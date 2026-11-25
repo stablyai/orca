@@ -23,9 +23,17 @@ const hoisted = vi.hoisted(() => ({
     (target: unknown, method: string, params: unknown, options?: unknown) => Promise<unknown>
   >(),
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
-  crew: null as unknown
+  crew: null as unknown,
+  /** The runtime that answers the unary read; the stream credits RUNTIME. */
+  replyRuntime: 'runtime-a'
 }))
-vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: hoisted.rpc,
+  callRuntimeRpcResponse: async (...args: Parameters<typeof hoisted.rpc>) => {
+    const result = await hoisted.rpc(...args)
+    return { id: 'r', ok: true, result, _meta: { runtimeId: hoisted.replyRuntime } }
+  }
+}))
 vi.mock('../../../worker-approvals/native-chat-worker-approval-feed', () => ({
   useNativeChatPinnedWorkerApprovals: () => []
 }))
@@ -48,12 +56,14 @@ vi.mock('../NativeChatCrewBackgroundTasksStatus', () => ({
 }))
 
 const SESSION = 'session-synthetic'
+const RUNTIME = 'runtime-a'
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
 const TUPLE = { childWorkId: 'child-1', invocationId: 'run-1', generation: 1 }
 const PREVIEW =
   "/fixture/bin/bash -lc 'fixture-build --target sample && fixture-check --suite smoke …"
+/** An independent provider sentinel: quotes, a newline and a tab, never the preview's text. */
 const EXACT =
-  'fixture-build --target sample && fixture-check --suite smoke\n  && fixture-pack "a b"'
+  'fixture-build --target sample && fixture-check --suite smoke\n  && fixture-pack "a b" \'c\'\t--end'
 
 const view: AgentChildWorkView = {
   id: TUPLE.childWorkId,
@@ -102,7 +112,22 @@ function credit(): void {
   scope = { transport: {}, generation: 1 }
   authority.invalidate(scope)
   authority.seed(scope, { epoch: 'e', sequence: 2 })
-  authority.observe(scope, frame(3))
+  authority.observe(scope, frame(3), RUNTIME)
+}
+
+const pre = () => screen.getByRole('dialog').querySelector('pre')?.textContent
+const commandReads = () =>
+  hoisted.rpc.mock.calls.filter(([, method]) => method === 'agentSession.backgroundCommand')
+
+/** A read the test answers later; `answer` resolves the most recent one. */
+function holdReplies(): { answer: (value: unknown) => void } {
+  const pending: ((value: unknown) => void)[] = []
+  hoisted.rpc.mockImplementation((_target, method) =>
+    method === 'agentSession.backgroundCommand'
+      ? new Promise((resolve) => pending.push(resolve))
+      : Promise.resolve({ ok: false })
+  )
+  return { answer: (value) => pending.pop()?.(value) }
 }
 
 function renderStrip() {
@@ -152,6 +177,7 @@ beforeEach(() => {
       }) as never
   )
   hoisted.crew = null
+  hoisted.replyRuntime = RUNTIME
   hoisted.rpc.mockReset()
   hoisted.rpc.mockImplementation(async (_target, method) =>
     method === 'agentSession.backgroundCommand' ? { command: EXACT } : { ok: false }
@@ -168,80 +194,112 @@ afterEach(() => {
 })
 
 describe('Worker Dock command dialog', () => {
-  it('copies the exact command bytes from one read of the credited invocation (no CRLF)', async () => {
+  it('shows the exact command with Copy, copies its bytes unchanged (no CRLF) and says Copied', async () => {
     credit()
     renderStrip()
-    await openRow()
+    const dialog = await openRow()
     const copy = await screen.findByRole('button', { name: 'Copy command' })
-    const reads = hoisted.rpc.mock.calls.filter(
-      ([, method]) => method === 'agentSession.backgroundCommand'
-    )
-    expect(reads).toHaveLength(1)
-    expect(reads[0]![2]).toEqual({
+    // Displayed text, provider sentinel and clipboard payload are compared independently.
+    expect(dialog.querySelector('pre')?.textContent).toBe(EXACT)
+    expect(dialog).toHaveTextContent('fixture-pack "a b"')
+    expect(commandReads()).toHaveLength(1)
+    expect(commandReads()[0]![2]).toEqual({
       sessionId: SESSION,
       childWorkId: TUPLE.childWorkId,
       invocation: { invocationId: TUPLE.invocationId, generation: TUPLE.generation }
     })
     fireEvent.click(copy)
     await waitFor(() => expect(writes).toEqual([EXACT]))
+    expect(writes[0]).not.toContain('\r')
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 
-  it('makes no host read without credit', async () => {
+  it('without credit shows the preview with its ellipsis, no Copy, no label and no read', async () => {
     renderStrip()
-    await openRow()
-    expect(hoisted.rpc).not.toHaveBeenCalledWith(
-      expect.anything(),
-      'agentSession.backgroundCommand',
-      expect.anything(),
-      expect.anything()
-    )
+    const dialog = await openRow()
+    expect(dialog.querySelector('pre')?.textContent).toBe(PREVIEW)
+    expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull()
+    expect(screen.queryByText(/preview/i)).toBeNull()
+    expect(commandReads()).toHaveLength(0)
   })
 
-  it('a loss before React commits withdraws Copy, and a held click writes nothing', async () => {
+  it('a loss before React commits withdraws Copy; a click on the still-mounted control writes nothing', async () => {
     credit()
     renderStrip()
     await openRow()
     const copy = await screen.findByRole('button', { name: 'Copy command' })
-    // The authority-changing frame arrives at ingress; the button is still on screen.
-    authority.observe(scope, frame(4))
+    // The authority-changing frame arrives at ingress; the button is still the live one on screen.
+    authority.observe(scope, frame(4), RUNTIME)
+    expect(copy.isConnected).toBe(true)
+    expect(screen.getByRole('button', { name: 'Copy command' })).toBe(copy)
     fireEvent.click(copy)
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull())
     expect(writes).toEqual([])
+    expect(pre()).toBe(PREVIEW)
   })
 
-  it('a late reply after the opening was lost is discarded', async () => {
+  it('a late reply after the opening was lost is discarded and the preview stays', async () => {
     credit()
-    let reply: (value: unknown) => void = () => {}
-    hoisted.rpc.mockImplementation((_target, method) =>
-      method === 'agentSession.backgroundCommand'
-        ? new Promise((resolve) => (reply = resolve))
-        : Promise.resolve({ ok: false })
-    )
+    const held = holdReplies()
     renderStrip()
     await openRow()
-    await waitFor(() =>
-      expect(hoisted.rpc).toHaveBeenCalledWith(
-        expect.anything(),
-        'agentSession.backgroundCommand',
-        expect.anything(),
-        expect.anything()
-      )
-    )
+    await waitFor(() => expect(commandReads()).toHaveLength(1))
     authority.invalidate(null)
-    await act(async () => reply({ command: EXACT }))
-    expect(screen.getByRole('dialog')).not.toHaveTextContent('fixture-pack "a b"')
+    await act(async () => held.answer({ command: EXACT }))
+    expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull()
+    expect(pre()).toBe(PREVIEW)
   })
 
-  it('a session change closes the dialog, so its exact text never outlives the session', async () => {
+  it('a reply from another runtime is discarded, and the opening stays lost', async () => {
     credit()
-    const strip = renderStrip()
+    hoisted.replyRuntime = 'runtime-b'
+    renderStrip()
+    await openRow()
+    await waitFor(() => expect(commandReads()).toHaveLength(1))
+    // Give the discarded reply every chance to land.
+    await act(async () => {})
+    expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull()
+    expect(pre()).toBe(PREVIEW)
+    // The unchanged stream from the crediting runtime cannot revive this opening.
+    authority.observe(scope, frame(3), RUNTIME)
+    await act(async () => {})
+    expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull()
+    expect(commandReads()).toHaveLength(1)
+  })
+
+  it('a stream frame from another runtime withdraws Copy before any click', async () => {
+    credit()
+    renderStrip()
     await openRow()
     await screen.findByRole('button', { name: 'Copy command' })
-    strip.switchSession('session-other')
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    authority.observe(scope, frame(3), 'runtime-b')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull())
+    expect(pre()).toBe(PREVIEW)
   })
 
-  it('after a crew comes and goes it reappears on its own, focused on Close, with a fresh read', async () => {
+  it('a session change closes the dialog; switching back never revives it, even with a held reply', async () => {
+    credit()
+    const held = holdReplies()
+    const strip = renderStrip()
+    await openRow()
+    await waitFor(() => expect(commandReads()).toHaveLength(1))
+    strip.switchSession('session-other')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    strip.switchSession(SESSION)
+    await act(async () => held.answer({ command: EXACT }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(writes).toEqual([])
+    // A fresh opening on current credit recovers.
+    hoisted.rpc.mockImplementation(async (_target, method) =>
+      method === 'agentSession.backgroundCommand' ? { command: EXACT } : { ok: false }
+    )
+    await openRow()
+    await screen.findByRole('button', { name: 'Copy command' })
+    expect(pre()).toBe(EXACT)
+    expect(commandReads()).toHaveLength(2)
+  })
+
+  it('after a crew comes and goes it reappears on its own with a fresh read, focus inside it', async () => {
     credit()
     const strip = renderStrip()
     await openRow()
@@ -252,13 +310,10 @@ describe('Worker Dock command dialog', () => {
     hoisted.crew = null
     strip.again()
     const dialog = await screen.findByRole('dialog')
-    await waitFor(() =>
-      expect(document.activeElement).toBe(dialog.querySelector('[data-slot="dialog-close"]'))
-    )
+    // The shared dialog's own initial focus, unchanged by this dialog.
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
     await screen.findByRole('button', { name: 'Copy command' })
-    const reads = hoisted.rpc.mock.calls.filter(
-      ([, method]) => method === 'agentSession.backgroundCommand'
-    )
-    expect(reads).toHaveLength(2)
+    expect(pre()).toBe(EXACT)
+    expect(commandReads()).toHaveLength(2)
   })
 })

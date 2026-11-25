@@ -18,48 +18,18 @@ import type { WorkerDockRowView } from './WorkerDockRow'
 import { WorkerDockCommandBlock } from './WorkerDockCommandBlock'
 import { useWorkerDockCommandDetail } from './use-worker-dock-command-detail'
 
-/** Focus on open: a reappearance (after a crew hid the dialog) goes to Close, never to the opener
- *  it may have lost; a user's own open keeps the first control outside the command block. */
-function focusOnOpen(event: Event, reappeared: boolean): void {
-  const content = event.target instanceof HTMLElement ? event.target : null
-  if (!content) {
-    return
-  }
-  const close = content.querySelector<HTMLElement>('[data-slot="dialog-close"]')
-  if (reappeared) {
-    event.preventDefault()
-    ;(close ?? content).focus()
-    return
-  }
-  const command = content.querySelector('[data-worker-dock-command]')
-  if (!command) {
-    return
-  }
-  // The command block's Copy and scroll area are new; the first open focuses what it did before.
-  const first = [
-    ...content.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"]), input, select, textarea'
-    )
-  ].find((element) => !command.contains(element))
-  event.preventDefault()
-  ;(first ?? close ?? content).focus()
-}
-
 export function WorkerDockProviderDetailsDialog({
   row,
   opener,
   sessionId,
   target,
-  onClose,
-  reappeared = false
+  onClose
 }: {
   row: WorkerDockRowView
   opener: HTMLElement
   sessionId: string
   target: RuntimeClientTarget
   onClose: () => void
-  /** A crew hid this dialog and it is showing again without a click. */
-  reappeared?: boolean
 }) {
   const [pane] = useState(() => workerDockOpenerPane(opener))
   // The held row as opened: output lookup and exact text never retarget while the dialog is up.
@@ -123,7 +93,6 @@ export function WorkerDockProviderDetailsDialog({
     >
       <DialogContent
         scrollable
-        onOpenAutoFocus={(event) => focusOnOpen(event, reappeared)}
         onCloseAutoFocus={(event) => {
           event.preventDefault()
           returnWorkerDockFocus(opener, pane)

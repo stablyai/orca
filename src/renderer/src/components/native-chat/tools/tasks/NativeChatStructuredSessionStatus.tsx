@@ -166,8 +166,6 @@ export function NativeChatStructuredSessionStatus(props: {
     opener: HTMLElement
     /** The session and host it was opened for; another one closes it. */
     owner: string
-    /** A crew's strip replaced the dialog's branch while it was open; it shows again on its own. */
-    hiddenByCrew?: boolean
   } | null>(null)
   const detailsOwner = structuredReadOwnerKey(props.sessionId, target)
   // Another session or host closes the dialog during render, so it never shows the old one's text.
@@ -175,11 +173,6 @@ export function NativeChatStructuredSessionStatus(props: {
     setProviderDetails(null)
   }
   const shownDetails = providerDetails?.owner === detailsOwner ? providerDetails : null
-  useEffect(() => {
-    if (crew && providerDetails && !providerDetails.hiddenByCrew) {
-      setProviderDetails({ ...providerDetails, hiddenByCrew: true })
-    }
-  }, [crew, providerDetails])
   const workerOpen = useCallback(
     (row: WorkerDockRowView) =>
       void openOrchestrationCrewAgent(
@@ -290,7 +283,6 @@ export function NativeChatStructuredSessionStatus(props: {
             sessionId={props.sessionId}
             target={target}
             onClose={() => setProviderDetails(null)}
-            reappeared={shownDetails.hiddenByCrew === true}
           />
         </Suspense>
       ) : null}

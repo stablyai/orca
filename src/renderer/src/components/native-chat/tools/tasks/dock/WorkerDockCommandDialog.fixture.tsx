@@ -120,7 +120,7 @@ function seedReader(scene: Scene, credited: boolean) {
     scope = { transport: {}, generation: 1 }
     authority.invalidate(scope)
     authority.seed(scope, { epoch: 'fixture', sequence: 1 })
-    authority.observe(scope, roster(scene, 3, credited))
+    authority.observe(scope, roster(scene, 3, credited), FIXTURE_RUNTIME)
   }
   connect()
   return {
@@ -131,6 +131,9 @@ function seedReader(scene: Scene, credited: boolean) {
     }
   }
 }
+
+/** The invented runtime that credits this fixture's reader and answers its read. */
+const FIXTURE_RUNTIME = 'runtime-fixture'
 
 const copies: { last: string | null; listeners: Set<() => void> } = {
   last: null,
@@ -143,7 +146,11 @@ function stubHost(scene: Scene): void {
     ...(typeof runtime === 'object' ? runtime : {}),
     call: async ({ method }: { method: string }) =>
       method === 'agentSession.backgroundCommand'
-        ? { ok: true, result: { command: COMMANDS[scene].exact } }
+        ? {
+            ok: true,
+            result: { command: COMMANDS[scene].exact },
+            _meta: { runtimeId: FIXTURE_RUNTIME }
+          }
         : { ok: false, error: { code: 'runtime_error', message: method } }
   })
   const ui: unknown = window.api.ui

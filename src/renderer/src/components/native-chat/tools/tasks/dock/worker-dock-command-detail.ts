@@ -5,7 +5,8 @@ import type { RuntimeClientTarget } from '../../../../../../../shared/remote-run
 import type { AgentSessionCommandDetailTuple } from '../../../../../../../shared/agent-session/background-tasks/agent-session-command-details'
 import type { CommandDetailOpening } from '../../../../../../../shared/agent-session/view/live-read/command-detail-authority'
 import { findStructuredAgentSessionReadOwner } from '../../../session/structured/read/structured-agent-session-read-owner-registry'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { callRuntimeRpcResponse } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { observedRuntimeEnvironmentRuntimeId } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
@@ -24,22 +25,41 @@ export type WorkerDockCommandDetail = {
 
 class CommandDetailRefused extends Error {}
 
-/** Target and runtime incarnation the opening was made under: a re-pair or reconnect ends it. */
-function pinTarget(target: RuntimeClientTarget): {
+/** Target, runtime incarnation and authenticated runtime the opening was made under: a re-pair,
+ *  reconnect, or any status or reply naming another runtime ends it, and the loss is sticky. */
+function pinTarget(
+  target: RuntimeClientTarget,
+  runtimeId: () => string | undefined
+): {
   current: () => boolean
+  /** Latches a detected runtime mismatch; `current()` is false from then on. */
+  mismatch: () => void
   pairingRevision: number | undefined
 } {
+  let mismatched = false
+  const mismatch = (): void => {
+    mismatched = true
+  }
   if (target.kind !== 'environment') {
-    return { current: () => true, pairingRevision: undefined }
+    return { current: () => !mismatched, mismatch, pairingRevision: undefined }
   }
   const { environmentId } = target
   const pairingRevision = getRuntimeEnvironmentRevision(environmentId)
   const connection = getRuntimeEnvironmentConnectionGeneration(environmentId)
   return {
     pairingRevision,
-    current: () =>
-      getRuntimeEnvironmentRevision(environmentId) === pairingRevision &&
-      getRuntimeEnvironmentConnectionGeneration(environmentId) === connection
+    mismatch,
+    current: () => {
+      const observed = observedRuntimeEnvironmentRuntimeId(environmentId)
+      if (observed !== undefined && observed !== runtimeId()) {
+        mismatched = true
+      }
+      return (
+        !mismatched &&
+        getRuntimeEnvironmentRevision(environmentId) === pairingRevision &&
+        getRuntimeEnvironmentConnectionGeneration(environmentId) === connection
+      )
+    }
   }
 }
 
@@ -52,7 +72,7 @@ export function openWorkerDockCommandDetail(input: {
   sessionId: string
   target: RuntimeClientTarget
   tuple: AgentSessionCommandDetailTuple
-  call?: typeof callRuntimeRpc
+  call?: typeof callRuntimeRpcResponse
   timeoutMs?: number
 }): WorkerDockCommandDetail | null {
   const { sessionId, target, tuple } = input
@@ -60,7 +80,8 @@ export function openWorkerDockCommandDetail(input: {
   if (!owner?.commandDetails) {
     return null
   }
-  const pinned = pinTarget(target)
+  let openedRuntimeId: string | undefined
+  const pinned = pinTarget(target, () => openedRuntimeId)
   const opening = owner.commandDetails.open(
     tuple,
     () => pinned.current() && findStructuredAgentSessionReadOwner(sessionId, target) === owner
@@ -68,7 +89,13 @@ export function openWorkerDockCommandDetail(input: {
   if (!opening) {
     return null
   }
-  const call = input.call ?? callRuntimeRpc
+  openedRuntimeId = opening.runtimeId
+  // A paired reader must know which runtime credited it; without that nothing can be pinned.
+  if (target.kind === 'environment' && openedRuntimeId === undefined) {
+    opening.close()
+    return null
+  }
+  const call = input.call ?? callRuntimeRpcResponse
   let text: string | null = null
   let reading: Promise<string | null> | null = null
   const read = async (): Promise<string | null> => {
@@ -91,6 +118,10 @@ export function openWorkerDockCommandDetail(input: {
             ...(pinned.pairingRevision !== undefined
               ? { expectedEnvironmentPairingRevision: pinned.pairingRevision }
               : {}),
+            // Routed only to the runtime that credited this opening.
+            ...(target.kind === 'environment'
+              ? { expectedEnvironmentRuntimeId: openedRuntimeId }
+              : {}),
             // After any compatibility await, before the request leaves.
             beforeSend: () => {
               if (!opening.check()) {
@@ -101,11 +132,19 @@ export function openWorkerDockCommandDetail(input: {
         ),
         timeout(input.timeoutMs ?? WORKER_DOCK_COMMAND_DETAIL_TIMEOUT_MS)
       ])
+      // A reply from any other runtime is discarded, and this opening cannot recover.
+      if (
+        reply !== 'timeout' &&
+        openedRuntimeId !== undefined &&
+        reply._meta.runtimeId !== openedRuntimeId
+      ) {
+        pinned.mismatch()
+      }
       // A late, refused or stale reply is discarded, never shown.
       if (reply === 'timeout' || !opening.check()) {
         return null
       }
-      const command = reply.command
+      const command = reply.result.command
       if (typeof command !== 'string' || command.length === 0) {
         return null
       }

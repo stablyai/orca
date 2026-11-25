@@ -182,34 +182,52 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     if (this.sessions.get(sessionId)) {
       return { kind: 'roster', fence, state: this.read(sessionId) }
     }
+    const detail = this.commandDetailReader(sessionId)
     return {
       kind: 'availability',
       fence,
-      keep: (tuples) => tuples.filter((tuple) => this.commandDetail(sessionId, tuple) !== null)
+      keep: (tuples) => tuples.filter((tuple) => detail(tuple) !== null)
     }
   }
 
   /** The exact command for one listed tuple, or null; the RPC and availability share it. */
   commandDetail(sessionId: string, tuple: AgentSessionCommandDetailTuple): string | null {
-    return eligibleStructuredCommandDetail({
-      conversation: this.deps.store.getConversation(sessionId),
-      membershipCurrent: this.deps.sessionMembershipCurrent?.(sessionId) ?? true,
-      detail: this.childWork.readCommandDetail?.(sessionId, tuple.childWorkId) ?? null,
-      tuple
-    })
+    return this.commandDetailReader(sessionId)(tuple)
+  }
+
+  /** Membership and owner authority are sampled at most once per synchronous read, on its first
+   *  tuple, and reused for the rest; the next read samples again. Nothing is cached across reads. */
+  private commandDetailReader(
+    sessionId: string
+  ): (tuple: AgentSessionCommandDetailTuple) => string | null {
+    let sample:
+      | Pick<
+          Parameters<typeof eligibleStructuredCommandDetail>[0],
+          'conversation' | 'membershipCurrent'
+        >
+      | undefined
+    return (tuple) => {
+      sample ??= {
+        membershipCurrent: this.deps.sessionMembershipCurrent?.(sessionId) ?? true,
+        conversation: this.deps.store.getConversation(sessionId)
+      }
+      return eligibleStructuredCommandDetail({
+        ...sample,
+        detail: this.childWork.readCommandDetail?.(sessionId, tuple.childWorkId) ?? null,
+        tuple
+      })
+    }
   }
 
   private commandDetailsAvailable(
     sessionId: string,
     views: readonly AgentChildWorkView[]
   ): AgentSessionCommandDetailTuple[] {
-    if (!(this.deps.sessionMembershipCurrent?.(sessionId) ?? true)) {
-      return []
-    }
+    const detail = this.commandDetailReader(sessionId)
     return views
       .filter((view) => view.kind === 'command')
       .map(commandDetailTupleOf)
-      .filter((tuple) => this.commandDetail(sessionId, tuple) !== null)
+      .filter((tuple) => detail(tuple) !== null)
   }
 
   /** Child records define the roster even after the provider releases the session. */

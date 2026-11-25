@@ -17,8 +17,9 @@ export type StructuredAgentSessionLiveReadCredit = {
   openGenerationAdvanced: (generation: number) => void
   /** The cursor this generation's subscription actually sends, null when it sends none. */
   subscribeCursor: (generation: number, cursor: AgentJournalCursor | null) => void
-  /** Every decoded frame of the current open, before snapshot handling and coalescing. */
-  observeFrame: (event: AgentSessionSubscribeEvent, generation: number) => void
+  /** Every decoded frame of the current open, before snapshot handling and coalescing, with the
+   *  runtime that authenticated its transport when the transport says. */
+  observeFrame: (event: AgentSessionSubscribeEvent, generation: number, runtimeId?: string) => void
 }
 
 /** Credit is bound to one transport instance's open generation; a bare number repeats across runs. */
@@ -29,6 +30,8 @@ type Baseline = { epoch: string | null; cursor: AgentJournalCursor | null }
 export type CommandDetailOpening = {
   readonly tuple: AgentSessionCommandDetailTuple
   readonly fence: number | null
+  /** The authenticated runtime whose frames granted this credit; requests and replies must match. */
+  readonly runtimeId: string | undefined
   /** Not lost, still on the latch's current connected scope, and the pinned identity holds. */
   valid: () => boolean
   /** `valid()`, and on any failure the opening latches itself lost and notifies first. */
@@ -44,8 +47,13 @@ export type CommandDetailAuthority = {
   invalidate: (scope: CommandDetailCreditScope | null) => void
   /** The cursor this scope's subscription actually sent seeds its admission baseline. */
   seed: (scope: CommandDetailCreditScope, cursor: AgentJournalCursor | null) => void
-  /** One decoded frame on `scope`, before snapshot/reset handling and before coalescing. */
-  observe: (scope: CommandDetailCreditScope, event: AgentSessionSubscribeEvent) => void
+  /** One decoded frame on `scope`, before snapshot/reset handling and before coalescing. A frame
+   *  naming a different runtime than the one that granted credit clears it and loses openings. */
+  observe: (
+    scope: CommandDetailCreditScope,
+    event: AgentSessionSubscribeEvent,
+    runtimeId?: string
+  ) => void
   /** A new opening for an available tuple on the current connected scope, else null. */
   open: (
     tuple: AgentSessionCommandDetailTuple,
@@ -58,6 +66,7 @@ export type CommandDetailAuthority = {
     fence: number | null
     available: ReadonlySet<string>
     baseline: Baseline | null
+    runtimeId: string | undefined
   }
 }
 
@@ -87,6 +96,8 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
   let fence: number | null = null
   let available: ReadonlySet<string> = new Set()
   let baseline: Baseline | null = null
+  /** The runtime whose replacement frame established the current credit. */
+  let runtimeId: string | undefined
   const openings = new Set<OpeningState>()
 
   const loseAll = (): void => {
@@ -98,6 +109,7 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
     available = new Set()
     fence = null
     connected = false
+    runtimeId = undefined
   }
 
   /** Latest admitted roster wins, whatever its fence; existing openings survive only unchanged. */
@@ -130,7 +142,7 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
       }
       baseline = cursor ? { epoch: cursor.epoch, cursor } : null
     },
-    observe: (frameScope, event) => {
+    observe: (frameScope, event, frameRuntimeId) => {
       // A frame never adopts or assigns a scope; a null or stale scope changes nothing.
       if (!sameScope(scope, frameScope) || event.type === 'end') {
         return
@@ -142,8 +154,16 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
         if (event.backgroundTasks !== undefined) {
           applyRoster(event.fence, event.backgroundTasks)
         }
+        runtimeId = frameRuntimeId
         const page = event.page
         baseline = { epoch: page.epoch, cursor: page.liveCursor ?? page.window.nextCursor }
+        return
+      }
+      if (connected && frameRuntimeId !== runtimeId) {
+        // Another runtime answering on this stream proves nothing it credited: sticky loss.
+        loseAll()
+        clearCredit()
+        baseline = null
         return
       }
       if (!baseline || !admitsAgentSessionBatch(baseline, event.batch.cursor)) {
@@ -152,6 +172,7 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
       baseline = { epoch: event.batch.cursor.epoch, cursor: event.batch.cursor }
       if (event.backgroundTasks !== undefined) {
         applyRoster(event.fence ?? null, event.backgroundTasks)
+        runtimeId = frameRuntimeId
       }
     },
     open: (tuple, pinnedCurrent) => {
@@ -163,6 +184,7 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
       const listeners = new Set<() => void>()
       let lost = false
       const openedFence = fence
+      const openedRuntimeId = runtimeId
       // Called only after `entry` below is initialized.
       const lose = (): void => {
         if (lost) {
@@ -180,6 +202,7 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
       const opening: CommandDetailOpening = {
         tuple,
         fence: openedFence,
+        runtimeId: openedRuntimeId,
         valid,
         check: () => {
           if (valid()) {
@@ -209,7 +232,7 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
       openings.add(entry)
       return entry.opening
     },
-    inspect: () => ({ scope, connected, fence, available, baseline })
+    inspect: () => ({ scope, connected, fence, available, baseline, runtimeId })
   }
   return authority
 }

@@ -274,3 +274,48 @@ describe('visible refusal on a failed check (A1-D8-02)', () => {
     expect(opening.check()).toBe(false)
   })
 })
+
+describe('command detail credit runtime identity (D5 pinned runtime)', () => {
+  function pinned() {
+    const read = run()
+    read.open()
+    read.authority.observe(read.scope(), batch(5, { fence: 7, backgroundTasks: roster() }), 'rt-a')
+    const opening = read.authority.open(TUPLE, () => true)!
+    return { ...read, opening }
+  }
+
+  it('an opening carries the runtime whose frame credited it', () => {
+    const { authority, opening } = pinned()
+    expect(opening.runtimeId).toBe('rt-a')
+    expect(authority.inspect().runtimeId).toBe('rt-a')
+  })
+
+  it('a frame from another runtime clears credit and loses openings; frames from the first do not revive', () => {
+    const { authority, opening, scope } = pinned()
+    let lost = 0
+    opening.onLost(() => (lost += 1))
+    authority.observe(scope(), batch(6, { fence: 7, backgroundTasks: roster() }), 'rt-b')
+    expect(opening.lost).toBe(true)
+    expect(lost).toBe(1)
+    expect(authority.inspect().connected).toBe(false)
+    authority.observe(scope(), batch(7, { fence: 7, backgroundTasks: roster() }), 'rt-a')
+    expect(authority.open(TUPLE, () => true)).toBeNull()
+    expect(opening.check()).toBe(false)
+  })
+
+  it('a frame with no runtime after a pinned grant is also a mismatch', () => {
+    const { authority, opening, scope } = pinned()
+    authority.observe(scope(), batch(6, { fence: 7, backgroundTasks: roster() }))
+    expect(opening.lost).toBe(true)
+  })
+
+  it('unchanged frames from the same runtime keep the opening; a replacement re-pins', () => {
+    const { authority, opening, scope } = pinned()
+    authority.observe(scope(), batch(6, { fence: 7, backgroundTasks: roster() }), 'rt-a')
+    expect(opening.valid()).toBe(true)
+    authority.observe(scope(), snapshot(9, 7, roster()), 'rt-b')
+    expect(opening.lost).toBe(true)
+    const fresh = authority.open(TUPLE, () => true)!
+    expect(fresh.runtimeId).toBe('rt-b')
+  })
+})

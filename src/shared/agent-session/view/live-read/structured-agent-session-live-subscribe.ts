@@ -9,7 +9,8 @@ export type StructuredAgentSessionLiveSubscribe = (
     cursor?: AgentJournalCursor
     capabilities?: StructuredAgentSessionSubscribeCapabilities
   },
-  onEvent: (event: AgentSessionSubscribeEvent) => void,
+  /** `runtimeId` is the runtime that authenticated this frame's transport, when it says. */
+  onEvent: (event: AgentSessionSubscribeEvent, runtimeId?: string) => void,
   onError: (error: unknown) => void,
   onClose: () => void
 ) => Promise<{ unsubscribe: () => void }>

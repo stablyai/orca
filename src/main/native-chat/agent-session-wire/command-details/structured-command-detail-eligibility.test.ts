@@ -29,7 +29,8 @@ function conversation(currentFence = 5, owner: Record<string, unknown> = {}) {
     provider: 'codex',
     currentFence,
     ownerObservation: {
-      claimStatus: 'claimed',
+      claimStatus: 'live',
+      unreconciled: false,
       ownerProcess: { pid: 1 },
       reservedSpawnToken: null,
       handoffStage: null,
@@ -81,6 +82,7 @@ describe('eligibleStructuredCommandDetail', () => {
   it('a moved owner fence revokes, except the proven release of that same acquisition', () => {
     expect(read({ conversation: conversation(6) })).toBeNull()
     const released = {
+      unreconciled: false,
       claimStatus: 'released',
       ownerProcess: null,
       reservedSpawnToken: null,
@@ -101,6 +103,63 @@ describe('eligibleStructuredCommandDetail', () => {
     ).toBeNull()
     expect(
       read({ conversation: conversation(6, { ...released, handoffStage: 'recovering' }) })
+    ).toBeNull()
+  })
+
+  it('an equal fence needs a live, reconciled owner: a same-fence recovery or reservation revokes', () => {
+    // The real unproven post-acquisition settlement: same fence and process, parked in recovery.
+    expect(
+      read({
+        conversation: conversation(5, {
+          claimStatus: 'live',
+          handoffStage: 'recovering',
+          handoffOperationId: null,
+          reservedSpawnToken: 'spawn-1'
+        })
+      })
+    ).toBeNull()
+    expect(read({ conversation: conversation(5, { unreconciled: true }) })).toBeNull()
+    expect(
+      read({ conversation: conversation(5, { handoffStage: 'new-owner-proving' }) })
+    ).toBeNull()
+    expect(
+      read({
+        conversation: conversation(5, {
+          claimStatus: 'reserved',
+          ownerProcess: null,
+          reservedSpawnToken: 'next'
+        })
+      })
+    ).toBeNull()
+    expect(read({ conversation: conversation(5, { ownerProcess: null }) })).toBeNull()
+    expect(read({ conversation: conversation(5, { claimStatus: 'released' }) })).toBeNull()
+    // Control: the same fence with its live owner still reads.
+    expect(read({ conversation: conversation(5) })).toBe('make')
+  })
+
+  it('a proven release of that acquisition still needs a reconciled record', () => {
+    const released = {
+      unreconciled: true,
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      handoffStage: null,
+      deathEvidence: { kind: 'exit-observed', detail: '', observedAt: 1, ownerFence: 5 }
+    }
+    expect(read({ conversation: conversation(6, released) })).toBeNull()
+    expect(read({ conversation: conversation(6, { ...released, unreconciled: false }) })).toBe(
+      'make'
+    )
+    // A newer reservation on top of the proven release revokes it.
+    expect(
+      read({
+        conversation: conversation(6, {
+          ...released,
+          unreconciled: false,
+          claimStatus: 'reserved',
+          reservedSpawnToken: 'next'
+        })
+      })
     ).toBeNull()
   })
 })

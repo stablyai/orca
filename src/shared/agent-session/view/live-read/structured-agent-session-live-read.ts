@@ -142,7 +142,11 @@ export function startStructuredAgentSessionLiveRead(args: {
     connected = false
     void open()
   }
-  const handleEvent = (received: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
+  const handleEvent = (
+    received: AgentSessionSubscribeEvent,
+    eventOpenGeneration: number,
+    runtimeId: string | undefined
+  ): void => {
     if (
       !isCurrentOpenGeneration(eventOpenGeneration) ||
       eventOpenGeneration === replacedOpenGeneration
@@ -155,7 +159,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       return
     }
     clearUnattachedReadGrace()
-    args.credit?.observeFrame(event, eventOpenGeneration)
+    args.credit?.observeFrame(event, eventOpenGeneration, runtimeId)
     // Note delivered frames; local subscribe can resolve before the host refuses opening.
     if (event.type !== 'end') {
       reconnectScheduler.noteDelivered()
@@ -232,9 +236,9 @@ export function startStructuredAgentSessionLiveRead(args: {
           ...(cursor ? { cursor } : {}),
           ...(capabilities ? { capabilities } : {})
         },
-        (event) => {
+        (event, runtimeId) => {
           closedDuringOpen ||= event.type === 'end'
-          handleEvent(event, currentOpenGeneration)
+          handleEvent(event, currentOpenGeneration, runtimeId)
         },
         (error) => {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {

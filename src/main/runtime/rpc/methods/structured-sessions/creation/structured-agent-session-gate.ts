@@ -71,6 +71,22 @@ export function requireStructuredSessionHost(
   return host
 }
 
+/** The same session gates as requireStructuredSessionHost, for a read that must never build or
+ *  rebuild a host: null when none is installed (cold, stopping, or refused at open). */
+export function installedStructuredSessionHost(
+  ctx: RpcContext,
+  sessionId: string
+): StructuredAgentSessionHost | null {
+  assertBotGroupSessionAccess(ctx.runtime, sessionId)
+  requireStructuredAgentAudience(ctx, '')
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    return null
+  }
+  requireStructuredAgentAudience(ctx, host.sessionAgent(sessionId) ?? '')
+  return host
+}
+
 /** Close/cancel/unsubscribe/release check wire capability and host only; new-work admission conditions must never strand already-owned children. */
 export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
   requireStructuredCapability(ctx)

@@ -3,20 +3,23 @@
 
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionCommandDetailTuple } from '../../../../shared/agent-session/background-tasks/agent-session-command-details'
+import { agentSessionOwnerObservationIsLive } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { StructuredCommandDetailRecord } from '../observations/structured-agent-session-status-ownership'
 
-/** The stored producer fence is still the owner, or that same acquisition was provably released
- *  and nothing newer has acquired or is handing off since. */
+/** The stored producer fence still has a live, reconciled owner, or that same acquisition was
+ *  provably released and nothing newer has acquired or is handing off since. An equal fence alone
+ *  proves nothing: a pending acquisition can settle into recovery without moving it. */
 function providerAuthorityCurrent(
   conversation: Pick<AgentSessionConversationView, 'currentFence' | 'ownerObservation'>,
   fence: number
 ): boolean {
-  if (conversation.currentFence === fence) {
-    return true
-  }
   const owner = conversation.ownerObservation
+  if (conversation.currentFence === fence) {
+    return agentSessionOwnerObservationIsLive(owner)
+  }
   return (
     conversation.currentFence > fence &&
+    !owner.unreconciled &&
     owner.claimStatus === 'released' &&
     owner.ownerProcess === null &&
     owner.reservedSpawnToken === null &&

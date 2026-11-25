@@ -22,7 +22,7 @@ describe('live read credit hooks', () => {
     vi.useFakeTimers()
     try {
       const calls: string[] = []
-      const streams: ((event: AgentSessionSubscribeEvent) => void)[] = []
+      const streams: ((event: AgentSessionSubscribeEvent, runtimeId?: string) => void)[] = []
       const read = startStructuredAgentSessionLiveRead({
         applyEvent: (event) => calls.push(`apply:${event.type}`),
         applyError: () => {},
@@ -43,7 +43,8 @@ describe('live read credit hooks', () => {
           openGenerationAdvanced: (generation) => calls.push(`advance:${generation}`),
           subscribeCursor: (generation, cursor) =>
             calls.push(`cursor:${generation}:${cursor?.sequence}`),
-          observeFrame: (event, generation) => calls.push(`observe:${generation}:${event.type}`)
+          observeFrame: (event, generation, runtimeId) =>
+            calls.push(`observe:${generation}:${event.type}${runtimeId ? `@${runtimeId}` : ''}`)
         }
       })
       // The advance happens before the open's first await.
@@ -57,9 +58,13 @@ describe('live read credit hooks', () => {
       streams[0]!(batch(4))
       expect(calls).toEqual(['observe:1:batch'])
       calls.length = 0
+      // The transport's authenticated runtime reaches the latch with the frame.
+      streams[0]!(batch(5), 'runtime-a')
+      expect(calls).toEqual(['observe:1:batch@runtime-a'])
+      calls.length = 0
       // A malformed append replaces the connected stream: the next open advances synchronously,
       // inside this same delivery, before any later frame.
-      streams[0]!(batch(5, [{ itemId: 'x', textAppend: 'not an append' }]))
+      streams[0]!(batch(6, [{ itemId: 'x', textAppend: 'not an append' }]))
       expect(calls).toContain('advance:2')
       expect(calls).not.toContain('observe:1:batch')
       read.dispose()
