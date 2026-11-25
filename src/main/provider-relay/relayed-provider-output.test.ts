@@ -318,4 +318,36 @@ describe('relayed provider output', () => {
     await output.settle()
     expect(sent).toEqual([['a'], ['b']])
   })
+
+  it('records a span the daemon released while nothing was split as a cut naming nothing, even with no line after it', async () => {
+    const sent: string[] = []
+    let released = false
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => true,
+      ackFloor: {
+        observe: () => {},
+        // A call open from line 1 holds the floor; no message is split.
+        floor: () => 1,
+        tookCut: () => false,
+        cutKeys: () => []
+      },
+      ack: async (seq, keepFrom, flags) => {
+        sent.push(
+          `${seq} keep ${keepFrom}${flags?.cut ? ` cut ${JSON.stringify(flags.cutKeys)}` : ''}`
+        )
+        // The daemon's memory cap let the kept span go once.
+        const reply = released ? {} : { ackedThrough: seq }
+        released = true
+        return reply
+      }
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, 'line-1')
+    output.line('relayData', 2, 'line-2')
+    await output.settle()
+    // Without it, every later attach would see the release unnamed and guess.
+    await output.flush()
+    expect(sent).toEqual(['2 keep 1', '2 keep undefined cut []'])
+  })
 })
