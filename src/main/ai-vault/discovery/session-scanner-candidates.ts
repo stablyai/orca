@@ -9,7 +9,7 @@ import {
 } from '../scanners/codex/codex-session-root-dedup'
 import { antigravityHistoryPathForBrainDir } from '../scanners/antigravity/session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from '../scanners/codex/session-scanner-codex-paths'
-import { DEFAULT_CODEX_HOME_DIR } from './session-scanner-agent-sources'
+import { defaultCodexHomeDir } from './session-scanner-agent-sources'
 import type {
   AiVaultScanOptions,
   FileWithMtime,
@@ -27,7 +27,7 @@ export function discoveryFileCandidates(
     discovery.agent === 'codex'
       ? codexHomeForSessionsDir(
           discovery.rootDir,
-          options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
+          options.defaultCodexHomeDir ?? defaultCodexHomeDir()
         )
       : null
   const antigravityHistoryPath =

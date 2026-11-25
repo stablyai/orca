@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { join } from 'node:path'
+import { agentHomeDirIn } from '../../shared/app-profiles/app-profile-homes'
 import {
   isPlainObject,
   readHooksJson
@@ -39,7 +40,11 @@ export function markQoderWorkspaceTrusted(
   } catch {
     // Missing paths retain their supplied spelling.
   }
-  const configPath = join(home, configDirName, 'settings.json')
+  const configDir =
+    configDirName === '.qoder'
+      ? agentHomeDirIn(home, 'QODER_CONFIG_DIR', '.qoder')
+      : join(home, configDirName)
+  const configPath = join(configDir, 'settings.json')
   const config = readHooksJson(configPath)
   if (!config) {
     return

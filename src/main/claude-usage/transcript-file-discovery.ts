@@ -1,11 +1,13 @@
 import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
-import { homedir } from 'node:os'
+import { defaultAgentHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import { readdir } from 'node:fs/promises'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 
-const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
-const CLAUDE_TRANSCRIPTS_DIR = join(homedir(), '.claude', 'transcripts')
+const claudeProjectsDir = (): string =>
+  join(defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude'), 'projects')
+const claudeTranscriptsDir = (): string =>
+  join(defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude'), 'transcripts')
 
 async function walkJsonlFiles(dirPath: string): Promise<string[]> {
   const entries = await readdir(dirPath, { withFileTypes: true }).catch((error: unknown) => {
@@ -45,7 +47,7 @@ export function claudeProfileTranscriptDirs(): string[] {
 export async function listClaudeTranscriptFiles(
   profileDirs = claudeProfileTranscriptDirs()
 ): Promise<string[]> {
-  const roots = new Set([CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR, ...profileDirs])
+  const roots = new Set([claudeProjectsDir(), claudeTranscriptsDir(), ...profileDirs])
   const files = await Promise.all([...roots].map((root) => walkJsonlFiles(root)))
   return [...new Set(files.flat())].sort()
 }

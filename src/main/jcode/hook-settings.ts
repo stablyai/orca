@@ -1,5 +1,6 @@
 // Honor JCODE_HOME so hooks land in the config jcode actually reads.
 import { homedir } from 'node:os'
+import { orcaHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 
 const JCODE_SCRIPT_BASE = 'jcode-hook'
@@ -37,7 +38,7 @@ export function getJcodeManagedScriptPath(): string {
 }
 
 export function getSharedJcodeScriptPath(scriptFileName: string): string {
-  return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
+  return join(orcaHomeDir(), 'agent-hooks', scriptFileName)
 }
 
 // jcode tokenizes commands before direct execution; quote paths to preserve Windows separators and spaces.

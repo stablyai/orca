@@ -4,6 +4,7 @@
 // folder of its own, made a git repo so Claude keys it to itself, mirroring the bot's servers; Claude
 // keeps a token by server name and URL, so the chats' launch config finds it.
 import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
+import { defaultAgentHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import type { McpHttpServerConfig, McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk'
 import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -51,7 +52,9 @@ export async function readClaudeInheritedTools(
   configDir: string | null
 ): Promise<BotInheritedTool[]> {
   const config = await readJson(claudeAccountConfigFile(configDir))
-  const settings = await readJson(join(configDir ?? join(homedir(), '.claude'), 'settings.json'))
+  const settings = await readJson(
+    join(configDir ?? defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude'), 'settings.json')
+  )
   const plugins = Object.entries(record(settings.enabledPlugins)).flatMap(([key, on]) =>
     on === true ? [{ name: key.split('@')[0] ?? key, plugin: true as const }] : []
   )

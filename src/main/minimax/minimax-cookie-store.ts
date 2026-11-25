@@ -6,7 +6,7 @@ import {
 } from '../credentials/credential-file-io'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { readFile, rm } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { orcaHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
 
@@ -21,7 +21,7 @@ type MiniMaxCookieEnvelope = {
 }
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return orcaHomeDir()
 }
 
 export function getMiniMaxCookiePath(): string {

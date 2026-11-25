@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { defaultAgentHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -47,7 +48,9 @@ export async function readClaudeDiffPanelPreference(
   input: Pick<ClaudeDiffPanelAutoOpenInput, 'configDirEnv' | 'home' | 'platform'>
 ): Promise<boolean | undefined> {
   const home = input.home ?? homedir()
-  const configDir = input.configDirEnv ?? join(home, '.claude')
+  const configDir =
+    input.configDirEnv ??
+    (input.home ? join(input.home, '.claude') : defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude'))
   const store = await readJsonObject(claudeDiffPanelStorePath(configDir))
   // Older releases saved the preference globally; the plugin migrates it only without a store value.
   const globalConfig = resolveClaudeGlobalConfigFile({
@@ -68,7 +71,9 @@ export async function claudeDiffPanelMayAutoOpen(
   if (!claudeVersionReaches(input.version, CLAUDE_DIFF_PANEL_FIRST_VERSION)) {
     return false
   }
-  const configDir = input.configDirEnv ?? join(input.home ?? homedir(), '.claude')
+  const configDir =
+    input.configDirEnv ??
+    (input.home ? join(input.home, '.claude') : defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude'))
   const settings = await readJsonObject(join(configDir, 'settings.json'))
   // The diff panel requires Claude's fullscreen renderer.
   if (settings?.tui === 'default') {

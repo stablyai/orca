@@ -6,7 +6,7 @@ import {
   inCredentialFileOrder,
   stageCredentialFile
 } from './credential-file-io'
-import { homedir } from 'node:os'
+import { orcaHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import { isUnreadableError } from '../../shared/secure-storage/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
@@ -42,7 +42,7 @@ export function createEncryptedApiKeyFileStore({
   }
 
   function getOrcaDir(): string {
-    return join(homedir(), '.orca')
+    return orcaHomeDir()
   }
 
   function getApiKeyPath(): string {

@@ -3,8 +3,8 @@
 // folder and id, so the bot's agent only ever gets Orca's relay address and its own token.
 import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { createHash, randomBytes } from 'node:crypto'
+import { orcaHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { readFileSync, rmSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
@@ -54,8 +54,7 @@ export function useBotToolCredentialsRoot(root: string | null): void {
   rootOverride = root
 }
 
-const credentialsRoot = (): string =>
-  rootOverride ?? join(homedir(), '.orca', 'bot-tool-credentials')
+const credentialsRoot = (): string => rootOverride ?? join(orcaHomeDir(), 'bot-tool-credentials')
 
 export const botToolCredentialsPath = (folder: string): string =>
   join(

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { agentHomeDirIn } from '../../../shared/app-profiles/app-profile-homes'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
@@ -35,7 +36,7 @@ export function markCursorWorkspaceTrusted(workspacePath: string, home: string):
 
 export function markCopilotFolderTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
-  const configDir = join(home, '.copilot')
+  const configDir = agentHomeDirIn(home, 'COPILOT_HOME', '.copilot')
   const configPath = join(configDir, 'config.json')
   let config: Record<string, unknown> = {}
   try {

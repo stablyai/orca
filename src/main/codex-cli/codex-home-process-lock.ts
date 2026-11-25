@@ -1,12 +1,14 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { defaultAgentHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 
 // Serialize Orca-owned spawns per home to prevent refresh-token rotation races; terminals are exempt.
 const lockTails = new Map<string, Promise<unknown>>()
 
 export function resolveCodexHomeProcessLockKey(codexHomePath?: string | null): string {
-  const home = codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
+  const home =
+    codexHomePath ?? process.env.CODEX_HOME ?? defaultAgentHomeDir('CODEX_HOME', '.codex')
   return normalizeRuntimePathForComparison(home)
 }
 

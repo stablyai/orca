@@ -1,4 +1,5 @@
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
+import { defaultAgentHomeDir } from '../../../../shared/app-profiles/app-profile-homes'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
@@ -10,7 +11,6 @@ import {
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { resolveAbsoluteDirOverride } from '../../../../shared/file-access/absolute-dir-override'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
 
 // Share account-home resolution between create pins and recordless catalog fingerprints or pickers show another account's models.
 
@@ -42,7 +42,7 @@ export async function resolveStructuredClaudeAccountHomePath(
         deps.wslDistro ? { runtime: 'wsl', wslDistro: deps.wslDistro } : { runtime: 'host' }
       )
       ?.trim() ||
-    join(homedir(), '.claude')
+    defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')
   )
 }
 
