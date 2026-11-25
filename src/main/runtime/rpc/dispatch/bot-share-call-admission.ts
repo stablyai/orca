@@ -30,10 +30,11 @@ export async function refuseBotShareCall(
     }
     case 'attachment': {
       const path = access.path(params)
+      // The attachment store is set up with the chat host, which opens lazily: open it first.
+      await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
       const claimed = path
         ? ((await getAgentSessionAttachmentStore()?.claimingSessions(path)) ?? [])
         : []
-      await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
       return claimed.some((sessionId) => botShareOwnsSession(runtime, scope, sessionId))
         ? null
         : 'session_not_found'

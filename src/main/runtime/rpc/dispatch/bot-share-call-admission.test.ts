@@ -304,7 +304,7 @@ describe('the share guard', () => {
   })
 
   // A stored file's upload id is claimed by the chats whose messages carry it (the journal's claims).
-  it('previews a stored attachment only when one of the teammate’s own chats claims it', async () => {
+  it('previews a stored attachment only when one of the teammate’s own chats claims it, right after a restart too', async () => {
     const root = join(directory, 'attachments')
     const theirs = join(root, '11111111-1111-4111-8111-111111111111', 'a.png')
     const owners = join(root, '22222222-2222-4222-8222-222222222222', 'b.png')
@@ -312,13 +312,17 @@ describe('the share guard', () => {
       ['11111111-1111-4111-8111-111111111111', [ids.alicesChat]],
       ['22222222-2222-4222-8222-222222222222', [ids.ownersChat]]
     ])
-    setAgentSessionAttachmentStore(
-      new AgentSessionAttachmentStore(root, {
-        hasSession: () => true,
-        claimingSessions: async (uploadId) => claims.get(uploadId) ?? []
-      }),
-      async () => {}
-    )
+    // As on a cold start: the store comes with the chat host, which the first call opens.
+    vi.mocked(runtime.ensureStructuredAgentSessionHost).mockImplementation(async () => {
+      setAgentSessionAttachmentStore(
+        new AgentSessionAttachmentStore(root, {
+          hasSession: () => true,
+          claimingSessions: async (uploadId) => claims.get(uploadId) ?? []
+        }),
+        async () => {}
+      )
+      throw new Error('installed')
+    })
     const read = (path: string) => call('agentSessionAttachment.read', { path })
     expect(errorCode(await read(theirs))).toBeNull()
     expect(errorCode(await read(owners))).toBe('not_found')
