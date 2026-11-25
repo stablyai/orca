@@ -24,6 +24,8 @@ export type BotItemPendingComment = {
   requestId: string | null
   /** The question a quick reply answers: the host refuses it once the agent has asked another. */
   questionId: string | null
+  /** The question it was sent for, kept on this device even where the host takes no question id. */
+  origin?: string
   /** Answers no question the agent waits on: the comment box named none. */
   plain: boolean
   /** Skills picked in it, each by its file on the bot's host; empty where the host takes none. */
@@ -310,6 +312,7 @@ export function createBotItemPendingCommentsHook({
           eventId: null,
           requestId: delivery.requestIds ? createNonSecureContextUuid() : null,
           questionId: questionId && delivery.questionIds ? questionId : null,
+          ...(questionId ? { origin: questionId } : {}),
           plain: plain && delivery.plain,
           ...(delivery.skills && skills.length > 0 ? { skills } : {}),
           // Only with the ask it answers named: skipped lines are that ask's.

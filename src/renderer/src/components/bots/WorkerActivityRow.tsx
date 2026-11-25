@@ -143,12 +143,12 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
           />
         </HoverCardTrigger>
         {props.running && props.canStop ? (
-          // Shown on hover, as the row's other actions are.
+          // Shown on hover, as the row's other actions are; centered on the title's line box.
           <span
             className={cn(
-              'mt-1.5 mr-1 opacity-0 transition-opacity group-hover/worker:opacity-100 focus-within:opacity-100',
+              'mr-1 flex items-center opacity-0 transition-opacity group-hover/worker:opacity-100 focus-within:opacity-100',
               // Nested rows are narrow: Stop covers the time on hover rather than taking width from the title.
-              props.nested && 'absolute top-0 right-0 rounded-sm bg-accent'
+              props.nested ? 'absolute top-1.5 right-0 h-4 rounded-sm bg-accent' : 'mt-1.5 h-5'
             )}
           >
             <Button

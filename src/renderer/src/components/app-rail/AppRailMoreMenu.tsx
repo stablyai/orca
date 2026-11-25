@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
-import { CircleHelp, Ellipsis, Settings } from 'lucide-react'
+import { CircleHelp, Ellipsis, Settings, SlidersHorizontal } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -15,8 +15,17 @@ import {
 import type { HelpMenuController } from '@/components/sidebar/chrome/help-menu-controller'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 import { appRailSlotCapacity } from './app-rail-overflow'
+import {
+  AppRailCustomizeRows,
+  useAppRailCustomizeLabel,
+  useMenuHeldInPlace,
+  type AppRailCustomizeRow
+} from './AppRailCustomizeMenu'
 
-/** What doesn't fit on a very short rail: Help (as a submenu sharing the rail's one Help controller), then Settings. */
+/**
+ * What doesn't fit on a short rail: folded pages, Customize (the "…" this button replaced), Help (as a submenu sharing
+ * the rail's one Help controller), then Settings.
+ */
 export function AppRailMoreMenu({
   help,
   includeHelp,
@@ -24,7 +33,8 @@ export function AppRailMoreMenu({
   settingsActive,
   onOpenSettings,
   tabStop,
-  destinations
+  destinations,
+  customizeRows
 }: {
   help: HelpMenuController
   includeHelp: boolean
@@ -42,12 +52,18 @@ export function AppRailMoreMenu({
     ownsFocusOnOpen?: boolean
     onSelect: () => void
   }[]
+  customizeRows: readonly AppRailCustomizeRow[]
 }): React.JSX.Element {
   const t = useTranslate()
   // Why: Radix refocuses the trigger in a timeout after closing, which would land after (or before, on a cold page
   // load) the page's own focus; yielding makes the page's focus win every time.
   const yieldCloseFocusRef = useRef(false)
   const label = t('appRail.more', 'More')
+  const customizeLabel = useAppRailCustomizeLabel()
+  const customizeTriggerRef = useRef<HTMLDivElement>(null)
+  const [customizeOpen, setCustomizeOpen] = useState(false)
+  // Toggling a page on while folded adds a row above Customize; keep its submenu put.
+  const customizeHeldInPlace = useMenuHeldInPlace(customizeOpen, customizeTriggerRef, customizeRows)
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
   const current =
     destinations.find((destination) => destination.current)?.label ??
@@ -102,9 +118,16 @@ export function AppRailMoreMenu({
             {destination.label}
           </DropdownMenuItem>
         ))}
-        {destinations.length > 0 && (includeHelp || includeSettings) ? (
-          <DropdownMenuSeparator />
-        ) : null}
+        {destinations.length > 0 ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuSub open={customizeOpen} onOpenChange={setCustomizeOpen}>
+          <DropdownMenuSubTrigger ref={customizeTriggerRef}>
+            <SlidersHorizontal className="size-3.5" aria-hidden />
+            {customizeLabel}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent {...customizeHeldInPlace}>
+            <AppRailCustomizeRows rows={customizeRows} />
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         {includeHelp ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>

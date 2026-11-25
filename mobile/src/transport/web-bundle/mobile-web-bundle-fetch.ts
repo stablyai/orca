@@ -2,7 +2,6 @@ import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
 import { PrioritySemaphore } from '../../../../src/shared/concurrency/priority-semaphore'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
 import {
-  isDeferredAsset,
   shellDownloadedAssets,
   type MobileWebBundleAssetRead,
   type MobileWebBundleManifestRead,
@@ -87,8 +86,6 @@ export async function fetchMobileWebBundle(args: {
   reusable?: MobileWebBundleReusableAssets
   // The manifest the caller already read; windows name its build id, so a build the desktop since replaced fails the fetch.
   opened?: MobileWebBundleManifestReply
-  // Just these assets of the opened build (deferred code a page asked for) instead of the generation.
-  only?: readonly MobileWebBundleAssetRead[]
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
   const stopped = new AbortController()
@@ -100,13 +97,9 @@ export async function fetchMobileWebBundle(args: {
   const reader = mobileWebBundleWindowReader(args.client, opened)
   const connection = connectionReadsOf(args.client)
   // Before reuse: a skipped catalog an older generation lists may not be on disk there either.
-  const wanted = args.only ?? shellDownloadedAssets(manifest)
-  // A cached build's copy of deferred code comes along; without one it waits for the page to ask.
-  const optional = new Set(args.only === undefined ? manifest.assets.filter(isDeferredAsset) : [])
+  const wanted = shellDownloadedAssets(manifest)
   const candidates = new Set(
-    args.reusable === undefined
-      ? []
-      : [...wanted, ...optional].filter((entry) => args.reusable?.has(entry))
+    args.reusable === undefined ? [] : wanted.filter((entry) => args.reusable?.has(entry))
   )
   const fetched = wanted.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
@@ -251,7 +244,7 @@ export async function fetchMobileWebBundle(args: {
       throwIfCallerAborted(args.signal)
       if (await args.reusable?.check(entry)) {
         reused.push(entry.path)
-      } else if (!optional.has(entry)) {
+      } else {
         missed.push(entry)
       }
     }

@@ -6170,7 +6170,7 @@
           "preservedTitle": "{{value0}}의 수정 내용을 별도로 저장했습니다",
           "preservedDescription": "Orca가 스킬을 업데이트하고 수정 내용을 {{value0}}에 저장했습니다.",
           "uncertainTitle": "Orca가 {{value0}}의 스킬 업데이트를 확인하지 못했습니다",
-          "uncertainDescription": "Orca가 {{value0}}의 스킬을 업데이트했을 수 있지만 결과를 확인하지 못했습니다. 업데이트 중에 스킬을 수정했다면 사본이 {{value1}}에 있습니다."
+          "uncertainDescriptionKept": "Orca가 {{value0}}의 스킬을 업데이트했을 수 있지만 결과를 확인하지 못했습니다. 업데이트 중에 스킬을 수정했다면 사본이 {{value1}}에 있거나 스킬 폴더에 그대로 남아 있습니다."
         },
         "SkillBackupPathLine": {
           "movedTo": "이전 사본을 옮긴 위치:",
@@ -21819,7 +21819,7 @@
         "task": "작업",
         "workerCount_one": "워커 {{count}}개",
         "workerCount_other": "워커 {{count}}개",
-        "stoppedByYou": "사용자가 중지함",
+        "stopped": "중지됨",
         "finished": "완료",
         "failedCount": "{{count}}개 실패",
         "needsYouCount": "확인 필요 {{count}}개",
@@ -27956,7 +27956,8 @@
     "errors": {
       "avatarHomeUnreadable": "저장된 사진을 읽지 못했습니다. 다시 선택하세요.",
       "folderNotOwned": "이 bot의 폴더를 확인하지 못했습니다.",
-      "unsavedDrafts": "봇 폴더에 저장하지 않은 편집 내용이 있습니다. 파일을 저장하거나 닫은 다음 다시 삭제하세요."
+      "unsavedDrafts": "봇 폴더에 저장하지 않은 편집 내용이 있습니다. 파일을 저장하거나 닫은 다음 다시 삭제하세요.",
+      "purposeTooLongForHost": "{{host}}의 Orca는 용도를 200자까지만 받을 수 있습니다. 줄이거나 {{host}}의 Orca를 업데이트하세요."
     },
     "slack": {
       "setup": {
@@ -28660,6 +28661,7 @@
     "toolsLabel": "앱 도구",
     "workspaces": "워크스페이스",
     "more": "더 보기",
+    "customize": "사용자 지정",
     "pageRegion": "페이지"
   },
   "chats": {

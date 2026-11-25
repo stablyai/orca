@@ -7133,13 +7133,24 @@
           "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
           "preservedTitle": "Your edits to {{value0}} were saved separately",
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "preservedBackupOnly": "Orca saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
-          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+          "uncertainDescriptionKept": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}} or still in the skills folder."
         },
         "SkillBackupPathLine": {
           "movedTo": "Old copy moved to:",
           "movedToOnHost": "Old copy moved to {{host}}:",
           "showFolder": "Show folder"
+        },
+        "skillBackupRefusal": {
+          "inPlaceReason": "Can't back it up: it's on another drive.",
+          "tryAgain": "Move it out of the skills folder, then try again.",
+          "leftoverReason": "Can't back up the left-over copy: it's on another drive.",
+          "movedAsideReason": "Couldn't back up the old copy: it's on another drive.",
+          "keepIt": "Move it out of the skills folder to keep it.",
+          "noReminder": "Move it out of the skills folder. Orca won't remind you.",
+          "copyPathFor": "Copy path for {{value0}}",
+          "copyFailed": "Couldn't copy the path."
         }
       },
       "sidebar": {
@@ -22539,7 +22550,8 @@
           "addressLabel": "Sign-in page address",
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
-        }
+        },
+        "manage": "Manage MCP servers"
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
@@ -22856,6 +22868,7 @@
         "dismiss": "Dismiss",
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
+        "workspaceRemoved": "This worker's workspace was removed",
         "restore": "Show in dock again",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
@@ -22891,7 +22904,7 @@
         "task": "Task",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "stoppedByYou": "Stopped by you",
+        "stopped": "Stopped",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
         "needsYouCount": "{{count}} needs you",
@@ -25865,19 +25878,6 @@
       }
     }
   },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} tab",
-      "chipOnlyName_other": "{{title}}, {{count}} tabs",
-      "entryNeedsAttention": "{{title}}, needs attention",
-      "moreTabs_one": "{{count}} more tab",
-      "moreTabs_other": "{{count}} more tabs",
-      "needAttention_one": ", {{count}} needs attention",
-      "needAttention_other": ", {{count}} need attention",
-      "openTabs_one": "{{count}} open tab",
-      "openTabs_other": "{{count}} open tabs"
-    }
-  },
   "updates": {
     "installOnQuit": {
       "title": "Update ready to install",
@@ -27622,6 +27622,7 @@
     },
     "errors": {
       "nameTaken": "Another bot already has that name.",
+      "purposeTooLongForHost": "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
       "generic": "Something went wrong. Try again.",
       "avatarHomeUnreadable": "Couldn't read the saved picture. Choose it again.",
       "folderNotOwned": "Couldn't verify this bot's folder.",
@@ -31078,6 +31079,7 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More",
+    "customize": "Customize",
     "pageRegion": "Page"
   },
   "chats": {
