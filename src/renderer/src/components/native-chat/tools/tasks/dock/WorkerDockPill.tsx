@@ -1,19 +1,24 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { useEffect, useLayoutEffect, type KeyboardEvent, type RefObject } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { cn } from '@/lib/class-names'
 import { ChevronDown } from 'lucide-react'
 import { WorkerDockGlyph } from './WorkerDockGlyph'
 import type { WorkerDockGlyph as Glyph } from './worker-dock-card-order'
 
-/** The chip's height (26px) plus 8px: the room the transcript keeps clear at its end. The chip sits
- *  on the dock's top edge, which the next box (message box, question, queue) already pads by 8px. */
+/** The chip's height (26px) plus 8px: the room the transcript keeps clear at its end, and where Jump
+ *  to latest rests so it stacks 8px above the chip. The chip sits on the dock's top edge, which the
+ *  next box (message box, question, queue) already pads by 8px. */
 const PILL_ROOM = '34px'
 
-// Where Jump to latest rests: on the chip's row, or just above the open panel.
+// Where Jump to latest rests: over the chip, or over the open panel, never under either.
 const JUMP_LIFT = '--native-chat-worker-jump-lift'
-// While the chip shows, Jump to latest shares its row as a right-aligned round arrow.
-const WORKER_ROW = 'data-native-chat-worker-row'
 
 export const WORKER_DOCK_FLOAT_CLASS =
   'pointer-events-none absolute inset-x-0 bottom-full z-20 h-0 [[data-native-chat-dock-fit~=dock]_&]:static [[data-native-chat-dock-fit~=dock]_&]:flex [[data-native-chat-dock-fit~=dock]_&]:h-auto [[data-native-chat-dock-fit~=dock]_&]:flex-col [[data-native-chat-dock-fit~=dock]_&]:pt-2'
@@ -30,6 +35,7 @@ export function WorkerDockPill({
   total,
   expanded,
   listId,
+  action,
   onToggle,
   onKeyDown
 }: {
@@ -42,74 +48,82 @@ export function WorkerDockPill({
   total: number
   expanded: boolean
   listId: string
+  /** Drawn at the end of the open panel's header, beside the toggle. */
+  action?: ReactNode
   onToggle: () => void
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
 }) {
   const t = useTranslate()
-  // Only while the chip shows does the transcript reserve its room and Jump to latest join its row.
+  // Only while the chip shows does the transcript reserve its room and Jump to latest lift over it.
   useLayoutEffect(() => {
     const pane = pill.current?.closest<HTMLElement>('[data-native-chat-root]')
     if (!pane) {
       return
     }
     pane.style.setProperty('--native-chat-worker-pill-room', PILL_ROOM)
-    pane.style.setProperty(JUMP_LIFT, '0px')
-    pane.setAttribute(WORKER_ROW, '')
+    pane.style.setProperty(JUMP_LIFT, PILL_ROOM)
     return () => {
       pane.style.removeProperty('--native-chat-worker-pill-room')
       pane.style.removeProperty(JUMP_LIFT)
-      pane.removeAttribute(WORKER_ROW)
     }
   }, [pill])
+  // One wrapper either way, so the button keeps its place (and focus) as the chip becomes the header.
   return (
-    <button
-      ref={pill}
-      type="button"
-      data-worker-dock-pill=""
-      aria-expanded={expanded}
-      aria-controls={expanded ? listId : undefined}
-      aria-label={
-        total > 0
-          ? t(
-              'components.native-chat.workerDock.pillLabel',
-              '{{count}} workers, latest: {{title}}',
-              {
-                count: total,
-                title: latest,
-                defaultValue_one: '{{count}} worker, latest: {{title}}'
-              }
-            )
-          : label
+    <div
+      className={
+        expanded ? 'flex h-[30px] shrink-0 items-center gap-1 rounded-md bg-muted pr-1' : 'contents'
       }
-      className={cn(
-        'flex shrink-0 items-center gap-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        expanded
-          ? 'h-[30px] w-full rounded-md bg-muted px-2.5 hover:bg-accent'
-          : cn(
-              WORKER_DOCK_SURFACE_CLASS,
-              'h-[26px] max-w-full rounded-full px-2.5 shadow-sm hover:bg-accent'
-            )
-      )}
-      onClick={onToggle}
-      onKeyDown={onKeyDown}
     >
-      {expanded ? (
-        <>
-          <span className="font-medium">
-            {t('components.native-chat.workerDock.workersRegion', 'Workers')}
-          </span>
-          {total > 0 ? <span className="tabular-nums text-muted-foreground">{total}</span> : null}
-          <ChevronDown aria-hidden="true" className="ml-auto size-3.5 text-muted-foreground" />
-        </>
-      ) : (
-        <>
-          <WorkerDockGlyph glyph={glyph} />
-          <span data-worker-dock-pill-title="" className="min-w-0 truncate">
-            {label}
-          </span>
-        </>
-      )}
-    </button>
+      <button
+        ref={pill}
+        type="button"
+        data-worker-dock-pill=""
+        aria-expanded={expanded}
+        aria-controls={expanded ? listId : undefined}
+        aria-label={
+          total > 0
+            ? t(
+                'components.native-chat.workerDock.pillLabel',
+                '{{count}} workers, latest: {{title}}',
+                {
+                  count: total,
+                  title: latest,
+                  defaultValue_one: '{{count}} worker, latest: {{title}}'
+                }
+              )
+            : label
+        }
+        className={cn(
+          'flex shrink-0 items-center gap-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          expanded
+            ? 'h-full min-w-0 flex-1 rounded-md px-2.5 hover:bg-accent'
+            : cn(
+                WORKER_DOCK_SURFACE_CLASS,
+                'h-[26px] max-w-full rounded-full px-2.5 shadow-sm hover:bg-accent'
+              )
+        )}
+        onClick={onToggle}
+        onKeyDown={onKeyDown}
+      >
+        {expanded ? (
+          <>
+            <span className="font-medium">
+              {t('components.native-chat.workerDock.workersRegion', 'Workers')}
+            </span>
+            {total > 0 ? <span className="tabular-nums text-muted-foreground">{total}</span> : null}
+            <ChevronDown aria-hidden="true" className="ml-auto size-3.5 text-muted-foreground" />
+          </>
+        ) : (
+          <>
+            <WorkerDockGlyph glyph={glyph} />
+            <span data-worker-dock-pill-title="" className="min-w-0 truncate">
+              {label}
+            </span>
+          </>
+        )}
+      </button>
+      {expanded ? action : null}
+    </div>
   )
 }
 
@@ -163,9 +177,9 @@ export function useWorkerDockJumpLift(card: RefObject<HTMLElement | null>, open:
     lift()
     return () => {
       observer.disconnect()
-      // Back onto the chip's row, unless the chip already left and cleared it.
-      if (pane.hasAttribute(WORKER_ROW)) {
-        pane.style.setProperty(JUMP_LIFT, '0px')
+      // Back over the chip, unless the chip already left and cleared both.
+      if (pane.style.getPropertyValue('--native-chat-worker-pill-room')) {
+        pane.style.setProperty(JUMP_LIFT, PILL_ROOM)
       }
     }
   }, [card, open])

@@ -23,11 +23,8 @@ export function workerDockSummary(
     }
   }
   const total = identities.length
-  const workers = kinds.get('worker')
-  const onlyKind = kinds.size === 1 ? kinds.keys().next().value : undefined
-  const countLabel = total
-    ? workerDockKindCount(t, workers ? 'worker' : (onlyKind ?? 'task'), workers ?? total)
-    : ''
+  // One count for everything listed: workers, subagents and background tasks alike.
+  const countLabel = total ? workerDockKindCount(t, 'worker', total) : ''
   const status = failures
     ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', { count: failures })
     : needsYou

@@ -3,8 +3,8 @@ import { useLayoutEffect, useState, type RefObject } from 'react'
 // A row's resting height: a one-line title over its model and age.
 export const WORKER_DOCK_ROW = 44
 const MAX_ROWS = 6
-// Jump to latest (26px) and its 8px gap rest above the open panel, so the panel leaves them room.
-const JUMP_ROOM = 34
+// Jump to latest (32px) and its 8px gap ride above the open panel, so the panel leaves them room.
+const JUMP_ROOM = 40
 const CRAMPED = 'data-worker-dock-cramped'
 
 /** The panel list's max height: six rows, or fewer when the chat above the dock is shorter, so the

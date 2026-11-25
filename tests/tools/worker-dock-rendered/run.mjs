@@ -320,7 +320,7 @@ await check('the open panel replaces the chip, spans the message box, and titles
     assert(header.y >= box.y && header.y + header.height <= box.y + 40, 'header is not on top')
     await page.mouse.move(1, 1)
     const cut = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-worker-dock-open] .line-clamp-2')].some(
+      [...document.querySelectorAll('[data-worker-dock-open] .line-clamp-3')].some(
         (title) => title.scrollWidth > title.clientWidth + 1
       )
     )
@@ -406,15 +406,19 @@ await check('Clear failed in the footer clears every failure', () =>
   })
 )
 
-await check('Stop all shows in the footer only when it applies, and stops', () =>
+await check('Stop all shows in the panel header only when it applies, and stops', () =>
   scene('stopAllOpen720', {}, async (page) => {
-    await page.getByRole('button', { name: 'Stop all' }).click()
+    const stop = page.getByRole('button', { name: 'Stop all' })
+    const [box, header] = await Promise.all([stop.boundingBox(), toggle(page).boundingBox()])
+    assert(Math.abs(box.y + box.height / 2 - (header.y + header.height / 2)) <= 1, 'not in header')
+    await stop.click()
     assert(
       (await events(page)).some((event) => event.action === 'stop-all'),
       'no Stop all'
     )
-    await shot(page, 'footer')
+    await shot(page, 'header-stop-all')
     await open('fourOpen720', {})
+    assert((await page.getByRole('button', { name: 'Stop all' }).count()) === 0, 'Stop all drawn')
     assert((await page.locator('[data-worker-dock-footer]').count()) === 0, 'empty footer drawn')
   })
 )
@@ -500,19 +504,14 @@ await check('Show in dock again restores the acknowledged failure', () =>
 
 await runLoadingAndLayerChecks({ check, scene, assert, shot })
 
-await check('Jump to latest shares the chip row at its end and never overlaps it', () =>
+await check('Jump to latest stacks 8px above the pill and never overlaps it', () =>
   scene('jumpFolded720', {}, async (page) => {
     const jump = page.getByRole('button', { name: 'Jump to latest' })
     await jump.waitFor()
     const [a, b] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
-    assert(Math.abs(a.y + a.height - (b.y + b.height)) <= 1, 'Jump is not on the chip row')
-    assert(a.x >= b.x + b.width + 8, 'Jump overlaps the chip')
-    const composer = await page.locator('[data-fixture-composer]').locator('..').boundingBox()
-    assert(
-      Math.abs(a.x + a.width - (composer.x + composer.width)) <= 1,
-      'Jump is not right-aligned'
-    )
-    await shot(page, 'jump-row')
+    const gap = b.y - (a.y + a.height)
+    assert(Math.abs(gap - 8) <= 1, `Jump to latest sits ${gap}px above the pill`)
+    await shot(page, 'jump-stacked')
   })
 )
 

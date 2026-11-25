@@ -16,7 +16,7 @@ import {
   workerDockScrollFade,
   type WorkerDockScrollAnchor
 } from './worker-dock-scroll-anchor'
-import { WorkerDockCardFooter } from './WorkerDockCardFooter'
+import { WorkerDockCardFooter, WorkerDockStopAll } from './WorkerDockCardFooter'
 import { useWorkerDockCardFocus } from './use-worker-dock-card-focus'
 import { useWorkerDockCardBudget, WORKER_DOCK_ROW } from './use-worker-dock-card-budget'
 import { useWorkerDockDetailReads } from './use-worker-dock-detail-reads'
@@ -250,8 +250,7 @@ export function WorkerDockRoster(props: {
                 WORKER_DOCK_SURFACE_CLASS,
                 'right-3 gap-1 rounded-[10px] p-1 shadow-floating sm:right-4'
               )
-            : // Leaves Jump to latest's 26px and an 8px gap free at the row's end.
-              'pointer-events-none max-w-[calc(100%-58px)] sm:max-w-[calc(100%-66px)] [&>*]:pointer-events-auto'
+            : 'pointer-events-none max-w-[calc(100%-24px)] sm:max-w-[calc(100%-32px)]'
         )}
         onPointerEnter={hold}
         onPointerLeave={release}
@@ -297,6 +296,7 @@ export function WorkerDockRoster(props: {
           total={total}
           expanded={props.expanded}
           listId={id}
+          action={<WorkerDockStopAll stopAll={props.stopAll} />}
           onToggle={() => {
             setHeld(null)
             props.onExpandedChange(!props.expanded)
@@ -391,7 +391,6 @@ export function WorkerDockRoster(props: {
               ) : null}
             </div>
             <WorkerDockCardFooter
-              stopAll={props.stopAll}
               clearable={clearable}
               clearing={clearing}
               onClearAll={() => {

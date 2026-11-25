@@ -118,7 +118,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="line-clamp-2 break-words">
+          <span className="line-clamp-3 break-words">
             {ordinal ? (
               <span className="text-muted-foreground">
                 {t('components.native-chat.workerDock.ordinal', '{{kind}} {{number}}', {

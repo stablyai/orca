@@ -129,10 +129,7 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         await toggle(page).click()
         await page.waitForTimeout(200)
         const [b, p] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
-        assert(
-          Math.abs(p.y + p.height - (b.y + b.height)) <= 1 && b.x >= p.x + p.width,
-          'Jump did not settle back onto the chip row'
-        )
+        assert(Math.abs(p.y - (b.y + b.height) - 8) <= 1, 'Jump did not settle back over the pill')
         await jump.click()
         await page.waitForTimeout(200)
         const atEnd = await page.evaluate(() => {
@@ -218,6 +215,12 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         await card(page).waitFor()
         await page.waitForTimeout(200)
         const jump = page.getByRole('button', { name: 'Jump to latest' })
+        // A pane too short for the panel and Jump both: Jump steps aside until the panel folds.
+        if (!(await jump.isVisible())) {
+          await toggle(page).click()
+          await card(page).waitFor({ state: 'detached' })
+          await page.waitForTimeout(200)
+        }
         const box = await jump.boundingBox()
         assert(box.y >= 0, `Jump to latest is off the pane at y=${box.y}`)
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
