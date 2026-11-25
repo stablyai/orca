@@ -25760,10 +25760,7 @@
         "lastItem": "Último elemento",
         "previous": "Elemento anterior",
         "next": "Elemento siguiente",
-        "linkCount": "{{count}} enlaces",
-        "reply": "Responder",
-        "replyAbove": "Responder, arriba",
-        "replyBelow": "Responder, abajo"
+        "subWhere": "Elemento {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "enlazó {{links}}",

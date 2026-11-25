@@ -28208,10 +28208,7 @@
         "place": "{{index}} / {{total}}",
         "deleted": "Bu öğe silindi.",
         "loading": "Öğe yükleniyor…",
-        "linkCount": "{{count}} bağlantı",
-        "reply": "Yanıtla",
-        "replyAbove": "Yukarıdaki soruyu yanıtla",
-        "replyBelow": "Aşağıdaki soruyu yanıtla"
+        "subWhere": "Öğe {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",
