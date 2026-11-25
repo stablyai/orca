@@ -77,25 +77,26 @@ const ROW_PRS = 5
 
 function linkSummary(links: readonly BotItemLinkView[]): string[] {
   const workers = links.filter((link) => link.kind === 'dispatch')
-  const parts =
-    workers.length > 0 ? [`${workers.length} worker${workers.length === 1 ? '' : 's'}`] : []
+  const prs: string[] = []
   for (const link of links) {
     const pr = link.kind === 'pr' || link.kind === 'dispatch' ? link.pr : null
     if (pr?.shown) {
-      parts.push(`#${pr.number}`)
+      prs.push(`#${pr.number}`)
     } else if (pr && !pr.shown) {
-      parts.push('PR not shown for server work yet')
+      prs.push('PR not shown for server work yet')
     }
   }
-  const unique = [...new Set(parts)]
-  const prs = unique.length - (workers.length > 0 ? 1 : 0)
-  return prs <= ROW_PRS
-    ? unique
-    : [
-        ...unique.slice(0, unique.length - prs),
-        ...unique.slice(-ROW_PRS),
-        `${prs - ROW_PRS} more PRs`
-      ]
+  const unique = [...new Set(prs)]
+  // Past the cap, the newest distinct PRs: a later link to an earlier PR counts as new.
+  const shown =
+    unique.length <= ROW_PRS
+      ? unique
+      : [...new Set(prs.toReversed())].slice(0, ROW_PRS).toReversed()
+  return [
+    ...(workers.length > 0 ? [`${workers.length} worker${workers.length === 1 ? '' : 's'}`] : []),
+    ...shown,
+    ...(unique.length > ROW_PRS ? [`${unique.length - ROW_PRS} more PRs`] : [])
+  ]
 }
 
 function age(at: number, now: number): string {
