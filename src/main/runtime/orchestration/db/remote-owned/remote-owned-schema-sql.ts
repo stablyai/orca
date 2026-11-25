@@ -42,7 +42,16 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
   -- Set when every send under request_key failed before leaving this Orca, so a cancel may retire
   -- the reservation; a resend clears it first.
-  never_sent_at      TEXT
+  never_sent_at      TEXT,
+  -- Set immediately before the request leaves this Orca. Rows from before this recovery feature
+  -- have no value and use their creation time only as a legacy fallback.
+  sent_at            TEXT,
+  -- The earliest point an in-flight send may be retired. This includes its configured transport
+  -- deadline, so a long explicit timeout cannot lose its fence while the request is still live.
+  sent_recovery_at   TEXT,
+  -- Set after a start reached the server but its answer was lost. Old rows have no stamp, so their
+  -- creation time remains the recovery boundary until they are observed or retried.
+  ambiguous_sent_at  TEXT
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);

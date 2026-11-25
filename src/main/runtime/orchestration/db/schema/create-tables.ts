@@ -33,6 +33,15 @@ export function createTables(this: OrchestrationDb): void {
   if (!this.hasColumn('remote_placements', 'never_sent_at')) {
     this.db.exec('ALTER TABLE remote_placements ADD COLUMN never_sent_at TEXT')
   }
+  if (!this.hasColumn('remote_placements', 'sent_at')) {
+    this.db.exec('ALTER TABLE remote_placements ADD COLUMN sent_at TEXT')
+  }
+  if (!this.hasColumn('remote_placements', 'sent_recovery_at')) {
+    this.db.exec('ALTER TABLE remote_placements ADD COLUMN sent_recovery_at TEXT')
+  }
+  if (!this.hasColumn('remote_placements', 'ambiguous_sent_at')) {
+    this.db.exec('ALTER TABLE remote_placements ADD COLUMN ambiguous_sent_at TEXT')
+  }
   if (!this.hasColumn('remote_dispatches', 'task_settled_here')) {
     this.db.exec(
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
