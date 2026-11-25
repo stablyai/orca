@@ -1,4 +1,4 @@
-import { JOURNAL_RUNNING_SUBAGENTS_MAX } from '../../../native-chat/agent-session-journal/journal-sql-running-subagents'
+import { JOURNAL_RUNNING_SUBAGENTS_MAX } from '../../../native-chat/agent-session-journal/journal-running-subagents'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { readCodexTurnStatus } from '../../app-server/codex-structured-thread-facts'
 import { readRecord } from '../../app-server/codex-item-field-readers'

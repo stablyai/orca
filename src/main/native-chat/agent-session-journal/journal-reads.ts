@@ -1,4 +1,4 @@
-import type { JournalRunningSubagent } from './journal-sql-running-subagents'
+import type { JournalRunningSubagent } from './journal-running-subagents'
 import type { JournalRestartCut } from './journal-sql-restart-cut'
 import type {
   AgentJournalAcceptanceReceipt,

@@ -1,10 +1,9 @@
 import type Database from '../../sqlite/sync-database'
+import {
+  JOURNAL_RUNNING_SUBAGENTS_MAX,
+  type JournalRunningSubagent
+} from './journal-running-subagents'
 import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
-
-/** More running children than a reopen numbers; past it the read refuses rather than drops one. */
-export const JOURNAL_RUNNING_SUBAGENTS_MAX = 64
-
-export type JournalRunningSubagent = { agentId: string; parentAgentId?: string }
 
 /**
  * Child agents whose saved turn is still open, with their parent: saved with the rows (before any
