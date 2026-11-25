@@ -23825,6 +23825,11 @@
         "cancel": "Cancelar",
         "tryAgain": "Tentar novamente"
       }
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Nota colada em {{agent}}. Pressione Enter lá para enviar.",
+      "pastingNote": "Colando nota em {{agent}}…",
+      "pastedNoteWaiting": "{{agent}} tem uma nota colada em espera. Pressione Enter lá primeiro."
     }
   },
   "csv": {

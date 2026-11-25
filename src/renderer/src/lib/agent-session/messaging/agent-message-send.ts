@@ -14,6 +14,7 @@ export async function sendMessageToAgent(args: {
   prompt: string
   /** False leaves the prompt unsent in a terminal agent's input; a chat takes it in its composer instead. */
   submit?: boolean
+  userInitiated?: boolean
 }): Promise<ActiveAgentNotesSendResult> {
   const { target, worktreeId, submit = true } = args
   const prompt = args.prompt.trim()
@@ -24,6 +25,7 @@ export async function sendMessageToAgent(args: {
     return sendNotesToActiveAgentSession({
       worktreeId,
       prompt,
+      userInitiated: args.userInitiated,
       noteTarget: { tabId: target.tabId, leafId: target.leafId },
       ...(submit ? {} : { submit: false })
     })

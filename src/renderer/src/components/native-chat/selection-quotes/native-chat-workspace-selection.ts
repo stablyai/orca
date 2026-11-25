@@ -98,13 +98,23 @@ export async function addQuoteToAgent(
     return { status: 'not-writable', code: 'session-send-refused' }
   }
   const result = await sendMessageToAgent({ worktreeId, target, prompt: quote, submit: false })
+  if (result.status === 'sent') {
+    revealAgentTerminal(worktreeId, target)
+  }
+  return result
+}
+
+/** Shows and focuses a terminal agent's pane, if its tab is still open. */
+export function revealAgentTerminal(
+  worktreeId: string,
+  target: { tabId: string; leafId: string }
+): void {
   const tab = useAppStore
     .getState()
     .unifiedTabsByWorktree[worktreeId]?.find(
       (candidate) => candidate.contentType === 'terminal' && candidate.entityId === target.tabId
     )
-  if (result.status === 'sent' && tab) {
+  if (tab) {
     revealTerminalPane(worktreeId, tab, target.leafId)
   }
-  return result
 }

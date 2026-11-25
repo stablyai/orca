@@ -20,6 +20,7 @@ import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { writeTerminalSendForReceipt } from './terminal-send-receipt'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
@@ -166,21 +167,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       if (!(await this.launchComposerAdmitsSubmit(pty.pty.ptyId, action, options))) {
         return { handle, accepted: false, bytesWritten: 0 }
       }
-      const writeSettlement = await this.writeTerminalAction(
-        pty.pty.ptyId,
-        action,
-        payload,
-        options
-      )
-      return {
-        handle,
-        accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
-        ...(writeSettlement ? { writeSettlement } : {}),
-        bytesWritten:
-          !writeSettlement || writeSettlement.outcome === 'accepted'
-            ? Buffer.byteLength(payload, 'utf8')
-            : 0
-      }
+      return this.writeTerminalSend(handle, pty.pty.ptyId, action, payload, options)
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -200,17 +187,25 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       return { handle, accepted: false, bytesWritten: 0 }
     }
 
-    const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
+    return this.writeTerminalSend(handle, leaf.ptyId, action, payload, options)
+  }
 
-    return {
-      handle,
-      accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
-      ...(writeSettlement ? { writeSettlement } : {}),
-      bytesWritten:
-        !writeSettlement || writeSettlement.outcome === 'accepted'
-          ? Buffer.byteLength(payload, 'utf8')
-          : 0
-    }
+  private writeTerminalSend(
+    handle: string,
+    ptyId: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    payload: string,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<RuntimeTerminalSend> {
+    return writeTerminalSendForReceipt(
+      {
+        writer: this.terminalWriter,
+        runFacts: this.terminalRunFacts,
+        writeAction: (writeOptions) =>
+          this.writeTerminalAction(ptyId, action, payload, writeOptions)
+      },
+      { handle, ptyId, action, payload, options }
+    )
   }
 
   private async launchComposerAdmitsSubmit(

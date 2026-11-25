@@ -1,4 +1,5 @@
 import { agentSessionWriteNoticeEnglish } from '../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { translate } from '@/i18n/i18n'
 
 export type ActiveAgentNotesSendStatus =
@@ -15,6 +16,8 @@ export type ActiveAgentNotesSendStatus =
   | 'not-ready'
   | 'not-writable'
   | 'partial-submit-failed'
+  /** Pasted into the agent's input and left there: the user presses Enter. */
+  | 'pasted'
   /** Sent, but nobody could confirm the agent got it: the host may hold it. */
   | 'unconfirmed'
 
@@ -37,6 +40,8 @@ export type ActiveAgentNotesSendFailureCode =
   | 'terminal-send-approval-unseen'
   | 'host-send-approval-guard-missing'
   | 'terminal-send-refused'
+  | 'terminal-send-busy'
+  | 'terminal-draft-pending'
   | 'terminal_not_writable'
   | 'submit-readiness-lost'
   | 'submit-terminal-unavailable'
@@ -49,6 +54,8 @@ export type ActiveAgentNotesSendFailureCode =
 export type ActiveAgentNotesSendResult = {
   status: ActiveAgentNotesSendStatus
   code?: ActiveAgentNotesSendFailureCode
+  /** With `pasted`: how long the terminal still needs to take the paste in. */
+  pasteSettleMs?: number
 }
 
 export function activeAgentNotesSendFailureMessage(
@@ -58,11 +65,20 @@ export function activeAgentNotesSendFailureMessage(
     code?: ActiveAgentNotesSendFailureCode
     /** What was being delivered; Add to chat reuses this wording for a selection. */
     subject?: 'notes' | 'selection'
+    /** The agent's display name, for messages that name it. */
+    agent?: string
   } = {}
 ): string {
   const target = options.explicitTarget
     ? translate('components.agentNotes.targetSelected', 'selected')
     : translate('components.agentNotes.targetActive', 'active')
+  if (options.code === 'terminal-draft-pending') {
+    return translate(
+      'components.agentNotes.pastedNoteWaiting',
+      '{{agent}} has a pasted note waiting. Press Enter there first.',
+      { agent: options.agent ?? formatAgentTypeLabel(null) }
+    )
+  }
   let message: string
   switch (status) {
     case 'empty':
@@ -153,6 +169,7 @@ export function activeAgentNotesSendFailureMessage(
     case 'unconfirmed':
       message = agentSessionWriteNoticeEnglish(['sendOutcomeLost'])
       break
+    case 'pasted':
     case 'sent':
       message = ''
       break

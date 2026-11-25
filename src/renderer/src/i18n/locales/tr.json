@@ -24327,7 +24327,10 @@
       "notWritable": "{{target}} ajanı notları kabul etmedi.",
       "selectedSubmitFailed": "Notlar seçilen terminale yapıştırılmış olabilir ancak Orca bunları gönderemedi.",
       "activeSubmitFailed": "Notlar etkin terminale yapıştırılmış olabilir ancak Orca bunları gönderemedi.",
-      "notWritableSelection": "{{target}} ajanı seçilen içeriği kabul etmedi."
+      "notWritableSelection": "{{target}} ajanı seçilen içeriği kabul etmedi.",
+      "pastedPressEnter": "Not {{agent}} içine yapıştırıldı. Göndermek için orada Enter tuşuna basın.",
+      "pastingNote": "Not {{agent}} içine yapıştırılıyor…",
+      "pastedNoteWaiting": "{{agent}} içinde yapıştırılmış bir not bekliyor. Önce orada Enter tuşuna basın."
     }
   },
   "dashboardPopout": {

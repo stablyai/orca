@@ -23783,7 +23783,10 @@
       "notWritable": "{{target}}代理程式未接受備註。",
       "selectedSubmitFailed": "備註可能已貼到所選的終端機中，但 Orca 無法送出。",
       "activeSubmitFailed": "備註可能已貼到作用中的終端機中，但 Orca 無法送出。",
-      "notWritableSelection": "{{target}}代理程式未接受選取內容。"
+      "notWritableSelection": "{{target}}代理程式未接受選取內容。",
+      "pastedPressEnter": "備註已貼到 {{agent}}。請在該終端機中按 Enter 鍵傳送。",
+      "pastingNote": "正在將備註貼到 {{agent}}…",
+      "pastedNoteWaiting": "{{agent}} 中有已貼上的備註尚未傳送。請先在該終端機中按 Enter 鍵。"
     },
     "crash": {
       "report": {

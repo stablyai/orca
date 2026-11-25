@@ -1,4 +1,8 @@
 import type { RuntimeTerminalAgentStatus } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type {
+  RuntimeTerminalClientPaste,
+  RuntimeTerminalClientPasteReceipt
+} from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { ActiveAgentNotesSendFailureCode } from './active-agent-note-send-result'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -22,27 +26,48 @@ export type TerminalAgentSendReadinessResult = {
   status: TerminalAgentSendReadiness
   supportsGuardedSend: boolean
   code?: ActiveAgentNotesSendFailureCode
+  /** Names the terminal's last input, as a paste receipt does. Older hosts omit it. */
+  inputGeneration?: number
+  resolvedInputGeneration?: number
+  /** The host's receipt for the paste asked about. Older hosts omit it. */
+  clientPaste?: RuntimeTerminalClientPasteReceipt
 }
 
 export async function getTerminalAgentSendReadiness(
   runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
-  options: { allowLegacyFallback: boolean }
+  options: { allowLegacyFallback: boolean },
+  clientPaste?: RuntimeTerminalClientPaste
 ): Promise<TerminalAgentSendReadinessResult> {
   try {
-    const { agentStatus } = await callRuntimeRpc<{ agentStatus: RuntimeTerminalAgentStatus }>(
+    const {
+      agentStatus,
+      inputGeneration,
+      resolvedInputGeneration,
+      clientPaste: receipt
+    } = await callRuntimeRpc<{
+      agentStatus: RuntimeTerminalAgentStatus
+      inputGeneration?: number
+      resolvedInputGeneration?: number
+      clientPaste?: RuntimeTerminalClientPasteReceipt
+    }>(
       runtimeTarget,
       'terminal.agentStatus',
-      { terminal: terminalHandle },
+      { terminal: terminalHandle, ...(clientPaste ? { clientPaste } : {}) },
       { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
     )
+    const input = {
+      ...(Number.isSafeInteger(inputGeneration) ? { inputGeneration } : {}),
+      ...(Number.isSafeInteger(resolvedInputGeneration) ? { resolvedInputGeneration } : {}),
+      ...(clientPaste && isClientPasteReceipt(receipt) ? { clientPaste: receipt } : {})
+    }
     if (!agentStatus.isRunningAgent) {
-      return { status: 'no-agent', supportsGuardedSend: true }
+      return { status: 'no-agent', supportsGuardedSend: true, ...input }
     }
     if (agentStatus.status === 'permission') {
-      return { status: 'permission', supportsGuardedSend: true }
+      return { status: 'permission', supportsGuardedSend: true, ...input }
     }
-    return { status: 'sendable', supportsGuardedSend: true }
+    return { status: 'sendable', supportsGuardedSend: true, ...input }
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       if (!options.allowLegacyFallback) {
@@ -88,6 +113,29 @@ async function getLegacyTerminalAgentSendStatus(
     }
     throw error
   }
+}
+
+function isClientPasteReceipt(value: unknown): value is RuntimeTerminalClientPasteReceipt {
+  if (typeof value !== 'object' || value === null || !('state' in value)) {
+    return false
+  }
+  const settles = 'settlesInMs' in value && isDelayMs(value.settlesInMs)
+  switch (value.state) {
+    case 'withdrawn':
+    case 'refused':
+    case 'unknown':
+      return true
+    case 'writing':
+      return settles
+    case 'written':
+      return settles && 'inputGeneration' in value && Number.isSafeInteger(value.inputGeneration)
+    default:
+      return false
+  }
+}
+
+function isDelayMs(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
 function runtimeTerminalUnavailableCode(error: unknown): ActiveAgentNotesSendFailureCode {

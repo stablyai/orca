@@ -22921,6 +22921,11 @@
         "cancel": "Отмена",
         "tryAgain": "Повторить"
       }
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Заметка вставлена в {{agent}}. Нажмите там Enter, чтобы отправить.",
+      "pastingNote": "Вставка заметки в {{agent}}…",
+      "pastedNoteWaiting": "В {{agent}} ожидает вставленная заметка. Сначала нажмите там Enter."
     }
   },
   "dashboardPopout": {
