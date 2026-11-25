@@ -2,9 +2,11 @@
 import {
   BotGitHubDefaultBot,
   BotGitHubUnlink,
+  BotGitHubPeople,
   BotGitHubUsers
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
 import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
+import { gitHubPeopleRosters } from '../../../connector-cloud/github-people-roster'
 import { defineMethod } from '../core'
 import { withHostCloudClient } from './bots-slack'
 
@@ -35,6 +37,17 @@ export const BOT_GITHUB_METHODS = [
     params: BotGitHubUsers,
     handler: async ({ query }, context) =>
       withHostCloudClient(context, (client) => client.githubUsers(query))
+  }),
+  defineMethod({
+    // The Add picker's people, read once per open through this host's own gh and filtered as the
+    // owner types; the exact-username lookup above still answers for anyone else on GitHub.
+    name: 'bots.github.people',
+    permission: 'accounts-admin',
+    params: BotGitHubPeople,
+    handler: async ({ scope, owner }) => ({
+      ok: true,
+      value: await gitHubPeopleRosters().read(scope, owner)
+    })
   }),
   defineMethod({
     name: 'bots.github.unlink',

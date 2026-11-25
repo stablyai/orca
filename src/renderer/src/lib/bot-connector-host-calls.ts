@@ -17,9 +17,11 @@ import type {
   ConnectorLinearState
 } from '../../../shared/connector-bot-linear-contract'
 import type {
+  BotGitHubRoster,
   ConnectorGitHubState,
   ConnectorGitHubUsersResponse
 } from '../../../shared/connector-bot-github-contract'
+import type { GitHubPeopleScope } from '../../../shared/bots/github-people-scope'
 import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
 import type { ConnectorConnectRedeem } from '../../../../cloud/packages/connector-contract/src/connect-messages'
 import { botHostTarget } from './bot-hosts'
@@ -92,6 +94,8 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
     state: () => call<ConnectorGitHubState>(hostId, 'bots.github.state'),
     users: (args: { query: string }) =>
       call<ConnectorGitHubUsersResponse>(hostId, 'bots.github.users', args),
+    people: (args: { scope: GitHubPeopleScope; owner: string | null }) =>
+      call<BotGitHubRoster>(hostId, 'bots.github.people', args),
     /** `userId`: one linked GitHub user; none unlinks them all, as an older host does. */
     unlink: (args: { userId?: string } = {}) => call<undefined>(hostId, 'bots.github.unlink', args),
     setDefaultBot: (args: { botId: string | null; userId?: string }) =>
