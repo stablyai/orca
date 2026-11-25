@@ -17,14 +17,16 @@ let finished = false;
 let byteLength = 0;
 let idleTimer;
 const absoluteTimer = setTimeout(finish, 7000);
-function finish() {
+function finish(complete) {
   if (finished) return;
   finished = true;
   clearTimeout(idleTimer);
   clearTimeout(absoluteTimer);
   process.stdin.pause();
-  payload += decoder.end();
-  try { require('node:fs').writeFileSync(outPath, payload); } catch {}
+  if (complete === true) {
+    payload += decoder.end();
+    try { require('node:fs').writeFileSync(outPath, payload); } catch {}
+  }
   process.exit(0);
 }
 function resetIdle(timeout) { clearTimeout(idleTimer); idleTimer = setTimeout(finish, timeout); }
@@ -32,10 +34,10 @@ resetIdle(${POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS * 1000});
 process.stdin.on('data', chunk => {
   if (finished) return;
   byteLength += chunk.length;
-  if (byteLength > maxBytes) finish();
+  if (byteLength > maxBytes) return finish();
   payload += decoder.write(chunk);
   resetIdle(${POSIX_HOOK_JSON_STDIN_IDLE_TIMEOUT_SECONDS * 1000});
 });
-process.stdin.on('end', finish);
-process.stdin.on('error', finish);
+process.stdin.on('end', () => finish(true));
+process.stdin.on('error', () => finish());
 `

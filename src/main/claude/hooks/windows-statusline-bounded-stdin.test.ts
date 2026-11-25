@@ -16,12 +16,10 @@ describe('statusline .cmd generation', () => {
     }
     const stampIndex = script.indexOf('ORCA_STATUSLINE_STAMP_FILE')
     const captureIndex = script.indexOf('claude-statusline-read.cjs')
-    const moreIndex = script.indexOf('more.com')
     expect(stampIndex).toBeGreaterThan(-1)
     expect(captureIndex).toBeGreaterThan(-1)
-    // Throttle comes before either stdin reader.
     expect(stampIndex).toBeLessThan(captureIndex)
-    expect(stampIndex).toBeLessThan(moreIndex)
+    expect(script).not.toContain('more.com')
   })
 
   it('names the reader helper beside the .cmd and points the runtime at the launch execPath', () => {
@@ -85,7 +83,7 @@ describe.skipIf(process.platform !== 'win32')('bounded stdin reader (.cjs)', () 
     expect((await import('node:fs')).readFileSync(out, 'utf-8')).toBe('{"a":1}')
   })
 
-  it('exits with partial payload when stdin is abandoned mid-read', async () => {
+  it('exits without a payload when stdin is abandoned mid-read', async () => {
     setup()
     const out = join(dir, 'payload.tmp')
     const { PassThrough } = await import('node:stream')
@@ -96,5 +94,6 @@ describe.skipIf(process.platform !== 'win32')('bounded stdin reader (.cjs)', () 
     const result = await resultPromise
     expect(result.timedOut).toBe(false)
     expect(result.code).toBe(0)
+    expect((await import('node:fs')).existsSync(out)).toBe(false)
   }, 15_000)
 })

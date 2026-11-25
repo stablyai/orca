@@ -3,7 +3,6 @@ import {
   buildPosixClaudeBackgroundJobGuardLines
 } from '../../agent-hooks/installation/scripts/claude-background-job-guard'
 import { posixCurlCommand } from '../../agent-hooks/installation/scripts/hook-post-command'
-import { WINDOWS_HOOK_STDIN_READER } from '../../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS,
   CLAUDE_STATUSLINE_PATHNAME
@@ -57,13 +56,11 @@ export function getManagedStatusLineScript(
       'set "ELECTRON_RUN_AS_NODE=1"',
       `if not defined ORCA_AGENT_HOOK_NODE set "ORCA_AGENT_HOOK_NODE=${windowsRuntimePath.replaceAll('%', '%%')}"`,
       // A bounded read replaces the parking `more.com`; a timed-out capture leaves no payload,
-      // which the rate_limits probe below treats as a skipped tick. Falls back to the legacy
-      // capture when the reader helper is absent (an install predating this pairing).
-      'if exist "%~dp0claude-statusline-read.cjs" (',
-      '  "%ORCA_AGENT_HOOK_NODE%" "%~dp0claude-statusline-read.cjs" "%ORCA_STATUSLINE_PAYLOAD_FILE%" 2>nul',
-      ') else (',
-      `  ${WINDOWS_HOOK_STDIN_READER} >"%ORCA_STATUSLINE_PAYLOAD_FILE%" 2>nul`,
-      ')',
+      // which the rate_limits probe below treats as a skipped tick. A stale payload from an
+      // interrupted tick is cleared first, and a missing reader (mid-refresh) skips the tick.
+      'del "%ORCA_STATUSLINE_PAYLOAD_FILE%" >nul 2>nul',
+      'if not exist "%~dp0claude-statusline-read.cjs" goto orca_statusline_cleanup',
+      '"%ORCA_AGENT_HOOK_NODE%" "%~dp0claude-statusline-read.cjs" "%ORCA_STATUSLINE_PAYLOAD_FILE%" 2>nul',
       `:${STATUSLINE_PROBE_LABEL}`,
       // Non-subscriber payloads lack rate_limits; skip their endpoint lookup and curl spawn.
       // Escaped quotes match the JSON key, avoiding false matches in paths.
