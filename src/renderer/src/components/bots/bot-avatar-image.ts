@@ -130,25 +130,38 @@ export function useBotAvatarLook(
 
 function useUploadSrc(bot: AvatarBot): string | null {
   const parsed = parseBotAvatar(bot.avatar)
-  const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
-  const [upload, setUpload] = useState<{ key: string; src: string | null } | null>(null)
   const { hostId, id } = bot
+  // The picture shown is bound to this host, bot and version.
+  const uploadKey =
+    parsed?.kind === 'upload' ? `${botRefKey({ hostId, id })}|${parsed.version}` : null
+  const version = parsed?.kind === 'upload' ? parsed.version : null
+  const [upload, setUpload] = useState<{ key: string; src: string | null } | null>(null)
   const away = useBotHostAway(hostId)
   // A paired server's picture read while it was away (as at launch, from its kept list) failed;
   // its coming back reads it again, so the row never stays on the initial.
   const generation = useBotHostGeneration(hostId)
   useEffect(() => {
-    if (!uploadKey) {
+    if (!uploadKey || !version) {
       return
     }
     const ref = { hostId, id }
     let live = true
+    // A version names the bytes, so a picture shown for it stays: an empty answer for the same version
+    // never hides it, whatever the shared cache holds by then (another view may have put an older
+    // version of this bot there).
+    const show = (src: string | null): void => {
+      if (live) {
+        setUpload((shown) =>
+          src === null && shown?.key === uploadKey && shown.src ? shown : { key: uploadKey, src }
+        )
+      }
+    }
     // A picture loaded for this version by any read (another view's, or one from before the host came
-    // back that answered late) shows here too, and an empty or failed answer never hides it.
+    // back that answered late) shows here too.
     const showLoaded = (): boolean => {
-      const loaded = peekBotUploadSrc(ref, uploadKey)
-      if (live && loaded) {
-        setUpload({ key: uploadKey, src: loaded })
+      const loaded = peekBotUploadSrc(ref, version)
+      if (loaded) {
+        show(loaded)
       }
       return Boolean(loaded)
     }
@@ -159,16 +172,16 @@ function useUploadSrc(bot: AvatarBot): string | null {
       }
     })
     // An away server can't answer, but a picture already loaded from it still shows.
-    const pending = away ? loadedUploadRead(ref, uploadKey) : uploadRead(ref, uploadKey, generation)
+    const pending = away ? loadedUploadRead(ref, version) : uploadRead(ref, version, generation)
     void pending?.then((read) => {
-      if (live && read !== 'failed' && (read.src || !showLoaded())) {
-        setUpload({ key: uploadKey, src: read.src })
+      if (read !== 'failed' && (read.src || !showLoaded())) {
+        show(read.src)
       }
     })
     return () => {
       live = false
       stopLoads()
     }
-  }, [hostId, id, uploadKey, away, generation])
+  }, [hostId, id, uploadKey, version, away, generation])
   return uploadKey && upload?.key === uploadKey ? upload.src : null
 }

@@ -249,6 +249,37 @@ describe('group Items row faces on a paired server', () => {
     }
   }
 
+  it('keeps a shown picture when an older version takes the cache slot and the read after the come-back answers empty', async () => {
+    hostIs(CONNECTED)
+    const panel = mountPanelRow()
+    const header = panel.mountHeader()
+    await flush()
+    const before = panel.readsOf()[0]
+
+    hostIs(DISCONNECTED)
+    hostIs(CONNECTED)
+    await flush()
+    expect(panel.readsOf()).toHaveLength(2)
+    const after = panel.readsOf()[1]
+    await answer(before, 'UE5H')
+    expect(panel.row()).toBe(PNG)
+    expect(header.result.current).toBe(PNG)
+
+    // Earlier chat history draws the same bot with the picture it had then: that read takes the
+    // bot's one cache slot while the current pair still shows the newer version.
+    const history = renderHook(
+      () => useBotAvatarLook({ id: panel.id, hostId: HOST, avatar: 'upload:v0' }).src
+    )
+    await flush()
+    expect(panel.readsOf()).toHaveLength(3)
+
+    await answer(after, null)
+    expect(header.result.current).toBe(PNG)
+    expect(panel.row()).toBe(PNG)
+    history.unmount()
+    panel.unmount()
+  })
+
   it('shows a picture a newly drawn row reads in a header whose own read failed', async () => {
     hostIs(CONNECTED)
     const first = mountPanelRow()
