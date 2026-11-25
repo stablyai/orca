@@ -225,7 +225,7 @@ export function useNativeChatPickerState(args: {
       const result = applyPickerSuggestion(text, at, item)
       if (item.kind === 'skill' && textareaRef.current?.insertSkill) {
         const from = result.caret - result.insertedToken.length - 1
-        textareaRef.current.insertSkill(from, at, result.insertedToken, item.path)
+        textareaRef.current.insertSkill(from, result.replacedEnd, result.insertedToken, item.path)
       }
       commitCompletion(result)
       skillOriginRef.current = item.kind === 'skill' ? result.insertedToken : null

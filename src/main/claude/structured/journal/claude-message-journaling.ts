@@ -155,12 +155,19 @@ export function journalClaudeMessage(
   }
   const stopHookFeedback = claudeEnvelopeStopHookFeedbackRow(envelope)
   if (stopHookFeedback) {
-    const goalCheck = ctx.threadGoal.goalCheckText(envelope)
-    if (goalCheck !== null) {
-      stopHookFeedback.presentation = AGENT_SESSION_GOAL_CHECK_PRESENTATION
-      stopHookFeedback.text = `Stop hook feedback: ${goalCheck}`
-    }
+    const goalCheck = ctx.threadGoal.recordGoalCheck(envelope)
     ctx.turn.ensureOpen(message, source, observedAt)
+    if (goalCheck?.reopened) {
+      const { identity: goalIdentity, body: goalBody } = goalCheck.reopened
+      ctx.sink.appendItem(goalIdentity, goalBody, {
+        ...stamp(goalIdentity, goalBody),
+        lifecycle: true
+      })
+    }
+    if (goalCheck) {
+      stopHookFeedback.presentation = AGENT_SESSION_GOAL_CHECK_PRESENTATION
+      stopHookFeedback.text = `Stop hook feedback: ${goalCheck.reason}`
+    }
     ctx.sink.appendItem(identity, stopHookFeedback, {
       ...stamp(identity, stopHookFeedback),
       lifecycle: true

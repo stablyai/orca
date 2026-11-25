@@ -34,8 +34,12 @@ import {
   ORCAD_FENCED_AUTOMATION
 } from '../ownership/orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 
 export { AutomationDispatchCancelledError }
+
+const UNSUPPORTED_AUTOMATION_AGENT_MESSAGE =
+  "This automation's agent is no longer supported. Edit the automation to pick another agent."
 
 type RunTarget = Extract<AutomationRunTargetResult, { ok: true }>
 
@@ -193,6 +197,10 @@ export async function requestAutomationDispatch(
           throw new AutomationDispatchCancelledError(
             'The run changed before its agent could launch.'
           )
+        }
+        // Saved automations can name a removed agent (Gemini CLI); refuse before either surface looks it up.
+        if (!isTuiAgent(automation.agentId)) {
+          throw new Error(UNSUPPORTED_AUTOMATION_AGENT_MESSAGE)
         }
         const latestTarget = resolveCurrentTarget()
         if (!latestTarget.ok) {

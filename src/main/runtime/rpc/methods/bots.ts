@@ -11,6 +11,10 @@ import {
   type BotChatResetParams,
   type BotUpdateParams
 } from '../../../../shared/rpc-contract/bots-params'
+import {
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
 import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
@@ -202,15 +206,39 @@ export const BOT_METHODS = [
     permission: 'workspace',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
+      bot: await runtime.bots.setAvatarImage(
+        params.botId,
+        Buffer.from(params.png, 'base64'),
+        params.expectedAvatarRevision,
+        params.expectedAvatarEpoch
+      )
     })
   }),
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
     params: BotAvatarRead,
+    handler: async (params, { runtime }) =>
+      params.catalogRevision === undefined
+        ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
+        : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.wanted',
+    permission: 'workspace',
+    params: BotSlackIconWanted,
+    handler: (params, { runtime }) => runtime.bots.slackIcons.wanted(params.botId, params.look)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.upload',
+    permission: 'workspace',
+    params: BotSlackIconUpload,
     handler: async (params, { runtime }) => ({
-      png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null
+      stored: await runtime.bots.slackIcons.store(
+        params.botId,
+        params.look,
+        Buffer.from(params.png, 'base64')
+      )
     })
   }),
   defineMethod({

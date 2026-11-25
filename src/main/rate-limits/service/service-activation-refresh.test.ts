@@ -5,7 +5,7 @@ import type {
   ProviderRateLimits,
   RateLimitState
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { fetchGeminiRateLimits } from '../providers/gemini/gemini-usage-fetcher'
+import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
 import { RateLimitService } from './rate-limit-service'
 
 const { unavailable } = vi.hoisted(() => ({
@@ -26,11 +26,10 @@ vi.mock('../providers/claude/claude-active-usage-fetch', () => ({
 vi.mock('../providers/codex/codex-fetcher', () => ({
   fetchCodexRateLimits: unavailable('codex')
 }))
-vi.mock('../providers/gemini/gemini-usage-fetcher', () => ({ fetchGeminiRateLimits: vi.fn() }))
 vi.mock('../providers/opencode-go/opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: unavailable('opencode-go')
 }))
-vi.mock('../providers/kimi/kimi-fetcher', () => ({ fetchKimiRateLimits: unavailable('kimi') }))
+vi.mock('../providers/kimi/kimi-fetcher', () => ({ fetchKimiRateLimits: vi.fn() }))
 vi.mock('../providers/minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: unavailable('minimax')
 }))
@@ -68,8 +67,8 @@ it('publishes local usage without a window activation and limits repeated owner 
   const start = Date.parse('2026-11-22T12:00:00Z')
   vi.setSystemTime(start)
   let usedPercent = 10
-  vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => ({
-    provider: 'gemini',
+  vi.mocked(fetchKimiRateLimits).mockImplementation(async () => ({
+    provider: 'kimi',
     session: { usedPercent, windowMinutes: 300, resetsAt: null, resetDescription: null },
     weekly: null,
     updatedAt: Date.now(),
@@ -94,13 +93,13 @@ it('publishes local usage without a window activation and limits repeated owner 
   service.attach(window as unknown as BrowserWindow)
 
   try {
-    expect((await service.refresh()).gemini?.session?.usedPercent).toBe(10)
+    expect((await service.refresh()).kimi?.session?.usedPercent).toBe(10)
 
     usedPercent = 60
     vi.setSystemTime(start + 360_000)
     await expect(service.refreshOnOwnerReturn()).resolves.toBeUndefined()
-    expect((await service.getState()).gemini?.session?.usedPercent).toBe(60)
-    await vi.waitFor(() => expect(published?.gemini?.session?.usedPercent).toBe(60))
+    expect((await service.getState()).kimi?.session?.usedPercent).toBe(60)
+    await vi.waitFor(() => expect(published?.kimi?.session?.usedPercent).toBe(60))
 
     usedPercent = 80
     // An unwatched return stamps the interval while leaving the stale reading eligible for refresh.
@@ -110,11 +109,11 @@ it('publishes local usage without a window activation and limits repeated owner 
     focused = true
     vi.setSystemTime(start + 780_000)
     await service.refreshOnOwnerReturn()
-    expect((await service.getState()).gemini?.session?.usedPercent).toBe(60)
+    expect((await service.getState()).kimi?.session?.usedPercent).toBe(60)
 
     vi.setSystemTime(start + 1_020_000)
     await service.refreshOnOwnerReturn()
-    expect((await service.getState()).gemini?.session?.usedPercent).toBe(80)
+    expect((await service.getState()).kimi?.session?.usedPercent).toBe(80)
 
     usedPercent = 90
     focused = false
@@ -123,12 +122,12 @@ it('publishes local usage without a window activation and limits repeated owner 
     focused = true
     vi.setSystemTime(start + 1_380_000)
     await service.refreshOnOwnerReturn()
-    expect((await service.getState()).gemini?.session?.usedPercent).toBe(90)
+    expect((await service.getState()).kimi?.session?.usedPercent).toBe(90)
 
     usedPercent = 95
     vi.setSystemTime(start + 1_680_000)
     await service.refreshOnOwnerReturn()
-    expect((await service.getState()).gemini?.session?.usedPercent).toBe(95)
+    expect((await service.getState()).kimi?.session?.usedPercent).toBe(95)
   } finally {
     service.stop()
   }

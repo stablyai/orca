@@ -72,6 +72,23 @@ export function botItemQuestionLine(text: string): string {
   return ''
 }
 
+/** Every way a question's first line has been written in "Question → answer" lines: this build's, then
+ *  the one builds before #47963 wrote (code-span contents lost their marks), which old answers, drafts
+ *  and older phones and servers still hold. */
+export function botItemQuestionLeads(text: string): string[] {
+  const first = text.split('\n').find((line) => line.trim().length > 0) ?? ''
+  const legacy = first
+    .trim()
+    .replace(/^(#{1,6}|>|[-*+]|\d+[.)])\s+/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(^|[^\w*])[*_]([^*_\s][^*_]*?)[*_](?=[^\w*]|$)/g, '$1$2')
+    .replace(/`([^`]*)`/g, '$1')
+    .trim()
+  const line = botItemQuestionLine(text)
+  return legacy && legacy !== line ? [line, legacy] : [line]
+}
+
 /** The ask a stored question event carries (written by v1.4.265 hosts), or null. */
 export function botItemAskOf(data: Record<string, unknown>): BotItemAsk | null {
   const parsed = BotItemAskSchema.safeParse(data.ask)
@@ -132,6 +149,59 @@ export function botItemQuickReplyText(
     : reply.label
 }
 
+// Each ask's heads, worked out once: matching runs per line, per option, per question.
+const headsByAsk = new WeakMap<readonly BotItemDecision[], readonly (readonly string[])[]>()
+
+function askHeads(decisions: readonly BotItemDecision[]): readonly (readonly string[])[] {
+  let heads = headsByAsk.get(decisions)
+  if (!heads) {
+    heads = decisions.map((decision) =>
+      botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
+    )
+    headsByAsk.set(decisions, heads)
+  }
+  return heads
+}
+
+/** Per question of the ask, the "Question →" head `line` starts with, else undefined. An older build's
+ *  head counts only when longer than every current head that matches, so one question's old head never
+ *  takes a line another's current head names. */
+export function botItemLineHeads(
+  shape: BotItemQuestionShape,
+  line: string
+): (string | undefined)[] {
+  const heads = askHeads(shape.decisions)
+  const current = heads.map(([head]) => (line.startsWith(head) ? head : undefined))
+  const longest = Math.max(0, ...current.map((head) => head?.length ?? 0))
+  return heads.map(
+    (older, index) =>
+      current[index] ??
+      older.slice(1).find((head) => head.length > longest && line.startsWith(head))
+  )
+}
+
+/** Whether `text` is what question `index`'s quick reply posts, as this build or an older one wrote it. */
+export function botItemIsQuickReplyText(
+  shape: BotItemQuestionShape,
+  index: number,
+  reply: BotItemQuickReply,
+  text: string
+): boolean {
+  if (shape.decisions.length <= 1) {
+    return text === reply.label
+  }
+  if (!text.endsWith(` ${reply.label}`)) {
+    return false
+  }
+  const heads = botItemLineHeads(shape, text)
+  const head = heads[index]
+  return (
+    head !== undefined &&
+    text === `${head} ${reply.label}` &&
+    !heads.some((candidate) => candidate !== undefined && candidate.length > head.length)
+  )
+}
+
 /** The quick replies an owner's reply picked for each question line, none where they wrote their own
  *  words: read from what a quick reply posts, or from the picks a v1.4.265 host recorded. */
 export function botItemPickedReplies(
@@ -149,21 +219,23 @@ export function botItemPickedReplies(
       return decision.replies.filter((_, at) => picks.includes(at))
     }
     const quick = decision.replies.filter((option) =>
-      lines.includes(botItemQuickReplyText(shape, decision, option))
+      lines.some((line) => botItemIsQuickReplyText(shape, index, option, line))
     )
-    return quick.length > 0 || !decision.multi ? quick : multiPicks(shape, decision, lines)
+    return quick.length > 0 || !decision.multi ? quick : multiPicks(shape, index, lines)
   })
 }
 
 /** A pick-several line's picks sent as one answer, "A, B" (what botItemAnswersText writes for them). */
 function multiPicks(
   shape: BotItemQuestionShape,
-  decision: BotItemDecision,
+  index: number,
   lines: readonly string[]
 ): BotItemQuickReply[] {
-  const head = `${botItemQuestionLine(decision.question)} →`
-  const line = shape.decisions.length > 1 ? lines.find((at) => at.startsWith(head)) : lines[0]
-  const words = (line?.startsWith(head) ? line.slice(head.length).trim() : line) ?? ''
+  const decision = shape.decisions[index]
+  const headOf = (at: string): string | undefined => botItemLineHeads(shape, at)[index]
+  const line = shape.decisions.length > 1 ? lines.find((at) => headOf(at)) : lines[0]
+  const head = line === undefined ? undefined : headOf(line)
+  const words = (head ? line?.slice(head.length).trim() : line) ?? ''
   const picks = words ? labelRun(words, 0, decision.replies, new Set()) : null
   return picks ? decision.replies.filter((option) => picks.includes(option)) : []
 }

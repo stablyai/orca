@@ -4,6 +4,8 @@ import { CONNECTOR_LIMITS } from './connector-limits.js'
 import {
   ConnectorActsForSchema,
   ConnectorConversationSchema,
+  ConnectorInboxConversationSchema,
+  ConnectorShareConversationSchema,
   PlaceIdSchema
 } from './connector-wire-scalars.js'
 import { ConnectorEarlierOwnSchema } from './earlier-own-messages.js'
@@ -16,6 +18,12 @@ import {
 import { hookIdOfActor, hookIdOfRule } from './webhook-names.js'
 import { WEBHOOK_NOTICE_CONDITIONS, WebhookHookIdSchema } from './webhook-messages.js'
 import { PrEventSchema } from './pr-event-messages.js'
+import {
+  ShareAcceptFields,
+  ShareResolvedFields,
+  ShareSendFields,
+  ViaAccountSchema
+} from './share-messages.js'
 
 // Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
 // answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
@@ -33,6 +41,15 @@ const DeliveryBase = {
   expiresAt: EpochMsSchema,
   conversation: ConnectorConversationSchema
 }
+
+// A share's deliveries: one ordered queue per share, its conversation named by the share's id.
+const ShareDelivery = {
+  ...DeliveryBase,
+  conversation: ConnectorShareConversationSchema
+}
+// A share delivery's queue is its own share's, so its order holds.
+const isOnItsShare = (delivery: { shareId: string; conversation: { externalId: string } }) =>
+  delivery.conversation.externalId === delivery.shareId
 
 // Where a bot was asked: a Slack conversation by channel id; a GitHub issue or pull request as
 // owner/repo#number; a Linear issue by its key. A kind this cloud can't tell apart is 'channel'.
@@ -102,7 +119,8 @@ export const ConnectorAskerSchema = z.object({
   app: z.literal(true).optional(),
   // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
   // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
-  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
+  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional(),
+  viaAccount: ViaAccountSchema
 })
 
 // A hook's call comes only in a webhook conversation, from the hook its rule names; no other event
@@ -178,6 +196,9 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     asker: ConnectorAskerSchema.optional(),
     automations: TurnAutomations,
     bareMention: BareMention,
+    // The reply @mentioned the bot, so a thread its machine muted takes it again. An older machine
+    // ignores it.
+    mentioned: z.literal(true).optional(),
     askedAt: AskedAt,
     // Resume pressed on the failed turn `turnId` (its turn-started `at`): the machine continues the
     // chat only while its newest turn is still failed, else refuses NOT_FAILED_REFUSAL. Sent only
@@ -233,7 +254,17 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     ...DeliveryBase,
     kind: z.literal('pr_event'),
     event: PrEventSchema
-  })
+  }),
+  // Sent only to a machine that lists bots.shares, on the share's conversation (share-messages.ts).
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_resolved'), ...ShareResolvedFields })
+    .refine(isOnItsShare),
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_accept'), ...ShareAcceptFields })
+    .refine(isOnItsShare),
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_send'), ...ShareSendFields })
+    .refine(isOnItsShare)
 ])
 
 const absent = z.never().optional()
@@ -251,7 +282,7 @@ export const ConnectorPollResponseSchema = z.object({
   holdMs: z.number().int().nonnegative().lt(CONNECTOR_LIMITS.pollTimeoutMs),
   // First poll after a hello only: deliveries received but never done, including by an earlier process.
   unsettled: z
-    .array(z.object({ deliveryId: OpaqueIdSchema, conversation: ConnectorConversationSchema }))
+    .array(z.object({ deliveryId: OpaqueIdSchema, conversation: ConnectorInboxConversationSchema }))
     .optional(),
   deliveries: z.array(ConnectorDeliverySchema).max(CONNECTOR_LIMITS.maxDeliveriesPerPoll),
   control: PollControlSchema.optional()

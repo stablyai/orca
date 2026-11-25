@@ -25,6 +25,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
     ...spec.account.pin,
+    instructionsEachStart: spec.instructions?.eachStart ?? false,
     capabilities: {
       // ACP has no stable rewind or goal methods.
       rewind: false,
@@ -44,6 +45,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
     ...(isManagedAgentCli(agent) && { managedRuntime: () => managedAgentCli(agent).available() }),
     ...(hostBackend && { runsHostProgram: (home) => hostBackend.pins(home) }),
+    ...(hostBackend?.ownLogin && { usesOwnLogin: hostBackend.ownLogin }),
     restingOptions: {
       acceptsKey: (key) =>
         isAcpStructuredOptionKey(key) ||
@@ -51,7 +53,8 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
         (spec.dialect.interactionModes !== undefined && key === 'interactionMode'),
       // Populate catalogs from live agents.
       fallbackModels: () => null,
-      effortDefaultsToModel: false
+      effortDefaultsToModel: false,
+      listedSelection: spec.dialect.listedSelection
     }
   }
 }

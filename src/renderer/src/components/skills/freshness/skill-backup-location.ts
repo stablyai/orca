@@ -1,5 +1,8 @@
 import type { BundledSkillOpOutcome } from '../../../../../shared/skills/bundled/bundled-skill-plan'
-import { collapseHomePath } from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import {
+  collapseHomePath,
+  skillBackupDirectory
+} from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -11,13 +14,6 @@ export type SkillBackupLocation = {
   /** The planned host's backups root, with its home shown as `~`. */
   folder: string
   host: SkillBackupHost
-}
-
-/** The host-side folder where Replace and the executor move old copies. */
-export function skillBackupDirectory(homeDirectory: string): string {
-  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
-  const home = homeDirectory.replace(/[\\/]+$/u, '')
-  return [home, '.agents', '.orca-skill-backups'].join(separator)
 }
 
 export function skillBackupLocation(
@@ -49,6 +45,14 @@ function environmentName(
 /** Read once, for a result that must keep naming the host it ran on. */
 export function skillBackupHost(target: BundledSkillTarget | null | undefined): SkillBackupHost {
   return hostFor(target, environmentName(useAppStore.getState().runtimeEnvironments, target))
+}
+
+/** The host a toast names: "This machine", the environment's name, or "Connected runtime". */
+export function skillHostLabel(target: BundledSkillTarget): string {
+  const host = skillBackupHost(target)
+  return host.kind === 'local'
+    ? translate('auto.components.skills.host.local', 'This machine')
+    : host.name
 }
 
 export function useSkillBackupHost(target: BundledSkillTarget | null | undefined): SkillBackupHost {

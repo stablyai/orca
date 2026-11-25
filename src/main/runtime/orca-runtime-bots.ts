@@ -94,6 +94,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       }),
     leaveBotGroups: (botId) => this.leaveBotGroups(botId),
     botsRoot: () => botsRootFolder(),
+    slackIconsRoot: () => join(getProfileUserDataPath(), 'bot-slack-icons'),
     filesystem: localBotHomeFilesystem,
     accountUserId: () =>
       this.servedOrcaProfileId
@@ -106,6 +107,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }
   })
 
@@ -341,6 +343,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */
   protected botFederatedWorkersChanged(dispatchIds: readonly string[]): void {
     this.botChatTreeWorkers.drop(dispatchIds)
+    this.botItems.workersWritten(dispatchIds)
     const botIds = this.botChatTreeIndex?.ownersOf(dispatchIds) ?? null
     if (botIds?.length !== 0) {
       this.botChangeNotices.changed({ ...(botIds ? { botIds } : {}), kinds: ['workers'] })
@@ -349,6 +352,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   protected botDispatchChanged(dispatchId: string | null, change: DispatchRowChange): void {
     this.botChatTreeWorkers.rowChanged(dispatchId, change)
+    this.botItems.workersWritten(dispatchId === null ? [] : [dispatchId], change === 'deleted')
     if (change !== 'deleted') {
       this.botItems.dispatchChanged(dispatchId)
     }

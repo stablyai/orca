@@ -318,7 +318,7 @@ export function latestStructuredAgentSessionReportedMessage(
 
 /** A root agent message's prose, without visual directives, which belong only in the transcript;
  *  empty for any other row. */
-function rootAssistantProse(item: AgentJournalRenderItem): string {
+export function rootAssistantProse(item: AgentJournalRenderItem): string {
   const { body } = item
   return isRootAgentJournalItem(item) && body.kind === 'message' && body.role === 'assistant'
     ? withoutNativeChatVisualDirectiveLines(assistantProse(body.blocks))

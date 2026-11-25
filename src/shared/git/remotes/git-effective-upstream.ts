@@ -1,3 +1,4 @@
+import type { DivergedUpstreamProbe } from './git-upstream-status'
 import { isNoUpstreamError } from './git-remote-error'
 import type { GitUpstreamStatus } from '../status/git-status-types'
 import {
@@ -184,7 +185,7 @@ export async function resolveEffectiveGitUpstream(
 
 export async function getEffectiveGitUpstreamStatus(
   execGit: GitCommandRunner,
-  getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
+  probeDivergedUpstream?: (upstreamName: string) => Promise<DivergedUpstreamProbe>
 ): Promise<GitUpstreamStatus> {
   const runGit = createGitConfigSnapshotRunner(execGit)
   const currentBranchName = await getGitCurrentBranchName(runGit)
@@ -201,18 +202,14 @@ export async function getEffectiveGitUpstreamStatus(
     }
   }
 
-  return getGitUpstreamStatusForUpstreamName(
-    runGit,
-    upstream.upstreamName,
-    getBehindCommitsArePatchEquivalent
-  )
+  return getGitUpstreamStatusForUpstreamName(runGit, upstream.upstreamName, probeDivergedUpstream)
 }
 
 /** Refresh ahead/behind with one rev-list when branch/config-derived upstream resolution is already cached. */
 export async function getGitUpstreamStatusForUpstreamName(
   runGit: GitCommandRunner,
   upstreamName: string,
-  getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
+  probeDivergedUpstream?: (upstreamName: string) => Promise<DivergedUpstreamProbe>
 ): Promise<GitUpstreamStatus> {
   const { stdout } = await runGit(['rev-list', '--left-right', '--count', `HEAD...${upstreamName}`])
   const counts = parseGitRevListAheadBehindCounts(stdout)
@@ -223,9 +220,9 @@ export async function getGitUpstreamStatusForUpstreamName(
     throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(stdout)}`)
   }
 
-  const behindCommitsArePatchEquivalent =
-    counts.ahead > 0 && counts.behind > 0 && getBehindCommitsArePatchEquivalent
-      ? await getBehindCommitsArePatchEquivalent(upstreamName)
+  const diverged =
+    counts.ahead > 0 && counts.behind > 0 && probeDivergedUpstream
+      ? await probeDivergedUpstream(upstreamName)
       : undefined
 
   return {
@@ -233,6 +230,11 @@ export async function getGitUpstreamStatusForUpstreamName(
     upstreamName,
     ahead: counts.ahead,
     behind: counts.behind,
-    ...(behindCommitsArePatchEquivalent !== undefined ? { behindCommitsArePatchEquivalent } : {})
+    ...(diverged
+      ? {
+          behindCommitsArePatchEquivalent: diverged.behindCommitsArePatchEquivalent,
+          ...(diverged.upstreamOid ? { upstreamOid: diverged.upstreamOid } : {})
+        }
+      : {})
   }
 }
