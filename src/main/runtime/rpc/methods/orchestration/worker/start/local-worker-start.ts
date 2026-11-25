@@ -42,7 +42,7 @@ import {
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
 import { assertLocalWorktree, prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
-import { handOverWhenReady } from './readiness/placed-worker-readiness'
+import { handOverWhenReady, wakeReusedSleptAgent } from './readiness/placed-worker-readiness'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import {
   prepareWorkerStartCard,
@@ -241,10 +241,10 @@ export async function startLocalWorker(args: {
       reusesTerminal: Boolean(params.terminal),
       creation: placed.terminalCreation
     }
+    const sleptIncarnation = await wakeReusedSleptAgent(runtime, placed, workerChat, timeoutMs)
     // Fixed now: the hand-over may run later, from the background wait.
     const placement = placed
     const handle = terminalHandle
-    const worktreeId = resolvedWorktree.id
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
     const bindTerminal = (): void => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
@@ -252,10 +252,11 @@ export async function startLocalWorker(args: {
         dispatchId: started.dispatch.id,
         handle,
         ...terminalAuthority,
-        worktreeId,
+        worktreeId: placement.worktree.id,
         effects,
         setupState: setupReceipt.state,
-        terminalOwnership: external ? 'external' : 'created'
+        terminalOwnership: external ? 'external' : 'created',
+        sleptProcessIncarnation: sleptIncarnation
       })
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {

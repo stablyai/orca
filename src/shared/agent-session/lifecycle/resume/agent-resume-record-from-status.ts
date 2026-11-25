@@ -187,10 +187,37 @@ export function liveResumeRecordChange(
   live: SleepingAgentSessionRecord | null
 ): { set: SleepingAgentSessionRecord } | 'clear' | null {
   if (live) {
-    const next = withSameSessionClaudeAccount(existing, live)
+    const carried = withSameSessionClaudeAccount(existing, live)
+    // A finished turn's checkpoint must not demote the sleep record of the same conversation (wakes
+    // key on its origin), but the record takes the turn's resume settings.
+    const next =
+      existing?.origin === 'worktree-sleep' &&
+      carried.state === 'done' &&
+      recoveryRecordTargetsSameSession(existing, carried)
+        ? withFinishedTurnSettings(existing, carried)
+        : carried
     return recoveryRecordMatches(existing, next) ? null : { set: next }
   }
   return existing ? 'clear' : null
+}
+
+function withFinishedTurnSettings(
+  slept: SleepingAgentSessionRecord,
+  live: SleepingAgentSessionRecord
+): SleepingAgentSessionRecord {
+  const launchConfig = live.launchConfig ?? slept.launchConfig
+  const claudeAccountId = live.launchConfig?.claudeAccountId ?? live.claudeAccountId
+  return {
+    ...slept,
+    providerSession: {
+      ...slept.providerSession,
+      effort: live.providerSession.effort,
+      permissionMode: live.providerSession.permissionMode
+    },
+    launchConfig:
+      launchConfig && claudeAccountId ? { ...launchConfig, claudeAccountId } : launchConfig,
+    claudeAccountId: launchConfig ? undefined : claudeAccountId
+  }
 }
 
 /**

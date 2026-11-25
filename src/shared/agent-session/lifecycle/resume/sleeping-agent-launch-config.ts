@@ -1,5 +1,13 @@
-import type { SleepingAgentLaunchConfig } from '../agent-session-resume'
 import { isLaunchConfigClaudeAccountId } from '../../../claude/project-claude-account-preference'
+
+export type SleepingAgentLaunchConfig = {
+  agentCommand?: string
+  agentArgs: string
+  agentEnv: Record<string, string>
+  ompResumeFilePath?: string
+  /** Account this launch was pinned to, or ACTIVE_CLAUDE_ACCOUNT; replayed on resume. */
+  claudeAccountId?: string
+}
 
 export function buildSleepingAgentLaunchConfig(args: {
   agentCommand?: string | null

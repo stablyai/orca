@@ -1,15 +1,15 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { useAppStore } from '@/store/index'
-import { isFloatingWorkspaceId } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
-import type { BrowserChromeToolAction } from './browser-chrome-toolbar'
+import type { AppState } from '@/store/types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 
-/** The floating panel's one tab row shows only the focused split, so a browser in another split needs its own close button. */
-export function useFloatingSplitBrowserClose(
+/** The floating panel's one tab row shows only the focused split, so a tab in another split needs its own close button. */
+export function useFloatingSplitTabClose(
   worktreeId: string,
-  browserPageId: string
-): BrowserChromeToolAction | null {
+  resolveTab: (state: AppState) => Tab | undefined
+): { onSelect: () => void; label: string } | null {
   const t = useTranslate()
   const tabId = useAppStore((state) => {
     if (
@@ -18,7 +18,7 @@ export function useFloatingSplitBrowserClose(
     ) {
       return null
     }
-    const tab = resolveBrowserSourceUnifiedTab(state, browserPageId, worktreeId)
+    const tab = resolveTab(state)
     return tab && !tab.isPinned ? tab.id : null
   })
   if (tabId === null) {
