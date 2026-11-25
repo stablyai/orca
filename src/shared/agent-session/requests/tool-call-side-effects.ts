@@ -224,7 +224,7 @@ function unwrapShell(command: string): string {
 export function shellCommandOnlyReads(command: string): boolean {
   const line = unwrapShell(command)
     .replaceAll('"${ORCA_CLI_COMMAND:-orca}"', 'orca')
-    .replace(/\s2>&1/g, ' ')
+    .replace(/\s2>&1(?=\s|$)/g, ' ')
     .replace(/\s2?>\s*\/dev\/null(?=\s|$)/g, ' ')
   // Redirection, substitution, background jobs and here-docs can write or run anything.
   if (/[>`]|\$\(|<<|<\(|(?<!&)&(?!&)/.test(line)) {
