@@ -246,6 +246,7 @@ export function start(
           state: ended === 'failed' ? ('completed' as const) : ended,
           ...(ended === 'completed' ? { outcome: 'success' as const } : {}),
           ...(ended === 'failed' ? { outcome: 'failure' as const } : {}),
+          startedAt: NOW,
           userItemId: opener.itemId
         }
       }

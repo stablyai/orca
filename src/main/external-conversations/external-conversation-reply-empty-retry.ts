@@ -59,15 +59,16 @@ export function emptyTurnRetry(deps: {
   settled: (sessionId: string) => void
 }): EmptyTurnRetry {
   const sending = new Set<string>()
-  // Recovery knows the turn's start from its record; with neither, any post since the app started.
+  // With no known start, no post can be pinned to this turn: an earlier turn's never counts.
   const posted = (
     turn: Pick<EndedTurnReplies, 'sessionId' | 'turnStartedAt' | 'postsSince' | 'postsUntil'>
-  ) =>
-    deps.postedSince(
-      turn.sessionId,
-      turn.turnStartedAt ?? turn.postsSince ?? 0,
-      turn.postsUntil ?? Number.POSITIVE_INFINITY
+  ) => {
+    const from = turn.turnStartedAt ?? turn.postsSince
+    return (
+      from !== undefined &&
+      deps.postedSince(turn.sessionId, from, turn.postsUntil ?? Number.POSITIVE_INFINITY)
     )
+  }
   return {
     posted,
     sending: (row) => sending.has(keyOf(row)),
@@ -218,12 +219,14 @@ export function heldHeads(
   const admittedAt = new Map<string, number>()
   for (const item of items) {
     const delivery = item.body.kind === 'message' ? item.body.connectorDelivery : undefined
-    for (const deliveryId of delivery ? [delivery.deliveryId, ...(delivery.carried ?? [])] : []) {
+    const ids = delivery ? [delivery.deliveryId, ...(delivery.carried ?? [])] : []
+    ids.forEach((deliveryId, index) => {
       const key = keyOf({ account: delivery!.account, deliveryId })
+      // A message's own delivery heads the ones it carries, as the live fill keys them.
       if (!admittedAt.has(key)) {
-        admittedAt.set(key, item.sequence)
+        admittedAt.set(key, item.sequence + index / (ids.length + 1))
       }
-    }
+    })
   }
   const groupOf = (row: JournalConnectorReplyRow) =>
     JSON.stringify([row.cut?.turnId, row.account, row.conversation])
