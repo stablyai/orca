@@ -18,6 +18,7 @@ const distro = (name: string) =>
 
 afterEach(() => {
   adds.length = 0
+  vi.unstubAllGlobals()
 })
 
 it('ignores an add that finishes after Cancel', async () => {

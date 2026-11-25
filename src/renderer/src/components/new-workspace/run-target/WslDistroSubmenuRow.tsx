@@ -29,6 +29,7 @@ export function WslDistroSubmenuRow({
   onArm,
   onHoverOpen,
   onKeyboardOpen,
+  onPointerEnterList,
   onReturnFocus,
   onPickDistro
 }: {
@@ -43,6 +44,8 @@ export function WslDistroSubmenuRow({
   onHoverOpen: () => void
   /** Enter or ArrowRight on the row: open the list and move focus into it. */
   onKeyboardOpen: () => void
+  /** The pointer reached the list: a pending close from crossing other rows is cancelled. */
+  onPointerEnterList: () => void
   /** Back from the list to the "WSL distro" row. */
   onReturnFocus: () => void
   onPickDistro: (distro: WslHostDistro) => void
@@ -64,17 +67,26 @@ export function WslDistroSubmenuRow({
           ? t('auto.components.RunTargetCombobox.noWslDistros', 'No WSL distros found')
           : null))
   const enabledCount = rows.filter((row) => !row.disabled).length
+  // Focus moves once per keyboard open: a later read of the list must not pull focus back.
+  const focusPending = React.useRef(false)
+  React.useEffect(() => {
+    focusPending.current = open && focusOnOpen
+  }, [open, focusOnOpen])
   // Distros arrive after the list opens, so focus waits for the first enabled one to render.
   React.useEffect(() => {
-    if (!open || !focusOnOpen || loading || enabledCount === 0) {
+    if (!focusPending.current || loading || enabledCount === 0) {
       return
     }
+    focusPending.current = false
     // The portaled list can mount a frame after the open state.
     return focusFirstSubmenuOptionWhenMounted(() => listRef.current)
   }, [open, focusOnOpen, loading, enabledCount])
   const back = (): void => {
     onOpenChange(false)
-    onReturnFocus()
+    // Only a keyboard open moved focus here; a pointer open leaves it in the picker's input.
+    if (focusOnOpen) {
+      onReturnFocus()
+    }
   }
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -83,7 +95,7 @@ export function WslDistroSubmenuRow({
           data-wsl-distro-row=""
           onMouseMove={onHoverOpen}
           onKeyDownCapture={(event) => {
-            if (event.key === 'Enter' || event.key === 'ArrowRight') {
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowRight') {
               event.preventDefault()
               event.stopPropagation()
               onKeyboardOpen()
@@ -115,10 +127,13 @@ export function WslDistroSubmenuRow({
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => {
-          // Escape steps back one level, to the "WSL distro" row, rather than closing the picker.
+          // Escape steps back one level. Radix hears it first (capture), so stopping it here keeps
+          // the picker's input from also closing Add host and unmounting the row.
           event.preventDefault()
+          event.stopPropagation()
           back()
         }}
+        onPointerEnter={onPointerEnterList}
         data-wsl-distro-menu=""
       >
         <div

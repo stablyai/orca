@@ -227,7 +227,8 @@ export function useBotCreateHost(
   )
   const onlyKey = only?.join('\n')
   const t = useTranslate()
-  const { waking, wake } = useBotWslWakes()
+  const wakes = useBotWslWakes()
+  const { waking, wake } = wakes
   const hosts = useMemo(() => {
     const all = botCreateHosts({
       runtimeEnvironments,
@@ -269,8 +270,12 @@ export function useBotCreateHost(
     .filter((entry) => !entry.blocked && (listing || entry.hostId === host.hostId))
     .flatMap((entry) => (entry.environmentId ? [entry.environmentId] : []))
   const accounts = useServerAccounts(asked, open)
-  // A sleeping host picked (or picked already, or gone idle while open) is the owner using it: wake it.
-  const sleepingPick = open && host.sleeping ? host.environmentId : undefined
+  // A sleeping host picked (or picked already, or gone idle while open) is the owner using it: wake it,
+  // once; a failed wake waits for a re-pick or a new sleep (`botWslMayAutoWake`).
+  const sleepingPick =
+    open && host.sleeping && host.environmentId && wakes.mayAutoWake(host.environmentId)
+      ? host.environmentId
+      : undefined
   useEffect(() => {
     if (sleepingPick) {
       wake(sleepingPick)
@@ -288,6 +293,10 @@ export function useBotCreateHost(
     setHostId: (next) => {
       // Another pick leaves a setup to finish on its own; this dialog stops following it.
       wslSetup.finish()
+      const environmentId = environmentOf.get(next)
+      if (environmentId) {
+        wakes.forget(environmentId)
+      }
       setHostId(next)
     },
     otherAccount: host.blocked ? null : otherAccountOf(host.hostId),
@@ -303,6 +312,7 @@ export function useBotCreateHost(
     busy: wslSetup.state.phase !== 'idle' || Boolean(host.sleeping || host.waking),
     reset: () => {
       wslSetup.finish()
+      wakes.reset()
       setHostId(initialHostId)
       setListing(false)
     }

@@ -19,6 +19,8 @@ import { getWslHostsPausedShortLabel } from '@/components/sidebar/host-admission
 import { WslDistroSubmenuRow } from './WslDistroSubmenuRow'
 import { stepSubmenuOptionFocus } from './submenu-option-focus'
 
+/** How long a pointer may cross other Add host rows on its way into the WSL list. */
+const WSL_CLOSE_DELAY_MS = 200
 const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
 
 /** The "Per-Workspace Environment" row and its nested recipe list. */
@@ -132,9 +134,20 @@ export function AddHostSubmenuRow({
   }
   const wslOpen = open && showWsl && wslOpenedBy !== null
   const listRef = React.useRef<HTMLDivElement>(null)
+  // A pointer heading diagonally for a lower distro crosses SSH and Remote; close only if it stays.
+  const wslCloseTimer = React.useRef<number | undefined>(undefined)
+  const keepWslOpen = (): void => {
+    window.clearTimeout(wslCloseTimer.current)
+    wslCloseTimer.current = undefined
+  }
+  React.useEffect(() => () => window.clearTimeout(wslCloseTimer.current), [])
   const armOther = (key: string): void => {
     setHoveredKey(key)
-    setWslOpenedBy(null)
+    // Every pointer move re-arms the row; the first one starts the countdown, later ones keep it.
+    wslCloseTimer.current ??= window.setTimeout(() => {
+      wslCloseTimer.current = undefined
+      setWslOpenedBy(null)
+    }, WSL_CLOSE_DELAY_MS)
   }
   React.useEffect(() => {
     if (open && focusOnOpen) {
@@ -216,10 +229,15 @@ export function AddHostSubmenuRow({
               armed={hoveredKey === 'wsl' || wslOpen}
               onArm={() => setHoveredKey('wsl')}
               onHoverOpen={() => {
+                keepWslOpen()
                 setHoveredKey('wsl')
                 setWslOpenedBy((current) => current ?? 'pointer')
               }}
-              onKeyboardOpen={() => setWslOpenedBy('keyboard')}
+              onKeyboardOpen={() => {
+                keepWslOpen()
+                setWslOpenedBy('keyboard')
+              }}
+              onPointerEnterList={keepWslOpen}
               onReturnFocus={() =>
                 listRef.current
                   ?.querySelector<HTMLElement>('[data-wsl-distro-row] [role="option"]')
