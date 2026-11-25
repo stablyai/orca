@@ -20,9 +20,46 @@ import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
 
 /** complete is false when the service's people are too many to read whole. */
 export type BotWhoCanAskFound = {
-  /** `app`: another Slack app's bot user, offered beside people. */
-  members: { id: string; name: string; handle?: string; avatarUrl?: string; app?: true }[]
+  /** `group`: where a service that searches its people's scope first found them: `scoped` in that
+   *  scope, `outside` shown not to be in it; absent, unknown, under `peopleHeading`. */
+  members: {
+    id: string
+    name: string
+    handle?: string
+    avatarUrl?: string
+    /** Another Slack app's bot user, offered beside people. */
+    app?: true
+    group?: 'scoped' | 'outside'
+    /** Muted in the real-name slot, saying why this person's source is uncertain. */
+    tag?: string
+  }[]
   complete: boolean
+  /** The prompt when the search host supports a narrower search than the service default. */
+  searchPlaceholder?: string
+  /** What this search could not cover, shown in place of the generic incomplete line. */
+  note?: string
+  /** What an empty result says, when the search knows better than the service's `noMatch`. */
+  empty?: { title: string; detail: string }
+  /** Part of this search failed and can be asked again in place (BotWhoCanAskSession.retry). */
+  retryable?: boolean
+  /** Headings and tags naming where this search actually looked, over the service's defaults. */
+  labels?: { scoped?: string; outsideTag?: string }
+}
+
+/** A successful username lookup can correct a picked identity after the user changes the query. */
+export type BotWhoCanAskIdentityUpdate = {
+  current: { id: string; name: string }[]
+  superseded: string[]
+}
+
+/** One picker open's search. `onUpdate` keeps one listener and returns its unsubscribe. */
+export type BotWhoCanAskSession = {
+  search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
+  onUpdate?: (
+    listener: (refresh: boolean, identities?: BotWhoCanAskIdentityUpdate) => void
+  ) => () => void
+  /** Forget what failed in the last search (only when the owner asks), so asking again retries. */
+  retry?: () => void
 }
 
 /** One connector's people: who is listed, how to find more, and what the card says around them. */
@@ -33,13 +70,21 @@ export type BotWhoCanAskService = {
   /** How many people this connector takes, within the bot's BOT_MAX_MEMBERS overall. */
   max: number
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
+  /** Called once per picker open for a search that keeps what it read across keystrokes. */
+  begin?: () => BotWhoCanAskSession
   errorMessage: (code: string) => string
   searchPlaceholder: string
   /** The picker's heading over found people, e.g. "People in Globex". */
   peopleHeading: string
+  /** The heading over `scoped` people, e.g. "People in your repositories". */
+  scopedHeading?: string
+  /** The heading over `outside` people, kept apart so a stranger never reads as a teammate. */
+  outsideHeading?: string
+  /** Muted beside each `outside` person, so one alone in the results still reads as a stranger. */
+  outsideTag?: string
   /** What an empty search says, naming the query and where it looked. */
   noMatch: (query: string) => { title: string; detail: string }
-  /** Shown instead of people while the search box is empty, for a service that can't list them. */
+  /** Shown while the search box is empty and the service suggests nobody. */
   idleHint?: { title: string; detail: string }
   /** The owner's own account here, listed as the owner rather than offered; null when unknown. */
   ownerId: string | null

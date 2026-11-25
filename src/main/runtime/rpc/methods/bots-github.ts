@@ -2,8 +2,10 @@
 import {
   BotGitHubDefaultBot,
   BotGitHubUnlink,
+  BotGitHubPeople,
   BotGitHubUsers
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
+import { readGitHubPeopleRoster } from '../../../connector-cloud/github-people-roster'
 import { defineMethod } from '../core'
 import { withHostCloudClient } from './bots-slack'
 
@@ -29,6 +31,16 @@ export const BOT_GITHUB_METHODS = [
     params: BotGitHubUsers,
     handler: async ({ query }, context) =>
       withHostCloudClient(context, (client) => client.githubUsers(query))
+  }),
+  defineMethod({
+    // The picker requests the host's roster once per open and filters it locally.
+    name: 'bots.github.people',
+    permission: 'accounts-admin',
+    params: BotGitHubPeople,
+    handler: async ({ scope, owner }) => ({
+      ok: true,
+      value: await readGitHubPeopleRoster(scope, owner)
+    })
   }),
   defineMethod({
     name: 'bots.github.unlink',

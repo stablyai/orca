@@ -7,6 +7,10 @@ import {
 } from '../connector-bot-slack-contract'
 import { GITHUB_ID_PATTERN, GITHUB_LOGIN_PATTERN } from '../connector-bot-github-contract'
 import { CONNECTOR_CONNECT_SOURCES } from '../connectors/connector-cloud-contract'
+import {
+  GITHUB_PEOPLE_MAX_OWNERS,
+  GITHUB_PEOPLE_MAX_REPOSITORIES
+} from '../bots/github-people-scope'
 
 const Id = z.string().min(1).max(256)
 const Query = z.string().max(200)
@@ -43,6 +47,17 @@ export const BotGitHubUsers = z.object({ query: Query })
 const GitHubUserId = z.string().regex(GITHUB_ID_PATTERN).optional()
 export const BotGitHubDefaultBot = z.object({ botId: Id.nullable(), userId: GitHubUserId })
 export const BotGitHubUnlink = z.object({ userId: GitHubUserId })
+/** The connected repositories and whole-account installs whose people the Add picker lists,
+ *  already bounded by gitHubPeopleScope; `more` says the installations held more than was sent. */
+export const BotGitHubPeople = z.object({
+  /** The first linked GitHub login, recorded with the read it starts. */
+  owner: z.string().max(39).nullable(),
+  scope: z.object({
+    repositories: z.array(z.string().max(140)).max(GITHUB_PEOPLE_MAX_REPOSITORIES),
+    owners: z.array(z.string().max(39)).max(GITHUB_PEOPLE_MAX_OWNERS),
+    more: z.boolean()
+  })
+})
 
 const Source = z.enum(CONNECTOR_CONNECT_SOURCES)
 /** `switchAccount` is "Not you?", which lets the person pick another account. `addAccess` (GitHub):

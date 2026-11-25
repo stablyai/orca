@@ -2,6 +2,7 @@
 // Every route acts as the caller's Orca account: confirm and set-default touch only that account's
 // own link and default, and a link token is single use.
 import * as z from 'zod'
+import type { GitHubPeopleScope } from './bots/github-people-scope'
 
 /** How people ask a bot on GitHub: "@orca-bots ranger …" in an issue or pull request comment. */
 export const GITHUB_BOT_MENTION = '@orca-bots'
@@ -70,6 +71,49 @@ export const ConnectorGitHubUsersResponse = z.object({
   complete: z.boolean()
 })
 export type ConnectorGitHubUsersResponse = z.infer<typeof ConnectorGitHubUsersResponse>
+
+/** `bots.github.people`: the people the Add picker lists, read once per open through the host's own
+ *  gh and filtered as the owner types. These are who the chosen reads returned (repositories'
+ *  assignable users, organizations' members), not a statement about who has access. */
+export type BotGitHubRoster =
+  | {
+      status: 'read'
+      people: { id: string; login: string; name: string | null }[]
+      /** Which kinds of source were read and contributed: repositories (listed, or a person's own),
+       *  organizations (their member lists). */
+      from: { repositories: boolean; organizations: boolean }
+      /** Every chosen read came back whole: no source failed or lost entries. It does not mean
+       *  everyone who can reach those repositories was listed. */
+      complete: boolean
+      /** Some connected repositories or accounts were left out on purpose (past the scope's caps,
+       *  or not a readable name): not a failure, but not everything either. */
+      omitted: boolean
+      /** Reads that stopped at their fixed size, whatever the owner types: a repository's first
+       *  GITHUB_PEOPLE_PER_SOURCE people, an organization's first GITHUB_PEOPLE_PER_SOURCE
+       *  members, a person's first GITHUB_PERSONAL_REPOSITORIES repositories. */
+      cut: { people: boolean; members: boolean; repositories: boolean }
+      /** When the read started (epoch ms, the host's clock). */
+      readAt: number
+      /** This answer is an earlier read reused: a host reads once per app run. */
+      reused: boolean
+      /** What the read was made for: the scope it read, and the linked GitHub login the asking
+       *  picker had then (null when it had none). A picker whose own differs treats the list as
+       *  historical: its sources and absences say nothing about the current repos or account. */
+      readFor: { scope: GitHubPeopleScope; owner: string | null }
+      /** The GitHub account gh read every source as, from that same call; absent when unknown.
+       *  Which gh binary or runtime ran it (native, or a fallback) isn't recorded. */
+      searchedAs?: string
+    }
+  /** No source could be read. `spent`: a read ran (or may have started a gh process) and no
+   *  later read runs in this app run of the host; false when the scope held nothing readable, so
+   *  no gh ran and nothing was used up. */
+  | { status: 'unavailable'; spent: boolean }
+  | { status: 'exact-only' }
+
+/** People per repository or organization a roster read returns. */
+export const GITHUB_PEOPLE_PER_SOURCE = 100
+/** A person's own repositories read when the app is on their whole account, most recent first. */
+export const GITHUB_PERSONAL_REPOSITORIES = 5
 
 /** The desktop's own code for a cloud with GitHub off (every GitHub route answers 404). */
 export const BOT_GITHUB_OFF = 'github_off'

@@ -29280,13 +29280,9 @@
     },
     "github": {
       "whoCanAsk": {
-        "search": "按 GitHub 用户名搜索",
         "outsiders": "GitHub 上的其他人会收到一条公开回复，可借此向你申请访问权限",
         "needsSetup": "完成设置以关联你的 GitHub 账户，然后在此选择人员",
-        "found": "GitHub 上的人员",
-        "noUser": "没有名为“{{query}}”的 GitHub 用户",
-        "exactOnly": "GitHub 只能按确切的用户名查找用户",
-        "typeUsername": "输入 GitHub 用户名"
+        "found": "GitHub 上的人员"
       },
       "connection": {
         "description": "{{repos}} · 已以 @{{login}} 身份登录",

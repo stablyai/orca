@@ -30071,13 +30071,9 @@
     },
     "github": {
       "whoCanAsk": {
-        "search": "GitHub kullanıcı adına göre ara",
         "outsiders": "GitHub’daki diğer kişilere, size başvurmalarını isteyen herkese açık bir yanıt gönderilir.",
         "needsSetup": "GitHub hesabınızı bağlamak için kurulumu tamamlayın. Ardından kişileri buradan seçin.",
-        "found": "GitHub’daki kişiler",
-        "noUser": "“{{query}}” adlı bir GitHub kullanıcısı yok",
-        "exactOnly": "GitHub’da birini bulmak için kullanıcı adını eksiksiz yazın.",
-        "typeUsername": "GitHub kullanıcı adını yazın"
+        "found": "GitHub’daki kişiler"
       },
       "connection": {
         "description": "{{repos}} · @{{login}} olarak oturum açıldı",
