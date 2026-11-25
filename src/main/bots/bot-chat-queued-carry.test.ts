@@ -197,7 +197,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
     const next = await chats.reset('bot-1')
     const { queuedMessages } = (await rig!.host.conversation(HOST_TEST_SESSION)).journal
     await expect(carryQueuedMessages(rig!.host, HOST_TEST_SESSION, next)).resolves.toBe(false)
-    queuedMessages.editLeases.release({ callerKey: 'phone', editId: 'edit-1' }, 'editing')
+    await queuedMessages.editLeases.release({ callerKey: 'phone', editId: 'edit-1' }, 'editing')
     await expect(carryQueuedMessages(rig!.host, HOST_TEST_SESSION, next)).resolves.toBe(true)
     expect((await queuedTexts(next)).map(textOf)).toContain('editing')
     expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).toEqual(['mail'])
