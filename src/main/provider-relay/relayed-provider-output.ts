@@ -1,10 +1,7 @@
 import type { Readable } from 'node:stream'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
-import {
-  RelayedProviderContinuation,
-  type ProviderRelayItemContinuation
-} from './relayed-provider-continuation'
+import type { RelayedProviderContinuation } from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
@@ -62,7 +59,7 @@ export class RelayedProviderOutput {
   /** How far a held replay has been handed on; it stays held until the slices reach the end. */
   private releasedTo = 0
   private releasing: Promise<void> | null = null
-  /** Set when the daemon dropped kept lines: items cut by that move to continuation rows. */
+  /** Set when a replay may start inside an open item: items cut by that move to continuation rows. */
   private continuation: RelayedProviderContinuation | null = null
   private readonly consumption = new RelayedProviderConsumption(() => {
     if (this.consumption.upTo(this.pushedSeq) > this.ackedSeq) {
@@ -143,13 +140,9 @@ export class RelayedProviderOutput {
     })
   }
 
-  /** The daemon dropped kept lines through `truncatedThrough` (its file cap); set before release. */
-  continueAfterTruncation(
-    hook: ProviderRelayItemContinuation,
-    relayId: string,
-    truncatedThrough: number
-  ): void {
-    this.continuation = new RelayedProviderContinuation(hook, relayId, truncatedThrough)
+  /** The replay may start inside an open item; set before release. */
+  continueWith(continuation: RelayedProviderContinuation | null): void {
+    this.continuation = continuation
   }
 
   /** Output waits for the chat to be ready (`release()`). */
@@ -167,7 +160,7 @@ export class RelayedProviderOutput {
         const held = this.held ?? []
         let chars = 0
         while (this.releasedTo < held.length) {
-          const entry = held[this.releasedTo++] as { seq: number | null; line: string }
+          const entry = held[this.releasedTo++]!
           this.push(entry.seq, entry.line)
           chars += entry.line.length + 1
           if (chars >= RELEASE_SLICE_CHARS && this.releasedTo < held.length) {
@@ -225,6 +218,9 @@ export class RelayedProviderOutput {
     // The floor reads each line as it is handed on: acks only ever cover what was.
     if (line && seq !== null) {
       const lines = this.continuation?.lines(seq, line, this.options.ackFloor) ?? [line]
+      if (this.continuation?.done) {
+        this.continuation = null
+      }
       line = lines.pop() ?? line
       // Lines a continuation adds before this one go out ahead of it, under its seq.
       for (const added of lines) {

@@ -1,8 +1,9 @@
+import type { ProviderRelayAttachResult } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayAckFloor } from './relayed-provider-output'
 
 /**
- * A provider's view of its streamed items, for a replay the daemon cut at its file cap: an item
- * whose start was dropped can't be rewritten whole, so its replayed lines go to a continuation row.
+ * A provider's view of its streamed items, for a replay that starts inside one (the daemon released
+ * its kept start at the file cap): it can't be rewritten whole, so its lines go to a continuation row.
  */
 export type ProviderRelayItemContinuation = {
   /** The streamed item a line belongs to, and whether the line starts it or ends it. */
@@ -16,13 +17,17 @@ export type ProviderRelayItemContinuation = {
    * whose end carries the whole item can put it on the saved row and retire the continuation.
    */
   finish?(line: string, tag: string): string[]
+  /** The attach's open-work group (keys as the daemon carries them) that every streamed item lives in. */
+  openGroup?: string
+  /** The key, as JSON, of the open work this line ends, if any. */
+  settles?(line: string): string | null
 }
 
 /**
- * The items open when the daemon dropped kept lines (through `truncatedThrough`): each one first
- * seen past that point without its start is re-keyed `relay:<relayId>:<first seq>` for the rest
- * of its life. The first replayed seq is where every later attach replays from, so the tag (and
- * the row) is the same each time. Lines are read only while a cut replay is in play.
+ * The items open at an attach that replays from `cutThrough`: each one first seen past that point
+ * without its start is re-keyed `relay:<relayId>:<first seq>` for the rest of its life. The first
+ * replayed seq is where every later attach replays from, so the tag (and the row) is the same each
+ * time. With `open`, lines are read only until all of that work has ended.
  */
 export class RelayedProviderContinuation {
   private readonly started = new Set<string>()
@@ -31,13 +36,35 @@ export class RelayedProviderContinuation {
   constructor(
     private readonly hook: ProviderRelayItemContinuation,
     private readonly relayId: string,
-    private readonly truncatedThrough: number
+    private readonly cutThrough: number,
+    private readonly replayThrough: number,
+    private readonly open: Set<string> | null = null
   ) {}
+
+  private lastSeq = 0
+
+  /**
+   * Nothing is left to move: past the replay with no item moved (a cut item still streaming shows
+   * in its replay), or once every open work the attach carried has ended (no item outlives it).
+   */
+  get done(): boolean {
+    return (
+      (this.lastSeq >= this.replayThrough && this.moved.size === 0) ||
+      (this.open !== null && this.open.size === 0)
+    )
+  }
 
   /** The lines to hand on for this one: itself, re-keyed, or a moved item's finishing lines. */
   lines(seq: number, line: string, floor: ProviderRelayAckFloor | undefined): string[] {
+    this.lastSeq = seq
+    if (this.open?.size) {
+      const settled = this.hook.settles?.(line)
+      if (settled) {
+        this.open.delete(settled)
+      }
+    }
     const item = this.hook.item(line)
-    if (!item || seq <= this.truncatedThrough) {
+    if (!item || seq <= this.cutThrough) {
       return [line]
     }
     if (item.start) {
@@ -60,4 +87,27 @@ export class RelayedProviderContinuation {
     }
     return [this.hook.rekey(line, tag)]
   }
+}
+
+/**
+ * A reattach from `fromSeq` may start inside an open item: the daemon reports where it dropped
+ * kept lines, and a forced release (its file cap) can leave a kept start behind the cursor too.
+ */
+export function attachContinuation(
+  hook: ProviderRelayItemContinuation,
+  relayId: string,
+  fromSeq: number,
+  result: ProviderRelayAttachResult
+): RelayedProviderContinuation | null {
+  const carried = hook.openGroup && result.openWork ? (result.openWork[hook.openGroup] ?? []) : null
+  if (fromSeq <= 0 || (carried ? carried.length === 0 : result.truncatedThrough === undefined)) {
+    return null
+  }
+  return new RelayedProviderContinuation(
+    hook,
+    relayId,
+    result.truncatedThrough ?? fromSeq,
+    result.replayThroughSeq,
+    carried && new Set(carried.map((key) => JSON.stringify(key)))
+  )
 }

@@ -22,8 +22,8 @@ import type {
   CodexAppServerConnectionHandlers
 } from './codex-app-server-connection-types'
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
-import { codexConnectionRelay } from './codex-app-server-relay'
 import {
+  codexConnectionRelay,
   CODEX_RELAY_WORK_MARKERS,
   isCodexAnswerAbove,
   keptInitializeResult

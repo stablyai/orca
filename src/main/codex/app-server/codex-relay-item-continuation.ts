@@ -28,7 +28,7 @@ function textItemLine(line: string): Message | null {
     return null
   }
   try {
-    const message = JSON.parse(line) as Message
+    const message: Message = JSON.parse(line)
     const { params } = message
     if (typeof params?.threadId !== 'string') {
       return null
@@ -83,6 +83,22 @@ export const CODEX_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
       params: { threadId: message.params.threadId, itemId: continuationId(tag, itemId(message)) }
     }
     return [CODEX_RELAY_ITEM_CONTINUATION.rekey(line, tag), JSON.stringify(retired), line]
+  },
+  openGroup: 'turn',
+  // Keys as CODEX_RELAY_WORK_MARKERS' `turn` group: [threadId].
+  settles: (line) => {
+    if (!line.includes('"turn/completed"') && !line.includes('"thread/closed"')) {
+      return null
+    }
+    try {
+      const { method, params }: Message = JSON.parse(line)
+      return (method === 'turn/completed' || method === 'thread/closed') &&
+        typeof params?.threadId === 'string'
+        ? JSON.stringify([params.threadId])
+        : null
+    } catch {
+      return null
+    }
   },
   start: (line, tag) => {
     const message = textItemLine(line)

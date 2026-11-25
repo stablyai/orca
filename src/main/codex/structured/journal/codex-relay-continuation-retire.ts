@@ -1,4 +1,5 @@
 import type { CodexJournalItems } from './codex-structured-journal-items'
+import { jsonProperty } from '../../../../shared/json-stream/json-value-property'
 import { codexStructuredItemKey } from '../items/codex-structured-item-stream-bounds'
 import {
   CODEX_JOURNAL_ADMITTED,
@@ -16,7 +17,7 @@ export function retireCodexRelayContinuation(
   threadId: string,
   params: unknown
 ): CodexJournalTranslationAdmission {
-  const itemId = (params as { itemId?: unknown } | null)?.itemId
+  const itemId = jsonProperty(params, 'itemId')
   const key = typeof itemId === 'string' ? codexStructuredItemKey(threadId, itemId) : null
   const identity = key === null ? undefined : items.identities.get(key)
   if (key === null || !identity) {

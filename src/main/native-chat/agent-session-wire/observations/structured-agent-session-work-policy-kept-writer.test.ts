@@ -3,7 +3,13 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import { StructuredAgentSessionWorkPolicy } from './structured-agent-session-work-policy'
 
 // The last run's turn started at fence 4; this run reattached its writer and holds fence 6.
-const turn = { itemId: 'turn-1', body: { kind: 'turn' } } as unknown as AgentJournalRenderItem
+const turn: AgentJournalRenderItem = {
+  itemId: 'turn-1',
+  revision: 1,
+  body: { kind: 'turn', turnId: 't1', state: 'running' },
+  sequence: 1,
+  observedAt: 0
+}
 const facts = {
   item: () => turn,
   itemFence: () => 4,

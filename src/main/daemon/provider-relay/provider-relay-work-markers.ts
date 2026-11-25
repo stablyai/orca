@@ -1,132 +1,10 @@
-import type {
-  ProviderRelayDetachPolicy,
-  ProviderRelayWorkMarker
-} from '../protocol/daemon-provider-relay-protocol'
+import type { ProviderRelayWorkMarker } from '../protocol/daemon-provider-relay-protocol'
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
+import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 import { mayHideKey } from './provider-relay-pending-requests'
 
-const MAX_MARKERS = 32
-const MAX_NAME_CHARS = 128
-const MAX_PATH_DEPTH = 8
-const MAX_KEY_PARTS = 4
-const MAX_WHEN = 4
-const MAX_OPEN_KEYS = 1_024
-const MAX_KEY_CHARS = 512
 /** More open tasks than this in one group reads as busy rather than growing without bound. */
 const MAX_GROUP_TASKS = 1_024
-
-function isName(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_NAME_CHARS
-}
-
-function isPath(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.length <= MAX_PATH_DEPTH && value.every((part) => isName(part))
-  )
-}
-
-function isKey(value: unknown): value is string[][][] {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_KEY_PARTS &&
-    value.every(
-      (part) => Array.isArray(part) && part.length > 0 && part.length <= 4 && part.every(isPath)
-    )
-  )
-}
-
-function readMarker(value: unknown): ProviderRelayWorkMarker | null {
-  if (typeof value !== 'object' || value === null) {
-    return null
-  }
-  const marker = value as Record<string, unknown>
-  const { group, name, effect, when, key, list } = marker
-  const whenOk =
-    when === undefined ||
-    (Array.isArray(when) &&
-      when.length <= MAX_WHEN &&
-      when.every((test: unknown) => {
-        const t = test as Record<string, unknown> | null
-        return (
-          typeof t === 'object' &&
-          t !== null &&
-          isPath(t.path) &&
-          isName(t.is) &&
-          (t.not === undefined || t.not === true)
-        )
-      }))
-  if (
-    !isName(group) ||
-    !isName(name) ||
-    (effect !== 'start' && effect !== 'end' && effect !== 'roster') ||
-    !whenOk ||
-    !isKey(key) ||
-    (effect === 'roster' ? !isPath(list) : list !== undefined)
-  ) {
-    return null
-  }
-  return marker as ProviderRelayWorkMarker
-}
-
-function readOpen(value: unknown): Record<string, string[][]> | null | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return null
-  }
-  let count = 0
-  for (const [group, keys] of Object.entries(value)) {
-    if (!isName(group) || !Array.isArray(keys)) {
-      return null
-    }
-    count += keys.length
-    const ok = keys.every(
-      (key: unknown) =>
-        Array.isArray(key) &&
-        key.length > 0 &&
-        key.length <= MAX_KEY_PARTS &&
-        key.every((part) => typeof part === 'string' && part.length <= MAX_KEY_CHARS)
-    )
-    if (!ok || count > MAX_OPEN_KEYS) {
-      return null
-    }
-  }
-  return value as Record<string, string[][]>
-}
-
-/** Untrusted wire input; anything malformed keeps today's behavior (the agent keeps running). */
-export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDetachPolicy | null {
-  if (typeof value !== 'object' || value === null) {
-    return null
-  }
-  const policy = value as Record<string, unknown>
-  const { idleStopMs } = policy
-  const markers = Array.isArray(policy.markers) ? policy.markers.map(readMarker) : null
-  const open = readOpen(policy.open)
-  const { workRequests, quiet } = policy
-  const names = (value: unknown) =>
-    value === undefined ||
-    (Array.isArray(value) && value.length <= MAX_MARKERS && value.every(isName))
-  const requestsOk = names(workRequests) && names(quiet)
-  if (
-    !(idleStopMs === null || (typeof idleStopMs === 'number' && idleStopMs > 0)) ||
-    !markers ||
-    markers.length > MAX_MARKERS ||
-    markers.some((marker) => marker === null) ||
-    open === null ||
-    !requestsOk
-  ) {
-    return null
-  }
-  return {
-    idleStopMs: idleStopMs === null ? null : Math.min(idleStopMs, 2 ** 31 - 1),
-    markers: markers as ProviderRelayWorkMarker[],
-    ...(workRequests ? { workRequests: workRequests as string[] } : {}),
-    ...(quiet ? { quiet: quiet as string[] } : {}),
-    ...(open ? { open } : {})
-  }
-}
 
 /** One parsed marker line: a task opened or closed, or a group restated. */
 export type ProviderRelayWorkChange =
@@ -144,10 +22,7 @@ export function providerRelayWorkKey(parts: readonly string[]): string {
 function at(value: unknown, path: readonly string[]): unknown {
   let current = value
   for (const part of path) {
-    if (typeof current !== 'object' || current === null) {
-      return undefined
-    }
-    current = (current as Record<string, unknown>)[part]
+    current = jsonProperty(current, part)
   }
   return current
 }
@@ -250,7 +125,8 @@ export class ProviderRelayWorkReader {
     if (typeof value !== 'object' || value === null) {
       return []
     }
-    const { method, type } = value as { method?: unknown; type?: unknown }
+    const method = jsonProperty(value, 'method')
+    const type = jsonProperty(value, 'type')
     const name = typeof method === 'string' ? method : typeof type === 'string' ? type : null
     const changes: ProviderRelayWorkChange[] = []
     for (const marker of this.markers) {

@@ -92,7 +92,7 @@ export function isCodexAnswerAbove(line: string, floor: number): boolean {
     if (typeof message !== 'object' || message === null || 'method' in message) {
       return false
     }
-    const { id } = message as { id?: unknown }
+    const id = 'id' in message ? message.id : undefined
     return typeof id === 'number' && id > floor
   } catch {
     return false
@@ -105,7 +105,7 @@ export function keptInitializeResult(line: string | null): unknown {
     return {}
   }
   try {
-    const message = JSON.parse(line) as { result?: unknown }
+    const message: { result?: unknown } = JSON.parse(line)
     return message.result ?? {}
   } catch {
     return {}

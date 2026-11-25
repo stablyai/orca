@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProviderRelayIdleStop } from '../provider-relay-idle-stop'
-import { readProviderRelayDetachPolicy } from '../provider-relay-work-markers'
+import { readProviderRelayDetachPolicy } from '../provider-relay-detach-policy'
 import { ProviderRelayPendingRequests } from '../provider-relay-pending-requests'
 import { ProviderRelayCarriedWork } from '../../../provider-relay/provider-relay-carried-work'
 import { CODEX_RELAY_WORK_MARKERS } from '../../../codex/app-server/codex-app-server-relay'
@@ -28,7 +28,11 @@ const command = (method: string, status: string) =>
   })
 
 function rig() {
-  const state = { attached: true, pending: 0, unacked: [] as string[] | null }
+  const state: { attached: boolean; pending: number; unacked: string[] | null } = {
+    attached: true,
+    pending: 0,
+    unacked: []
+  }
   const stop = vi.fn()
   const idle = new ProviderRelayIdleStop({
     attached: () => state.attached,
