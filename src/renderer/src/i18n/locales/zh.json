@@ -21311,7 +21311,7 @@
         "monitor": "监控任务",
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
-        "stoppedByYou": "已由你停止",
+        "stopped": "已停止",
         "finished": "已完成",
         "failedCount": "{{count}} 个失败",
         "needsYouCount": "{{count}} 个等待你处理",

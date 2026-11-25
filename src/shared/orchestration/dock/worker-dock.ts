@@ -90,7 +90,9 @@ export const WorkerDockResult = z.object({
   at: z.number().nullable(),
   settlement: z.string(),
   acknowledged: z.boolean(),
-  ownerActionsAvailable: z.boolean().default(true)
+  ownerActionsAvailable: z.boolean().default(true),
+  /** The worker's workspace on its host, so the card can say when it was removed. Older hosts omit it. */
+  workspaceId: z.string().optional()
 })
 export type WorkerDockResult = z.infer<typeof WorkerDockResult>
 /** A failed row this owner can acknowledge; Clear all sends exactly these. */

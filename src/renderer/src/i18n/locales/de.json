@@ -20759,7 +20759,7 @@
         "task": "Aufgabe",
         "workerCount_one": "{{count}} Worker",
         "workerCount_other": "{{count}} Worker",
-        "stoppedByYou": "Von dir gestoppt",
+        "stopped": "Gestoppt",
         "finished": "Abgeschlossen",
         "failedCount": "{{count}} fehlgeschlagen",
         "needsYouCount": "{{count}} mit Rückfrage",

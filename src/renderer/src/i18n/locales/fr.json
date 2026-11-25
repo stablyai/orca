@@ -20771,7 +20771,7 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stoppedByYou": "Arrêté par vous",
+        "stopped": "Arrêté",
         "finished": "Terminé",
         "failedCount": "{{count}} en échec",
         "needsYouCount": "En attente de votre réponse : {{count}}",

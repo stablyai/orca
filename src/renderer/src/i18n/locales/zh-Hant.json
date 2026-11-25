@@ -20448,7 +20448,7 @@
         "monitor": "監控項目",
         "task": "任務",
         "workerCount_other": "{{count}} 個工作者",
-        "stoppedByYou": "已由你停止",
+        "stopped": "已停止",
         "finished": "已完成",
         "failedCount": "{{count}} 個失敗",
         "needsYouCount": "{{count}} 個等待你處理",

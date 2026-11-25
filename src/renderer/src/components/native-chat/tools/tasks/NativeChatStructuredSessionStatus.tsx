@@ -12,6 +12,7 @@ import {
   WorkerDockFailureStrip
 } from './dock/WorkerDockFailureStrip'
 import { WorkerDockResultDialogSlot } from './dock/WorkerDockResultDialogSlot'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import {
@@ -284,6 +285,7 @@ export function NativeChatStructuredSessionStatus(props: {
       ) : null}
       <WorkerDockResultDialogSlot
         dialog={dialog}
+        hostId={getRuntimeTargetHostId(target)}
         ownerActionsAvailable={ownerActionsAvailable}
         onClose={owner.close}
         onOpen={workerOpen}

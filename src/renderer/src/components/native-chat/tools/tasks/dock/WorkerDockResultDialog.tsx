@@ -102,7 +102,8 @@ export function WorkerDockResultDialog({
   onOpen,
   onRestore,
   onReturnFocus,
-  ownerActionsAvailable
+  ownerActionsAvailable,
+  workspaceRemoved = false
 }: {
   result: WorkerDockResult | null
   /** The row the card opened from, for its name and state when the saved result is unreadable. */
@@ -115,6 +116,8 @@ export function WorkerDockResultDialog({
    *  row the card unmounted meanwhile. */
   onReturnFocus: () => void
   ownerActionsAvailable: boolean
+  /** The worker's workspace is gone, so the card says so in place of Open worker. */
+  workspaceRemoved?: boolean
 }) {
   const t = useTranslate()
   const openButton = useRef<HTMLButtonElement>(null)
@@ -261,9 +264,18 @@ export function WorkerDockResultDialog({
               {t('components.native-chat.workerDock.restore', 'Show in dock again')}
             </Button>
           ) : null}
-          <Button ref={openButton} variant="outline" size="sm" onClick={onOpen}>
-            {t('components.native-chat.workerDock.openWorker', 'Open worker')}
-          </Button>
+          {workspaceRemoved ? (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'components.native-chat.workerDock.workspaceRemoved',
+                "This worker's workspace was removed"
+              )}
+            </p>
+          ) : (
+            <Button ref={openButton} variant="outline" size="sm" onClick={onOpen}>
+              {t('components.native-chat.workerDock.openWorker', 'Open worker')}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

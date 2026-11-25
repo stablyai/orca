@@ -21819,7 +21819,7 @@
         "task": "작업",
         "workerCount_one": "워커 {{count}}개",
         "workerCount_other": "워커 {{count}}개",
-        "stoppedByYou": "사용자가 중지함",
+        "stopped": "중지됨",
         "finished": "완료",
         "failedCount": "{{count}}개 실패",
         "needsYouCount": "확인 필요 {{count}}개",
