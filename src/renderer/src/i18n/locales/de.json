@@ -4806,8 +4806,6 @@
             "runtime_last_close_reason": "Geschlossen: {{value0}}",
             "runtime_reconnect_attempt": "Versuch {{value0}}",
             "runtime_workspace_window_closed": "Arbeitsbereichsfenster geschlossen",
-            "connectedHostCount_one": "{{count}} Host",
-            "connectedHostCount_other": "{{count}} Hosts",
             "searchSshHosts": "SSH-Hosts suchen…",
             "noMatchingSshHosts": "Keine passenden SSH-Hosts.",
             "moreSshHostMatches_one": "{{count}} weiterer Treffer. Zur Eingrenzung weitertippen.",

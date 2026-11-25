@@ -5813,8 +5813,6 @@
             "runtime_last_close_reason": "Kapatıldı: {{value0}}",
             "runtime_reconnect_attempt": "Deneme {{value0}}",
             "runtime_workspace_window_closed": "Çalışma alanı penceresi kapatıldı",
-            "connectedHostCount_one": "{{count}} ana bilgisayar",
-            "connectedHostCount_other": "{{count}} ana bilgisayar",
             "searchSshHosts": "SSH sunucusu ara…",
             "noMatchingSshHosts": "Eşleşen SSH sunucusu yok.",
             "moreSshHostMatches_one": "{{count}} eşleşme daha var. Sonuçları daraltmak için yazmaya devam edin.",
