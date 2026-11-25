@@ -234,28 +234,46 @@ describe('terminal WebGL atlas work limits', () => {
     expect(stillPending).not.toContain(queuedAtlases[1])
   })
 
-  it('retains pending work until a direct read issues and cancels an empty queue wake', () => {
+  it('retires pending work on a throwing readback but preserves it on a preparation failure', () => {
+    const start = fixture.clock
     const busy = fakePane(atlas())
     const waiting = fakePane(atlas())
     register(true, [busy, waiting])
-    const reader = deps(blank)
+    const firstKit = fakeKit()
+    const prepare = vi.spyOn(firstKit.ctx, 'clearRect').mockImplementation(() => {
+      throw new Error('scratch preparation failed')
+    })
+    const unread = vi.spyOn(firstKit.ctx, 'getImageData')
+    const secondKit = fakeKit()
+    const readback = vi.spyOn(secondKit.ctx, 'getImageData').mockImplementation(() => {
+      throw new Error('readback failed')
+    })
+    const kits = [firstKit, secondKit]
+    const reader = deps(createGlyphInkReader(() => kits.shift() ?? null))
 
     verifyPaneWebglAtlasIntegrity(busy, 'reveal', deps(ink))
     verifyPaneWebglAtlasIntegrity(waiting, 'reveal', reader)
     advanceServiceClock(50)
-    verifyPaneWebglAtlasIntegrity(
-      waiting,
-      'reveal',
-      deps(() => 'unavailable')
-    )
+    verifyPaneWebglAtlasIntegrity(waiting, 'reveal', reader)
+
+    expect(prepare).toHaveBeenCalledTimes(1)
+    expect(unread).not.toHaveBeenCalled()
+    expect(fixture.state.readTimes).toEqual([start])
     expect(fixture.state.pending.size).toBe(1)
-    expect(fixture.timers).toHaveLength(1)
     expect(waiting.addon.clearTextureAtlas).not.toHaveBeenCalled()
+
+    const due = takeScheduledWake(50)
+    due()
+    expect(readback).not.toHaveBeenCalled()
+    expect(fixture.state.pending.size).toBe(1)
+    expect(fixture.timers.map((timer) => timer.ms)).toEqual([50])
 
     advanceServiceClock(50)
     verifyPaneWebglAtlasIntegrity(waiting, 'reveal', reader)
 
-    expect(waiting.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(readback).toHaveBeenCalledTimes(1)
+    expect(fixture.state.readTimes).toEqual([start, start + 100])
+    expect(waiting.addon.clearTextureAtlas).not.toHaveBeenCalled()
     expect(fixture.state.pending.size).toBe(0)
     expect(fixture.state.serviceTimer).toBeNull()
     expect(fixture.timers).toHaveLength(0)
