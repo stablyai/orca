@@ -388,7 +388,7 @@
         "importInvalid": "読み取れない行 {{count}} 件",
         "importUndecryptable": "{{count}} 件はブラウザで保護されているため、そのブラウザから CSV をエクスポートしてください",
         "imported": "{{count}} 件のパスワードをインポートしました",
-        "deleteAllConfirmDescription": "{{profile}} プロファイルに保存されているすべてのパスワードが完全に削除されます。この操作は元に戻せません。",
+        "deleteAllConfirmDescription": "{{profile}} プロファイルの保存済みパスワード、メモ、保存しないサイトがすべて完全に削除されます。この操作は元に戻せません。",
         "deletedAll": "パスワードデータを削除しました",
         "form": {
           "invalidSite": "example.com のようなウェブサイトのアドレスを入力してください。",

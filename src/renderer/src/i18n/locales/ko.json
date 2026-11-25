@@ -407,7 +407,7 @@
         "importInvalid": "읽을 수 없는 행 {{count}}개",
         "importUndecryptable": "{{count}}개는 브라우저가 보호 중입니다. 대신 브라우저에서 CSV를 내보내세요",
         "imported": "비밀번호 {{count}}개를 가져왔습니다",
-        "deleteAllConfirmDescription": "{{profile}} 프로필에 저장된 모든 비밀번호가 영구적으로 삭제됩니다. 되돌릴 수 없습니다.",
+        "deleteAllConfirmDescription": "{{profile}} 프로필의 저장된 비밀번호, 메모, 저장 안 함 사이트가 모두 영구적으로 삭제됩니다. 되돌릴 수 없습니다.",
         "deletedAll": "비밀번호 데이터를 삭제했습니다",
         "form": {
           "invalidSite": "example.com과 같은 웹사이트 주소를 입력하세요.",

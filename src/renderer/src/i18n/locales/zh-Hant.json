@@ -1048,7 +1048,7 @@
         "importInvalid": "{{count}} 列無法讀取",
         "importUndecryptable": "{{count}} 個受該瀏覽器保護；請改從該瀏覽器匯出 CSV",
         "imported": "已匯入 {{count}} 個密碼",
-        "deleteAllConfirmDescription": "{{profile}} 設定檔中所有已儲存的密碼都會被永久刪除。此操作無法復原。",
+        "deleteAllConfirmDescription": "{{profile}} 設定檔中所有已儲存的密碼、備註，以及「永不儲存」清單中的網站都會被永久刪除。此操作無法復原。",
         "deletedAll": "已刪除密碼資料",
         "form": {
           "invalidSite": "請輸入網站位址，例如 example.com。",
