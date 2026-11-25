@@ -2,14 +2,14 @@ import { readFile } from 'node:fs/promises'
 import type { Socket } from 'node:net'
 import { app } from 'electron'
 import { parseProcNetTcpEndpoint, parseProcNetTcpRow } from '../../../ports/linux-proc-net-tcp-rows'
-import { loadWindowsSecurityAsync } from '../../../../shared/secure-storage/windows-security-addon'
+import {
+  loadWindowsSecurityAsync,
+  type WindowsSecurity
+} from '../../../../shared/secure-storage/windows-security-addon'
 
 export type SocksClientOwnerVerdict =
-  /**
-   * `unchecked` says why this build can't look the owner up; the loopback check still applied.
-   * `unreadableOwnProcess`: the owner is one of this app's processes, but its account couldn't be read.
-   */
-  | { allowed: true; unchecked?: string; unreadableOwnProcess?: string }
+  /** `unreadableOwnProcess`: the owner is one of this app's processes, but its account couldn't be read. */
+  | { allowed: true; unreadableOwnProcess?: string }
   /** `owner` is `uid <n>` on Linux and the token user's SID on Windows. */
   | { allowed: false; reason: 'foreign-owner'; owner: string }
   | { allowed: false; reason: 'lookup-failed'; detail: string }
@@ -30,9 +30,7 @@ export function createSocksClientAdmission(
   const logged = new Set<string>()
   const logOnce = (verdict: SocksClientOwnerVerdict): void => {
     const key = verdict.allowed
-      ? verdict.unchecked
-        ? 'unchecked'
-        : 'unreadable-own-process'
+      ? 'unreadable-own-process'
       : verdict.reason === 'foreign-owner'
         ? `owner:${verdict.owner}`
         : verdict.reason
@@ -42,9 +40,7 @@ export function createSocksClientAdmission(
     logged.add(key)
     console.warn(
       verdict.allowed
-        ? verdict.unchecked
-          ? `[browser-tunnel] ${listener} clients are checked for loopback only: ${verdict.unchecked}.`
-          : `[browser-tunnel] Admitted a ${listener} connection from this app's own process whose account could not be read (${verdict.unreadableOwnProcess}).`
+        ? `[browser-tunnel] Admitted a ${listener} connection from this app's own process whose account could not be read (${verdict.unreadableOwnProcess}).`
         : verdict.reason === 'foreign-owner'
           ? `[browser-tunnel] Refused a ${listener} connection from ${verdict.owner}; only this user may use it.`
           : `[browser-tunnel] Refused a ${listener} connection: could not confirm its owner (${verdict.detail}).`
@@ -59,7 +55,7 @@ export function createSocksClientAdmission(
       if (socket.destroyed) {
         return
       }
-      if (!verdict.allowed || verdict.unchecked || verdict.unreadableOwnProcess) {
+      if (!verdict.allowed || verdict.unreadableOwnProcess) {
         logOnce(verdict)
       }
       if (verdict.allowed) {
@@ -102,14 +98,38 @@ export function findProcNetTcpClientUid(
   return null
 }
 
-/** Linux and Windows list every user's connections with their owner; the client end must be ours. macOS relies on the loopback check. */
+/** Why this computer can't name a loopback client's account, or null when it can or has no lookup (macOS). */
+export async function socksClientOwnerLookupGap(): Promise<string | null> {
+  if (process.platform === 'win32') {
+    const lookup = await loadWindowsOwnerLookup()
+    return typeof lookup === 'string' ? lookup : null
+  }
+  return process.platform === 'linux' && process.getuid === undefined
+    ? 'this process has no user id'
+    : null
+}
+
+/** Refuses to open a listener whose connections would all be refused for want of an owner lookup. */
+export async function assertSocksClientOwnerLookup(listener: string): Promise<void> {
+  const gap = await socksClientOwnerLookupGap()
+  if (gap) {
+    throw new Error(
+      `Can't start the ${listener}: Orca can't confirm which account on this computer opens each connection (${gap}).`
+    )
+  }
+}
+
+/** Linux and Windows list every user's connections with their owner; the client end must be ours. macOS has no lookup, so any local account passes its loopback check. */
 export async function verifySocksClientOwner(
   socket: AcceptedSocket,
   readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8')
 ): Promise<SocksClientOwnerVerdict> {
-  const ownUid = process.platform === 'linux' ? process.getuid?.() : undefined
-  if (process.platform !== 'win32' && ownUid === undefined) {
+  if (process.platform !== 'win32' && process.platform !== 'linux') {
     return { allowed: true }
+  }
+  const ownUid = process.getuid?.()
+  if (process.platform === 'linux' && ownUid === undefined) {
+    return { allowed: false, reason: 'lookup-failed', detail: 'this process has no user id' }
   }
   const client = toEndpoint(socket.remoteAddress, socket.remotePort)
   const listener = toEndpoint(socket.localAddress, socket.localPort)
@@ -146,13 +166,9 @@ async function verifyWindowsClientOwner(
   client: Endpoint,
   listener: Endpoint
 ): Promise<SocksClientOwnerVerdict> {
-  const security = await loadWindowsSecurityAsync()
-  // Only a missing lookup admits unchecked; a lookup that ran and found nothing refuses.
-  if ('error' in security) {
-    return { allowed: true, unchecked: `the security addon did not load (${security.error})` }
-  }
-  if (!security.addon.hasNativeExport('tcpClientOwnerAsync')) {
-    return { allowed: true, unchecked: 'the security addon predates the owner lookup' }
+  const security = await loadWindowsOwnerLookup()
+  if (typeof security === 'string') {
+    return { allowed: false, reason: 'lookup-failed', detail: security }
   }
   const owner = await security.addon.tcpClientOwnerAsync(
     client.host,
@@ -172,6 +188,17 @@ async function verifyWindowsClientOwner(
   return owner.sid === security.userSid
     ? { allowed: true }
     : { allowed: false, reason: 'foreign-owner', owner: owner.sid }
+}
+
+/** The loaded addon, or why it can't look an owner up. */
+async function loadWindowsOwnerLookup(): Promise<WindowsSecurity | string> {
+  const security = await loadWindowsSecurityAsync()
+  if ('error' in security) {
+    return `the Windows security addon did not load: ${security.error}`
+  }
+  return security.addon.hasNativeExport('tcpClientOwnerAsync')
+    ? security
+    : 'the Windows security addon predates the connection owner lookup'
 }
 
 const OWN_APP_PIDS_TTL_MS = 1_000

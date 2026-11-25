@@ -2,7 +2,10 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { BROWSER_NETWORK_TUNNEL_MAX_STREAMS } from '../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { reserveBrowserTunnelOrcaListenerPort } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 import { pipeUpstreamToClient } from '../../browser/network/tunnels/remote-browser-socks-upstream'
-import { createSocksClientAdmission } from '../../browser/network/tunnels/remote-browser-socks-client-owner'
+import {
+  assertSocksClientOwnerLookup,
+  createSocksClientAdmission
+} from '../../browser/network/tunnels/remote-browser-socks-client-owner'
 import { listenForPortForward } from '../../ssh/port-forwarding/ssh2-port-forward-provider'
 import type {
   PortForwardStartOptions,
@@ -29,11 +32,12 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
     tunnel: PairedPortForwardTunnel,
     options: PortForwardStartOptions
   ): Promise<StartedPortForward<PairedPortForwardTunnel>> {
+    await assertSocksClientOwnerLookup('port forward')
     const activeSockets = new Set<Socket>()
     let closed = false
     const target = { host: options.remoteHost, port: options.remotePort }
 
-    // Another OS account on this computer may not ride this desktop's pairing (uid on Linux, SID on Windows).
+    // Another OS account on this computer may not ride this desktop's pairing (uid on Linux, SID on Windows; macOS has no lookup).
     const admitClient = createSocksClientAdmission('port forward')
     const forward = (socket: Socket): void => {
       tunnel.open(target).then(

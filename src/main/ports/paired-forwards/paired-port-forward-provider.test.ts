@@ -1,7 +1,11 @@
 import { connect } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { Duplex, PassThrough } from 'node:stream'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  resetWindowsSecurityLoadForTests,
+  setWindowsSecurityForTests
+} from '../../../shared/secure-storage/windows-security-addon'
 import { browserTunnelTargetBlockReason } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
 import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
@@ -87,6 +91,30 @@ describe('PairedPortForwardProvider', () => {
     }
     expect(browserTunnelTargetBlockReason('127.0.0.1', port)).toBeNull()
     await expect(roundTrip(port, 'x')).rejects.toMatchObject({ code: 'ECONNREFUSED' })
+  })
+
+  describe('on Windows without the connection owner lookup', () => {
+    const realPlatform = process.platform
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: realPlatform })
+      resetWindowsSecurityLoadForTests()
+    })
+
+    it('refuses to start instead of admitting other accounts unchecked', async () => {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      setWindowsSecurityForTests(null)
+      const opened: { host: string; port: number }[] = []
+      await expect(
+        new PairedPortForwardProvider().start(echoTunnel(opened), {
+          id: 'pf-1',
+          connectionId: 'environment-a',
+          localHost: '127.0.0.1',
+          localPort: 0,
+          remoteHost: 'localhost',
+          remotePort: 5173
+        })
+      ).rejects.toThrow(/can't confirm which account/)
+    })
   })
 
   it('still delivers the response after the client shuts down its request side', async () => {

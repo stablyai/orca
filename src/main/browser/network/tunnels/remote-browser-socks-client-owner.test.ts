@@ -15,6 +15,7 @@ import {
 import type { TcpClientOwner } from '@orca/windows-security'
 import {
   findProcNetTcpClientUid,
+  socksClientOwnerLookupGap,
   verifySocksClientOwner
 } from './remote-browser-socks-client-owner'
 
@@ -126,7 +127,7 @@ describe('verifySocksClientOwner on Windows', () => {
     resetWindowsSecurityLoadForTests()
   })
 
-  it('admits only this SID, refuses when a lookup that ran finds no owner, and admits unchecked only without the lookup', async () => {
+  it('admits only this SID and refuses every connection it cannot attribute', async () => {
     withOwner(async () => ({ pid: 7, sid: FAKE_USER_SID }))
     await expect(verifySocksClientOwner(socket)).resolves.toEqual({ allowed: true })
     withOwner(async () => ({ pid: 8, sid: 'S-1-5-21-1-2-3-1002' }))
@@ -167,18 +168,20 @@ describe('verifySocksClientOwner on Windows', () => {
       reason: 'foreign-owner'
     })
 
+    await expect(socksClientOwnerLookupGap()).resolves.toBeNull()
+  })
+
+  it('refuses connections and listener starts when the owner lookup is missing', async () => {
     const stale = createFakeWindowsSecurity()
     stale.hasNativeExport = (name) => name !== 'tcpClientOwnerAsync'
-    setWindowsSecurityForTests(stale)
-    await expect(verifySocksClientOwner(socket)).resolves.toMatchObject({
-      allowed: true,
-      unchecked: expect.any(String)
-    })
-    setWindowsSecurityForTests(null)
-    await expect(verifySocksClientOwner(socket)).resolves.toMatchObject({
-      allowed: true,
-      unchecked: expect.any(String)
-    })
+    for (const addon of [stale, null]) {
+      setWindowsSecurityForTests(addon)
+      await expect(verifySocksClientOwner(socket)).resolves.toMatchObject({
+        allowed: false,
+        reason: 'lookup-failed'
+      })
+      await expect(socksClientOwnerLookupGap()).resolves.toEqual(expect.any(String))
+    }
   })
 })
 
