@@ -8,7 +8,6 @@ export {
   dropListedProviderRelay,
   keptProviderRelaySpawnToken,
   keptRunningProviderRelayPid,
-  providerRelayInventoryComplete,
   providerRelayKeptFromLastRun,
   liveKeptProviderRelayChats as liveProviderRelayChats,
   registerReattachableProviderRelayAgent
@@ -19,7 +18,8 @@ import {
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
-  recheckKeptProviderRelay
+  recheckKeptProviderRelay,
+  providerRelayInventoryComplete as inventoryComplete
 } from './provider-relay-launch-inventory'
 import {
   KeptProviderRelayEndedError,
@@ -105,6 +105,11 @@ function policyFor(
     ...(markers.quiet ? { quiet: [...markers.quiet] } : {}),
     ...(open ? { open } : {})
   }
+}
+
+/** No agent can be kept where no relay route is installed (servers, SSH hosts). */
+export function providerRelayInventoryComplete(): boolean {
+  return !route || inventoryComplete()
 }
 
 /** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
