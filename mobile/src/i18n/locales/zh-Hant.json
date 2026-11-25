@@ -86,37 +86,19 @@
     },
     "pairConfirm": {
       "backToHome": "返回首頁",
-      "connectTimedOut": "未能在 {{seconds}} 秒內連線；請查看下方記錄，確認停在哪個步驟",
       "connecting": "連線中…",
-      "description": "您開啟了來自電腦的配對連結。確認後，即可將該電腦加入主機清單。",
       "pairButton": "配對",
-      "pairingFailed": "配對失敗：{{error}}",
-      "pairingLog": "配對記錄",
-      "title": "要與這台電腦配對嗎？"
+      "pairingFailed": "配對失敗：{{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "請在「設定」中啟用相機存取權限，或改為貼上配對碼。",
-      "cameraDisabledTitle": "相機存取權限已停用",
-      "cameraPermissionDescription": "掃描電腦上 Orca 顯示的 QR Code，或改為貼上配對碼。",
-      "connectTimedOut": "未能在 {{seconds}} 秒內連線；請查看下方記錄，確認停在哪個步驟",
       "connecting": "連線中…",
       "invalidPairingCode": "配對碼無效，請從電腦複製後重新貼上",
       "invalidQrCode": "無效的 Orca QR Code",
-      "downloadQrCode": "這是下載碼。請掃描桌面端第 2 步中的配對碼。",
-      "openDesktopStep": "在電腦上開啟 Orca",
-      "openMobileSettingsStep": "前往「設定」→「行動版」",
       "openSettings": "開啟設定",
       "pairingFailed": "配對失敗：{{error}}",
-      "pairingLog": "配對記錄",
       "pasteCodeMessage": "複製電腦上 QR Code 下方顯示的配對碼。",
       "pasteCodePlaceholder": "orca://pair?code=... 或貼上配對碼",
-      "pasteCodeTitle": "貼上配對碼",
-      "pasteInstead": "改為貼上配對碼",
-      "pastePairingCode": "貼上配對碼",
-      "scanCodeStep": "掃描 QR Code",
-      "title": "與電腦配對",
-      "tryAgain": "重試",
-      "codeNoLongerValid": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
+      "pasteCodeTitle": "貼上配對碼"
     },
     "terminalSettings": {
       "keepPhoneSize": "保持手機尺寸（預設）",
@@ -1577,15 +1559,6 @@
       "toggleFailed": "無法更新 {{name}}",
       "updateDesktop": "請更新 {{desktop}} 上的 Orca，以使用自動化。"
     },
-    "emptyState": {
-      "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
-      "connectedTitle": "已連線",
-      "description": "與電腦上的 Orca 配對，即可用手機查看代理程式狀態、開啟任何終端機，並推進工作。",
-      "openDesktopDescription": "前往「設定」→「行動版」，產生配對用的 QR Code。",
-      "openDesktopTitle": "開啟 Orca 桌面版",
-      "scanCodeTitle": "掃描 QR Code",
-      "title": "連線至您的電腦"
-    },
     "listFooter": {
       "hostPickerTitle": "選擇開啟任務的主機"
     },
@@ -1825,16 +1798,11 @@
       "waitingOnYou": "正在等待您回應。"
     },
     "onboardingPage": {
-      "enableAgentNotifications": "啟用代理程式通知",
       "enableNotifications": "啟用通知",
       "keepTerminal": "繼續使用終端機",
       "notNow": "暫時不要",
-      "notificationsDescription": "即使未使用應用程式，代理程式完成工作或等待您回應時，此手機也會收到通知。",
-      "notificationsDisclosure": "電腦閒置 3 分鐘後，便會透過 Orca 推播服務傳送通知。您隨時可在「設定」中變更。",
       "notificationsTitle": "代理程式需要您時，別錯過通知",
-      "openInChatUi": "以聊天介面開啟工作階段",
       "openInTerminal": "在終端機中開啟工作階段",
-      "sessionViewDescription": "選擇在此裝置上以終端機或聊天介面開啟支援此功能的代理程式工作階段。長按工作階段分頁可切換檢視方式，也可隨時在「設定」→「聊天介面」中變更預設值。",
       "sessionViewTitle": "如何開啟工作階段？",
       "skipNotifications": "暫不啟用通知",
       "useChatUi": "使用聊天介面"
@@ -4454,7 +4422,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",

@@ -1,143 +1,78 @@
-import { QrCode } from 'lucide-react-native'
+import { Clipboard, Laptop, ScanQrCode } from 'lucide-react-native'
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
-import Animated from 'react-native-reanimated'
-import { NumberedStepsPanel } from '../components/list/NumberedStepsPanel'
-import { OrcaLogo } from '../components/icons/OrcaLogo'
-import type { Translate } from '../i18n/mobile-i18n'
+import { ScrollView, View } from 'react-native'
+import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
+import { SheetSecondaryButton } from '../components/sheets/SheetSecondaryButton'
+import { TextInputModal } from '../components/sheets/TextInputModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileHomeAppMoveBanner } from './MobileHomeAppMoveBanner'
+import { MobileHomeTabEmpty } from './tabs/MobileHomeTabEmpty'
 
-function onboardingSteps(t: Translate) {
-  return [
-    {
-      id: 'open-desktop',
-      title: t('home.emptyState.openDesktopTitle', 'Open Orca desktop'),
-      desc: t(
-        'home.emptyState.openDesktopDescription',
-        'Go to Settings → Mobile and generate a pairing QR code.'
-      )
-    },
-    {
-      id: 'scan-code',
-      title: t('home.emptyState.scanCodeTitle', 'Scan the code'),
-      desc: t(
-        'home.emptyState.scanCodeBelowDescription',
-        'Tap Pair desktop below, then point your camera at the QR code on your screen.'
-      )
-    },
-    {
-      id: 'connected',
-      title: t('home.emptyState.connectedTitle', "You're connected"),
-      desc: t(
-        'home.emptyState.connectedDescription',
-        'Your desktop will appear here. Everything is encrypted end-to-end.'
-      )
-    }
-  ]
-}
-
+/** Feed with nothing paired: what to open on the computer, then Scan code or Paste code above the tabs. */
 export function MobileHomeEmptyState(props: {
   contentMaxWidth: number
   isWideLayout: boolean
-  bottomInset: number
-  onPairDesktop: () => void
+  onScanCode: () => void
+  onPasteCode: (code: string) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
-  // Scrolls because a phone in landscape is shorter than the hero and the steps together.
+  const [pasting, setPasting] = useState(false)
+  const wide = props.isWideLayout && {
+    maxWidth: props.contentMaxWidth,
+    width: '100%' as const,
+    alignSelf: 'center' as const
+  }
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        { paddingBottom: props.bottomInset },
-        props.isWideLayout && {
-          maxWidth: props.contentMaxWidth,
-          width: '100%',
-          alignSelf: 'center'
-        }
-      ]}
-    >
-      <MobileHomeAppMoveBanner />
-      <View style={styles.guide}>
-        <View style={styles.hero}>
-          <OrcaLogo size={44} />
-          <Text style={styles.title} accessibilityRole="header">
-            {t('home.emptyState.title', 'Connect your desktop')}
-          </Text>
-          <Text style={styles.body}>
-            {t(
-              'home.emptyState.description',
-              'Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.'
-            )}
-          </Text>
-        </View>
-        <NumberedStepsPanel steps={onboardingSteps(t)} />
-        <PairDesktopButton onPress={props.onPairDesktop} />
+    <>
+      {/* Scrolls because a phone in landscape is shorter than the message and the buttons together. */}
+      <ScrollView contentContainerStyle={[styles.content, wide]}>
+        <MobileHomeAppMoveBanner />
+        <MobileHomeTabEmpty
+          centred
+          icon={Laptop}
+          title={t('home.emptyState.connectComputer', 'Connect your computer')}
+          message={t(
+            'home.emptyState.openSettingsMobile',
+            'Open Orca on your computer, then Settings → Mobile.'
+          )}
+        />
+      </ScrollView>
+      <View style={[styles.foot, wide]}>
+        <SheetPrimaryButton
+          icon={ScanQrCode}
+          label={t('app.pairScan.scanCode', 'Scan code')}
+          onPress={props.onScanCode}
+        />
+        <SheetSecondaryButton
+          icon={Clipboard}
+          label={t('app.pairScan.pasteCode', 'Paste code')}
+          onPress={() => setPasting(true)}
+        />
       </View>
-    </ScrollView>
-  )
-}
-
-function PairDesktopButton(props: { onPress: () => void }) {
-  const t = useMobileTranslation()
-  useMobileColorScheme()
-  const [pressed, setPressed] = useState(false)
-  return (
-    <Pressable
-      accessibilityRole="button"
-      style={styles.ctaHit}
-      onPressIn={() => setPressed(true)}
-      onPressOut={() => setPressed(false)}
-      onPress={props.onPress}
-    >
-      <Animated.View
-        style={[
-          styles.cta,
-          {
-            opacity: pressed ? 0.85 : 1,
-            transform: [{ scale: pressed ? 0.97 : 1 }],
-            transitionProperty: ['transform', 'opacity'],
-            transitionDuration: pressed ? 90 : 160
-          }
-        ]}
-      >
-        <QrCode size={18} color={colors.onAccent} strokeWidth={2.2} />
-        <Text style={styles.ctaLabel}>
-          {t('home.emptyState.pairDesktopButton', 'Pair desktop')}
-        </Text>
-      </Animated.View>
-    </Pressable>
+      <TextInputModal
+        visible={pasting}
+        title={t('app.pairScan.pasteCodeTitle', 'Paste pairing code')}
+        message={t(
+          'app.pairScan.pasteCodeMessage',
+          'Copy the code shown under the QR on your computer.'
+        )}
+        placeholder={t(
+          'app.pairScan.pasteCodePlaceholder',
+          'orca://pair?code=... or paste the code'
+        )}
+        onSubmit={(code) => {
+          setPasting(false)
+          props.onPasteCode(code)
+        }}
+        onCancel={() => setPasting(false)}
+      />
+    </>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  container: { flexGrow: 1, padding: spacing.lg },
-  // The move banner stays at the top while the pairing guide centres in the space below it.
-  guide: { flexGrow: 1, justifyContent: 'center' },
-  hero: { alignItems: 'center', paddingHorizontal: spacing.sm, marginBottom: 34 },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginTop: 26,
-    marginBottom: 10
-  },
-  body: { fontSize: 17, lineHeight: 24, color: colors.textSecondary, textAlign: 'center' },
-  ctaHit: { alignSelf: 'center', marginTop: 22 },
-  cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 48,
-    paddingHorizontal: 22,
-    borderRadius: radii.control,
-    backgroundColor: colors.accentBlue
-  },
-  ctaLabel: { fontSize: 16, fontWeight: '600', color: colors.onAccent }
+  content: { flexGrow: 1, paddingHorizontal: spacing.lg },
+  foot: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }
 }))

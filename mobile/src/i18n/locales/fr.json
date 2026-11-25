@@ -88,37 +88,19 @@
     },
     "pairConfirm": {
       "backToHome": "Retour à l'accueil",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
-      "description": "Vous avez ouvert un lien d'appairage depuis votre ordinateur. Confirmez pour l'ajouter à vos hôtes.",
       "pairButton": "Appairer",
-      "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
-      "title": "Appairer cet ordinateur ?"
+      "pairingFailed": "Échec de l'appairage : {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Activez l'accès à la caméra dans les paramètres, ou collez le code d'appairage.",
-      "cameraDisabledTitle": "Accès à la caméra désactivé",
-      "cameraPermissionDescription": "Scannez le QR code affiché dans Orca sur votre ordinateur, ou collez le code d'appairage.",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
       "invalidPairingCode": "Code d'appairage invalide — copiez-le depuis votre ordinateur et collez-le à nouveau.",
       "invalidQrCode": "QR code Orca invalide",
-      "downloadQrCode": "C’est le code de téléchargement. Scannez le code d’association à l’étape 2 sur votre ordinateur.",
-      "openDesktopStep": "Ouvrez Orca sur votre ordinateur",
-      "openMobileSettingsStep": "Allez dans Paramètres → Mobile",
       "openSettings": "Ouvrir les paramètres",
       "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
       "pasteCodeMessage": "Copiez le code affiché sous le QR code sur votre ordinateur.",
       "pasteCodePlaceholder": "orca://pair?code=... ou collez le code",
-      "pasteCodeTitle": "Coller le code d'appairage",
-      "pasteInstead": "Coller plutôt le code",
-      "pastePairingCode": "Coller le code d'appairage",
-      "scanCodeStep": "Scannez le QR code",
-      "title": "Appairer un ordinateur",
-      "tryAgain": "Réessayer",
-      "codeNoLongerValid": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau."
+      "pasteCodeTitle": "Coller le code d'appairage"
     },
     "terminalSettings": {
       "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
@@ -1625,15 +1607,6 @@
       "toggleFailed": "Impossible de mettre à jour {{name}}",
       "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
     },
-    "emptyState": {
-      "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
-      "connectedTitle": "Vous êtes connecté",
-      "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
-      "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
-      "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "scanCodeTitle": "Scanner le code",
-      "title": "Connectez votre ordinateur"
-    },
     "listFooter": {
       "hostPickerTitle": "Ouvrir les tâches sur"
     },
@@ -1878,16 +1851,11 @@
       "waitingOnYou": "En attente de votre intervention."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Activer les notifications des agents",
       "enableNotifications": "Activer les notifications",
       "keepTerminal": "Conserver le terminal",
       "notNow": "Pas maintenant",
-      "notificationsDescription": "Recevez une notification sur ce téléphone lorsqu'un agent a terminé ou est en attente, même si vous n'utilisez pas l'application.",
-      "notificationsDisclosure": "Envoyées via le service de notifications push d'Orca après 3 minutes d'inactivité de votre ordinateur. Modifiez ce réglage à tout moment dans les paramètres.",
       "notificationsTitle": "Soyez averti quand un agent a besoin de vous",
-      "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
       "openInTerminal": "Ouvrir les sessions dans le terminal",
-      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut à tout moment dans Paramètres → Chat UI.",
       "sessionViewTitle": "Comment ouvrir les sessions ?",
       "skipNotifications": "Ignorer les notifications pour le moment",
       "useChatUi": "Utiliser le chat"
@@ -4566,7 +4534,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

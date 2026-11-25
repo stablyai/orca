@@ -86,37 +86,19 @@
     },
     "pairConfirm": {
       "backToHome": "ホームに戻る",
-      "connectTimedOut": "{{seconds}} 秒以内に接続できませんでした。どこで処理が止まったか、下のログで確認してください。",
       "connecting": "接続中…",
-      "description": "デスクトップのペアリングリンクを開きました。確認すると、このデスクトップがホスト一覧に追加されます。",
       "pairButton": "ペアリング",
-      "pairingFailed": "ペアリングに失敗しました：{{error}}",
-      "pairingLog": "ペアリングログ",
-      "title": "このデスクトップとペアリングしますか？"
+      "pairingFailed": "ペアリングに失敗しました：{{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "設定でカメラへのアクセスを有効にするか、ペアリングコードを貼り付けてください。",
-      "cameraDisabledTitle": "カメラへのアクセスが無効",
-      "cameraPermissionDescription": "デスクトップの Orca に表示された QR コードをスキャンするか、ペアリングコードを貼り付けてください。",
-      "connectTimedOut": "{{seconds}} 秒以内に接続できませんでした。どこで処理が止まったか、下のログで確認してください。",
       "connecting": "接続中…",
       "invalidPairingCode": "ペアリングコードが無効です。コンピュータからコピーして、もう一度貼り付けてください。",
       "invalidQrCode": "Orca の有効な QR コードではありません",
-      "downloadQrCode": "これはダウンロード用のコードです。デスクトップのステップ2にあるペアリングコードをスキャンしてください。",
-      "openDesktopStep": "コンピュータで Orca を開く",
-      "openMobileSettingsStep": "「設定」→「モバイル」を開く",
       "openSettings": "設定を開く",
       "pairingFailed": "ペアリングに失敗しました：{{error}}",
-      "pairingLog": "ペアリングログ",
       "pasteCodeMessage": "コンピュータの QR コードの下に表示されているコードをコピーしてください。",
       "pasteCodePlaceholder": "orca://pair?code=... またはコードを貼り付け",
-      "pasteCodeTitle": "ペアリングコードを貼り付け",
-      "pasteInstead": "代わりにコードを貼り付け",
-      "pastePairingCode": "ペアリングコードを貼り付け",
-      "scanCodeStep": "QR コードをスキャン",
-      "title": "デスクトップのペアリング",
-      "tryAgain": "再試行",
-      "codeNoLongerValid": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。"
+      "pasteCodeTitle": "ペアリングコードを貼り付け"
     },
     "terminalSettings": {
       "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
@@ -1574,15 +1556,6 @@
       "toggleFailed": "{{name}} を更新できませんでした",
       "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
     },
-    "emptyState": {
-      "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
-      "connectedTitle": "接続完了",
-      "description": "コンピュータ上の Orca とペアリングすると、スマートフォンから Agent の状況を確認したり、任意のターミナルを操作したりして、作業を進められます。",
-      "openDesktopDescription": "「設定」→「モバイル」を開き、ペアリング用の QR コードを生成してください。",
-      "openDesktopTitle": "デスクトップで Orca を開く",
-      "scanCodeTitle": "コードをスキャン",
-      "title": "デスクトップに接続"
-    },
     "listFooter": {
       "hostPickerTitle": "タスクを開くホスト"
     },
@@ -1827,16 +1800,11 @@
       "waitingOnYou": "対応を待っています。"
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Agent の通知を有効にする",
       "enableNotifications": "通知を有効にする",
       "keepTerminal": "ターミナルのままにする",
       "notNow": "後で",
-      "notificationsDescription": "アプリを使用していないときでも、Agent の作業が完了したときや対応待ちになったときに、このスマートフォンに通知が届きます。",
-      "notificationsDisclosure": "デスクトップで3分間操作がないと、Orca のプッシュ通知サービスを通じて配信されます。「設定」でいつでも変更できます。",
       "notificationsTitle": "Agent からの呼びかけを見逃さない",
-      "openInChatUi": "セッションをチャット UI で開く",
       "openInTerminal": "セッションをターミナルで開く",
-      "sessionViewDescription": "この端末で、対応する Agent セッションをターミナルとチャット UI のどちらで開くか選択してください。セッションタブを長押しすると表示を切り替えられます。デフォルトはいつでも「設定」→「Chat UI」で変更できます。",
       "sessionViewTitle": "セッションの表示方法は？",
       "skipNotifications": "今は通知を有効にしない",
       "useChatUi": "チャット UI を使用"
@@ -4534,7 +4502,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

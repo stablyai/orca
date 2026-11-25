@@ -133,37 +133,19 @@
     },
     "pairConfirm": {
       "backToHome": "返回首页",
-      "connectTimedOut": "未能在 {{seconds}} 秒内连接，请查看下方日志，了解连接停在哪一步",
       "connecting": "正在连接…",
-      "description": "已打开来自桌面的配对链接。确认后将此桌面添加到主机列表",
       "pairButton": "配对",
-      "pairingFailed": "配对失败：{{error}}",
-      "pairingLog": "配对日志",
-      "title": "要与此桌面配对吗？"
+      "pairingFailed": "配对失败：{{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "请在“设置”中启用相机访问权限，或粘贴配对码",
-      "cameraDisabledTitle": "相机访问已禁用",
-      "cameraPermissionDescription": "扫描桌面上 Orca 显示的二维码，或粘贴配对码",
-      "connectTimedOut": "未能在 {{seconds}} 秒内连接，请查看下方日志，了解连接停在哪一步",
       "connecting": "正在连接…",
       "invalidPairingCode": "配对码无效，请从电脑上复制后重新粘贴",
       "invalidQrCode": "无效的 Orca 二维码",
-      "downloadQrCode": "这是下载码。请扫描桌面端第 2 步中的配对码",
-      "openDesktopStep": "在电脑上打开 Orca",
-      "openMobileSettingsStep": "前往“设置” → “移动端”",
       "openSettings": "打开设置",
       "pairingFailed": "配对失败：{{error}}",
-      "pairingLog": "配对日志",
       "pasteCodeMessage": "复制电脑上二维码下方显示的配对码",
       "pasteCodePlaceholder": "orca://pair?code=... 或粘贴配对码",
       "pasteCodeTitle": "粘贴配对码",
-      "pasteInstead": "改为粘贴配对码",
-      "pastePairingCode": "粘贴配对码",
-      "scanCodeStep": "扫描二维码",
-      "title": "与桌面配对",
-      "tryAgain": "重试",
-      "codeNoLongerValid": "此配对码已过期、已被使用或已被替换。请在电脑上显示新的配对码后重新扫描。",
       "runtimeAccessLink": "此链接适用于其他 Orca 应用。请扫描电脑上“设置” → “移动端”中的二维码，或在服务器上运行 orca pair --mobile"
     },
     "terminalSettings": {
@@ -2219,17 +2201,6 @@
       "toggleFailed": "无法更新 {{name}}",
       "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化。"
     },
-    "emptyState": {
-      "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密",
-      "connectedTitle": "已连接",
-      "description": "与电脑上的 Orca 配对，即可在手机上查看智能体、进入任意终端并推进工作",
-      "pairDesktopButton": "配对桌面",
-      "scanCodeBelowDescription": "轻点下方的“配对桌面”，然后将相机对准屏幕上的二维码",
-      "openDesktopDescription": "前往“设置” → “移动端”，生成配对二维码",
-      "openDesktopTitle": "打开 Orca 桌面应用",
-      "scanCodeTitle": "扫描二维码",
-      "title": "连接桌面"
-    },
     "listFooter": {
       "hostPickerTitle": "选择打开任务的主机"
     },
@@ -2545,16 +2516,11 @@
       "waitingOnYou": "等待您的回应"
     },
     "onboardingPage": {
-      "enableAgentNotifications": "启用智能体通知",
       "enableNotifications": "启用通知",
       "keepTerminal": "继续使用终端",
       "notNow": "暂不",
-      "notificationsDescription": "智能体完成任务或等待响应时，即使未使用应用，此手机也会收到通知",
-      "notificationsDisclosure": "桌面空闲 3 分钟后，通过 Orca 的推送服务发送通知。可随时在“设置”中更改",
       "notificationsTitle": "智能体需要您时，及时收到提醒",
-      "openInChatUi": "在聊天界面中打开会话",
       "openInTerminal": "在终端中打开会话",
-      "sessionViewDescription": "选择在此设备上以终端还是聊天界面打开受支持的智能体会话。长按会话标签页可切换视图，也可随时在“设置”→“聊天界面”中更改默认方式。",
       "sessionViewTitle": "以何种方式打开会话？",
       "skipNotifications": "暂不启用通知",
       "useChatUi": "使用聊天界面"

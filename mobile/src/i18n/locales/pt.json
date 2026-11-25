@@ -98,37 +98,19 @@
     },
     "pairConfirm": {
       "backToHome": "Voltar ao início",
-      "connectTimedOut": "Não foi possível conectar em {{seconds}}s — veja no log abaixo em que etapa a conexão parou",
       "connecting": "Conectando…",
-      "description": "Você abriu um link de pareamento do seu desktop. Confirme para adicioná-lo aos seus hosts.",
       "pairButton": "Parear",
-      "pairingFailed": "Falha no pareamento: {{error}}",
-      "pairingLog": "Log de pareamento",
-      "title": "Parear com este desktop?"
+      "pairingFailed": "Falha no pareamento: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Ative o acesso à câmera nas Configurações ou cole o código de pareamento.",
-      "cameraDisabledTitle": "Acesso à câmera desativado",
-      "cameraPermissionDescription": "Escaneie o código QR do Orca no seu desktop ou cole o código de pareamento.",
-      "connectTimedOut": "Não foi possível conectar em {{seconds}}s — veja no log abaixo em que etapa a conexão parou",
       "connecting": "Conectando…",
       "invalidPairingCode": "Código de pareamento inválido — copie-o do seu computador e cole novamente",
       "invalidQrCode": "Código QR do Orca inválido",
-      "downloadQrCode": "Esse é o código de download. Leia o código de pareamento na etapa 2 no seu computador.",
-      "openDesktopStep": "Abra o Orca no seu computador",
-      "openMobileSettingsStep": "Vá para Configurações → Mobile",
       "openSettings": "Abrir Configurações",
       "pairingFailed": "Falha no pareamento: {{error}}",
-      "pairingLog": "Log de pareamento",
       "pasteCodeMessage": "Copie o código que aparece abaixo do QR no seu computador.",
       "pasteCodePlaceholder": "orca://pair?code=... ou cole o código",
-      "pasteCodeTitle": "Colar código de pareamento",
-      "pasteInstead": "Colar código em vez disso",
-      "pastePairingCode": "Colar código de pareamento",
-      "scanCodeStep": "Escaneie o código QR",
-      "title": "Parear com desktop",
-      "tryAgain": "Tentar novamente",
-      "codeNoLongerValid": "Este código de pareamento expirou, já foi usado ou foi substituído. Mostre um novo código no computador e escaneie novamente."
+      "pasteCodeTitle": "Colar código de pareamento"
     },
     "terminalSettings": {
       "keepPhoneSize": "Manter no tamanho do celular (padrão)",
@@ -1747,17 +1729,6 @@
       "toggleFailed": "Não foi possível atualizar {{name}}",
       "updateDesktop": "Atualize o Orca em {{desktop}} para usar automações."
     },
-    "emptyState": {
-      "connectedDescription": "Seu desktop aparecerá aqui. Tudo é criptografado de ponta a ponta.",
-      "connectedTitle": "Você está conectado",
-      "description": "Pareie com o Orca no seu computador para acompanhar seus agentes, acessar qualquer terminal e gerenciar o trabalho pelo celular.",
-      "openDesktopDescription": "Vá para Configurações → Mobile e gere um código QR de pareamento.",
-      "openDesktopTitle": "Abra o Orca no desktop",
-      "scanCodeTitle": "Escaneie o código",
-      "title": "Conecte seu desktop",
-      "pairDesktopButton": "Emparelhar computador",
-      "scanCodeBelowDescription": "Toque em Emparelhar computador abaixo e aponte a câmera para o código QR na tela."
-    },
     "listFooter": {
       "hostPickerTitle": "Abrir tarefas em"
     },
@@ -2029,16 +2000,11 @@
       "waitingOnYou": "Aguardando você."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Ativar notificações de agentes",
       "enableNotifications": "Ativar notificações",
       "keepTerminal": "Manter terminal",
       "notNow": "Agora não",
-      "notificationsDescription": "Receba uma notificação neste celular quando um agente terminar ou estiver aguardando — mesmo sem usar o app.",
-      "notificationsDisclosure": "Enviadas pelo serviço de notificações push do Orca após 3 minutos de inatividade do seu desktop. Altere isso a qualquer momento em Configurações.",
       "notificationsTitle": "Saiba quando um agente precisar de você",
-      "openInChatUi": "Abrir sessões na interface de chat",
       "openInTerminal": "Abrir sessões no terminal",
-      "sessionViewDescription": "Escolha se as sessões de agentes compatíveis devem abrir no terminal ou na interface de chat neste dispositivo. Toque e segure uma aba de sessão para alternar a visualização ou altere o padrão a qualquer momento em Configurações → Interface de Chat.",
       "sessionViewTitle": "Como as sessões devem ser abertas?",
       "skipNotifications": "Pular notificações por enquanto",
       "useChatUi": "Usar interface de chat"
@@ -5140,7 +5106,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

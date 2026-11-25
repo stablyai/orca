@@ -86,37 +86,19 @@
     },
     "pairConfirm": {
       "backToHome": "홈으로 돌아가기",
-      "connectTimedOut": "{{seconds}}초 내에 연결하지 못했습니다. 어느 단계에서 멈췄는지 아래 로그를 확인하세요.",
       "connecting": "연결 중…",
-      "description": "데스크톱의 페어링 링크를 열었습니다. 확인하면 이 데스크톱이 호스트 목록에 추가됩니다.",
       "pairButton": "페어링",
-      "pairingFailed": "페어링 실패: {{error}}",
-      "pairingLog": "페어링 로그",
-      "title": "이 데스크톱과 페어링하시겠습니까?"
+      "pairingFailed": "페어링 실패: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "설정에서 카메라 접근을 허용하거나 페어링 코드를 붙여넣으세요.",
-      "cameraDisabledTitle": "카메라 접근 비활성화",
-      "cameraPermissionDescription": "데스크톱의 Orca에 표시된 QR 코드를 스캔하거나 페어링 코드를 붙여넣으세요.",
-      "connectTimedOut": "{{seconds}}초 내에 연결하지 못했습니다. 어느 단계에서 멈췄는지 아래 로그를 확인하세요.",
       "connecting": "연결 중…",
       "invalidPairingCode": "유효한 페어링 코드가 아닙니다. 컴퓨터에서 코드를 복사해 다시 붙여넣으세요.",
       "invalidQrCode": "유효한 Orca QR 코드가 아닙니다.",
-      "downloadQrCode": "다운로드용 코드입니다. 데스크톱의 2단계에 있는 페어링 코드를 스캔하세요.",
-      "openDesktopStep": "컴퓨터에서 Orca를 실행하세요",
-      "openMobileSettingsStep": "설정 → 모바일로 이동하세요",
       "openSettings": "설정 열기",
       "pairingFailed": "페어링 실패: {{error}}",
-      "pairingLog": "페어링 로그",
       "pasteCodeMessage": "컴퓨터의 QR 코드 아래에 표시된 코드를 복사하세요.",
       "pasteCodePlaceholder": "orca://pair?code=... 또는 코드 붙여넣기",
-      "pasteCodeTitle": "페어링 코드 붙여넣기",
-      "pasteInstead": "대신 코드 붙여넣기",
-      "pastePairingCode": "페어링 코드 붙여넣기",
-      "scanCodeStep": "QR 코드를 스캔하세요",
-      "title": "데스크톱과 페어링",
-      "tryAgain": "다시 시도",
-      "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요."
+      "pasteCodeTitle": "페어링 코드 붙여넣기"
     },
     "terminalSettings": {
       "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
@@ -1574,15 +1556,6 @@
       "toggleFailed": "{{name}}을(를) 업데이트할 수 없습니다",
       "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요."
     },
-    "emptyState": {
-      "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
-      "connectedTitle": "연결 완료",
-      "description": "컴퓨터의 Orca와 페어링하여 에이전트 상태를 확인하고, 원하는 터미널에 접속하고, 휴대폰으로 작업을 진행하세요.",
-      "openDesktopDescription": "설정 → 모바일에서 페어링 QR 코드를 생성하세요.",
-      "openDesktopTitle": "Orca 데스크톱 앱 열기",
-      "scanCodeTitle": "코드 스캔",
-      "title": "데스크톱을 연결하세요"
-    },
     "listFooter": {
       "hostPickerTitle": "작업을 열 호스트"
     },
@@ -1827,16 +1800,11 @@
       "waitingOnYou": "응답을 기다리고 있습니다."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "에이전트 알림 켜기",
       "enableNotifications": "알림 켜기",
       "keepTerminal": "터미널 유지",
       "notNow": "나중에",
-      "notificationsDescription": "앱을 사용하지 않아도 에이전트가 작업을 마치거나 대기 중이면 이 휴대폰으로 알림을 받습니다.",
-      "notificationsDisclosure": "데스크톱을 3분 동안 사용하지 않으면 Orca 푸시 서비스를 통해 알림이 전달됩니다. 언제든지 설정에서 변경할 수 있습니다.",
       "notificationsTitle": "에이전트의 요청을 놓치지 마세요",
-      "openInChatUi": "채팅 UI에서 세션 열기",
       "openInTerminal": "터미널에서 세션 열기",
-      "sessionViewDescription": "지원되는 에이전트 세션을 이 기기에서 터미널로 열지, 채팅 UI로 열지 선택하세요. 세션 탭을 길게 눌러 보기를 전환하거나, 언제든지 설정 → 채팅 UI에서 기본값을 변경할 수 있습니다.",
       "sessionViewTitle": "세션을 어떻게 열까요?",
       "skipNotifications": "지금은 알림 설정 건너뛰기",
       "useChatUi": "채팅 UI 사용"
@@ -4562,7 +4530,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",

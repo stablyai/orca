@@ -299,39 +299,32 @@
       "description": "Get agent alerts even when the app is closed. Delivered through Orca’s push service and Apple or Google."
     },
     "pairConfirm": {
-      "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
       "pairingFailed": "Pairing failed: {{error}}",
-      "title": "Pair with this desktop?",
-      "description": "You opened a pairing link from your desktop. Confirm to add it to your hosts.",
       "pairButton": "Pair",
       "connecting": "Connecting…",
-      "pairingLog": "Pairing log",
-      "backToHome": "Back to home"
+      "backToHome": "Back to home",
+      "pairThisComputer": "Pair with this computer?",
+      "onlyYourOwn": "Only pair with a computer you trust."
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
-      "downloadQrCode": "That's the download code. Scan the pairing code in step 2 on your desktop.",
       "invalidPairingCode": "Not a valid pairing code — copy it from your computer and paste again",
-      "connectTimedOut": "Couldn't connect within {{seconds}}s — see log below for where it stalled",
       "pairingFailed": "Pairing failed: {{error}}",
-      "title": "Pair with desktop",
-      "cameraDisabledTitle": "Camera Access Disabled",
-      "cameraPermissionDescription": "Scan the QR code from Orca on your desktop, or paste the pairing code instead.",
-      "cameraDisabledDescription": "Enable camera access in Settings, or paste the pairing code instead.",
       "openSettings": "Open Settings",
-      "pasteInstead": "Paste code instead",
       "pasteCodeTitle": "Paste pairing code",
       "pasteCodeMessage": "Copy the code shown under the QR on your computer.",
       "pasteCodePlaceholder": "orca://pair?code=... or paste the code",
-      "openDesktopStep": "Open Orca on your computer",
-      "openMobileSettingsStep": "Go to Settings → Mobile",
-      "scanCodeStep": "Scan the QR code",
-      "pastePairingCode": "Paste pairing code",
       "connecting": "Connecting…",
-      "pairingLog": "Pairing log",
-      "tryAgain": "Try Again",
-      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
-      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server."
+      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server.",
+      "couldNotPair": "Couldn’t pair",
+      "pasteCode": "Paste code",
+      "retry": "Try again",
+      "cameraOff": "Camera is off",
+      "allowCameraOrPaste": "Allow the camera to scan, or paste the code.",
+      "allowCamera": "Allow camera",
+      "pointAtCode": "Point at the code in Orca on your computer",
+      "scanCode": "Scan code",
+      "downloadCodeScanned": "That’s the download code. Scan the pairing code in Settings → Mobile on your computer."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -373,6 +366,10 @@
       "systemMono": "System mono",
       "defaultFont": "Default",
       "resetFont": "Reset font settings"
+    },
+    "pairing": {
+      "connectTimedOut": "Your computer didn’t answer in {{seconds}} seconds.",
+      "codeExpired": "This code expired or was already used. Show a new one on your computer."
     }
   },
   "appMove": {
@@ -739,15 +736,8 @@
       "update": "Update"
     },
     "emptyState": {
-      "openDesktopTitle": "Open Orca desktop",
-      "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
-      "scanCodeTitle": "Scan the code",
-      "connectedTitle": "You're connected",
-      "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
-      "title": "Connect your desktop",
-      "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
-      "pairDesktopButton": "Pair desktop",
-      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
+      "connectComputer": "Connect your computer",
+      "openSettingsMobile": "Open Orca on your computer, then Settings → Mobile."
     },
     "listFooter": {
       "hostPickerTitle": "Open Tasks On"
@@ -1071,17 +1061,14 @@
     "onboardingPage": {
       "sessionViewTitle": "How should sessions open?",
       "notificationsTitle": "Don’t miss when an agent needs you",
-      "sessionViewDescription": "Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default any time in Settings → Chat UI.",
-      "notificationsDescription": "Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.",
-      "notificationsDisclosure": "Delivered through Orca’s push service after your desktop has been idle for 3 minutes. Change this anytime in Settings.",
       "useChatUi": "Use Chat UI",
-      "openInChatUi": "Open sessions in Chat UI",
       "keepTerminal": "Keep terminal",
       "openInTerminal": "Open sessions in the terminal",
       "enableNotifications": "Enable notifications",
-      "enableAgentNotifications": "Enable agent notifications",
       "notNow": "Not now",
-      "skipNotifications": "Skip notifications for now"
+      "skipNotifications": "Skip notifications for now",
+      "sessionViewLine": "You can change this any time in Settings → Chat UI.",
+      "notificationsLine": "Orca’s push service tells this phone when an agent finishes or needs you while your computer is idle."
     },
     "notificationOnboardingPreview": {
       "codexFinished": "Codex finished",

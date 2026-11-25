@@ -86,37 +86,19 @@
     },
     "pairConfirm": {
       "backToHome": "Zurück zur Startseite",
-      "connectTimedOut": "Verbindung konnte nicht innerhalb von {{seconds}} s hergestellt werden – das Protokoll unten zeigt, wo der Vorgang hängen blieb",
       "connecting": "Verbindung wird hergestellt…",
-      "description": "Ein Kopplungslink vom Desktop wurde geöffnet. Bestätigen, um diesen Desktop zu den Hosts hinzuzufügen.",
       "pairButton": "Koppeln",
-      "pairingFailed": "Kopplung fehlgeschlagen: {{error}}",
-      "pairingLog": "Kopplungsprotokoll",
-      "title": "Mit diesem Desktop koppeln?"
+      "pairingFailed": "Kopplung fehlgeschlagen: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Den Kamerazugriff in den Einstellungen aktivieren oder stattdessen den Kopplungscode einfügen.",
-      "cameraDisabledTitle": "Kamerazugriff deaktiviert",
-      "cameraPermissionDescription": "Den QR-Code in Orca auf dem Desktop scannen oder stattdessen den Kopplungscode einfügen.",
-      "connectTimedOut": "Verbindung konnte nicht innerhalb von {{seconds}} s hergestellt werden – das Protokoll unten zeigt, wo der Vorgang hängen blieb",
       "connecting": "Verbindung wird hergestellt…",
       "invalidPairingCode": "Kein gültiger Kopplungscode – vom Computer kopieren und erneut einfügen",
       "invalidQrCode": "Kein gültiger Orca-QR-Code",
-      "downloadQrCode": "Das ist der Download-Code. Scanne den Kopplungscode in Schritt 2 auf deinem Computer.",
-      "openDesktopStep": "Orca auf dem Computer öffnen",
-      "openMobileSettingsStep": "Einstellungen → Mobil öffnen",
       "openSettings": "Einstellungen öffnen",
       "pairingFailed": "Kopplung fehlgeschlagen: {{error}}",
-      "pairingLog": "Kopplungsprotokoll",
       "pasteCodeMessage": "Den Code kopieren, der auf dem Computer unter dem QR-Code angezeigt wird.",
       "pasteCodePlaceholder": "orca://pair?code=... oder den Code einfügen",
-      "pasteCodeTitle": "Kopplungscode einfügen",
-      "pasteInstead": "Stattdessen Code einfügen",
-      "pastePairingCode": "Kopplungscode einfügen",
-      "scanCodeStep": "QR-Code scannen",
-      "title": "Mit Desktop koppeln",
-      "tryAgain": "Erneut versuchen",
-      "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
+      "pasteCodeTitle": "Kopplungscode einfügen"
     },
     "terminalSettings": {
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
@@ -1580,15 +1562,6 @@
       "toggleFailed": "{{name}} konnte nicht aktualisiert werden",
       "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen."
     },
-    "emptyState": {
-      "connectedDescription": "Der Desktop erscheint hier. Alles ist Ende-zu-Ende-verschlüsselt.",
-      "connectedTitle": "Verbunden",
-      "description": "Mit Orca auf dem Computer koppeln, um Agenten im Blick zu behalten, beliebige Terminals zu öffnen und die Arbeit vom Smartphone aus zu steuern.",
-      "openDesktopDescription": "Einstellungen → Mobil öffnen und einen QR-Code zum Koppeln erstellen.",
-      "openDesktopTitle": "Orca-Desktop-App öffnen",
-      "scanCodeTitle": "Code scannen",
-      "title": "Desktop verbinden"
-    },
     "listFooter": {
       "hostPickerTitle": "Aufgaben auf Host öffnen"
     },
@@ -1831,16 +1804,11 @@
       "waitingOnYou": "Wartet auf dich."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Agenten-Benachrichtigungen aktivieren",
       "enableNotifications": "Benachrichtigungen aktivieren",
       "keepTerminal": "Terminal beibehalten",
       "notNow": "Jetzt nicht",
-      "notificationsDescription": "Auf diesem Smartphone benachrichtigt werden, wenn ein Agent fertig ist oder wartet – auch wenn die App gerade nicht genutzt wird.",
-      "notificationsDisclosure": "Zustellung über den Push-Dienst von Orca, sobald der Computer 3 Minuten lang inaktiv ist. Jederzeit in den Einstellungen änderbar.",
       "notificationsTitle": "Nicht verpassen, wenn ein Agent dich braucht",
-      "openInChatUi": "Sitzungen in der Chat-Oberfläche öffnen",
       "openInTerminal": "Sitzungen im Terminal öffnen",
-      "sessionViewDescription": "Festlegen, ob unterstützte Agenten-Sitzungen auf diesem Gerät im Terminal oder in der Chat-Oberfläche geöffnet werden. Einen Sitzungs-Tab gedrückt halten, um die Ansicht zu wechseln, oder den Standard jederzeit unter Einstellungen → Chat-Oberfläche ändern.",
       "sessionViewTitle": "Wie sollen Sitzungen geöffnet werden?",
       "skipNotifications": "Benachrichtigungen vorerst überspringen",
       "useChatUi": "Chat-Oberfläche verwenden"
@@ -4460,7 +4428,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

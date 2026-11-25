@@ -88,37 +88,19 @@
     },
     "pairConfirm": {
       "backToHome": "Volver al inicio",
-      "connectTimedOut": "No se pudo conectar en {{seconds}} s; consulta el registro de abajo para ver dónde se detuvo.",
       "connecting": "Conectando…",
-      "description": "Has abierto un enlace de emparejamiento desde tu escritorio. Confirma para añadirlo a tus hosts.",
       "pairButton": "Emparejar",
-      "pairingFailed": "Error de emparejamiento: {{error}}",
-      "pairingLog": "Registro de emparejamiento",
-      "title": "¿Emparejar con este escritorio?"
+      "pairingFailed": "Error de emparejamiento: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Activa el acceso a la cámara en Ajustes o pega el código de emparejamiento.",
-      "cameraDisabledTitle": "Acceso a la cámara desactivado",
-      "cameraPermissionDescription": "Escanea el código QR de Orca en tu escritorio o pega el código de emparejamiento.",
-      "connectTimedOut": "No se pudo conectar en {{seconds}} s; consulta el registro de abajo para ver dónde se detuvo.",
       "connecting": "Conectando…",
       "invalidPairingCode": "No es un código de emparejamiento válido; cópialo de tu ordenador y vuelve a pegarlo.",
       "invalidQrCode": "No es un código QR de Orca válido",
-      "downloadQrCode": "Ese es el código de descarga. Escanea el código de emparejamiento del paso 2 en tu ordenador.",
-      "openDesktopStep": "Abre Orca en tu ordenador",
-      "openMobileSettingsStep": "Ve a Ajustes → Móvil",
       "openSettings": "Abrir Ajustes",
       "pairingFailed": "Error de emparejamiento: {{error}}",
-      "pairingLog": "Registro de emparejamiento",
       "pasteCodeMessage": "Copia el código que aparece debajo del QR en tu ordenador.",
       "pasteCodePlaceholder": "orca://pair?code=... o pega el código",
-      "pasteCodeTitle": "Pegar código de emparejamiento",
-      "pasteInstead": "Pegar código en su lugar",
-      "pastePairingCode": "Pegar código de emparejamiento",
-      "scanCodeStep": "Escanea el código QR",
-      "title": "Emparejar con un escritorio",
-      "tryAgain": "Reintentar",
-      "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
+      "pasteCodeTitle": "Pegar código de emparejamiento"
     },
     "terminalSettings": {
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
@@ -1625,15 +1607,6 @@
       "toggleFailed": "No se pudo actualizar {{name}}",
       "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones."
     },
-    "emptyState": {
-      "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
-      "connectedTitle": "Ya tienes conexión",
-      "description": "Empareja tu teléfono con Orca en tu ordenador para supervisar a tus agentes, acceder a cualquier terminal y gestionar el trabajo desde el móvil.",
-      "openDesktopDescription": "Ve a Ajustes → Móvil y genera un código QR de emparejamiento.",
-      "openDesktopTitle": "Abre Orca en el escritorio",
-      "scanCodeTitle": "Escanea el código",
-      "title": "Conecta tu escritorio"
-    },
     "listFooter": {
       "hostPickerTitle": "Abrir tareas en"
     },
@@ -1878,16 +1851,11 @@
       "waitingOnYou": "Te está esperando."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Activar notificaciones de agentes",
       "enableNotifications": "Activar notificaciones",
       "keepTerminal": "Mantener el terminal",
       "notNow": "Ahora no",
-      "notificationsDescription": "Recibe una notificación en este teléfono cuando un agente termine o esté esperando, aunque no estés usando la aplicación.",
-      "notificationsDisclosure": "Se envían a través del servicio de notificaciones push de Orca cuando tu escritorio lleva 3 minutos inactivo. Puedes cambiarlo cuando quieras en Ajustes.",
       "notificationsTitle": "Entérate cuando un agente te necesite",
-      "openInChatUi": "Abrir sesiones en la interfaz de chat",
       "openInTerminal": "Abrir sesiones en el terminal",
-      "sessionViewDescription": "Elige si las sesiones de agentes compatibles se abren en el terminal o en la interfaz de chat de este dispositivo. Mantén pulsada la pestaña de una sesión para cambiar su vista, o cambia la opción predeterminada cuando quieras en Ajustes → Interfaz de chat.",
       "sessionViewTitle": "¿Cómo quieres abrir las sesiones?",
       "skipNotifications": "Omitir las notificaciones por ahora",
       "useChatUi": "Usar interfaz de chat"
@@ -4566,7 +4534,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

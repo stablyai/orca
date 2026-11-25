@@ -11,7 +11,7 @@ export const mobileOnboardingStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.xl
+    paddingHorizontal: spacing.lg
   },
   brandName: {
     color: colors.textPrimary,
@@ -50,7 +50,7 @@ export const mobileOnboardingStyles = themedStyleSheet(() => ({
   // Allow landscape/accessibility scrolling because Back and swipe-to-skip are disabled.
   pageContent: {
     flexGrow: 1,
-    paddingHorizontal: spacing.xl
+    paddingHorizontal: spacing.lg
   },
   content: {
     flexGrow: 1,
@@ -92,52 +92,13 @@ export const mobileOnboardingStyles = themedStyleSheet(() => ({
     width: '100%',
     maxWidth: 420,
     alignSelf: 'center',
+    gap: spacing.sm,
     paddingBottom: spacing.lg
-  },
-  disclosure: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
-  primaryButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.control,
-    backgroundColor: colors.surfaceBright,
-    paddingVertical: spacing.sm
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  secondaryButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.control,
-    marginTop: spacing.xs,
-    paddingVertical: spacing.sm
-  },
-  secondaryButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  buttonPressed: {
-    opacity: 0.72
-  },
-  buttonDisabled: {
-    opacity: 0.58
   },
   error: {
     color: colors.statusRed,
     fontSize: typography.metaSize,
     lineHeight: 18,
-    textAlign: 'center',
-    marginBottom: spacing.sm
+    textAlign: 'center'
   }
 }))

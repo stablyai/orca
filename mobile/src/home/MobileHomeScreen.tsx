@@ -29,6 +29,7 @@ import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile
 import { useOpenMobileHostEdit } from '../host-screen/identity/use-open-mobile-host-edit'
 import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
+import { handOffPastedPairingCode } from '../pairing/pasted-pairing-code'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { useHomeSparePage } from './use-home-spare-page'
 import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
@@ -149,6 +150,13 @@ export function MobileHomeScreen() {
   }
 
   const pairDesktop = useCallback(() => router.push('/pair-scan'), [router])
+  const pastePairingCode = useCallback(
+    (code: string) => {
+      handOffPastedPairingCode(code)
+      router.push('/pair-scan')
+    },
+    [router]
+  )
   const openSettings = useCallback(() => router.push('/settings'), [router])
   const openBot = useCallback(
     (row: HomeBotRow) =>
@@ -226,6 +234,7 @@ export function MobileHomeScreen() {
                     onOpenHost={openHost}
                     onOpenHostActions={openHostActions}
                     onPairDesktop={pairDesktop}
+                    onPastePairingCode={pastePairingCode}
                     onOpenTasks={openTasks}
                     onOpenSettings={openSettings}
                   />

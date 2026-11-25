@@ -136,37 +136,19 @@
     },
     "pairConfirm": {
       "backToHome": "Ana ekrana dön",
-      "connectTimedOut": "{{seconds}} saniye içinde bağlantı kurulamadı — işlemin nerede takıldığını görmek için aşağıdaki günlüğe bakın",
       "connecting": "Bağlanılıyor…",
-      "description": "Masaüstünüzden bir eşleştirme bağlantısı açtınız. Bu masaüstünü sunucu listenize eklemek için onaylayın.",
       "pairButton": "Eşleştir",
-      "pairingFailed": "Eşleştirme yapılamadı: {{error}}",
-      "pairingLog": "Eşleştirme günlüğü",
-      "title": "Bu masaüstüyle eşleştirilsin mi?"
+      "pairingFailed": "Eşleştirme yapılamadı: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Ayarlar bölümünde kamera erişimini etkinleştirin veya eşleştirme kodunu yapıştırın.",
-      "cameraDisabledTitle": "Kamera Erişimi Devre Dışı",
-      "cameraPermissionDescription": "Masaüstünüzdeki Orca'da gösterilen QR kodunu tarayın veya eşleştirme kodunu yapıştırın.",
-      "connectTimedOut": "{{seconds}} saniye içinde bağlantı kurulamadı — işlemin nerede takıldığını görmek için aşağıdaki günlüğe bakın",
       "connecting": "Bağlanılıyor…",
       "invalidPairingCode": "Geçerli bir eşleştirme kodu değil — bilgisayarınızdan kopyalayıp yeniden yapıştırın",
       "invalidQrCode": "Geçerli bir Orca QR kodu değil",
-      "downloadQrCode": "Bu indirme kodu. Bilgisayarınızdaki 2. adımda bulunan eşleştirme kodunu tarayın.",
-      "openDesktopStep": "Bilgisayarınızda Orca'yı açın",
-      "openMobileSettingsStep": "Ayarlar → Mobil bölümüne gidin",
       "openSettings": "Ayarları Aç",
       "pairingFailed": "Eşleştirme yapılamadı: {{error}}",
-      "pairingLog": "Eşleştirme günlüğü",
       "pasteCodeMessage": "Bilgisayarınızda QR kodunun altında gösterilen kodu kopyalayın.",
       "pasteCodePlaceholder": "orca://pair?code=... veya kodu yapıştırın",
       "pasteCodeTitle": "Eşleştirme kodunu yapıştır",
-      "pasteInstead": "Bunun yerine kod yapıştır",
-      "pastePairingCode": "Eşleştirme kodunu yapıştır",
-      "scanCodeStep": "QR kodunu tarayın",
-      "title": "Masaüstüyle eşleştir",
-      "tryAgain": "Tekrar Dene",
-      "codeNoLongerValid": "Bu eşleştirme kodunun süresi doldu, kod zaten kullanıldı veya değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın.",
       "runtimeAccessLink": "Bu bağlantı başka bir Orca uygulaması için. Bilgisayarınızda Ayarlar → Mobil bölümündeki kodu tarayın veya sunucunuzda orca pair --mobile komutunu çalıştırın."
     },
     "terminalSettings": {
@@ -2338,17 +2320,6 @@
       "toggleFailed": "{{name}} güncellenemedi",
       "updateDesktop": "Otomasyonları kullanmak için {{desktop}} üzerindeki Orca'yı güncelleyin."
     },
-    "emptyState": {
-      "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
-      "connectedTitle": "Bağlandınız",
-      "description": "Ajanlarınızı takip etmek, istediğiniz terminale erişmek ve işlerinizi telefonunuzdan yönetmek için bilgisayarınızdaki Orca ile eşleştirin.",
-      "openDesktopDescription": "Ayarlar → Mobil bölümüne gidin ve eşleştirme için bir QR kodu oluşturun.",
-      "openDesktopTitle": "Orca masaüstü uygulamasını açın",
-      "scanCodeTitle": "Kodu tarayın",
-      "title": "Masaüstünüzü bağlayın",
-      "pairDesktopButton": "Bilgisayarı eşleştir",
-      "scanCodeBelowDescription": "Aşağıdaki Bilgisayarı eşleştir düğmesine dokunun, ardından kameranızı ekrandaki QR koduna tutun."
-    },
     "listFooter": {
       "hostPickerTitle": "Görevlerin Açılacağı Sunucu"
     },
@@ -2674,16 +2645,11 @@
       "waitingOnYou": "Sizden yanıt bekleniyor."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Ajan bildirimlerini etkinleştir",
       "enableNotifications": "Bildirimleri etkinleştir",
       "keepTerminal": "Terminalle devam et",
       "notNow": "Şimdi değil",
-      "notificationsDescription": "Uygulamayı kullanmasanız bile bir ajan işini bitirdiğinde veya beklediğinde bu telefonda bildirim alın.",
-      "notificationsDisclosure": "Bilgisayarınız 3 dakika boşta kaldıktan sonra Orca'nın anlık bildirim hizmeti üzerinden iletilir. Bunu Ayarlar bölümünden istediğiniz zaman değiştirebilirsiniz.",
       "notificationsTitle": "Bir ajanın size ihtiyacı olduğunda haberdar olun",
-      "openInChatUi": "Oturumları Sohbet Arayüzü ile aç",
       "openInTerminal": "Oturumları terminalde aç",
-      "sessionViewDescription": "Bu cihazda desteklenen ajan oturumlarının terminalde mi yoksa Sohbet Arayüzü ile mi açılacağını seçin. Görünümünü değiştirmek için oturum sekmesine uzun basın veya varsayılanı istediğiniz zaman Ayarlar → Sohbet Arayüzü bölümünden değiştirin.",
       "sessionViewTitle": "Oturumlar nasıl açılsın?",
       "skipNotifications": "Bildirimleri şimdilik atla",
       "useChatUi": "Sohbet Arayüzünü kullan"
