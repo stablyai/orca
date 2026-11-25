@@ -9,16 +9,30 @@ import { openProjectDefaultCheckout } from './project-added-default-checkout'
 
 export type PersistRequest = { repoId: string; updates: object; hostId?: string }
 export type ToastOptions = { description?: string; action?: { onClick: () => void } }
+export type ActivateOptions = {
+  navigationIntent?: string
+  initialCwd?: string
+  executionHostId?: string
+}
+export type AddRequest = { path: string; kind?: string; displayName?: string }
+export type ProfileLookupRequest = {
+  path: string
+  connectionId: string | null
+  executionHostId: string
+  excludeProfileId: string
+}
 export type Harness = {
   state: AppState | null
-  activate: Mock<(worktreeId: string, options: object) => void>
+  activate: Mock<(worktreeId: string, options: ActivateOptions) => void>
   persist: Mock<(request: PersistRequest) => Promise<Repo>>
   subscribe: Mock<(listener: (state: AppState) => void) => () => void>
   error: Mock<(message: string, options: ToastOptions) => void>
   onboarding: Mock<(step: string) => Promise<void>>
-  add: Mock<(request: object) => Promise<unknown>>
+  add: Mock<(request: AddRequest) => Promise<unknown>>
   warning: Mock<(message: string, options: ToastOptions) => void>
-  findProjectProfiles: Mock<(request: object) => Promise<{ projects: { profileName: string }[] }>>
+  findProjectProfiles: Mock<
+    (request: ProfileLookupRequest) => Promise<{ projects: { profileName: string }[] }>
+  >
 }
 export const repo: Repo = {
   id: 'project',

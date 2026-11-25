@@ -42,7 +42,10 @@ export function createStore(seed: Repo[] = []) {
 
 export type FakeStore = ReturnType<typeof createStore>['store']
 
-export function asStore<T extends Store | RuntimeStore>(store: FakeStore | object): T {
+/** A fake store, optionally with the worktree-meta read the desktop owner checks use. */
+export type FakeDesktopStore = FakeStore & { getWorktreeMeta?: () => { hostId: string } }
+
+export function asStore<T extends Store | RuntimeStore>(store: FakeDesktopStore): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller reads only the repo, project-group and worktree-meta methods its fake implements.
   return store as unknown as T
 }

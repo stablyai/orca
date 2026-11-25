@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { useAppStore } from '@/store/index'
-import { findRepoForHost } from '@/store/repos/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/workspace/creation/nested-repo-selected-paths'
 import {
   buildNestedRepoImportActionTelemetry,
@@ -190,11 +190,13 @@ export function useAddRepoNestedImportFlow({
         }
         // The row the originating endpoint owns: another host may hold a row with this same id.
         const completionHostId = completionOwnerOptions.executionHostId
-        const state = useAppStore.getState()
-        const repo = findRepoForHost(state.repos, firstRepoId, {
-          hostId: completionHostId,
-          settings: state.settings
-        })
+        const repo = useAppStore
+          .getState()
+          .repos.find((entry) =>
+            completionHostId
+              ? repoMatchesHostIdentity(entry, firstRepoId, completionHostId)
+              : entry.id === firstRepoId
+          )
         if (repo) {
           const source: AddRepoExistingWorkspaceSource = nestedConnectionId
             ? 'ssh_remote_path'

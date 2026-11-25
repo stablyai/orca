@@ -79,6 +79,16 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 }))
 
 const setup = createSetup(harness)
+
+/** The foreground fields the handoff intent compares, as a test changes them. */
+type ForegroundChange = Partial<
+  Pick<AppState, 'activeWorktreeId' | 'activeTabType' | 'activeTabId' | 'activeBrowserTabId'>
+> & {
+  browserTabsByWorktree?: Record<
+    string,
+    { id: string; worktreeId: string; activePageId: string; url: string }[]
+  >
+}
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -296,7 +306,7 @@ describe('selected checkout handoff', () => {
         ]
       }
     })
-    const show = (store: ReturnType<typeof setup>['store'], state: object) =>
+    const show = (store: ReturnType<typeof setup>['store'], state: ForegroundChange) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the intent reads only these Browser workspace fields.
       store.setState(state as Partial<AppState>)
 
@@ -344,14 +354,14 @@ describe('selected checkout handoff', () => {
      * Fails the first handoff, recovers the host, dispatches Retry and holds its read: resolves once
      * that read has arrived, then `finish` applies the change, settles the read and lets it land.
      */
-    async function retryHeldAtRead(start: object) {
+    async function retryHeldAtRead(start: ForegroundChange) {
       const { store, recover } = setup(
         [checkout('/repo'), checkout('/selected', { visible: false })],
         [repo],
         true
       )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the intent reads only these foreground fields.
-      const show = (state: object) => store.setState(state as Partial<AppState>)
+      const show = (state: ForegroundChange) => store.setState(state as Partial<AppState>)
       show(start)
       let retry: (() => void) | undefined
       harness.error.mockImplementation((_message, options) => {
@@ -375,7 +385,7 @@ describe('selected checkout handoff', () => {
       await arrived.promise
       return {
         store,
-        finish: async (change: object | null, succeeds: boolean) => {
+        finish: async (change: ForegroundChange | null, succeeds: boolean) => {
           if (change) {
             show(change)
           }
