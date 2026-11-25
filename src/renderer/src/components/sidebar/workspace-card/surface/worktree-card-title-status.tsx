@@ -76,7 +76,13 @@ export function WorktreeCardTitleStatusProvider({
   card: WorktreeCardController
   children: React.ReactNode
 }): React.JSX.Element {
-  const { worktree, showInlineAgentList, lineageCollapsed, lineageDescendantIdentities } = card
+  const {
+    worktree,
+    isSleeping,
+    showInlineAgentList,
+    lineageCollapsed,
+    lineageDescendantIdentities
+  } = card
   const agents = card.inlineAgentRows
   const signals = useSlotAgentSignals(agents)
   const offline = card.isRuntimeDisconnected || card.isSshDisconnected
@@ -92,7 +98,8 @@ export function WorktreeCardTitleStatusProvider({
     signals.rootCount > 1 &&
     !compactRootListExpanded &&
     !pickingSendTarget
-  const linesShown = showInlineAgentList && signals.rootCount > 0 && !foldedBehindSummary
+  const linesShown =
+    !isSleeping && showInlineAgentList && signals.rootCount > 0 && !foldedBehindSummary
   const descendants = lineageDescendantIdentities ?? NO_DESCENDANTS
   const hiddenDescendants = lineageCollapsed ? descendants : NO_DESCENDANTS
   const lineage = useLineageSlotSummary(descendants, lineageCollapsed)

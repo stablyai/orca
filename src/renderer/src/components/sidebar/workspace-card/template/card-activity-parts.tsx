@@ -53,20 +53,22 @@ export const CARD_ACTIVITY_PARTS = {
   StatusLane: part(['unreadAction'], (props, _children, card) => (
     <WorktreeCardStatusLane card={card} showUnreadAction={props.unreadAction === true} />
   )),
-  Agents: part(['tight'], (props, _children, card) => (
-    <WorktreeCardAgents
-      worktreeId={card.worktree.id}
-      executionHostId={card.worktree.hostId}
-      // Why: counterbalance the card stack gap so agents right after the title read as one group.
-      className={props.tight === true ? '-mt-1' : 'mt-0'}
-    />
-  )),
-  LineAgents: part([], (_props, _children, card) => (
-    <WorktreeCardLineAgents worktreeId={card.worktree.id} />
-  )),
-  LineAgentMore: part([], (_props, _children, card) => (
-    <WorktreeCardLineAgentMore worktreeId={card.worktree.id} />
-  )),
+  Agents: part(['tight'], (props, _children, card) =>
+    card.isSleeping ? null : (
+      <WorktreeCardAgents
+        worktreeId={card.worktree.id}
+        executionHostId={card.worktree.hostId}
+        // Why: counterbalance the card stack gap so agents right after the title read as one group.
+        className={props.tight === true ? '-mt-1' : 'mt-0'}
+      />
+    )
+  ),
+  LineAgents: part([], (_props, _children, card) =>
+    card.isSleeping ? null : <WorktreeCardLineAgents worktreeId={card.worktree.id} />
+  ),
+  LineAgentMore: part([], (_props, _children, card) =>
+    card.isSleeping ? null : <WorktreeCardLineAgentMore worktreeId={card.worktree.id} />
+  ),
   RemoteBranchConflict: part([], (_props, _children, { remoteBranchConflict }) =>
     remoteBranchConflict ? (
       <WorktreeCardRemoteBranchConflict

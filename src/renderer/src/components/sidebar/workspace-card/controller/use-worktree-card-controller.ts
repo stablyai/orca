@@ -3,6 +3,7 @@ import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
+import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { useWorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
 import { useWorktreeCardActivationActions } from './use-worktree-card-activation-actions'
@@ -16,6 +17,7 @@ import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-a
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo, compactLine } = props
   const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine })
+  const isSleeping = useIsSleepingWorktree(worktree.id)
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
@@ -164,6 +166,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
     linkedGiteaPR: review.linkedGiteaPR,
     newCardStyle: foundation.newCardStyle,
+    isSleeping,
     compactCards: foundation.compactCards,
     cardDetails: foundation.cardDetails,
     agentActivityDisplayMode: foundation.agentActivityDisplayMode,
@@ -176,6 +179,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   return {
     ...props,
     ...foundation,
+    isSleeping,
     ...review,
     ...linked,
     setTitleRenaming,

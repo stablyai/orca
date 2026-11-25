@@ -23,6 +23,7 @@ import {
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { worktreeCopyOwnerKey } from '@/store/slices/worktrees/metadata/worktree-copy-review-clear'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
 /** A one-line card's status and agent rows, which the line itself has no room for. */
 export function WorktreeCardLineActivity({
@@ -49,6 +50,7 @@ export function WorktreeCardLineActivity({
   const runtimeOwner = runtimeOwnerEnvironmentId?.trim()
   const activityHostId =
     hasHostCopies && runtimeOwner ? toRuntimeExecutionHostId(runtimeOwner) : executionHostId
+  const isSleeping = useIsSleepingWorktree(worktreeId)
   const agents = useWorktreeAgentRows(worktreeId, true, activityHostId)
   let status = workspaceStatus
   if (hasHostCopies) {
@@ -61,7 +63,7 @@ export function WorktreeCardLineActivity({
     }
     status = rankWorktreeStatus('active', flags)
   }
-  if (agents.length === 0 && status !== 'permission') {
+  if (isSleeping || (agents.length === 0 && status !== 'permission')) {
     return null
   }
   return (

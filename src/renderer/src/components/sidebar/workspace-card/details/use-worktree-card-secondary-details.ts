@@ -39,6 +39,7 @@ export function useWorktreeCardSecondaryDetails({
   linkedAzureDevOpsPR,
   linkedGiteaPR,
   newCardStyle,
+  isSleeping = false,
   compactCards,
   cardDetails,
   agentActivityDisplayMode,
@@ -70,7 +71,10 @@ export function useWorktreeCardSecondaryDetails({
     worktree.hostId
   )
   const inlineAgentRowsVisible =
-    showInlineAgentList && agentActivityDisplayMode === 'compact' && inlineAgentRows.length > 0
+    !isSleeping &&
+    showInlineAgentList &&
+    agentActivityDisplayMode === 'compact' &&
+    inlineAgentRows.length > 0
   const showAggregateCacheTimer = !compactCards && !inlineAgentRowsVisible
   const handleOpenGitHubIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
