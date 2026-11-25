@@ -25828,7 +25828,17 @@
       "untitled": "新しいチャット",
       "searchRetry": "再試行",
       "loading": "チャットを読み込み中…",
-      "readFailed": "このボットのチャットを読み取れませんでした。"
+      "readFailed": "このボットのチャットを読み取れませんでした。",
+      "noMessages": "まだメッセージはありません",
+      "searchPerson": "{{name}} のチャットを検索",
+      "searchOwn": "自分のチャットを検索",
+      "noneFromPerson": "{{name}} のチャットはありません。",
+      "noneFromYou": "自分のチャットはありません。",
+      "filter": {
+        "label": "人で絞り込む",
+        "you": "自分",
+        "everyone": "全員"
+      }
     },
     "needs": {
       "chat": "{{name}} とのチャット",

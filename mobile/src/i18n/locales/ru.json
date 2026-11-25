@@ -5246,7 +5246,8 @@
     },
     "saveFailed": "Не удалось сохранить",
     "chats": {
-      "readFailedTitle": "Не удалось загрузить чаты"
+      "readFailedTitle": "Не удалось загрузить чаты",
+      "noMessages": "Сообщений пока нет"
     },
     "panel": {
       "backTo": "Назад к {{name}}"

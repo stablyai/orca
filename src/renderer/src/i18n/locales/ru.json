@@ -25310,7 +25310,17 @@
       "untitled": "Новый чат",
       "loading": "Загрузка чатов…",
       "readFailed": "Не удалось прочитать чаты этого бота.",
-      "searchRetry": "Повторить попытку"
+      "searchRetry": "Повторить попытку",
+      "noMessages": "Сообщений пока нет",
+      "searchPerson": "Поиск в чатах {{name}}",
+      "searchOwn": "Поиск в ваших чатах",
+      "noneFromPerson": "Нет чатов от {{name}}.",
+      "noneFromYou": "Нет ваших чатов.",
+      "filter": {
+        "label": "Фильтр по человеку",
+        "you": "Вы",
+        "everyone": "Все"
+      }
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",

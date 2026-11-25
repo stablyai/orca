@@ -27791,7 +27791,6 @@
       "cantReachHost": "无法连接到 {{host}}",
       "statusUnknown": "状态未知",
       "onHost": "在 {{host}} 上",
-      "new": "新建聊天",
       "title": "聊天",
       "search": "搜索聊天和工作者",
       "empty": "支线聊天、Slack 和 Linear 话题以及自动化运行都会显示在这里，并附带各自启动的工作者",
@@ -27814,7 +27813,17 @@
       "readFailed": "无法读取此 bot 的聊天",
       "delete": "删除聊天",
       "open": "打开",
-      "actions": "聊天操作"
+      "actions": "聊天操作",
+      "noMessages": "暂无消息",
+      "searchPerson": "搜索 {{name}} 的聊天",
+      "searchOwn": "搜索你的聊天",
+      "noneFromPerson": "没有 {{name}} 的聊天。",
+      "noneFromYou": "没有你的聊天。",
+      "filter": {
+        "label": "按人员筛选",
+        "you": "你",
+        "everyone": "所有人"
+      }
     },
     "items": {
       "view": {

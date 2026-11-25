@@ -8,8 +8,14 @@ import { readSharedBotChatTree, runtimeBotChatTreeHost } from '../../../bots/bot
 import { readBotOwnChatPanes } from '../../../bots/bot-own-chat-panes'
 import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat-search-host'
 import { defineMethod } from '../core'
-import { botShareChatFilter, botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
+import {
+  botShareChatFilter,
+  botShareScopeOf,
+  withBotChatPeople
+} from '../../../bots/team-share/bot-share-chats'
 import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
+import type { Bot } from '../../../../shared/bot-types'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotChatTreeRead as BotChatTree } from '../../../../shared/bots/bot-chat-tree'
 
 /** A teammate's tree: their own chats, and only the workspaces under those. */
@@ -22,6 +28,10 @@ function botShareChatTree(tree: BotChatTree, owns: (chatId: string) => boolean):
   }
 }
 
+function botOf(runtime: Pick<OrcaRuntimeService, 'bots'>, botId: string): Bot | undefined {
+  return runtime.bots.list().find((bot) => bot.id === botId)
+}
+
 export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
     name: 'bots.chatTree',
@@ -31,7 +41,9 @@ export const BOT_CHAT_TREE_METHODS = [
     handler: async (params, context) => {
       const tree = await readSharedBotChatTree(context.runtime, params)
       const share = botShareScopeOf(context)
-      return share ? botShareChatTree(tree, botShareChatFilter(context.runtime, share)) : tree
+      return share
+        ? botShareChatTree(tree, botShareChatFilter(context.runtime, share))
+        : withBotChatPeople(context.runtime, botOf(context.runtime, params.botId), tree)
     }
   }),
   // Each bot's own side chats, pane and title, so its row's line says what any of them is doing.
@@ -55,6 +67,11 @@ export const BOT_CHAT_TREE_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: BotChatSearch,
-    handler: (params, { runtime }) => searchBotChats(runtimeBotChatSearchHost(runtime), params)
+    handler: async (params, { runtime }) =>
+      withBotChatPeople(
+        runtime,
+        botOf(runtime, params.botId),
+        await searchBotChats(runtimeBotChatSearchHost(runtime), params)
+      )
   })
 ]

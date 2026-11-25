@@ -27832,7 +27832,17 @@
       "untitled": "새 채팅",
       "searchRetry": "다시 시도하세요",
       "loading": "채팅 로드 중…",
-      "readFailed": "이 봇의 채팅을 읽지 못했습니다."
+      "readFailed": "이 봇의 채팅을 읽지 못했습니다.",
+      "noMessages": "아직 메시지가 없습니다",
+      "searchPerson": "{{name}}님의 채팅 검색",
+      "searchOwn": "내 채팅 검색",
+      "noneFromPerson": "{{name}}님의 채팅이 없습니다.",
+      "noneFromYou": "내 채팅이 없습니다.",
+      "filter": {
+        "label": "사람으로 필터링",
+        "you": "나",
+        "everyone": "모두"
+      }
     },
     "needs": {
       "chat": "{{name}} 채팅",

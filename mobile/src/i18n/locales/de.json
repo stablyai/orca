@@ -5026,7 +5026,8 @@
     },
     "saveFailed": "Speichern fehlgeschlagen",
     "chats": {
-      "readFailedTitle": "Chats konnten nicht geladen werden"
+      "readFailedTitle": "Chats konnten nicht geladen werden",
+      "noMessages": "Noch keine Nachrichten"
     },
     "panel": {
       "backTo": "Zurück zu {{name}}"

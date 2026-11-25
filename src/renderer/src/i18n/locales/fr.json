@@ -25128,7 +25128,17 @@
       "untitled": "Nouveau chat",
       "searchRetry": "Réessayer",
       "loading": "Chargement des chats…",
-      "readFailed": "Impossible de lire les chats de ce bot."
+      "readFailed": "Impossible de lire les chats de ce bot.",
+      "noMessages": "Aucun message pour l’instant",
+      "searchPerson": "Rechercher dans les chats de {{name}}",
+      "searchOwn": "Rechercher dans vos chats",
+      "noneFromPerson": "Aucun chat de {{name}}.",
+      "noneFromYou": "Aucun chat de votre part.",
+      "filter": {
+        "label": "Filtrer par personne",
+        "you": "Vous",
+        "everyone": "Tout le monde"
+      }
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",

@@ -68,17 +68,20 @@ export function BotChatLine({
   bot,
   chat,
   folded,
-  liveAtEnd = false
+  liveAtEnd = false,
+  hidePerson = false
 }: {
   bot: Bot
   chat: BotChatTreeChat
   folded: boolean
   liveAtEnd?: boolean
+  /** A person is picked, so every row is theirs and none names them. */
+  hidePerson?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const stop = useBotUsageLimitStopIndex().bySession.get(chat.chatId)
   if (liveAtEnd) {
-    return <BotChatPreview bot={bot} chat={chat} />
+    return <BotChatPreview bot={bot} chat={chat} hidePerson={hidePerson} />
   }
   if (chat.live === 'replying') {
     return <>{t('bots.chats.replying', 'Replying…')}</>
@@ -99,11 +102,19 @@ export function BotChatLine({
   if (counts) {
     return <>{chatFoldSummary(t, counts)}</>
   }
-  return <BotChatPreview bot={bot} chat={chat} />
+  return <BotChatPreview bot={bot} chat={chat} hidePerson={hidePerson} />
 }
 
-/** Where the chat is, when it closed, and the last thing said. */
-function BotChatPreview({ bot, chat }: { bot: Bot; chat: BotChatTreeChat }): React.JSX.Element {
+/** Where the chat is, whose it is, when it closed, and the last thing said; every row has a line. */
+function BotChatPreview({
+  bot,
+  chat,
+  hidePerson
+}: {
+  bot: Bot
+  chat: BotChatTreeChat
+  hidePerson: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const closed = chat.closedAt
     ? t('bots.chats.closedOn', 'closed {{date}}', {
@@ -114,8 +125,22 @@ function BotChatPreview({ bot, chat }: { bot: Bot; chat: BotChatTreeChat }): Rea
     chat.preview ??
     (chat.origin === 'home'
       ? t('bots.chats.sayHi', 'Say hi to {{name}}', { name: bot.name })
-      : null)
-  return <>{[botChatPlace(chat), closed, preview].filter(Boolean).join(' · ')}</>
+      : t('bots.chats.noMessages', 'No messages yet'))
+  const person = hidePerson ? null : (chat.person?.name ?? null)
+  const place = botChatPlace(chat)
+  const rest = [closed, preview].filter(Boolean).join(' · ')
+  return (
+    <>
+      {place ? `${place} · ` : null}
+      {person ? (
+        <>
+          <span className="text-foreground/80">{person}</span>
+          {' · '}
+        </>
+      ) : null}
+      {rest}
+    </>
+  )
 }
 
 /** The preview line's end for the chat itself: replying, waiting for the owner, or stopped on its
@@ -202,10 +227,12 @@ export function BotChatTreeGroup({
   chat,
   unfolded,
   onFold,
-  loadMore
+  loadMore,
+  hidePerson = false
 }: {
   bot: Bot
   chat: BotChatTreeChat
+  hidePerson?: boolean
   /** The panel's own fold, apart from the sidebar's; null for a search's chat hit, which lists no workers. */
   unfolded: boolean | null
   onFold: (open: boolean) => void
@@ -336,7 +363,13 @@ export function BotChatTreeGroup({
             </span>
             <span className="flex min-w-0 items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
-                <BotChatLine bot={bot} chat={chat} folded={false} liveAtEnd />
+                <BotChatLine
+                  bot={bot}
+                  chat={chat}
+                  folded={false}
+                  liveAtEnd
+                  hidePerson={hidePerson}
+                />
               </span>
               <ChatRowLive chat={chat} />
               <ChatRowWork chat={chat} />

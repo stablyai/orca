@@ -6319,7 +6319,8 @@
       "runningCount": "{{count}} running",
       "needsYouCount": "{{count}} needs you",
       "open": "Open",
-      "delete": "Delete chat"
+      "delete": "Delete chat",
+      "noMessages": "No messages yet"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",

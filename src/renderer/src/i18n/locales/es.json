@@ -25107,7 +25107,17 @@
       "untitled": "Nuevo chat",
       "searchRetry": "Probar de nuevo",
       "loading": "Cargando chats…",
-      "readFailed": "No se pudieron leer los chats de este bot."
+      "readFailed": "No se pudieron leer los chats de este bot.",
+      "noMessages": "Aún no hay mensajes",
+      "searchPerson": "Buscar en los chats de {{name}}",
+      "searchOwn": "Buscar en tus chats",
+      "noneFromPerson": "No hay chats de {{name}}.",
+      "noneFromYou": "No hay chats tuyos.",
+      "filter": {
+        "label": "Filtrar por persona",
+        "you": "Tú",
+        "everyone": "Todos"
+      }
     },
     "needs": {
       "chat": "Tu chat con {{name}}",

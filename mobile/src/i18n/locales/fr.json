@@ -5138,7 +5138,8 @@
     },
     "saveFailed": "Impossible d’enregistrer",
     "chats": {
-      "readFailedTitle": "Impossible de charger les chats"
+      "readFailedTitle": "Impossible de charger les chats",
+      "noMessages": "Aucun message pour l’instant"
     },
     "panel": {
       "backTo": "Retour à {{name}}"

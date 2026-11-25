@@ -5026,7 +5026,8 @@
     },
     "saveFailed": "Kaydedilemedi",
     "chats": {
-      "readFailedTitle": "Sohbetler yüklenemedi"
+      "readFailedTitle": "Sohbetler yüklenemedi",
+      "noMessages": "Henüz mesaj yok"
     },
     "panel": {
       "backTo": "{{name}} ekranına dön"

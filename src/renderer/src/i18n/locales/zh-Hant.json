@@ -24189,7 +24189,17 @@
       "untitled": "新對話",
       "searchRetry": "重試",
       "loading": "正在載入聊天…",
-      "readFailed": "無法讀取此機器人的聊天。"
+      "readFailed": "無法讀取此機器人的聊天。",
+      "noMessages": "尚無訊息",
+      "searchPerson": "搜尋 {{name}} 的聊天",
+      "searchOwn": "搜尋你的聊天",
+      "noneFromPerson": "沒有 {{name}} 的聊天。",
+      "noneFromYou": "沒有你的聊天。",
+      "filter": {
+        "label": "依人員篩選",
+        "you": "你",
+        "everyone": "所有人"
+      }
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",

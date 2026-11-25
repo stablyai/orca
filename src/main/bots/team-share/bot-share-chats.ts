@@ -2,6 +2,9 @@
 // or acts in. Others' chats are not theirs to see, Home Chat included.
 import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
 import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
+import type { Bot } from '../../../shared/bot-types'
+import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
+import { botChatPeople, botChatPersonOf } from '../../../shared/bots/bot-chat-people'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -87,5 +90,28 @@ export function emptyChatReusableBy(
     }
     const recorded = readBotConversationActsFor(sources, chatId)
     return recorded === undefined || actsForOwner(recorded.actsFor)
+  }
+}
+
+/** The owner's chats, each a teammate's own naming them: the one place the desktop and the phone
+ *  learn whose a chat is. A chat Orca never recorded stays the owner's, unnamed. */
+export function withBotChatPeople<T extends { chats: BotChatTreeChat[] }>(
+  sources: BotConversationActsForSources,
+  bot: Pick<Bot, 'shares'> | undefined,
+  read: T
+): T {
+  const people = botChatPeople(bot?.shares)
+  if (people.length === 0) {
+    return read
+  }
+  return {
+    ...read,
+    chats: read.chats.map((chat) => {
+      const person = botChatPersonOf(
+        readBotConversationActsFor(sources, chat.chatId)?.actsFor,
+        people
+      )
+      return person ? { ...chat, person } : chat
+    })
   }
 }

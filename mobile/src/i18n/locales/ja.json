@@ -5107,7 +5107,8 @@
     },
     "saveFailed": "保存できませんでした",
     "chats": {
-      "readFailedTitle": "チャットを読み込めませんでした"
+      "readFailedTitle": "チャットを読み込めませんでした",
+      "noMessages": "まだメッセージはありません"
     },
     "panel": {
       "backTo": "{{name}} に戻る"

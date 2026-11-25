@@ -31,6 +31,9 @@ export type BotChatTreeWorker = {
   run?: { automationId: string; runId: string }
 }
 
+/** A teammate the bot is shared with, by Orca account, as their share names them (name, else email). */
+export type BotChatPerson = { accountId: string; name: string }
+
 export type BotChatTreeChat = {
   chatId: string
   title: string
@@ -56,6 +59,8 @@ export type BotChatTreeChat = {
   run?: { automationId: string; runId: string; worktreeId?: string; paneKey?: string }
   /** Line 2: the last thing said. */
   preview?: string
+  /** The teammate it acts for, on the owner's list; absent for the owner's own and unrecorded chats. */
+  person?: BotChatPerson
   /** Needs-you first, then newest; up to the page the host was asked for. */
   running: BotChatTreeWorker[]
   runningTotal: number

@@ -24525,7 +24525,17 @@
       "untitled": "Neuer Chat",
       "searchRetry": "Erneut versuchen",
       "loading": "Chats werden geladen…",
-      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden."
+      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden.",
+      "noMessages": "Noch keine Nachrichten",
+      "searchPerson": "Chats von {{name}} durchsuchen",
+      "searchOwn": "Deine Chats durchsuchen",
+      "noneFromPerson": "Keine Chats von {{name}}.",
+      "noneFromYou": "Keine Chats von dir.",
+      "filter": {
+        "label": "Nach Person filtern",
+        "you": "Du",
+        "everyone": "Alle"
+      }
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",

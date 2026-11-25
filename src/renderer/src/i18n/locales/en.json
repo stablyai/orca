@@ -30134,7 +30134,6 @@
       "cantReachHost": "Can't reach {{host}}",
       "statusUnknown": "Status unknown",
       "onHost": "on {{host}}",
-      "new": "New chat",
       "title": "Chats",
       "search": "Search chats and workers",
       "empty": "Side chats, Slack and Linear threads and automation runs show up here, each with the workers it starts.",
@@ -30159,7 +30158,17 @@
       "delete": "Delete chat",
       "open": "Open",
       "actions": "Chat actions",
-      "needsYouCount": "{{count}} needs you"
+      "needsYouCount": "{{count}} needs you",
+      "noMessages": "No messages yet",
+      "searchPerson": "Search {{name}}'s chats",
+      "searchOwn": "Search your chats",
+      "noneFromPerson": "No chats from {{name}}.",
+      "noneFromYou": "No chats from you.",
+      "filter": {
+        "label": "Filter by person",
+        "you": "You",
+        "everyone": "Everyone"
+      }
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",

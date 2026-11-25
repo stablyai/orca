@@ -1,0 +1,113 @@
+// Whose chat the owner's list says each one is, from Orca's acts-for record alone: a teammate's own
+// chat names them, the owner's and an unrecorded (older) chat name no one, and nothing is stored.
+import { describe, expect, it } from 'vitest'
+import type { Bot } from '../../../shared/bot-types'
+import type { BotRequestAsker } from '../../../shared/bots/bot-acts-for'
+import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
+import { BotChatTreeReadSchema } from '../../../shared/bots/bot-chat-tree-schema'
+import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
+import { withBotChatPeople } from './bot-share-chats'
+
+const SHARES: NonNullable<Bot['shares']> = [
+  {
+    kind: 'account',
+    shareId: 's1',
+    accountId: 'acc-alice',
+    name: 'Alice Park',
+    email: 'alice@x.dev',
+    addedAt: 1
+  },
+  { kind: 'account', shareId: 's2', accountId: 'acc-bo', email: 'bo@x.dev', addedAt: 1 },
+  { kind: 'invite', shareId: 's3', email: 'eli@x.dev', addedAt: 1 }
+]
+const orcaPerson = (userId: string): BotRequestAsker => ({
+  kind: 'person',
+  source: 'orca',
+  userId,
+  workspaceId: null,
+  role: 'member'
+})
+const RECORDS: Record<string, BotRequestAsker[]> = {
+  own: [{ kind: 'owner' }],
+  alice: [orcaPerson('acc-alice')],
+  // Bo asked in Slack, through the Slack login linked to their Orca account.
+  boSlack: [
+    {
+      kind: 'person',
+      source: 'slack',
+      userId: 'U_BO',
+      workspaceId: 'T1',
+      role: 'member',
+      viaAccount: 'acc-bo'
+    }
+  ],
+  both: [orcaPerson('acc-alice'), orcaPerson('acc-bo')],
+  stranger: [orcaPerson('acc-gone')]
+}
+
+function sources() {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only this DB method.
+  const db = {
+    getBotConversationActsFor: (id: string) => (RECORDS[id] ? { actsFor: RECORDS[id] } : undefined)
+  } as unknown as OrchestrationDb
+  return {
+    getOrchestrationDb: () => db,
+    listAutomationRuns: () => [],
+    showAutomation: () => {
+      throw new Error('gone')
+    }
+  }
+}
+
+const chat = (chatId: string): BotChatTreeChat => ({
+  chatId,
+  title: chatId,
+  origin: 'side',
+  live: 'idle',
+  lastActiveAt: 1,
+  unread: false,
+  closed: false,
+  running: [],
+  runningTotal: 0,
+  finished: [],
+  finishedTotal: 0,
+  failedTotal: 0
+})
+
+describe('whose chat each of the owner’s chats is', () => {
+  const ids = ['own', 'alice', 'boSlack', 'both', 'stranger', 'unrecorded']
+  const people = (shares: Bot['shares']) =>
+    withBotChatPeople(sources(), { shares }, { chats: ids.map(chat) }).chats.map(
+      (entry) => entry.person
+    )
+
+  it('names a teammate by their share (name, else email), and no one else', () => {
+    expect(people(SHARES)).toEqual([
+      undefined,
+      { accountId: 'acc-alice', name: 'Alice Park' },
+      { accountId: 'acc-bo', name: 'bo@x.dev' },
+      undefined,
+      undefined,
+      undefined
+    ])
+  })
+
+  it('leaves an unshared bot’s chats as they were', () => {
+    const read = { chats: ids.map(chat) }
+    expect(withBotChatPeople(sources(), { shares: [] }, read)).toBe(read)
+  })
+
+  it('reads a host’s chat from before people were named, and keeps the name from a newer one', () => {
+    const parsed = BotChatTreeReadSchema.parse({
+      chats: [
+        chat('old'),
+        { ...chat('new'), person: { accountId: 'acc-alice', name: 'Alice Park' } }
+      ],
+      workspaceChats: {}
+    })
+    expect(parsed.chats.map((entry) => entry.person)).toEqual([
+      undefined,
+      { accountId: 'acc-alice', name: 'Alice Park' }
+    ])
+  })
+})
