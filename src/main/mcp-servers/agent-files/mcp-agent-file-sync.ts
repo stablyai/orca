@@ -35,7 +35,7 @@ import {
   isEmptyMcpAgentFile,
   mcpAgentFileServerNames,
   mcpAgentFileValue,
-  orcaOwnedServerNames,
+  otherOrcasServerNames,
   withOrcaEntries,
   withoutOrcaEntries,
   type McpAgentFileEdit
@@ -169,8 +169,10 @@ async function syncFileOnce(
   const taken = before === null ? new Set<string>() : mcpAgentFileServerNames(edit, before)
   // A name the user (or another Orca) already uses stays theirs, and so does a server name the user
   // keeps in the agent itself: that server runs from there, not twice. Another Orca's bridge entry
-  // under the bare name (an older build) doesn't count as the user's.
-  const orcaNames = before === null ? new Set<string>() : orcaOwnedServerNames(edit, before)
+  // under the bare name (an older build) doesn't count as the user's; a copy of this Orca's own entry
+  // the user renamed does.
+  const orcaNames =
+    before === null ? new Set<string>() : otherOrcasServerNames(edit, before, deps.userDataPath)
   const adding = new Map(
     [...wanted].filter(([name, entry]) => {
       const serverName = mcpHostServerNameOfEntry(name, entry.env, deps.userDataPath) ?? name

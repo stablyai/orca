@@ -144,6 +144,8 @@ describe("Orca's servers in Grok's, Cursor's and Droid's own MCP files", () => {
     writeFileSync(paths.cursor, read(paths.cursor).replace(`"${name}"`, '"postgres"'))
     writeFileSync(ledgerPath, read(ledgerPath).replaceAll(`\\"${name}\\"`, '\\"postgres\\"'))
     writeFileSync(ledgerPath, read(ledgerPath).replace(`"${name}"`, '"postgres"'))
+    // ...and the user has edited the file since, so only the ledger's copy of the entry tells it apart.
+    writeFileSync(paths.cursor, read(paths.cursor).replace('"dark"', '"light"'))
 
     await syncMcpAgentFiles(app)
     const renamed = parse(read(paths.cursor))
@@ -151,7 +153,7 @@ describe("Orca's servers in Grok's, Cursor's and Droid's own MCP files", () => {
 
     await setMcpAgentFileAllowed('cursor', false, folder)
     await syncMcpAgentFiles(app)
-    expect(read(paths.cursor)).toBe(CURSOR_BEFORE)
+    expect(read(paths.cursor)).toBe(CURSOR_BEFORE.replace('"dark"', '"light"'))
   })
 
   it('writes nothing while the MCP servers switch is off', async () => {

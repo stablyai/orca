@@ -55,8 +55,12 @@ export function mcpAgentFileServerNames(edit: McpAgentFileEdit, text: string): S
   )
 }
 
-/** The file's names that hold an Orca's own bridge entry, this Orca's or another's. */
-export function orcaOwnedServerNames(edit: McpAgentFileEdit, text: string): Set<string> {
+/** The file's names that hold another Orca's bridge entry (one pinned to another data folder). */
+export function otherOrcasServerNames(
+  edit: McpAgentFileEdit,
+  text: string,
+  userDataPath: string
+): Set<string> {
   const parsed = parseAgentMcpConfigText(text, edit.format)
   const servers = valueAtKeyPath(parsed, [SERVERS_KEY[edit.agent]])
   if (typeof servers !== 'object' || servers === null || Array.isArray(servers)) {
@@ -66,7 +70,13 @@ export function orcaOwnedServerNames(edit: McpAgentFileEdit, text: string): Set<
   return new Set(
     Object.entries(servers).flatMap(([name, raw]) => {
       const entry = agentMcpConfigEntry(name, raw, dialect)
-      return entry && isOrcaOwnedAgentMcpServer(entry.server) ? [name] : []
+      const server = entry?.server
+      return server &&
+        isOrcaOwnedAgentMcpServer(server) &&
+        !('url' in server) &&
+        server.env?.ORCA_USER_DATA_PATH !== userDataPath
+        ? [name]
+        : []
     })
   )
 }
