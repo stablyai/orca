@@ -1,4 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
+import { JOURNAL_DISPATCH_WRITTEN_SCHEMA } from './journal-dispatch-written-schema'
 
 /** The queued card a send carried, as the operation window reads it. */
 export const SEND_QUEUED_CARD_SQL = `(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.queuedMessageId') END)`
@@ -21,5 +22,5 @@ CREATE INDEX IF NOT EXISTS journal_items_send_place
   ON journal_items(session_id, epoch, sequence, item_id) WHERE ${SEND_PLACE_ROW_SQL};`
 
 export function ensureJournalSubmissionWindowIndexes(db: Database.Database): void {
-  db.exec(JOURNAL_SUBMISSION_WINDOW_INDEXES)
+  db.exec(JOURNAL_SUBMISSION_WINDOW_INDEXES + JOURNAL_DISPATCH_WRITTEN_SCHEMA)
 }

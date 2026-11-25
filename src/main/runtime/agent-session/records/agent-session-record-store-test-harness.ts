@@ -50,12 +50,15 @@ export function openTestAgentSessionRecordStoreSlot(
 }
 
 /** Stores reopened in one directory share its writer, like one runtime's slot. */
-export function openTestAgentSessionDatabase(stateDirectory: string): Promise<JournalSqlDatabase> {
+export function openTestAgentSessionDatabase(
+  stateDirectory: string,
+  writerPath = journalSqlWorkerPath()
+): Promise<JournalSqlDatabase> {
   const directory = resolve(stateDirectory)
   let opened = databases.get(directory)
   if (!opened) {
     opened = JournalSqlDatabase.open(directory, {
-      writerPath: journalSqlWorkerPath(),
+      writerPath,
       readerPath: journalSqlReaderPath(),
       onMaintenanceError: () => {}
     })

@@ -70,8 +70,7 @@ export function journalClaudeResult(
     steerAwaitingEcho
   }: ClaudeResultJournalContext,
   message: Record<string, unknown>,
-  observedAt: number,
-  unrunOpening?: true
+  observedAt: number
 ): void {
   // Child results can report failures but must never settle the root turn.
   const settlesTurn = isRootClaudeFrame(message)
@@ -155,9 +154,9 @@ export function journalClaudeResult(
     streamedText.finish({ completedAt: observedAt })
     context.settle(
       message,
-      commandResult?.end ?? claudeTurnEndForResult(message, observedAt, false, unrunOpening),
+      commandResult?.end ?? claudeTurnEndForResult(message, observedAt),
       stopCheck && !commandResult
-        ? { check: stopCheck, end: claudeTurnEndForResult(message, observedAt, true, unrunOpening) }
+        ? { check: stopCheck, end: claudeTurnEndForResult(message, observedAt, true) }
         : undefined
     )
     streamedBlocks.clear()

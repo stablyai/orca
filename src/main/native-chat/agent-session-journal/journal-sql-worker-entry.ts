@@ -14,6 +14,7 @@ import {
 } from './database/journal-domain-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { journalWalWriterRelief } from './database/journal-wal-writer-relief'
+import { confirmJournalDispatchWritten } from './journal-domain-dispatch-written'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
 import {
@@ -245,11 +246,25 @@ async function runWrites(
       throw fault
     }
     assertJournalWritable(readOnly, 'database')
+    const command = list.length === 1 ? list[0]?.command : undefined
+    const receipt =
+      command?.type === 'write' &&
+      command.command.operation.kind === 'dispatch-written' &&
+      !command.command.effects &&
+      !command.command.forkInstall
+        ? command.command.operation
+        : undefined
     const result = await writer.run(
       list,
       (request) => applyJournalSqlWriteRequest(context, request),
       journalSqlWriteDurability(list),
-      urgent
+      urgent,
+      receipt && command?.type === 'write'
+        ? (response) =>
+            response.type === 'committed' &&
+            response.commit.publication?.writtenOnly === true &&
+            confirmJournalDispatchWritten(context.database, command.command.target, receipt)
+        : undefined
     )
     forks!.acknowledge()
     // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.

@@ -34,8 +34,8 @@ export type ClaudeJournalTranslatorDeps = {
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
-  /** The step handoff checks priority steers. Turn opening also checks turn-scoped sends. */
-  steerAwaitingEcho?: (kind: 'priority' | 'all') => boolean
+  /** True while a send written with priority `now` has not been echoed. */
+  steerAwaitingEcho?: () => boolean
   /** The Full access refusal warning this chat is due and has not had yet, else null. */
   fullAccessRefusalNotice?: () => ClaudeFullAccessRefusalNotice | null
 }
@@ -56,14 +56,7 @@ export type ClaudeJournalTranslator = {
   commandInterruptRequested: (turnId: string) => void
   readonly turnCycle: Pick<
     ClaudeOpenTurn,
-    | 'openedInLiveProviderCycle'
-    | 'ownsLiveProviderCycle'
-    | 'confirmProviderCycle'
-    | 'identity'
-    | 'userItemId'
-    | 'startDispatch'
-    | 'echoedDispatchStart'
-    | 'suppressReopen'
+    'openedInLiveProviderCycle' | 'ownsLiveProviderCycle' | 'confirmProviderCycle' | 'identity'
   >
   readonly openTurnHasInputWork: boolean
   flush: () => void

@@ -1,4 +1,3 @@
-import { claudeDispatchIsSteer } from '../turns/claude-command-lifecycle'
 import {
   bindClaudeContextUsageCapture,
   type ClaudeContextUsageCaptureOptions
@@ -54,10 +53,8 @@ export function createClaudeSessionJournalTranslator(
           const session = currentSession()
           return session ? claimClaudeFullAccessRefusalNotice(session) : null
         },
-        steerAwaitingEcho: (kind) =>
-          currentSession()?.dispatchWaiters.some((waiter) =>
-            kind === 'all' ? claudeDispatchIsSteer(waiter) : waiter.steers === true
-          ) ?? false
+        steerAwaitingEcho: () =>
+          currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
       })
     : null
 }

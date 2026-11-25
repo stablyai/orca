@@ -64,7 +64,6 @@ export function applyJournalDomainDispatchCommand(
     ...result,
     value: {
       carried,
-      turnScope: result.handoverScope ?? input.turnScope,
       handoverCursor: result.handoverScope ? result.cursor : undefined
     }
   }

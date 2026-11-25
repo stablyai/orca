@@ -1,4 +1,3 @@
-import type { ClaudeEchoedDispatch } from '../turns/claude-echoed-dispatch-start'
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import {
@@ -84,8 +83,7 @@ export function journalClaudeMessage(
   observedAt: number,
   /** Host clock on the submission that produced this send, when known. */
   requestedAt?: number,
-  clientMessageId?: string,
-  queuedDispatch?: ClaudeEchoedDispatch
+  clientMessageId?: string
 ): boolean {
   const envelope = readClaudeMessageEnvelope(message)
   if (!envelope) {
@@ -245,9 +243,6 @@ export function journalClaudeMessage(
     // Output can open the send's turn before its echo confirms delivery.
     if (!clientMessageId || ctx.turn.userItemId !== agentJournalSubmissionKey(clientMessageId)) {
       ctx.turn.open(sendEchoTurn, observedAt)
-      if (queuedDispatch) {
-        ctx.turn.echoedDispatchStart.expect(queuedDispatch)
-      }
     } else {
       ctx.turn.confirmProviderCycle()
     }

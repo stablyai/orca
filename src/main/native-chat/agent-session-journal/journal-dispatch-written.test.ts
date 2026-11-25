@@ -2,7 +2,7 @@ import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-ser
 import { createCodexDispatchEchoes } from '../../codex/structured/turns/codex-structured-dispatch-echo'
 import { dispatchCodexTurn } from '../../codex/structured/turns/codex-structured-turn-start'
 import type { CodexTurnHost } from '../../codex/structured/turns/codex-structured-turn-contract'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createStructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
 import { openJournal, receipt } from './journal-dispatch-written.test-fixture'
@@ -154,6 +154,8 @@ describe('a send the agent took', () => {
     const first = await journal.prepareHandover(input)
     const next = await journal.prepareHandover(input)
     const at = journal.cursor()
+    const commit = vi.fn()
+    const release = journal.observeCommits(commit)
     const delivery = createDeferredStructuredAgentSessionEventSink({
       sessionId: 'session',
       logger: createStructuredAgentSessionLogger()
@@ -171,11 +173,14 @@ describe('a send the agent took', () => {
       expect(await delivery.drained()).toEqual({ ok: true })
       expect(journal.cursor()).toEqual(at)
       expect(await receipt('retry')).toBeUndefined()
+      expect(commit).not.toHaveBeenCalled()
 
       receive(next.handoverCursor, 202)
       expect(await delivery.drained()).toEqual({ ok: true })
       expect(await receipt('retry')).toBe(202)
+      expect(commit).toHaveBeenCalledTimes(1)
     } finally {
+      release()
       delivery.close()
     }
   })
@@ -245,7 +250,6 @@ describe('a send the agent took', () => {
                     ...input,
                     turnScope: { kind: 'thread' }
                   })
-                  expect(current.turnScope).toEqual({ kind: 'turn', turnItemId: 'orca:parent' })
                   expect(current.handoverCursor).not.toEqual(before)
                 }
                 return enqueue('own', false)

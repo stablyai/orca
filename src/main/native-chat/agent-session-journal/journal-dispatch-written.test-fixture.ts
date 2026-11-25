@@ -22,8 +22,11 @@ export function storedProviderReceipt(
     stateDirectory,
     (db) =>
       db
-        .prepare(`SELECT json_extract(facts_json, '$.writtenAt') AS writtenAt
-      FROM journal_submission_attempts WHERE session_id=? AND message_id=? AND current=1`)
+        .prepare(`SELECT receipt.written_at AS writtenAt FROM journal_submission_attempts AS attempt
+      JOIN journal_dispatch_written AS receipt ON receipt.session_id=attempt.session_id
+        AND receipt.epoch=attempt.epoch
+        AND receipt.handover_sequence=json_extract(attempt.facts_json,'$.handover.sequence')
+      WHERE attempt.session_id=? AND attempt.message_id=? AND attempt.current=1`)
         .get(sessionId, clientMessageId)?.writtenAt ?? undefined
   )
 }

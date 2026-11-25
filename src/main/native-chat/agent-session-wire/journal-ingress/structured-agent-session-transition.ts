@@ -71,6 +71,7 @@ export function createStructuredAgentSessionTransitionMembers(
     recordProviderReceipt: (receipt) => {
       queue.submit({
         bytes: Buffer.byteLength(receipt.clientMessageId, 'utf8') + 64,
+        workOperations: 0,
         run: async ({ journal }) => {
           try {
             await journal.markDispatchWritten({ ...receipt, providerReceipt: true })

@@ -216,7 +216,7 @@ export type JournalShutdownCutInput = {
 export type JournalCommandOpenInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
   'clientMessageId' | 'fence' | 'turnScope'
-> & { submittedAt: number; waitsForProviderStart?: true }
+> & { submittedAt: number }
 
 export type JournalHandoverInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
@@ -226,7 +226,6 @@ export type JournalHandoverInput = Pick<
 export type JournalHandoverResult = {
   handoverCursor: AgentJournalCursor | undefined
   carried: StoppedHistoryDelivery | null
-  turnScope: AgentJournalTurnScope
 }
 
 export type JournalCommandSettlementInput = {

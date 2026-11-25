@@ -208,7 +208,6 @@ export function applyJournalDomainDispatch(
     writeJournalDomainDispatchAttempt(db, target, {
       ...attempt,
       submission: next,
-      writtenAt: input.state === 'pending' ? undefined : attempt.writtenAt,
       candidate,
       handover,
       handoverPlace,

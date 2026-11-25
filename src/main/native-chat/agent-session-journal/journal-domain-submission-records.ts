@@ -75,8 +75,6 @@ export type JournalDomainSubmissionAttempt = {
   candidate: boolean
   admittedPersonal: boolean
   submission: AgentJournalSubmission
-  /** Receipt belongs to host attempt facts. The submission payload is the wire record. */
-  writtenAt?: number
   admission: JournalDomainSubmissionAdmission
   handover: JournalDomainSubmissionHandover | null
   handoverPlace: JournalDomainSubmissionHandoverPlace | null
@@ -117,7 +115,6 @@ export type JournalDomainSubmissionCommit<Value = AgentJournalCursor | null | un
 export type JournalDomainSubmissionStoredFacts = Pick<
   JournalDomainSubmissionAttempt,
   | 'handover'
-  | 'writtenAt'
   | 'handoverPlace'
   | 'carries'
   | 'rejection'
@@ -137,7 +134,6 @@ export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissio
   const { body: _body, familyId: _family, ...admission } = attempt.admission
   const {
     handover,
-    writtenAt,
     handoverPlace,
     carries,
     rejection,
@@ -148,7 +144,6 @@ export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissio
   const facts: JournalDomainSubmissionStoredFacts = {
     admission,
     handover,
-    writtenAt,
     handoverPlace,
     carries,
     rejection,

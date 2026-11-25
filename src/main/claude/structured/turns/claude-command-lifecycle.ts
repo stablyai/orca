@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 // Lifecycle frames can reject only unstarted sends; completed alone leaves delivery uncertain.
 
 import {
@@ -15,7 +16,6 @@ import {
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeText } from '../journal/claude-structured-item-translation'
 import { isRootClaudeFrame } from './claude-turn-opening'
-import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type {
   ClaudeDispatchWaiter,
@@ -33,62 +33,12 @@ function isTerminalState(state: unknown): state is keyof typeof UNSTARTED_VERDIC
   return state === 'cancelled' || state === 'discarded' || state === 'refused'
 }
 
-export type ClaudeDispatchFrameEvidence = {
-  observedAt: number
-  onReceived: NonNullable<StructuredAgentSessionTransitionSink['recordProviderReceipt']>
-}
-
-export function resolveClaudeDispatchLifecycle(
-  session: ClaudeSession,
-  message: Record<string, unknown>,
-  onSettledLate: ClaudeLateDispatchSettlement | undefined,
-  frame: ClaudeDispatchFrameEvidence | undefined
-): void {
-  if (
-    frame &&
-    message.state === 'started' &&
-    readClaudeFrameString(message, 'session_id') === session.providerSessionId
-  ) {
-    session.translator?.turnCycle.echoedDispatchStart.confirm(
-      readClaudeFrameString(message, 'command_uuid'),
-      session.fence,
-      frame.observedAt
-    )
-  }
-  observeClaudeCommandLifecycle(session, message, onSettledLate, (waiter, evidence) => {
-    if (!frame || waiter.clientMessageId === null) {
-      return
-    }
-    if (evidence.received && waiter.handoverCursor !== undefined) {
-      frame.onReceived({
-        clientMessageId: waiter.clientMessageId,
-        fence: waiter.dispatchFence,
-        handoverCursor: waiter.handoverCursor,
-        observedAt: frame.observedAt
-      })
-    }
-    if (evidence.started) {
-      session.translator?.turnCycle.startDispatch(
-        session.providerSessionId,
-        waiter,
-        frame.observedAt
-      )
-    }
-  })
-}
-
-function observeClaudeCommandLifecycle(
+export function observeClaudeCommandLifecycle(
   session: ClaudeSession,
   message: Record<string, unknown>,
   onSettledLate?: ClaudeLateDispatchSettlement,
-  onLiveLifecycle?: (
-    waiter: ClaudeDispatchWaiter,
-    evidence: { received: boolean; started: boolean }
-  ) => void
+  onReceipt?: (waiter: ClaudeDispatchWaiter) => void
 ): void {
-  if (readClaudeFrameString(message, 'session_id') !== session.providerSessionId) {
-    return
-  }
   const commandUuid = readClaudeFrameString(message, 'command_uuid')
   // Echoed sends leave both lists and cannot be rejected here.
   const waiter = [...session.dispatchWaiters, ...session.retiredDispatchWaiters].find(
@@ -98,16 +48,17 @@ function observeClaudeCommandLifecycle(
     return
   }
   const state = message.state
-  if (state === 'started' || state === 'queued') {
-    const previous = waiter.commandLifecycle
-    if (previous !== 'started' && previous !== state) {
-      waiter.commandLifecycle = state
-      if (!waiter.retired && waiter.dispatchFence === session.fence) {
-        onLiveLifecycle?.(waiter, {
-          received: previous === undefined,
-          started: state === 'started'
-        })
-      }
+  if (state === 'started' || (state === 'queued' && waiter.commandLifecycle !== 'started')) {
+    const first = waiter.commandLifecycle === undefined
+    // Redelivery can emit queued again after started.
+    waiter.commandLifecycle = state
+    if (
+      first &&
+      !waiter.retired &&
+      waiter.dispatchFence === session.fence &&
+      readClaudeFrameString(message, 'session_id') === session.providerSessionId
+    ) {
+      onReceipt?.(waiter)
     }
   } else if (isTerminalState(state) && waiter.commandLifecycle === 'started') {
     releaseClaudeDispatchWaitersInDoubt(
@@ -133,8 +84,25 @@ function observeClaudeCommandLifecycle(
   }
 }
 
-export function claudeDispatchIsSteer(waiter: ClaudeDispatchWaiter): boolean {
-  return waiter.steers === true || waiter.turnScoped === true
+export function recordClaudeDispatchReceipt(
+  session: ClaudeSession,
+  waiter: ClaudeDispatchWaiter,
+  observedAt: number,
+  record: StructuredAgentSessionTransitionSink['recordProviderReceipt']
+): void {
+  if (
+    waiter.clientMessageId !== null &&
+    waiter.handoverCursor !== undefined &&
+    waiter.dispatchFence === session.fence &&
+    session.dispatchWaiters.includes(waiter)
+  ) {
+    record?.({
+      clientMessageId: waiter.clientMessageId,
+      fence: waiter.dispatchFence,
+      handoverCursor: waiter.handoverCursor,
+      observedAt
+    })
+  }
 }
 
 /** Local commands such as `/goal` can output before their echo; bind them to the started send. */
@@ -145,7 +113,6 @@ export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStarted
   return waiter?.clientMessageId
     ? {
         clientMessageId: waiter.clientMessageId,
-        ...(claudeDispatchIsSteer(waiter) ? { steers: true } : {}),
         ...(waiter.requestedAt === null ? {} : { requestedAt: waiter.requestedAt })
       }
     : null
@@ -189,13 +156,8 @@ export function claudeFrameSendFacts(
   return { ...(startedSend ? { startedSend } : {}), ...(renamedTo ? { renamedTo } : {}) }
 }
 
-const EMPTY_HELD_SENDS: ReadonlySet<string> = new Set()
-
 /** Include settlements until the host hears them, avoiding a gap in dispatch ownership. */
-export function claudeHeldSends(session?: ClaudeSession): ReadonlySet<string> {
-  if (!session) {
-    return EMPTY_HELD_SENDS
-  }
+export function claudeHeldSends(session: ClaudeSession): ReadonlySet<string> {
   return new Set([
     ...session.dispatchWaiters.flatMap((waiter) => waiter.clientMessageId ?? []),
     ...(session.unreportedSettlements ?? [])

@@ -269,7 +269,6 @@ async function dispatchSafely(
       fence: ctx.fence,
       handoverCursor: () => handover().handoverCursor,
       requestedAt,
-      turnScope: handover().turnScope,
       onInputPreparation: ctx.recordRanOptions?.prepareInput,
       onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
     })

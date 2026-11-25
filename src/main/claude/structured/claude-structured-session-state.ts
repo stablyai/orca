@@ -45,7 +45,7 @@ export type ClaudeAutoUnsettled =
   | { kind: 'time'; retryAt: number }
   | { kind: 'model'; model: string | undefined }
   | { kind: 'fast-mode'; fastMode: string | undefined }
-export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number; steers?: true }
+export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
 export type ClaudeLateDispatchOutcome =
   | {
@@ -110,7 +110,6 @@ export type ClaudeDispatchWaiter = {
   requestedAt: number | null
   dispatchFence: number
   handoverCursor?: AgentJournalCursor
-  turnScoped?: true
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
   /** Sent with priority `now`: the step it interrupts hands its open turn to this send. */

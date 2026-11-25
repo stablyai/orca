@@ -1,5 +1,3 @@
-import type { ClaudeOpenTurn } from './claude-open-turn'
-import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import {
   claudeHasReplayContent,
   claudeRecord,
@@ -75,7 +73,6 @@ export function claudeStreamTurnStartSource(
 export function createClaudeTurnOpener(deps: {
   isTurnOpen: () => boolean
   isSuppressed: () => boolean
-  steerAwaitingEcho?: (() => boolean) | undefined
   startedSend: () => ClaudeStartedSend | null
   open: (turn: ClaudeCurrentTurn, observedAt: number) => void
 }): (frame: Record<string, unknown>, source: ClaudeTurnSource | null, observedAt: number) => void {
@@ -84,11 +81,7 @@ export function createClaudeTurnOpener(deps: {
       return
     }
     const send = deps.startedSend()
-    if (
-      deps.isTurnOpen() ||
-      send?.steers ||
-      (!send && (deps.isSuppressed() || deps.steerAwaitingEcho?.()))
-    ) {
+    if ((!send && deps.isSuppressed()) || deps.isTurnOpen()) {
       return
     }
     deps.open(
@@ -104,28 +97,4 @@ export function createClaudeTurnOpener(deps: {
       observedAt
     )
   }
-}
-
-/** Root init starts a cycle; task frames never mark its work. */
-export function observeClaudeTurnFrame(
-  turn: ClaudeOpenTurn,
-  event: Extract<ClaudeStructuredSessionEvent, { type: 'message' }>
-): boolean {
-  if (!isRootClaudeFrame(event.message)) {
-    return false
-  }
-  const { message } = event
-  if (message.type === 'system' && message.subtype === 'init') {
-    turn.observeProviderCycleStart()
-  } else if (event.startsTurn || message.type === 'assistant' || message.type === 'stream_event') {
-    turn.observeProviderCycleWork()
-    if (message.type === 'assistant' || message.type === 'stream_event') {
-      turn.echoedDispatchStart.observeOutput(event.observedAt)
-    }
-    turn.inputChoiceWorkObserved ||=
-      message.type !== 'assistant' ||
-      message.is_api_error_message !== true ||
-      event.startedSend != null
-  }
-  return true
 }

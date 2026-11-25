@@ -10,7 +10,7 @@ import type { ClaudeCommandTurn } from './claude-command-turn'
 export type ClaudeCurrentTurn = {
   sessionId: string
   turnId: string
-  startedAt?: number
+  startedAt: number
   /** Host submission time; absent when the provider resumes without an Orca send. */
   requestedAt?: number
   /** Anchor to the user echo, an unechoed started submission, or the provider-resumed lifecycle row. */
@@ -29,23 +29,19 @@ export type ClaudeTurnEnd = {
   outcome?: AgentJournalTurnOutcome
   /** SDK-measured duration, available only on result frames. */
   durationMs?: number
-  /** Claude dropped the opener before running it. The end is observable but untimed. */
-  unrun?: true
 }
 
 /** Failed results complete normally; cancellation or a deferred Stop verdict interrupts the turn. */
 export function claudeTurnEndForResult(
   message: Record<string, unknown>,
   completedAt: number,
-  leftToStop = false,
-  unrun?: true
+  leftToStop = false
 ): ClaudeTurnEnd {
   const outcome = claudeResultOutcome(message, leftToStop)
   const durationMs = message.duration_ms
   return {
     state: outcome === undefined || outcome === 'cancellation' ? 'interrupted' : 'completed',
     completedAt,
-    ...(unrun ? { unrun } : {}),
     ...(outcome !== undefined ? { outcome } : {}),
     ...(typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs >= 0
       ? { durationMs }
@@ -82,7 +78,6 @@ export function claudeTurnLifecycleItem(
 } {
   const { sessionId, turnId, startedAt, requestedAt, userItemId } = turn
   const requested = requestedAt === undefined ? {} : { requestedAt }
-  const started = startedAt === undefined ? {} : { startedAt }
   return {
     identity: claudeCurrentTurnIdentity(turn),
     body: agentJournalTurnBody(
@@ -91,16 +86,16 @@ export function claudeTurnLifecycleItem(
             turnId,
             state: end.state,
             ...(end.outcome === undefined ? {} : { outcome: end.outcome }),
-            ...started,
+            startedAt,
             ...requested,
-            ...(end.unrun ? {} : { completedAt: end.completedAt }),
+            completedAt: end.completedAt,
             userItemId,
-            ...(end.durationMs === undefined || end.unrun ? {} : { durationMs: end.durationMs })
+            ...(end.durationMs === undefined ? {} : { durationMs: end.durationMs })
           }
-        : { turnId, state: 'running', ...started, ...requested, userItemId }
+        : { turnId, state: 'running', startedAt, ...requested, userItemId }
     ),
     // Use the turn start timestamp so append latency does not inflate timing.
-    options: end || startedAt === undefined ? {} : { observedAt: startedAt },
+    options: end ? {} : { observedAt: startedAt },
     publishCoalescingKey: end ? 'publish' : `turn-start:${sessionId}:${turnId}`
   }
 }

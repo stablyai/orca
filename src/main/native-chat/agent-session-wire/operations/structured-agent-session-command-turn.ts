@@ -214,7 +214,6 @@ async function openCommandTurn(
   return ctx.journal.openCommand({
     clientMessageId: submission.clientMessageId,
     submittedAt: submission.submittedAt,
-    ...(ctx.record()?.provider === 'claude' ? { waitsForProviderStart: true } : {}),
     fence: ctx.fence,
     turnScope: (await contextStructuredAgentSessionCurrentWork(ctx)).turnScope()
   })
