@@ -45,7 +45,7 @@ describe('an In progress item nothing runs for', () => {
     const owner = { id: 'rail-chat', kind: 'thread', title: 'Rail redesign' } as const
     const item = makeTestBotItem(7, { chat: owner })
     const next = 'rail-after-clear'
-    const bot = { folderWorkspaceId: 'designer', chatSessionId: 'home-chat' }
+    const bot = { id: 'designer', folderWorkspaceId: 'designer', chatSessionId: 'home-chat' }
     const record = (sessionId: string) => {
       const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
       return {

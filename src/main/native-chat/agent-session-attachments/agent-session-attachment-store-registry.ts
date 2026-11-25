@@ -10,15 +10,24 @@ export type AgentSessionAttachmentClaimer = (
   body: AgentJournalMessageItem
 ) => Promise<void>
 
+/** Releases only the copies a caller created for a write that was refused before publication. */
+export type UnpublishedAttachmentDiscarder = (
+  sessionId: string,
+  uploadIds: readonly string[]
+) => Promise<void>
+
 let installedStore: AgentSessionAttachmentStore | null = null
 let installedClaimer: AgentSessionAttachmentClaimer | null = null
+let installedDiscarder: UnpublishedAttachmentDiscarder | null = null
 
 export function setAgentSessionAttachmentStore(
   store: AgentSessionAttachmentStore | null,
-  claimer: AgentSessionAttachmentClaimer | null = null
+  claimer: AgentSessionAttachmentClaimer | null = null,
+  discarder: UnpublishedAttachmentDiscarder | null = null
 ): void {
   installedStore = store
   installedClaimer = store ? claimer : null
+  installedDiscarder = store ? discarder : null
 }
 
 export function getAgentSessionAttachmentStore(): AgentSessionAttachmentStore | null {
@@ -27,6 +36,10 @@ export function getAgentSessionAttachmentStore(): AgentSessionAttachmentStore | 
 
 export function getAgentSessionAttachmentClaimer(): AgentSessionAttachmentClaimer | null {
   return installedClaimer
+}
+
+export function getUnpublishedAttachmentDiscarder(): UnpublishedAttachmentDiscarder | null {
+  return installedDiscarder
 }
 
 const uploadRemovalListeners = new Set<(uploadDir: string) => void>()

@@ -146,22 +146,24 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
           : null
       const items = work?.idle
       let idle: ReturnType<typeof botIdleItemsNote> = null
-      return unanswered || needsYou || items?.length
+      return unanswered || needsYou || work
         ? {
             get text() {
               // Other turn reads may have waited. Use the current chat placement when assembling it.
               try {
-                const bot = items?.length ? bots.byId(botId) : undefined
+                const bot = work ? bots.byId(botId) : undefined
                 const records = bot ? readAgentSessionRecordStore() : null
-                idle =
-                  bot && records && items
-                    ? botIdleItemsNote(
-                        idleSaid,
-                        sessionId,
-                        items,
-                        routeIdleItem(bot, records, sessionId, items)
-                      )
-                    : null
+                if (bot && records) {
+                  const candidates = items ?? []
+                  const route = routeIdleItem(
+                    bot,
+                    records,
+                    sessionId,
+                    candidates,
+                    runtime.bots.list()
+                  )
+                  idle = botIdleItemsNote(idleSaid, sessionId, candidates, route)
+                }
               } catch {
                 idle = null
               }

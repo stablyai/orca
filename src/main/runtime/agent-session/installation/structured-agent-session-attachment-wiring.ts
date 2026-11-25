@@ -1,7 +1,11 @@
 // Keep chat attachment storage/sweeps beside the journal; its database owns upload claims the sweeps honor.
 
 import { mkdirSync } from 'node:fs'
-import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { join } from 'node:path'
+import {
+  AgentSessionAttachmentStore,
+  removeQuietly
+} from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import {
   publishAgentSessionUploadRemoval,
   setAgentSessionAttachmentStore
@@ -41,14 +45,30 @@ export function installAgentSessionAttachments(deps: {
   const attachments = new AgentSessionAttachmentStore(root, {
     hasSession: (sessionId) => deps.store.getRecord(sessionId) !== null
   })
-  setAgentSessionAttachmentStore(attachments, async (sessionId, body) => {
-    if (deps.journalDatabase.readOnly || deps.journalDatabase.isClosed) {
-      throw new Error('Chat attachments cannot be claimed on this host now')
+  setAgentSessionAttachmentStore(
+    attachments,
+    async (sessionId, body) => {
+      if (deps.journalDatabase.readOnly || deps.journalDatabase.isClosed) {
+        throw new Error('Chat attachments cannot be claimed on this host now')
+      }
+      await deps.journalDatabase.effects([
+        { kind: 'claim', claim: { sessionId, body, required: true, now: Date.now() } }
+      ])
+    },
+    async (sessionId, uploadIds) => {
+      const now = Date.now()
+      const marked = await deps.journalDatabase.effects(
+        uploadIds.map((uploadId) => ({
+          kind: 'sweep',
+          operation: { kind: 'discard-unpublished', sessionId, uploadId, now }
+        }))
+      )
+      // The sweep also retries a removal interrupted here or held by another process.
+      await Promise.all(
+        uploadIds.map((id, i) => marked[i] === true && removeQuietly(join(root, id)))
+      )
     }
-    await deps.journalDatabase.effects([
-      { kind: 'claim', claim: { sessionId, body, required: true, now: Date.now() } }
-    ])
-  })
+  )
   sweeper = startAgentSessionAttachmentSweeps(
     attachments,
     {

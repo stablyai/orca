@@ -10,7 +10,7 @@ import { botIdleItemsNote } from './bot-active-work'
 import { createBotActiveWorkReader } from './bot-active-work-read'
 import { createBotIdleItemChatRouter } from './bot-idle-item-chat'
 
-const BOT = { folderWorkspaceId: 'designer', chatSessionId: 'home-chat' }
+const BOT = { id: 'designer', folderWorkspaceId: 'designer', chatSessionId: 'home-chat' }
 const chatId = (index: number): string => `chat-${String(index).padStart(6, '0')}`
 
 function record(sessionId: string, successor?: string) {
@@ -36,6 +36,7 @@ function record(sessionId: string, successor?: string) {
 function indexedRecords(records: Map<string, ReturnType<typeof record>>) {
   let reads = 0
   let revision = {}
+  const listeners = new Set<(ids: readonly string[], tabsChanged: boolean) => void>()
   return {
     records: {
       getRecord: (id: string) => {
@@ -45,13 +46,20 @@ function indexedRecords(records: Map<string, ReturnType<typeof record>>) {
       isSessionUnreadable: () => false,
       isSessionTabRetired: () => false,
       lineageRevision: () => revision,
+      onRecordsChanged: (listener: (ids: readonly string[], tabsChanged: boolean) => void) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      },
       listRecords: (): never => {
         throw new Error('idle notes must not enumerate chat records')
       }
     },
     count: () => reads,
-    lineageChanged: () => {
+    lineageChanged: (...ids: string[]) => {
       revision = {}
+      listeners.forEach((listen) => listen(ids, false))
     }
   }
 }
@@ -99,6 +107,7 @@ it.each([750, 7_500])('reuses an unchanged %i-step /clear lineage on later turns
   expect(store.count()).toBe(depth + 1)
   const initial = store.count()
   for (let turn = 0; turn < 10; turn += 1) {
+    store.lineageChanged(`unrelated-${turn}`)
     expect(botIdleItemsNote(memo, leaf, idle, route(BOT, store.records, leaf, idle))).toBeNull()
   }
   expect(store.count() - initial).toBe(10)
@@ -106,8 +115,12 @@ it.each([750, 7_500])('reuses an unchanged %i-step /clear lineage on later turns
   const successor = chatId(depth)
   records.set(leaf, record(leaf, successor))
   records.set(successor, record(successor))
-  store.lineageChanged()
+  store.lineageChanged(leaf, successor)
   expect(
     botIdleItemsNote(memo, successor, idle, route(BOT, store.records, successor, idle))
   ).not.toBeNull()
+  route(BOT, store.records, successor, [])
+  const retired = store.count()
+  store.lineageChanged(leaf, successor)
+  expect(store.count()).toBe(retired)
 })

@@ -59,7 +59,13 @@ const SET = defineMethod({
     }
     // With an ask, the files go under its own context; its comment is the host's rendering of it.
     const words = ask ? (ask.context ?? '') : (comment ?? '')
-    const attached = await admitBotItemFiles(context, item, words, params.files)
+    const attached = await admitBotItemFiles(
+      context,
+      item,
+      words,
+      params.files,
+      expectedVersion !== undefined
+    )
     if (ask && params.files?.length) {
       ask = { ...ask, ...(attached.text ? { context: attached.text } : {}) }
     } else if (!ask && comment !== undefined) {
@@ -96,7 +102,18 @@ const SET = defineMethod({
     const defined = Object.fromEntries(
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )
-    const outcome = await store.set(item.uid, defined, writer.actor)
+    const outcome = await store
+      .set(item.uid, defined, writer.actor)
+      .catch(async (error: unknown) => {
+        if (error instanceof BotItemError && error.code === 'item_changed') {
+          await attached
+            .discardCopies?.()
+            .catch((discardError: unknown) =>
+              console.warn('[bots] items: discarding unpublished copies failed', discardError)
+            )
+        }
+        throw error
+      })
     const result = await writeResult(context, outcome, writer)
     // A tip back to the bot when its ask may be hard to read; the ask is already posted as written.
     const advice =

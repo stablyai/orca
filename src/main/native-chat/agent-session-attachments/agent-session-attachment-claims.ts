@@ -160,6 +160,19 @@ export function markUnclaimedUploadForSweep(
   return Number(result.changes) > 0
 }
 
+/** The caller owns a fresh copy that never appeared in a published item. Keep other chats' claims. */
+export function markUnpublishedUploadForSweep(
+  db: Database.Database,
+  uploadId: string,
+  sessionId: string,
+  now: number
+): boolean {
+  db.prepare(
+    'DELETE FROM agent_session_attachment_claims WHERE upload_id = ? AND session_id = ?'
+  ).run(uploadId, sessionId)
+  return markUnclaimedUploadForSweep(db, uploadId, now)
+}
+
 export function listUploadsBeingSwept(db: Database.Database): string[] {
   return db
     .prepare('SELECT upload_id FROM agent_session_attachment_sweeps')
