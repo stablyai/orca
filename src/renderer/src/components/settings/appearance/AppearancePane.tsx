@@ -12,7 +12,6 @@ import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
 import {
-  getAppearanceAdvancedEntries,
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getLayoutEntries,
@@ -22,6 +21,7 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
+import { getAppearanceAdvancedEntries } from './appearance-advanced-search'
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,

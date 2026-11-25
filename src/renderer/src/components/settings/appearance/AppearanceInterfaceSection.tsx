@@ -16,13 +16,13 @@ import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormCon
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
 import {
   APPEARANCE_EDITOR_THEME_SETTING_ID,
-  getAppearanceAdvancedEntries,
   getCodeEditorThemeEntries,
   getThemeEntries,
   getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
+import { getAppearanceAdvancedEntries } from './appearance-advanced-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
