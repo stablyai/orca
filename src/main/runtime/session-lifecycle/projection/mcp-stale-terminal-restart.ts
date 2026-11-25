@@ -8,10 +8,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import {
-  isAgentForegroundWrapperProcess,
-  recognizeAgentProcess
-} from '../../../../shared/agent-status/process/agent-process-recognition'
+import { readAgentPaneForeground } from './agent-pane-foreground-read'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { terminalMcpPanes } from '../../../mcp-servers/terminal/terminal-mcp-panes'
 import { currentTerminalMcpFingerprints } from '../../../mcp-servers/terminal/terminal-mcp-launch'
@@ -56,24 +53,24 @@ export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithCl
     }
     // A pane's workspace and agent decide which servers it would get now.
     const current = await currentTerminalMcpFingerprints(live.map(({ pane }) => pane))
-    const stale: StaleTerminal[] = []
-    for (const { pty, pane } of live) {
+    const changed = live.filter(({ pane }) => {
       const now = current.get(pane) ?? null
-      if (now === null || now === pane.fingerprint) {
-        continue
-      }
-      // After a main restart its launch evidence is unknown: only its foreground says the agent runs.
-      const agent = mcpTerminalAgent(pty, pane)
-      const running = await this.mcpTerminalAgentRunning(pty, agent)
-      if (running !== false) {
-        stale.push({
-          pty,
-          pane,
-          session: running === true ? await this.mcpTerminalSession(pty, agent) : null
-        })
-      }
-    }
-    return stale
+      return now !== null && now !== pane.fingerprint
+    })
+    // Read together: their fresh foreground reads then share one process-table capture.
+    const checked = await Promise.all(
+      changed.map(async ({ pty, pane }): Promise<StaleTerminal | null> => {
+        // After a main restart its launch evidence is unknown: only its foreground says the agent runs.
+        const agent = mcpTerminalAgent(pty, pane)
+        const running = await this.mcpTerminalAgentRunning(pty, agent)
+        if (running === false) {
+          return null
+        }
+        const session = running === true ? await this.mcpTerminalSession(pty, agent) : null
+        return { pty, pane, session }
+      })
+    )
+    return checked.filter((entry): entry is StaleTerminal => entry !== null)
   }
 
   /** Whether the pane's foreground process is the agent it launched; unchecked when unreadable. */
@@ -81,20 +78,12 @@ export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithCl
     pty: RuntimePtyWorktreeRecord,
     agent: TuiAgent | null
   ): Promise<boolean | 'unchecked'> {
-    const controller = this.ptyController
-    if (!controller || !agent) {
+    if (!agent) {
       return 'unchecked'
     }
-    const name = await controller.getForegroundProcess(pty.ptyId).catch(() => null)
-    if (recognizeAgentProcess(name)?.agent === agent) {
-      return true
-    }
-    // The cached name can lag the program in front, so anything else is read again before it counts.
-    const fresh = (await controller.confirmForegroundProcess?.(pty.ptyId).catch(() => null)) ?? null
-    if (fresh === null && (name === null || isAgentForegroundWrapperProcess(name))) {
-      return 'unchecked'
-    }
-    return recognizeAgentProcess(fresh ?? name)?.agent === agent
+    const running = await readAgentPaneForeground(this.ptyController, pty.ptyId, agent)
+    // An Agent Teams lead's restart would orphan its teammates: counted, never restarted.
+    return running === 'team' ? 'unchecked' : running
   }
 
   private async mcpTerminalSession(

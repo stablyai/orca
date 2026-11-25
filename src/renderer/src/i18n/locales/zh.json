@@ -1392,7 +1392,7 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已添加 {{name}}",
         "newSessions": "对新会话生效",
-        "restart": "重启 {{count}} 个会话",
+        "restart_other": "重启 {{count}} 个会话",
         "addedMany": "已添加 {{count}} 个服务器",
         "repoOn": "已在 {{repo}} 中开启 {{name}}",
         "repoOff": "已在 {{repo}} 中关闭 {{name}}"

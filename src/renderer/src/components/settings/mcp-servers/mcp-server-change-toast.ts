@@ -33,8 +33,13 @@ export async function showMcpStaleTerminalsToast(
   current: () => boolean
 ): Promise<boolean> {
   const stale = await readStaleMcpSessions(target).catch(() => null)
-  if (!current() || !stale || stale.count === 0) {
+  if (!current() || !stale) {
     return stale !== null
+  }
+  if (stale.count === 0) {
+    // An earlier run's offer, if still up, has nothing left to restart.
+    toast.dismiss(mcpStaleTerminalsToastId(target))
+    return true
   }
   const count = stale.count
   const title =
