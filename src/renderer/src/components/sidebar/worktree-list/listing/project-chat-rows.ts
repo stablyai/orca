@@ -82,20 +82,25 @@ export function useProjectTreeRows(
     () => ({
       worktreesByRepo,
       isRowHidden,
-      sectionRepoIds: new Map(sections.map((section) => [section.key, section.group.repoIds]))
+      sectionRepoIds: new Map(
+        enabled ? sections.map((section) => [section.key, section.group.repoIds]) : []
+      )
     }),
-    [worktreesByRepo, isRowHidden, sections]
+    [enabled, worktreesByRepo, isRowHidden, sections]
   )
+  // Off, Tree reads nothing: no header's main checkouts are looked up or subscribed to.
   const mainIds = useMemo(
     () =>
-      rows.flatMap((row) =>
-        row.type === 'header' && row.repo
-          ? headerMainCheckouts(row, row.repo, homes).map((home) => home.id)
-          : []
-      ),
-    [rows, homes]
+      enabled
+        ? rows.flatMap((row) =>
+            row.type === 'header' && row.repo
+              ? headerMainCheckouts(row, row.repo, homes).map((home) => home.id)
+              : []
+          )
+        : [],
+    [enabled, rows, homes]
   )
-  const withChats = useWorkspacesWithAgents(enabled ? mainIds : [])
+  const withChats = useWorkspacesWithAgents(mainIds)
   return useMemo(
     () =>
       enabled ? withProjectChatRows(rows, { ...homes, groupBy, collapsedGroups }, withChats) : rows,
