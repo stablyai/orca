@@ -12,21 +12,15 @@ export function renderSmartWorkspaceSourceResults(
   t: Translate = translate
 ): React.JSX.Element {
   const { disabled, localInputRef, mode, tabsListRef } = controller
-  const hasFilterHeader = mode === 'gitlab' || mode === 'linear' || mode === 'jira'
-  const maxHeight = hasFilterHeader
-    ? 'min(var(--radix-popover-content-available-height,8rem),8rem)'
-    : 'min(var(--radix-popover-content-available-height,7rem),7rem)'
 
   return (
     <PopoverContent
       data-workspace-source-suggestions="true"
       align="start"
       side="bottom"
-      sideOffset={4}
+      sideOffset={6}
       avoidCollisions={false}
       className="popover-scroll-content flex w-[var(--radix-popover-trigger-width)] flex-col p-0"
-      // Why: results must not cover the create-workspace dialog's submit footer.
-      style={{ maxHeight }}
       onOpenAutoFocus={(event) => event.preventDefault()}
       onPointerDownOutside={(event) => {
         // Input/mode tabs are anchors outside Radix content; interacting with them must keep results open.
