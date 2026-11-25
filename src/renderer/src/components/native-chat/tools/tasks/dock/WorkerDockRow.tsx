@@ -25,6 +25,8 @@ export type WorkerDockRowView = WorkerDockEntry & {
   providerId?: string
   /** The open question a needs-you worker asked: the row's title while it waits. */
   question?: string
+  /** A running workflow's phase progress, read out in the row's accessible label. */
+  progress?: string
 }
 
 /** What a row and the pill call the worker: its question while it waits on you, else its title. */
@@ -103,7 +105,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           'Stop or clear this from the computer it runs on'
         )
       : ''
-  const progress =
+  const orchestrationNote =
     row &&
     !row.retired &&
     row.state !== 'failed' &&
@@ -112,6 +114,8 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     row.progressNote
       ? row.progressNote
       : ''
+  // A workflow's phase progress, else a worker's own progress note.
+  const progress = row?.progress || orchestrationNote
   const label = [
     mixed && row ? workerDockKindLabel(t, row.kind) : '',
     row ? workerDockSpokenTitle(row.kind, title) : title,

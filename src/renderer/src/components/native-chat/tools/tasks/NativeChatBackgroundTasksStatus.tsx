@@ -158,6 +158,9 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
               view?.description ??
               agentChildRowName(row) ??
               agentChildRowDetailText(row, Date.now()),
+            ...(row.kind === 'workflow' && state === 'running' && view?.lastMessage
+              ? { progress: view.lastMessage }
+              : {}),
             model: row.model ?? null,
             state,
             changedAt: view?.settledAt ?? row.firstObservedAt ?? null,

@@ -8,6 +8,7 @@ import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { claudeWorkflowProgressText } from './claude-workflow-progress'
 import { taskText, taskUsageTotalTokens } from '../background-tasks/claude-background-task-frames'
 import type { ClaudeSession } from '../structured/claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from '../structured/lifecycle/claude-structured-session-event'
@@ -109,7 +110,9 @@ export function claudeChildWorkOutcome(status: unknown): AgentChildWorkOutcome {
 
 export function claudeTaskProgressFacts(message: Record<string, unknown>): ClaudeTaskFacts {
   const toolName = taskText(message.last_tool_name)
-  const lastMessage = taskText(message.summary)
+  // A Workflow's phase progress says more than its last agent's summary.
+  const lastMessage =
+    claudeWorkflowProgressText(message.workflow_progress) ?? taskText(message.summary)
   const totalTokens = taskUsageTotalTokens(message)
   return {
     ...(toolName ? { toolName } : {}),
