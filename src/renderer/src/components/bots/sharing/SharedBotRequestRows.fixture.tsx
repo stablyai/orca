@@ -17,7 +17,7 @@ const BUILDER: SharedBotRequestView = {
     mascot: 'H1',
     color: '#f4c4cf',
     outfit: 'tie',
-    services: ['github', 'slack', 'linear']
+    services: ['github', 'slack', 'linear', 'google']
   }
 }
 
