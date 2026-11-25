@@ -15,6 +15,10 @@
     "terminalPromptFailed": "Orca a ouvert un terminal pour {{value0}}, mais n’a pas pu lui transmettre votre prompt. Envoyez le prompt dans ce terminal."
   },
   "app": {
+    "saving": {
+      "delayedTitle": "Le stockage du profil prend plus de temps que d’habitude",
+      "delayedDescription": "Les prochains enregistrements peuvent être retardés jusqu’à la fin de cette opération."
+    },
     "recoverableError": {
       "rootTitle": "Orca a rencontré une erreur de rendu.",
       "rootDescription": "Le shell de l'application n'a pas pu terminer son rendu. Réessayez pour le remonter, ou relancez Orca si l'erreur persiste.",

@@ -15,6 +15,10 @@
     "terminalPromptFailed": "Orca 已为 {{value0}} 打开终端，但无法传递你的提示。请在该终端中发送提示。"
   },
   "app": {
+    "saving": {
+      "delayedTitle": "配置存储操作耗时比平时更长",
+      "delayedDescription": "在此操作完成前，后续保存可能会延迟"
+    },
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误",
       "rootDescription": "应用 shell 无法完成渲染，重试以重新挂载，如果错误仍然存在，请重新启动 Orca",

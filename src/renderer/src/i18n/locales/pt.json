@@ -456,6 +456,10 @@
       "rootDescription": "O shell do aplicativo não conseguiu concluir a renderização. Tente novamente para remontá-lo, ou reinicie o Orca se o erro persistir.",
       "webTitle": "O Orca Web encontrou um erro de renderização.",
       "webDescription": "Tente novamente no cliente web ou reconecte-se ao runtime pareado."
+    },
+    "saving": {
+      "delayedTitle": "O armazenamento do perfil está demorando mais que o normal",
+      "delayedDescription": "Outros salvamentos podem demorar enquanto esta operação termina."
     }
   },
   "sidebar": {
