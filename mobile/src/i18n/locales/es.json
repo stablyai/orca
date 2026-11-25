@@ -4547,33 +4547,18 @@
     },
     "pagination": {
       "pageUnreachable": "La página {{page}} está fuera del alcance de la búsqueda de GitHub.",
-      "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub.",
-      "noMoreResults": "No hay más resultados en la página {{page}}."
+      "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub."
     },
     "filterSheet": {
-      "sortBy": "Ordenar por",
       "issueSource": "Fuente de issues",
-      "issueSourceRow": "Upstream u origin",
       "view": "Vista",
-      "projectView": "Vista del proyecto",
-      "projectItems_many": "{{count}} elementos",
-      "projectItems_one": "{{count}} elemento",
-      "projectItems_other": "{{count}} elementos",
-      "chooseView": "Elegir",
       "showOnRows": "Mostrar en las filas",
-      "projectFields": "Campos del proyecto",
       "workspace": "Espacio de trabajo",
-      "linearWorkspace": "Espacio de trabajo de Linear",
       "layout": "Diseño",
       "groupBy": "Agrupar por",
       "orderBy": "Ordenar por",
-      "displayProperties": "Propiedades de visualización",
       "title": "Filtrar y mostrar",
-      "done": "Listo",
-      "jqlReplacesPreset": "Tu búsqueda JQL reemplaza el filtro predefinido. Borra la búsqueda para volver a elegir uno."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Búsqueda JQL"
+      "done": "Listo"
     },
     "itemComments": {
       "noComments": "Aún no hay comentarios",
@@ -4611,24 +4596,11 @@
     "filterPickers": {
       "allTeams": "Todos los equipos",
       "changeStatus": "Cambiar estado",
-      "fieldHidden": "Oculto en las tarjetas",
-      "fieldShown": "Visible en las tarjetas",
-      "fieldsSubtitle": "Elige qué campos del proyecto aparecen en las tarjetas de los elementos.",
-      "fieldsTitle": "Campos del proyecto",
-      "gitlabFilter": "Filtro de GitLab",
-      "gitlabView": "Vista de GitLab",
-      "jiraFilter": "Filtro de Jira",
-      "jiraSite": "Sitio de Jira",
       "statesFailed": "No se pudieron cargar los estados. Vuelve a abrir para intentarlo de nuevo.",
-      "linearFilter": "Filtro de Linear",
       "linearIssue": "Issue de Linear",
-      "linearWorkspace": "Espacio de trabajo de Linear",
       "loadingStates": "Cargando estados…",
-      "noFields": "Esta vista no tiene campos adicionales que mostrar.",
       "noStates": "No hay estados disponibles",
       "switchWorkspaceFailed": "No se pudo cambiar de espacio de trabajo",
-      "teamsSubtitle": "Elige qué equipos aparecen en Tareas.",
-      "teamsTitle": "Equipos de Linear",
       "teams_many": "{{count}} equipos",
       "teams_one": "{{count}} equipo",
       "teams_other": "{{count}} equipos"
@@ -4770,9 +4742,6 @@
     "linearList": {
       "changeStatusFrom": "Cambiar el estado actual: {{status}}"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Propiedades visibles"
-    },
     "listSurface": {
       "connectLinearButton": "Conectar Linear",
       "connectLinearMessage": "Consulta los issues de Linear que tienes asignados y empieza a trabajar en ellos directamente desde Tareas.",
@@ -4826,7 +4795,6 @@
       "projectMergeRequests": "MRs del proyecto",
       "projectMergeRequestsDescription": "Solicitudes de fusión e issues por repositorio",
       "projects": "Proyectos",
-      "pullRequests": "PRs",
       "repository": "Repositorio",
       "repositorySortDescription": "Agrupar por repositorio y luego por actividad más reciente",
       "reviewRequestsDescription": "Solicitudes de revisión asignadas a ti",
@@ -4948,42 +4916,8 @@
       "reviewers": "Revisores",
       "viewFile": "Ver"
     },
-    "providerControls": {
-      "myTodos": "Mis tareas pendientes",
-      "reposLabel": "Repositorios: {{repos}}",
-      "filterCount": "Filtrar · {{count}}",
-      "filter": "Filtrar",
-      "filterLabel": "Filtrar y mostrar",
-      "projectMergeRequests": "MR del proyecto"
-    },
-    "providerItemList": {
-      "intoBranch": "en {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Página siguiente",
-      "page": "Página {{page}}",
-      "pageOfTotal": "Página {{page}} de {{total}}",
-      "previousPage": "Página anterior",
-      "selectPage": "Seleccionar página, página {{page}}",
-      "selectPageOfTotal": "Seleccionar página, página {{page}} de {{total}}"
-    },
     "providerPickers": {
-      "allRepositories": "Todos los repositorios",
-      "githubView": "Vista de GitHub",
-      "issueSources": "Fuentes de issues de GitHub",
-      "issueSourcesDescription": "Elige si usar upstream u origin para consultar y crear issues en cada repositorio.",
-      "issues": "Issues",
-      "noIssueSources": "No hay fuentes alternativas de issues disponibles.",
-      "origin": "Origen",
-      "pageHint": "Ve a una página de resultados cargada o disponible.",
-      "pageLoaded": "Cargada",
-      "pageNotLoaded": "Carga resultados anteriores",
-      "pageNumber": "Página {{page}}",
-      "pages": "Páginas de GitHub",
-      "pullRequests": "Pull requests",
-      "queryingSource": "Consultando {{source}}",
-      "repoDescription": "Elige qué repositorios consultar.",
-      "repos": "Repositorios",
-      "upstream": "Upstream"
+      "allRepositories": "Todos los repositorios"
     },
     "providerViewProjection": {
       "all": "Todo",
@@ -4992,7 +4926,6 @@
       "allWorkspaces": "Todos los espacios de trabajo",
       "chooseProject": "Elige proyecto",
       "default": "Predeterminado",
-      "defaultSubtitle": "{{subtitle}} · Predeterminado",
       "issues": "Issues",
       "openState": "Abierto",
       "projects": "Proyectos",
@@ -5009,15 +4942,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nuevo issue de GitHub",
       "newLinearIssue": "Nuevo issue de Linear",
-      "refreshGitHub": "Actualizar trabajo de GitHub",
-      "refreshGitLab": "Actualizar elementos de trabajo de GitLab",
-      "refreshJira": "Actualizar issues de Jira",
-      "refreshLinear": "Actualizar Linear",
       "title": "Tareas"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Buscar en la vista del proyecto…",
-      "providerPlaceholder": "Buscar tareas de {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Todo",
@@ -5497,7 +5422,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Busca issues o escribe JQL, p. ej. project = ABC",
         "jiraTextMatchesNotice": "Mostrando coincidencias de texto. Jira no pudo ejecutar esta búsqueda como JQL."
       },
       "editor": {
@@ -5783,7 +5707,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
