@@ -138,13 +138,13 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
-import { BotChatReopen, BotChats, BotChatsOwn, BotChatsSeen } from './bot-chats-params'
 import {
   BotAvatarRead,
   BotAvatarUpload,
   BotSlackIconUpload,
   BotSlackIconWanted
 } from './bot-avatar-params'
+import { BotChatReopen, BotChats, BotChatsOwn, BotChatsSeen } from './bot-chats-params'
 import {
   ComposioApp,
   ComposioApps,
