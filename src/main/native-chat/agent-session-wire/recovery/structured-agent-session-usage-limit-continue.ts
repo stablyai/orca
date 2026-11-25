@@ -156,18 +156,18 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   /** See usageLimitCutDisposition; the cut read as the journal stands now, even unloaded. Without a
-   *  turn, the chat's latest cut. */
+   *  turn, the chat's latest cut, pending too while it lacks a reset: an account switch gives one. */
   disposition = async (id: string, turnItemId?: string): Promise<UsageLimitCutDisposition> => {
     const cut = await this.cold.read(id, true)
-    const record = this.deps.host.store.getRecord(id)
-    const attempt = this.attempts.get(id)
+    const [record, attempt] = [this.deps.host.store.getRecord(id), this.attempts.get(id)]
     return usageLimitCutDisposition({
       cut,
       turnItemId: turnItemId ?? cut?.turnItemId ?? '',
       continuable:
         cut !== null &&
         this.enabled() &&
-        this.holds.schedulable(id, cut, this.deps.now()) &&
+        ((turnItemId === undefined && cut.resetsAt === undefined) ||
+          this.holds.schedulable(id, cut, this.deps.now())) &&
         record?.location.executionHostId === this.deps.host.store.hostId &&
         isUsageLimitChatOpen(this.deps.host.store, id),
       cancel: record?.usageLimitContinueCancel,
