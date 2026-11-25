@@ -540,9 +540,9 @@
       "xhigh": "Очень высокий",
       "xhighShort": "Очень выс.",
       "ultracode": "Ultracode",
-      "permissionAppliesNextMessage": "{{saved}} применится к следующему сообщению; сейчас выполняется {{active}}",
+      "permissionAppliesNextMessage": "{{saved}} применится к следующему сообщению; сейчас действует {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · следующее сообщение",
-      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас выполняется {{active}}"
+      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}"
     },
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",
@@ -1094,7 +1094,7 @@
           "connect": "Подключение и проверка"
         },
         "done": "Готово",
-        "takeOver": "Дальше берёт на себя",
+        "takeOver": "Передать боту",
         "choice": {
           "gmail": "Gmail",
           "calendar": "Календарь",
@@ -1859,7 +1859,7 @@
       "showChildAgents_many": "Показать {{count}} дочерних агентов",
       "hideIdleChildren": "Скрыть простаивающих дочерних агентов: {{count}}",
       "showIdleChildren": "Показать простаивающих дочерних агентов: {{count}}",
-      "idleChildCount": "простаивает: {{count}}"
+      "idleChildCount": "Простаивает: {{count}}"
     },
     "diffReviewFilesSheet": {
       "title": "Файлы",
@@ -2530,7 +2530,7 @@
       "ignoredLost": "Игнорируемые файлы будут потеряны",
       "checking": "Проверка изменений…",
       "unchecked": "Не удалось проверить изменения",
-      "ignoredNamesMore": "{{names}} и ещё",
+      "ignoredNamesMore": "{{names}} и другие",
       "ignoredNamesCount": "{{names}} +{{value0}}",
       "ignoredUnchecked": "Не удалось полностью проверить игнорируемые файлы",
       "needsUpdate": "Обновите Orca на компьютере, чтобы удалить это рабочее пространство с телефона.",
@@ -2982,10 +2982,10 @@
       "allThreadsResolved": "Все обсуждения решены",
       "noThreads": "Обсуждений проверки нет",
       "threadAuthorOnFile": "{{author}} в {{file}}",
-      "fromBots_one": "{{count}} от бота",
-      "fromBots_other": "{{count}} от ботов",
-      "fromBots_few": "{{count}} от ботов",
-      "fromBots_many": "{{count}} от ботов",
+      "fromBots_one": "От ботов: {{count}}",
+      "fromBots_other": "От ботов: {{count}}",
+      "fromBots_few": "От ботов: {{count}}",
+      "fromBots_many": "От ботов: {{count}}",
       "unresolvedThreads_one": "{{count}} нерешённое обсуждение",
       "unresolvedThreads_other": "{{count}} нерешённых обсуждения",
       "unresolvedThreads_few": "{{count}} нерешённых обсуждения",
@@ -4397,7 +4397,7 @@
       "unresolvedConflict": "Неразрешённый конфликт",
       "unstageFile": "Убрать {{path}} из индекса",
       "discardFile": "Отменить изменения: {{path}}",
-      "discard": "Отменить"
+      "discard": "Отменить изменения"
     },
     "gitHistory": {
       "days_few": "{{count}} д",
@@ -7154,7 +7154,7 @@
       "title": "Предложения",
       "looked": "Осмотр {{time}}",
       "yesterdayAt": "вчера {{time}}",
-      "looking": "Осматриваюсь…",
+      "looking": "Осматривается…",
       "start": "Начать",
       "dismiss": "Скрыть",
       "dismissTitle": "Скрыть: {{title}}",
