@@ -148,6 +148,8 @@
       "remoteSchedulingUnavailable": "Remote-server automation scheduling is not available from this Orca client yet. Run this automation on the remote server or update Orca when durable remote scheduling is available.",
       "repoDetached": "Repository is no longer attached to the selected automation host.",
       "repoUnavailable": "Repository for the selected automation host is no longer available.",
+      "sessionBusy": "The previous session in this workspace is still working, so Orca skipped this run instead of starting a second session. Later runs reuse it once the agent is done.",
+      "sessionNotReusable": "The previous session in this workspace cannot take this run, so Orca skipped it instead of starting a second session. Close or finish that session to let later runs start.",
       "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
       "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",
       "targetSetupMismatch": "Automation run target no longer matches the selected project host setup.",

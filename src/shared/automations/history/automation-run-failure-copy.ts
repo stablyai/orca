@@ -32,6 +32,10 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
   hooksReviewBlocked:
     'The agent is waiting for someone to review new or changed hooks ("Hooks need review"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.',
   agentNeverStarted: 'Automation agent never started after the prompt was submitted.',
+  sessionBusy:
+    'The previous session in this workspace is still working, so Orca skipped this run instead of starting a second session. Later runs reuse it once the agent is done.',
+  sessionNotReusable:
+    'The previous session in this workspace cannot take this run, so Orca skipped it instead of starting a second session. Close or finish that session to let later runs start.',
   agentNoCompletion: 'Automation agent did not report completion.',
   agentInterrupted: 'The agent was interrupted before it finished this run.',
   watchTimedOut: 'Orca stopped watching this run after 6h without a completion signal.',

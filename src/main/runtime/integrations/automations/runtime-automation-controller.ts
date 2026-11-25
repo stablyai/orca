@@ -157,6 +157,9 @@ export class RuntimeAutomationController {
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+    if (input.onNoReusableSession && !input.reuseSession) {
+      throw new Error('Skipping an unusable previous session requires session reuse.')
+    }
     const { on: rules, bot: botTarget } = await botAutomationCreateRules(this, bot, input)
     const chosen = destination ?? input.destination
     return await this.webhooks.save(bot && { botId: bot.id }, rules, async (on, id) => {
@@ -182,6 +185,7 @@ export class RuntimeAutomationController {
           setupDecision: input.setupDecision,
           setupTrustHash: input.setupTrustHash,
           reuseSession: input.reuseSession,
+          onNoReusableSession: input.onNoReusableSession,
           timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
           timezoneExplicit: input.timezoneExplicit,
           rrule: input.rrule,
@@ -253,6 +257,9 @@ export class RuntimeAutomationController {
     }
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
+    }
+    if (patch.onNoReusableSession && !(patch.reuseSession ?? current.reuseSession)) {
+      throw new Error('Skipping an unusable previous session requires session reuse.')
     }
     const owner = current.bot ? { botId: current.bot.botId, current } : null
     return await this.webhooks.save(owner, patch.on, async (on) => {

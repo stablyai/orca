@@ -20,6 +20,7 @@ const AUTOMATION_STATE_FLAGS = [
   'disabled',
   'missed-run-grace-minutes',
   'reuse-session',
+  'on-no-reusable-session',
   'fresh-session'
 ]
 
@@ -77,6 +78,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --precheck to run a command only before scheduled runs; exit code 0 continues, any other exit, error, or timeout skips the run.',
       'Use --precheck-timeout <seconds> to set the time limit (default 60 seconds). Skips appear in Orca run history and orca automations runs --id <automation-id> as skipped_precheck.',
       'Run now in Orca and orca automations run intentionally bypass the precheck so you can test or override the scheduled condition.',
+      'Use --on-no-reusable-session skip with --reuse-session to record a skipped run while a live previous session cannot take it, instead of launching another session.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
       "Use --bot <name> to run as a bot, in its folder with its agent; --provider and the project flags do not apply. --runs-in new (default) starts a new conversation each run, except that one made from a chat other than its Home Chat runs in that chat, so its results reach whoever asked there, and one made from a group room runs in that room as its owner's post; chat continues the bot's Chat; chat:<id> (from `orca bot chats`) continues that chat, and a run fails if it was closed. --results-to says where the result goes: chat (the default), thread, none, channel:<channel> (a #name, link or id), or linear:<issue> (a bot on Linear; ENG-123 or a link); keep the default unless asked for another place. thread answers in the Slack thread, pull request or issue the event happened on, where the run can also post updates with `orca bot reply`; it is the default for an automation that only Slack, GitHub or Linear events start, and needs --runs-in new.",
       'Use --on "<source>.<event> [in=<place>,<place>] [subject=<one>] [contains="<text>"] [from=<people>]" (repeatable, bots only) to start a run each time the event happens, whoever does it (from= narrows it to some people, by @name or id; on=mine keeps a slack.reaction to reactions on your own messages); it takes the place of --trigger, and both together are refused (make two automations for a schedule and events). `orca automations trigger-options` lists the events, and `orca bot connectors` the bot\'s workspaces and teams as refs for in=.',
