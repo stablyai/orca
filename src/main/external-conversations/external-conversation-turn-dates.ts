@@ -26,6 +26,12 @@ export class TurnDates {
     if (before?.includes(at)) {
       return
     }
+    // Told as new while the host still runs the same opener's turn (a waiting delivery that joined
+    // it): the same turn, ended by one end.
+    if (before && opener && this.openers.get(paneKey) === opener) {
+      this.add(paneKey, at)
+      return
+    }
     if (before) {
       this.replaced.set(paneKey, before)
     }

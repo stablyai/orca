@@ -339,8 +339,8 @@ export class ChatTurns {
     this.clear()
   }
 
-  /** A watch went; a turn end still being read reaches the next one. */
-  // Ended turns' dates are kept, so the next watch's snapshot doesn't take one's row for a running turn.
+  /** A watch went; a turn end still being read reaches the next one. Ended turns' dates are kept,
+   *  so the next watch's snapshot doesn't take one's row for a running turn. */
   clear(): void {
     this.dates.gap()
     this.startedAt.clear()

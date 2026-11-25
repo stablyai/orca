@@ -259,4 +259,16 @@ describe('a chat turn’s status row after the turn ended', () => {
     show({ state: 'working', stateStartedAt: ENDED - 1_000 })
     expect(chats.turnOf(paneKey)).toBe(ENDED - 1_000)
   })
+
+  it('stays in step when a waiting delivery joins the running turn', () => {
+    const { show, starts } = endedTurn((chats, show, hostRuns) => {
+      show({ state: 'working', stateStartedAt: SENT })
+      // A follow-up waits and joins the same turn: the host still runs the first send's turn.
+      hostRuns('send-a', true)
+      show({ state: 'working', stateStartedAt: HANDED_OVER })
+    })
+    // The duplicate start predates this change; after the one end, no start comes back.
+    show({ state: 'working', stateStartedAt: HANDED_OVER })
+    expect(starts()).toEqual([SENT, HANDED_OVER])
+  })
 })
