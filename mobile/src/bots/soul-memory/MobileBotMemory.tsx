@@ -11,10 +11,7 @@ import {
   findBotMemoryFact,
   parseBotMemoryFacts
 } from '../../../../src/shared/bot-memory-lines'
-import {
-  BOT_MEMORY_NO_FACT,
-  botMemoryFactHasWords
-} from '../../../../src/shared/bot-memory-quick-add'
+import { botMemoryFactHasWords } from '../../../../src/shared/bot-memory-quick-add'
 import { TextField } from '../../components/composer-input/TextField'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import {
@@ -33,7 +30,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { botMemoryEdit, botMemoryForget } from './bot-memory-operations'
+import { botMemoryEdit, botMemoryForget, interpretBotMemoryEdit } from './bot-memory-operations'
 import { MobileBotMemoryHistory } from './MobileBotMemoryHistory'
 import type { BotMemoryTopic, BotMemoryTopics } from './use-bot-home-files'
 
@@ -53,13 +50,9 @@ function saveBotMemory(
   params: { botId: string; text: string; fact?: string }
 ): Promise<boolean> {
   return actions.run(async (client) => {
-    const { alreadyInMemory } = botMemoryEdit.interpret(
-      await botMemoryEdit.request(client, params, { failWhenDisconnected: true }).catch((error) => {
-        // A host stricter than this app's check refuses the add: say why in the owner's language.
-        throw error instanceof Error && error.message === BOT_MEMORY_NO_FACT
-          ? new Error(t('settings.bots.memoryNoFact', 'Add some words first.'))
-          : error
-      })
+    const { alreadyInMemory } = interpretBotMemoryEdit(
+      await botMemoryEdit.request(client, params, { failWhenDisconnected: true }),
+      t('settings.bots.memoryNoFact', 'Add some words first.')
     )
     if (alreadyInMemory) {
       actions.showToast(t('settings.bots.memoryAlreadySaved', 'That fact is already in memory.'))

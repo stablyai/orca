@@ -72,21 +72,15 @@ export const BOT_MEMORY_METHODS = [
       if (params.fact === undefined && params.text.trim() === '') {
         throw new InvalidArgumentError('Missing text')
       }
-      // A Quick add the file already states changes nothing on disk and leaves nothing to undo,
-      // even when Orca's record adopts it.
+      // A Quick add the file already states changes nothing and leaves nothing to undo.
       let stated = false
       await context.runtime.bots.memory.change(
         bot.id,
         botHomeFolder(bot),
         { kind: 'owner' },
-        (file, record) => {
+        (file) => {
           if (params.fact === undefined) {
-            const asked = quickAddBotMemoryChange(
-              file,
-              record,
-              params.text,
-              botMemoryDate(new Date())
-            )
+            const asked = quickAddBotMemoryChange(file, params.text, botMemoryDate(new Date()))
             stated = asked.stated
             return asked.change
           }

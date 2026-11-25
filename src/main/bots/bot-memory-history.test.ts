@@ -84,7 +84,7 @@ function bot(memory: string, start = Date.UTC(2026, 10, 6)) {
         'bot-1',
         FOLDER,
         { kind: 'owner' },
-        (file, known) => quickAddBotMemoryChange(file, known, fact, '2026-11-06').change
+        (file) => quickAddBotMemoryChange(file, fact, '2026-11-06').change
       ),
     rows: () => record.history('bot-1'),
     record,
@@ -192,117 +192,54 @@ describe("a bot's memory history", () => {
     expect(read()).toBe(OLD)
   })
 
-  it("never loses an owner's Quick add to an open code fence or a chat's turn", async () => {
-    const { quickAdd, read, turnEnded, write } = bot('# Notes\n\n```sh\npnpm build\n')
-    const facts = () => parseBotMemoryFacts(read()).map(({ text }) => text)
+  it("never loses an owner's Quick add to an open code fence", async () => {
+    const { quickAdd, read } = bot('# Notes\n\n```sh\npnpm build\n')
 
     // Below the unclosed fence the new line would read as code.
     await quickAdd('deploys at noon')
-    expect(facts()).toEqual(['deploys at noon'])
-    // A chat wrote a fact the owner then added too, and took both out before its turn ended.
-    write(read().replace('```sh', '- 2026-11-06 releases go out Tuesdays\n```sh'))
-    await quickAdd('releases go out Tuesdays')
-    write('```sh\npnpm build\n')
-    await turnEnded()
-
-    expect(read()).toBe(
-      '- 2026-11-06 deploys at noon\n- 2026-11-06 releases go out Tuesdays\n```sh\npnpm build\n'
-    )
+    expect(read()).toBe('# Notes\n- 2026-11-06 deploys at noon\n\n```sh\npnpm build\n')
+    expect(parseBotMemoryFacts(read()).map(({ text }) => text)).toEqual(['deploys at noon'])
   })
 
-  it('saves nothing for a fact the file and record both state, and records one only the file has', async () => {
+  it('saves nothing and leaves no Undo for a fact the file already states', async () => {
     const mixed = '# Notes\r\n- 2026-11-01 deploys at noon\n'
-    const { quickAdd, read, rows, write } = bot(mixed)
+    const { quickAdd, read, rows, turnEnded, write } = bot(mixed)
 
     expect(await quickAdd('deploys at noon')).toEqual({ added: [], removed: [] })
     expect(read()).toBe(mixed)
-    expect(await rows()).toEqual([])
-
-    // A chat wrote this one mid-turn: on disk, not yet in the record.
-    const written = `${mixed}- 2026-11-06 releases go out Tuesdays\n`
+    // A chat wrote this one mid-turn, twice: on disk, not yet in the record.
+    const written = `${mixed}- 2026-11-06 releases go out Tuesdays\n## Later\n- releases go out Tuesdays\n`
     write(written)
-    const made = await quickAdd('releases go out Tuesdays')
-    expect(made.added.map(({ line }) => line)).toEqual(['- 2026-11-06 releases go out Tuesdays'])
+    expect(await quickAdd('releases go out Tuesdays')).toEqual({ added: [], removed: [] })
     expect(read()).toBe(written)
-  })
-
-  it('never lets Undo take out a fact the file had before a Quick add of it', async () => {
-    const { quickAdd, read, reopened, rows, stored, turnEnded, write } = bot(OLD)
-    // A chat wrote two copies mid-turn, which the owner then added too.
-    const written = `# Memory\n- 2026-11-06 releases go out Tuesdays\n- 2026-11-01 owner fact\n## Later\n- releases go out Tuesdays\n`
-    write(written)
-    await quickAdd('releases go out Tuesdays')
-    // Nothing changed on disk, so no owner row offers an Undo that would delete either copy.
     expect(await rows()).toEqual([])
-    await turnEnded()
-
-    expect(read()).toBe(written)
-    await stored()
-    const listed = await reopened().list('bot-1')
-    expect(listed.map(({ by }) => by.kind)).toEqual(['chat'])
-    // Orca's record has it now, so a later turn that drops both copies gets it back.
-    write(OLD)
-    await turnEnded()
-    expect(parseBotMemoryFacts(read()).map(({ text }) => text)).toContain(
-      'releases go out Tuesdays'
-    )
+    // The turn end records it as the chat's, as without the add.
+    await turnEnded('Slack, Dana')
+    expect(read()).toContain('- 2026-11-06 releases go out Tuesdays · from: Slack, Dana')
+    expect((await rows()).map(({ by }) => by.kind)).toEqual(['chat'])
   })
 
-  it("keeps where a chat's fact came from when the owner Quick adds it before the turn ends", async () => {
-    const ended = async (ownerAdds: boolean): Promise<string> => {
-      const { quickAdd, read, turnEnded, write } = bot(OLD)
-      write(`${OLD}- 2026-11-06 releases go out Tuesdays\n`)
-      if (ownerAdds) {
-        await quickAdd('releases go out Tuesdays')
-      }
-      await turnEnded('Slack, Dana')
-      return read()
-    }
-    const alone = await ended(false)
-    expect(alone).toContain('releases go out Tuesdays · from: Slack, Dana')
-    expect(await ended(true)).toBe(alone)
-  })
-
-  it('leaves no Undo that would make a chat’s drop stick when the owner adds back a fact the record had', async () => {
-    const { quickAdd, read, rows, turnEnded, write } = bot(OLD)
-    // A chat dropped the owner's fact mid-turn; the owner adds it back before the turn ends.
-    write('# Memory\n')
-    await quickAdd('owner fact')
-    // The record still had it, so the add leaves no row whose Undo would take it from the record.
-    expect(await rows()).toEqual([])
-    write('# Memory\n')
-    await turnEnded()
-    expect(read()).toBe(OLD)
-  })
-
-  it('marks an Undo done when a chat already wrote back what it puts back', async () => {
-    const undone = async (chatWroteBack: boolean) => {
-      const { read, record, reopened, rows, stored, undo, write } = bot(OLD)
-      await record.change('bot-1', FOLDER, { kind: 'tidy-up' }, (file) =>
-        botMemoryChange(file, file.replace('- 2026-11-01 owner fact\n', ''))
-      )
-      const [tidied] = await rows()
-      if (chatWroteBack) {
-        write(OLD)
-      }
-      expect(await undo(tidied.id)).toBe(true)
-      expect(read()).toBe(OLD)
-      await stored()
-      return { by: (await reopened().list('bot-1'))[0].by, of: tidied.id }
-    }
-    for (const chatWroteBack of [false, true]) {
-      const { by, of } = await undone(chatWroteBack)
-      expect(by).toEqual({ kind: 'undo', of })
-    }
-  })
-
-  it('rejects a Quick add that is only a bullet or separator, saving nothing', async () => {
+  it('rejects a Quick add that is only a bullet or separator, and keeps any with words', async () => {
     const { quickAdd, read, rows } = bot(OLD)
-    for (const fact of ['-', ':', ' - ']) {
+    for (const fact of ['-', ':', ' - ', '–', '—', ' — ']) {
       await expect(quickAdd(fact)).rejects.toThrow(BOT_MEMORY_NO_FACT)
     }
     expect(read()).toBe(OLD)
     expect(await rows()).toEqual([])
+    // A leading dash reads as the date's separator, as for any dated line.
+    for (const fact of ['部署在周二', '🚀', '!', '...', '#', '-x', '– note']) {
+      await quickAdd(fact)
+    }
+    expect(parseBotMemoryFacts(read()).map(({ text }) => text)).toEqual([
+      'note',
+      'x',
+      '#',
+      '...',
+      '!',
+      '🚀',
+      '部署在周二',
+      'owner fact'
+    ])
   })
 
   it('puts an older row without an occurrence back after the last copy outside a fence', async () => {

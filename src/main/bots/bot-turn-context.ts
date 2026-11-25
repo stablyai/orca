@@ -62,7 +62,7 @@ export function createBotTurnContext(
   /** Each bot's MEMORY.md as Orca last recorded it, which Forget also updates. */
   record: Pick<
     BotMemoryRecord,
-    'started' | 'version' | 'changedBesides' | 'after' | 'noted' | 'history' | 'adopted'
+    'started' | 'version' | 'changedBesides' | 'after' | 'noted' | 'history'
   > = createBotMemoryRecord(fs),
   linkedSkills: BotTurnLinkedSkills = NO_BOT_TURN_LINKED_SKILLS,
   /** What the bot's other chats did lately, as this turn's message may hear of it. */
@@ -269,7 +269,7 @@ export function createBotTurnContext(
             // Not known yet: everything in the file is new.
             const before = recorded ?? ''
             const keepOut = await readdGuard(fs, entry, record, turn)
-            const tagged = await tagBotMemoryFile(fs, entry, before, label, keepOut, record)
+            const tagged = await tagBotMemoryFile(fs, entry.folder, before, label, keepOut)
             await writeBotTurnMemoryReceipt(
               {
                 botId: entry.botId,
