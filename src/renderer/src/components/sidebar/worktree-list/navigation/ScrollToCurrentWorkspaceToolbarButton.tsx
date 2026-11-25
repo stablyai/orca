@@ -23,6 +23,8 @@ function useReasonText(reason: SidebarRevealNoneReason | null): string | null {
       return t('sidebar.revealCurrent.botsOff', 'Bots are turned off, so this bot isn’t listed')
     case 'bot-hidden':
       return t('sidebar.revealCurrent.botHidden', 'This bot is paused and hidden by Bot options')
+    case 'projects-hidden':
+      return t('sidebar.revealCurrent.projectsHidden', 'The Projects section is hidden')
   }
 }
 

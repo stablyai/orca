@@ -3,6 +3,21 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
+export const getShowProjectsInSidebarEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate('settings.appearance.showProjectsInSidebar.title', 'Show Projects in Sidebar'),
+  description: translate(
+    'settings.appearance.showProjectsInSidebar.description',
+    'Show the Projects section in the left sidebar.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.workspace',
+      'workspace'
+    )
+  ]
+}))
+
 export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
     'auto.components.settings.appearance.search.leftSidebarAppearance.0a5d3677f0',
@@ -185,5 +200,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getShowProjectsInSidebarEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

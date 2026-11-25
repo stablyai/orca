@@ -165,7 +165,7 @@ function targetFrom(
     state.activeWorkspaceKey,
     state.activeWorktreeId
   )
-  return resolveSidebarRevealTarget({
+  const target = resolveSidebarRevealTarget({
     ...ownerInputs(state, statuses, bots, groups),
     activeView: state.activeView,
     activeWorkspaceId,
@@ -173,6 +173,10 @@ function targetFrom(
     frontTab: selectFrontTab(state),
     activeIsArchived: activeWorkspaceId ? activeIsArchived(state, activeWorkspaceId) : false
   })
+  if (target.section === 'projects' && state.settings?.showProjectsInSidebar === false) {
+    return { section: 'none', reason: 'projects-hidden' }
+  }
+  return target
 }
 
 /** What "Reveal current" points at right now, for a click or a command. */

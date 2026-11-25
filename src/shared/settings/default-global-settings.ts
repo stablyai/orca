@@ -184,6 +184,7 @@ export function buildDefaultSettings(args: {
     prAutoRefresh: 'default',
     showTitlebarAppName: true,
     linuxTilingWindowMode: false,
+    showProjectsInSidebar: true,
     showTasksButton: true,
     showAutomationsButton: true,
     artifactsEnabled: true,

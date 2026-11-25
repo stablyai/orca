@@ -18,6 +18,7 @@ import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
+  getShowProjectsInSidebarEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { getStatusBarToggles } from './appearance-status-bar-search'
@@ -91,6 +92,8 @@ export function AppearanceWindowSidebarSection({
   const statusBarUsageFormat = useAppStore((state) => state.statusBarUsageFormat)
   const setStatusBarUsageFormat = useAppStore((state) => state.setStatusBarUsageFormat)
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const showProjectsEntry = getShowProjectsInSidebarEntry()
+  const showProjects = settings.showProjectsInSidebar !== false
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
@@ -141,13 +144,20 @@ export function AppearanceWindowSidebarSection({
         </SearchableSetting>
       )}
       <SearchableSetting
-        title={leftSidebarAppearanceEntry.title}
-        description={leftSidebarAppearanceEntry.description}
-        keywords={leftSidebarAppearanceEntry.keywords}
+        {...leftSidebarAppearanceEntry}
         className="space-y-2"
         forceVisible={forceVisiblePrimary}
       >
         <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+      </SearchableSetting>
+
+      <SearchableSetting {...showProjectsEntry} forceVisible={forceVisiblePrimary}>
+        <SettingsSwitchRow
+          label={showProjectsEntry.title}
+          description={showProjectsEntry.description}
+          checked={showProjects}
+          onChange={() => updateSettings({ showProjectsInSidebar: !showProjects })}
+        />
       </SearchableSetting>
 
       <SearchableSetting
@@ -337,11 +347,7 @@ export function AppearanceWindowSidebarSection({
                 />
               </SearchableSetting>
 
-              <SearchableSetting
-                title={getShowPinnedWorktreesInGroupsEntry().title}
-                description={getShowPinnedWorktreesInGroupsEntry().description}
-                keywords={getShowPinnedWorktreesInGroupsEntry().keywords}
-              >
+              <SearchableSetting {...getShowPinnedWorktreesInGroupsEntry()}>
                 <SettingsSwitchRow
                   label={t(
                     'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.title',
