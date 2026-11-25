@@ -62,10 +62,11 @@ export function projectOrchestrationFleetAttention(
   if (facts.interrupted) {
     categories.push('interruption')
   }
-  // Unsupervised settled dispatches never had a process to wait on; unverifiable adds no coordinator work.
+  // Unsupervised settled and handed-on dispatches have no process of their own to wait on; unverifiable adds no coordinator work.
   if (
     facts.liveness.verdict === 'unverifiable' &&
-    facts.liveness.reason !== 'unsupervised_settled'
+    facts.liveness.reason !== 'unsupervised_settled' &&
+    facts.liveness.reason !== 'handed_on'
   ) {
     categories.push(facts.liveness.reason === 'stale_status' ? 'stale' : 'unverifiable')
   }
