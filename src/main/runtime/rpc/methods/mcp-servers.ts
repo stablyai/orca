@@ -106,7 +106,13 @@ export const MCP_SERVER_METHODS = [
           const servers: McpServer[] = []
           try {
             for (const server of given) {
-              servers.push(await addMcpServer(server, { nameGiven, signal: context.signal }))
+              servers.push(
+                await addMcpServer(server, {
+                  nameGiven,
+                  signal: context.signal,
+                  workspaces: params.workspaces
+                })
+              )
             }
           } catch (error) {
             // The ones added before the refusal are on the list: other clients re-read it.

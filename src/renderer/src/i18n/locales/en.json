@@ -1707,7 +1707,10 @@
           "checkAgain": "Check again",
           "executionContextOnHost": "{{agent}} · {{host}}",
           "commandWarningOnHost": "The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust."
-        }
+        },
+        "hostMcpNone": "None on this host yet",
+        "hostMcp": "Your MCP servers",
+        "hostMcpAndMore": "Your MCP servers, {{rest}}"
       },
       "editPicture": "Edit bot picture",
       "retry": "Retry",
@@ -2074,7 +2077,10 @@
         "workspaces": "{{name}}: {{workspaces}}",
         "added": "{{name}} added",
         "newSessions": "Applies to new sessions",
-        "restart": "Restart {{count}} sessions"
+        "restart": "Restart {{count}} sessions",
+        "addedMany": "{{count}} servers added",
+        "repoOn": "{{name}} turned on in {{repo}}",
+        "repoOff": "{{name}} turned off in {{repo}}"
       },
       "fileAgent": {
         "title": "Let Orca edit {{agent}}’s MCP file?",
@@ -2167,7 +2173,13 @@
       "fromPlugins": "From plugins",
       "unsupported": "MCP servers aren’t available on {{host}}.",
       "title": "MCP servers",
-      "description": "Servers your agents can use. Changes apply to new sessions."
+      "description": "Servers your agents can use. Changes apply to new sessions.",
+      "repo": {
+        "on": "On in this repo",
+        "add": "Add a server for this repo",
+        "files": "From this repo’s files",
+        "open": "Open {{file}}"
+      }
     }
   },
   "menu": {

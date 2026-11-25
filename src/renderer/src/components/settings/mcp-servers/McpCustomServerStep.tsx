@@ -5,35 +5,66 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { BotToolEditor } from '@/components/bots/BotToolEditor'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { BotToolServer } from '../../../../../shared/bot-tools'
+import type { BotToolInput, BotToolServer } from '../../../../../shared/bot-tools'
+import type { McpServerWorkspaces } from '../../../../../shared/mcp-servers/mcp-servers'
 import { parseMcpServersPaste } from '../../../../../shared/bot-tool-paste'
 import { addMcpServer, type McpServerView } from '@/runtime/mcp-servers/mcp-servers-client'
 import { useMcpHostPlatform } from './mcp-server-agents'
 import { useMountedRef } from '@/hooks/useMountedRef'
+
+const NO_PREFIXES: Readonly<Record<string, string>> = {}
 
 export function McpCustomServerStep({
   target,
   servers,
   initial,
   onAdded,
+  workspaces,
+  headerPrefixes = NO_PREFIXES,
   onCancel
 }: {
   target: RuntimeClientTarget
   servers: readonly McpServerView[]
   initial?: BotToolServer
   /** The server added, to sign in to or show; none after several. */
-  onAdded: (server: McpServerView | null) => void
+  /** Header values a catalog app puts before the token (GitHub's `Bearer `), added when it's left out. */
+  headerPrefixes?: Readonly<Record<string, string>>
+  /** Where each added server is on from the start; all workspaces without it. */
+  workspaces?: McpServerWorkspaces
+  /** The servers added: one, or every one a paste named; only while the dialog shows. */
+  onAdded: (servers: McpServerView[]) => void
   onCancel: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const platform = useMcpHostPlatform(target)
   // A save that answers after the dialog closed leaves it closed.
   const mounted = useMountedRef()
-  const done = (server: McpServerView | null): void => {
+  const done = (servers: McpServerView[]): void => {
     if (mounted.current) {
-      onAdded(server)
+      onAdded(servers)
     }
   }
+  const withPrefixes = (config: BotToolInput): BotToolInput =>
+    'url' in config
+      ? {
+          ...config,
+          headers: config.headers.map((row) => {
+            const prefix = headerPrefixes[row.key]
+            // Only the catalog app's own address, and only a bare token: a value that already
+            // names a scheme ("bearer …", "token …") stays as typed.
+            return prefix &&
+              initial &&
+              'url' in initial &&
+              config.url === initial.url &&
+              'value' in row &&
+              /^\S+$/.test(row.value ?? '')
+              ? { ...row, value: `${prefix}${row.value}` }
+              : row
+          })
+        }
+      : config
+  const add = (config: BotToolInput): Promise<McpServerView> =>
+    addMcpServer(target, { config: withPrefixes(config), ...(workspaces ? { workspaces } : {}) })
   return (
     <div className="scrollbar-sleek min-h-0 space-y-4 overflow-y-auto p-6">
       <DialogTitle>{t('settings.mcpServers.custom.title', 'Custom server')}</DialogTitle>
@@ -60,13 +91,14 @@ export function McpCustomServerStep({
         }}
         parsePaste={(text) => parseMcpServersPaste(text, platform, t)}
         onCancel={onCancel}
-        onSave={async (config) => done(await addMcpServer(target, { config }))}
+        onSave={async (config) => done([await add(config)])}
         onSaveMany={async (configs) => {
+          const added: McpServerView[] = []
           // One at a time: each add rewrites the host's one list.
           for (const config of configs) {
-            await addMcpServer(target, { config })
+            added.push(await add(config))
           }
-          done(null)
+          done(added)
         }}
       />
     </div>

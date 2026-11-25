@@ -70,7 +70,10 @@ export async function discoverMcpServers(
 
 export async function addMcpServer(
   target: RuntimeClientTarget,
-  params: { source: string; name?: string } | { config: BotToolInput }
+  params: ({ source: string; name?: string } | { config: BotToolInput }) & {
+    /** Where it's on from the start, written with it; all workspaces without it. */
+    workspaces?: McpServerWorkspaces
+  }
 ): Promise<McpServerView> {
   return served(await change(target, 'add', params))
 }
