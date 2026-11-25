@@ -27,9 +27,9 @@ export function selectChecksPanelReview({
   linkedAzureDevOpsPR,
   linkedGiteaPR
 }: ChecksPanelReviewSelectionInput): ChecksPanelReview | null {
-  const gitLabHostedReview = hostedReview?.provider === 'gitlab' ? hostedReview : null
-  if (gitLabHostedReview) {
-    return gitLabHostedReview
+  // GitLab and Azure DevOps reviews come from the hosted-review cache, not a GitHub PR.
+  if (hostedReview?.provider === 'gitlab' || hostedReview?.provider === 'azure-devops') {
+    return hostedReview
   }
   const hasNonGitHubLinkedReview =
     linkedGitLabMR !== null ||

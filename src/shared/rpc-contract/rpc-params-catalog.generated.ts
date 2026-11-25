@@ -139,6 +139,23 @@ import {
   AutomationUpdate
 } from './automations/automation-params'
 import {
+  AzureBoardsRepo,
+  AzureBoardsSearch,
+  AzureBoardsWorkItem,
+  AzureBoardsWorkItemAssigneeSet,
+  AzureBoardsWorkItemCommentAdd,
+  AzureBoardsWorkItemComments,
+  AzureBoardsWorkItemStateSet
+} from './azure-boards/azure-boards-params'
+import {
+  AzureDevOpsPr,
+  AzureDevOpsPrBranch,
+  AzureDevOpsPrBuild,
+  AzureDevOpsPrComment,
+  AzureDevOpsPrFiles,
+  AzureDevOpsPrVote
+} from './azure-boards/azure-devops-pr-review-params'
+import {
   BotAvatarRead,
   BotAvatarUpload,
   BotSlackIconUpload,
@@ -1264,6 +1281,24 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'azureBoards.addComment': AzureBoardsWorkItemCommentAdd,
+  'azureBoards.assigned': AzureBoardsRepo,
+  'azureBoards.connection': AzureBoardsRepo,
+  'azureBoards.search': AzureBoardsSearch,
+  'azureBoards.setAssignee': AzureBoardsWorkItemAssigneeSet,
+  'azureBoards.setState': AzureBoardsWorkItemStateSet,
+  'azureBoards.teams': AzureBoardsRepo,
+  'azureBoards.workItem': AzureBoardsWorkItem,
+  'azureBoards.workItemComments': AzureBoardsWorkItemComments,
+  'azureDevOps.pr': AzureDevOpsPr,
+  'azureDevOps.prAwaitingReview': AzureBoardsRepo,
+  'azureDevOps.prBuild': AzureDevOpsPrBuild,
+  'azureDevOps.prChecks': AzureDevOpsPr,
+  'azureDevOps.prComment': AzureDevOpsPrComment,
+  'azureDevOps.prFiles': AzureDevOpsPrFiles,
+  'azureDevOps.prForBranch': AzureDevOpsPrBranch,
+  'azureDevOps.prThreads': AzureDevOpsPr,
+  'azureDevOps.prVote': AzureDevOpsPrVote,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,

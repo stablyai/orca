@@ -35,6 +35,14 @@
     "mobile-fit-debug": [
       "84aa7cc18ed03df90f40c3c70650a0ad3df941a5e1f80870bd00cf6b9b7f7eab"
     ],
+    "orca-azure-boards": [
+      "c3435b89b7a4211d1d65ea3b743f7245d1a6a84d36f7310cd29eb9ce7b2adca6",
+      "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677"
+    ],
+    "orca-azure-devops-pr": [
+      "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1",
+      "8e71f7ca5a28a569aad27b49db54c9dd991b465b993f3b12bae178934ed0b733"
+    ],
     "orca-cli": [
       "06b7c1cc62bcae49e9d3ac18384f94cb58040e2fdc9eabb882fb516a119c4494",
       "1c7be78ed388d2c094967a007283ce73e95905a3d48effd858deef112583bab5",

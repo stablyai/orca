@@ -10,6 +10,8 @@ export type CheckDetailsLoadState = {
   loading: boolean
   details: PRCheckRunDetails | null
   error: string | null
+  /** False when no loader can ever answer, so offering Retry would mislead. */
+  retryable?: boolean
   /** Check state when the load failed or returned nothing, so a later state change can retry it. */
   errorAt?: { status: PRCheckDetail['status']; conclusion: PRCheckDetail['conclusion'] }
 }

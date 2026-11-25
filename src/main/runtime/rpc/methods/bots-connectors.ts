@@ -10,6 +10,7 @@ import { getGoogleConnect } from '../../../google/google-connect'
 import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { defineMethod, InvalidArgumentError } from '../core'
+import { getAzureDevOpsAuthStatus } from '../../../azure-devops/client'
 import { CONNECTOR_ACT_METHOD } from './connector-act'
 
 type Workspaces = Pick<BotConnectorsView, 'workspaces' | 'workspacesNote'>
@@ -73,7 +74,8 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
           googleApp: Boolean(await getGoogleConnect()?.client()),
-          googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null }
+          googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null },
+          azureBoards: (await getAzureDevOpsAuthStatus()).configured
         },
         sources
       ),

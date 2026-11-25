@@ -3,6 +3,8 @@ import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
+import { RuntimeAzureBoardsCommands } from '../integrations/azure-boards/runtime-azure-boards-commands'
+import { RuntimeAzureDevOpsReviewCommands } from '../integrations/azure-boards/runtime-azure-devops-review-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
 import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
 import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
@@ -23,6 +25,9 @@ import {
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
 import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+
+type AzureBoards = RuntimeAzureBoardsCommands
+type AzureReview = RuntimeAzureDevOpsReviewCommands
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
@@ -114,6 +119,128 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
+
+  protected readonly azureBoardsCommands = new RuntimeAzureBoardsCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  getAzureBoardsConnection(repo: string): ReturnType<AzureBoards['getAzureBoardsConnection']> {
+    return this.azureBoardsCommands.getAzureBoardsConnection(repo)
+  }
+
+  getAzureBoardsWorkItem(
+    repo: string,
+    id: number
+  ): ReturnType<AzureBoards['getAzureBoardsWorkItem']> {
+    return this.azureBoardsCommands.getAzureBoardsWorkItem(repo, id)
+  }
+
+  listAzureBoardsWorkItemComments(
+    repo: string,
+    id: number,
+    limit?: number
+  ): ReturnType<AzureBoards['listAzureBoardsWorkItemComments']> {
+    return this.azureBoardsCommands.listAzureBoardsWorkItemComments(repo, id, limit)
+  }
+
+  searchAzureBoardsWorkItems(
+    repo: string,
+    wiql: string,
+    limit?: number
+  ): ReturnType<AzureBoards['searchAzureBoardsWorkItems']> {
+    return this.azureBoardsCommands.searchAzureBoardsWorkItems(repo, wiql, limit)
+  }
+
+  listAzureBoardsAssignedWorkItems(
+    repo: string
+  ): ReturnType<AzureBoards['listAzureBoardsAssignedWorkItems']> {
+    return this.azureBoardsCommands.listAzureBoardsAssignedWorkItems(repo)
+  }
+
+  listAzureBoardsTeams(repo: string): ReturnType<AzureBoards['listAzureBoardsTeams']> {
+    return this.azureBoardsCommands.listAzureBoardsTeams(repo)
+  }
+
+  addAzureBoardsWorkItemComment(
+    ...args: Parameters<AzureBoards['addAzureBoardsWorkItemComment']>
+  ): ReturnType<AzureBoards['addAzureBoardsWorkItemComment']> {
+    return this.azureBoardsCommands.addAzureBoardsWorkItemComment(...args)
+  }
+
+  setAzureBoardsWorkItemState(
+    ...args: Parameters<AzureBoards['setAzureBoardsWorkItemState']>
+  ): ReturnType<AzureBoards['setAzureBoardsWorkItemState']> {
+    return this.azureBoardsCommands.setAzureBoardsWorkItemState(...args)
+  }
+
+  setAzureBoardsWorkItemAssignee(
+    ...args: Parameters<AzureBoards['setAzureBoardsWorkItemAssignee']>
+  ): ReturnType<AzureBoards['setAzureBoardsWorkItemAssignee']> {
+    return this.azureBoardsCommands.setAzureBoardsWorkItemAssignee(...args)
+  }
+
+  protected readonly azureDevOpsReviewCommands = new RuntimeAzureDevOpsReviewCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  listAzureDevOpsPrsAwaitingReview(
+    repo: string
+  ): ReturnType<AzureReview['listAzureDevOpsPrsAwaitingReview']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrsAwaitingReview(repo)
+  }
+
+  listAzureDevOpsPrsForBranch(
+    repo: string,
+    branch: string
+  ): ReturnType<AzureReview['listAzureDevOpsPrsForBranch']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrsForBranch(repo, branch)
+  }
+
+  getAzureDevOpsPr(repo: string, id: number): ReturnType<AzureReview['getAzureDevOpsPr']> {
+    return this.azureDevOpsReviewCommands.getAzureDevOpsPr(repo, id)
+  }
+
+  listAzureDevOpsPrThreads(
+    repo: string,
+    id: number
+  ): ReturnType<AzureReview['listAzureDevOpsPrThreads']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrThreads(repo, id)
+  }
+
+  listAzureDevOpsPrChecks(
+    repo: string,
+    id: number
+  ): ReturnType<AzureReview['listAzureDevOpsPrChecks']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrChecks(repo, id)
+  }
+
+  listAzureDevOpsPrFiles(
+    repo: string,
+    id: number,
+    sinceIteration?: number
+  ): ReturnType<AzureReview['listAzureDevOpsPrFiles']> {
+    return this.azureDevOpsReviewCommands.listAzureDevOpsPrFiles(repo, id, sinceIteration)
+  }
+
+  getAzureDevOpsPrBuild(
+    ...args: Parameters<AzureReview['getAzureDevOpsPrBuild']>
+  ): ReturnType<AzureReview['getAzureDevOpsPrBuild']> {
+    return this.azureDevOpsReviewCommands.getAzureDevOpsPrBuild(...args)
+  }
+
+  addAzureDevOpsPrComment(
+    ...args: Parameters<AzureReview['addAzureDevOpsPrComment']>
+  ): ReturnType<AzureReview['addAzureDevOpsPrComment']> {
+    return this.azureDevOpsReviewCommands.addAzureDevOpsPrComment(...args)
+  }
+
+  setAzureDevOpsPrVote(
+    ...args: Parameters<AzureReview['setAzureDevOpsPrVote']>
+  ): ReturnType<AzureReview['setAzureDevOpsPrVote']> {
+    return this.azureDevOpsReviewCommands.setAzureDevOpsPrVote(...args)
+  }
 
   protected readonly gitLabQueryCommands = new RuntimeGitLabQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),

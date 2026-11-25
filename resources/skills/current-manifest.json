@@ -34,6 +34,38 @@
       ]
     },
     {
+      "name": "orca-azure-boards",
+      "sourcePath": "skills/orca-azure-boards",
+      "packageDigest": "da252cab4444b8891724ae3336d73cc3cbda925e94c468d196506859522d872d",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2678,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677",
+          "textNormalizedSha256": "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677",
+          "identitySha256": "deffc35ec43d00c17ca8777ca0aa105d6bd4dcb3ad48c4b00ac7405c72721677"
+        }
+      ]
+    },
+    {
+      "name": "orca-azure-devops-pr",
+      "sourcePath": "skills/orca-azure-devops-pr",
+      "packageDigest": "cedd05255303614ee3646389b9a5c2f4574445b26b6df9c8fb8f339341c46fa0",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2753,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1",
+          "textNormalizedSha256": "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1",
+          "identitySha256": "4780bb95be266a0c3e2d5881167a02a4261872df81ad9b0aaf92138a9268fea1"
+        }
+      ]
+    },
+    {
       "name": "orca-cli",
       "sourcePath": "skills/orca-cli",
       "packageDigest": "c5d6b54f0736a56d0b606f5ec45f659f4d22fb8d8e15959679cb979bb2a2a6f6",

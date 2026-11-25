@@ -116,7 +116,8 @@ export function useChecksListState({
             error: translate(
               'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
               'No inline details are available for this check.'
-            )
+            ),
+            retryable: false
           }
         }))
         return
@@ -130,7 +131,8 @@ export function useChecksListState({
             error: translate(
               'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
               'No inline details are available for this check.'
-            )
+            ),
+            retryable: false
           }
         }))
         return

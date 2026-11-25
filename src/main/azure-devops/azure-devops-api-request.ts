@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import {
+  getAzCliAzureDevOpsAccessToken,
+  isEntraEligibleAzureDevOpsBaseUrl
+} from './az-cli-access-token'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Newest first: older on-prem Servers reject newer versions with VssVersionOutOfRangeException.
@@ -72,6 +76,10 @@ export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
   onResponse?: (response: Response) => void
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH'
+  body?: unknown
+  /** Work item updates take JSON Patch (`application/json-patch+json`). */
+  contentType?: string
 }
 
 function envValue(name: string): string | null {
@@ -99,7 +107,7 @@ export function azureDevOpsTokenConfigured(config: AzureDevOpsAuthConfig): boole
   return Boolean(config.pat || config.accessToken)
 }
 
-function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
+function envAuthHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   if (config.accessToken) {
     return { Authorization: `Bearer ${config.accessToken}` }
   }
@@ -108,6 +116,69 @@ function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
     return { Authorization: `Basic ${encoded}` }
   }
   return {}
+}
+
+export const AZURE_DEVOPS_TRUSTED_HOSTS_ENV = 'ORCA_AZURE_DEVOPS_TRUSTED_HOSTS'
+
+/**
+ * Hosted Azure DevOps, the configured API base URL's host, or a host listed in
+ * ORCA_AZURE_DEVOPS_TRUSTED_HOSTS (comma-separated, for Azure DevOps Server).
+ */
+export function isTrustedAzureDevOpsCredentialHost(
+  baseUrl: string,
+  configuredApiBaseUrl: string | null,
+  trustedHosts: string | undefined = process.env[AZURE_DEVOPS_TRUSTED_HOSTS_ENV]
+): boolean {
+  const target = parsedUrl(baseUrl)
+  if (!target) {
+    return false
+  }
+  const host = target.hostname.toLowerCase()
+  const https = target.protocol === 'https:'
+  if (host === 'dev.azure.com' || host.endsWith('.visualstudio.com')) {
+    return https
+  }
+  // The user's own base URL may be plain http for an on-prem server; protocol and host must both match it.
+  const configured = configuredApiBaseUrl ? parsedUrl(configuredApiBaseUrl) : null
+  if (configured && configured.origin === target.origin) {
+    return true
+  }
+  return (
+    https &&
+    (trustedHosts ?? '')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .some((entry) => entry.length > 0 && entry === host)
+  )
+}
+
+function parsedUrl(url: string): URL | null {
+  try {
+    return new URL(url)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Env tokens win; otherwise hosted Azure DevOps falls back to the az CLI's
+ * Entra login. On-prem Azure DevOps Server never tries az — it only accepts
+ * PAT/Windows auth.
+ */
+export async function resolveAzureDevOpsAuthHeaders(
+  baseUrl: string
+): Promise<Record<string, string>> {
+  const config = getAzureDevOpsAuthConfig()
+  const fromEnv = envAuthHeaders(config)
+  if (Object.keys(fromEnv).length > 0) {
+    // A repo remote can name any host; the user's token only goes where they pointed it.
+    return isTrustedAzureDevOpsCredentialHost(baseUrl, config.apiBaseUrl) ? fromEnv : {}
+  }
+  if (!isEntraEligibleAzureDevOpsBaseUrl(baseUrl)) {
+    return {}
+  }
+  const token = await getAzCliAzureDevOpsAccessToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
@@ -143,12 +214,25 @@ function apiUrl(
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
   const params = {
     ...searchParams,
-    'api-version': azureDevOpsApiVersionForOrigin(url.origin)
+    // Why: a pinned version names an endpoint that exists only there; negotiation is for the rest.
+    'api-version': searchParams?.['api-version'] ?? azureDevOpsApiVersionForOrigin(url.origin)
   }
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, String(value))
   }
   return url
+}
+
+/** A 400's own message (bad WIQL, unknown field) is what lets a caller fix the request. */
+function azureDevOpsErrorReason(body: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(body)
+    const message =
+      parsed && typeof parsed === 'object' && 'message' in parsed ? parsed.message : null
+    return typeof message === 'string' && message.trim() ? message.trim().slice(0, 300) : null
+  } catch {
+    return null
+  }
 }
 
 export async function requestAzureDevOpsJsonAtBase<T>(
@@ -158,13 +242,17 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
-  const doFetch = (url: URL): Promise<Response> =>
+  const doFetch = async (url: URL): Promise<Response> =>
     fetch(url, {
+      method: options.method ?? 'GET',
       headers: {
         Accept: 'application/json',
-        ...authHeaders(config)
+        ...(options.body !== undefined
+          ? { 'Content-Type': options.contentType ?? 'application/json' }
+          : {}),
+        ...(await resolveAzureDevOpsAuthHeaders(baseUrl))
       },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
   try {
@@ -179,10 +267,14 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       await cancelUnreadResponseBody(response)
       if (
         attempt >= AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS ||
+        options.searchParams?.['api-version'] !== undefined ||
         !recordAzureDevOpsApiVersionRejection(url, response.status, body)
       ) {
         if (throwOnFailure) {
-          throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
+          const reason = azureDevOpsErrorReason(body)
+          throw new Error(
+            `Azure DevOps request failed: HTTP ${response.status}${reason ? `: ${reason}` : ''}`
+          )
         }
         return null
       }

@@ -3,7 +3,6 @@ import type { Translate } from '@/i18n/use-translate'
 import type { ExecutionHostScope } from '../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostHealth } from '../../../../../shared/execution-host/execution-host-health'
 import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
-import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import type { TaskProviderIdentity } from '../../../../../shared/work-items/task-provider-identity'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getTranslatedExecutionHostLabel } from '../../../runtime/hosts/display/execution-host-label'
@@ -42,13 +41,13 @@ export type TaskSourceHostAvailability = {
     | 'unsupported-provider'
 }
 
-type HostLabelLookup = ReadonlyMap<string, string> | undefined
+export type HostLabelLookup = ReadonlyMap<string, string> | undefined
 
 function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup): string {
   return hostLabelById?.get(hostId) ?? getTranslatedExecutionHostLabel(hostId)
 }
 
-type RepoBackedTaskSourceSummaryArgs = {
+export type RepoBackedTaskSourceSummaryArgs = {
   providerLabel: string
   repoContexts: readonly TaskSourceContext[]
   /** Resolved list sources; null names no repository. Saved project identity is not the list's source. */
@@ -58,48 +57,7 @@ type RepoBackedTaskSourceSummaryArgs = {
   selectedRepoCount?: number
 }
 
-export function getTaskSourceContextSummary(
-  args:
-    | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
-    | {
-        provider: Extract<TaskProvider, 'linear' | 'jira'>
-        providerLabel: string
-        hostAvailability?: readonly TaskSourceHostAvailability[]
-        hostLabelById?: HostLabelLookup
-        accountHostId?: ExecutionHostScope | null
-        linearWorkspaceName?: string | null
-        jiraSiteName?: string | null
-      },
-  t?: Translate
-): TaskSourceContextSummary {
-  switch (args.provider) {
-    case 'github':
-    case 'gitlab':
-      return getRepoBackedTaskSourceSummary(args, t)
-    case 'linear':
-      return getAccountBackedTaskSourceSummary(
-        args.providerLabel,
-        {
-          accountLabel: args.linearWorkspaceName,
-          accountHostId: args.accountHostId,
-          hostLabelById: args.hostLabelById,
-          hostAvailability: args.hostAvailability
-        },
-        t
-      )
-    case 'jira':
-      return getAccountBackedTaskSourceSummary(
-        args.providerLabel,
-        {
-          accountLabel: args.jiraSiteName,
-          accountHostId: args.accountHostId,
-          hostLabelById: args.hostLabelById,
-          hostAvailability: args.hostAvailability
-        },
-        t
-      )
-  }
-}
+export { getTaskSourceContextSummary } from './task-source-context-summary-by-provider'
 
 export function getTaskSourceAvailabilityNotice(
   args: {
@@ -142,7 +100,7 @@ export function getTaskSourceAvailabilityNotice(
   }
 }
 
-function getRepoBackedTaskSourceSummary(
+export function getRepoBackedTaskSourceSummary(
   args: RepoBackedTaskSourceSummaryArgs,
   t: Translate = translate
 ): TaskSourceContextSummary {
@@ -239,6 +197,10 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'azure-devops':
+      return identity.organization && identity.project
+        ? `${identity.organization}/${identity.project}`
+        : null
   }
 }
 

@@ -1,5 +1,6 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitLabProjectRef } from '../../../../shared/gitlab/gitlab-types'
+import type { AzureDevOpsTaskProviderIdentity } from '../../../../shared/work-items/task-provider-identity'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
@@ -8,8 +9,9 @@ import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
-  gitlabProjectRef?: GitLabProjectRef | null
+  provider: 'github' | 'gitlab' | 'azure-devops',
+  gitlabProjectRef?: GitLabProjectRef | null,
+  azureDevOpsIdentity?: AzureDevOpsTaskProviderIdentity | null
 ): TaskSourceContext | null {
   if (!repo) {
     return null
@@ -22,7 +24,9 @@ export function getTaskPageRepoSourceContext(
       ? project.providerIdentity
       : provider === 'gitlab' && gitlabProjectRef
         ? buildGitLabProviderIdentity(gitlabProjectRef)
-        : null
+        : provider === 'azure-devops'
+          ? (azureDevOpsIdentity ?? null)
+          : null
   return normalizeTaskSourceContext({
     provider,
     projectId: setup?.projectId ?? project?.id ?? repo.id,

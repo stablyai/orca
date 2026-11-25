@@ -25,6 +25,14 @@ export function authRequiredDetail(
       'Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.'
     )
   }
+  // Azure DevOps accepts either an az CLI sign-in or the token variable.
+  if (provider === 'azure-devops') {
+    return translate(
+      'sourceControl.createReviewFailure.authRequiredAzureDevOps',
+      '{{providerName}} is not authenticated. Next step: run az login, or set {{variable}} in this environment.',
+      { providerName: copy.providerName, variable: SIGN_IN_VARIABLES['azure-devops'] }
+    )
+  }
   if (provider === 'github' || provider === 'gitlab') {
     return t(
       'sourceControl.createReviewFailure.authRequiredCommand',
@@ -49,6 +57,13 @@ export function hostedReviewSignInHint(
     return t(
       'sourceControl.createReviewFailure.signInHintBitbucket',
       'Connect Bitbucket in Settings > Integrations'
+    )
+  }
+  if (supported === 'azure-devops') {
+    return translate(
+      'sourceControl.createReviewFailure.signInHintAzureDevOps',
+      'Run az login or set {{variable}} in this environment',
+      { variable: SIGN_IN_VARIABLES['azure-devops'] }
     )
   }
   if (supported === 'github' || supported === 'gitlab') {
