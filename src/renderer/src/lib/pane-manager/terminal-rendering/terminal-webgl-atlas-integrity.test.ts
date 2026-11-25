@@ -9,11 +9,15 @@ import {
   type AtlasIntegrityDeps
 } from './terminal-webgl-atlas-integrity'
 import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
+import { fakeKit, pageWithInk } from './terminal-webgl-atlas-test-canvas'
 import {
   admittedRect,
   checkAtlasIntegrity,
+  type AtlasCanvas,
   type GlyphAtlasLike,
-  type GlyphInkReader
+  type GlyphInkReader,
+  type GlyphRect,
+  type InkRead
 } from './terminal-webgl-atlas-sampling'
 
 type Glyph = NonNullable<GlyphAtlasLike['pages'][number]['glyphs']>[number]
@@ -32,8 +36,18 @@ function atlas(glyphs: Glyph[] = [glyph(0), glyph(9)], width = 512): MutableAtla
 }
 
 const traversal = () => ({ layoutVersion: undefined, cursors: [], startPage: 0 })
-const ink: GlyphInkReader = () => 'ink'
-const blank: GlyphInkReader = () => 'blank'
+const ink = fakeReader(() => 'ink')
+const blank = fakeReader(() => 'blank')
+
+function fakeReader(classify: (canvas: AtlasCanvas, rect: GlyphRect) => InkRead): GlyphInkReader {
+  return (canvas, rect, onReadIssued) => {
+    const result = classify(canvas, rect)
+    if (result !== 'unavailable') {
+      onReadIssued()
+    }
+    return result
+  }
+}
 
 describe('admittedRect', () => {
   const page = { width: 512, height: 512 }
@@ -57,7 +71,7 @@ describe('checkAtlasIntegrity', () => {
       outcome: 'healthy',
       reads: 1
     })
-    const mixed: GlyphInkReader = (canvas) => (canvas.width === 512 ? 'ink' : 'unreadable')
+    const mixed = fakeReader((canvas) => (canvas.width === 512 ? 'ink' : 'unreadable'))
     const twoPages = atlas()
     twoPages.pages.push({ canvas: { width: 1024, height: 1024 }, glyphs: [glyph(0)] })
     expect(checkAtlasIntegrity(twoPages, mixed, traversal(), 16)).toEqual({
@@ -67,12 +81,12 @@ describe('checkAtlasIntegrity', () => {
   })
 
   it('acts on a valid blank after an invalid read, but never calls invalid then ink healthy', () => {
-    const pages = (results: string[]) => {
+    const pages = (results: InkRead[]) => {
       const multi = atlas()
       for (let i = 1; i < results.length; i++) {
         multi.pages.push({ canvas: { width: 512 + i, height: 512 }, glyphs: [glyph(0)] })
       }
-      const reader: GlyphInkReader = (canvas) => results[canvas.width - 512] as never
+      const reader = fakeReader((canvas) => results[canvas.width - 512])
       return [multi, reader] as const
     }
     const [blankAfter, blankReader] = pages(['unreadable', 'blank'])
@@ -95,7 +109,7 @@ describe('checkAtlasIntegrity', () => {
   it('does not credit health from positive alpha read through failed controls', () => {
     const inkedPage = atlas()
     Object.assign(inkedPage.pages[0].canvas, { alphaAt: () => 255 })
-    const read = createGlyphInkReader(() => fakeKit({ dropControls: true }))
+    const read = createGlyphInkReader(() => fakeKit({ dropControl: 'both' }))
     expect(checkAtlasIntegrity(inkedPage, read, traversal(), 16)).toEqual({
       outcome: 'inconclusive',
       reads: 1
@@ -104,8 +118,9 @@ describe('checkAtlasIntegrity', () => {
 
   it('reads every admitted glyph of a page in turn, one per attempt', () => {
     const merged = atlas([glyph(0), glyph(9), glyph(512), glyph(0, 512), glyph(512, 512)], 1024)
-    const blankLast: GlyphInkReader = (_c, rect) =>
+    const blankLast = fakeReader((_canvas, rect) =>
       rect.x === 512 && rect.y === 512 ? 'blank' : 'ink'
+    )
     const walk = traversal()
     const outcomes = Array.from(
       { length: 5 },
@@ -142,7 +157,8 @@ describe('checkAtlasIntegrity', () => {
   })
 
   it('counts unreadable and throwing reads and respects the read budget', () => {
-    const throwing: GlyphInkReader = () => {
+    const throwing: GlyphInkReader = (_canvas, _rect, onReadIssued) => {
+      onReadIssued()
       throw new Error('readback failed')
     }
     expect(checkAtlasIntegrity(atlas(), throwing, traversal(), 16)).toEqual({
@@ -153,118 +169,6 @@ describe('checkAtlasIntegrity', () => {
       outcome: 'inconclusive',
       reads: 0
     })
-  })
-})
-
-/** Alpha-only 2D context: enough of the canvas model for the reader's copy and control pixels. */
-function fakeKit(options: { dropControls?: boolean; lost?: boolean } = {}) {
-  const width = 258
-  const alpha = new Uint8ClampedArray(width * 256)
-  const ctx = {
-    fillStyle: '',
-    getContextAttributes: () => ({ alpha: true }),
-    isContextLost: () => options.lost === true,
-    clearRect: (x: number, y: number, w: number, h: number) => {
-      for (let row = y; row < y + h; row++) {
-        alpha.fill(0, row * width + x, row * width + x + w)
-      }
-    },
-    fillRect: (x: number, y: number) => {
-      if (!options.dropControls) {
-        alpha[y * width + x] = 255
-      }
-    },
-    drawImage: (source: { alphaAt?: (x: number, y: number) => number }, ...args: number[]) => {
-      if (args.length === 2) {
-        if (!options.dropControls) {
-          alpha[args[1] * width + args[0]] = 255
-        }
-        return
-      }
-      const [sx, sy, sw, sh, dx, dy] = args
-      for (let y = 0; y < sh; y++) {
-        for (let x = 0; x < sw; x++) {
-          alpha[(dy + y) * width + dx + x] = source.alphaAt?.(sx + x, sy + y) ?? 0
-        }
-      }
-    },
-    getImageData: (_x: number, _y: number, w: number, h: number) => {
-      const data = new Uint8ClampedArray(w * h * 4)
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          data[(y * w + x) * 4 + 3] = alpha[y * width + x]
-        }
-      }
-      return { data }
-    }
-  }
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, control: {} as HTMLCanvasElement }
-}
-
-const pageWithInk = (inked: boolean) => ({
-  width: 512,
-  height: 512,
-  alphaAt: (x: number, y: number) => (inked && x === 3 && y === 0 ? 255 : 0)
-})
-
-describe('createGlyphInkReader', () => {
-  it('classifies a genuinely blank rect as blank, including a one-pixel-high rect', () => {
-    const read = createGlyphInkReader(() => fakeKit())
-    expect(read(pageWithInk(false), { x: 0, y: 0, width: 9, height: 18 })).toBe('blank')
-    expect(read(pageWithInk(false), { x: 0, y: 0, width: 9, height: 1 })).toBe('blank')
-    expect(read(pageWithInk(true), { x: 0, y: 0, width: 9, height: 1 })).toBe('ink')
-  })
-
-  it('reports a scratch that silently loses pixels as unreadable, never blank', () => {
-    expect(
-      createGlyphInkReader(() => fakeKit({ dropControls: true }))(pageWithInk(false), {
-        x: 0,
-        y: 0,
-        width: 9,
-        height: 18
-      })
-    ).toBe('unreadable')
-    expect(
-      createGlyphInkReader(() => fakeKit({ lost: true }))(pageWithInk(false), {
-        x: 0,
-        y: 0,
-        width: 9,
-        height: 18
-      })
-    ).toBe('unreadable')
-  })
-
-  it('never credits ink from an invalid read', () => {
-    const read = createGlyphInkReader(() => fakeKit({ dropControls: true }))
-    expect(read(pageWithInk(true), { x: 0, y: 0, width: 9, height: 18 })).toBe('unreadable')
-  })
-
-  it.each(['a failed control', 'a thrown readback'])('replaces a scratch after %s', (failure) => {
-    const failedKit = fakeKit({ dropControls: failure === 'a failed control' })
-    if (failure === 'a thrown readback') {
-      vi.spyOn(failedKit.ctx, 'getImageData').mockImplementation(() => {
-        throw new Error('readback failed')
-      })
-    }
-    const kits = [failedKit, fakeKit()]
-    const make = vi.fn(() => kits.shift() ?? null)
-    const read = createGlyphInkReader(make)
-    const rect = { x: 0, y: 0, width: 9, height: 18 }
-    expect(read(pageWithInk(false), rect)).toBe('unreadable')
-    expect(make).toHaveBeenCalledTimes(1)
-    expect(read(pageWithInk(false), rect)).toBe('blank')
-    expect(make).toHaveBeenCalledTimes(2)
-  })
-
-  it.each([
-    () => null,
-    () => {
-      throw new Error('scratch allocation failed')
-    }
-  ])('reports unavailable when no scratch can be created, without issuing a read', (makeKit) => {
-    expect(
-      createGlyphInkReader(makeKit)(pageWithInk(false), { x: 0, y: 0, width: 9, height: 18 })
-    ).toBe('unavailable')
   })
 })
 
@@ -647,6 +551,139 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(state.lastAttemptAt).toBe(clock)
   })
 
+  it('holds the rolling budget until the oldest physical readback expires', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const start = clock
+    const readTimes: number[] = []
+    const kit = fakeKit()
+    const clearRect = kit.ctx.clearRect.bind(kit.ctx)
+    vi.spyOn(kit.ctx, 'clearRect').mockImplementation((...args) => {
+      if (readTimes.length === 0) {
+        advanceServiceClock(4)
+      }
+      clearRect(...args)
+    })
+    const getImageData = kit.ctx.getImageData.bind(kit.ctx)
+    vi.spyOn(kit.ctx, 'getImageData').mockImplementation((...args) => {
+      readTimes.push(clock)
+      const pixels = getImageData(...args)
+      if (readTimes.length === 1) {
+        advanceServiceClock(3)
+      }
+      return pixels
+    })
+    const sharedDeps = deps(createGlyphInkReader(() => kit))
+    const atlases = Array.from({ length: 17 }, () => {
+      const paneAtlas = atlas()
+      paneAtlas.pages[0].canvas = pageWithInk(true)
+      return paneAtlas
+    })
+    const panes = atlases.map((paneAtlas) => fakePane(paneAtlas))
+    register(true, panes)
+
+    verifyPaneWebglAtlasIntegrity(panes[0], 'reveal', sharedDeps)
+    expect(readTimes).toEqual([start + 4])
+    expect(state.lastAttemptAt).toBe(start)
+    expect(state.atlases.get(atlases[0])?.completedAt).toBe(start + 7)
+    for (const [index, pane] of panes.slice(1, 16).entries()) {
+      advanceServiceClock(start + (index + 1) * 50 - clock)
+      verifyPaneWebglAtlasIntegrity(pane, 'reveal', sharedDeps)
+    }
+    expect(readTimes).toHaveLength(16)
+
+    advanceServiceClock(start + 1001 - clock)
+    verifyPaneWebglAtlasIntegrity(panes[16], 'reveal', sharedDeps)
+    expect(readTimes).toHaveLength(16)
+    expect(state.pending.size).toBe(1)
+
+    const wake = takeScheduledWake(3)
+    advanceServiceClock(3)
+    wake()
+    expect(readTimes).toHaveLength(17)
+    expect(readTimes.at(-1)).toBe(start + 1004)
+    expect(state.pending.size).toBe(0)
+    expect(state.timerArmed).toBe(false)
+  })
+
+  it.each([
+    ['context loss before readback', false],
+    ['an exception during preparation', false],
+    ['an exception during readback', true]
+  ] as const)('accounts for physical readback after %s', (failure, issued) => {
+    const start = clock
+    const brokenKit = fakeKit({ lost: failure === 'context loss before readback' })
+    const nextKit = fakeKit()
+    const firstReadback = vi.spyOn(brokenKit.ctx, 'getImageData')
+    const nextReadback = vi.spyOn(nextKit.ctx, 'getImageData')
+    if (failure === 'an exception during preparation') {
+      vi.spyOn(brokenKit.ctx, 'clearRect').mockImplementation(() => {
+        throw new Error('scratch preparation failed')
+      })
+    } else if (failure === 'an exception during readback') {
+      firstReadback.mockImplementation(() => {
+        throw new Error('readback failed')
+      })
+    }
+    const kits = [brokenKit, nextKit]
+    const sharedDeps = deps(createGlyphInkReader(() => kits.shift() ?? null))
+    const firstAtlas = atlas()
+    const first = fakePane(firstAtlas)
+    const next = fakePane(atlas())
+    register(true, [first, next])
+    state.readTimes.push(...Array.from({ length: 15 }, () => start))
+
+    verifyPaneWebglAtlasIntegrity(first, 'reveal', sharedDeps)
+    expect(firstReadback).toHaveBeenCalledTimes(issued ? 1 : 0)
+    expect(state.readTimes).toHaveLength(issued ? 16 : 15)
+    expect(state.atlases.get(firstAtlas)?.completedAt).toBe(
+      issued ? start : Number.NEGATIVE_INFINITY
+    )
+    expect(state.lastAttemptAt).toBe(start)
+    expect(first.addon.clearTextureAtlas).not.toHaveBeenCalled()
+
+    clock += 50
+    verifyPaneWebglAtlasIntegrity(next, 'reveal', sharedDeps)
+    expect(nextReadback).toHaveBeenCalledTimes(issued ? 0 : 1)
+    expect(next.addon.clearTextureAtlas).toHaveBeenCalledTimes(issued ? 0 : 1)
+  })
+
+  it.each([
+    [-1, false],
+    [0, true]
+  ] as const)(
+    'checks the clear interval at invocation with a %s ms offset from expiry',
+    (offset, clearsAgain) => {
+      const start = clock
+      const kit = fakeKit()
+      const getImageData = kit.ctx.getImageData.bind(kit.ctx)
+      vi.spyOn(kit.ctx, 'getImageData').mockImplementation((...args) => {
+        clock += 10
+        return getImageData(...args)
+      })
+      const sharedDeps = deps(createGlyphInkReader(() => kit))
+      const paneAtlas = atlas()
+      const pane = fakePane(paneAtlas)
+      const clearTimes: number[] = []
+      pane.addon.clearTextureAtlas.mockImplementation(() => {
+        clearTimes.push(clock)
+        evict(paneAtlas)
+        clock++
+      })
+      register(true, [pane])
+
+      verifyPaneWebglAtlasIntegrity(pane, 'reveal', sharedDeps)
+      expect(clearTimes).toEqual([start + 10])
+      expect(state.atlases.get(paneAtlas)?.resetAt).toBe(start + 10)
+      expect(state.atlases.get(paneAtlas)?.completedAt).toBe(start + 11)
+
+      paneAtlas.pages[0].glyphs.push(glyph(0))
+      clock = start + 60_000 + offset
+      verifyPaneWebglAtlasIntegrity(pane, 'reveal', sharedDeps)
+      expect(clearTimes).toEqual(clearsAgain ? [start + 10, start + 60_010] : [start + 10])
+      expect(events.at(-1)?.outcome).toBe(clearsAgain ? 'reset' : 'refused')
+    }
+  )
+
   it.each([
     ['has no eligible owner', { covered: true }],
     ['fails scratch setup', {}]
@@ -656,7 +693,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     const second = fakePane(atlas())
     register(true, [busy, first, second])
     // One shared reader, as in production: the first atlas's scratch setup fails, the second reads blank.
-    const reader: GlyphInkReader = (canvas) => (canvas.width === 513 ? 'unavailable' : 'blank')
+    const reader = fakeReader((canvas) => (canvas.width === 513 ? 'unavailable' : 'blank'))
     verifyPaneWebglAtlasIntegrity(busy, 'reveal', deps(ink))
     verifyPaneWebglAtlasIntegrity(first, 'reveal', deps(reader))
     verifyPaneWebglAtlasIntegrity(second, 'reveal', deps(reader))
@@ -689,15 +726,17 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
         }
       })
     }
-    const sharedDeps = deps((canvas) => {
-      if (canvas === firstAtlas.pages[0].canvas) {
-        observed.push('first reads')
-      } else if (canvas === secondAtlas.pages[0].canvas) {
-        observed.push('second reads')
-        return 'blank'
-      }
-      return 'ink'
-    })
+    const sharedDeps = deps(
+      fakeReader((canvas) => {
+        if (canvas === firstAtlas.pages[0].canvas) {
+          observed.push('first reads')
+        } else if (canvas === secondAtlas.pages[0].canvas) {
+          observed.push('second reads')
+          return 'blank'
+        }
+        return 'ink'
+      })
+    )
     verifyPaneWebglAtlasIntegrity(busy, 'reveal', sharedDeps)
     verifyPaneWebglAtlasIntegrity(first, 'reveal', sharedDeps)
     verifyPaneWebglAtlasIntegrity(second, 'reveal', sharedDeps)
@@ -734,7 +773,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     const pending = fakePane(pendingAtlas)
     const later = fakePane(laterAtlas)
     register(true, [busy, pending, later])
-    const reader = vi.fn<GlyphInkReader>((canvas) => (canvas === pendingCanvas ? 'blank' : 'ink'))
+    const reader = vi.fn(fakeReader((canvas) => (canvas === pendingCanvas ? 'blank' : 'ink')))
     const sharedDeps = deps(reader)
     verifyPaneWebglAtlasIntegrity(busy, 'reveal', sharedDeps)
     verifyPaneWebglAtlasIntegrity(pending, 'reveal', sharedDeps)
@@ -745,7 +784,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     // At the original deadline, direct work spends the spacing slot before the callback runs.
     verifyPaneWebglAtlasIntegrity(later, 'reveal', sharedDeps)
     expect(reader).toHaveBeenCalledTimes(2)
-    expect(reader).toHaveBeenLastCalledWith(laterAtlas.pages[0].canvas, expect.anything())
+    expect(reader.mock.lastCall?.[0]).toBe(laterAtlas.pages[0].canvas)
     expect(state.lastAttemptAt).toBe(start + 50)
     expect(state.readTimes).toEqual([start, start + 50])
 
@@ -759,7 +798,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     nextWake()
 
     expect(reader).toHaveBeenCalledTimes(3)
-    expect(reader).toHaveBeenLastCalledWith(pendingCanvas, expect.anything())
+    expect(reader.mock.lastCall?.[0]).toBe(pendingCanvas)
     expect(state.readTimes).toEqual([start, start + 50, start + 100])
     expect(pending.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(state.pending.size).toBe(0)
@@ -768,10 +807,11 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
   })
 
   it.each([
-    ['an invalid read', (() => 'unreadable') as GlyphInkReader, true],
+    ['an invalid read', fakeReader(() => 'unreadable'), true],
     [
       'a throwing read',
-      (() => {
+      ((_canvas, _rect, onReadIssued) => {
+        onReadIssued()
         throw new Error('readback failed')
       }) as GlyphInkReader,
       true

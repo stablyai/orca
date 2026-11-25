@@ -39,7 +39,8 @@ function isUsable(ctx: CanvasRenderingContext2D): boolean {
 function readOnce(
   current: ReadKit,
   canvas: AtlasCanvas,
-  rect: GlyphRect
+  rect: GlyphRect,
+  onReadIssued: () => void
 ): Exclude<InkRead, 'unavailable'> {
   const { ctx, control } = current
   if (!isUsable(ctx)) {
@@ -62,6 +63,7 @@ function readOnce(
   ctx.fillStyle = '#000'
   ctx.fillRect(DESTINATION_CONTROL_X, 0, 1, 1)
   ctx.drawImage(control, SOURCE_CONTROL_X, 0)
+  onReadIssued()
   const pixels = ctx.getImageData(0, 0, SCRATCH_WIDTH, height).data
   // An invalid read proves nothing, not even ink.
   const controlsPassed =
@@ -83,7 +85,7 @@ function readOnce(
 /** The live context and fresh controls validate the scratch copy path, with no guarantee for a specific source page. */
 export function createGlyphInkReader(makeKit: () => ReadKit | null = createKit): GlyphInkReader {
   let kit: ReadKit | null = null
-  return (canvas, rect) => {
+  return (canvas, rect, onReadIssued) => {
     try {
       kit ??= makeKit()
     } catch {
@@ -93,7 +95,7 @@ export function createGlyphInkReader(makeKit: () => ReadKit | null = createKit):
       return 'unavailable'
     }
     try {
-      const result = readOnce(kit, canvas, rect)
+      const result = readOnce(kit, canvas, rect, onReadIssued)
       if (result !== 'unreadable') {
         return result
       }

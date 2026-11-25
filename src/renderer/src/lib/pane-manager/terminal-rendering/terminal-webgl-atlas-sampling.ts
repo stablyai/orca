@@ -25,9 +25,13 @@ export type GlyphAtlasLike = {
   readonly pageLayoutVersion?: number
 }
 
-/** `unavailable`: no read was issued (scratch setup failed); `unreadable`: an issued read was invalid. */
+/** Scratch setup can be unavailable. A prepared candidate can be unreadable before or after readback. */
 export type InkRead = 'ink' | 'blank' | 'unreadable' | 'unavailable'
-export type GlyphInkReader = (canvas: AtlasCanvas, rect: GlyphRect) => InkRead
+export type GlyphInkReader = (
+  canvas: AtlasCanvas,
+  rect: GlyphRect,
+  onReadIssued: () => void
+) => InkRead
 
 export type AtlasPoisonFinding = { reason: 'blank-page-glyph'; page: number; pageSize: number }
 
@@ -92,13 +96,19 @@ export function checkAtlasIntegrity(
   atlas: GlyphAtlasLike,
   read: GlyphInkReader,
   traversal: Traversal,
-  maxReads: number
+  maxCandidates: number,
+  onReadIssued?: () => void
 ): AtlasCheckResult {
   if (traversal.layoutVersion !== atlas.pageLayoutVersion) {
     traversal.layoutVersion = atlas.pageLayoutVersion
     traversal.cursors = []
   }
   let reads = 0
+  let candidates = 0
+  const recordRead = () => {
+    reads++
+    onReadIssued?.()
+  }
   let inked = 0
   let invalid = 0
   let unavailable = false
@@ -106,7 +116,7 @@ export function checkAtlasIntegrity(
   const pageCount = atlas.pages.length
   const firstPage = pageCount ? traversal.startPage % pageCount : 0
   traversal.startPage = firstPage + 1
-  for (let step = 0; step < pageCount && scansLeft > 0 && reads < maxReads; step++) {
+  for (let step = 0; step < pageCount && scansLeft > 0 && candidates < maxCandidates; step++) {
     const page = (firstPage + step) % pageCount
     const { canvas, glyphs } = atlas.pages[page]
     if (!canvas?.width || !canvas.height || !glyphs?.length) {
@@ -121,8 +131,9 @@ export function checkAtlasIntegrity(
       continue
     }
     let result: InkRead
+    candidates++
     try {
-      result = read(canvas, candidate.rect)
+      result = read(canvas, candidate.rect, recordRead)
     } catch {
       result = 'unreadable'
     }
@@ -130,7 +141,6 @@ export function checkAtlasIntegrity(
       unavailable = true
       break
     }
-    reads++
     if (result === 'blank') {
       return {
         outcome: 'poisoned',

@@ -113,25 +113,26 @@ function reset(
   state: AtlasState,
   finding: AtlasPoisonFinding,
   trigger: AtlasCheckTrigger,
-  now: number,
   deps: AtlasIntegrityDeps
 ): string {
-  if (!deps.isWindowPresented() || !isEligibleOwner(owner, atlas)) {
+  const addon = owner.webglAddon
+  if (!addon || !deps.isWindowPresented() || !isEligibleOwner(owner, atlas)) {
     return 'inconclusive'
   }
+  const before = atlas.pageLayoutVersion
+  const clearAt = deps.now()
   const allowed =
     deps.state.resets < MAX_RESETS_PER_SESSION &&
     state.resets < MAX_RESETS_PER_ATLAS &&
-    now - state.resetAt >= RESET_INTERVAL_MS
+    clearAt - state.resetAt >= RESET_INTERVAL_MS
   let outcome: 'reset' | 'reset-failed' | 'refused' = 'refused'
   if (allowed) {
-    const before = atlas.pageLayoutVersion
     state.resets++
-    state.resetAt = now
+    state.resetAt = clearAt
     deps.state.resets++
     outcome = 'reset-failed'
     try {
-      owner.webglAddon?.clearTextureAtlas()
+      addon.clearTextureAtlas()
       // Same object, before any presentation can rasterize into it again.
       const after = atlas.pageLayoutVersion
       if (
@@ -171,37 +172,35 @@ function attempt(
   now: number
 ): void {
   const state = stateOf(deps, atlas)
-  // Every issued read is charged, including invalid and throwing ones; an unavailable scratch issued none.
-  const tracedRead: GlyphInkReader = (canvas, rect) => {
-    let result: ReturnType<GlyphInkReader>
-    try {
-      result = deps.read(canvas, rect)
-    } catch (error) {
-      deps.state.readTimes.push(now)
-      throw error
-    }
-    if (result !== 'unavailable') {
-      deps.state.readTimes.push(now)
-    }
+  const tracedRead: GlyphInkReader = (canvas, rect, onReadIssued) => {
+    const result = deps.read(canvas, rect, onReadIssued)
     trace({ stage: 'read', x: rect.x, y: rect.y, result })
     return result
   }
-  // Reads are reserved before any traversal or scratch setup.
-  const result = checkAtlasIntegrity(atlas, tracedRead, state.traversal, readsLeft(deps, now))
-  if (result.reads > 0) {
-    state.completedAt = now
+  // Reserve before traversal; only physical readbacks spend a credit.
+  const maxCandidates = readsLeft(deps, now)
+  let readIssued = false
+  try {
+    const result = checkAtlasIntegrity(atlas, tracedRead, state.traversal, maxCandidates, () => {
+      deps.state.readTimes.push(deps.now())
+      readIssued = true
+    })
+    const outcome =
+      result.outcome === 'poisoned'
+        ? reset(owner, atlas, state, result.finding, trigger, deps)
+        : result.outcome
+    trace({
+      stage: 'action',
+      trigger,
+      outcome,
+      reads: result.reads,
+      ...(result.outcome === 'poisoned' ? { page: result.finding.page } : {})
+    })
+  } finally {
+    if (readIssued) {
+      state.completedAt = deps.now()
+    }
   }
-  const outcome =
-    result.outcome === 'poisoned'
-      ? reset(owner, atlas, state, result.finding, trigger, now, deps)
-      : result.outcome
-  trace({
-    stage: 'action',
-    trigger,
-    outcome,
-    reads: result.reads,
-    ...(result.outcome === 'poisoned' ? { page: result.finding.page } : {})
-  })
 }
 
 /** Drops collected and expired entries; at most MAX_PENDING_ATLASES checks. */
