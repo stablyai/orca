@@ -496,6 +496,37 @@
   color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
 }
 
+/* Terminal pane actions stay hidden (still focusable) until the pointer is on the pane's
+   top row or focus is inside it; data-top-row-hover covers the pass-through chromeless strip. */
+.pane-title-overlay-layer .pane-title-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.pane-title-overlay-layer :is(.pane-title-split-trigger, .pane-title-close) {
+  opacity: 1;
+}
+
+.pane-title-overlay-layer .pane-title-split-trigger:disabled {
+  opacity: 0.5;
+}
+
+.pane-title-overlay-layer
+  .pane-title-bar:is(:hover, :focus-within, [data-top-row-hover])
+  .pane-title-actions,
+.pane-title-overlay-layer .pane-title-actions:has([data-state$='open']),
+body:has([data-contextual-tour-overlay])
+  .pane-title-overlay-layer
+  .pane-title-actions:has([data-contextual-tour-target]) {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-title-overlay-layer .pane-title-actions {
+    transition: none;
+  }
+}
+
 /* Match title text while editing to prevent layout shift. */
 /* Remove title padding while editing; the input supplies edge-to-edge padding. */
 .pane-title-bar[data-editing] {
