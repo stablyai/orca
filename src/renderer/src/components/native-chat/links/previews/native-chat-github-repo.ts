@@ -33,7 +33,7 @@ export type NativeChatGitHubRepo = {
   repo: Repo
   /** Origin then upstream identity keys; main answers previews for any repo on their hosts. */
   identityKeys: readonly string[]
-  /** Where bare `#123` points: upstream unless the repo prefers origin. github.com only. */
+  /** Where bare `#123` points in markdown (github.com only). */
   referenceRepo: GitHubRepoReference | null
 }
 

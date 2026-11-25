@@ -39,6 +39,7 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 import {
   getSmartGitHubSubmitResolution,
   getSmartGitHubSubmitIntent,
+  lookupSmartGitHubNumberItems,
   lookupSmartGitHubSubmitItem
 } from '@/lib/work-items/github/smart-github-submit'
 import { getForkPushWarning } from '../../../../../shared/new-workspace/fork-push-warning'
@@ -162,6 +163,11 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
 
       const submitSelection = { kind: 'github-submit-lookup', query: name } as const
       smartSourceSelectionRef.current = submitSelection
+      const lookup = {
+        sourceContext: selectedRepoGitHubSourceContext,
+        workItem: lookupGitHubWorkItemForSource,
+        workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
+      }
       const item = isProjectGroupTarget
         ? (
             await Promise.all(
@@ -184,14 +190,14 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
             .filter((candidate): candidate is GitHubWorkItem => candidate !== null)
             .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]
         : selectedRepo && selectedRepoIsGit
-          ? await lookupSmartGitHubSubmitItem({
-              repoPath: selectedRepo.path,
-              repoId: selectedRepo.id,
-              sourceContext: selectedRepoGitHubSourceContext,
-              intent,
-              workItem: lookupGitHubWorkItemForSource,
-              workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
-            })
+          ? intent.kind === 'hash-number' && selectedRepo.defaultIssueRepository
+            ? (await lookupSmartGitHubNumberItems(selectedRepo, intent.number, lookup))[0]
+            : await lookupSmartGitHubSubmitItem({
+                ...lookup,
+                repoPath: selectedRepo.path,
+                repoId: selectedRepo.id,
+                intent
+              })
           : null
       if (!item) {
         throw new Error(

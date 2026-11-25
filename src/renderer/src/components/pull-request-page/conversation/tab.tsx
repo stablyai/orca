@@ -21,6 +21,7 @@ import { groupPRComments } from '../../../../../shared/source-control/review-com
 import { resolveCommentReplyTarget } from '@/components/github/comment-reply-target-state'
 import { runWorkItemBodyUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
+import { useGitHubWorkItemMarkdownRepo } from '@/components/github/use-github-work-item-markdown-repo'
 import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import {
   resolveGitHubBodyDraft,
@@ -167,12 +168,9 @@ export function ConversationTab({
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
-  const markdownGitHubRepo = useMemo(
-    () =>
-      projectOrigin
-        ? { owner: projectOrigin.owner, repo: projectOrigin.repo, host: projectOrigin.host }
-        : bodySlug,
-    [bodySlug, projectOrigin]
+  const markdownGitHubRepo = useGitHubWorkItemMarkdownRepo(
+    { repoId: repoId ?? item.repoId, repoHostId: sourceContext?.hostId ?? item.repoHostId },
+    projectOrigin ?? bodySlug
   )
   const canEditBody =
     item.type === 'pr'

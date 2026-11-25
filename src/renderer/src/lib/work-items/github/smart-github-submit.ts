@@ -8,8 +8,14 @@ import {
 import { getLinkedWorkItemWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import type { LinkedWorkItemSummary } from '../../workspace/creation/new-workspace'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
+import { resolveGitHubIssueReference } from '../../../../../shared/github/repositories/github-issue-reference'
 import { resolveGitHubWorkItemIdentity } from '../../../../../shared/new-workspace/github-work-item-identity'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import {
+  githubHostFromIdentityKey,
+  githubRepoIdentityKey
+} from '../../../../../shared/github/repositories/repository-identity-key'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 
 export type SmartGitHubSubmitIntent =
   | {
@@ -19,10 +25,12 @@ export type SmartGitHubSubmitIntent =
       host?: string
       number: number
       type: 'issue' | 'pr'
+      allowSameHost?: boolean
     }
   | {
       kind: 'hash-number'
       number: number
+      type?: 'pr'
     }
 
 export type SmartGitHubSubmitResolution = {
@@ -47,6 +55,7 @@ export type SmartGitHubSubmitLookup = {
     repoId: string
     sourceContext?: TaskSourceContext | null
     number: number
+    type?: 'pr'
   }) => Promise<GitHubWorkItem | null>
   workItemByOwnerRepo: (args: {
     repoPath: string
@@ -57,6 +66,7 @@ export type SmartGitHubSubmitLookup = {
     host?: string
     number: number
     type: 'issue' | 'pr'
+    allowSameHost?: boolean
   }) => Promise<GitHubWorkItem | null>
 }
 
@@ -138,9 +148,9 @@ function getSmartGitHubSubmitLookupCacheKey({
   const sourceScope = sourceContext ? getTaskSourceCacheScope(sourceContext) : 'default'
   const repoScope = `${sourceScope}:${repoId}:${repoPath}`
   if (intent.kind === 'hash-number') {
-    return `${repoScope}:hash:${intent.number}`
+    return `${repoScope}:hash:${intent.number}:${intent.type ?? 'any'}`
   }
-  return `${repoScope}:link:${githubRepoIdentityKey(intent)}:${intent.type}:${intent.number}`
+  return `${repoScope}:link:${githubRepoIdentityKey(intent)}:${intent.type}:${intent.number}:${intent.allowSameHost === true}`
 }
 
 export function lookupSmartGitHubSubmitItem({
@@ -169,13 +179,15 @@ export function lookupSmartGitHubSubmitItem({
           repo: intent.repo,
           ...(intent.host ? { host: intent.host } : {}),
           number: intent.number,
-          type: intent.type
+          type: intent.type,
+          ...(intent.allowSameHost ? { allowSameHost: true } : {})
         })
       : workItem({
           repoPath,
           repoId,
           sourceContext,
-          number: intent.number
+          number: intent.number,
+          ...(intent.type ? { type: intent.type } : {})
         })
   const stampedPromise = promise.then((item) => (item ? { ...item, repoId } : null))
   smartGitHubSubmitLookupCache.set(key, {
@@ -190,6 +202,49 @@ export function lookupSmartGitHubSubmitItem({
     }
   })
   return stampedPromise
+}
+
+export async function lookupSmartGitHubNumberItems(
+  repo: Repo,
+  number: number,
+  lookup: Omit<SmartGitHubSubmitLookup, 'repoId' | 'repoPath' | 'intent'>
+): Promise<GitHubWorkItem[]> {
+  const lookUp = (intent: SmartGitHubSubmitIntent) =>
+    lookupSmartGitHubSubmitItem({ ...lookup, repoId: repo.id, repoPath: repo.path, intent }).catch(
+      () => null
+    )
+  const { defaultIssueRepository } = repo
+  if (!defaultIssueRepository) {
+    const item = await lookUp({ kind: 'hash-number', number })
+    return item ? [item] : []
+  }
+
+  const issueLookup = async (): Promise<GitHubWorkItem | null> => {
+    const originKey = await resolveRepoSlug(repo)
+    const issue = resolveGitHubIssueReference(
+      { kind: 'bare', number },
+      {
+        defaultIssueRepository,
+        host: originKey ? githubHostFromIdentityKey(originKey) : repo.upstream?.host
+      }
+    )
+    return issue?.kind === 'url'
+      ? lookUp({
+          kind: 'link',
+          owner: issue.owner,
+          repo: issue.repo,
+          host: issue.host,
+          number: issue.number,
+          type: 'issue',
+          allowSameHost: true
+        })
+      : null
+  }
+  const items = await Promise.all([
+    issueLookup(),
+    lookUp({ kind: 'hash-number', number, type: 'pr' })
+  ])
+  return items.filter((item) => item !== null)
 }
 
 export function getSmartGitHubSubmitResolution(

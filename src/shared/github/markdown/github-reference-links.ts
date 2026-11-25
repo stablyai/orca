@@ -20,11 +20,14 @@ type MarkdownNode = {
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
-/** Where bare `#123` points: upstream unless the repo prefers origin. github.com only. */
+/** Where bare `#123` points. Markdown issue links are github.com-only. */
 export function githubReferenceRepo(
-  repo: Pick<Repo, 'upstream' | 'issueSourcePreference'>,
+  repo: Pick<Repo, 'upstream' | 'issueSourcePreference' | 'defaultIssueRepository'>,
   originIdentityKey: string
 ): GitHubRepoReference | null {
+  if (repo.defaultIssueRepository && !githubHostFromIdentityKey(originIdentityKey)) {
+    return repo.defaultIssueRepository
+  }
   const upstreamKey = repoUpstreamIdentityKey(repo, originIdentityKey)
   const key =
     upstreamKey && repo.issueSourcePreference !== 'origin' ? upstreamKey : originIdentityKey

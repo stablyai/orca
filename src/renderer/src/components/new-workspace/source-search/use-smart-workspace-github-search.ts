@@ -5,8 +5,10 @@ import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
 } from '@/lib/work-items/github/github-work-item-source-lookup'
-import { lookupSmartGitHubSubmitItem } from '@/lib/work-items/github/smart-github-submit'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import {
+  lookupSmartGitHubNumberItems,
+  lookupSmartGitHubSubmitItem
+} from '@/lib/work-items/github/smart-github-submit'
 import { RESULT_LIMIT } from '../name-field/smart-workspace-name-field-model'
 import { resolveSmartWorkspaceGithubDirectLink } from './smart-workspace-github-direct-link'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
@@ -114,19 +116,26 @@ export function useSmartWorkspaceGithubSearch({
           }
         : { kind: 'hash-number' as const, number: directNumber }
       const request = Promise.all(
-        repoBackedSearchTargets.map((target) =>
-          lookupSmartGitHubSubmitItem({
-            repoPath: target.repo.path,
-            repoId: target.repo.id,
+        repoBackedSearchTargets.map(async (target) => {
+          const lookup = {
             sourceContext: target.githubSourceContext,
-            intent,
             workItem: lookupGitHubWorkItemForSource,
             workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
+          }
+          if (intent.kind === 'hash-number' && crossRepoSwitchTarget === 'project') {
+            return lookupSmartGitHubNumberItems(target.repo, intent.number, lookup)
+          }
+          const item = await lookupSmartGitHubSubmitItem({
+            ...lookup,
+            repoPath: target.repo.path,
+            repoId: target.repo.id,
+            intent
           }).catch(() => null)
-        )
+          return item ? [item] : []
+        })
       ).then((items) =>
         items
-          .filter((item): item is GitHubWorkItem => item !== null)
+          .flat()
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
           .slice(0, RESULT_LIMIT)
       )
