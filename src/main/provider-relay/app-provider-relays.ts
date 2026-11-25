@@ -68,6 +68,8 @@ export type ProviderRelayLaunch = {
   passWhileHeld?: (line: string) => boolean
   /** Session state the daemon keeps for the next attach; only a daemon that can keep it relays. */
   keep?: ProviderRelayKeepSpec
+  /** A reattached agent closed during quit (its start given up) goes back to the daemon instead. */
+  handsOffOnQuit?: true
 }
 
 export type RelayedProviderProcess = {
@@ -239,7 +241,9 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
       noteProviderRelayReattachedFromLastRun(launch.chatKey)
       carriedFor.get(child)?.take(child.attachResult?.openWork)
       track(launch.chatKey, child, launch.markers)
-      return { managed: relayedManagedProcess(child), child, reattached: true }
+      const handOff = () => (quitting ? detachProviderRelayForQuit(launch.chatKey, null) : null)
+      const managed = relayedManagedProcess(child, launch.handsOffOnQuit ? handOff : undefined)
+      return { managed, child, reattached: true }
     }
   }
   const verdict =
