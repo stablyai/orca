@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 // A runtime that can answer `host.resources`. Older hosts omit it; the phone then asks for an update.
 export const HOST_RESOURCES_RUNTIME_CAPABILITY = 'host.resources.v1' as const
