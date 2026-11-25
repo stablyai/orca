@@ -208,7 +208,8 @@ export class CodexConfigMirror {
           : null
       })
     )
-    const owned = []
+    const owned: { runtimeHomePath: string; linuxRuntimeHome: string; linuxSystemHome: string }[] =
+      []
     for (const result of settled) {
       if (result.status === 'rejected') {
         console.warn('[codex-accounts] Failed to sync managed config:', result.reason)
