@@ -50,13 +50,12 @@ export function createProfileStateWriterRequest(
   id: number,
   command: PendingProfileStateWriterRequest['command'],
   slowWarningMs: number,
-  diagnostics: { acknowledgedRevision: number; now?: () => number; onSlow?: () => void }
+  diagnostics: { acknowledgedRevision: number; now?: () => number }
 ): PendingProfileStateWriterRequest {
   const clearSlowWarning = startProfileStateWriterSlowWarning({
     warningMs: slowWarningMs,
     phase: 'awaiting-reply',
     now: diagnostics.now,
-    onSlow: diagnostics.onSlow,
     request: {
       command,
       requestId: id,

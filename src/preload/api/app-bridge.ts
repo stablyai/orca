@@ -20,14 +20,6 @@ import type { PreloadApi } from '../api-types'
 export const appApi = {
   getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
     ipcRenderer.invoke('app:getSystemLanguageDetection', browserPreferences),
-  isProfileStateSaveDelayed: (): Promise<boolean> =>
-    ipcRenderer.invoke('app:isProfileStateSaveDelayed'),
-  onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, delayed: boolean): void =>
-      callback(delayed === true)
-    ipcRenderer.on('app:profileStateSaveDelayChanged', listener)
-    return () => ipcRenderer.removeListener('app:profileStateSaveDelayChanged', listener)
-  },
   getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
   getWindowsAdministratorStatus: (): Promise<boolean | null> =>
     ipcRenderer.invoke('app:getWindowsAdministratorStatus'),

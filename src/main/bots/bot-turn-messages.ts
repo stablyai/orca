@@ -1,0 +1,76 @@
+// The person-side messages each of a chat's turns took, from Orca's own journal: the one that opened
+// it and those steered into it. Who a turn acts for and whether it may leave its thread both read this.
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
+import { isStructuredAgentSessionCommandEntry } from '../../shared/agent-session/requests/structured-agent-session-command-entry'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
+
+export function isRootUserMessage(item: AgentJournalRenderItem): boolean {
+  return (
+    item.body.kind === 'message' &&
+    item.body.role === 'user' &&
+    isRootAgentJournalItem(item) &&
+    !isStructuredAgentSessionCommandEntry(item.body)
+  )
+}
+
+export function isRootTurnRecord(item: AgentJournalRenderItem): boolean {
+  return isRootAgentJournalItem(item) && readAgentJournalTurn(item.body) !== null
+}
+
+/** Each of `turns` (root turn records in `items`)' messages, in the order given. A message still
+ *  queued belongs to no turn yet. An opener found by journal order is never a message from before
+ *  the turn record ahead of it, so a turn no message opened takes none. */
+export function turnMessages(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[],
+  turns: readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem[][] {
+  // One pass: each message lands on the turns it opens and the one it was steered into.
+  const openedBy = new Map<string, string[]>()
+  for (const [turnId, opener] of structuredAgentTurnAnchors(items, submissions)) {
+    const opens = openedBy.get(opener)
+    if (opens) {
+      opens.push(turnId)
+    } else {
+      openedBy.set(opener, [turnId])
+    }
+  }
+  const byTurn = new Map<string, AgentJournalRenderItem[]>()
+  const take = (turnId: string, item: AgentJournalRenderItem): void => {
+    const bucket = byTurn.get(turnId)
+    if (bucket) {
+      bucket.push(item)
+    } else {
+      byTurn.set(turnId, [item])
+    }
+  }
+  // The index of the turn record before each turn record.
+  const previousRecord = new Map<string, number>()
+  const messages: { item: AgentJournalRenderItem; index: number }[] = []
+  let lastRecord = -1
+  items.forEach((item, index) => {
+    if (isRootUserMessage(item)) {
+      messages.push({ item, index })
+    } else if (isRootTurnRecord(item)) {
+      previousRecord.set(item.itemId, lastRecord)
+      lastRecord = index
+    }
+  })
+  for (const { item, index } of messages) {
+    const steeredInto = item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null
+    for (const turnId of openedBy.get(item.itemId) ?? []) {
+      if (turnId !== steeredInto && index > (previousRecord.get(turnId) ?? -1)) {
+        take(turnId, item)
+      }
+    }
+    if (steeredInto !== null) {
+      take(steeredInto, item)
+    }
+  }
+  return turns.map((turn) => byTurn.get(turn.itemId) ?? [])
+}

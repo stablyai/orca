@@ -21,6 +21,8 @@ export type BotActiveWorkSection = {
   text: string
   key: string
   idle?: readonly { number: number; key: string }[]
+  /** Needs you items, each said apart to the chat that owns it (`botNeedsYouInChatNote`). */
+  needsYou?: readonly BotNeedsYouItem[]
 }
 
 type Row = { id: string; state: string; line: string }
@@ -35,7 +37,11 @@ type ItemRead = Pick<
   | 'snoozedUntil'
   | 'links'
   | 'wait'
->
+> &
+  Partial<Pick<BotItem, 'chat' | 'question'>>
+
+/** A Needs you item, with the chat that owns it and its row as that chat's note lists it. */
+export type BotNeedsYouItem = { number: number; key: string; chatId: string; line: string }
 
 const IDLE_MEMO_MAX = 500
 
@@ -186,6 +192,18 @@ export function botActiveWorkSection(
   const idle = items
     .filter(nothingRuns)
     .map((item) => ({ number: item.number, key: item.lastEventId }))
+  const needsYou = items.flatMap((item): BotNeedsYouItem[] =>
+    item.status === 'needs_you' && item.chat
+      ? [
+          {
+            number: item.number,
+            key: item.lastEventId,
+            chatId: item.chat.id,
+            line: needsYouLine(item)
+          }
+        ]
+      : []
+  )
   const render = (rows: readonly Row[], hidden: number): string => {
     const lines = [
       ...rows.map(({ line }) => line),
@@ -224,7 +242,13 @@ export function botActiveWorkSection(
       .toSorted(([a], [b]) => a.localeCompare(b)),
     more
   ])
-  return { text, key, idle }
+  return { text, key, idle, needsYou }
+}
+
+/** `#12 "title" asks: "…"`: its question line (`--ask`), else its comment's first line. */
+function needsYouLine(item: ItemRead): string {
+  const ask = item.question?.decisions?.[0]?.question || item.question?.gist || ''
+  return `#${item.number} ${title(item.title)}${ask ? ` asks: ${title(ask)}` : ''}`
 }
 
 const FEEDS_MEMO_MAX = 500
