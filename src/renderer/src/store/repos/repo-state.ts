@@ -48,6 +48,9 @@ export type FolderWorkspaceDeleteOptions = {
 }
 export const ERROR_TOAST_DURATION = 60_000
 
+/** A failed checkout handoff replaces this add's toast, so one add never reports both outcomes. */
+export const projectAddToastId = (repoId: string): string => `project-add:${repoId}`
+
 export type RepoUpdate = Partial<
   Pick<
     Repo,

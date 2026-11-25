@@ -15,7 +15,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from './repo-state'
-import { ERROR_TOAST_DURATION } from './repo-state'
+import { ERROR_TOAST_DURATION, projectAddToastId } from './repo-state'
 import { fetchRuntimeAddProjectPathStatus, getRuntimeEnvironmentDisplayName } from './owner-routing'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
@@ -133,6 +133,7 @@ export function createRepoAddActions(
         })
         if (alreadyAdded) {
           toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
+            id: projectAddToastId(repo.id),
             description: repo.displayName
           })
         } else {
@@ -141,6 +142,7 @@ export function createRepoAddActions(
               ? translate('auto.store.slices.repos.8bb3ad7935', 'Project added')
               : translate('auto.store.slices.repos.90d129b48b', 'Folder added'),
             {
+              id: projectAddToastId(repo.id),
               description: repo.displayName
             }
           )

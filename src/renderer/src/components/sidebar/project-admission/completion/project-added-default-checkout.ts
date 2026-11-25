@@ -13,6 +13,8 @@ import {
 } from '../../../../../../shared/file-access/cross-platform-path'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
+import { projectAddToastId } from '@/store/repos/repo-state'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { worktreeMatchesHost } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import {
   getHiddenExternalWorktrees,
@@ -223,11 +225,13 @@ export async function openProjectDefaultCheckout({
               )
             : translate(
                 'projectAdmission.checkout.refreshFailed',
-                'Could not refresh checkouts on the selected host. Retry when the host is available.'
+                'Could not refresh checkouts on {{host}}. Retry when the host is available.',
+                { host: selectExecutionHostDisplayLabel(useAppStore.getState(), ownerHostId) }
               )
     toast.error(
       translate('projectAdmission.checkout.openFailed', 'Could not open selected checkout'),
       {
+        id: projectAddToastId(repoId),
         description,
         ...(repo && ownerHostId
           ? {

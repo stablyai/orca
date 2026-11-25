@@ -292,6 +292,8 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
   await expect(dialog).toBeHidden({ timeout: 30_000 })
   const retry = orcaPage.getByRole('button', { name: 'Retry', exact: true })
   await expect(retry).toBeVisible()
+  // The failure replaces this add's "already added" toast, so the add never reports both outcomes.
+  await expect(orcaPage.getByText('Project already added', { exact: true })).toHaveCount(0)
   expect(
     await orcaPage.evaluate(
       (id) =>
@@ -308,5 +310,9 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
   await expect(
     orcaPage.locator('[role="option"][data-worktree-id]').filter({ hasText: 'retry-hidden' })
   ).toHaveCount(0)
+  const ptyId = await waitForActivePanePtyId(orcaPage)
+  await expect
+    .poll(() => orcaPage.evaluate((id) => window.api.pty.getCwd(id), ptyId))
+    .toBe(paths.selected)
   await orcaPage.screenshot({ path: testInfo.outputPath('retry-opened-selected.png') })
 })
