@@ -37,6 +37,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
   let pendingRetries: Set<string> | undefined
   let hasRejected = false
   const lineages = structuredAgentSessionRetryLineages(submissions)
+  const hasItem = (id: string) => args.itemIds?.has(id) ?? true
   for (const submission of submissions) {
     hasRejected ||= submission.dispatchState === 'rejected'
   }
@@ -52,8 +53,12 @@ export function structuredAgentSessionDeliveryNotices(args: {
     : null
   for (const entry of args.pending) {
     if (entry.phase !== 'unconfirmed' && !recorded?.has(entry.clientMessageId)) {
+      const root = entry.retryOfClientMessageId ?? entry.clientMessageId
+      const retry = lineages.get(root)
       notices.set(
-        agentJournalSubmissionKey(entry.retryOfClientMessageId ?? entry.clientMessageId),
+        retry
+          ? structuredAgentSessionRetryRow(root, retry, hasItem)
+          : agentJournalSubmissionKey(root),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
       )
     }
@@ -78,7 +83,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
       continue
     }
     const id = retry
-      ? structuredAgentSessionRetryRow(root, retry, (itemId) => args.itemIds?.has(itemId) ?? true)
+      ? structuredAgentSessionRetryRow(root, retry, hasItem)
       : agentJournalSubmissionKey(root)
     const original = submission.retryOfClientMessageId
       ? ((byId ??= new Map(submissions.map((entry) => [entry.clientMessageId, entry]))).get(
