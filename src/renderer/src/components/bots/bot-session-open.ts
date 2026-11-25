@@ -6,11 +6,20 @@ import { useAppStore } from '@/store'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { isLocalExecutionHost } from '../../../../shared/execution-host/execution-host'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
+/** A chat of a bot on another computer opens on that computer: its home's folder id alone can name a
+ *  twin here. This machine's bots keep the default route. */
 function activate(bot: Bot, sessionId: string): Promise<boolean> {
-  return activateAiVaultStructuredSession({
-    structuredSession: { sessionId, workspaceId: folderWorkspaceKey(bot.folderWorkspaceId) }
-  })
+  const target = isLocalExecutionHost(bot.hostId)
+    ? undefined
+    : (structuredAgentSessionTargetForHost(bot.hostId) ?? undefined)
+  return activateAiVaultStructuredSession(
+    { structuredSession: { sessionId, workspaceId: folderWorkspaceKey(bot.folderWorkspaceId) } },
+    undefined,
+    target
+  )
 }
 
 /** Opening a chat without a tab reveals it, which marks its thread seen; activating its open tab here
@@ -29,7 +38,11 @@ function shownChatTab(bot: Bot, sessionId: string): { id: string } | null {
     return null
   }
   const tab = selectFocusedChatTab(state, workspaceId)
-  return tab?.entityId === sessionId ? tab : null
+  // The tab must be this bot's host's: stamped with it, or unstamped on this machine's own bot.
+  const ofBotHost = tab?.executionHostId
+    ? tab.executionHostId === bot.hostId
+    : isLocalExecutionHost(bot.hostId)
+  return tab?.entityId === sessionId && ofBotHost ? tab : null
 }
 
 /** Opens one of the bot's chats as a focused tab; a thread's or a run's gets its tab here. The chat

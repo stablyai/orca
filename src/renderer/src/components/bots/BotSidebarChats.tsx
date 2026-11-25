@@ -31,7 +31,12 @@ import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
 import { BotSidebarOlderToggle } from './BotSidebarOlderChats'
-import { useBotSidebarOlderChats, useListHold } from './use-bot-sidebar-older-chats'
+import {
+  useBotHomeFrontTab,
+  useBotSidebarOlderChats,
+  useListHold,
+  type BotHomeFrontTab
+} from './use-bot-sidebar-older-chats'
 
 /** Not a chat id: chat ids are session ids. */
 const OLDER_TOGGLE_KEY = '\u0000older-toggle'
@@ -103,6 +108,9 @@ export function BotSidebarChats({
     }
   }, [revealNonce, foldedHolder, setBotChatFold, bot.hostId, bot.id])
   const hold = useListHold()
+  const front = useBotHomeFrontTab(bot.folderWorkspaceId)
+  // Focus in a listed older row, its portaled menu included (React's tree), so Hide can take focus first.
+  const olderFocused = useRef(false)
   const liveLineIds = useMemo(() => botLiveWorkspaceIds(chats), [chats])
   const revealHeld = useMemo(
     () =>
@@ -126,7 +134,8 @@ export function BotSidebarChats({
     liveLineIds,
     activeLineId: activeLine?.id ?? null,
     reveal: revealHeld,
-    fresh: tree.state === 'ready' && tree.landed && !tree.refreshFailed,
+    front,
+    fresh: tree.state === 'ready' && tree.landed && !tree.refreshFailed && !tree.changeUnread,
     held: hold.held
   })
   // The toggle unmounting while it had focus (fewer than two left to fold) hands focus to the last chat
@@ -165,6 +174,8 @@ export function BotSidebarChats({
       // unmounted until it is opened or lifts back up.
       view={folded ? olderRowView(chatView) : chatView}
       folded={folded}
+      front={front}
+      olderFocused={olderFocused}
       notes={notes}
       lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
       onStep={(next) => onStep(chatView.chat.chatId, next)}
@@ -183,6 +194,7 @@ export function BotSidebarChats({
             open={showOlder}
             onToggle={onToggleOlder}
             removedWithFocus={toggleLeftWithFocus}
+            olderFocused={olderFocused}
           />
         ]
       : []),
@@ -237,6 +249,8 @@ function BotSidebarChat({
   bot,
   view,
   folded,
+  front,
+  olderFocused,
   notes,
   lineageChildrenByParentIdentity,
   onStep,
@@ -246,6 +260,8 @@ function BotSidebarChat({
   view: BotSidebarChatView<Worktree>
   /** Listed under "Hide older". */
   folded: boolean
+  front: BotHomeFrontTab | null
+  olderFocused: React.RefObject<boolean>
   notes: ReadonlyMap<string, string>
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   onStep: (steps: number) => void
@@ -253,7 +269,7 @@ function BotSidebarChat({
 }): React.JSX.Element {
   const t = useTranslate()
   const { chat, foldable, open, lines, paging, steps } = view
-  const { active, toggle, highlight } = useBotChatPress(bot, chat.chatId, chat.liveSessionId)
+  const { active, toggle, highlight } = useBotChatPress(bot, chat, front)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
   const trailing = trailingText(t, view.trailing)
@@ -274,7 +290,24 @@ function BotSidebarChat({
   }
 
   return (
-    <div className="flex flex-col gap-1" data-bot-sidebar-older-chat={folded ? '' : undefined}>
+    <div
+      className="flex flex-col gap-1"
+      data-bot-sidebar-older-chat={folded ? '' : undefined}
+      onFocus={
+        folded
+          ? () => {
+              olderFocused.current = true
+            }
+          : undefined
+      }
+      onBlur={
+        folded
+          ? () => {
+              olderFocused.current = false
+            }
+          : undefined
+      }
+    >
       <BotChatContextMenu bot={bot} chat={chat} onOpen={() => pressRow({ detail: 1 })}>
         {/* Its label names the slot's kind and state; pr-0.5 puts the chevron on the bot chevron's edge. */}
         <div

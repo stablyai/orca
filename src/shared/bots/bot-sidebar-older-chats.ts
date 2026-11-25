@@ -14,13 +14,17 @@ function knownTime(value: number | undefined): number {
 }
 
 /** When a settled chat's outcome is dated: a day of quiet is measured from the latest of its turn, mail
- *  and newest worker's settle time. 0 when its newest worker finished with no settle time (it exited
- *  without reporting), so nothing proves how long it has been quiet. */
+ *  and its workers' settle times. 0 when any worker the read shows finished with no settle time (it exited
+ *  without reporting): finished workers sort by start, so an undated exit can sit behind a dated one and
+ *  nothing proves how long ago it ended. Only the read's shown finished workers (the newest page) count. */
 function settledChatDatedAt(chat: BotChatTreeChat): number {
-  const newest = chat.finished[0]
-  const settledAt = newest ? knownTime(newest.settledAt) : 0
-  if (newest && settledAt === 0) {
-    return 0
+  let settledAt = 0
+  for (const worker of chat.finished) {
+    const at = knownTime(worker.settledAt)
+    if (at === 0) {
+      return 0
+    }
+    settledAt = Math.max(settledAt, at)
   }
   return Math.max(knownTime(chat.lastActiveAt), knownTime(chat.turnDone?.at), settledAt)
 }

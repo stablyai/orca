@@ -1,51 +1,51 @@
 // A bot chat row's fold and paging controls, the same in the sidebar and the Activity panel.
-import { Fragment, useMemo } from 'react'
+import { Fragment } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { flashChatPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
-import { tabOfBotHost } from './use-bot-sidebar-older-chats'
 
-/** Whether a chat's tab is the one in front, its fold toggle, and a flash of its pane for a press
- *  on the row of the chat already in front, for a row whose list reads its fold. */
-export function useBotChatPress(
-  bot: Pick<Bot, 'hostId' | 'id' | 'folderWorkspaceId'>,
+/** The front tab shows this chat. Its own id matches as before; the session a /clear moved it to marks
+ *  it current only when the tab is stamped with the bot's host, never on an unknown owner. */
+function frontTabIsBotChat(
+  tab: Pick<Tab, 'entityId' | 'executionHostId'> | null,
+  hostId: string,
   chatId: string,
-  /** The session a /clear moved the chat to, whose id its tab then carries. */
-  liveSessionId?: string
+  liveSessionId: string | undefined
+): boolean {
+  if (!tab) {
+    return false
+  }
+  return (
+    tab.entityId === chatId ||
+    (liveSessionId !== undefined &&
+      tab.entityId === liveSessionId &&
+      tab.executionHostId === hostId)
+  )
+}
+
+/** Whether a chat's tab is the one in front (from the list's one read of the bot home's front chat tab),
+ *  its fold toggle, and a flash of its pane for a press on the row of the chat already in front. */
+export function useBotChatPress(
+  bot: Pick<Bot, 'hostId' | 'id'>,
+  chat: { chatId: string; liveSessionId?: string },
+  front: Pick<Tab, 'id' | 'entityId' | 'executionHostId'> | null
 ): {
   active: boolean
   toggle: (open: boolean) => void
   highlight: () => void
 } {
-  const homeKey = useMemo(() => folderWorkspaceKey(bot.folderWorkspaceId), [bot.folderWorkspaceId])
   const setBotChatFold = useAppStore((s) => s.setBotChatFold)
-  const active = useAppStore((s) => {
-    if ((s.activeWorkspaceKey ?? s.activeWorktreeId) !== homeKey) {
-      return false
-    }
-    const tab = selectFrontTab(s)
-    return (
-      tab !== null &&
-      tabOfBotHost(tab, bot.hostId) &&
-      (tab.entityId === chatId || tab.entityId === liveSessionId)
-    )
-  })
+  const active = frontTabIsBotChat(front, bot.hostId, chat.chatId, chat.liveSessionId)
   return {
     active,
-    toggle: (open) => setBotChatFold(bot.hostId, bot.id, chatId, open ? 'folded' : 'open'),
+    toggle: (open) => setBotChatFold(bot.hostId, bot.id, chat.chatId, open ? 'folded' : 'open'),
     highlight: () => {
-      const tab = selectFrontTab(useAppStore.getState())
-      if (
-        tab !== null &&
-        tabOfBotHost(tab, bot.hostId) &&
-        (tab.entityId === chatId || tab.entityId === liveSessionId)
-      ) {
-        flashChatPaneRim(tab.id)
+      if (front && active) {
+        flashChatPaneRim(front.id)
       }
     }
   }

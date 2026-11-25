@@ -155,6 +155,10 @@ const CHATS = [
   // Its newest worker exited without reporting: nothing dates the failure, so it never folds.
   chat('undated-failure', { finished: [worker('w-lost', 'failed')] }),
   chat('dated-failure', { finished: [worker('w-done', 'failed', DAYS_AGO_4)] }),
+  // Sorted by start, an undated exit can sit behind a dated worker: it still holds the chat.
+  chat('undated-behind-dated', {
+    finished: [worker('w-dated', 'done', DAYS_AGO_4), worker('w-lost-later', 'failed')]
+  }),
   chat('failed-2', { unseen: true })
 ]
 

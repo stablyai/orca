@@ -95,6 +95,7 @@ function homeTab(sessionId: string, focusedAt?: number) {
     color: null,
     sortOrder: 0,
     createdAt: NOW - 5 * 24 * HOUR,
+    executionHostId: 'local' as const,
     ...(focusedAt === undefined ? {} : { lastFocusedAt: focusedAt })
   }
 }
