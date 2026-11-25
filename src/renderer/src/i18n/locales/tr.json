@@ -358,6 +358,19 @@
       "title": "Tarayıcı sayfası durdu",
       "failed": "Tarayıcı sayfası beklenmedik şekilde durdu. Geri yüklemek için yeniden deneyin."
     },
+    "serverPage": {
+      "download": {
+        "started": "{{host}} üzerinde {{path}} konumuna indiriliyor",
+        "saveHere": "Bu bilgisayara kaydet",
+        "copying": "{{filename}} bu bilgisayara indiriliyor…",
+        "copied": "{{path}} konumuna kaydedildi",
+        "copyFailed": "{{filename}} bu bilgisayara kaydedilemedi.",
+        "showInFolder": "Klasörde Göster"
+      },
+      "print": {
+        "failed": "Sayfa PDF olarak kaydedilemedi"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "Bu masaüstünde uzak tarayıcı başlatılamadı. Eşlenen bağlantıyı kontrol edip tekrar deneyin.",
       "unavailableTitle": "İstemci taraflı tarayıcı kullanılamıyor",
@@ -575,6 +588,25 @@
         "title": "Kaydedilmiş girişler",
         "otherLogins": "Bu sitedeki diğer girişler"
       }
+    },
+    "profileCookieClear": {
+      "label": "Çerezler",
+      "action": "Çerezleri temizle…",
+      "rowLocal": "Bu bilgisayarda {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
+      "rowServer": "{{host}} üzerinde {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir.",
+      "rowSsh": "{{host}} için {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
+      "unavailable": "Seçili ana bilgisayarda bu profil kullanılamıyor.",
+      "confirmTitle": "{{host}} üzerinde {{profile}} içindeki çerezler temizlensin mi?",
+      "confirmTitleLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlensin mi?",
+      "confirmDescriptionServer": "Bu işlem, bu profildeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir. Diğer profiller ve sunucular çerezlerini korur.",
+      "confirmDescription": "Bu işlem, bu profildeki tüm sitelerdeki oturumunuzu kapatır. Diğer profiller ve sunucular çerezlerini korur.",
+      "clear": "Temizle",
+      "cancel": "İptal",
+      "cleared": "{{host}} üzerinde {{profile}} içindeki çerezler temizlendi.",
+      "clearedLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlendi.",
+      "failed": "{{host}} üzerinde {{profile}} içindeki çerezler temizlenemedi. Yeniden deneyin.",
+      "failedLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlenemedi. Yeniden deneyin.",
+      "sshHostOption": "{{host}} (SSH)"
     }
   },
   "editor": {
@@ -881,6 +913,9 @@
           "browse": "Chrome Web Store",
           "openFailed": "Chrome Web Store'a göz atmak için bir çalışma alanı açın."
         }
+      },
+      "sessionHost": {
+        "sshDetail": "Bu SSH sunucusunun sayfaları bu bilgisayarda açılır."
       }
     },
     "agents": {
@@ -1240,6 +1275,7 @@
       "progress": "Orca {{version}} sürümünün kullanımınıza sunulmasına kalan süre",
       "skipDelayOnceHint": "Bu sürümü şimdi kontrol edin. Gecikme ayarınız değişmez.",
       "ee1d96f74a": "Gecikmeyi bir kez atla",
+      "teamManaged": "Ekibiniz tarafından ayarlandı",
       "1b4d825e0e": "Güncelleme gecikmesi",
       "description": "Orca bir sürümü sunmadan önce yayınlanmasının üzerinden bu kadar gün geçmesini bekler."
     },
@@ -1267,6 +1303,25 @@
       "description": "Desteklenen masaüstü kurulumlarında Orca, düzenli denetimler sırasında uygun güncellemeleri indirir ve bunları yüklemek için otomatik olarak yeniden başlatılır.",
       "info": "Otomatik güncellemeler hakkında",
       "saveFailed": "Otomatik güncelleme ayarı kaydedilemedi."
+    },
+    "cloudConsole": {
+      "manageInBrowser": "Tarayıcıda yönet",
+      "openFailed": "Tarayıcı açılamadı. Yeniden deneyin.",
+      "teamAdmin": {
+        "title": "Ekip ve yönetici",
+        "description": "Ekibinizi tarayıcıda yönetin."
+      },
+      "signInFailed": "Konsolda oturumunuz açılamadı",
+      "signInFailedDetail": "Tarayıcınız konsolu yine de açtı. Devam etmek için orada oturum açın."
+    },
+    "mobile": {
+      "teamDisabledRelay": "Orca Relay ekibiniz tarafından kapatıldı. LAN kullanın."
+    },
+    "computerUse": {
+      "teamDisabled": "Computer Use ekibiniz tarafından kapatıldı."
+    },
+    "artifacts": {
+      "teamDisabled": "Artifact paylaşımı ekibiniz tarafından kapatıldı."
     }
   },
   "menu": {
@@ -1914,8 +1969,26 @@
           "tab": {
             "open": {
               "urlFailed": "URL açılamadı.",
-              "searchFailed": "{{value0}} ile arama yapılamadı."
+              "searchFailed": "{{value0}} ile arama yapılamadı.",
+              "failure": {
+                "stageError": "Hata · {{value0}} · {{value1}}",
+                "hostNotFound": "Çalışma alanının bilgisayarı bulunamadı.",
+                "linkBlocked": "Bağlantıyı açma engellendi.",
+                "notWebLink": "Bir web bağlantısı değil."
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "{{host}} üzerindeki {{port}} portu yönlendirilemedi. {{host}} üzerindeki Orca'yı güncelleyip yeniden deneyin.",
+            "failed": "{{host}} üzerindeki {{port}} portu yönlendirilemedi. Bağlantıyı kontrol edip yeniden deneyin.",
+            "forwarded": "{{host}} üzerindeki {{port}} portu yönlendirildi",
+            "opened": "{{address}} varsayılan tarayıcınızda açıldı.",
+            "otherMachine": "{{port}} portu yönlendirilemedi: bu çalışma alanı {{host}} üzerinde doğrudan çalışmıyor.",
+            "useSshPorts": "{{host}} üzerindeki {{port}} portu yönlendirilemedi. Portlar bölümünde yönlendirip yeniden deneyin.",
+            "restoredMoved": "{{host}} üzerindeki {{port}} portu localhost:{{localPort}} adresine yönlendirildi",
+            "restoredMovedReason": "localhost:{{previousPort}} bu bilgisayarda kullanımda."
           }
         }
       },
@@ -4267,6 +4340,7 @@
             "copyLinkFailed": "Bağlantı kopyalanamadı",
             "downloadOpenWithDefaultApp": "İndir ve varsayılan uygulamayla aç",
             "downloadOpenFailed": "'{{value0}}' indirilemedi.",
+            "openLinkInThisGroupRefused": "Bağlantı bu grupta açılamadı",
             "openInNewTab": "Yeni sekmede aç",
             "openInThisGroupRefused": "{{value0}} bu grupta açılamadı"
           },
@@ -4860,6 +4934,8 @@
             "cursorUsageMenu": "Cursor Kullanımı",
             "hiddenUsageProviders": "Ayrıca: {{value0}}",
             "zcodeUsageMenu": "ZCode Kullanımı",
+            "rateLimitResetsUnsupportedWsl_one": "{{count}} sıfırlama hakkı kullanılabilir · WSL'de henüz yok",
+            "rateLimitResetsUnsupportedWsl_other": "{{count}} sıfırlama hakkı kullanılabilir · WSL'de henüz yok",
             "rateLimitResetsAvailable_other": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
             "rateLimitResetsAvailable_one": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
             "staleCodexSessions_other": "{{count}} Codex oturumu hâlâ eski hesapta.",
@@ -5092,6 +5168,7 @@
             "updatedAgo": "{{time}} güncellendi",
             "notYetUpdated": "Henüz güncellenmedi",
             "rateLimitResetsAvailable_other": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
+            "unsupportedOwner": "{{server}} için kullanım bilgisi alınamıyor",
             "rateLimitResetsAvailable_one": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir"
           },
           "SshTargetStatusRow": {
@@ -5110,6 +5187,7 @@
             "gotIt": "Anladım"
           },
           "UsageRosterPanel": {
+            "wslUsageNotShown": "WSL kullanımı henüz gösterilmiyor",
             "title": "Kullanım",
             "openDetails": "Kullanım ayrıntılarını aç",
             "notSignedIn": "oturum açılmadı",
@@ -8235,6 +8313,12 @@
           },
           "worktreeCardStyle": {
             "title": "Kart stili"
+          },
+          "sharedCodexServers": {
+            "title": "Paylaşılan Codex sunucuları",
+            "description": "Aynı kurulumdaki Codex sohbetleri, her sohbet için ayrı bir arka plan işlemi başlatmak yerine tek bir işlemi paylaşır.",
+            "copy": "Daha az bellek kullanır ve yeni sohbetleri daha hızlı başlatır. Paylaşılan bir işlem çökerse tüm sohbetleri yeniden bağlanır. Bu ayarı değiştirdikten sonra bu bilgisayarda başlatılan sohbetlere uygulanır; uzak ve WSL sunucuları sohbet başına bir işlem tutmaya devam eder.",
+            "toggleLabel": "Paylaşılan Codex sunucularını aç veya kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -10398,6 +10482,12 @@
               "inWindow": "pencere içinde",
               "worktrees": "worktree'ler",
               "eaf17a7214": "Ajan Panosu"
+            },
+            "sharedCodexServers": {
+              "title": "Paylaşılan Codex sunucuları",
+              "description": "Aynı kurulumdaki Codex sohbetleri, her sohbet için ayrı bir arka plan işlemi başlatmak yerine tek bir işlemi paylaşır.",
+              "codex": "codex",
+              "memory": "bellek"
             }
           }
         },
@@ -12191,6 +12281,7 @@
           "placeholder": "/Users/you/plugins/my-plugin veya C:\\Users\\you\\plugins\\my-plugin",
           "add": "Yol ekle",
           "dialogTitle": "Geliştirme klasörleri",
+          "teamDisabled": "Geliştirme klasörleri ekibiniz tarafından kapatıldı.",
           "reviewHelp": "Bir kez incelenir. Sonraki kod değişiklikleri sormadan çalışır."
         },
         "PluginInstallDialog": {
@@ -12553,6 +12644,11 @@
           "title": "Orca Hesabı",
           "description": "Çalışmanızı anında paylaşın ve nerede olursanız olun Orca Mobile'dan masaüstünüze ulaşın.",
           "searchDescription": "Artifact'ler ve Orca Relay tarafından kullanılan hesapta oturum açın veya kapatın.",
+          "managed": "Orca ayarlarının bir kısmı ekibiniz tarafından yönetiliyor.",
+          "deviceReportNamedViewers": "{{teams}} içindeki sahipler ve yöneticiler bu cihazdan gelen raporları görüntüleyebilir.",
+          "deviceReportViewers": "Ekip sahipleri ve yöneticileri bu cihazdan gelen raporları görüntüleyebilir.",
+          "reportingDetails": "Cihaz raporlama ayrıntıları",
+          "reportingDisclosure": "Cihazlar görünümü; Orca sürümünüzü, yayın kanalını, cihaz adını, platformu, güncelleme durumunu, Orca'nın yükleyemediği gerekli eklentileri ve cihazın en son ne zaman rapor verdiğini gösterir.",
           "benefitsTitle": "Hesabınıza dahil",
           "artifactsTitle": "Artifact paylaşımı",
           "artifactsDescription": "HTML ve Markdown dosyalarını yayınlayın, ardından paylaşılan her bağlantıyı Orca'dan yönetin.",
@@ -13162,6 +13258,10 @@
           "defaultHostWebHelp": "Bu tarayıcı yeni projeleri seçilen sunucuda açar.",
           "updateAll": "Tümünü güncelle",
           "updatesCount_other": "{{count}} güncelleme mevcut",
+          "shareRowHint": "Başka bir Orca'nın buraya bağlanmasına izin verin.",
+          "manageShare": "Yönet",
+          "share": "Paylaş",
+          "serversCaption": "Sunucular",
           "updatesCount_one": "{{count}} güncelleme mevcut",
           "addServer": "Sunucu ekle",
           "moreWaysToAdd": "Sunucu eklemenin diğer yolları",
@@ -13483,6 +13583,7 @@
           "shownOf": "{{value0}} / {{value1}}"
         },
         "PluginManagerRows": {
+          "requiredByTeam": "Ekibinizce zorunlu kılındı",
           "reinstall": "Yeniden yükle",
           "crashedCount": "Art arda {{value0}} kez çöktü",
           "crashed": "Başlatılırken çöktü",
@@ -21589,7 +21690,10 @@
         "keepOpen": "Açık tut",
         "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
         "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
-        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır"
+        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır",
+        "boundRunning": "{{worker}} ile birlikte kapanır",
+        "boundFinished": "{{worker}} tamamlandı · {{countdown}} içinde kapanır",
+        "boundFallbackName": "ilgili çalışan"
       }
     },
     "wslHostMark": {
@@ -22694,7 +22798,8 @@
       "noEmailNotSaved": "agy e-posta adresi bildirmedi · kaydedilmedi",
       "saveShort": "Kaydet",
       "readAt": "Okunma zamanı: {{time}}",
-      "active": "Etkin"
+      "active": "Etkin",
+      "chatDescriptionKeyOnAgy": "Yeni sohbetler, aşağıdaki oturum açma bilgisiyle agy üzerinde çalışır ve terminaldeki agy'den ayrı tutulur."
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -22768,7 +22873,14 @@
         "title": "Claude kullanımını sorgula",
         "description": "Kullanımı, kredileri ve etkin olmayan hesapları kontrol etmek için Claude Code oturumunuzu kullanır. Yalnızca çalışan terminal oturumlarından gelen canlı verileri kullanmak için kapatın.",
         "about": "Claude kullanım sorgulaması hakkında"
-      }
+      },
+      "organizationSuffix": "Kuruluş ···{{suffix}}",
+      "personalOrganization": "Kişisel"
+    },
+    "codex": {
+      "usageSignInLabel": "Oturum açılmadı",
+      "usageSignInMessage": "Kullanımı görmek için oturum açın.",
+      "usageSignInSettingsMessage": "Oturum açmak için Ayarlar → Hesaplar bölümünü açın."
     },
     "managedData": {
       "description": "Orca ana makinesindeki bir terminalde bu komutu çalıştırarak hesap ekleyin. Seçim, o ana makinede açıkça başlatılan yeni ajanlar için geçerlidir; doğrudan SSH aktarması ve Windows ana makinesindeki WSL başlatmaları kendi kimlik bilgilerini kullanır.",
@@ -22911,7 +23023,8 @@
       "detailsFailed": "Ayrıntılar yüklenemedi",
       "listFailed": "Projeler listelenemedi",
       "organizations": "Kuruluşlar",
-      "viewFailed": "Proje görünümü getirilemedi"
+      "viewFailed": "Proje görünümü getirilemedi",
+      "chooseProject": "Bir proje seçin"
     },
     "error": {
       "notFoundState": "Bu proje veya görünüm bulunamadı.",
@@ -23089,6 +23202,12 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "Güncelleme yüklenmeye hazır",
+      "summary": "Orca'dan çıkın. Yüklemeden sonra yeniden açın.",
+      "quit": "Orca'dan çık",
+      "later": "Daha sonra"
+    },
     "installBlock": {
       "instancesLabel": "Orca'yı kullanan örnekler",
       "browserLabel": "Arka plan tarayıcısı",
@@ -23151,9 +23270,25 @@
       "rateLimitedInMinutes_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin.",
       "rateLimitedInMinutesSignedOut_one": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
       "rateLimitedInMinutesSignedOut_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
+      "teamUpdatePolicy": "Orca güncellemelerini ekibiniz yönetiyor.",
       "automaticInstallCheckpointFailed": "Orca, yeniden başlamadan önce geçerli pencereyi kaydedemedi. Güncellemeyi yeniden yüklemeyi deneyin.",
       "automaticInstallTerminalBusy": "Yeniden başlatma bazı terminalleri kapatır. Orca daha sonraki bir güncelleme denetiminde yeniden dener.",
       "macStagingTimeout": "macOS hâlâ güncellemeyi hazırlıyor. Bu durum sürerse Orca’dan çıkıp uygulamayı yeniden açın."
+    },
+    "emergencyRequired": {
+      "title": "Orca {{version}} gerekli",
+      "summary": "Orca {{version}} gerekli. Güncellemek için yeniden başlatın."
+    },
+    "teamRequired": {
+      "summary": "Ekibiniz Orca {{version}} sürümünü gerektiriyor. Güncellemek için yeniden başlatın.",
+      "title": "Ekibiniz Orca {{version}} sürümünü gerektiriyor",
+      "restartNow": "Şimdi yeniden başlat",
+      "countdown": "Geri sayım bittikten sonra Orca oturumlarınızı kaydedip yeniden başlatacak. Etkin ajanlar yeniden başlatmayı geciktirebilir.",
+      "waiting": "Orca yeniden başlatmadan önce etkin ajanları bekliyor.",
+      "retry": "Orca bu güncellemeyi bir sonraki başlatışında yeniden deneyecek.",
+      "manual": "Otomatik yükleme yapılamadı. Bu güncellemeyi elle yükleyin.",
+      "deadline": "{{deadline}} tarihine kadar yeniden başlatın. Orca yeniden başlatmadan önce oturumlarınızı kaydeder.",
+      "download": "İndirmeleri aç"
     }
   },
   "jira": {
@@ -23373,7 +23508,11 @@
     "refresh": "Yenile",
     "restartLocal": "Yerel arka plan hizmetini yeniden başlat",
     "killAllLocal": "Tüm yerel oturumları sonlandır",
-    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur."
+    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur.",
+    "chatRow": {
+      "tooltip": "{{agent}} sohbeti ve altında çalışan işlemler dahil"
+    },
+    "sharedAgentProcesses": "Paylaşılan ajan işlemleri"
   },
   "browserExtensions": {
     "permission": {
@@ -24078,6 +24217,7 @@
       },
       "botProviderErrorNotSaved": "Botun turu başarısız oldu ancak bu çalıştırmada sağlayıcının hatası kaydedilmedi. Asıl sohbette daha fazla ayrıntı olabilir.",
       "botsOff": "Botlar Ayarlar’da kapalı olduğu için Orca bu çalıştırmayı atladı.",
+      "botsOffByTeam": "Bots ekibiniz tarafından kapatıldığı için Orca bu çalıştırmayı atladı.",
       "botMissing": "Bu otomasyonun adına çalıştığı bot artık yok.",
       "botFolderMissing": "Botun klasörü artık kullanılamıyor.",
       "botPaused": "{{bot}} duraklatıldığı için Orca bu çalıştırmayı atladı."
@@ -24110,7 +24250,8 @@
     },
     "botTarget": {
       "hostNeedsUpdate": "Botlarının otomasyon kullanabilmesi için {host} üzerindeki Orca sunucusunu güncelleyin."
-    }
+    },
+    "hostUnreachable": "{{host}} sunucusuna ulaşılamadı. Yeniden bağlandığında tekrar deneyin."
   },
   "codeHost": {
     "errors": {
@@ -25010,6 +25151,13 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "Ekibiniz tarafından engellendi.",
+    "requiredFailures": {
+      "toast": "Gerekli bir eklenti yüklenemedi",
+      "open": "Eklentileri Aç",
+      "label": "Ekibinizce zorunlu kılındı",
+      "body": "Orca {{plugin}} eklentisini yükleyemedi."
+    },
     "actionConfirmation": {
       "cancel": "İptal",
       "deleteAutomation": "{{plugin}}, “{{automation}}” otomasyonunu silmek istiyor",
@@ -25023,6 +25171,19 @@
       "unknownProject": "bilinmeyen bir proje",
       "automationNewWorkspaces": "Otomasyon {{id}}: {{schedule}} zamanlamasıyla her çalıştırmada {{project}} için yeni bir çalışma alanı.",
       "automationInWorkspace": "Otomasyon {{id}}: {{schedule}} zamanlamasıyla {{project}} / {{workspace}} içinde."
+    },
+    "catalog": {
+      "managedByTeam": "Ekibiniz tarafından yönetiliyor",
+      "managedByNamedTeams": "{{teams}} tarafından yönetiliyor",
+      "teamPublisher": "Ekibiniz"
+    },
+    "displayText": {
+      "tb0b38488": "Orca için GitHub Temaları",
+      "tb8aa98fc": "Orca için VS Code Varsayılan Temaları",
+      "tfc425a57": "Multipass VM Tarifleri",
+      "t0f9f5503": "GitHub'ın kendi VS Code temaları: Light Default, Dark Default, Dark Dimmed ve yüksek kontrastlı varyantlar.",
+      "t0b4f7e19": "VS Code'un varsayılan renk temalarının resmî olmayan portları: Dark Modern, Light Modern, Dark+ ve Light+.",
+      "tc86eed7d": "Tek kullanımlık Multipass çalışma alanları için gözden geçirilmiş bir başlangıç yaşam döngüsü."
     }
   },
   "agentPicker": {
@@ -25184,6 +25345,21 @@
     "sendReport": "Raporu gönder"
   },
   "agentCliUpdate": {
+    "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "thisComputer": "Bu bilgisayar"
+  },
+  "activityBar": {
+    "moveUp": "Yukarı taşı",
+    "moveDown": "Aşağı taşı",
+    "hide": "Gizle",
+    "show": "{{name}} öğesini göster",
+    "dragStart": "{{name}} alındı",
+    "dragOver": "{{name}}, {{target}} üzerinde",
+    "dragEnd": "{{name}} bırakıldı",
+    "dragCancel": "{{name}} öğesinin taşınması iptal edildi",
+    "moveLeft": "Sola taşı",
+    "moveRight": "Sağa taşı",
+    "reset": "Sekme sırasını sıfırla"
   }
 }
