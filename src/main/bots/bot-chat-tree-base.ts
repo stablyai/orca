@@ -192,7 +192,7 @@ function botChatBaseChatOfRow(
     paneKey: structuredAgentSessionStatusPaneKey(live?.sessionId ?? row.id),
     ...(live && live.sessionId !== row.id ? { liveSessionId: live.sessionId } : {}),
     closed,
-    empty: !origin && record.sessionId === row.id && botChatRecordEmpty(record)
+    empty: !origin && record.sessionId === row.id && botChatRecordEmpty(live ?? record)
   }
 }
 
