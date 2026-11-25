@@ -24,6 +24,10 @@ export function comparableKagiSessionUrl(rawUrl: string): string | null {
   if (kept === null) {
     return null
   }
-  parsed.search = kept.replaceAll('%20', '+')
+  const comparable = kept.replaceAll('%20', '+')
+  // Assigning '' would drop an explicit empty `?`; only a removed token may empty the query.
+  if (comparable !== parsed.search) {
+    parsed.search = comparable
+  }
   return parsed.href
 }

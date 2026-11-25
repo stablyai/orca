@@ -15,6 +15,8 @@ export function kagiQueryWithoutToken(search: string): string | null {
   for (const parameter of query.split('&')) {
     let name: string
     try {
+      // Decoding the whole parameter rejects an undecodable value as well as name.
+      decodeURIComponent(parameter.replaceAll('+', ' '))
       // Same name decoding as URLSearchParams, so every spelling of `token` is dropped.
       name = decodeURIComponent(parameter.split('=')[0].replaceAll('+', ' '))
     } catch {

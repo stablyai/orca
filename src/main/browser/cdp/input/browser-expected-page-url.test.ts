@@ -59,3 +59,17 @@ it('accepts its own redacted receipt back as the expected URL', () => {
   expect(checkedUrl).toBe('https://kagi.com/search?q=~a:b,c/d')
   expect(() => new ExpectedPageUrlGuard(checkedUrl, 'page').verify(live)).not.toThrow()
 })
+
+it('keeps an explicit empty query apart and requires an exact match for undecodable values', () => {
+  const verify = (expected: string, live: string): void =>
+    new ExpectedPageUrlGuard(expected, 'page').verify([live])
+  expect(() => verify('https://kagi.com/search?', 'https://kagi.com/search')).toThrow()
+  expect(() => verify('https://kagi.com/search?', 'https://kagi.com/search?')).not.toThrow()
+  // A token-only query still redacts to no query at all.
+  expect(() =>
+    verify('https://kagi.com/search', 'https://kagi.com/search?token=secret')
+  ).not.toThrow()
+  expect(() =>
+    verify('https://kagi.com/search?q=%FF+a', 'https://kagi.com/search?q=%FF%20a&token=secret')
+  ).toThrow()
+})
