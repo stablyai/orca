@@ -1,4 +1,4 @@
-// Guards PR #<n>: listing or checking a host's MCP servers or a bot's tools, or flipping one server's
+// Guards PR #49123: listing or checking a host's MCP servers or a bot's tools, or flipping one server's
 // switch, opens each saved credential a fixed number of times, not once per credentialed server.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
