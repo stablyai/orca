@@ -1097,7 +1097,7 @@
       "signInDetail": "Sign in to Orca on your desktop to reconnect",
       "hostOffline": "{{host}} is offline",
       "hostOfflineDetail": "Check it's awake, Orca is running, and you're signed in",
-      "relayAccessExpired": "Relay access expired for {{host}}",
+      "relayAccessRefused": "Relay refused access for {{host}}",
       "rePairDetail": "Re-pair with your desktop",
       "relayUnreachable": "Can't reach Relay",
       "checkConnection": "Check your connection",
@@ -3941,7 +3941,8 @@
         "needsAuth_other": "{{count}} need sign-in",
         "failed": "{{count}} failed"
       },
-      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
+      "manage": "Manage MCP servers"
     },
     "selectionQuote": {
       "action": "Quote",
@@ -7310,7 +7311,13 @@
         "context7": "Current docs and examples for code libraries",
         "atlassian": "Jira issues and Confluence pages",
         "notion": "Search, read and edit pages",
-        "stripe": "Look up payments, customers and subscriptions"
+        "stripe": "Look up payments, customers and subscriptions",
+        "clickup": "Manage tasks, lists and docs",
+        "airtable": "Query and edit bases, tables and records",
+        "todoist": "Add, sort and complete tasks",
+        "zapier": "Run actions in the apps you set up in Zapier",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles"
       },
       "webhooks": {
         "line": "Events from any tool or script"
@@ -8402,10 +8409,6 @@
           "grokBillingUsageMissing": "Grok billing response did not include credit usage",
           "grokUsageUnauthorizedHttp": "Grok usage request unauthorized (HTTP {{status}})",
           "grokUsageFailedHttp": "Grok usage request failed (HTTP {{status}})",
-          "geminiOauthDisabled": "Gemini CLI OAuth is disabled in settings",
-          "geminiCredentialsNotFound": "Gemini CLI credentials not found",
-          "geminiProjectIdNotFound": "Gemini project ID not found",
-          "tokenRefreshFailed": "Token refresh failed",
           "codexNotSignedIn": "Codex not signed in",
           "codexHomeUnavailable": "Codex home unavailable",
           "wslCodexHomeUnavailable": "WSL Codex home unavailable for {{distro}}",
@@ -8424,9 +8427,6 @@
           "ptyUsageTimeout": "PTY timeout — /usage panel did not render",
           "cliExitedBeforeUsage": "CLI exited before /usage rendered",
           "cliExitedBeforeStatus": "CLI exited before status was available",
-          "quotaFetchFailed": "Quota fetch failed ({{status}})",
-          "geminiProjectIdLoadFailed": "Failed to load Gemini project ID (HTTP {{status}})",
-          "geminiProjectIdMissingInResponse": "Gemini project ID not found in API response",
           "minimaxUsageFetchFailed": "MiniMax usage fetch failed ({{status}})",
           "minimaxReturnedError": "MiniMax returned an error",
           "minimaxInvalidUsageResponse": "Invalid MiniMax usage response",

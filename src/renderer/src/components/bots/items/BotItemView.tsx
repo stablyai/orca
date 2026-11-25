@@ -248,30 +248,31 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, fromBox, answerNone, waitingLine } = useBotItemQuestionSteps(
-    bot,
-    item,
-    view.events,
-    sendLatest,
-    pending.shown
-  )
+  const { steps, sent, quick, fromBox, answerNone, answerWaiting, waitingLine } =
+    useBotItemQuestionSteps(bot, item, view.events, sendLatest, pending.shown)
   const quickReplies = useMemo(
     () =>
       deleted
         ? undefined
         : {
             send: quick,
-            edit: (text: string) => comment.current?.fill(text),
+            edit: (text: string) => {
+              answerWaiting()
+              comment.current?.fill(text)
+            },
             recover: (text: string) => {
               // A comment of its own: it answers no line, whatever the box names next.
               answerNone()
               comment.current?.fill(text, true)
             },
-            type: () => comment.current?.answer(),
+            type: () => {
+              answerWaiting()
+              comment.current?.answer()
+            },
             steps,
             sent
           },
-    [deleted, comment, quick, answerNone, steps, sent]
+    [deleted, comment, quick, answerNone, answerWaiting, steps, sent]
   )
   const loadingTarget = useWaitingQuestionPage(item.waitingAsk ?? item.question?.eventId, view)
   const answering = steps?.sending ?? pending.shown.some(({ failed }) => !failed)
