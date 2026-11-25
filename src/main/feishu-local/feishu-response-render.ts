@@ -67,7 +67,7 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
   if (complete) {
     elements.unshift(prose(response.final || text || '已处理'))
     if (history.length) {
-      elements.push(folded('中途说明', history))
+      elements.push(folded('过程记录', history))
     }
   } else {
     elements.push({
