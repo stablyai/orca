@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { openBotHomeTab } from '@/lib/bot-catalog'
+import { openBotHomeTab } from '@/lib/bot-home-open'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-workspace-record-index'

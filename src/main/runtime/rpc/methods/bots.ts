@@ -1,4 +1,3 @@
-import { hostOffersNewChatAgent } from './bots-agent-choices'
 import { SHARE_BY_BOT, SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
 import {
   BotActivityRead,
@@ -23,7 +22,7 @@ import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
 import { ownerOnly } from './bots-caller-gates'
 import { BOT_CREATE_METHOD } from './bots-create'
-import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
+import { BOT_AGENT_CHOICES_METHOD, hostOffersNewChatAgent } from './bots-agent-choices'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'

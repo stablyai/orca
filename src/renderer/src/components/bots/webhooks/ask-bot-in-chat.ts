@@ -1,4 +1,4 @@
-import { openBotHomeTab } from '@/lib/bot-catalog'
+import { openBotHomeTab } from '@/lib/bot-home-open'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 

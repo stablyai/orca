@@ -51,7 +51,6 @@ import { NativeChatVisualOwnerContext } from '@/components/native-chat/media/vis
 import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
-export { openBotHome, openBotHomeTab, openBotHomeTabById } from './bot-home-open'
 
 const NO_BOTS: readonly Bot[] = []
 

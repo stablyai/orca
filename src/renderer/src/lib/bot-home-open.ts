@@ -25,6 +25,7 @@ import { openBotChat, readHostBots, refreshBotHost, startBotSession } from './bo
 import { readBots } from './bot-catalog-snapshot'
 import { botHostTarget, botRefKey, callBotRpc, type BotRef } from './bot-hosts'
 import { activateAndRevealFolderWorkspace } from './workspace/activation/worktree-activation'
+import { setAgentHomeChatOpener } from './workspace/activation/initial-surface/agent-home-initial-surface'
 
 /** False when the home is not in the catalog (or not reachable) yet. A home with no tab open shows
  *  the agent's chat. */
@@ -95,9 +96,14 @@ async function sharedBotOpeningSession(bot: Bot): Promise<string> {
     : await startBotSession(bot, { agent: bot.agent })
 }
 
+/** Lets activation open an agent's chat in place of a seeded shell in its home. */
+export function installAgentHomeChatSurface(): () => void {
+  return setAgentHomeChatOpener(openAgentHomeChatInsteadOfShell)
+}
+
 /** Whether `worktreeId` is an agent's home, whose chat then opens in place of a seeded shell. A
  *  shared agent's home is one before its host first answers, so it never gets a shell either. */
-export function openAgentHomeChatInsteadOfShell(worktreeId: string): boolean {
+function openAgentHomeChatInsteadOfShell(worktreeId: string): boolean {
   const bot = botOfHomeWorkspace(readBots(), worktreeId)
   if (bot) {
     void openBotHomeChat(bot)

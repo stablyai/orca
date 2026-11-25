@@ -1,38 +1,46 @@
-// The agents a shared agent's owner offers for a new chat, read from the owner's computer the first
-// time its + menu opens here; kept for the session, as that computer's agents rarely change.
+// The agents a shared agent's owner offers for a new chat, read from the owner's computer each time its
+// + menu opens here, so the menu follows what that computer offers now.
 import { useEffect, useState } from 'react'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotNewChatAgent } from '../../../../../shared/bots/bot-agent-choices'
 import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
 
-const kept = new Map<string, readonly BotNewChatAgent[]>()
+/** The owner's list, or null when its computer didn't answer with one. */
+export async function readSharedBotOwnerAgents(bot: Bot): Promise<BotNewChatAgent[] | null> {
+  try {
+    const { newChatAgents } = await callBotRpc<{ newChatAgents?: BotNewChatAgent[] }>(
+      bot,
+      'bots.agentChoices'
+    )
+    return newChatAgents && newChatAgents.length > 0 ? newChatAgents : null
+  } catch (error) {
+    console.warn('[shared-agents] could not read the owner’s agents', error)
+    return null
+  }
+}
 
-/** Null until read (or while the owner's computer can't answer); `menuOpen` starts the read. */
+/** The last list the owner's computer answered while this menu was mounted, else null; each open
+ *  reads it again, and a read that fails leaves the last answer. */
 export function useSharedBotOwnerAgents(
   bot: Bot | null,
   shared: boolean,
   menuOpen: boolean
 ): readonly BotNewChatAgent[] | null {
   const key = bot && shared ? botRefKey(bot) : null
-  const [, setRead] = useState(0)
+  const [answer, setAnswer] = useState<{ key: string; agents: BotNewChatAgent[] } | null>(null)
   useEffect(() => {
-    if (!bot || !key || !menuOpen || kept.has(key)) {
+    if (!bot || !key || !menuOpen) {
       return
     }
     let live = true
-    void callBotRpc<{ newChatAgents?: BotNewChatAgent[] }>(bot, 'bots.agentChoices')
-      .then(({ newChatAgents }) => {
-        if (newChatAgents) {
-          kept.set(key, newChatAgents)
-          if (live) {
-            setRead((n) => n + 1)
-          }
-        }
-      })
-      .catch(() => undefined)
+    void readSharedBotOwnerAgents(bot).then((agents) => {
+      if (live && agents) {
+        setAnswer({ key, agents })
+      }
+    })
     return () => {
       live = false
     }
   }, [bot, key, menuOpen])
-  return key ? (kept.get(key) ?? null) : null
+  return answer?.key === key ? answer.agents : null
 }

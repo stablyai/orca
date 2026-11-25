@@ -1,6 +1,6 @@
 // Opens a file in a bot's home as an editor tab on the bot's page, for edits longer than Settings' fields suit.
 import { toast } from 'sonner'
-import { openBotHome } from '@/lib/bot-catalog'
+import { openBotHome } from '@/lib/bot-home-open'
 import { botTarget } from '@/lib/bot-hosts'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useAppStore } from '@/store'

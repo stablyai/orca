@@ -9,9 +9,9 @@ import { NewBotDialog } from './NewBotDialog'
 
 vi.mock('@/lib/bot-catalog', () => ({
   createBot: async () => ({ id: 'bot-1', name: 'Pebble', hostId: 'local' }),
-  openBotHomeTab: async () => true,
   useHostBots: () => []
 }))
+vi.mock('@/lib/bot-home-open', () => ({ openBotHomeTab: async () => true }))
 vi.mock('./use-bot-agent-choices', () => ({
   useBotAgentMenu: () => ({ model: { state: 'loading' }, choices: ['codex'] })
 }))

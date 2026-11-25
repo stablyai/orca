@@ -1,7 +1,7 @@
 // Start, Dismiss and Look now for a bot's Up next, through its host.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { openBotHomeTab } from '@/lib/bot-catalog'
+import { openBotHomeTab } from '@/lib/bot-home-open'
 import { callBotRpc } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 

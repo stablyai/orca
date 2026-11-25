@@ -25,7 +25,8 @@ import {
   readLiveBotHostIds,
   readUpdateNeededBotHosts
 } from './bot-catalog-snapshot'
-import { openBotHome, openBotHomeTab, refreshBots } from './bot-catalog'
+import { refreshBots } from './bot-catalog'
+import { openBotHome, openBotHomeTab } from './bot-home-open'
 import { botHostTarget, botTarget } from './bot-hosts'
 import { activateAiVaultStructuredSession } from './agent-session/open/activate-ai-vault-structured-session'
 import { isHome } from '../../../shared/bots/bot-homes'

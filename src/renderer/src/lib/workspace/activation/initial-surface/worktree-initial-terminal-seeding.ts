@@ -1,4 +1,4 @@
-import { openAgentHomeChatInsteadOfShell } from '@/lib/bot-home-open'
+import { openAgentHomeChatInsteadOfShell } from './agent-home-initial-surface'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch

@@ -68,3 +68,9 @@ it('refuses a teammate’s new chat on an agent the owner’s + menu doesn’t o
   expect(refused.ok).toBe(false)
   expect(JSON.stringify(refused)).toContain('agent_not_offered')
 })
+
+it('lets a teammate’s new chat through on an agent the owner’s + menu offers', async () => {
+  // Past the gate the chat host isn't installed here, so the start fails later, for that reason alone.
+  const started = await asTeammate('bots.session.start', { botId: 'bot-shared', agent: 'codex' })
+  expect(JSON.stringify(started)).not.toContain('agent_not_offered')
+})
