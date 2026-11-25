@@ -1349,6 +1349,36 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "mcpServers": {
+      "catalog": {
+        "caption": "服务器",
+        "noMatch": "没有匹配“{{query}}”的服务器。",
+        "search": "搜索服务器"
+      },
+      "catalogLine": {
+        "github": "议题、拉取请求和代码搜索",
+        "linear": "读取和更新议题与项目"
+      },
+      "description": "智能体可以使用的服务器。更改仅对新会话生效。",
+      "fromPlugins": "来自插件",
+      "repo": {
+        "add": "为这个仓库添加服务器",
+        "files": "来自这个仓库的文件",
+        "on": "已在这个仓库中开启",
+        "open": "打开 {{file}}"
+      },
+      "title": "MCP 服务器",
+      "unsupported": "{{host}} 上不支持 MCP 服务器。",
+      "workspaces": {
+        "all": "所有工作区",
+        "allBut": "除 {{names}} 之外的所有工作区",
+        "later": "之后添加的工作区",
+        "none": "没有工作区",
+        "only": "仅 {{names}}",
+        "title": "工作区"
+      },
+      "yours": "你添加的"
     }
   },
   "menu": {
