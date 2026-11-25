@@ -15,6 +15,8 @@ export type StructuredAgentSessionLiveTextSource = {
   read(epoch: string): readonly AgentJournalRenderItem[]
   has(epoch: string): boolean
   flush(): void
+  /** Saved on a forced ack or hand-off only; ordinary acks may cover it (it never replays). */
+  deferrable?: true
 }
 
 /** One acquisition's saved facts, replaced whole per epoch, and the holds a replacement places. */
@@ -31,11 +33,13 @@ export class StructuredAgentSessionSinkSnapshots {
     epoch === null || this.held || this.closed
       ? []
       : [...this.liveSources].flatMap((source) => source.read(epoch))
-  hasLiveText = (epoch: string | null): boolean =>
+  hasLiveText = (epoch: string | null, includeDeferrable = false): boolean =>
     epoch !== null &&
     !this.held &&
     !this.closed &&
-    [...this.liveSources].some((source) => source.has(epoch))
+    [...this.liveSources].some(
+      (source) => (includeDeferrable || !source.deferrable) && source.has(epoch)
+    )
   flushLiveText = (): void => {
     this.liveSources.forEach((source) => source.flush())
   }

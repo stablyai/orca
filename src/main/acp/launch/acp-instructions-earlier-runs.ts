@@ -1,11 +1,11 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
-import { listProviderRelaysAtLaunch } from '../../provider-relay/app-provider-relays'
 import {
-  keptProviderRelaysComplete,
-  providerRelayChatsKeptThisRun
-} from '../../provider-relay/provider-relay-launch-inventory'
+  listProviderRelaysAtLaunch,
+  providerRelayInventoryComplete
+} from '../../provider-relay/app-provider-relays'
+import { providerRelayChatsKeptThisRun } from '../../provider-relay/provider-relay-launch-inventory'
 
 /** Removals run this many at a time, so a large leftover folder doesn't hold the launch long. */
 const REMOVE_BATCH = 16
@@ -67,7 +67,7 @@ async function olderLaunches(
 async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
   await listProviderRelaysAtLaunch()
   // A daemon that didn't answer may still run agents reading these; a later launch tries again.
-  if (!keptProviderRelaysComplete()) {
+  if (!providerRelayInventoryComplete()) {
     return false
   }
   // Every chat's folder name has the same length; its entries are it, `<it>.md` or `<it>-<uuid>`.

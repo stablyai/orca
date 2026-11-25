@@ -41,6 +41,8 @@ export type AgentSessionDeltaCoalescer = {
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
   /** Whether `snapshot` would return one, without joining its text. */
   has: (key: string) => boolean
+  /** Whether any stream's buffered length meets `test`, without joining text. */
+  someLength: (test: (key: string, textLength: number) => boolean) => boolean
   dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
   /** External writes satisfy the current snapshot until more text arrives. */
   markFlushed: (key: string) => void
@@ -201,6 +203,14 @@ export function createAgentSessionDeltaCoalescer(
       totalRetainedBytes = 0
     },
     has: (key) => streams.has(key),
+    someLength: (test) => {
+      for (const [key, stream] of streams) {
+        if (test(key, stream.textLength)) {
+          return true
+        }
+      }
+      return false
+    },
     snapshot: (key) => {
       const stream = streams.get(key)
       return stream

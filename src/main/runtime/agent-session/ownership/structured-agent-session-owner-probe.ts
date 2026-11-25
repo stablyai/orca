@@ -9,9 +9,14 @@ import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token
 import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
 import {
   keptRunningProviderRelayPid,
-  listProviderRelaysAtLaunch
+  listProviderRelaysAtLaunch,
+  providerRelayInventoryComplete
 } from '../../../provider-relay/app-provider-relays'
-import { providerOwnerHeldElsewhere } from '../../../provider-relay/provider-relay-owner-ancestry'
+import {
+  providerOwnerHeldElsewhere,
+  providerOwnerProcessRows,
+  type ProviderOwnerProcessRows
+} from '../../../provider-relay/provider-relay-owner-ancestry'
 
 /**
  * An owner still running under the terminal host is this app's to reattach, not an orphan to stop:
@@ -19,19 +24,21 @@ import { providerOwnerHeldElsewhere } from '../../../provider-relay/provider-rel
  */
 async function keptRunningProbe(
   record: AgentSessionRecord,
-  hostId: string
+  hostId: string,
+  rows?: ProviderOwnerProcessRows
 ): Promise<AgentSessionOwnerProbe | null> {
   const owner = record.lease.ownerProcess
   if (!owner) {
     return null
   }
   await listProviderRelaysAtLaunch()
-  // The inventory may have missed a daemon that was slow to answer; the process tree can't.
+  // Until every daemon has answered, the inventory may miss a kept agent; the process tree can't.
   const kept =
     keptRunningProviderRelayPid(record.sessionId) === owner.pid ||
     (owner.hostId === hostId &&
       process.platform !== 'win32' &&
-      (await providerOwnerHeldElsewhere(owner.pid)) === true)
+      !providerRelayInventoryComplete() &&
+      (await providerOwnerHeldElsewhere(owner.pid, rows)) === true)
   return kept
     ? { outcome: 'indeterminate', reason: 'owner kept running under the terminal host' }
     : null
@@ -95,9 +102,10 @@ export function createStructuredAgentSessionOwnerProbes(
       record: AgentSessionRecord
       owner: NonNullable<AgentSessionRecord['lease']['ownerProcess']>
     }[] = []
+    const rows = providerOwnerProcessRows()
     for (const record of records) {
       const owner = record.lease.ownerProcess
-      const kept = await keptRunningProbe(record, hostId)
+      const kept = await keptRunningProbe(record, hostId, rows)
       if (kept) {
         results.set(record.sessionId, kept)
       } else if (owner?.hostId === hostId) {
