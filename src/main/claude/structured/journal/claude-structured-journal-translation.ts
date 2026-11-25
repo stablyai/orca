@@ -290,7 +290,7 @@ export function createClaudeJournalTranslator(
     recordContextReport: (target, report, askedAt) => context.recordReport(target, report, askedAt),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
-    adoptKept: (kept) => adoptKeptClaudeWork(turn, tools, kept),
+    adoptKept: (kept) => adoptKeptClaudeWork(turn, tools, kept, backgroundTasks),
     dispose: () => {
       delivery.dispose()
       flush()

@@ -9,6 +9,9 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudeToolUse } from '../structured/journal/claude-structured-item-translation'
+import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
+import type { ClaudeBackgroundTaskRow } from '../background-tasks/claude-background-task-row-lifecycle'
+import { isSettledBackgroundTaskState } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import type { ClaudeOpenTurn } from '../structured/turns/claude-open-turn'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
@@ -77,11 +80,45 @@ export function keptClaudeToolCalls(items: readonly AgentJournalRenderItem[]): C
   )
 }
 
+/** Background tasks still running when the last app quit, from their saved rows: a completion
+ *  then finishes that row rather than one built from the notification alone. */
+export function keptClaudeBackgroundTasks(
+  items: readonly AgentJournalRenderItem[]
+): ClaudeBackgroundTaskRow[] {
+  return items.flatMap((item) => {
+    const blocks = 'blocks' in item.body && Array.isArray(item.body.blocks) ? item.body.blocks : []
+    // A restarted run's row carries its generation in its key (`…#<n>`); the first has none.
+    const generation = Number(/#(\d+)$/.exec(item.itemId)?.[1] ?? 1)
+    return blocks
+      .filter(
+        (block): block is NativeChatBackgroundTaskBlock =>
+          block.type === 'background-task' && !isSettledBackgroundTaskState(block.state)
+      )
+      .map((block) => ({
+        block: { ...block },
+        lastSerialized: null,
+        terminalNotificationReceived: false,
+        generation,
+        ...(block.parentToolUseId === undefined ? {} : { toolUseId: block.parentToolUseId })
+      }))
+  })
+}
+
 export function adoptKeptClaudeWork(
   open: Pick<ClaudeOpenTurn, 'adoptKept'>,
   tools: Map<string, ClaudeToolUse>,
-  kept: { turn: ClaudeCurrentTurn | null; tools: readonly ClaudeToolUse[] }
+  kept: {
+    turn: ClaudeCurrentTurn | null
+    tools: readonly ClaudeToolUse[]
+    backgroundTasks: readonly ClaudeBackgroundTaskRow[]
+  },
+  backgroundTasks: { rows: Map<string, ClaudeBackgroundTaskRow> }
 ): void {
+  for (const row of kept.backgroundTasks) {
+    if (!backgroundTasks.rows.has(row.block.taskId)) {
+      backgroundTasks.rows.set(row.block.taskId, row)
+    }
+  }
   if (kept.turn) {
     open.adoptKept(kept.turn)
   }

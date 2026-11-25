@@ -54,7 +54,8 @@ export type ClaudeBackgroundTaskRowsDeps = {
 }
 
 export class ClaudeBackgroundTaskRows {
-  private readonly rows = new Map<string, ClaudeBackgroundTaskRow>()
+  /** Read and seeded only by a kept agent's reattach (its saved rows), besides this class. */
+  readonly rows = new Map<string, ClaudeBackgroundTaskRow>()
   private readonly writer: ClaudeBackgroundTaskRowWriter
   private readonly openTurn: ReturnType<typeof createClaudeBackgroundTaskTurnOpener>
   private readonly overflowTerminalRows: ClaudeOverflowTerminalRows

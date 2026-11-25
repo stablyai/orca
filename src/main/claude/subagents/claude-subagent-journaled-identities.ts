@@ -114,14 +114,16 @@ export class ClaudeJournaledSubagents {
     selectClaudeBackgroundTask(this.read()?.backgrounds.get(taskId), run)
 
   isSubagent = (taskId: string): boolean => this.read()?.subagents.has(taskId) === true
-  /** Read once per restated task at a reattach, so a scan is fine. */
+  /** The latest call that launched it (a resumed subagent has several), read once per restated
+   *  task at a reattach, so a scan is fine. */
   launchOf = (taskId: string): string | undefined => {
+    let latest: string | undefined
     for (const [toolUseId, agentId] of this.read()?.canonicalByToolUse ?? []) {
       if (agentId === taskId) {
-        return toolUseId
+        latest = toolUseId
       }
     }
-    return undefined
+    return latest
   }
   isBackgroundSubagent = (taskId: string): boolean =>
     this.read()?.backgroundSubagents.has(taskId) === true

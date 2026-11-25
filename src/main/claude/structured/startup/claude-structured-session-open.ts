@@ -12,7 +12,11 @@ import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pa
 import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import { noteKeptClaudeReattach } from '../../relay/claude-kept-permission'
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
-import { keptClaudeToolCalls, keptClaudeTurn } from '../../relay/claude-kept-turn'
+import {
+  keptClaudeBackgroundTasks,
+  keptClaudeToolCalls,
+  keptClaudeTurn
+} from '../../relay/claude-kept-turn'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -114,7 +118,8 @@ async function openStartingClaudeSession(
     const keptTurn = keptClaudeTurn(items, session.providerSessionId)
     session.translator?.adoptKept({
       turn: keptTurn?.kind === 'turn' ? keptTurn.turn : null,
-      tools: keptClaudeToolCalls(items)
+      tools: keptClaudeToolCalls(items),
+      backgroundTasks: keptClaudeBackgroundTasks(items)
     })
     if (keptTurn?.kind === 'command') {
       events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })

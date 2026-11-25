@@ -1,4 +1,5 @@
 import type { ClaudeFullAccessRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
+import type { ClaudeBackgroundTaskRow } from '../../background-tasks/claude-background-task-row-lifecycle'
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
@@ -88,6 +89,10 @@ export type ClaudeJournalTranslator = {
   /** Size interim estimates with the applied model until its window is measured. */
   modelWritten: (model: string) => void
   /** Continue what a kept agent was running when the last app quit: its turn and tool calls. */
-  adoptKept: (kept: { turn: ClaudeCurrentTurn | null; tools: readonly ClaudeToolUse[] }) => void
+  adoptKept: (kept: {
+    turn: ClaudeCurrentTurn | null
+    tools: readonly ClaudeToolUse[]
+    backgroundTasks: readonly ClaudeBackgroundTaskRow[]
+  }) => void
   dispose: () => void
 }
