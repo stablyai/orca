@@ -65,7 +65,7 @@ export class PhoneSharedAgents {
   // Listed by a computer but with no key here yet (its host wasn't reached): shown, not callable.
   private readonly awaitingKey = new Map<string, readonly SharedBotPhoneShare[]>()
   private readonly follows = new PhoneSharedAgentFollows<UnvalidatedRpcRequestPort>(
-    (pairedHostId, client) => this.followComputer({ pairedHostId, client })
+    (pairedHostId, client, applied) => this.followComputer({ pairedHostId, client }, applied)
   )
   // Each computer's client its shares were last followed with, to follow them again.
   private readonly computers = new Map<string, UnvalidatedRpcRequestPort>()
@@ -110,11 +110,11 @@ export class PhoneSharedAgents {
   /** Whether the computer still lists `entry` once its follow under way, if any, lands: a link that
    *  dropped may be a revoke, which ends the follow it started without the share. */
   private async stillShared(entry: PhoneSharedAgent): Promise<boolean> {
-    await this.follows.current(entry.pairedHostId)
+    await this.follows.nextListed(entry.pairedHostId)
     return this.store.get(entry.shareId) !== undefined
   }
 
-  private async followComputer(computer: Computer): Promise<void> {
+  private async followComputer(computer: Computer, applied: () => void): Promise<void> {
     await this.ready()
     const { pairedHostId } = computer
     const shares = await readComputerShares(computer)
@@ -122,11 +122,14 @@ export class PhoneSharedAgents {
       const listed = new Set(shares.map((share) => share.shareId))
       for (const entry of this.store.list()) {
         if (entry.pairedHostId === pairedHostId && !listed.has(entry.shareId)) {
-          this.links.get(entry.shareId)?.close()
-          this.links.delete(entry.shareId)
+          this.forget(entry.shareId)
           this.kept.forget(entry.shareId)
         }
       }
+    }
+    // What a revoke check waits for: the list, not the keys and dials that follow.
+    applied()
+    if (shares) {
       await syncComputerShares(
         this.store,
         computer,

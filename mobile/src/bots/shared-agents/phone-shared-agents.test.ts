@@ -242,6 +242,32 @@ describe('a call to a shared agent whose owner stopped sharing it', () => {
       message: 'This agent is no longer shared.'
     })
   })
+
+  it('waits at most its cap for a computer that never answers, then reads as offline', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    let away = false
+    const client = {
+      sendRequest: async (method: string, params?: unknown) =>
+        method === 'sharedBots.phone.list' && away
+          ? await new Promise<never>(() => {})
+          : await desktop.client.sendRequest(method, params)
+    }
+    await agents.syncComputer('computer-1', client)
+    const entry = agents.find('computer-1', 'env-1')!
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      away = true
+      void agents.syncComputer('computer-1', client)
+      const answer = agents.call(entry, 'bots.list', {})
+      await vi.advanceTimersByTimeAsync(5_000)
+      const response = await answer
+      expect(response.ok ? null : response.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('a page frame before the phone’s shared agents are loaded', () => {

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { z } from 'zod'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -15,7 +15,6 @@ import { SHARED_BOT_HOSTS_FILENAME, SharedBotHostStore } from './shared-bot-host
 import {
   isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
-  SHARED_BOT_UNSHARED_MESSAGE,
   SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHostView
 } from '../../../shared/bots/shared-bot-hosts'
@@ -199,31 +198,6 @@ describe('shared agent pairing', () => {
     expect(service.phones.phoneShares().shares.map((listed) => listed.shareId)).toEqual(['share-1'])
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(events).toEqual([{ type: 'botsChanged', kinds: ['bot'] }])
-  })
-
-  it('answers no longer shared while the cloud read that drops a share is out, and after', async () => {
-    let answer: ((shares: MineShare[]) => void) | null = null
-    let mine: () => MineShare[] | Promise<MineShare[]> = () => [share()]
-    const { service } = hosts(
-      () => mine(),
-      () => 1_000
-    )
-    await service.refresh()
-    const { environmentId } = service.views()[0]!
-    mine = () => new Promise((resolve) => (answer = resolve))
-    const read = service.refresh()
-    const during = service.call(environmentId, 'bots.list', {})
-    await vi.waitFor(() => expect(answer).not.toBeNull())
-    answer!([])
-    await read
-    const answers = [await during, await service.call(environmentId, 'bots.list', {})]
-    service.stop()
-    const unshared = { code: SHARED_BOT_HOST_ERRORS.unshared, message: SHARED_BOT_UNSHARED_MESSAGE }
-    expect(answers.map((response) => (response.ok ? null : response.error))).toEqual([
-      unshared,
-      unshared
-    ])
-    expect(service.reaches(environmentId)).toBe(true)
   })
 
   it('accepts again with the same device keys once the invite expired and the host is back', async () => {

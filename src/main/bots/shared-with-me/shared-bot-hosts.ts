@@ -33,6 +33,8 @@ import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 // New shares and invites resolve within this; pairing and held messages are read sooner.
 const IDLE_POLL_MS = 10 * 60 * 1000
 const BUSY_POLL_MS = 30 * 1000
+// How long a call on a dropped link waits for the share list to say whether it was a revoke.
+const SHARES_LIST_WAIT_MS = 5000
 
 export type SharedBotHostsDeps = {
   userDataPath: string
@@ -54,7 +56,7 @@ export class SharedBotHosts {
   // Null until the cloud first answers: every kept share is listed meanwhile, none dropped.
   private shares: Map<string, MineShare> | null = null
   private readonly held: SharedBotHeldSends
-  private readonly reads = new SerialRerun(() => this.readMine())
+  private readonly reads = new SerialRerun((applied) => this.readMine(applied), SHARES_LIST_WAIT_MS)
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
   private loaded: Promise<void> | null = null
@@ -147,18 +149,18 @@ export class SharedBotHosts {
     return entry && link && this.entryFor(environmentId) ? { entry, link } : null
   }
 
-  private async readMine(): Promise<void> {
+  private async readMine(applied: () => void): Promise<void> {
     await this.ready()
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
     }
-    const cloud = this.deps.cloud()
     const read = this.held.beginRead()
-    const answer = await this.sharing.read(cloud, () => this.publish())
+    const answer = await this.sharing.read(this.deps.cloud(), () => this.publish())
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
     const gone = shares ? this.applyMine(shares, read) : []
+    applied()
     await this.deps.homes.settle(gone, this.store)
     if (shares) {
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
@@ -307,9 +309,9 @@ export class SharedBotHosts {
     return step?.kind === 'connect' ? link.connect(step.credential) : link.settled()
   }
 
-  /** Once the cloud read under way, if any, has landed. */
+  /** Once a cloud read under way or asked for has its list applied (not its pairings), capped. */
   async settled(): Promise<void> {
-    await this.reads.current()?.catch(() => {})
+    await this.reads.nextListed()
   }
 
   /** Whether `environmentId` names one of these hosts; read once `ready` has settled. */

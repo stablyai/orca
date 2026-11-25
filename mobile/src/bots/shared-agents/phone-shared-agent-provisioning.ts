@@ -36,11 +36,16 @@ export function awaitingKeyView(share: SharedBotPhoneShare): SharedBotHostView {
   }
 }
 
+// A computer away doesn't hold its follow (and every later one) until it is back.
+const LIST_READ_OPTIONS = { timeoutMs: 15_000, budgetSpansConnect: true }
+
 /** The computer's list, or null when it gave none (offline, or too old to list shared agents). */
 export async function readComputerShares(
   computer: Computer
 ): Promise<readonly SharedBotPhoneShare[] | null> {
-  const answer = await computer.client.sendRequest(SHARED_BOTS_PHONE_LIST_METHOD).catch(() => null)
+  const answer = await computer.client
+    .sendRequest(SHARED_BOTS_PHONE_LIST_METHOD, undefined, LIST_READ_OPTIONS)
+    .catch(() => null)
   return answer?.ok ? (SharedBotsPhoneList.safeParse(answer.result).data?.shares ?? null) : null
 }
 
