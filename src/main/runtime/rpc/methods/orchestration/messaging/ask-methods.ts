@@ -15,6 +15,7 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import {
@@ -54,7 +55,17 @@ export const ORCHESTRATION_ASK_METHODS = [
       const from = params.from ?? 'unknown'
       // Echo the clamped budget on every return so callers report time actually waited.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
-      const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      // A runtime restart can reissue a surviving worker PTY's handle; recover it by exact incarnation.
+      // A resumed question's server-owned Dispatch can select which of the handle's recorded histories
+      // to try, but recovery still proves that Dispatch's handle, pane, host, process and custody.
+      const reporter = resolveWorkerReporterIdentity(runtime, db, {
+        from,
+        authority: undefined,
+        hasSessionCaller: Boolean(orchestrationCaller),
+        evidence: orchestrationCompatibilityEvidence,
+        candidateDispatchId: params.resume ? db.getQuestion(params.resume)?.dispatch_id : undefined
+      })
+      const paneKey = reporter.paneKey ?? undefined
       if (!orchestrationCaller) {
         assertLifecycleCallerIsNotAnotherParty(runtime, {
           from,
@@ -74,7 +85,8 @@ export const ORCHESTRATION_ASK_METHODS = [
           paneKey,
           dispatchId: remoteAttachment.dispatch_id,
           taskId: remoteAttachment.task_id,
-          workerState: remoteAttachment.state
+          workerState: remoteAttachment.state,
+          processIncarnation: reporter.processIncarnation
         })
       }
       const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
@@ -87,13 +99,14 @@ export const ORCHESTRATION_ASK_METHODS = [
             address: from,
             paneKey: paneKey ?? null,
             orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
-            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+            // A restart-reissued reporter proves its process by the same recovered incarnation.
+            processIncarnation: () => reporter.processIncarnation() ?? undefined
           },
           { run: undefined, dispatchId: undefined, dispatch: undefined },
           'question'
         )
       if (!askingDispatch) {
-        refuseFinishedRemoteWorker(db, paneKey, undefined)
+        refuseFinishedRemoteWorker(db, { address: from, paneKey }, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
@@ -109,7 +122,7 @@ export const ORCHESTRATION_ASK_METHODS = [
             db.isDispatchProcessCurrent({
               dispatchId: workingDispatch.id,
               paneKey: paneKey ?? null,
-              processIncarnation: runtime.getTerminalProcessIncarnation(from)
+              processIncarnation: reporter.processIncarnation()
             })
         })
       }
