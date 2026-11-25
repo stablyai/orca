@@ -103,9 +103,10 @@ export function NativeChatSubagentSheetPromptSlot({
               ) {
                 return
               }
-              // A card's own Esc cancels or folds its prompt; in the sheet Esc only goes up or closes.
+              // A card's own Esc cancels or folds its prompt; in the sheet Esc only goes up or closes,
+              // from its answer field too, which keeps a half-typed answer.
               event.stopPropagation()
-              closeNativeChatSubagentOnEscape(event, paneKey)
+              closeNativeChatSubagentOnEscape(event, paneKey, true)
             }}
           >
             {children}

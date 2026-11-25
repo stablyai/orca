@@ -115,13 +115,17 @@ export function useNativeChatOpenSubagent(paneKey: string): NativeChatOpenSubage
   return useSyncExternalStore(subscribe, read, read)
 }
 
-/** Esc outside inputs, menus and other dialogs goes back a level. */
+/**
+ * Esc outside inputs, menus and other dialogs goes back a level. `fromTextFields`: the caller has
+ * already kept the Esc from the field's own handlers, so a text field goes back a level too.
+ */
 export function closeNativeChatSubagentOnEscape(
   event: Pick<
     React.KeyboardEvent,
     'key' | 'defaultPrevented' | 'target' | 'currentTarget' | 'preventDefault'
   >,
-  paneKey: string
+  paneKey: string,
+  fromTextFields = false
 ): void {
   const target = event.target
   if (
@@ -131,7 +135,7 @@ export function closeNativeChatSubagentOnEscape(
     !(target instanceof Element) ||
     // Portaled menus bubble through React but sit outside this pane's DOM.
     !event.currentTarget.contains(target) ||
-    isEditableTarget(target) ||
+    (!fromTextFields && isEditableTarget(target)) ||
     target.closest(
       `[role="menu"], [role="listbox"], [role="dialog"]:not([${NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE}])`
     ) !== null
