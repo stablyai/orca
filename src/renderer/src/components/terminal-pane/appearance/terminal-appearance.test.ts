@@ -16,6 +16,7 @@ function applyTo(
     leafId: 'leaf-1',
     terminal: { options, cols: 80, rows: 24 }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial PaneManager stub covering only what applyTerminalAppearance calls
   const manager = {
     getPanes: () => [pane],
     setPaneLigaturesEnabled: vi.fn(),
