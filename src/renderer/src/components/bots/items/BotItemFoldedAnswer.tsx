@@ -12,6 +12,7 @@ import {
   botItemHeldAnswerShown,
   type BotItemHeldAnswer
 } from '../../../../../shared/bots/bot-item-held-answers'
+import { stripImagePromptMarker } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { NativeChatImageAttachmentPreview } from '../../native-chat/attachments/chips/NativeChatImageAttachmentPreview'
 import { NativeChatMarkdownImageOwnerContext } from '../../native-chat/media/images/native-chat-markdown-image-owner'
 import { BotItemCommentFiles } from './BotItemCommentFiles'
@@ -24,7 +25,8 @@ export function botItemShownAnswer(answer: BotItemHeldAnswer | string): {
   files: readonly string[]
 } {
   if (typeof answer === 'string') {
-    return { words: answer, images: [], files: [] }
+    // A send on its way: its images show on its comment, so their marks go (an image alone keeps it).
+    return { words: stripImagePromptMarker(answer).trim() || answer, images: [], files: [] }
   }
   const { words, files } = botItemHeldAnswerShown(answer)
   // Images or files alone read as their names.
