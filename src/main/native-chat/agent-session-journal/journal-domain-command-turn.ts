@@ -97,7 +97,7 @@ export function applyJournalDomainCommandTurn(
         state: 'running',
         userItemId: agentJournalSubmissionKey(dispatch.clientMessageId),
         requestedAt: attempt?.submission.handedOverAt ?? operation.input.submittedAt,
-        startedAt: savedAt
+        ...(operation.input.waitsForProviderStart ? {} : { startedAt: savedAt })
       })
       const commit = applyJournalDomainItem(
         db,
@@ -132,7 +132,15 @@ export function applyJournalDomainCommandTurn(
       }
       db.exec('RELEASE journal_command_turn')
       appendJournalDomainInputCommit(result, step)
-      result.value = { value: { turn, running } }
+      result.value = {
+        value: {
+          turn,
+          running,
+          handoverCursor: attempt?.handover
+            ? { epoch: target.epoch, sequence: attempt.handover.sequence }
+            : undefined
+        }
+      }
     } else {
       const previous = readJournalDomainDispatchItem(db, target, turn.itemId)
       const running = readAgentJournalTurn(previous?.item.body)

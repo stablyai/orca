@@ -1,3 +1,5 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../lifecycle/claude-structured-session-id'
@@ -129,6 +131,9 @@ export async function dispatchClaudeTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     sentUuid?: string
+    fence?: number
+    handoverCursor?: () => AgentJournalCursor | undefined
+    turnScope?: AgentJournalTurnScope
     signal?: AbortSignal
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
@@ -163,8 +168,18 @@ export async function dispatchClaudeTurn(
       sentUuid,
       claudeDispatchContentKey(content),
       input.clientMessageId ?? null,
-      input.requestedAt ?? null
+      input.requestedAt ?? null,
+      input.fence ?? session.fence,
+      input.handoverCursor?.()
     )
+    const liveScope = session.translator?.currentTurnScope()
+    if (
+      input.turnScope?.kind === 'turn' &&
+      liveScope?.kind === 'turn' &&
+      input.turnScope.turnItemId === liveScope.turnItemId
+    ) {
+      replay.waiter.turnScoped = true
+    }
     if (renamesSession) {
       replay.waiter.renamesSession = true
     }

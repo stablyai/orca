@@ -219,7 +219,8 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       if (commit.goals) {
         this.goalAttachments.adopt(commit.goals)
       }
-      const advanced = !sameJournalCursor(this.acknowledged, commit.cursor)
+      const changed =
+        !sameJournalCursor(this.acknowledged, commit.cursor) || commit.publication?.writtenOnly
       this.acknowledged = { ...commit.cursor }
       if (commit.queueRevision !== undefined) {
         this.queuedMessages.adoptRevision(commit.queueRevision)
@@ -229,7 +230,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       } else if (operation.kind === 'epoch-replace') {
         this.queuedMessages.editLeases.adoptDeadline(null)
       }
-      if (advanced || commit.inputChanged || commit.items.length > 0) {
+      if (changed || commit.inputChanged || commit.items.length > 0) {
         this.listener?.(commit)
       }
       return commit

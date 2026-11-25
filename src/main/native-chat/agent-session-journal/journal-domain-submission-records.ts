@@ -75,6 +75,8 @@ export type JournalDomainSubmissionAttempt = {
   candidate: boolean
   admittedPersonal: boolean
   submission: AgentJournalSubmission
+  /** Receipt belongs to host attempt facts. The submission payload is the wire record. */
+  writtenAt?: number
   admission: JournalDomainSubmissionAdmission
   handover: JournalDomainSubmissionHandover | null
   handoverPlace: JournalDomainSubmissionHandoverPlace | null
@@ -95,6 +97,8 @@ export type JournalDomainSubmissionCoordinate = {
 
 export type JournalDomainSubmissionCommit<Value = AgentJournalCursor | null | undefined> = {
   promptDispatches?: JournalPromptDispatch[]
+  writtenOnly?: true
+  handoverScope?: AgentJournalTurnScope
   cursor: AgentJournalCursor
   value: Value
   /** Empty means the legacy no-op would not invoke its row-bound receipt. */
@@ -113,6 +117,7 @@ export type JournalDomainSubmissionCommit<Value = AgentJournalCursor | null | un
 export type JournalDomainSubmissionStoredFacts = Pick<
   JournalDomainSubmissionAttempt,
   | 'handover'
+  | 'writtenAt'
   | 'handoverPlace'
   | 'carries'
   | 'rejection'
@@ -132,6 +137,7 @@ export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissio
   const { body: _body, familyId: _family, ...admission } = attempt.admission
   const {
     handover,
+    writtenAt,
     handoverPlace,
     carries,
     rejection,
@@ -142,6 +148,7 @@ export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissio
   const facts: JournalDomainSubmissionStoredFacts = {
     admission,
     handover,
+    writtenAt,
     handoverPlace,
     carries,
     rejection,

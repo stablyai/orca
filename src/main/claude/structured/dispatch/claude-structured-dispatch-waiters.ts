@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { ClaudeDispatchWaiter, ClaudeSession } from '../claude-structured-session-state'
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
@@ -16,7 +17,9 @@ export function waitForReplay(
   sentUuid: string,
   replayContentKey: string,
   clientMessageId: string | null,
-  requestedAt: number | null
+  requestedAt: number | null,
+  dispatchFence = session.fence,
+  handoverCursor?: AgentJournalCursor
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -26,6 +29,8 @@ export function waitForReplay(
       sentUuid,
       dispatchSequence: session.dispatchSequence,
       requestedAt,
+      dispatchFence,
+      handoverCursor,
       replayContentKey,
       resolve
     }

@@ -120,6 +120,7 @@ export function applyJournalDomainDispatch(
           scope = derived
         }
       }
+      result.handoverScope = scope
       handover = {
         sequence,
         at: savedAt,
@@ -207,6 +208,7 @@ export function applyJournalDomainDispatch(
     writeJournalDomainDispatchAttempt(db, target, {
       ...attempt,
       submission: next,
+      writtenAt: input.state === 'pending' ? undefined : attempt.writtenAt,
       candidate,
       handover,
       handoverPlace,

@@ -178,7 +178,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   nameProviderConversation: StructuredAgentSessionAdapter['nameProviderConversation'] = (input) =>
     this.naming?.accept(input)
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
-    dispatchClaudeCommand(this.session(input.sessionId), input.command)
+    dispatchClaudeCommand(this.session(input.sessionId), input.command, input.fence)
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (request) =>
     cancelClaudeStructuredTurn({
@@ -220,7 +220,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   heldSends = (sessionId: string): ReadonlySet<string> | undefined => {
     const session = this.sessions.get(sessionId) ?? this.exits.get(sessionId)?.session
     const held = session && claudeHeldSends(session)
-    return held ?? (this.settledExitErrors.has(sessionId) ? new Set() : undefined)
+    return held ?? (this.settledExitErrors.has(sessionId) ? claudeHeldSends() : undefined)
   }
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
     const session = this.sessions.get(sessionId)

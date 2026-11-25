@@ -35,6 +35,7 @@ export function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptS
     case 'context-clear':
     case 'context-rewind':
     case 'dead-generation-settle':
+    case 'dispatch-written':
     case 'edit-lease':
     case 'epoch-replace':
     case 'fork-install':

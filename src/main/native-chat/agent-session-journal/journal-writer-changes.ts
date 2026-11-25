@@ -31,6 +31,7 @@ export type JournalWriterPublication = {
   acceptedInputs?: JournalSqlAcceptedInputs
   editDeadline?: number | null
   referencedUploads?: string[]
+  writtenOnly?: true
 }
 
 export type JournalWriterCommit = {

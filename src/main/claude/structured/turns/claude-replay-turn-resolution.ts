@@ -1,9 +1,12 @@
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
-  observeClaudeCommandLifecycle,
+  resolveClaudeDispatchLifecycle,
+  type ClaudeDispatchFrameEvidence,
+  claudeDispatchIsSteer,
   releaseClaudeDispatchesUnansweredAtIdle
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
-import { forgetRetiredWaiter } from '../dispatch/claude-structured-dispatch-waiters'
+import { forgetRetiredWaiter, forgetWaiter } from '../dispatch/claude-structured-dispatch-waiters'
 import { settleCancelledClaudeDispatchWaiters } from '../dispatch/claude-structured-dispatch'
 import {
   claudeHasReplayContent,
@@ -17,6 +20,7 @@ import type {
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeDispatchContentKey } from '../dispatch/claude-structured-dispatch-content'
 import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { ClaudeEchoedDispatch } from './claude-echoed-dispatch-start'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
@@ -24,15 +28,17 @@ export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) =>
 export type ClaudeReplayTurnOrigin = {
   requestedAt: number | null
   clientMessageId: string | null
+  queuedDispatch?: ClaudeEchoedDispatch
 }
 
 export function resolveClaudeReplayTurn(
   session: ClaudeSession,
   message: Record<string, unknown>,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  frame?: ClaudeDispatchFrameEvidence
 ): ClaudeReplayTurnOrigin | null {
   if (message.type === 'command_lifecycle') {
-    observeClaudeCommandLifecycle(session, message, onSettledLate)
+    resolveClaudeDispatchLifecycle(session, message, onSettledLate, frame)
     return null
   }
   if (claudeSessionStateEndsTurn(message)) {
@@ -55,6 +61,31 @@ export function resolveClaudeReplayTurn(
   if (!uuid) {
     return null
   }
+  const settle = (waiter: ClaudeDispatchWaiter) => {
+    if (
+      isUserReplay &&
+      frame &&
+      waiter.dispatchFence === session.fence &&
+      session.translator?.commandTurnId != null
+    ) {
+      session.translator.turnCycle.startDispatch(
+        session.providerSessionId,
+        waiter,
+        frame.observedAt
+      )
+    }
+    const origin = settleLiveDispatch(session, waiter, uuid, isUserReplay, onSettledLate)
+    if (
+      origin &&
+      frame &&
+      origin.clientMessageId !== null &&
+      waiter.dispatchFence === session.fence &&
+      waiter.commandLifecycle === 'queued'
+    ) {
+      origin.queuedDispatch = { sentUuid: waiter.sentUuid, fence: waiter.dispatchFence }
+    }
+    return origin
+  }
 
   // Explicit correlation outranks content and queue order across identical prompts and timeout boundaries.
   const userMessageUuid = readClaudeFrameString(message, 'user_message_uuid')
@@ -66,7 +97,7 @@ export function resolveClaudeReplayTurn(
     }
     const live = session.dispatchWaiters.find((candidate) => candidate.sentUuid === member)
     if (live) {
-      settleWaiter(session, live, member, onSettledLate, joinedTurn(session))
+      settleLiveDispatch(session, live, member, false, onSettledLate, true)
       continue
     }
     const late = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === member)
@@ -89,7 +120,7 @@ export function resolveClaudeReplayTurn(
         settleCancelledClaudeDispatchWaiters(session, [exact.sentUuid], onSettledLate)
         return null
       }
-      return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
+      return settle(exact)
     }
     const retired = session.retiredDispatchWaiters.find(
       (candidate) => candidate.sentUuid === userMessageUuid
@@ -108,7 +139,7 @@ export function resolveClaudeReplayTurn(
 
   const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (exact) {
-    return settleLiveDispatch(session, exact, uuid, isUserReplay, onSettledLate)
+    return settle(exact)
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
@@ -126,7 +157,7 @@ export function resolveClaudeReplayTurn(
       )
       if (compatible.length === 1) {
         const [candidate] = compatible
-        return settleLiveDispatch(session, candidate!, uuid, true, onSettledLate)
+        return settle(candidate!)
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
       const lateCompatible = session.retiredDispatchWaiters.filter(
@@ -153,14 +184,7 @@ export function resolveClaudeReplayTurn(
   if (isCompletedCommand && session.replayContentFallbackBlocked) {
     return null
   }
-  const waiter = uuid ? session.dispatchWaiters.shift() : undefined
-  if (waiter && uuid) {
-    settleWaiter(session, waiter, uuid, onSettledLate)
-    return isUserReplay
-      ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
-      : null
-  }
-  return null
+  return current ? settleLiveDispatch(session, current, uuid, isUserReplay, onSettledLate) : null
 }
 
 /** Safely matched echoes inherit cycle ownership independently of their delivery UUID. */
@@ -169,16 +193,28 @@ function settleLiveDispatch(
   waiter: ClaudeDispatchWaiter,
   uuid: string,
   isUserReplay: boolean,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  onSettledLate?: ClaudeLateDispatchSettlement,
+  explicitlyFolded = false
 ): ClaudeReplayTurnOrigin | null {
+  const cycle = session.translator?.turnCycle
+  const ownOpener =
+    waiter.clientMessageId !== null &&
+    cycle?.userItemId === agentJournalSubmissionKey(waiter.clientMessageId)
+  const steers = claudeDispatchIsSteer(waiter)
   const joinsTurn =
-    session.translator?.turnCycle.ownsLiveProviderCycle === true ||
-    (waiter.steers === true && session.translator?.currentTurnId != null)
-  if (isUserReplay && joinsTurn) {
-    session.translator?.turnCycle.confirmProviderCycle()
+    !ownOpener &&
+    (explicitlyFolded ||
+      cycle?.ownsLiveProviderCycle === true ||
+      (steers && session.translator?.currentTurnId != null))
+  if (isUserReplay && (ownOpener || joinsTurn)) {
+    cycle?.confirmProviderCycle()
+  }
+  const startedSteer = steers && waiter.commandLifecycle === 'started'
+  if (isUserReplay && startedSteer && !joinsTurn && !ownOpener) {
+    cycle?.suppressReopen()
   }
   settleWaiter(session, waiter, uuid, onSettledLate, joinsTurn ? joinedTurn(session) : undefined)
-  return isUserReplay && !joinsTurn
+  return isUserReplay && !joinsTurn && !startedSteer
     ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
     : null
 }
@@ -203,10 +239,7 @@ function settleWaiter(
   onSettledLate?: ClaudeLateDispatchSettlement,
   answeredInTurn?: AgentJournalAnsweredTurnIdentity
 ): void {
-  const index = session.dispatchWaiters.indexOf(waiter)
-  if (index !== -1) {
-    session.dispatchWaiters.splice(index, 1)
-  }
+  forgetWaiter(session, waiter)
   waiter.settledUuid = uuid
   waiter.resolve(uuid)
   // Admission already returned; this replay settles delivery.

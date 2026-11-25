@@ -87,6 +87,10 @@ export class StructuredAgentSessionConversations extends Map<
       if (!current()) {
         return
       }
+      if (commit.publication?.writtenOnly) {
+        this.touch(sessionId)
+        return
+      }
       this.publish(sessionId, 'commit', commit)
       session.workChanged?.()
       this.settledTurns.deliver(sessionId, journal, commit)

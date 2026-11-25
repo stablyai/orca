@@ -14,7 +14,7 @@ import { structuredCompactionOutcome } from '../../../native-chat/agent-session-
 import { claudeText } from '../journal/claude-structured-item-translation'
 import { claudeResultFailure } from '../launch/claude-structured-provider-fallback'
 import type { ClaudeCurrentTurn, ClaudeTurnEnd } from './claude-turn-lifecycle-item'
-import { isRootClaudeFrame } from './claude-turn-opening'
+import { claudeStreamTurnStartSource, isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import type { ClaudeUsageLimits } from '../journal/claude-usage-limits'
 import type { ClaudeAssistantFailures } from '../journal/claude-assistant-failures'
@@ -42,7 +42,7 @@ export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurre
   return {
     sessionId: start.providerSessionId,
     turnId: start.turnId,
-    startedAt: running.startedAt ?? Date.now(),
+    ...(running.startedAt === undefined ? {} : { startedAt: running.startedAt }),
     ...(running.requestedAt === undefined ? {} : { requestedAt: running.requestedAt }),
     userItemId: running.userItemId ?? agentJournalItemKey(start.identity),
     command: {
@@ -94,13 +94,20 @@ export function absorbClaudeCommandFrame(
     usageLimits: Pick<ClaudeUsageLimits, 'assistant'>
     assistantFailures: Pick<ClaudeAssistantFailures, 'notice'>
   },
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  observedAt: number
 ): boolean {
   const { command } = turn
   if (!observeClaudeCommandFrame(command, message)) {
     return false
   }
   if (command && claudeCommandAnswers(command, message)) {
+    if (
+      turn.startedAt === null &&
+      (message.type === 'assistant' || claudeStreamTurnStartSource(message))
+    ) {
+      turn.startCommand(observedAt)
+    }
     usageLimits.assistant(message, turn)
     command.notice ??= assistantFailures.notice(message)
   }

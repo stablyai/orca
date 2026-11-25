@@ -11,6 +11,7 @@ import type {
   JournalCommandSettlementInput,
   JournalCommandOpenInput,
   JournalHandoverInput,
+  JournalHandoverResult,
   JournalItemAppendInput,
   JournalItemAppendOptions,
   JournalLifecycleBatchInput,
@@ -31,7 +32,6 @@ import type { JournalSqlStoreOperation, JournalSqlStorePrepare } from './journal
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import type { JournalWriterStep, JournalStepsResult } from './writing/journal-writer-step'
-import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import type { JournalWriterSettled } from './journal-sql-failure'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { claimJournalAutomaticSubmission } from './journal-sql-automatic-submission'
@@ -190,6 +190,17 @@ export abstract class SqlJournalAppends {
     return this.answerOf(this.write({ kind: 'dispatch', input }, receipted(receipt)))
   }
 
+  /** Record the provider's receipt of a pending send; the echo still settles delivery. */
+  async markDispatchWritten(input: {
+    clientMessageId: string
+    fence: number
+    observedAt: number
+    handoverCursor: AgentJournalCursor
+    providerReceipt?: true
+  }): Promise<void> {
+    await this.write({ kind: 'dispatch-written', ...input })
+  }
+
   appendStopEvent(event: Omit<JournalStopEvent, 'at'>, fence: number): Promise<AgentJournalCursor> {
     return this.answerOf(this.write({ kind: 'stop', event, fence }))
   }
@@ -211,10 +222,10 @@ export abstract class SqlJournalAppends {
     await this.write({ kind: 'shutdown-cut', input })
   }
 
-  async prepareHandover(input: JournalHandoverInput): Promise<StoppedHistoryDelivery | null> {
+  async prepareHandover(input: JournalHandoverInput): Promise<JournalHandoverResult> {
     const { value } = await this.write({ kind: 'handover', input })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handover returns only its stopped-history delivery result.
-    return value as StoppedHistoryDelivery | null
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handover returns its typed result from the writer dispatcher.
+    return value as JournalHandoverResult
   }
 
   async openCommand(input: JournalCommandOpenInput): Promise<JournalCommandOpenResult> {
