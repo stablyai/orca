@@ -74,7 +74,6 @@ export function MobileSourceControlContent({
     commitFailureRecovery,
     commitFailureRecoveryAction,
     openBranchPicker,
-    abortConflictOperation,
     sections,
     shouldShowBranchCompareSection,
     branchEntries,
@@ -96,21 +95,12 @@ export function MobileSourceControlContent({
           branchLabel,
           branchCompareResult,
           busyAction,
-          openBranchPicker,
-          abortConflictOperation
+          openBranchPicker
         }}
         onOpenCommits={onOpenCommits}
       />
     ),
-    [
-      abortConflictOperation,
-      branchCompareResult,
-      branchLabel,
-      busyAction,
-      onOpenCommits,
-      openBranchPicker,
-      status
-    ]
+    [branchCompareResult, branchLabel, busyAction, onOpenCommits, openBranchPicker, status]
   )
   const list = useMemo(
     () => (
@@ -163,11 +153,11 @@ export function MobileSourceControlContent({
     connState !== 'connected' || commitFailureRecovery || actionError ? (
       <View style={hubStyles.changesControls}>
         {connState !== 'connected' ? (
-          // Retained rows look actionable offline; show reconnect state beside them.
-          <View style={styles.reconnectBanner}>
-            <ActivityIndicator size="small" color={colors.statusAmber} />
-            <Text style={styles.reconnectBannerText}>
-              {t('sourceControl.content.reconnecting', 'Reconnecting to desktop...')}
+          // Retained rows look actionable offline; say so in one quiet line above them.
+          <View style={styles.feedbackLine}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <Text style={styles.feedbackText}>
+              {t('sourceControl.content.reconnectingToComputer', 'Reconnecting…')}
             </Text>
           </View>
         ) : null}
@@ -177,11 +167,10 @@ export function MobileSourceControlContent({
             action={commitFailureRecoveryAction}
           />
         ) : actionError ? (
-          <View style={styles.actionError}>
-            <Text style={styles.actionErrorText} numberOfLines={2}>
-              {actionError}
-            </Text>
-          </View>
+          // Whole, not clipped: a git error's useful part ("hint: …") is usually its last lines.
+          <Text style={[styles.feedbackText, styles.feedbackError]} selectable>
+            {actionError}
+          </Text>
         ) : null}
       </View>
     ) : null
@@ -192,10 +181,7 @@ export function MobileSourceControlContent({
         <View style={hubStyles.changesControls}>{header}</View>
         <CleanStateFade animate={cleanedByCommit}>
           <Text style={styles.stateTitle}>
-            {t('sourceControl.content.emptyTitle', 'No local changes')}
-          </Text>
-          <Text style={styles.stateText}>
-            {t('sourceControl.content.emptyMessage', 'Working tree is clean.')}
+            {t('sourceControl.content.noChanges', 'No changes')}
           </Text>
         </CleanStateFade>
       </View>

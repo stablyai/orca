@@ -28,7 +28,7 @@ export function MobileSourceControlModals({ state }: Props) {
     <>
       <ConfirmModal
         visible={discardTarget !== null}
-        title={t('sourceControl.modals.discardTitle', 'Discard Change')}
+        title={t('sourceControl.modals.discardTitle', 'Discard change')}
         message={
           discardTarget
             ? t(
@@ -53,15 +53,10 @@ export function MobileSourceControlModals({ state }: Props) {
 
       <PickerModal
         visible={showBranchPicker}
-        title={t('sourceControl.modals.switchBranchTitle', 'Switch Branch')}
-        options={(localBranches?.branches ?? []).map((b) => ({
-          value: b,
-          label: b,
-          subtitle:
-            b === localBranches?.current
-              ? t('sourceControl.modals.currentBranch', 'current')
-              : undefined
-        }))}
+        title={t('sourceControl.modals.switchBranchTitle', 'Switch branch')}
+        // Real repos list dozens to hundreds of branches; the check marks the current one.
+        searchable
+        options={(localBranches?.branches ?? []).map((b) => ({ value: b, label: b }))}
         selected={localBranches?.current ?? ''}
         onSelect={(branch) => {
           if (branch !== localBranches?.current) {
@@ -75,7 +70,7 @@ export function MobileSourceControlModals({ state }: Props) {
 
       <ConfirmModal
         visible={createdPrUrl !== null}
-        title={t('sourceControl.modals.prCreatedTitle', 'Pull Request Created')}
+        title={t('sourceControl.modals.prCreatedTitle', 'Pull request created')}
         message={
           createdPrWarning
             ? t(

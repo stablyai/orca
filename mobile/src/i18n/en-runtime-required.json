@@ -1282,9 +1282,7 @@
     },
     "changesHeader": {
       "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits",
-      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
-      "filesNeedDecision_other": "{{count}} files need a decision before you can finish."
+      "commits_other": "{{count}} commits"
     },
     "commitDetail": {
       "files_one": "{{count}} file",

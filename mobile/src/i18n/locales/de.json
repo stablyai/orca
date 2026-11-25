@@ -3124,12 +3124,7 @@
     },
     "commitFailurePanel": {
       "fix": "Beheben",
-      "fixWithAi": "Commit-Fehler mit KI beheben",
       "hideDetails": "Details ausblenden",
-      "hideFailureDetails": "Details zum Commit-Fehler ausblenden",
-      "showDetails": "Details anzeigen",
-      "showFailureDetails": "Details zum Commit-Fehler anzeigen",
-      "summary": "Commit fehlgeschlagen.",
       "title": "Commit fehlgeschlagen"
     },
     "commitMessageAi": {
@@ -3149,10 +3144,7 @@
       "cancelGeneration": "Generierung der Commit-Nachricht abbrechen",
       "commitMessageDisabled": "Commit-Nachricht deaktiviert. Keine vorgemerkten Dateien.",
       "commitMessagePlaceholder": "Commit-Nachricht",
-      "emptyMessage": "Der Worktree ist sauber.",
-      "emptyTitle": "Keine lokalen Änderungen",
       "generateMessage": "Commit-Nachricht mit KI generieren",
-      "reconnecting": "Verbindung zum Desktop wird wiederhergestellt…",
       "regenerateHint": "Nachricht leeren, um sie neu zu generieren."
     },
     "createPrAction": {
@@ -3288,7 +3280,6 @@
       "updateDesktop": "Orca auf diesem Host aktualisieren, um die Quellcodeverwaltung mobil zu nutzen."
     },
     "modals": {
-      "currentBranch": "aktuell",
       "discardButton": "Verwerfen",
       "discardConfirmMessage": "Änderungen an „{{path}}“ verwerfen? Dies kann nicht rückgängig gemacht werden.",
       "discardTitle": "Änderung verwerfen?",
@@ -4460,7 +4451,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

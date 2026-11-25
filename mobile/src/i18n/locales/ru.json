@@ -4551,12 +4551,7 @@
     },
     "commitFailurePanel": {
       "fix": "Исправить",
-      "fixWithAi": "Исправить ошибку коммита с ИИ",
       "hideDetails": "Скрыть подробности",
-      "hideFailureDetails": "Скрыть подробности ошибки коммита",
-      "showDetails": "Показать подробности",
-      "showFailureDetails": "Показать подробности ошибки коммита",
-      "summary": "Не удалось создать коммит.",
       "title": "Не удалось создать коммит"
     },
     "commitMessageAi": {
@@ -4576,10 +4571,7 @@
       "cancelGeneration": "Отменить создание сообщения коммита",
       "commitMessageDisabled": "Ввод сообщения коммита недоступен. В индексе нет файлов.",
       "commitMessagePlaceholder": "Сообщение коммита",
-      "emptyMessage": "В рабочем дереве нет изменений.",
-      "emptyTitle": "Нет локальных изменений",
       "generateMessage": "Создать сообщение коммита с помощью ИИ",
-      "reconnecting": "Переподключение к компьютеру…",
       "regenerateHint": "Очистите сообщение для повторного создания."
     },
     "createPrAction": {
@@ -4745,7 +4737,6 @@
       "updateDesktop": "Обновите Orca на этом сервере, чтобы использовать управление версиями на мобильном устройстве."
     },
     "modals": {
-      "currentBranch": "текущая",
       "discardButton": "Отменить изменения",
       "discardConfirmMessage": "Отменить изменения в «{{path}}»? Это действие необратимо.",
       "discardTitle": "Отменить изменение",
@@ -5059,15 +5050,6 @@
       "behind": "Позади: {{count}}",
       "upToDate": "Актуально",
       "switchBranch": "Сменить ветку {{branch}}",
-      "mergeInProgress": "Выполняется слияние",
-      "rebaseInProgress": "Выполняется перебазирование",
-      "cherryPickInProgress": "Выполняется cherry-pick",
-      "filesNeedDecision_one": "{{count}} файл требует решения, чтобы вы могли завершить.",
-      "filesNeedDecision_other": "{{count}} файла требуют решения, чтобы вы могли завершить.",
-      "filesNeedDecision_few": "{{count}} файла требуют решения, чтобы вы могли завершить.",
-      "filesNeedDecision_many": "{{count}} файлов требуют решения, чтобы вы могли завершить.",
-      "conflictsResolved": "Все конфликты разрешены. Завершите на панели ниже.",
-      "continueOnComputer": "Все конфликты разрешены. Завершите на компьютере.",
       "commits_one": "{{count}} коммит",
       "commits_other": "{{count}} коммита",
       "commits_few": "{{count}} коммита",

@@ -210,9 +210,9 @@ export function ChangeFileRow({
     >
       {(guardPress) => (
         <Pressable
-          style={({ pressed }) => [
+          style={[
             styles.fileRow,
-            pressed && item.canOpen && styles.fileRowPressed,
+            (detail || splitGitPath(item.path).folder) && styles.fileRowTwoLine,
             !item.canOpen && !hasConflictActions && styles.fileRowUnavailable
           ]}
           onPress={guardPress(() => {
@@ -231,15 +231,20 @@ export function ChangeFileRow({
             }
           )}
         >
-          <FileRowBody
-            status={item.status}
-            path={item.path}
-            detail={detail}
-            added={item.added}
-            removed={item.removed}
-            trailing={trailing(guardPress)}
-            actions={conflictActions(guardPress)}
-          />
+          {({ pressed }) => (
+            <>
+              {pressed && item.canOpen ? <PressWash /> : null}
+              <FileRowBody
+                status={item.status}
+                path={item.path}
+                detail={detail}
+                added={item.added}
+                removed={item.removed}
+                trailing={trailing(guardPress)}
+                actions={conflictActions(guardPress)}
+              />
+            </>
+          )}
         </Pressable>
       )}
     </SwipeRowActions>
@@ -257,9 +262,9 @@ export function BranchFileRow({
   const t = useMobileTranslation()
   return (
     <Pressable
-      style={({ pressed }) => [
+      style={[
         styles.fileRow,
-        pressed && entry.canOpen && styles.fileRowPressed,
+        (entry.oldPath || splitGitPath(entry.path).folder) && styles.fileRowTwoLine,
         !entry.canOpen && styles.fileRowUnavailable
       ]}
       onPress={() =>
@@ -272,17 +277,28 @@ export function BranchFileRow({
         { path: entry.path }
       )}
     >
-      <FileRowBody
-        status={entry.status}
-        path={entry.path}
-        detail={
-          entry.oldPath
-            ? t('sourceControl.fileRows.renamedFrom', 'from {{path}}', { path: entry.oldPath })
-            : undefined
-        }
-        added={entry.added}
-        removed={entry.removed}
-      />
+      {({ pressed }) => (
+        <>
+          {pressed && entry.canOpen ? <PressWash /> : null}
+          <FileRowBody
+            status={entry.status}
+            path={entry.path}
+            detail={
+              entry.oldPath
+                ? t('sourceControl.fileRows.renamedFrom', 'from {{path}}', { path: entry.oldPath })
+                : undefined
+            }
+            added={entry.added}
+            removed={entry.removed}
+          />
+        </>
+      )}
     </Pressable>
   )
+}
+
+// The row stays opaque (Discard waits behind it), so the press is a translucent layer over it.
+function PressWash() {
+  useMobileColorScheme()
+  return <View pointerEvents="none" style={styles.fileRowPressed} />
 }

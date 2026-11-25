@@ -3605,12 +3605,7 @@
     },
     "commitFailurePanel": {
       "fix": "Corrigir",
-      "fixWithAi": "Corrigir falha de commit com IA",
       "hideDetails": "Ocultar detalhes",
-      "hideFailureDetails": "Ocultar detalhes da falha no commit",
-      "showDetails": "Mostrar detalhes",
-      "showFailureDetails": "Mostrar detalhes da falha no commit",
-      "summary": "Falha no commit.",
       "title": "Falha no commit"
     },
     "commitMessageAi": {
@@ -3630,10 +3625,7 @@
       "cancelGeneration": "Cancelar geração da mensagem de commit",
       "commitMessageDisabled": "Mensagem de commit desativada. Nenhum arquivo no stage.",
       "commitMessagePlaceholder": "Mensagem de commit",
-      "emptyMessage": "A árvore de trabalho está limpa.",
-      "emptyTitle": "Nenhuma alteração local",
       "generateMessage": "Gerar mensagem de commit com IA",
-      "reconnecting": "Reconectando ao desktop…",
       "regenerateHint": "Limpe a mensagem para gerar novamente."
     },
     "createPrAction": {
@@ -3787,7 +3779,6 @@
       "updateDesktop": "Atualize o Orca neste host para usar o controle de versão no celular."
     },
     "modals": {
-      "currentBranch": "atual",
       "discardButton": "Descartar",
       "discardConfirmMessage": "Descartar alterações em \"{{path}}\"? Esta ação não pode ser desfeita.",
       "discardTitle": "Descartar alteração?",
@@ -4070,17 +4061,9 @@
       "behind": "{{count}} atrás",
       "upToDate": "Atualizada",
       "switchBranch": "Mudar branch de {{branch}}",
-      "mergeInProgress": "Merge em andamento",
-      "rebaseInProgress": "Rebase em andamento",
-      "cherryPickInProgress": "Cherry-pick em andamento",
-      "filesNeedDecision_one": "{{count}} arquivo precisa de uma decisão antes de você concluir.",
-      "filesNeedDecision_other": "{{count}} arquivos precisam de uma decisão antes de você terminar.",
-      "conflictsResolved": "Todos os conflitos foram resolvidos. Conclua na barra abaixo.",
-      "continueOnComputer": "Todo conflito é resolvido. Continue no seu computador para terminar.",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
       "conflictsMayRemain": "Nem todos os arquivos estão listados, portanto, os conflitos podem permanecer. Verifique no seu computador.",
-      "filesNeedDecision_many": "{{count}} arquivos precisam de uma decisão antes de você terminar.",
       "commits_many": "{{count}} commits"
     },
     "fileList": {
@@ -5140,7 +5123,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

@@ -4321,12 +4321,7 @@
     },
     "commitFailurePanel": {
       "fix": "Düzelt",
-      "fixWithAi": "Commit hatasını AI ile düzelt",
       "hideDetails": "Ayrıntıları gizle",
-      "hideFailureDetails": "Commit hatasının ayrıntılarını gizle",
-      "showDetails": "Ayrıntıları göster",
-      "showFailureDetails": "Commit hatasının ayrıntılarını göster",
-      "summary": "Commit'lenemedi.",
       "title": "Commit'lenemedi"
     },
     "commitMessageAi": {
@@ -4346,10 +4341,7 @@
       "cancelGeneration": "Commit mesajı oluşturmayı iptal et",
       "commitMessageDisabled": "Commit mesajı devre dışı. Stage edilmiş dosya yok.",
       "commitMessagePlaceholder": "Commit mesajı",
-      "emptyMessage": "Çalışma ağacı temiz.",
-      "emptyTitle": "Yerel değişiklik yok",
       "generateMessage": "Commit mesajını AI ile oluştur",
-      "reconnecting": "Masaüstüne yeniden bağlanılıyor…",
       "regenerateHint": "Yeniden oluşturmak için mesajı temizleyin."
     },
     "createPrAction": {
@@ -4491,7 +4483,6 @@
       "updateDesktop": "Mobilde Kaynak Kontrolü özelliğini kullanmak için bu sunucudaki Orca'yı güncelleyin."
     },
     "modals": {
-      "currentBranch": "geçerli",
       "discardButton": "At",
       "discardConfirmMessage": "“{{path}}” dosyasındaki değişiklikler atılsın mı? Bu işlem geri alınamaz.",
       "discardTitle": "Değişikliği At",
@@ -4791,13 +4782,6 @@
       "behind": "{{count}} geride",
       "upToDate": "Güncel",
       "switchBranch": "{{branch}} yerine başka bir branch'e geç",
-      "mergeInProgress": "Merge devam ediyor",
-      "rebaseInProgress": "Rebase devam ediyor",
-      "cherryPickInProgress": "Cherry-pick devam ediyor",
-      "filesNeedDecision_one": "Bitirmeden önce {{count}} dosya için karar vermeniz gerekiyor.",
-      "filesNeedDecision_other": "Bitirmeden önce {{count}} dosya için karar vermeniz gerekiyor.",
-      "conflictsResolved": "Tüm çakışmalar çözüldü. Aşağıdaki çubuktan işlemi tamamlayın.",
-      "continueOnComputer": "Tüm çakışmalar çözüldü. İşlemi tamamlamak için bilgisayarınızda devam edin.",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commit",
       "conflictsMayRemain": "Tüm dosyalar listelenmediği için çözülmemiş çakışmalar olabilir. Bilgisayarınızda kontrol edin."

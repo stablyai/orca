@@ -4184,12 +4184,7 @@
     },
     "commitFailurePanel": {
       "fix": "修复",
-      "fixWithAi": "使用 AI 修复提交失败",
       "hideDetails": "隐藏详情",
-      "hideFailureDetails": "隐藏提交失败详情",
-      "showDetails": "显示详情",
-      "showFailureDetails": "显示提交失败详情",
-      "summary": "提交失败",
       "title": "提交失败"
     },
     "commitMessageAi": {
@@ -4209,10 +4204,7 @@
       "cancelGeneration": "取消生成提交信息",
       "commitMessageDisabled": "提交信息输入已禁用。没有已暂存的文件",
       "commitMessagePlaceholder": "提交信息",
-      "emptyMessage": "工作树无更改",
-      "emptyTitle": "无本地更改",
       "generateMessage": "使用 AI 生成提交信息",
-      "reconnecting": "正在重新连接桌面…",
       "regenerateHint": "清除消息以重新生成"
     },
     "createPrAction": {
@@ -4354,7 +4346,6 @@
       "updateDesktop": "请更新此主机上的 Orca，以在手机上使用源代码控制"
     },
     "modals": {
-      "currentBranch": "当前",
       "discardButton": "放弃",
       "discardConfirmMessage": "放弃对“{{path}}”的更改？此操作无法撤销",
       "discardTitle": "放弃更改",
@@ -4654,13 +4645,6 @@
       "behind": "落后 {{count}}",
       "upToDate": "已是最新",
       "switchBranch": "从 {{branch}} 切换分支",
-      "mergeInProgress": "合并进行中",
-      "rebaseInProgress": "变基进行中",
-      "cherryPickInProgress": "挑选进行中",
-      "filesNeedDecision_one": "还有 {{count}} 个文件需要你做出选择，才能完成",
-      "filesNeedDecision_other": "还有 {{count}} 个文件需要你做出选择，才能完成",
-      "conflictsResolved": "所有冲突均已解决，请在下方操作栏中完成",
-      "continueOnComputer": "所有冲突均已解决，请在电脑上继续完成",
       "commits_one": "{{count}} 个提交",
       "commits_other": "{{count}} 个提交",
       "conflictsMayRemain": "并非所有文件都已列出，可能仍有冲突，请在电脑上检查"

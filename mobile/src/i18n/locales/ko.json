@@ -3299,12 +3299,7 @@
     },
     "commitFailurePanel": {
       "fix": "수정",
-      "fixWithAi": "AI로 커밋 실패 수정",
       "hideDetails": "세부 정보 숨기기",
-      "hideFailureDetails": "커밋 실패 세부 정보 숨기기",
-      "showDetails": "세부 정보 표시",
-      "showFailureDetails": "커밋 실패 세부 정보 표시",
-      "summary": "커밋에 실패했습니다.",
       "title": "커밋 실패"
     },
     "commitMessageAi": {
@@ -3324,10 +3319,7 @@
       "cancelGeneration": "커밋 메시지 생성 취소",
       "commitMessageDisabled": "커밋 메시지 입력이 비활성화되었습니다. 스테이징된 파일이 없습니다.",
       "commitMessagePlaceholder": "커밋 메시지",
-      "emptyMessage": "워크트리에 변경 사항이 없습니다.",
-      "emptyTitle": "로컬 변경 사항 없음",
       "generateMessage": "AI로 커밋 메시지 생성",
-      "reconnecting": "데스크톱에 다시 연결 중…",
       "regenerateHint": "다시 생성하려면 메시지를 지웁니다."
     },
     "createPrAction": {
@@ -3463,7 +3455,6 @@
       "updateDesktop": "모바일에서 소스 제어를 사용하려면 이 호스트의 Orca를 업데이트하세요."
     },
     "modals": {
-      "currentBranch": "현재",
       "discardButton": "버리기",
       "discardConfirmMessage": "\"{{path}}\"의 변경 사항을 버리시겠습니까? 이 작업은 되돌릴 수 없습니다.",
       "discardTitle": "변경사항 취소",
@@ -4635,7 +4626,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",

@@ -77,7 +77,10 @@ export function useMobileSourceControlActionSheet(
           }
         },
         t
-      ).map((action) => ({ ...action, icon: SOURCE_CONTROL_ACTION_ICONS[action.iconKey] })),
+      )
+        // The menu lists only what can run now, as iOS pull-down menus do.
+        .filter((action) => !action.inapplicable)
+        .map((action) => ({ ...action, icon: SOURCE_CONTROL_ACTION_ICONS[action.iconKey] })),
     [
       busyAction,
       createPr,

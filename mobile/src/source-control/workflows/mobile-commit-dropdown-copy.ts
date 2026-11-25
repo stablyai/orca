@@ -8,9 +8,9 @@ export function mobileCommitDropdownCopy(t: Translate): CommitDropdownCopy {
       'sourceControl.commitDropdown.commitStagedChanges',
       'Commit staged changes'
     ),
-    commitPush: t('sourceControl.commitDropdown.commitPush', 'Commit & Push'),
-    commitForcePush: t('sourceControl.commitDropdown.commitForcePush', 'Commit & Force Push'),
-    commitSync: t('sourceControl.commitDropdown.commitSync', 'Commit & Sync'),
+    commitPush: t('sourceControl.commitDropdown.commitPush', 'Commit & push'),
+    commitForcePush: t('sourceControl.commitDropdown.commitForcePush', 'Commit & force push'),
+    commitSync: t('sourceControl.commitDropdown.commitSync', 'Commit & sync'),
     checkingBranchStatus: t(
       'sourceControl.commitDropdown.checkingBranchStatus',
       'Checking branch status…'

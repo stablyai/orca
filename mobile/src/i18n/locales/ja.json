@@ -3121,12 +3121,7 @@
     },
     "commitFailurePanel": {
       "fix": "修正",
-      "fixWithAi": "AI によるコミット失敗の修正",
       "hideDetails": "詳細を非表示",
-      "hideFailureDetails": "コミット失敗の詳細を非表示",
-      "showDetails": "詳細を表示",
-      "showFailureDetails": "コミット失敗の詳細を表示",
-      "summary": "コミットに失敗しました。",
       "title": "コミットに失敗しました"
     },
     "commitMessageAi": {
@@ -3146,10 +3141,7 @@
       "cancelGeneration": "コミットメッセージの生成をキャンセル",
       "commitMessageDisabled": "コミットメッセージは入力できません。ステージ済みのファイルがありません。",
       "commitMessagePlaceholder": "コミットメッセージ",
-      "emptyMessage": "ワークツリーに変更はありません。",
-      "emptyTitle": "ローカルの変更なし",
       "generateMessage": "AIでコミットメッセージを生成",
-      "reconnecting": "デスクトップに再接続中…",
       "regenerateHint": "再生成するには、メッセージをクリアしてください。"
     },
     "createPrAction": {
@@ -3285,7 +3277,6 @@
       "updateDesktop": "モバイルでソース管理を使うには、このホストの Orca を更新してください。"
     },
     "modals": {
-      "currentBranch": "現在",
       "discardButton": "破棄",
       "discardConfirmMessage": "「{{path}}」への変更を破棄しますか？この操作は取り消せません。",
       "discardTitle": "変更を破棄",
@@ -4534,7 +4525,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

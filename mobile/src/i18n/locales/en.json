@@ -4323,9 +4323,9 @@
     "commitDropdown": {
       "commit": "Commit",
       "commitStagedChanges": "Commit staged changes",
-      "commitPush": "Commit & Push",
-      "commitForcePush": "Commit & Force Push",
-      "commitSync": "Commit & Sync",
+      "commitPush": "Commit & push",
+      "commitForcePush": "Commit & force push",
+      "commitSync": "Commit & sync",
       "checkingBranchStatus": "Checking branch status…",
       "checkingPrStatus": "Checking PR status…",
       "prAlreadyMerged": "PR is already merged",
@@ -4378,11 +4378,11 @@
     },
     "remoteDropdown": {
       "push": "Push",
-      "forcePush": "Force Push",
+      "forcePush": "Force push",
       "pull": "Pull",
       "fastForward": "Fast-forward",
       "sync": "Sync",
-      "publishBranch": "Publish Branch",
+      "publishBranch": "Publish branch",
       "publishPrStatus": "PR Status",
       "publishLinkedReview": "Linked Review",
       "publishNoBranch": "No Branch",
@@ -4499,13 +4499,10 @@
     },
     "commitFailurePanel": {
       "title": "Commit failed",
-      "summary": "Commit failed.",
-      "fixWithAi": "Fix commit failure with AI",
       "fix": "Fix",
-      "hideFailureDetails": "Hide commit failure details",
-      "showFailureDetails": "Show commit failure details",
       "hideDetails": "Hide details",
-      "showDetails": "Show details"
+      "failedWith": "Commit failed: {{reason}}",
+      "details": "Details"
     },
     "gitHistoryList": {
       "loadFailed": "Failed to load history",
@@ -4520,14 +4517,13 @@
       "completeMerge": "Complete merge"
     },
     "content": {
-      "reconnecting": "Reconnecting to desktop...",
-      "emptyTitle": "No local changes",
-      "emptyMessage": "Working tree is clean.",
       "commitMessageDisabled": "Commit message disabled. No staged files.",
       "commitMessagePlaceholder": "Commit message",
       "regenerateHint": "Clear the message to regenerate.",
       "cancelGeneration": "Cancel commit message generation",
-      "generateMessage": "Generate commit message with AI"
+      "generateMessage": "Generate commit message with AI",
+      "reconnectingToComputer": "Reconnecting…",
+      "noChanges": "No changes"
     },
     "fileRows": {
       "bothModified": "Both modified",
@@ -4554,16 +4550,15 @@
       "title": "Source Control",
       "openNumberedPrWeb": "Open pull request #{{number}} on the web",
       "openPrWeb": "Open pull request on the web",
-      "refresh": "Refresh source control",
+      "refresh": "Refresh",
       "moreActions": "More source control actions"
     },
     "modals": {
-      "discardTitle": "Discard Change",
+      "discardTitle": "Discard change",
       "discardConfirmMessage": "Discard changes to \"{{path}}\"? This cannot be undone.",
       "discardButton": "Discard",
-      "switchBranchTitle": "Switch Branch",
-      "currentBranch": "current",
-      "prCreatedTitle": "Pull Request Created",
+      "switchBranchTitle": "Switch branch",
+      "prCreatedTitle": "Pull request created",
       "openPrWithWarning": "Open it in your browser?\n\n{{warning}}",
       "openPrMessage": "Open it in your browser?"
     },
@@ -4660,7 +4655,10 @@
       "aborting": "Aborting…",
       "abortMerge": "Abort merge",
       "abortRebase": "Abort rebase",
-      "abortOperation": "Abort {{operation}}"
+      "abortOperation": "Abort {{operation}}",
+      "confirmRebaseTitle": "Abort the rebase?",
+      "confirmMergeTitle": "Abort the merge?",
+      "confirmMessage": "The branch goes back to where it was, and the resolved files are lost."
     },
     "hubTab": {
       "changes": "Changes",
@@ -4853,16 +4851,11 @@
       "behind": "{{count}} behind",
       "upToDate": "Up to date",
       "switchBranch": "Switch branch from {{branch}}",
-      "mergeInProgress": "Merge in progress",
-      "rebaseInProgress": "Rebase in progress",
-      "cherryPickInProgress": "Cherry-pick in progress",
-      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
-      "filesNeedDecision_other": "{{count}} files need a decision before you can finish.",
-      "conflictsResolved": "Every conflict is resolved. Finish from the bar below.",
-      "continueOnComputer": "Every conflict is resolved. Continue on your computer to finish.",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
-      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer."
+      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer.",
+      "pausedToResolve": "{{operation}} · {{count}} to resolve",
+      "continueOnComputerShort": "Continue on your computer to finish."
     },
     "fileList": {
       "stageAll": "Stage all",

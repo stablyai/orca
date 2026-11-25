@@ -3206,12 +3206,7 @@
     },
     "commitFailurePanel": {
       "fix": "Corriger",
-      "fixWithAi": "Corriger l'échec du commit avec l'IA",
       "hideDetails": "Masquer les détails",
-      "hideFailureDetails": "Masquer les détails de l'échec du commit",
-      "showDetails": "Afficher les détails",
-      "showFailureDetails": "Afficher les détails de l'échec du commit",
-      "summary": "Échec du commit.",
       "title": "Échec du commit"
     },
     "commitMessageAi": {
@@ -3231,10 +3226,7 @@
       "cancelGeneration": "Annuler la génération du message de commit",
       "commitMessageDisabled": "Message de commit désactivé. Aucun fichier indexé.",
       "commitMessagePlaceholder": "Message de commit",
-      "emptyMessage": "Le worktree est propre.",
-      "emptyTitle": "Aucune modification locale",
       "generateMessage": "Générer le message de commit avec l'IA",
-      "reconnecting": "Reconnexion à l'ordinateur…",
       "regenerateHint": "Effacez le message pour le régénérer."
     },
     "createPrAction": {
@@ -3382,7 +3374,6 @@
       "updateDesktop": "Mettez à jour Orca sur cet hôte pour utiliser le contrôle de code source sur mobile."
     },
     "modals": {
-      "currentBranch": "actuelle",
       "discardButton": "Abandonner",
       "discardConfirmMessage": "Abandonner les modifications de « {{path}} » ? Cette action est irréversible.",
       "discardTitle": "Abandonner la modification",
@@ -4566,7 +4557,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
