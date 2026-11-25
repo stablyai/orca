@@ -21,6 +21,8 @@ type IdleStopHost = {
    */
   unacked: () => readonly ProviderRelayRecord[] | null
   stop: () => void
+  /** Output no app has taken yet: the next launch shows it, so the agent isn't idle-stopped. */
+  unread?: () => boolean
   log?: (event: string, details?: Record<string, unknown>) => void
 }
 
@@ -55,7 +57,8 @@ export class ProviderRelayIdleStop {
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
       }
-      stopIdle: () => Promise<unknown>
+      stoppedBy: 'idle' | 'cap' | null
+      close: () => Promise<unknown>
     },
     options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void },
     unacked: () => readonly ProviderRelayRecord[] | null
@@ -69,9 +72,25 @@ export class ProviderRelayIdleStop {
         relay.pending.workMethods = new Set(methods)
       },
       unacked,
-      stop: () => void relay.stopIdle().catch(() => {}),
+      unread: () => {
+        const lines = unacked()
+        return lines === null || lines.length > 0
+      },
+      stop: () => {
+        relay.stoppedBy = 'idle'
+        void relay.close().catch(() => {})
+      },
       log: (event, details) => options.log?.(event, { relayId: options.relayId, ...details })
     })
+  }
+
+  /** Armed by a detach that said what is open; a detach without (work unknown) is never idle-stopped. */
+  get tracking(): boolean {
+    return this.armed
+  }
+
+  get unread(): boolean {
+    return this.host.unread?.() === true
   }
 
   /** Learned at spawn or attach, for a stream that drops without a detach of its own. */
@@ -202,6 +221,11 @@ export class ProviderRelayIdleStop {
     }
     if (this.work.busy || this.host.pendingCount() > 0) {
       this.waitingForLine = true
+      return
+    }
+    // Only an attach takes it; the detached cap bounds how long it waits.
+    if (this.host.unread?.()) {
+      this.host.log?.('relay-idle-unread', { quietMs: quietFor })
       return
     }
     this.armed = false

@@ -28,7 +28,8 @@ export class ProviderRelay {
   private readonly lines: ProviderRelayLineReader
   private readerBusy = false
   private exitStatus: ProviderRelayExit | null = null
-  private idleStopped = false
+  /** Set by the idle stop or the detached cap before it closes the agent; its exit says which. */
+  stoppedBy: 'idle' | 'cap' | null = null
   /** The client's own acks that gave up an open kept span (the daemon's ask at its file cap). */
   private readonly cut = new ProviderRelayCut()
   private stdoutEnded = false
@@ -99,7 +100,8 @@ export class ProviderRelay {
         code: exit.code,
         signal: exit.signal,
         ...(this.failure ? { error: this.failure } : {}),
-        ...(this.idleStopped ? { idleStopped: true as const } : {})
+        ...(this.stoppedBy === 'idle' ? { idleStopped: true as const } : {}),
+        ...(this.stoppedBy === 'cap' ? { capStopped: true as const } : {})
       }
       this.pending.clear()
       this.idleStop.disarm()
@@ -138,7 +140,7 @@ export class ProviderRelay {
     )
   }
 
-  get idleStopPolicy(): Pick<ProviderRelayIdleStop, 'configure'> {
+  get idleStopPolicy(): Pick<ProviderRelayIdleStop, 'configure' | 'tracking' | 'unread'> {
     return this.idleStop
   }
 
@@ -238,11 +240,6 @@ export class ProviderRelay {
     this.cut.record(seq, keepFrom, options)
     const ackedThrough = this.spool.ack(seq, keepFrom, options.held === true)
     return { ackedThrough, truncatedThrough: this.spool.truncatedThrough }
-  }
-
-  stopIdle(): Promise<unknown> {
-    this.idleStopped = true
-    return this.close()
   }
 
   close(grace?: 'brief'): Promise<unknown> {

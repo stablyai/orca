@@ -11,6 +11,8 @@ import {
   type ProviderRelaySpawnSpec
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelay } from './provider-relay'
+import { ProviderRelayDetachedCap } from './provider-relay-detached-cap'
+import { ProviderRelayEndedRetention } from './provider-relay-ended-retention'
 import type { ProviderRelayStream } from './provider-relay-attachment'
 import { waitAtMost } from './provider-relay-bounded-wait'
 import { readProviderRelayDetachPolicy } from './provider-relay-idle-stop'
@@ -19,8 +21,6 @@ import { validProviderRelaySpawnSpec } from './provider-relay-spawn-spec'
 type SpawnManaged = typeof spawnManagedProviderProcess
 
 const MAX_CHAT_KEY_CHARS = 1024
-/** An ended relay nobody collects is dropped after this, so it never holds the daemon or its spool forever. */
-const ENDED_RELAY_RETENTION_MS = 24 * 60 * 60 * 1000
 /** Relay cleanup is disk work; shutdown waits for it only this long. */
 const DISPOSE_WAIT_MS = 3000
 const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson(?:\.line|\.compact)?$/
@@ -49,7 +49,14 @@ function ownerProvenGone(pid: number): boolean {
 /** Agents this daemon owns for chats; nothing here runs until a client's first `relaySpawn`. */
 export class ProviderRelayHost {
   private readonly relays = new Map<string, ProviderRelay>()
-  private readonly expiries = new Map<ProviderRelay, ReturnType<typeof setTimeout>>()
+  private readonly retention = new ProviderRelayEndedRetention<ProviderRelay>((relay) => {
+    if (!relay.live) {
+      this.remove(relay)
+    }
+  })
+  private readonly cap = new ProviderRelayDetachedCap((event, details) =>
+    this.options.log(event, details)
+  )
   private readonly platform: NodeJS.Platform
   private ready: Promise<{ directory: string; spawn: SpawnManaged }> | null = null
   private disposed = false
@@ -122,9 +129,13 @@ export class ProviderRelayHost {
       onSettled: () => {
         this.removeIfFinished(relay)
         this.expireWhenAbandoned(relay)
+        this.cap.forget(relay)
         this.options.onLiveCountChanged()
       },
-      onDetached: () => this.expireWhenAbandoned(relay)
+      onDetached: () => {
+        this.expireWhenAbandoned(relay)
+        this.cap.detached(relay)
+      }
     })
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     this.relays.set(relayId, relay)
@@ -163,6 +174,7 @@ export class ProviderRelayHost {
     try {
       return await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
     } finally {
+      this.cap.forget(relay)
       // An ended relay with nothing left to ack is done once a client has seen its outcome.
       this.removeIfFinished(relay)
     }
@@ -221,10 +233,8 @@ export class ProviderRelayHost {
 
   private async disposeOnce(): Promise<void> {
     this.disposed = true
-    for (const timer of this.expiries.values()) {
-      clearTimeout(timer)
-    }
-    this.expiries.clear()
+    this.cap.stop()
+    this.retention.dispose()
     const relays = [...this.relays.values()]
     this.relays.clear()
     await waitAtMost(Promise.all(relays.map((relay) => relay.dispose())), DISPOSE_WAIT_MS)
@@ -257,7 +267,7 @@ export class ProviderRelayHost {
   }
 
   private remove(relay: ProviderRelay): void {
-    this.clearExpiry(relay)
+    this.retention.clear(relay)
     if (this.registered(relay)) {
       this.relays.delete(relay.relayId)
       void relay.dispose()
@@ -268,24 +278,8 @@ export class ProviderRelayHost {
   private expireWhenAbandoned(relay: ProviderRelay): void {
     // A late stdout end on an already removed relay must not pin it with a timer.
     // Attached or not: a client that stops acking can't keep an ended agent's output forever.
-    if (!this.registered(relay) || relay.live || this.expiries.has(relay)) {
-      return
-    }
-    const timer = setTimeout(() => {
-      this.expiries.delete(relay)
-      if (!relay.live) {
-        this.remove(relay)
-      }
-    }, ENDED_RELAY_RETENTION_MS)
-    timer.unref?.()
-    this.expiries.set(relay, timer)
-  }
-
-  private clearExpiry(relay: ProviderRelay): void {
-    const timer = this.expiries.get(relay)
-    if (timer) {
-      clearTimeout(timer)
-      this.expiries.delete(relay)
+    if (this.registered(relay)) {
+      this.retention.schedule(relay)
     }
   }
 
