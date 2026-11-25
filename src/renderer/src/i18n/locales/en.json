@@ -31087,5 +31087,14 @@
     "moveLeft": "Move left",
     "moveRight": "Move right",
     "reset": "Reset tab order"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "Put the values themselves in the mcp add command: Orca can’t fill in $VARIABLES or other shell expressions.",
+      "unsupported": "Orca can’t add this server as written: it uses SSE, its own OAuth client, or a value read from the environment.",
+      "badAddCommand": "Check the mcp add command: a name and a URL or command.",
+      "badJson": "Check the pasted JSON: it doesn’t parse.",
+      "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
+    }
   }
 }
