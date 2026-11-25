@@ -50,13 +50,24 @@ export function pairedBotThreadRecovery(
   const key = `${environmentId}\0${workspaceId}\0${sessionId}`
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  const isSameConnection = (): boolean =>
+    getRuntimeEnvironmentRegistration(environmentId) === registration &&
+    getRuntimeEnvironmentConnectionGeneration(environmentId) === generation
+  const checkConnection = (): void => {
+    if (!isSameConnection()) {
+      throw createRuntimeRpcAbortError()
+    }
+  }
   let minimumReceivedFrame: number | undefined
   let completedReveal: RevealResult | undefined
-  const recordReveal = (result: RevealResult): void => {
+  const recordReveal = (result: RevealResult): boolean => {
+    checkConnection()
     completedReveal = result
     if (revealedChat(result.outcome)) {
       minimumReceivedFrame = nextReceivedSessionTabsFrame()
+      return true
     }
+    return false
   }
   const find = <T>(
     pending: Map<string, Pending<T>>,
@@ -96,14 +107,6 @@ export function pairedBotThreadRecovery(
       () => sharedPromiseSettlementWaiters(request).waiterCount > 0,
       forget
     )
-    const checkConnection = (): void => {
-      if (
-        getRuntimeEnvironmentRegistration(environmentId) !== registration ||
-        getRuntimeEnvironmentConnectionGeneration(environmentId) !== generation
-      ) {
-        throw createRuntimeRpcAbortError()
-      }
-    }
     const request: Promise<T> = Promise.resolve()
       .then(() => {
         checkConnection()
@@ -123,6 +126,9 @@ export function pairedBotThreadRecovery(
   }
   return {
     resumePending: async (): Promise<boolean> => {
+      if (!isSameConnection()) {
+        return false
+      }
       if (find(pendingLocations)) {
         return true
       }
@@ -130,25 +136,35 @@ export function pairedBotThreadRecovery(
       if (!pending) {
         return false
       }
-      recordReveal(await observe(pending))
-      return true
-    },
-    minimumInventoryFrame: (): number | undefined => minimumReceivedFrame,
-    locate: async (address: string, messageIds: readonly string[]): Promise<LocateResult> => {
-      if (completedReveal) {
-        const chat = revealedChat(completedReveal.outcome) ?? completedReveal.target
-        return { location: { kind: 'chat', ...chat } }
-      }
       try {
-        return await wait(pendingLocations, JSON.stringify([address, messageIds]), (options) =>
-          callStructuredSessionParty(
-            owner,
-            'orchestration.partyLocation',
-            address,
-            messageIds,
-            options
-          )
+        return recordReveal(await observe(pending))
+      } catch {
+        return false
+      }
+    },
+    minimumInventoryFrame: (): number | undefined =>
+      isSameConnection() ? minimumReceivedFrame : undefined,
+    locate: async (address: string, messageIds: readonly string[]): Promise<LocateResult> => {
+      try {
+        checkConnection()
+        if (completedReveal) {
+          const chat = revealedChat(completedReveal.outcome) ?? completedReveal.target
+          return { location: { kind: 'chat', ...chat } }
+        }
+        const result = await wait(
+          pendingLocations,
+          JSON.stringify([address, messageIds]),
+          (options) =>
+            callStructuredSessionParty(
+              owner,
+              'orchestration.partyLocation',
+              address,
+              messageIds,
+              options
+            )
         )
+        checkConnection()
+        return result
       } catch (error) {
         return structuredSessionOpenFailure(error)
       }
@@ -161,13 +177,14 @@ export function pairedBotThreadRecovery(
       sessionId: string
     }): Promise<StructuredSessionRevealOutcome> => {
       const target = { worktreeId, sessionId }
-      if (completedReveal) {
-        const chat = revealedChat(completedReveal.outcome) ?? completedReveal.target
-        if (chat.sessionId === target.sessionId && chat.worktreeId === target.worktreeId) {
-          return completedReveal.outcome
-        }
-      }
       try {
+        checkConnection()
+        if (completedReveal) {
+          const chat = revealedChat(completedReveal.outcome) ?? completedReveal.target
+          if (chat.sessionId === target.sessionId && chat.worktreeId === target.worktreeId) {
+            return completedReveal.outcome
+          }
+        }
         const result = await wait(
           pendingReveals,
           `${target.worktreeId}\0${target.sessionId}`,

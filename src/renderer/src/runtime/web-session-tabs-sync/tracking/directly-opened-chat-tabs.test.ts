@@ -127,7 +127,7 @@ it('startup and older inventories cannot erase an early chat before the current 
   expect(newer.unifiedTabsByWorktree[WT] ?? []).toEqual([])
 })
 
-it.each(['empty', 'populated'])('keeps the split after an older %s frame', (older) => {
+it.each(['empty', 'populated', 'partial'])('keeps the split after an older %s frame', (older) => {
   const sessionId = 'cold-link'
   const hostTabId = 'agent-session:cold-link'
   const localTabId = 'local-cold-link'
@@ -204,18 +204,30 @@ it.each(['empty', 'populated'])('keeps the split after an older %s frame', (olde
     }
   )
   const olderFrame =
-    older === 'populated'
-      ? { ...frame, snapshotVersion: 4 }
-      : makeSnapshot([], {
+    older === 'empty'
+      ? makeSnapshot([], {
           snapshotVersion: 4,
           activeGroupId: 'left',
           tabGroupLayout: { type: 'leaf', groupId: 'left' },
           tabGroups: [{ id: 'left', activeTabId: null, tabOrder: [] }]
         })
+      : {
+          ...frame,
+          snapshotVersion: 4,
+          ...(older === 'partial'
+            ? {
+                tabs: frame.tabs.filter((tab) => tab.id !== hostTabId),
+                tabGroups: frame.tabGroups?.map((group) =>
+                  group.id === 'right' ? { ...group, tabOrder: [], activeTabId: null } : group
+                )
+              }
+            : {})
+        }
   const afterOlderFrame = { ...state, ...applyWebSessionTabsSnapshot(state, olderFrame, ENV) }
   expect(afterOlderFrame.activeGroupIdByWorktree[WT]).toBe(
-    older === 'populated' ? 'right' : localGroupId
+    older === 'empty' ? localGroupId : 'right'
   )
+  expect(afterOlderFrame.tabBarOrderByWorktree[WT]).toContain(localTabId)
 
   const next = { ...afterOlderFrame, ...applyWebSessionTabsSnapshot(afterOlderFrame, frame, ENV) }
   expect(next.layoutByWorktree[WT]).toEqual(layout)

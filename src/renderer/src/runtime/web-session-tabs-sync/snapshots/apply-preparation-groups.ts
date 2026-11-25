@@ -255,6 +255,11 @@ export function prepareWebSessionTabsSnapshotGroups(
     for (const tabId of hostOrMirroredOrder) {
       push(tabId)
     }
+    if (hostTabBarOrder.length > 0 && directlyOpened) {
+      for (const { unifiedTab } of directlyOpened.values()) {
+        push(unifiedTab.id)
+      }
+    }
     return next
   })()
   return {
