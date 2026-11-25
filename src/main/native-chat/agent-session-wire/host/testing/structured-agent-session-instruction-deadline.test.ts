@@ -259,6 +259,14 @@ it('keeps a failed task-gate commit uncertain and refuses B without replaying A'
     await eventually(() => expect(closeSession.mock.calls.length).toBeGreaterThan(0))
     expect(failed).toHaveBeenCalledTimes(1)
     expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
+    // Delivery claims A once more; startup refuses it before any provider open, and its closure
+    // meets the same failed writer, so A stays uncertain. Waiting for it keeps B's outcome fixed.
+    await eventually(() => expect(failed).toHaveBeenCalledTimes(2))
+    await eventually(() =>
+      expect(host.collaboratorsForTests().runtimeState.startFlights.get(SESSION)).toBeUndefined()
+    )
+    expect(providerOpen.mock.calls.length).toBe(1)
+    expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
     failing.mockRestore()
     const b = await host.send(CALLER, hostTestSendParams('explicit B'))
     expect(b).toMatchObject({

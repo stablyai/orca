@@ -79,7 +79,7 @@ function context() {
           folderWorkspaceId: 'release'
         }
       ],
-      store.getRecord('release-chat')!,
+      { ...store.getRecord('release-chat')!, instructionsEachStart: false },
       FOLDER,
       null,
       fs

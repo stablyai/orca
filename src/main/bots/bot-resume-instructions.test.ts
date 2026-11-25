@@ -37,7 +37,8 @@ async function resumeWithoutReceipt(provider: 'codex' | 'claude') {
       sessionId: 'release-chat',
       provider,
       location: { workspaceId: `folder:${bot.folderWorkspaceId}` },
-      providerHandleChain: [{ id: 'thread-without-bot-instructions' }]
+      providerHandleChain: [{ id: 'thread-without-bot-instructions' }],
+      instructionsEachStart: false
     },
     FOLDER,
     null,
