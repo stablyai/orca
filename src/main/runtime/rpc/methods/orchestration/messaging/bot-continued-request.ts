@@ -7,7 +7,8 @@
 //      resumes; with none readable it starts its own, as Orca's, with no one's words.
 //   3. A group member's turn continues the room line that started its request, whichever member
 //      runs it and however it got there (its own turn on the post, an @mention, a peer's request).
-//   4. Anything else starts its own (the turn's own message, or the request that woke it).
+//   4. Anything else starts its own (the message or request that opened it; a request steered in
+//      later changes neither).
 // A prose question the bot asked, answered by the owner's next message, has no recorded link, so
 // that answer starts a new request; `bot item add --from-item` states such a link explicitly.
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'

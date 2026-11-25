@@ -38,14 +38,15 @@ export function groupTurnRequest(
   store: BotGroupStore,
   db: OrchestrationDb,
   sessionId: string,
-  turn: Pick<BotActingTurn, 'requestIds' | 'openerOperationId'>
+  turn: Pick<BotActingTurn, 'requestIds' | 'openerOperationId' | 'openedBy'>
 ): { rootKey: string; start: Omit<BotItemOrigin, 'rootKey'> } | null {
   const found = store.memberOf(sessionId)
   if (!found) {
     return null
   }
   const rootRequestId =
-    turn.requestIds.length > 0
+    // Only a turn a peer request opened; one steered into a turn a post opened keeps the post's line.
+    turn.requestIds.length > 0 && turn.openedBy === undefined
       ? turn.requestIds.flatMap((id) => {
           const row = db.getBotRequest(id)
           const scope = row ? groupScopeOfRecord(row.record) : null

@@ -104,7 +104,7 @@ export function withContinuation(
   submissions: readonly AgentJournalSubmission[],
   lookups: BotActingTurnLookups
 ): BotActingTurn {
-  const opener = items.find((item) => item.itemId === turn.rootItemId)
+  const opener = items.find((item) => item.itemId === (turn.openedItemId ?? turn.rootItemId))
   const sent = opener ? submissionOf(opener, submissions) : undefined
   const itemMailIds = itemMailIdsBefore(turn, items, submissions)
   const facts = {
