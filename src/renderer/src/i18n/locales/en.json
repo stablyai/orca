@@ -2086,6 +2086,10 @@
         "staleTerminalsOnHost_other": "{{count}} agent terminals on {{host}} use an older MCP setup",
         "staleTerminalsRestart_one": "Restart it to reconnect Orca’s MCP servers.",
         "staleTerminalsRestart_other": "Restart them to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_one": "Restart it yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_other": "Restart them yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartSome_one": "{{restartable}} can be resumed here. Restart the other one yourself.",
+        "staleTerminalsRestartSome_other": "{{restartable}} can be resumed here. Restart the other {{count}} yourself.",
         "addedMany": "{{count}} servers added",
         "repoOn": "{{name}} turned on in {{repo}}",
         "repoOff": "{{name}} turned off in {{repo}}"

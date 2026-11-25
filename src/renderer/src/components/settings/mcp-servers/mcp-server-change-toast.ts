@@ -60,17 +60,41 @@ export async function showMcpStaleTerminalsToast(
         )
   toast(title, {
     id: mcpStaleTerminalsToastId(target),
-    description: translate(
-      'settings.mcpServers.toast.staleTerminalsRestart',
-      'Restart them to reconnect Orca’s MCP servers.',
-      { count, defaultValue_one: 'Restart it to reconnect Orca’s MCP servers.' }
-    ),
+    description: staleTerminalsRestartLine(count, stale.restartable),
     // Their tools stay broken until they restart, so the offer waits to be seen.
     duration: Infinity,
     closeButton: true,
     ...restartAction(target, stale.restartable)
   })
   return true
+}
+
+/** What restarting does for them: the button resumes those with a conversation, and the rest the
+ *  user restarts themselves. */
+function staleTerminalsRestartLine(count: number, restartable: number): string {
+  if (restartable >= count) {
+    return translate(
+      'settings.mcpServers.toast.staleTerminalsRestart',
+      'Restart them to reconnect Orca’s MCP servers.',
+      { count, defaultValue_one: 'Restart it to reconnect Orca’s MCP servers.' }
+    )
+  }
+  if (restartable === 0) {
+    return translate(
+      'settings.mcpServers.toast.staleTerminalsRestartManual',
+      'Restart them yourself to reconnect Orca’s MCP servers.',
+      { count, defaultValue_one: 'Restart it yourself to reconnect Orca’s MCP servers.' }
+    )
+  }
+  return translate(
+    'settings.mcpServers.toast.staleTerminalsRestartSome',
+    '{{restartable}} can be resumed here. Restart the other {{count}} yourself.',
+    {
+      count: count - restartable,
+      restartable,
+      defaultValue_one: '{{restartable}} can be resumed here. Restart the other one yourself.'
+    }
+  )
 }
 
 export const mcpStaleTerminalsToastId = (target: RuntimeClientTarget): string =>

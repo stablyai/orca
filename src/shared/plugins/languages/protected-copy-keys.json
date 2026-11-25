@@ -1682,6 +1682,8 @@
     "settings.mcpServers.toast.staleTerminals",
     "settings.mcpServers.toast.staleTerminalsOnHost",
     "settings.mcpServers.toast.staleTerminalsRestart",
+    "settings.mcpServers.toast.staleTerminalsRestartManual",
+    "settings.mcpServers.toast.staleTerminalsRestartSome",
     "settings.mcpServers.workspaces.all",
     "settings.mcpServers.workspaces.allBut",
     "settings.mcpServers.workspaces.none",
