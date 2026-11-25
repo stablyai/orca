@@ -46,7 +46,9 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   -- Who started it, and whether a connector conversation woke that turn, as a local Dispatch records.
   creator_handle          TEXT,
   creator_orca_session_id TEXT,
-  creator_turn_source     TEXT
+  creator_turn_source     TEXT,
+  -- The request those were recorded for: they describe only the reservation under that key.
+  creator_request_key     TEXT
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);

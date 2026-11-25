@@ -15,6 +15,7 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
+  creator_request_key: string | null
 } & RemoteStartCreatorColumns
 
 export type RemoteStartCreator = Pick<
@@ -22,24 +23,43 @@ export type RemoteStartCreator = Pick<
   'creatorHandle' | 'creatorOrcaSessionId' | 'creatorTurnSource'
 >
 
-/** A new reservation names who asked for it, in its own transaction; its Dispatch copies it when first recorded. */
+/** A reservation names who asked for it, under its own request key; its Dispatch copies it only
+ *  while that key is still the reservation's. */
 export function recordPlacementCreator(
   db: OrchestrationDb,
-  taskId: string,
+  placement: { taskId: string; requestKey: string },
   creator: RemoteStartCreator | undefined
 ): void {
   db.db
     .prepare(
       `UPDATE remote_placements
-       SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?
+       SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?,
+         creator_request_key = ?
        WHERE task_id = ?`
     )
     .run(
       creator?.creatorHandle ?? null,
       creator?.creatorOrcaSessionId ?? null,
       creator?.creatorTurnSource ?? null,
-      taskId
+      placement.requestKey,
+      placement.taskId
     )
+}
+
+/** A same-key retry sends again. When nothing under the key left this Orca, it is the first ask the
+ *  server will see, so it names who asks now. */
+export function resendRemoteReservation(
+  db: OrchestrationDb,
+  existing: Pick<RemotePlacementRow, 'never_sent_at'>,
+  placement: { taskId: string; requestKey: string },
+  creator: RemoteStartCreator | undefined
+): void {
+  if (existing.never_sent_at !== null) {
+    recordPlacementCreator(db, placement, creator)
+  }
+  db.db
+    .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
+    .run(placement.taskId)
 }
 
 /** The start's creator, as a local Dispatch's creator columns record it. */

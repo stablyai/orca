@@ -45,6 +45,9 @@ export function createTables(this: OrchestrationDb): void {
       }
     }
   }
+  if (!this.hasColumn('remote_placements', 'creator_request_key')) {
+    this.db.exec('ALTER TABLE remote_placements ADD COLUMN creator_request_key TEXT')
+  }
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }

@@ -28,6 +28,7 @@ import {
   getLiveRemotePlacement,
   getRemotePlacement,
   recordPlacementCreator,
+  resendRemoteReservation,
   type RemotePlacementRow,
   type RemoteStartCreator
 } from './remote-placement-hold'
@@ -70,9 +71,7 @@ export function reserveRemotePlacement(
       existing?.request_key === params.requestKey &&
       existing.conversation_id === link.conversation_id
     ) {
-      db.db
-        .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
-        .run(params.taskId)
+      resendRemoteReservation(db, existing, params, params.creator)
       commitLifecycleWriteTransaction(db.db, transaction)
       return {
         placement: { ...existing, never_sent_at: null },
@@ -113,7 +112,7 @@ export function reserveRemotePlacement(
         task.status,
         params.retryOf ?? null
       )
-    recordPlacementCreator(db, task.id, params.creator)
+    recordPlacementCreator(db, { taskId: task.id, requestKey: params.requestKey }, params.creator)
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
       id: task.id,
@@ -239,7 +238,7 @@ export function adoptRemoteAttempt(
     // A Dispatch this Orca already knew predates the placement's attempt or reservation; only a new one is its answer.
     return record
   }
-  if (placement.state === 'reserved') {
+  if (placement.state === 'reserved' && placement.creator_request_key === placement.request_key) {
     recordRemoteAttemptCreator(db, record.dispatch_id, placement)
   }
   db.db
