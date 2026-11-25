@@ -8,6 +8,8 @@ import { createOrcaSessionId } from '../../../../../../shared/agent-session/iden
 import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
 import type { SessionWorkersRuntime } from './session-workers-method'
 import { readWorkspaceRetainedChats } from './workspace-retained-chats-method'
+
+type RetainedChatsHost = Parameters<typeof readWorkspaceRetainedChats>[1]
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
@@ -104,27 +106,29 @@ describe('a workspace finished chat workers stay reachable', () => {
     return dispatch.id
   }
 
-  const keptChatsHost = () => ({
-    isSessionTabVisible: (id: string) => openTabs.has(id),
-    deps: {
-      store: {
-        getConversation: (id: string) =>
-          kept.has(id)
-            ? {
-                sessionId: id,
-                location: {
-                  executionHostId: 'local',
-                  wslDistro: null,
-                  workspaceId: 'wt-shared',
-                  workspaceKind: 'git-worktree'
+  const keptChatsHost = (): RetainedChatsHost =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read and its lineage walk use only these store members.
+    ({
+      isSessionTabVisible: (id: string) => openTabs.has(id),
+      deps: {
+        store: {
+          getConversation: (id: string) =>
+            kept.has(id)
+              ? {
+                  sessionId: id,
+                  location: {
+                    executionHostId: 'local',
+                    wslDistro: null,
+                    workspaceId: 'wt-shared',
+                    workspaceKind: 'git-worktree'
+                  }
                 }
-              }
-            : undefined,
-        listConversations: () => [],
-        getVisibleSessionTabIndex: () => undefined
+              : undefined,
+          listConversations: () => [],
+          getVisibleSessionTabIndex: () => undefined
+        }
       }
-    }
-  })
+    }) as unknown as RetainedChatsHost
 
   const runtime = (): SessionWorkersRuntime =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only the database.
@@ -154,8 +158,9 @@ describe('a workspace finished chat workers stay reachable', () => {
       handle: 'term_1'
     })
 
-    mocks.host = keptChatsHost()
-    const listed = await readWorkspaceRetainedChats(runtime(), 'wt-shared')
+    const host = keptChatsHost()
+    mocks.host = host
+    const listed = await readWorkspaceRetainedChats(runtime(), host, 'wt-shared')
 
     expect(listed.map((worker) => worker.dispatchId).sort()).toEqual(
       [implementation, review].sort()
@@ -177,9 +182,10 @@ describe('a workspace finished chat workers stay reachable', () => {
       finishedChatWorker({ worktreeId: 'wt-shared', chat: `chat-open-${i}`, release: 'released' })
       openTabs.add(`chat-open-${i}`)
     }
-    mocks.host = keptChatsHost()
+    const host = keptChatsHost()
+    mocks.host = host
 
-    const listed = await readWorkspaceRetainedChats(runtime(), 'wt-shared')
+    const listed = await readWorkspaceRetainedChats(runtime(), host, 'wt-shared')
 
     expect(listed.map((worker) => worker.dispatchId)).toEqual([older])
   })

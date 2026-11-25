@@ -6,7 +6,11 @@ import {
 } from '../../../../../../shared/orchestration-session-workers'
 import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { WorkspaceRetainedChatsParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import {
+  ensureStructuredHostInstalled,
+  requireStructuredHost
+} from '../../structured-sessions/creation/structured-agent-session-gate'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import {
   resolveStructuredWorkerIdentity,
@@ -20,9 +24,16 @@ export const ORCHESTRATION_WORKSPACE_RETAINED_CHATS_METHODS = [
     access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
     params: WorkspaceRetainedChatsParams,
-    handler: async (params, { runtime }): Promise<OrchestrationSessionWorkersResult> => ({
-      workers: await readWorkspaceRetainedChats(runtime, params.worktreeId)
-    })
+    handler: async (params, ctx): Promise<OrchestrationSessionWorkersResult> => {
+      await ensureStructuredHostInstalled(ctx)
+      return {
+        workers: await readWorkspaceRetainedChats(
+          ctx.runtime,
+          requireStructuredHost(ctx),
+          params.worktreeId
+        )
+      }
+    }
   })
 ]
 
@@ -31,13 +42,10 @@ export const ORCHESTRATION_WORKSPACE_RETAINED_CHATS_METHODS = [
  *  open or deleted chats never crowd out older kept ones; a reopened chat's open tab drops it. */
 export async function readWorkspaceRetainedChats(
   runtime: SessionWorkersRuntime,
+  host: Pick<StructuredAgentSessionHost, 'isSessionTabVisible' | 'deps'>,
   worktreeId: string
 ): Promise<OrchestrationSessionWorker[]> {
   const db = runtime.getOrchestrationDb()
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return []
-  }
   const rows = db.db
     .prepare(
       `SELECT owner_dispatch_id, terminal_handle FROM worker_terminal_resources
