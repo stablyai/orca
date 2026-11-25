@@ -44,12 +44,20 @@ export const KEPT_ITEM_LISTS = 20
 /** Rows need no description, done means or close note: the opened item reads its own. */
 const SUMMARY = { summary: true }
 
-/** The list call for a bot (or some of its chats), every read a summary. */
-function listCall(bot: BotRef, chatIds: readonly string[] | null): BotItemsListCall {
+/** Whose items a read lists: a teammate's account, null for the owner's own, undefined for everyone's. */
+export type BotItemsPerson = string | null | undefined
+
+/** The list call for a bot (or some of its chats, or one person's), every read a summary. */
+function listCall(
+  bot: BotRef,
+  chatIds: readonly string[] | null,
+  person: BotItemsPerson
+): BotItemsListCall {
   return (params) =>
     callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
       botId: bot.id,
       ...chatScope(chatIds),
+      ...(person !== undefined ? { person } : {}),
       ...SUMMARY,
       ...params
     })
@@ -70,7 +78,7 @@ const itemsRead: BotHostRead<BotItemsRead> = createBotHostRead<BotItemsRead>(
     // The first read after a reopen builds on the kept list, whose deeper pages missed the notices while
     // it was closed: it reads every loaded page again, not only once the first page moves.
     load: (bot, previous, ask, show, live, waiting) =>
-      loadBotItemsList(listCall(bot, null), previous, ask, {
+      loadBotItemsList(listCall(bot, null, undefined), previous, ask, {
         show,
         live,
         waiting,
@@ -115,11 +123,36 @@ export function useStableBotItemChats(chatIds: readonly string[] | null): readon
   return useMemo(() => (key === null ? null : key === '' ? [] : key.split('\n')), [key])
 }
 
-/** These chats' items while the filter shows them, with their own counts and Closed pages; re-read on
- *  change, one read at a time. */
+// Each scope's last list, so reopening a scoped tab (a shared bot's own items, say) shows it at once
+// while it re-reads, as the bot's whole list does.
+const keptScopedReads = new Map<string, BotItemsRead>()
+
+function scopedReadKey(
+  bot: BotRef,
+  chats: readonly string[] | null,
+  person: BotItemsPerson
+): string {
+  const whose = person === undefined ? '*' : person === null ? '' : `p:${person}`
+  return JSON.stringify([botRefKey(bot), chats, whose])
+}
+
+function keepScopedRead(key: string, value: BotItemsRead): void {
+  keptScopedReads.delete(key)
+  keptScopedReads.set(key, value)
+  for (const oldest of keptScopedReads.keys()) {
+    if (keptScopedReads.size <= KEPT_ITEM_LISTS) {
+      break
+    }
+    keptScopedReads.delete(oldest)
+  }
+}
+
+/** These chats' items, or one person's, while the filter shows them, with their own counts and Closed
+ *  pages; re-read on change, one read at a time. */
 export function useBotChatItems(
   bot: BotRef,
-  chatIds: readonly string[] | null
+  chatIds: readonly string[] | null,
+  person: BotItemsPerson = undefined
 ): {
   read: BotItemsRead | null
   failed: boolean
@@ -129,19 +162,27 @@ export function useBotChatItems(
 } {
   const { hostId, id } = bot
   const chats = useStableBotItemChats(chatIds)
-  const [read, setRead] = useState<{ chats: readonly string[]; value: BotItemsRead } | null>(null)
+  type Scoped = { chats: readonly string[] | null; person: BotItemsPerson; value: BotItemsRead }
+  const [read, setRead] = useState<Scoped | null>(null)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const moreRef = useRef<() => Promise<BotItemsRead | null>>(async () => null)
-  // The last read of these chats outlives a Retry, so it keeps its loaded Closed depth.
-  const kept = useRef<{ chats: readonly string[]; value: BotItemsRead } | null>(null)
+  // The last read of this scope outlives a Retry, so it keeps its loaded Closed depth.
+  const kept = useRef<Scoped | null>(null)
   useEffect(() => {
-    if (chats === null) {
+    if (chats === null && person === undefined) {
       return
     }
-    const call = listCall({ hostId, id }, chats)
+    const call = listCall({ hostId, id }, chats, person)
+    const key = scopedReadKey({ hostId, id }, chats, person)
     let live = true
-    let last: BotItemsRead | null = kept.current?.chats === chats ? kept.current.value : null
+    let last: BotItemsRead | null =
+      kept.current?.chats === chats && kept.current.person === person
+        ? kept.current.value
+        : (keptScopedReads.get(key) ?? null)
+    if (last) {
+      setRead({ chats, person, value: last })
+    }
     let missed = false
     // One read out at a time; asks during it share one more after it, so the last to land is newest.
     let reading = false
@@ -161,8 +202,9 @@ export function useBotChatItems(
       const land = (value: BotItemsRead): void => {
         if (live && value !== last) {
           last = value
-          kept.current = { chats, value }
-          setRead({ chats, value })
+          kept.current = { chats, person, value }
+          keepScopedRead(key, value)
+          setRead({ chats, person, value })
         }
       }
       loadBotItemsList(call, last, ask, { show: land, live: () => live, pageUnmoved: true })
@@ -217,10 +259,15 @@ export function useBotChatItems(
       stop()
       more.splice(0).forEach((told) => told(null))
     }
-  }, [hostId, id, chats, attempt])
+  }, [hostId, id, chats, person, attempt])
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
   const readMore = useCallback(() => moreRef.current(), [])
-  return { read: read && read.chats === chats ? read.value : null, failed, retry, readMore }
+  return {
+    read: read && read.chats === chats && read.person === person ? read.value : null,
+    failed,
+    retry,
+    readMore
+  }
 }
 
 export type BotItemShow = {

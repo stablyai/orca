@@ -119,6 +119,8 @@ export const BotItemsOwnerList = z.object({
   chatId: OptionalString,
   /** Only these chats' items, counts included; a host before it ignores it, so one chat goes as `chatId`. */
   chatIds: z.array(z.string().min(1)).max(BOT_ITEM_LIST_CHATS_MAX).optional(),
+  /** Only one person's items, counts included: a teammate's account, or null for the owner's own. */
+  person: z.string().min(1).nullable().optional(),
   closedCursor: OptionalString,
   /** Each item without its description, done means and close note; its own read has them. A host
    *  before it ignores these three and answers whole. */

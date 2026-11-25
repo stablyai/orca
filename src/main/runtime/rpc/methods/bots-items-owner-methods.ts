@@ -2,7 +2,6 @@
 // Every comment and status change mails the item's chat, one mail per action and chat; a snooze mails none.
 import {
   BOT_ITEM_LIMITS,
-  BOT_ITEM_OPEN_STATUSES,
   BOT_ITEM_STATUSES,
   botItemEventId,
   parseBotItemEventId
@@ -24,12 +23,15 @@ import {
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { botChatTakingMail } from './bots-chats'
 import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
-import type { BotItemRecord } from '../../../bots/bot-items-schema'
-import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import { defineMethod, type RpcContext } from '../core'
 import { ownerOnly } from './bots-caller-gates'
-import { BOT_ITEMS_EVERYONE } from '../../../bots/bot-item-access'
+import {
+  BOT_ITEMS_EVERYONE,
+  botItemListScope,
+  botItemsOfPerson
+} from '../../../bots/bot-item-access'
 import { parseCursor, resolveItem } from './bots-items-write-support'
+import { allOpenItems, ownerViews } from './bots-items-owner-reads'
 import {
   botItemCountsForClient,
   botItemEventsForClient,
@@ -46,31 +48,6 @@ function ownerActor(context: RpcContext): BotItemOwnerActor {
     : { kind: 'owner' }
 }
 
-/** Every open item of the bot (or its chats), however many, read a page at a time. */
-async function allOpenItems(
-  store: BotItemsRemote,
-  botId: string,
-  chat: { chatIds?: readonly string[] }
-): Promise<BotItemRecord[]> {
-  const open: BotItemRecord[] = []
-  let cursor: { at: number; number: number } | undefined
-  for (;;) {
-    const page = await store.list({
-      botId,
-      ...chat,
-      statuses: BOT_ITEM_OPEN_STATUSES,
-      limit: BOT_ITEM_LIMITS.listPageMax + 1,
-      ...(cursor ? { cursor } : {})
-    })
-    open.push(...page.items.slice(0, BOT_ITEM_LIMITS.listPageMax))
-    const last = page.items[BOT_ITEM_LIMITS.listPageMax - 1]
-    if (page.items.length <= BOT_ITEM_LIMITS.listPageMax || !last) {
-      return open
-    }
-    cursor = { at: last.lastActivityAt, number: last.number }
-  }
-}
-
 const LIST = defineMethod({
   name: 'bots.items.owner.list',
   permission: 'workspace',
@@ -82,7 +59,10 @@ const LIST = defineMethod({
     const store = botItems.store()
     // An older client names one chat; a group's panel names its rooms' member sessions.
     const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
-    const chat = chatIds ? { chatIds } : {}
+    const chat = {
+      ...(chatIds ? { chatIds } : {}),
+      ...(params.person !== undefined ? botItemListScope(botItemsOfPerson(params.person)) : {})
+    }
     // Read after the rows, so a mark another device moved meanwhile is the one sent.
     const seenEventId = (): string =>
       botItemEventId(
@@ -98,7 +78,10 @@ const LIST = defineMethod({
         limit: params.uids.length
       })
       return {
-        items: botItemsForClient(await botItems.views(named.items, params.summary), context),
+        items: botItemsForClient(
+          await ownerViews(context, params.botId, named.items, params.summary),
+          context
+        ),
         counts: botItemCountsForClient(named.counts, context),
         seenEventId: seenEventId()
       }
@@ -122,7 +105,7 @@ const LIST = defineMethod({
     const stillOpen = open.filter((item) => !closedUids.has(item.uid))
     return {
       items: botItemsForClient(
-        await botItems.views([...stillOpen, ...closedRows], params.summary),
+        await ownerViews(context, params.botId, [...stillOpen, ...closedRows], params.summary),
         context
       ),
       counts: botItemCountsForClient(closed.counts, context),

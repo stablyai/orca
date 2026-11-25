@@ -26306,7 +26306,10 @@
         "cancelAll": "Cancelar todos"
       },
       "tab": "Início",
-      "readMoreClosedFailed": "Não foi possível ler mais itens fechados"
+      "readMoreClosedFailed": "Não foi possível ler mais itens fechados",
+      "empty": {
+        "person": "Nenhum item de {{name}}."
+      }
     },
     "hover": {
       "asksQuestion": "Aguardando sua resposta",

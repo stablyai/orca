@@ -4,7 +4,7 @@ import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
 import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
 import type { Bot } from '../../../shared/bot-types'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
-import { botSharePersonName } from '../../../shared/bots/bot-home-of'
+import { botChatPerson } from '../../../shared/bots/bot-chat-people'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -113,12 +113,7 @@ export function withBotChatPeople<T extends { chats: BotChatTreeChat[] }>(
     ...read,
     chats: read.chats.map((chat) => {
       const of = homes.get(chat.chatId)
-      return of && of !== 'owner'
-        ? {
-            ...chat,
-            person: { accountId: of.accountId, name: botSharePersonName(bot, of.accountId) }
-          }
-        : chat
+      return of && of !== 'owner' ? { ...chat, person: botChatPerson(bot, of.accountId) } : chat
     })
   }
 }

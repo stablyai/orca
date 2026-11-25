@@ -12,7 +12,12 @@ import {
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { botItemCursorPlace, botItemReaches } from '../../../../../shared/bots/bot-item-merge'
-import { readMoreBotItems, useBotChatItems, type BotItemsRead } from './use-bot-items'
+import {
+  readMoreBotItems,
+  useBotChatItems,
+  type BotItemsPerson,
+  type BotItemsRead
+} from './use-bot-items'
 
 /** One Show more: the Closed items it loaded, and whether more remain. */
 export type BotItemsClosedPage = { items: readonly BotItem[]; more: boolean }
@@ -22,7 +27,7 @@ const NONE: readonly BotItem[] = []
 const isClosed = (item: BotItem): boolean => item.status === 'done' || item.status === 'canceled'
 
 export type BotItemsShownList = {
-  /** The bot's read, or the filtered chats'; null while that chat's first read is out. */
+  /** The bot's read, or the filtered chats' or person's; null while that first read is out. */
   read: BotItemsRead | null
   chatRead: ReturnType<typeof useBotChatItems>
   /** Every loaded item, before the filter. */
@@ -45,17 +50,19 @@ export function useBotItemsShownList(
   botRead: BotItemsRead | null,
   filter: BotItemFilter,
   now: number,
-  seenEventId: string
+  seenEventId: string,
+  /** Whose items it shows; undefined: everyone's. */
+  person: BotItemsPerson = undefined
 ): BotItemsShownList {
-  // Some chats shown: their own read, so counts and Closed pages are theirs, not the first page's.
-  const chatRead = useBotChatItems(bot, filter.chatIds)
-  const read = filter.chatIds === null ? botRead : chatRead.read
+  // Some chats or one person shown: their own read, so counts and Closed pages are theirs.
+  const chatRead = useBotChatItems(bot, filter.chatIds, person)
+  const filtered = filter.chatIds !== null || person !== undefined
+  const read = filtered ? chatRead.read : botRead
   // Closed loads as deep as asked inside the read itself: Show more is one more read of it, in turn.
   const items = read?.items ?? NONE
   const cursor = read?.nextClosedCursor ?? null
   const { hostId, id } = bot
   const chatMore = chatRead.readMore
-  const filtered = filter.chatIds !== null
   const loadMore = useCallback(async (): Promise<BotItemsClosedPage> => {
     const before = new Set(items.map((item) => item.uid))
     const end = botItemCursorPlace(cursor)

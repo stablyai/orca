@@ -1,0 +1,90 @@
+import { afterEach, expect, it } from 'vitest'
+import type { Bot } from '../../../../shared/bot-types'
+import type { BotItem } from '../../../../shared/bots/bot-items'
+import type { BotItemBotActor } from '../../../bots/bot-items-input'
+import type { BotItemRecord } from '../../../bots/bot-items-schema'
+import { BotItemsStore } from '../../../bots/bot-items-store'
+import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
+
+const AGENT: BotItemBotActor = { kind: 'bot', botId: 'bot-1', chatId: 'chat-1' }
+const BOT = {
+  id: 'bot-1',
+  shares: [
+    { kind: 'account', accountId: 'acct-a', name: 'Alice Park', email: 'a@example.com' },
+    { kind: 'account', accountId: 'acct-d', name: 'Dana Reyes', email: 'd@example.com' }
+  ]
+} as unknown as Bot
+
+const stores: BotItemsStore[] = []
+afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
+
+function seeded(): BotItemsStore {
+  const store = BotItemsStore.open(':memory:')
+  stores.push(store)
+  const add = (title: string, actsForAccount: string | null): string =>
+    store.add(
+      {
+        ownerBotId: 'bot-1',
+        chatId: 'chat-1',
+        source: { kind: 'home', title: null },
+        actsForAccount,
+        title,
+        status: 'working',
+        links: []
+      },
+      AGENT
+    ).uid
+  add('Mine', null)
+  add('Alice open', 'acct-a')
+  store.set(add('Alice closed', 'acct-a'), { status: 'done', note: 'Shipped' }, AGENT)
+  return store
+}
+
+async function list(
+  store: BotItemsStore,
+  person?: string | null
+): Promise<{ items: BotItem[]; counts: Record<string, number> }> {
+  const method = BOT_ITEMS_OWNER_METHODS.find((entry) => entry.name === 'bots.items.owner.list')!
+  const context = {
+    runtime: {
+      bots: { assertEnabled: () => {}, list: () => [BOT] },
+      botItems: {
+        store: () => store,
+        views: async (records: readonly BotItemRecord[]) =>
+          records.map((record) => ({ uid: record.uid, title: record.title, status: record.status }))
+      }
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these context parts
+  return (await method.handler(
+    { botId: 'bot-1', ...(person !== undefined ? { person } : {}) } as never,
+    context as never
+  )) as never
+}
+
+const rows = (read: { items: BotItem[] }): string[] =>
+  read.items.map((item) => (item.person ? `${item.title} · ${item.person.name}` : item.title))
+
+it("lists the owner's own items alone, counts included", async () => {
+  const read = await list(seeded(), null)
+  expect(rows(read)).toEqual(['Mine'])
+  expect(read.counts).toEqual({ working: 1 })
+})
+
+it("lists everyone's, each teammate's item naming them and the owner's unmarked", async () => {
+  const read = await list(seeded())
+  expect(rows(read).toSorted()).toEqual([
+    'Alice closed · Alice Park',
+    'Alice open · Alice Park',
+    'Mine'
+  ])
+  expect(read.counts).toEqual({ working: 2, done: 1 })
+})
+
+it("lists a picked teammate's items alone, and none for one with no items", async () => {
+  const store = seeded()
+  const alice = await list(store, 'acct-a')
+  expect(rows(alice).toSorted()).toEqual(['Alice closed · Alice Park', 'Alice open · Alice Park'])
+  expect(alice.counts).toEqual({ working: 1, done: 1 })
+  expect(await list(store, 'acct-d')).toMatchObject({ items: [], counts: {} })
+})

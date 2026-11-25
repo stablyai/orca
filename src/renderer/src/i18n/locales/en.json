@@ -30597,7 +30597,8 @@
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
         "title": "No items yet",
-        "short": "No items yet. When {{bot}} takes something on, it shows up here."
+        "short": "No items yet. When {{bot}} takes something on, it shows up here.",
+        "person": "No items from {{name}}."
       },
       "field": {
         "chat": "Chat",

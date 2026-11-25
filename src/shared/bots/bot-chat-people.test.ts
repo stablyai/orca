@@ -1,7 +1,8 @@
 // The Chats tab's person filter: a pick narrows the list and a search's hits to that person's chats,
-// the owner's pick to chats that name no teammate, and a person with none says so.
+// the owner's pick to chats that name no teammate, and a person with none says so. Items open on the owner's own.
 import { describe, expect, it } from 'vitest'
-import type { BotChatTreeChat } from './bot-chat-tree'
+import type { BotChatPerson, BotChatTreeChat } from './bot-chat-tree'
+import { botItemsPersonPick, botPickAccount } from './bot-chat-people'
 import { botChatListView, type BotChatSearchState } from './bot-chat-tree-view'
 
 const ALICE = { accountId: 'acc-alice', name: 'Alice Park' }
@@ -55,5 +56,33 @@ describe('the Chats tab’s person filter', () => {
     expect(list({ kind: 'person', person: ELI })).toMatchObject({ found: [], noneFromPick: true })
     expect(list({ kind: 'person', person: ALICE }).noneFromPick).toBe(false)
     expect(list({ kind: 'everyone' }).noneFromPick).toBe(false)
+  })
+})
+
+describe("the Items tab's person pick", () => {
+  const ALICE_ROW: BotChatPerson = { accountId: 'acct-a', name: 'Alice Park' }
+
+  it("opens a shared bot on the owner's own items", () => {
+    const pick = botItemsPersonPick([ALICE_ROW], null)
+    expect(pick).toEqual({ kind: 'owner' })
+    expect(botPickAccount(pick)).toBeNull()
+  })
+
+  it("shows everyone's for a bot shared with no one, as a teammate's copy is, whatever was picked", () => {
+    expect(botItemsPersonPick([], null)).toEqual({ kind: 'everyone' })
+    expect(botItemsPersonPick([], { kind: 'person', person: ALICE_ROW })).toEqual({
+      kind: 'everyone'
+    })
+    expect(botPickAccount({ kind: 'everyone' })).toBeUndefined()
+  })
+
+  it("keeps a picked teammate while they share it, then falls back to the owner's own", () => {
+    const picked = { kind: 'person', person: ALICE_ROW } as const
+    expect(botItemsPersonPick([ALICE_ROW], picked)).toEqual(picked)
+    expect(botPickAccount(picked)).toBe('acct-a')
+    expect(botItemsPersonPick([{ accountId: 'acct-b', name: 'Bo' }], picked)).toEqual({
+      kind: 'owner'
+    })
+    expect(botItemsPersonPick([ALICE_ROW], { kind: 'everyone' })).toEqual({ kind: 'everyone' })
   })
 })

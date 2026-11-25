@@ -33,7 +33,18 @@ import {
   botItemsByDispatch,
   type BotItemFilter
 } from '../../../../shared/bots/bot-item-groups'
-import { BotItemsFilterButton, BotItemsFilterChips } from './items/BotItemsFilter'
+import {
+  BotItemsFilterButton,
+  BotItemsFilterChips,
+  type BotItemsPeople
+} from './items/BotItemsFilter'
+import {
+  botChatPeople,
+  botItemsPersonPick,
+  botPickAccount,
+  type BotChatPersonPick
+} from '../../../../shared/bots/bot-chat-people'
+import { useBotOwnPersonLabel } from './BotPersonPickItems'
 import { BotItemsSection } from './items/BotItemsSection'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
@@ -128,11 +139,35 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setReturnTo(null)
     setFilterState(next)
   }
+  // Whose items, per screen: a shared bot opens on the owner's own.
+  const people = useMemo(() => botChatPeople(bot), [bot])
+  const [picked, setPicked] = useState<BotChatPersonPick | null>(null)
+  const pick = botItemsPersonPick(people, picked)
+  const you = useBotOwnPersonLabel(bot)
+  const personPick: BotItemsPeople | null =
+    people.length > 0
+      ? {
+          you,
+          people,
+          pick,
+          onPick: (next) => {
+            setReturnTo(null)
+            setPicked(next)
+          }
+        }
+      : null
   const picture = useBotPictureSetting(bot, (updates) => updateBotReporting(bot, updates))
   // "Today at…" and "next" roll over with the clock; a minute is fine-grained enough.
   const clock = useNow(60_000)
   // Read above the list/item switch: an open item walks this list, and Back finds its row in it.
-  const list = useBotItemsShownList(bot, read, filter, clock, seenAtOpen ?? '')
+  const list = useBotItemsShownList(
+    bot,
+    read,
+    filter,
+    clock,
+    seenAtOpen ?? '',
+    botPickAccount(pick)
+  )
   const walk = useBotItemWalk(list, botRefKey(bot))
   const openItem = (uid: string): void => {
     setReturnTo(null)
@@ -214,13 +249,20 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         picture={picture}
         offline={offline}
         filter={
-          read && read.items.length > 0 ? (
-            <BotItemsFilterButton items={read.items} filter={filter} onFilter={setFilter} />
+          read && (read.items.length > 0 || personPick) ? (
+            <BotItemsFilterButton
+              items={list.items}
+              filter={filter}
+              onFilter={setFilter}
+              people={personPick}
+            />
           ) : null
         }
       />
       <fieldset disabled={offline} className="contents">
-        {read ? <BotItemsFilterChips filter={filter} onFilter={setFilter} /> : null}
+        {read ? (
+          <BotItemsFilterChips filter={filter} onFilter={setFilter} people={personPick} />
+        ) : null}
         {read && items.refreshFailed ? <BotItemsReadFailed stale onRetry={items.retry} /> : null}
         {/* Asks lead Needs you in every item-read state: loading, failed or empty. */}
         <BotItemsSection
@@ -237,6 +279,8 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           offline={offline}
           focusFallback={scroll}
           scroller={scroll}
+          marksPeople={pick.kind === 'everyone' && personPick !== null}
+          teammate={pick.kind === 'person' ? pick.person.name : null}
         />
         <BotUpcomingSection
           bot={bot}
