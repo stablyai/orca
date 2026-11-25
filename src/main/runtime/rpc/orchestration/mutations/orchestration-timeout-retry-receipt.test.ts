@@ -229,6 +229,35 @@ describe('worker_done retry after a possibly delivered timeout', () => {
     expect(workerMessages().map((message) => message.id)).toEqual([originalMessageId])
   })
 
+  it.each([
+    ['an ordinary send', { type: 'status', to: 'term_coord' }, 'orchestration.send'],
+    ['a mailbox check', { terminal: 'term_worker' }, 'orchestration.check'],
+    [
+      'a question',
+      { from: 'term_worker', to: 'term_coord', question: 'Which?' },
+      'orchestration.ask'
+    ]
+  ])(
+    'admits replay-only for a keyed worker_done only, refusing %s',
+    async (_case, extra, method) => {
+      const { workerDone, dispatcher, workerMessages } = setupWorker()
+      const params = isRecord(workerDone.params) ? workerDone.params : {}
+
+      const refused = await dispatcher.dispatch({
+        ...workerDone,
+        method,
+        params: { ...params, ...extra },
+        orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
+      })
+
+      expect(refused).toMatchObject({
+        ok: false,
+        error: { code: 'orchestration_migration_required' }
+      })
+      expect(workerMessages()).toHaveLength(0)
+    }
+  )
+
   it('refuses a replay-only request that carries no request id to replay', async () => {
     const { workerDone, dispatcher, workerMessages } = setupWorker()
     const { orchestrationRequestId: _omitted, ...unkeyed } = workerDone

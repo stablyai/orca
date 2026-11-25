@@ -237,16 +237,18 @@ export async function sendRequest<TResult>(
     })
     const send = (id: string, requestedMethod: string, requestedParams: unknown): void => {
       try {
+        // The status pre-request carries no orchestration fields: it must not read as the request.
+        const orchestration = id === requestId ? envelope : undefined
         const serialized = `${JSON.stringify({
           id,
           authToken: metadata.authToken,
           method: requestedMethod,
           params: requestedParams,
-          orchestrationCapability: envelope?.orchestrationCapability,
-          orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId,
-          compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          orchestrationCapability: orchestration?.orchestrationCapability,
+          orchestrationContractVersion: orchestration?.orchestrationContractVersion,
+          orchestrationRequestId: orchestration?.orchestrationRequestId,
+          compatibilityInvocationId: orchestration?.compatibilityInvocationId,
+          orchestrationCompatibilityEvidence: orchestration?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource
         })}\n`
         if (Buffer.byteLength(serialized, 'utf8') > MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES) {

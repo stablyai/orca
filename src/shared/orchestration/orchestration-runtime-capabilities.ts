@@ -46,10 +46,13 @@ export const ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY =
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
 export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
-/** Contract 1 admitted only as a replay or join of an existing receipt, for a retry after a timeout
- *  that may have been delivered. A runtime that predates it refuses it before any effect, as it
- *  refuses every contract but its own, so the retry can never run as new work there. */
+/** Contract 1 admitted only as a replay or join of an existing receipt, for a worker_done retry after
+ *  a timeout that may have been delivered. Reserved: a future contract must not reuse this number. */
 export const ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION = 2 as const
+/** This runtime enforces the replay-only contract. Releases without the contract fence ignore the
+ *  version and would run the retry anew, so a client sends one only to a runtime that advertises this. */
+export const ORCHESTRATION_REPLAY_ONLY_RETRY_RUNTIME_CAPABILITY =
+  'orchestration.replay-only-retry.v1' as const
 export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 /** Receives agent mail a paired Orca carries for its agents, and queues replies for it to pull. */
 export const ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY = 'orchestration.peer-mail.v1' as const
@@ -93,6 +96,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY,
   ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_REPLAY_ONLY_RETRY_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,

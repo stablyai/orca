@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { attachMutationRecovery } from '../../runtime/connection/client-error-recovery'
 import type { RuntimeClient } from '../../runtime/client'
+import { ORCHESTRATION_REPLAY_ONLY_RETRY_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeRequestSelection } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const { printOrchestrationResultMock } = vi.hoisted(() => ({
   printOrchestrationResultMock: vi.fn()
@@ -16,7 +18,13 @@ import { ORCHESTRATION_HANDLERS } from '../orchestration-handlers'
 // These tests cover the CLI side only: key and payload forwarding, when a retry is replay-only,
 // which error is reported, and output. Server replay and refusal are in the dispatcher test.
 
-type SendOptions = { orchestrationRequestId?: string; orchestrationReplayOnly?: true } | undefined
+type SendOptions =
+  | {
+      orchestrationRequestId?: string
+      orchestrationReplayOnly?: true
+      requestSelection?: RuntimeRequestSelection
+    }
+  | undefined
 type SentAttempt = { params: unknown; requestId: string; replayOnly: boolean }
 type Step = (attempt: SentAttempt) => unknown
 
@@ -48,15 +56,30 @@ function completedReceipt(requestId: string, replayed: boolean) {
   }
 }
 
-function scriptedRuntime(steps: Step[]) {
+const REPLAY_CAPABLE_STATUS = { capabilities: [ORCHESTRATION_REPLAY_ONLY_RETRY_RUNTIME_CAPABILITY] }
+
+/** `recipientStatus` is what the runtime answers to a status pre-request on the same connection. */
+function scriptedRuntime(steps: Step[], recipientStatus: unknown = REPLAY_CAPABLE_STATUS) {
   const attempts: SentAttempt[] = []
+  const unsentReplays: string[] = []
   const call = vi.fn(async (method: string, params: unknown, options?: SendOptions) => {
     if (method !== 'orchestration.send') {
       throw new Error(`unexpected ${method}`)
     }
+    // A status pre-request that refuses stops the transport before the request is written.
+    const selected = options?.requestSelection
+      ? (() => {
+          try {
+            return options.requestSelection.paramsForStatus(recipientStatus)
+          } catch (error) {
+            unsentReplays.push(options.orchestrationRequestId ?? '')
+            throw error
+          }
+        })()
+      : params
     // RuntimeClient.call mints a fresh durable id per call when the caller supplies none.
     const attempt = {
-      params,
+      params: selected,
       requestId: options?.orchestrationRequestId ?? randomUUID(),
       replayOnly: options?.orchestrationReplayOnly === true
     }
@@ -67,7 +90,7 @@ function scriptedRuntime(steps: Step[]) {
     }
     return { result: step(attempt) }
   })
-  return { call, attempts }
+  return { call, attempts, unsentReplays }
 }
 
 /** What RuntimeClient.call throws: the raw error with its request id and command attached. */
@@ -290,21 +313,54 @@ it.each([
   expect(printOrchestrationResultMock).not.toHaveBeenCalled()
 })
 
-it('reports the original timeout, not a later outage, when the replay finds nothing', async () => {
-  const runtime = scriptedRuntime([sentTimeout, sentUnavailable, notReplayable])
+it('makes exactly one replay, and reports the original timeout when that replay fails', async () => {
+  const runtime = scriptedRuntime([
+    sentTimeout,
+    sentUnavailable,
+    ({ requestId }) => completedReceipt(requestId, true)
+  ])
 
   await expectTimeoutGuidance(send(runtime.call), 30_000, runtime.attempts)
 
-  expect(runtime.attempts.map((attempt) => attempt.replayOnly)).toEqual([false, true, true])
+  expect(runtime.attempts.map((attempt) => attempt.replayOnly)).toEqual([false, true])
 })
 
-it('surfaces the inspect/retry guidance once timeouts exhaust the worker_done budget', async () => {
+it('does not send the replay to a runtime that cannot prove it enforces replay-only', async () => {
+  // A release without the contract fence would run the replay as a new send.
+  const runtime = scriptedRuntime(
+    [sentTimeout, ({ requestId }) => completedReceipt(requestId, false)],
+    { capabilities: ['orchestration.contract.v1'] }
+  )
+
+  await expectTimeoutGuidance(send(runtime.call), 30_000, runtime.attempts)
+
+  expect(runtime.attempts).toHaveLength(1)
+  expect(runtime.unsentReplays).toEqual([runtime.attempts[0].requestId])
+})
+
+it('does not start a retry once the budget has passed, even if the timer fired late', async () => {
+  // performance.now: the deadline base, the check before the backoff, then a late wake-up.
+  const now = vi.spyOn(performance, 'now')
+  now.mockReturnValueOnce(0).mockReturnValueOnce(118_000).mockReturnValueOnce(121_000)
+  const runtime = scriptedRuntime([
+    sentUnavailable,
+    ({ requestId }) => completedReceipt(requestId, false)
+  ])
+
+  const error = await settleAfter(send(runtime.call), 1_000)
+
+  expect(error).toMatchObject({ code: 'runtime_unavailable' })
+  expect(runtime.attempts).toHaveLength(1)
+  now.mockRestore()
+})
+
+it('surfaces the inspect/retry guidance when the one replay also times out', async () => {
   const runtime = scriptedRuntime(Array.from({ length: 100 }, () => sentTimeout))
 
   await expectTimeoutGuidance(send(runtime.call), 130_000, runtime.attempts)
 
   const [{ requestId }] = runtime.attempts
-  expect(runtime.attempts.length).toBeGreaterThan(1)
+  expect(runtime.attempts).toHaveLength(2)
   expect(runtime.attempts.every((attempt) => attempt.requestId === requestId)).toBe(true)
 })
 
