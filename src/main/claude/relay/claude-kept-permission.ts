@@ -11,6 +11,8 @@ import {
   setClaudeAllowedPermissionMode
 } from '../structured/permissions/claude-permission-mode-ladder'
 import { keptClaudeAgentRelay } from './claude-kept-agent-connection'
+import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
+import { ClaudeControlRequestError } from '../sdk-transport/claude-agent-sdk-control-requests'
 
 type Adapter = StructuredAgentSessionAdapter
 type Sessions = ReadonlyMap<string, ClaudeSession>
@@ -206,11 +208,8 @@ export function requiresAcquisition(
 export function pickedWhileStarting(
   sessions: Sessions
 ): NonNullable<Adapter['permissionPickedWhileStarting']> {
-  return ({ sessionId, mode }) => {
-    if (mode !== 'full-access') {
-      keptSession(sessions, sessionId)?.liveFullAccess?.unpicked()
-    }
-  }
+  return ({ sessionId, mode }) =>
+    keptSession(sessions, sessionId)?.liveFullAccess?.pickedWhileStarting(mode === 'full-access')
 }
 
 const CHOICE_OF_MODE: Readonly<Record<string, AgentChatPermissionChoice>> = {
@@ -245,4 +244,18 @@ export function applyLive(
     }
     await applyPick(session, claudePermissionModeFor(mode), timeoutMs())
   }
+}
+
+/** A kept agent may run an older CLI than the installed one the capability check read: once it
+ *  refuses the flag-settings control, it runs on its own choices and the message still goes. */
+export function keptCliRefusedFlagSettings(session: ClaudeSession, error: unknown): void {
+  // Refused once (the effort write), the CLI's local check refuses the rest of this message too.
+  const refused =
+    session.flagSettingsControl === 'unsupported' ||
+    (error instanceof AgentSessionOptionRejectedError &&
+      error.cause instanceof ClaudeControlRequestError)
+  if (!refused || !keptClaudeAgentRelay(session.connection)) {
+    throw error
+  }
+  session.flagSettingsControl = 'unsupported'
 }

@@ -122,4 +122,15 @@ describe('Claude relay ack floor', () => {
     expect(floor.floor(1)).toBe(1)
     expect(floor.floor(2)).toBe(null)
   })
+
+  it('keeps a partly read message held while the reader-ahead stops a later one', () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, stream('message_start'))
+    floor.observe(3, stream('message_stop'))
+    floor.observe(4, stream('message_start'))
+    floor.observe(6, stream('message_stop'))
+    expect(floor.floor(2)).toBe(1)
+    expect(floor.floor(5)).toBe(4)
+    expect(floor.floor(6)).toBe(null)
+  })
 })

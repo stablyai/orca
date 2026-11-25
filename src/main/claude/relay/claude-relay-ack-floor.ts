@@ -38,9 +38,9 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
 } {
   /** Each stream scope's open message, by the seq of its `message_start`. */
   const open = new Map<string, number>()
-  /** Each scope's last stopped message, held until the reader is past its stop: the floor sees a
-   *  line when it is pushed, ahead of a paused reader. */
-  const closed = new Map<string, { start: number; stop: number }>()
+  /** Each scope's stopped messages in order, each held until the reader is past its stop: the
+   *  floor sees a line when it is pushed, ahead of a paused reader. */
+  const closed = new Map<string, { start: number; stop: number }[]>()
   /** Each scope's latest `message_start`, for the tool calls in its later final frames. */
   const starts = new Map<string, number>()
   /** Unreturned tool calls, by the seq of their message's `message_start`, and their scope. */
@@ -108,9 +108,12 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
           dropTool(id)
         }
       }
-      for (const [scope, { start }] of closed) {
-        if (start <= seq) {
+      for (const [scope, stopped] of closed) {
+        const kept = stopped.filter(({ start }) => start > seq)
+        if (kept.length === 0) {
           closed.delete(scope)
+        } else {
+          closed.set(scope, kept)
         }
       }
     },
@@ -188,7 +191,12 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
       ) {
         const start = open.get(scopeOf(frame))
         if (start !== undefined) {
-          closed.set(scopeOf(frame), { start, stop: seq })
+          const stopped = closed.get(scopeOf(frame))
+          if (stopped) {
+            stopped.push({ start, stop: seq })
+          } else {
+            closed.set(scopeOf(frame), [{ start, stop: seq }])
+          }
         }
         open.delete(scopeOf(frame))
         releasedOpen.delete(scopeOf(frame))
@@ -205,11 +213,15 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
     // `through`: how far the reader took; without it a stopped message holds nothing.
     floor: (through?: number) => {
       const held: number[] = []
-      for (const [scope, { start, stop }] of closed) {
-        if (through === undefined || stop <= through) {
+      for (const [scope, stopped] of closed) {
+        // Stops come in order, so the reader passed a prefix; the oldest left holds the scope.
+        const passed =
+          through === undefined ? stopped.length : stopped.findIndex(({ stop }) => stop > through)
+        if (passed === -1 || passed === stopped.length) {
           closed.delete(scope)
         } else {
-          held.push(start)
+          stopped.splice(0, passed)
+          held.push(stopped[0].start)
         }
       }
       return open.size === 0 && tools.size === 0 && held.length === 0

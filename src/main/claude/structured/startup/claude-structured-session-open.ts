@@ -174,7 +174,7 @@ async function openStartingClaudeSession(
   // auto-approves, ahead of the waiting requests the release hands on.
   const picked = request.permissionMode?.()
   if (kept && picked != null && picked !== 'full-access') {
-    session.liveFullAccess?.unpicked()
+    session.liveFullAccess?.pickedWhileStarting(false)
   }
   kept?.releaseOutput()
   return { ...result, link: session.link, newConversation: !resumesTranscript }

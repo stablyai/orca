@@ -26,11 +26,10 @@ import {
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
-import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import {
   applyKeptClaudeModeOwed,
   askKeptBypassLeavingPlan,
+  keptCliRefusedFlagSettings,
   sendKeptPickMadeLeavingPlan
 } from '../../relay/claude-kept-permission'
 import {
@@ -129,12 +128,15 @@ export async function applyClaudeMessageOptions(
       }
       const refused = claudeBypassRefused(session)
       const requested = claudeBuildPermissionMode(session)
+      // A live pick during this write goes out behind it and records its own mode.
+      const turn = session.keptModeTurn
+      const current = (): boolean => session.keptModeTurn === turn
       // A refused Full access chat already running its fallback needs no write.
       const written =
         !leavingPlan && refused && !claudeOwesFullAccessFallback(session)
           ? null
           : await waitForPromiseWithSignal(
-              writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused),
+              writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused, current),
               signal
             )
       const mode = leavingPlan
@@ -144,7 +146,7 @@ export async function applyClaudeMessageOptions(
           )
         : written
       session.appliedInputOptions.set('interactionMode', options.interactionMode)
-      if (mode !== null) {
+      if (mode !== null && (leavingPlan || current())) {
         session.appliedInputOptions.set('buildPermissionMode', mode)
       }
     }
@@ -152,20 +154,6 @@ export async function applyClaudeMessageOptions(
     await applyClaudeFullAccessFallback(session, timeoutMs, signal)
   }
   throwIfSignalAborted(signal)
-}
-
-/** A kept agent may run an older CLI than the installed one the capability check read: once it
- *  refuses the flag-settings control, it runs on its own choices and the message still goes. */
-function keptCliRefusedFlagSettings(session: ClaudeSession, error: unknown): void {
-  // Refused once (the effort write), the CLI's local check refuses the rest of this message too.
-  const refused =
-    session.flagSettingsControl === 'unsupported' ||
-    (error instanceof AgentSessionOptionRejectedError &&
-      error.cause instanceof ClaudeControlRequestError)
-  if (!refused || !keptClaudeAgentRelay(session.connection)) {
-    throw error
-  }
-  session.flagSettingsControl = 'unsupported'
 }
 
 const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
@@ -176,7 +164,8 @@ const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
 function writeClaudeBuildMode(
   session: ClaudeSession,
   timeoutMs: number | undefined,
-  tolerate: boolean
+  tolerate: boolean,
+  current: () => boolean
 ): Promise<PermissionMode | null> {
   return setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
     timeoutMs
@@ -184,7 +173,9 @@ function writeClaudeBuildMode(
     if (!tolerate && !(error instanceof ClaudePermissionModeUnsettled)) {
       throw error
     }
-    session.appliedInputOptions.delete('buildPermissionMode')
+    if (current()) {
+      session.appliedInputOptions.delete('buildPermissionMode')
+    }
     return null
   })
 }
@@ -222,11 +213,13 @@ export async function applyClaudeFullAccessFallback(
   if (!claudeOwesFullAccessFallback(session)) {
     return
   }
+  const turn = session.keptModeTurn
+  const current = (): boolean => session.keptModeTurn === turn
   const mode = await waitForPromiseWithSignal(
-    writeClaudeBuildMode(session, timeoutMs, true),
+    writeClaudeBuildMode(session, timeoutMs, true, current),
     signal
   )
-  if (mode !== null) {
+  if (mode !== null && current()) {
     session.appliedInputOptions.set('buildPermissionMode', mode)
   }
 }

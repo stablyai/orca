@@ -44,6 +44,17 @@ describe('live Full access policy', () => {
     expect(launched.allows('repicked')).toBe(true)
   })
 
+  it('restores the grant when Full access is picked back before the Ask pick reached Claude', () => {
+    const launched = createClaudeFullAccessPolicy('s1')
+    launched.observe(status('bypassPermissions'))
+    const undo = launched.revoke()
+    launched.observe(request('while-ask'))
+    undo()
+    launched.observe(request('picked-back'))
+    expect(launched.allows('while-ask')).toBe(false)
+    expect(launched.allows('picked-back')).toBe(true)
+  })
+
   it("reads a reattached agent's waiting request under the mode Claude last confirmed", () => {
     const kept = createClaudeFullAccessPolicy('s1')
     kept.reattached()

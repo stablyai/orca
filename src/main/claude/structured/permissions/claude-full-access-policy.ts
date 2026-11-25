@@ -16,8 +16,9 @@ export type ClaudeFullAccessPolicy = {
   reattached: () => void
   /** The user picked Full access live, so Claude's next report of it grants. */
   arm: () => void
-  /** The user picked another mode live; nothing auto-approves until a new pick is reported. */
-  revoke: () => void
+  /** The user picked another mode live; nothing auto-approves until a new pick is reported.
+   *  Returns the undo for a pick taken back before anything reached Claude. */
+  revoke: () => () => void
   close: () => void
   retained: () => { partialChars: number; requests: number }
 }
@@ -136,11 +137,16 @@ export function createClaudeFullAccessPolicy(
       armed = true
     },
     revoke: () => {
+      const before = { granted, armed }
       granted = false
       armed = false
       // Requests already waiting were stamped under the grant the pick just took back.
       for (const requestId of modeAtRequest.keys()) {
         modeAtRequest.set(requestId, false)
+      }
+      return () => {
+        granted ||= before.granted
+        armed ||= before.armed
       }
     },
     close: () => {
