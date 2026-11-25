@@ -62,12 +62,13 @@ export function accountHoldVerdict({
   )
   const spentUntil = account && reading && rateLimitSpentUntil(reading)
   // A spent reading always holds a still-recoverable moved or relaunched cut, even when the reading
-  // itself is older than its turn. It cannot make an expired task eligible again. A relaunched cut
-  // ignores live-session readings here as its room check does, so one can't hold it unreleasably.
+  // itself is older than its turn. It cannot make an expired task eligible again. Only non-live room
+  // clears an unknown reset, so a live-session reading without one can't latch it.
   if (
     reading &&
-    (movedCut || (relaunched && reading.usageMetadata?.source !== 'live-session')) &&
+    (movedCut || relaunched) &&
     spentUntil !== undefined &&
+    (spentUntil !== null || reading.usageMetadata?.source !== 'live-session') &&
     now - cut.resetsAt <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
   ) {
     if (spentUntil === null) {
