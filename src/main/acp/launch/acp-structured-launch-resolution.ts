@@ -74,7 +74,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   sessionMetaOnReopen?: true
   takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
   sessionMetaOptional?: true
-  aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
+  aroundSessionOpen?: AcpInstructionsLaunch['aroundSessionOpen']
   release?: AcpInstructionsLaunch['release']
   /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
   mcpServers?: McpServer[]
@@ -296,8 +296,8 @@ export function acpStructuredLaunchPart(
               ...(instructions.sessionMetaOptional ? { sessionMetaOptional: true as const } : {})
             }
           : {}),
-        ...(instructions?.aroundNewSession
-          ? { aroundNewSession: instructions.aroundNewSession }
+        ...(instructions?.aroundSessionOpen
+          ? { aroundSessionOpen: instructions.aroundSessionOpen }
           : {}),
         ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
