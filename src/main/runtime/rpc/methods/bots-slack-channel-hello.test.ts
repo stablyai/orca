@@ -19,7 +19,17 @@ vi.mock('../../../bots/bot-turn-for', () => ({
   botTurnFor: async (_runtime: unknown, sessionId: string) =>
     sessions.get(sessionId)?.turnFor ?? 'someone_else'
 }))
-vi.mock('../../../bots/bot-chat-status-line', () => ({ noteInChat: vi.fn() }))
+vi.mock('../../../bots/bot-chat-status-line', () => ({ writeInChat: vi.fn() }))
+// A run's token names its bot; 'ended' is one Orca no longer knows.
+vi.mock('../../../bots/bot-of-caller', () => ({
+  BOT_TOKEN_ENDED: 'token ended',
+  botOfToken: (runtime: { bots: { list: () => Bot[] } }, token: string | undefined) =>
+    !token
+      ? { kind: 'owner' }
+      : token === 'ended'
+        ? { kind: 'ended' }
+        : { kind: 'bot', bot: runtime.bots.list().find((bot) => `${bot.id}-token` === token) }
+}))
 
 const SCOUT = makeTestBot({ id: 'scout', name: 'Scout', chatSessionId: 'scout-chat' })
 const REVIEWER = makeTestBot({ id: 'reviewer', name: 'Reviewer' })
@@ -61,13 +71,16 @@ function runtimeFor(options: { features?: string[] | null; look?: string } = {})
   return { runtime, update, saved }
 }
 
-function contextFor(options: Parameters<typeof runtimeFor>[0] & { pairedDeviceId?: string } = {}) {
+function contextFor(
+  options: Parameters<typeof runtimeFor>[0] & { pairedDeviceId?: string; verified?: string } = {}
+) {
   const made = runtimeFor(options)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only runtime.bots, lookAround, getConnectorCloud and pairedDeviceId.
   const context = {
     runtime: made.runtime,
     caller: LOCAL_CLI_RPC_CALLER,
-    pairedDeviceId: options.pairedDeviceId
+    pairedDeviceId: options.pairedDeviceId,
+    ...(options.verified ? { orchestrationCaller: { sessionId: options.verified } } : {})
   } as unknown as RpcContext
   return { ...made, context }
 }
@@ -91,6 +104,20 @@ describe('bots.slackChannelHello.set', () => {
       ['another bot’s chat', {}, { callerSessionId: 'scout-chat', botId: 'reviewer', off: true }],
       ['a turn for someone else', {}, { callerSessionId: 'scout-slack', off: true }],
       ['a look-around run', { look: 'scout-chat' }, { callerSessionId: 'scout-chat', off: true }],
+      // The host-verified session wins over the one the command names.
+      [
+        'a verified turn for someone else',
+        { verified: 'scout-slack' },
+        { callerSessionId: 'scout-chat', off: true }
+      ],
+      ['an ended token', {}, { botToken: 'ended', botId: 'scout', off: true }],
+      [
+        'a token for another bot than the chat',
+        {},
+        { botToken: 'reviewer-token', callerSessionId: 'scout-chat', off: true }
+      ],
+      // A bot's token with no chat to check the turn in.
+      ['a token with no session', {}, { botToken: 'scout-token', off: true }],
       // A paired client's session claim names no chat, so it must name the bot.
       ['a paired claim', { pairedDeviceId: 'phone' }, { callerSessionId: 'scout-chat', off: true }],
       ['a cloud that doesn’t honour it', { features: [] }, { botId: 'scout', off: true }],
@@ -112,6 +139,17 @@ describe('bots.slackChannelHello.set', () => {
     expect(setIntro!.params!.safeParse({ botId: 'scout', on: true }).data).not.toHaveProperty('on')
   })
 
+  it('reports to a look run, which may not change it', async () => {
+    const { context, update } = contextFor({ look: 'scout-chat' })
+    await expect(
+      setIntro!.handler({ callerSessionId: 'scout-chat' }, context)
+    ).resolves.toMatchObject({
+      bot: { id: 'scout' },
+      slackChannelHello: true
+    })
+    expect(update).not.toHaveBeenCalled()
+  })
+
   it('only reports without off, telling an unsupported cloud from no connection', async () => {
     for (const [features, cloud] of [
       [[], 'no'],
@@ -120,7 +158,8 @@ describe('bots.slackChannelHello.set', () => {
       const { context, update } = contextFor({ features: features as string[] | null })
       await expect(setIntro!.handler({ botId: 'scout' }, context)).resolves.toMatchObject({
         slackChannelHello: true,
-        cloud
+        cloud,
+        applied: false
       })
       expect(update).not.toHaveBeenCalled()
     }
@@ -135,26 +174,31 @@ describe('bots.update slackChannelHello', () => {
       runtime: runtime as unknown as OrcaRuntimeService,
       methods: BOT_METHODS.filter((method) => method.name === 'bots.update')
     })
-    for (const updates of [
-      { slackChannelHello: true },
-      { slackChannelHello: false },
-      // Batched with an unrelated key, nothing of the update applies.
-      { paused: true, slackChannelHello: true }
+    for (const caller of [
+      LOCAL_CLI_RPC_CALLER,
+      { kind: 'paired-device' as const, deviceId: 'd', agent: true as const }
     ]) {
-      const replies: string[] = []
-      await dispatcher.dispatchStreaming(
-        {
-          id: 'update',
-          authToken: 'token',
-          method: 'bots.update',
-          params: { botId: 'scout', updates }
-        },
-        (reply) => replies.push(reply),
-        { caller: LOCAL_CLI_RPC_CALLER }
-      )
-      expect(JSON.parse(replies[0]!).error.message).toBe(
-        'Only the owner can change what posts to Slack'
-      )
+      for (const updates of [
+        { slackChannelHello: true },
+        { slackChannelHello: false },
+        // Batched with an unrelated key, nothing of the update applies.
+        { paused: true, slackChannelHello: true }
+      ]) {
+        const replies: string[] = []
+        await dispatcher.dispatchStreaming(
+          {
+            id: 'update',
+            authToken: 'token',
+            method: 'bots.update',
+            params: { botId: 'scout', updates }
+          },
+          (reply) => replies.push(reply),
+          { caller }
+        )
+        expect(JSON.parse(replies[0]!).error.message).toBe(
+          'Only the owner can change what posts to Slack'
+        )
+      }
     }
     expect(update).not.toHaveBeenCalled()
   })

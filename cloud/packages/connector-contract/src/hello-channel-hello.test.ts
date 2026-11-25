@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  CONNECTOR_CLOUD_FEATURES,
-  CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE,
-  ConnectorBotPageRequestSchema,
-  ConnectorHelloRequestSchema
-} from './hello-messages.js'
+import { ConnectorBotPageRequestSchema, ConnectorHelloRequestSchema } from './hello-messages.js'
 
 const hello = {
   v: 1,
@@ -42,11 +37,15 @@ describe('a bot’s Slack channel intro switch', () => {
       })
       expect(page.success).toBe(true)
     }
+    // A staged page keeps a real off, as the inline hello does.
+    const off = ConnectorBotPageRequestSchema.parse({
+      v: 1,
+      inventoryId: 'inv-1',
+      index: 0,
+      pages: 1,
+      bots: [{ ...bot, channelHello: false }]
+    })
+    expect(off.bots[0]?.channelHello).toBe(false)
   })
 
-  it('keeps its feature out of the listed set: only the code that honours the field lists it', () => {
-    // The desktop's copy (src/shared/connector-cloud-features.ts) names the same string.
-    expect(CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE).toBe('slack.channelHello')
-    expect(CONNECTOR_CLOUD_FEATURES).not.toContain(CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE)
-  })
 })

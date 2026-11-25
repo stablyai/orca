@@ -182,8 +182,11 @@ export class ConnectorPollClient {
     return post.finally(() => this.posting--)
   }
 
+  /** Takes `next` first, then tells its owner, so a reader it wakes sees the new list. */
   private takeFeatures(next: ReadonlySet<string> | null): void {
-    this.features = pollControl.noteFeatures(this.features, next, this.options.onFeaturesChanged)
+    const before = this.features
+    this.features = next
+    pollControl.tellFeatureChange(before, next, this.options.onFeaturesChanged)
   }
 
   stop(): void {
@@ -311,11 +314,10 @@ export class ConnectorPollClient {
     }
     this.helloSaid = JSON.stringify(said)
     this.botsSaid = said.bots !== null
-    const features = new Set(answer.features)
-    this.takeFeatures(features)
+    this.takeFeatures(new Set(answer.features))
     const current = this.helloRev !== null
     this.helloRev = null
-    this.options.events.useCloudFeatures(features, answer.helloRev)
+    this.options.events.useCloudFeatures(this.features ?? new Set(), answer.helloRev)
     this.wake.offer(answer.wake ?? null)
     machine.helloAnswered?.(answer)
     // A fresh watch's first event is the snapshot, which opens this hello's numbered events.

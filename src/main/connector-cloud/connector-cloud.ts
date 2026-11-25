@@ -283,11 +283,17 @@ export class ConnectorCloud {
         seam,
         machine: this.options.machine,
         // bots.list says what the cloud takes (the Slack intro switch, GitHub's newer events).
-        onFeaturesChanged: () => this.options.onStatusChanged?.(),
+        onFeaturesChanged: () => {
+          if (this.client === client && this.clientStop === null) {
+            this.options.onStatusChanged?.()
+          }
+        },
         onHalt: (reason) => {
           if (this.client === client) {
+            // What it took stops counting with it, so bots.list stops offering it.
+            const told = this.needsSignIn() || this.cloudFeatures() !== null
             this.clientStop = reason
-            if (this.needsSignIn()) {
+            if (told || this.needsSignIn()) {
               this.options.onStatusChanged?.()
             }
           }
@@ -317,9 +323,10 @@ export class ConnectorCloud {
     })
   }
 
-  /** What the cloud's last hello answer listed; null until one arrives or while no client runs. */
+  /** What the cloud's last hello answer listed; null until one arrives, while no client runs, and
+   *  while the cloud has stopped this one, since nothing it takes reaches the cloud until then. */
   cloudFeatures(): ReadonlySet<string> | null {
-    return this.client?.cloudFeatures ?? null
+    return this.clientStop === null ? (this.client?.cloudFeatures ?? null) : null
   }
 
   /** The signed-in Orca account's name, as a mirrored Slack post names its author. */

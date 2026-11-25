@@ -10,6 +10,8 @@ type IntroAnswer = {
   bot: { id: string; name: string }
   slackChannelHello: boolean
   cloud: 'yes' | 'no' | 'not_connected'
+  /** Whether Orca Cloud acts on the saved setting now. */
+  applied: boolean
   change: string
 }
 
