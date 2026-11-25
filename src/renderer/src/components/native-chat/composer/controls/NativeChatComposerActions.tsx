@@ -167,7 +167,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             : t('components.native-chat.stop', 'Stop the agent')
           : (sendReason ?? t('components.native-chat.composer.send', 'Send'))
       }
-      disabled={sendDisabled}
+      disabled={sendDisabled || (stops && isStopping)}
       aria-busy={stops && isStopping}
       onClick={handleCriticalAction}
       variant={stops ? 'secondary' : 'default'}

@@ -374,9 +374,7 @@ export function NativeChatMessageList({
                   />
                   {liveLine && tailRow === 'activity' ? (
                     <>
-                      <StructuredAgentWorkingGate>
-                        <NativeChatTurnActivityLine line={liveLine} />
-                      </StructuredAgentWorkingGate>
+                      <NativeChatTurnActivityLine line={liveLine} />
                       {!stopping && liveLine.reasoning ? (
                         <StructuredAgentWorkingGate whileSending>
                           <NativeChatReasoningRow

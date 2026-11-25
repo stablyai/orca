@@ -6,6 +6,7 @@ import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attac
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type {
   AgentJournalRenderItem,
+  AgentJournalSubmission,
   AgentJournalAcceptanceReceipt
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
@@ -33,6 +34,7 @@ export type JournalWriterPublication = {
   referencedUploads?: string[]
   /** Only a send's written stamp changed; readers that predate the stamp need no wake for it. */
   writtenOnly?: true
+  writtenSubmission?: AgentJournalSubmission & { writtenAt: number }
 }
 
 export type JournalWriterCommit = {

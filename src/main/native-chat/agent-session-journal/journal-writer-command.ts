@@ -60,6 +60,7 @@ export type JournalWriterCoreOperation =
       clientMessageId: string
       fence: number
       observedAt: number
+      handoverCursor: AgentJournalCursor
       providerReceipt?: true
     }
   | { kind: 'stop'; event: Omit<JournalStopEvent, 'at'>; fence: number }

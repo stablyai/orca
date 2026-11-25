@@ -68,19 +68,19 @@ describe('a send the agent took', () => {
         origin: 'client'
       })
     }
-    await journal.prepareHandover({
+    const { handoverCursor: idle } = await journal.prepareHandover({
       clientMessageId: 'idle',
       fence: 2,
       turnScope: { kind: 'thread' },
       body
     })
-    await journal.prepareHandover({
+    const { handoverCursor: steer } = await journal.prepareHandover({
       clientMessageId: 'steer',
       fence: 2,
       turnScope: { kind: 'turn', turnItemId: 'orca:turn-running' },
       body
     })
-    await journal.prepareHandover({
+    const { handoverCursor: echoed } = await journal.prepareHandover({
       clientMessageId: 'echoed',
       fence: 2,
       turnScope: { kind: 'thread' },
@@ -96,21 +96,34 @@ describe('a send the agent took', () => {
     const before = journal.cursor()
     await journal.markDispatchWritten({
       clientMessageId: 'steer',
+      handoverCursor: steer!,
       fence: 1,
       observedAt: 70,
       providerReceipt: true
     })
-    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2, observedAt: 71 })
+    await journal.markDispatchWritten({
+      clientMessageId: 'steer',
+      handoverCursor: steer!,
+      fence: 2,
+      observedAt: 71
+    })
     await journal.markDispatchWritten({
       clientMessageId: 'echoed',
+      handoverCursor: echoed!,
       fence: 2,
       observedAt: 72,
       providerReceipt: true
     })
     expect(journal.cursor()).toEqual(before)
-    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2, observedAt: 80 })
+    await journal.markDispatchWritten({
+      clientMessageId: 'idle',
+      handoverCursor: idle!,
+      fence: 2,
+      observedAt: 80
+    })
     await journal.markDispatchWritten({
       clientMessageId: 'steer',
+      handoverCursor: steer!,
       fence: 2,
       observedAt: 81,
       providerReceipt: true
@@ -118,6 +131,7 @@ describe('a send the agent took', () => {
     expect(journal.cursor().sequence).toBe(before.sequence + 2)
     await journal.markDispatchWritten({
       clientMessageId: 'steer',
+      handoverCursor: steer!,
       fence: 2,
       observedAt: 90,
       providerReceipt: true
@@ -132,6 +146,49 @@ describe('a send the agent took', () => {
     expect((await journal.reads.submission('echoed'))?.writtenAt).toBeUndefined()
   })
 
+  it('rejects a delayed provider callback after re-handover at the same fence and time', async () => {
+    const journal = await openJournal()
+    const input = {
+      clientMessageId: 'retry',
+      fence: 2,
+      turnScope: { kind: 'thread' as const },
+      body
+    }
+    await journal.appendSubmission({
+      ...input,
+      payloadFingerprint: 'retry',
+      handoverRecorded: true,
+      origin: 'client'
+    })
+    const first = await journal.prepareHandover(input)
+    const next = await journal.prepareHandover(input)
+    const at = journal.cursor()
+    const delivery = createDeferredStructuredAgentSessionEventSink({
+      sessionId: 'session',
+      logger: createStructuredAgentSessionLogger()
+    })
+    delivery.bind({ journal, fence: 2, publish: () => {} })
+    const receive = (handoverCursor: typeof first.handoverCursor, observedAt: number) =>
+      delivery.sink.recordProviderReceipt?.({
+        clientMessageId: 'retry',
+        fence: 2,
+        handoverCursor: handoverCursor!,
+        observedAt
+      })
+    try {
+      receive(first.handoverCursor, 201)
+      expect(await delivery.drained()).toEqual({ ok: true })
+      expect(journal.cursor()).toEqual(at)
+      expect((await journal.reads.submission('retry'))?.writtenAt).toBeUndefined()
+
+      receive(next.handoverCursor, 202)
+      expect(await delivery.drained()).toEqual({ ok: true })
+      expect((await journal.reads.submission('retry'))?.writtenAt).toBe(202)
+    } finally {
+      delivery.close()
+    }
+  })
+
   // Readers without queued-image support take the image-admission route; the stamp must reach them too.
   it('pages a provider receipt before the turn start for a reader with a queued-image policy', async () => {
     const journal = await openJournal(200)
@@ -143,7 +200,7 @@ describe('a send the agent took', () => {
       handoverRecorded: true,
       origin: 'client'
     })
-    await journal.prepareHandover({
+    const { handoverCursor } = await journal.prepareHandover({
       clientMessageId: 'idle',
       fence: 2,
       turnScope: { kind: 'thread' },
@@ -163,7 +220,12 @@ describe('a send the agent took', () => {
       logger: createStructuredAgentSessionLogger()
     })
     delivery.bind({ journal, fence: 2, publish: () => {} })
-    delivery.sink.recordProviderReceipt?.({ clientMessageId: 'idle', fence: 2, observedAt: 150 })
+    delivery.sink.recordProviderReceipt?.({
+      clientMessageId: 'idle',
+      fence: 2,
+      handoverCursor: handoverCursor!,
+      observedAt: 150
+    })
     delivery.sink.appendItem(
       { provider: 'orca', clientMessageId: 'turn' },
       { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:idle', startedAt: 150 },

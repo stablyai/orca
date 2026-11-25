@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -76,6 +77,7 @@ export type AgentSessionAcquisition = {
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
 export type StructuredAgentSessionCommandRun = {
+  handoverCursor?: AgentJournalCursor
   clientMessageId: string
   turnId: string
   identity: AgentJournalItemIdentity
@@ -217,6 +219,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     /** Abort only before provider write, preserving the original signal reason so the host knows it was unwritten. */
     signal?: AbortSignal
     fence: number
+    /** Read at provider enqueue, after any fresh handover replaced the initial attempt. */
+    handoverCursor?: () => AgentJournalCursor | undefined
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
     turnScope?: AgentJournalTurnScope
@@ -290,6 +294,7 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     generation: string
   }): (() => boolean) | undefined
   /** Undefined without a live child; then the host conservatively treats unanswered sends as held. */
+  /** A stable, immutable snapshot until the held membership changes. */
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean

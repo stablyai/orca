@@ -59,10 +59,11 @@ export function resolveClaudeDispatchLifecycle(
     if (!frame || waiter.clientMessageId === null) {
       return
     }
-    if (evidence.received) {
+    if (evidence.received && waiter.handoverCursor !== undefined) {
       frame.onReceived({
         clientMessageId: waiter.clientMessageId,
         fence: waiter.dispatchFence,
+        handoverCursor: waiter.handoverCursor,
         observedAt: frame.observedAt
       })
     }
@@ -188,12 +189,24 @@ export function claudeFrameSendFacts(
   return { ...(startedSend ? { startedSend } : {}), ...(renamedTo ? { renamedTo } : {}) }
 }
 
+const EMPTY_HELD_SENDS: ReadonlySet<string> = new Set()
+
 /** Include settlements until the host hears them, avoiding a gap in dispatch ownership. */
-export function claudeHeldSends(session: ClaudeSession): ReadonlySet<string> {
-  return new Set([
+export function claudeHeldSends(session?: ClaudeSession): ReadonlySet<string> {
+  if (!session) {
+    return EMPTY_HELD_SENDS
+  }
+  const unreported = session.unreportedSettlements
+  const prior = session.heldSendsSnapshot
+  if (prior && prior.unreported === unreported) {
+    return prior.sends
+  }
+  const sends = new Set([
     ...session.dispatchWaiters.flatMap((waiter) => waiter.clientMessageId ?? []),
-    ...(session.unreportedSettlements ?? [])
+    ...(unreported ?? [])
   ])
+  session.heldSendsSnapshot = { unreported, sends }
+  return sends
 }
 
 /** Pending lifecycle-tracked sends must keep the idle sweep from resting the child. */

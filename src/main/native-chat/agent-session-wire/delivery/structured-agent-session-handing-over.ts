@@ -14,11 +14,16 @@ type HandoverInput = {
   unadmitted: boolean
   compilerPermission?: 'auto'
   signal?: AbortSignal
+  removeAbortListener?: () => void
   pending?: () => boolean
   finalization: { close: (cause: UnsentSendHold['cause']) => void; completion: Promise<void> }
 }
 type Handover = { count: number; input?: HandoverInput }
 const handingOver = new WeakMap<HandoverJournal, Map<string, Handover>>()
+const handoverAuthorities = new WeakMap<
+  HandoverJournal,
+  ReturnType<typeof captureHandoverAuthority>
+>()
 const NONE: ReadonlyMap<string, Handover> = new Map()
 
 /** Cancellation retains outcome responsibility; its exact owner may bypass doubt delegation. */
@@ -56,11 +61,17 @@ export function structuredAgentSessionHandingOver(
 }
 
 /** Pending submission membership is checked in the reader's snapshot, alongside these live owners. */
-export function structuredAgentSessionHandoverAuthority(journal: HandoverJournal): {
-  handingOver: string[]
-  continuingUnadmitted: string[]
-  finalizing: string[]
-} {
+export function structuredAgentSessionHandoverAuthority(journal: HandoverJournal) {
+  const saved = handoverAuthorities.get(journal)
+  if (saved) {
+    return saved
+  }
+  const authority = captureHandoverAuthority(journal)
+  handoverAuthorities.set(journal, authority)
+  return authority
+}
+
+function captureHandoverAuthority(journal: HandoverJournal) {
   const sends = structuredAgentSessionHandingOver(journal)
   const continuingUnadmitted: string[] = []
   const finalizing: string[] = []
@@ -72,7 +83,11 @@ export function structuredAgentSessionHandoverAuthority(journal: HandoverJournal
       finalizing.push(id)
     }
   }
-  return { handingOver: [...sends.keys()], continuingUnadmitted, finalizing }
+  return {
+    handingOver: [...sends.keys()].sort(),
+    continuingUnadmitted: continuingUnadmitted.sort(),
+    finalizing: finalizing.sort()
+  }
 }
 
 /** Volatile proof owned by the live handover; a crash or cancellation restores ordinary doubt. */
@@ -94,10 +109,17 @@ export function markStructuredAgentSessionInputUnadmitted(
 ): void {
   const input = handingOver.get(journal)?.get(clientMessageId)?.input
   if (input?.owner === owner) {
+    input.removeAbortListener?.()
+    handoverAuthorities.delete(journal)
+    const aborted = () => handoverAuthorities.delete(journal)
+    if (unadmitted && signal && !signal.aborted) {
+      signal.addEventListener('abort', aborted, { once: true })
+    }
     Object.assign(input, {
       unadmitted,
       compilerPermission,
       signal,
+      removeAbortListener: () => signal?.removeEventListener('abort', aborted),
       ...(hasSubmissionSnapshot(journal)
         ? { pending: () => journal.submission(clientMessageId)?.dispatchState === 'pending' }
         : {})
@@ -145,6 +167,7 @@ export function beginStructuredAgentSessionHandover(
   const entry: Handover = sends.get(clientMessageId) ?? { count: 0 }
   entry.count += 1
   sends.set(clientMessageId, entry)
+  handoverAuthorities.delete(journal)
   // The send's writes, through its accepted receipt, must not wait behind other chats' streaming.
   const sending = 'holdSending' in journal ? journal.holdSending() : undefined
   let held = true
@@ -153,7 +176,9 @@ export function beginStructuredAgentSessionHandover(
     if (held) {
       held = false
       sending?.()
+      handoverAuthorities.delete(journal)
       if (entry.input?.owner === release) {
+        entry.input.removeAbortListener?.()
         delete entry.input
       }
       entry.count -= 1
@@ -168,6 +193,7 @@ export function beginStructuredAgentSessionHandover(
     }
   }
   if (finalization) {
+    entry.input?.removeAbortListener?.()
     entry.input = {
       owner: release,
       unadmitted: false,

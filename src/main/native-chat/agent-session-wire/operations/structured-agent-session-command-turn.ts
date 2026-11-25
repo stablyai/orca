@@ -171,14 +171,20 @@ export async function handOverStructuredAgentSessionCommand(
     )
     return
   }
-  const { turn, running } = await openCommandTurn(ctx, submission)
+  const { turn, running, handoverCursor } = await openCommandTurn(ctx, submission)
   const instructions = body.command?.instructions
   let admission: AgentSessionCommandAdmission
   try {
     admission = await ctx.adapter.compact!({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
-      command: { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
+      command: {
+        clientMessageId,
+        ...turn,
+        running,
+        handoverCursor,
+        ...(instructions ? { instructions } : {})
+      }
     })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.

@@ -136,5 +136,12 @@ export function createStructuredAgentSessionStatusReader(
       : null
   }
 
-  return Object.assign(read, { work, workFrame })
+  const cachedWork = (sessionId: string, journal: SqlAgentSessionJournal) => {
+    const captured = capture(sessionId, journal)()
+    return captured
+      ? observedWork(journal, projections.currentWorkSql(journal, captured) ?? null)
+      : null
+  }
+
+  return Object.assign(read, { work, workFrame, cachedWork })
 }

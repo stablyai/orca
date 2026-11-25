@@ -16,6 +16,7 @@ export type SubscriberCatchUp = {
   /** The same fan-out's port with a queue read, shared by every subscriber that still owes one. */
   queuePort: () => SubscriberDeliveryPort
   queueChanged: boolean
+  receiptsOnly?: boolean
   hostNow: number
   activity?: AgentSessionTurnActivity | null | undefined
 }

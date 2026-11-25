@@ -195,6 +195,7 @@ export abstract class SqlJournalAppends {
     clientMessageId: string
     fence: number
     observedAt: number
+    handoverCursor: AgentJournalCursor
     providerReceipt?: true
   }): Promise<void> {
     await this.write({ kind: 'dispatch-written', ...input })

@@ -68,6 +68,10 @@ export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
     sessionId: string,
     journal: AgentSessionJournal
   ) => Promise<StructuredAgentSessionObservedWork | null>
+  readCachedWork?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => StructuredAgentSessionObservedWork | null
   readWorkFrame?: StructuredAgentSessionWorkFrameReader
   /** The session gained its first, or lost its last, subscriber that shows prompt suggestions. */
   onPromptSuggestionInterest?: (sessionId: string, wanted: boolean) => void

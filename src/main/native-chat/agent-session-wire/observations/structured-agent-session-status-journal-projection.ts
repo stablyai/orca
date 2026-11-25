@@ -7,6 +7,11 @@ import {
   journalSqlWorkAnswerIsCurrent,
   readJournalSqlWorkFrame
 } from '../../agent-session-journal/journal-sql-work-answer'
+import {
+  cachedWorkAuthority,
+  readCachedWorkFrame,
+  rememberWorkAuthority
+} from './structured-agent-session-work-authority'
 import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
 import type { JournalDomainHistoryWork } from '../../agent-session-journal/journal-domain-history-page'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
@@ -59,7 +64,6 @@ type ProjectionEntry =
 
 type PendingObservation = { key: string; result: Promise<JournalObserverResult> }
 type CapturedWork = { authority: JournalWorkAuthority; contextId: string | null }
-
 export class StructuredAgentSessionJournalProjections {
   // Key by journal lifetime; task-progress frames must not rescan unchanged conversations.
   private readonly byJournal = new WeakMap<SqlAgentSessionJournal, ProjectionEntry>()
@@ -109,34 +113,28 @@ export class StructuredAgentSessionJournalProjections {
       : null
   }
 
-  private currentWorkSql(
+  currentWorkSql(
     journal: SqlAgentSessionJournal,
     captured: CapturedWork
   ): JournalSqlWorkResult | undefined {
-    const authority = copyJournalCurrentWorkAuthority(captured.authority)
     const entry = this.currentEntry(journal)
-    const answer: JournalSqlWorkResult | undefined =
-      entry?.kind === 'work-only'
-        ? entry.contextId === captured.contextId
-          ? entry.answer
-          : undefined
-        : entry?.projection.work &&
-            entry.projection.contextId === captured.contextId &&
-            entry.projection.authority
-          ? {
-              cursor: { epoch: entry.projection.epoch, sequence: entry.projection.sequence },
-              physicalCursor: entry.physicalCursor,
-              authority: copyJournalCurrentWorkAuthority(entry.projection.authority),
-              result: { kind: 'state', state: entry.projection.work }
-            }
-          : undefined
-    // Receipt metadata cannot change projected work. Validate live authority and give the
-    // transcript reader the current coordinates for its snapshot check.
-    const current =
-      answer && advanceJournalStatusWork(answer, journal.cursor(), journal.physicalCursor())
-    return current &&
-      journalSqlWorkAnswerIsCurrent(journal, () => captured.authority, authority, current)
-      ? current
+    if (entry?.kind === 'work-only') {
+      const { answer, contextId } = entry
+      return contextId === captured.contextId &&
+        answer.result.kind === 'state' &&
+        cachedWorkAuthority(answer.result.state, captured.authority)
+        ? advanceJournalStatusWork(answer, journal.cursor(), journal.physicalCursor())
+        : undefined
+    }
+    const work = entry?.projection.work
+    const authority = work && cachedWorkAuthority(work, captured.authority)
+    return entry && work && authority && entry.projection.contextId === captured.contextId
+      ? {
+          cursor: journal.cursor(),
+          physicalCursor: journal.physicalCursor(),
+          authority,
+          result: { kind: 'state', state: work }
+        }
       : undefined
   }
 
@@ -165,7 +163,7 @@ export class StructuredAgentSessionJournalProjections {
       ) {
         continue
       }
-      this.remember(journal, recaptured, result, captured.contextId)
+      this.remember(journal, recaptured, result)
       return result
     }
   }
@@ -187,17 +185,19 @@ export class StructuredAgentSessionJournalProjections {
       return { answer: null, value: (await read(undefined)).value, current: () => !capture() }
     }
     const cached = this.currentWorkSql(journal, captured)
+    if (cached) {
+      return readCachedWorkFrame(journal, captured, capture, read, cached)
+    }
     const frame = await readJournalSqlWorkFrame(
       journal,
       () => {
         const live = capture()
         return live && live.contextId === captured.contextId ? live.authority : null
       },
-      read,
-      cached
+      read
     )
-    if (frame && frame.answer !== cached) {
-      this.remember(journal, captured, frame.answer, captured.contextId)
+    if (frame) {
+      this.remember(journal, captured, frame.answer)
     }
     return frame
   }
@@ -205,11 +205,13 @@ export class StructuredAgentSessionJournalProjections {
   private remember(
     journal: SqlAgentSessionJournal,
     captured: CapturedWork,
-    answer: JournalSqlWorkResult,
-    contextId: string | null
+    answer: JournalSqlWorkResult
   ) {
     if (this.currentEntry(journal)?.kind !== 'full' || !this.currentWorkSql(journal, captured)) {
-      this.byJournal.set(journal, { kind: 'work-only', answer, contextId })
+      if (answer.result.kind === 'state') {
+        rememberWorkAuthority(answer.result.state, captured.authority, answer.authority)
+      }
+      this.byJournal.set(journal, { kind: 'work-only', answer, contextId: captured.contextId })
     }
   }
 
@@ -297,6 +299,7 @@ export class StructuredAgentSessionJournalProjections {
       authority,
       work: result.work
     }
+    rememberWorkAuthority(result.work, current.authority)
     const stop = authority.stop
     const savedStop = stop && { sequence: stop.sequence, event: stop.event }
     this.byJournal.set(journal, {

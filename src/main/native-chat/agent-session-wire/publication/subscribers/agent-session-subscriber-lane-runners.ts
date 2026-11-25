@@ -13,6 +13,7 @@ import {
   type SubscriberDeliveryLaneRunners,
   type SubscriberDeliveryRetention
 } from './agent-session-subscriber-delivery-lane'
+import { journalStatusReceiptProgress } from '../../../agent-session-journal/journal-status-receipt-progress'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 
@@ -30,8 +31,16 @@ export function subscriberLaneRunners(
 ): SubscriberDeliveryLaneRunners {
   const { sessionId } = subscriber
   return {
-    catchUp: ({ journal, port, hostNow, activity }) =>
-      deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity }),
+    catchUp: ({ journal, port, hostNow, activity, receiptsOnly, queuePort }) =>
+      deliverToSubscriber(port, {
+        subscriber,
+        journal,
+        hostNow,
+        emitCheckpoint: false,
+        activity,
+        receiptsOnly,
+        queuePort
+      }),
     backgroundTasks: (fence) =>
       republishSubscriberBackgroundTasks(
         owner.deliveryPort(),
@@ -75,6 +84,7 @@ export function mergeSubscriberCatchUp(
     port: queueChanged === next.queueChanged ? next.port : next.queuePort(),
     queuePort: next.queuePort,
     queueChanged,
+    receiptsOnly: pending.receiptsOnly && next.receiptsOnly,
     hostNow: next.hostNow,
     ...(activity !== undefined ? { activity } : {})
   }
@@ -91,6 +101,7 @@ export class SubscriberLanes {
     next: SubscriberCatchUp,
     receiptsAfter?: AgentJournalCursor
   ): void {
+    const progress = receiptsAfter && journalStatusReceiptProgress(next.journal)
     for (const subscriber of subscribers) {
       const catchUpOwed =
         receiptsAfter !== undefined &&
@@ -100,10 +111,15 @@ export class SubscriberLanes {
       if (receiptsAfter && !subscriber.readsProviderReceipts && !catchUpOwed) {
         continue
       }
+      const receiptSuffix =
+        progress &&
+        subscriber.readsProviderReceipts &&
+        subscriber.cursor.epoch === progress.epoch &&
+        subscriber.cursor.sequence >= progress.after
       this.of(subscriber).catchUp(
-        catchUpOwed && !next.queueChanged
+        catchUpOwed && !next.queueChanged && !receiptSuffix
           ? { ...next, port: next.queuePort(), queueChanged: true }
-          : next
+          : { ...next, receiptsOnly: receiptsAfter !== undefined && !next.queueChanged }
       )
     }
   }

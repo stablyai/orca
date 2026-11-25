@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -111,6 +112,7 @@ export function releaseClaudeDispatchWaitersInDoubt(
 
 /** Retain bounded waiter identities after exit so late replay can still settle delivery. */
 export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
+  session.heldSendsSnapshot = undefined
   for (const waiter of session.dispatchWaiters.splice(0)) {
     retireWaiter(session, waiter)
     waiter.resolve(null)
@@ -131,6 +133,7 @@ export async function dispatchClaudeTurn(
     requestedAt?: number
     sentUuid?: string
     fence?: number
+    handoverCursor?: () => AgentJournalCursor | undefined
     turnScope?: AgentJournalTurnScope
     signal?: AbortSignal
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
@@ -167,7 +170,8 @@ export async function dispatchClaudeTurn(
       claudeDispatchContentKey(content),
       input.clientMessageId ?? null,
       input.requestedAt ?? null,
-      input.fence ?? session.fence
+      input.fence ?? session.fence,
+      input.handoverCursor?.()
     )
     const liveScope = session.translator?.currentTurnScope()
     if (

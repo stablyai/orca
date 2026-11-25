@@ -45,13 +45,16 @@ export function applyJournalDomainDispatchWritten(
     submission.dispatchState !== 'pending' ||
     submission.writtenAt !== undefined ||
     !attempt.handover ||
+    attempt.handover.sequence !== operation.handoverCursor.sequence ||
+    target.epoch !== operation.handoverCursor.epoch ||
     attempt.handover.fence !== operation.fence ||
     operation.fence < Number(head.highest_fence) ||
     (!operation.providerReceipt && attempt.handover.scope?.kind !== 'thread')
   ) {
     return result
   }
-  const payload = JSON.stringify({ ...submission, writtenAt: operation.observedAt })
+  const written = { ...submission, writtenAt: operation.observedAt }
+  const payload = JSON.stringify(written)
   advanceJournalDomainSubmissionRevision(db, target, operation.clientMessageId, payload)
   // Receipt leaves dispatch and request outcomes unchanged.
   db.prepare(`UPDATE journal_submission_attempts SET payload_json=?
@@ -73,5 +76,6 @@ export function applyJournalDomainDispatchWritten(
   )
   result.cursor = { epoch: target.epoch, sequence }
   result.writtenOnly = true
+  result.writtenSubmission = written
   return result
 }

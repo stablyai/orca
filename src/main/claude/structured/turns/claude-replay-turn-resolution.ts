@@ -6,7 +6,7 @@ import {
   releaseClaudeDispatchesUnansweredAtIdle
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
-import { forgetRetiredWaiter } from '../dispatch/claude-structured-dispatch-waiters'
+import { forgetRetiredWaiter, forgetWaiter } from '../dispatch/claude-structured-dispatch-waiters'
 import { settleCancelledClaudeDispatchWaiters } from '../dispatch/claude-structured-dispatch'
 import {
   claudeHasReplayContent,
@@ -239,10 +239,7 @@ function settleWaiter(
   onSettledLate?: ClaudeLateDispatchSettlement,
   answeredInTurn?: AgentJournalAnsweredTurnIdentity
 ): void {
-  const index = session.dispatchWaiters.indexOf(waiter)
-  if (index !== -1) {
-    session.dispatchWaiters.splice(index, 1)
-  }
+  forgetWaiter(session, waiter)
   waiter.settledUuid = uuid
   waiter.resolve(uuid)
   // Admission already returned; this replay settles delivery.

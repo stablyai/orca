@@ -177,8 +177,23 @@ export async function emitSubscriberFrame(
     journal?: AgentSessionJournal
     queuePublication?: { value: QueuePublication | undefined }
     isActive?: () => boolean
+    current?: () => void
+    receiptsOnly?: true
+    restatement?: true
   }
 ): Promise<void> {
+  if (options?.receiptsOnly) {
+    const frames = subscriber.boundedFrames
+      ? boundedFrames(event, { queued: undefined, backgroundTasks: undefined }, subscriber.cursor)
+      : [event]
+    for (const frame of frames) {
+      if (options.isActive && !options.isActive()) {
+        return
+      }
+      subscriber.emit(frame)
+    }
+    return
+  }
   const marker =
     event.type !== 'end' && subscriber.readsCurrentRequests
       ? options?.currentWork?.requestProjection(subscriber.sessionId).marker
@@ -191,12 +206,13 @@ export async function emitSubscriberFrame(
     includeMarker && event.type !== 'end' ? { ...event, currentRequests: marker } : event,
     options?.withholdQueued === true,
     options?.currentWork,
-    options?.journal,
+    options?.restatement ? undefined : options?.journal,
     options?.queuePublication
   )
   if (options?.isActive && !options.isActive()) {
     return
   }
+  options?.current?.()
   for (const outgoing of built.frames) {
     if (options?.isActive && !options.isActive()) {
       return

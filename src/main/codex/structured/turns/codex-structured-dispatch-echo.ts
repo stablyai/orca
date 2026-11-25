@@ -8,7 +8,11 @@ import type { ProviderDiagnostic } from '../../../../shared/agent-session/failur
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnJoin } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
-export { MAX_CODEX_PENDING_DISPATCH_ECHOES, MAX_CODEX_RECORDED_TURN_ENDS }
+export {
+  MAX_CODEX_PENDING_DISPATCH_ECHOES,
+  MAX_CODEX_RECORDED_TURN_ENDS,
+  readCodexDispatchEcho
+} from './codex-dispatch-receipt-correlation'
 
 export type CodexTurnEnd =
   | { status: 'completed' }
@@ -107,8 +111,9 @@ export function createCodexDispatchEchoes(
   let clock = 0
   let status: { active: boolean; at: number } | null = null
   const publishedTurns = new Set<string>()
-  const heldSends = (): Set<string> =>
-    new Set(
+  let heldSnapshot: ReadonlySet<string> | undefined
+  const heldSends = (): ReadonlySet<string> =>
+    (heldSnapshot ??= new Set(
       [...armed].flatMap(([clientMessageId, entry]) =>
         entry.answeredAt === undefined ||
         (entry.turn
@@ -118,15 +123,19 @@ export function createCodexDispatchEchoes(
           ? [clientMessageId]
           : []
       )
-    )
+    ))
   const reporting = <T>(change: () => T): T => {
-    if (!onHeldChange) {
-      return change()
-    }
-    const before = [...heldSends()].join('\n')
+    const before = onHeldChange && heldSends()
+    heldSnapshot = undefined
     const result = change()
-    if ([...heldSends()].join('\n') !== before) {
-      onHeldChange()
+    heldSnapshot = undefined
+    if (before) {
+      const after = heldSends()
+      if (before.size === after.size && [...before].every((id) => after.has(id))) {
+        heldSnapshot = before
+      } else {
+        onHeldChange?.()
+      }
     }
     return result
   }
@@ -185,6 +194,7 @@ export function createCodexDispatchEchoes(
         return false
       }
       armed.set(clientMessageId, { requestedAt: requestedAt ?? null, sequence: nextSequence++ })
+      heldSnapshot = undefined
       return true
     },
     expect: receiptCorrelation.expect,
@@ -297,6 +307,7 @@ export function createCodexDispatchEchoes(
     clear: () => {
       status = null
       armed.clear()
+      heldSnapshot = undefined
       endedTurns.clear()
       receiptCorrelation.clear()
       unopenedTurns.clear()
@@ -308,21 +319,4 @@ export function createCodexDispatchEchoes(
       return armed.size
     }
   }
-}
-
-export function readCodexDispatchEcho(
-  item: { type: string; id: string } & Record<string, unknown>,
-  identity: AgentJournalItemIdentity,
-  echoes?: CodexDispatchEchoes
-): { clientMessageId: string; providerIdentity: AgentJournalItemIdentity } | null {
-  if (item.type !== 'userMessage' || identity.provider !== 'codex') {
-    return null
-  }
-  const clientMessageId =
-    typeof item.clientId === 'string' && item.clientId.length > 0
-      ? item.clientId
-      : echoes?.receipt(identity, item.content)
-  return typeof clientMessageId === 'string' && clientMessageId.length > 0
-    ? { clientMessageId, providerIdentity: identity }
-    : null
 }

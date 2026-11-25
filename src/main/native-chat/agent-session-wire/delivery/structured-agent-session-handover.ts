@@ -6,7 +6,10 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { StructuredAgentSessionInputNotAdmitted } from './structured-agent-session-input-admission'
+import {
+  cancelledDispatch,
+  StructuredAgentSessionInputNotAdmitted
+} from './structured-agent-session-input-admission'
 import type { AgentSessionHandoverContext } from '../host/structured-agent-session-host-types'
 import {
   agentSessionFailureFact,
@@ -28,7 +31,6 @@ import {
   structuredAgentSessionHandoverOrigin
 } from '../operations/structured-agent-session-command-turn'
 import type { JournalHandoverResult } from '../../agent-session-journal/journal-store-contracts'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import { structuredAgentSessionRideAlong } from '../structured-agent-session-ride-along'
 import {
@@ -156,7 +158,7 @@ export async function beginSubmissionHandover(
                       queued,
                       ownsChild,
                       prepareFresh,
-                      handover.turnScope,
+                      () => handover,
                       attempt?.signal
                     )
                   : null
@@ -210,8 +212,14 @@ export async function beginSubmissionHandover(
         if (outcome?.state !== 'unknown' && (!unwritten || !closing)) {
           await resolveHandover(ctx, clientMessageId, outcome)
         }
-        if (outcome?.state === 'admitted' && outcome.writtenAt !== undefined && !unwritten) {
-          await markHandoverWritten(ctx, clientMessageId, outcome.writtenAt)
+        const { handoverCursor } = handover
+        if (
+          outcome?.state === 'admitted' &&
+          outcome.writtenAt !== undefined &&
+          !unwritten &&
+          handoverCursor
+        ) {
+          await markHandoverWritten(ctx, clientMessageId, handoverCursor, outcome.writtenAt)
         }
         await commit(async () => {
           if (outcome?.state === 'unknown') {
@@ -255,7 +263,7 @@ async function dispatchSafely(
   queued: boolean,
   isCurrent: () => boolean,
   prepare: (fence: number) => Promise<AgentJournalMessageItem>,
-  turnScope: AgentJournalTurnScope,
+  handover: () => JournalHandoverResult,
   signal?: AbortSignal
 ): Promise<AgentSessionDispatchOutcome> {
   const { admitFreshInput } = ctx
@@ -274,8 +282,9 @@ async function dispatchSafely(
         : {}),
       isCurrent,
       fence: ctx.fence,
+      handoverCursor: () => handover().handoverCursor,
       requestedAt,
-      turnScope,
+      turnScope: handover().turnScope,
       onInputPreparation: ctx.recordRanOptions?.prepareInput,
       onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
     })
@@ -299,18 +308,5 @@ async function dispatchSafely(
       }
     }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-/** Non-delivery proof applies only to queued handoffs; direct sends still owe stopped-history handling. */
-function cancelledDispatch(
-  neverReachedAgent: boolean
-): Extract<AgentSessionDispatchOutcome, { state: 'rejected' }> {
-  return {
-    state: 'rejected',
-    ...agentSessionFailureWords(
-      agentSessionFailureFact('cancelled', neverReachedAgent ? { neverReachedAgent } : {}),
-      { surface: 'rejection' }
-    )
   }
 }

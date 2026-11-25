@@ -96,6 +96,7 @@ export type JournalDomainSubmissionCoordinate = {
 export type JournalDomainSubmissionCommit<Value = AgentJournalCursor | null | undefined> = {
   promptDispatches?: JournalPromptDispatch[]
   writtenOnly?: true
+  writtenSubmission?: AgentJournalSubmission & { writtenAt: number }
   cursor: AgentJournalCursor
   value: Value
   /** Empty means the legacy no-op would not invoke its row-bound receipt. */

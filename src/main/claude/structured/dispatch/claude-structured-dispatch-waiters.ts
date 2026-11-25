@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { ClaudeDispatchWaiter, ClaudeSession } from '../claude-structured-session-state'
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
@@ -17,7 +18,8 @@ export function waitForReplay(
   replayContentKey: string,
   clientMessageId: string | null,
   requestedAt: number | null,
-  dispatchFence = session.fence
+  dispatchFence = session.fence,
+  handoverCursor?: AgentJournalCursor
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -28,10 +30,12 @@ export function waitForReplay(
       dispatchSequence: session.dispatchSequence,
       requestedAt,
       dispatchFence,
+      handoverCursor,
       replayContentKey,
       resolve
     }
     session.dispatchWaiters.push(waiter)
+    session.heldSendsSnapshot = undefined
   })
   return { waiter, promise }
 }
@@ -40,6 +44,7 @@ export function forgetWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaite
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
     session.dispatchWaiters.splice(index, 1)
+    session.heldSendsSnapshot = undefined
   }
 }
 

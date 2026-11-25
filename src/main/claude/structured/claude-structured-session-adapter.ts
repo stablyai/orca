@@ -220,7 +220,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   heldSends = (sessionId: string): ReadonlySet<string> | undefined => {
     const session = this.sessions.get(sessionId) ?? this.exits.get(sessionId)?.session
     const held = session && claudeHeldSends(session)
-    return held ?? (this.settledExitErrors.has(sessionId) ? new Set() : undefined)
+    return held ?? (this.settledExitErrors.has(sessionId) ? claudeHeldSends() : undefined)
   }
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
     const session = this.sessions.get(sessionId)

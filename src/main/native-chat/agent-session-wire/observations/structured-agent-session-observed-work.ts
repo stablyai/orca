@@ -8,29 +8,31 @@ import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-w
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { currentRequestsProjection } from './agent-session-current-requests'
 
-type SubmissionPresentation = Pick<
-  AgentJournalSubmission,
-  'fence' | 'handedOverAt' | 'dispatchState' | 'reason' | 'recovered'
->
+type WorkState = JournalObserverResult['work']
+const presentations = new WeakMap<
+  WorkState,
+  { submissions: ReadonlyMap<string, AgentJournalSubmission>; promptIds: string[] }
+>()
 
 /** Finished observer answers; selection and live-work policy remain in the reader snapshot. */
 export class StructuredAgentSessionObservedWork {
-  private readonly restated: ReadonlyMap<string, SubmissionPresentation>
+  private readonly presentation: NonNullable<ReturnType<typeof presentations.get>>
 
   constructor(
     private readonly journal: Pick<SqlAgentSessionJournal, 'cursor'>,
-    private readonly work: JournalObserverResult['work'],
+    private readonly work: WorkState,
     readonly cursor: AgentJournalCursor,
     readonly readSource?: JournalSqlWorkResult
   ) {
-    this.restated = new Map(
-      work.restatedSubmissions.map(
-        ({ clientMessageId, fence, handedOverAt, dispatchState, reason, recovered }) => [
-          clientMessageId,
-          { fence, handedOverAt, dispatchState, reason, recovered }
-        ]
-      )
-    )
+    let presentation = presentations.get(work)
+    if (!presentation) {
+      presentation = {
+        submissions: new Map(work.restatedSubmissions.map((send) => [send.clientMessageId, send])),
+        promptIds: work.actionablePrompts.map((item) => item.itemId)
+      }
+      presentations.set(work, presentation)
+    }
+    this.presentation = presentation
   }
 
   get liveFence() {
@@ -49,12 +51,12 @@ export class StructuredAgentSessionObservedWork {
       ? { kind: 'turn', turnItemId: this.work.activeTurn.item.itemId }
       : AGENT_JOURNAL_THREAD_SCOPE
   actionablePrompts = () => this.work.actionablePrompts
-  actionablePromptIds = () => this.work.actionablePrompts.map((item) => item.itemId)
+  actionablePromptIds = () => this.presentation.promptIds
   hasActionablePrompt = () => this.work.actionablePrompts.length > 0
   publishedLatestTurn = (_latest: AgentSessionLatestTurn | null) => this.work.latestTurn
   // Work can outlive receipts. A page owns the attempt and its receipt metadata.
   publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission => {
-    const presentation = this.restated.get(submission.clientMessageId)
+    const presentation = this.presentation.submissions.get(submission.clientMessageId)
     if (
       !presentation ||
       presentation.fence !== submission.fence ||
@@ -70,7 +72,7 @@ export class StructuredAgentSessionObservedWork {
       ...(recovered === undefined ? {} : { recovered })
     }
   }
-  restatedSubmissionIds = () => this.restated.keys()
+  restatedSubmissions = () => this.work.restatedSubmissions
   viewKey = () => this.work.viewKey
   workViewKey = () => this.work.workViewKey
   requestProjection = (sessionId: string) =>

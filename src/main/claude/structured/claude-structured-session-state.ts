@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
 import type {
@@ -108,6 +109,7 @@ export type ClaudeDispatchWaiter = {
   /** Host submission instant owned by this exact dispatch. */
   requestedAt: number | null
   dispatchFence: number
+  handoverCursor?: AgentJournalCursor
   turnScoped?: true
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
@@ -137,6 +139,7 @@ export type ClaudeSession = {
   dispatchWaiters: ClaudeDispatchWaiter[]
   /** Sends the frame being handled settled, until their settlements reach the host. */
   unreportedSettlements?: ReadonlySet<string>
+  heldSendsSnapshot?: { unreported: ReadonlySet<string> | undefined; sends: ReadonlySet<string> }
   /** Bounded identities for dispatches settled without an echo; a late replay still accepts one. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */

@@ -4,9 +4,9 @@ import {
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
 } from '../../../../../shared/agent-session/agent-session-wire'
+import { deliverReceiptSuffix } from './agent-session-subscriber-receipts'
 import { sameJournalCursor } from '../../../agent-session-journal/replay/journal-cursor'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {
   withPublishedWork,
   withPublishedWorkResult,
@@ -25,11 +25,9 @@ import {
   type SubscriberFrameCapture
 } from './agent-session-subscriber-frame-capture'
 import type { StructuredAgentSessionWorkFrameReader } from '../../observations/structured-agent-session-status-reader'
+import { capturedSubscriberPort, emitCaughtUp } from './agent-session-subscriber-checkpoint'
 import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
-import {
-  subscriberCommandsChanged,
-  type SubscriberFieldHooks
-} from './agent-session-subscriber-frame-fields'
+import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
 
@@ -40,6 +38,10 @@ export type SubscriberDeliveryPort = {
       sessionId: string,
       journal: AgentSessionJournal
     ) => Promise<StructuredAgentSessionObservedWork | null>
+    readCachedWork?: (
+      sessionId: string,
+      journal: AgentSessionJournal
+    ) => StructuredAgentSessionObservedWork | null
     readWorkFrame?: StructuredAgentSessionWorkFrameReader
     /** In-lane queue for a captured frame; never admits the lane itself. */
     captureQueuePublication?: (
@@ -55,6 +57,9 @@ export type SubscriberDeliveryPort = {
       journal?: AgentSessionJournal
       currentWork?: AgentSessionPublishedWork
       historyView?: string
+      current?: () => void
+      receiptsOnly?: true
+      restatement?: true
       queuePublication?: { value: QueuePublication | undefined }
     }
   ) => Promise<void>
@@ -67,6 +72,8 @@ type DeliveryInput = {
   journal: AgentSessionJournal
   hostNow: number
   emitCheckpoint: boolean
+  receiptsOnly?: boolean
+  queuePort?: () => SubscriberDeliveryPort
   activity?: AgentSessionTurnActivity | null | undefined
 }
 
@@ -104,6 +111,16 @@ async function deliver(
   if (subscriber.owedSnapshotFence !== undefined) {
     return publishSnapshotFrame(port, subscriber, journal, subscriber.owedSnapshotFence, shared)
   }
+  if (
+    input.receiptsOnly &&
+    activity === undefined &&
+    (await deliverReceiptSuffix(port, subscriber, journal, hostNow))
+  ) {
+    return undefined
+  }
+  if (input.receiptsOnly && input.queuePort) {
+    port = input.queuePort()
+  }
   const reader = subscriberHistoryReader(subscriber)
   const readPage = createAgentSessionCatchUpReader(journal, reader)
   while (true) {
@@ -125,7 +142,7 @@ async function deliver(
       return undefined
     }
     const { work } = frame
-    const delivery = capturedPort(port, journal, frame)
+    const delivery = capturedSubscriberPort(port, journal, frame)
     if (frame.value === undefined) {
       await emitCaughtUp(port, subscriber, journal, emitCheckpoint, shared, frame)
       return frame
@@ -146,7 +163,15 @@ async function deliver(
       }
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.workView = undefined
-      await refreshPublishedWork(delivery, subscriber, journal, work, frame.current, shared)
+      await refreshPublishedWork(
+        delivery,
+        subscriber,
+        journal,
+        work,
+        frame.current,
+        shared,
+        frame.queue
+      )
       return frame
     }
     const page = result.page
@@ -189,70 +214,18 @@ async function deliver(
     if (!page.hasNewer) {
       // The contiguous page already carries current fields and changed submissions.
       if (work && work.workViewKey() !== subscriber.workView) {
-        await refreshPublishedWork(delivery, subscriber, journal, work, frame.current, shared)
+        await refreshPublishedWork(
+          delivery,
+          subscriber,
+          journal,
+          work,
+          frame.current,
+          shared,
+          frame.queue
+        )
       }
       return frame
     }
-  }
-}
-
-/** Every emission of a captured frame, restatements included, carries its own work and queue. */
-function capturedPort(
-  port: SubscriberDeliveryPort,
-  journal: AgentSessionJournal,
-  frame: SubscriberFrameCapture<unknown>
-): SubscriberDeliveryPort {
-  return {
-    ...port,
-    emit: (target, event, options) =>
-      port.emit(target, event, {
-        ...options,
-        currentWork: frame.work,
-        journal,
-        ...(frame.queue ? { queuePublication: frame.queue } : {})
-      })
-  }
-}
-
-async function emitCaughtUp(
-  port: SubscriberDeliveryPort,
-  subscriber: Subscriber,
-  journal: AgentSessionJournal,
-  emitCheckpoint: boolean,
-  shared: {
-    hostNow: number
-    activity?: AgentSessionTurnActivity | null
-  },
-  frame: SubscriberFrameCapture<unknown>
-): Promise<void> {
-  const commandsChanged = subscriberCommandsChanged(port.hooks, subscriber)
-  // Ownership/exit changes without rows still require current-work restatement.
-  const { work, queue } = frame
-  const workChanged = work !== undefined && work.workViewKey() !== subscriber.workView
-  if (workChanged) {
-    await refreshPublishedWork(
-      capturedPort(port, journal, frame),
-      subscriber,
-      journal,
-      work,
-      frame.current,
-      shared
-    )
-    return
-  }
-  const queuedChanged = queue !== undefined && queue.value !== subscriber.queuePublication
-  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
-    await port.emit(
-      subscriber,
-      {
-        type: 'batch',
-        sessionId: subscriber.sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence: subscriber.fence,
-        ...shared
-      },
-      { currentWork: work, ...(queue ? { queuePublication: queue } : {}) }
-    )
   }
 }
 
@@ -282,7 +255,7 @@ async function publishSnapshotFrame(
   if (!frame) {
     return undefined
   }
-  const delivery = capturedPort(port, journal, frame)
+  const delivery = capturedSubscriberPort(port, journal, frame)
   const page = withPublishedWork(frame.value, frame.work)
   await delivery.emit(subscriber, {
     type: 'snapshot',
@@ -300,6 +273,14 @@ async function publishSnapshotFrame(
   subscriber.owedSnapshotFence = undefined
   // The replacement dropped client restatements; owe them until every follow-up lands.
   subscriber.workView = undefined
-  await refreshPublishedWork(delivery, subscriber, journal, frame.work, frame.current, shared)
+  await refreshPublishedWork(
+    delivery,
+    subscriber,
+    journal,
+    frame.work,
+    frame.current,
+    shared,
+    frame.queue
+  )
   return frame
 }

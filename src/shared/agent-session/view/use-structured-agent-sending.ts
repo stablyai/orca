@@ -55,7 +55,7 @@ export function StructuredAgentSendingScope({
 }: {
   source?: StructuredAgentSendingSource
   isDisplayed: (id: string) => boolean
-  children: ReactNode
+  children?: ReactNode
 }): ReactNode {
   return createElement(
     StructuredAgentSendingContext,

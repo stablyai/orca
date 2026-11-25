@@ -498,6 +498,7 @@ it('refuses a provider receipt issued against a retired journal epoch', () => {
         target,
         {
           kind: 'dispatch-written',
+          handoverCursor: { epoch: target.epoch, sequence: f.attempt('send')!.handover!.sequence },
           clientMessageId: 'send',
           fence: 1,
           observedAt: now,

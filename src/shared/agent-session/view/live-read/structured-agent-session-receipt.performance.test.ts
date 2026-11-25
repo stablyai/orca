@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
-import { useMemo } from 'react'
-import { createStructuredAgentSendingSource } from '../use-structured-agent-sending'
+import { act, render, renderHook } from '@testing-library/react'
+import { createElement, useMemo } from 'react'
+import {
+  createStructuredAgentSendingSource,
+  StructuredAgentSendingScope
+} from '../use-structured-agent-sending'
 import { structuredAgentSessionSendingItemIds } from '../structured-agent-session-sending'
 import { expect, it, vi } from 'vitest'
 import type {
@@ -74,7 +77,7 @@ const { createReadOwner } = await vi.importActual<{
     sessionId: string,
     target: { kind: 'local' }
   ) => DeliveryOwner & {
-    getSnapshot: () => object
+    getSnapshot: () => { state: StructuredAgentSessionState }
     getReadCursor: () => { epoch: string; sequence: number } | null
     subscribe: DeliveryOwner['subscribeDelivery']
     publishCreated: (page: AgentSessionHistoryPage) => void
@@ -344,6 +347,12 @@ it.each([
   }
 )
 
+const { NativeChatTurnActivityLine } = await vi.importActual<{
+  NativeChatTurnActivityLine: React.ComponentType<{
+    line: { thinking: boolean; stopping: boolean; activityText: null; reasoning: null }
+  }>
+}>('../../../../renderer/src/components/native-chat/messages/reasoning/NativeChatTurnActivityLine')
+
 // PR #45057: desktop transcript subscribers stay asleep as the delivery cursor advances.
 it('publishes only delivery updates to desktop subscribers for receipts', () => {
   const transport = vi.mocked(startStructuredAgentSessionReadTransport)
@@ -374,20 +383,40 @@ it('publishes only delivery updates to desktop subscribers for receipts', () => 
   const delivery = vi.fn()
   const unsubscribeBulk = owner.subscribe(bulk)
   const unsubscribeDelivery = owner.subscribeDelivery(delivery)
+  const source = createStructuredAgentSendingSource(
+    { subscribe: owner.subscribeDelivery, getSnapshot: owner.getSubmissionReceipts },
+    [],
+    previous.state.submissions
+  )
+  const activity = render(
+    createElement(
+      StructuredAgentSendingScope,
+      { source, isDisplayed: (id) => id === 'orca:opener' },
+      createElement(NativeChatTurnActivityLine, {
+        line: { thinking: false, stopping: true, activityText: null, reasoning: null }
+      })
+    )
+  )
+  const activityLines = () =>
+    activity.container.querySelectorAll('[data-native-chat-turn-activity]')
   try {
-    deliver(batch(2, [{ ...SEND, writtenAt: 2000 }], [], null))
+    expect(activityLines()).toHaveLength(0)
+    act(() => deliver(batch(2, [{ ...SEND, writtenAt: 2000 }], [], null)))
+    expect(activityLines()).toHaveLength(1)
     expect(owner.getSnapshot()).toBe(previous)
     expect(owner.getReadCursor()).toEqual({ epoch: EPOCH, sequence: 2 })
     expect(owner.getSubmissionReceipts().get('opener')).toBe(2000)
     expect(delivery).toHaveBeenCalledTimes(1)
     expect(bulk).not.toHaveBeenCalled()
 
-    deliver(batch(3, [{ ...SEND, fence: 3 }], [], null))
+    act(() => deliver(batch(3, [{ ...SEND, fence: 3 }], [], null)))
+    expect(activityLines()).toHaveLength(0)
     expect(owner.getSnapshot()).not.toBe(previous)
     expect(owner.getSubmissionReceipts().get('opener')).toBeUndefined()
     expect(delivery).toHaveBeenCalledTimes(2)
     expect(bulk).toHaveBeenCalledTimes(1)
   } finally {
+    activity.unmount()
     unsubscribeBulk()
     unsubscribeDelivery()
     release()

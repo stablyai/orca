@@ -18,6 +18,7 @@ import type {
 const SESSION = '00000000-0000-4000-8000-00000000c1a0'
 const SENT = 'ec94ea32-e87c-4cef-9ff1-be319d2e77a5'
 const RESULT = '5bfd911d-c26b-4598-bc75-959a8a2fd86d'
+const HANDOVER = { epoch: 'chat-epoch', sequence: 17 }
 const FOLLOW_UP = 'f9123a8b-15b2-49f3-a00c-135976b198f7'
 
 const lifecycle = (state: string, uuid = SENT): Record<string, unknown> => ({
@@ -55,7 +56,12 @@ const stopFrames: Record<string, unknown>[] = [
 function fixture(connection?: Partial<ClaudeSession['connection']>) {
   const writes: AgentJournalRenderItem[] = []
   const settled: ClaudeLateDispatchOutcome[] = []
-  const receipts: { clientMessageId: string; fence: number; observedAt: number }[] = []
+  const receipts: {
+    clientMessageId: string
+    fence: number
+    handoverCursor: typeof HANDOVER
+    observedAt: number
+  }[] = []
   const dispatchWaiters: ClaudeDispatchWaiter[] = []
   const translator = createClaudeJournalTranslator({
     steerAwaitingEcho: (kind) =>
@@ -103,6 +109,17 @@ function fixture(connection?: Partial<ClaudeSession['connection']>) {
     })
   return {
     session,
+    arm: (acceptsResult: boolean, uuid: string, clientMessageId: string, requestedAt: number) =>
+      waitForReplay(
+        session,
+        acceptsResult,
+        uuid,
+        'key',
+        clientMessageId,
+        requestedAt,
+        session.fence,
+        HANDOVER
+      ),
     frame,
     settled,
     receipts,
@@ -132,7 +149,7 @@ it.each([true, false])(
   'keeps the start and real echo identity through pre-echo output (root init %s)',
   (rootInit) => {
     const f = fixture()
-    waitForReplay(f.session, false, SENT, 'key', 'client-1', 1000)
+    f.arm(false, SENT, 'client-1', 1000)
     f.frame(lifecycle('queued'), 1500)
     expect(f.turns()).toEqual([])
     f.frame(lifecycle('started'), 2000)
@@ -144,7 +161,9 @@ it.each([true, false])(
     const echoedUuid = 'e798686a-cd6f-4eb6-8b9a-3e3584b34ad9'
     f.frame(echo(echoedUuid, SENT), 4000)
 
-    expect(f.receipts).toEqual([{ clientMessageId: 'client-1', fence: 3, observedAt: 1500 }])
+    expect(f.receipts).toEqual([
+      { clientMessageId: 'client-1', fence: 3, handoverCursor: HANDOVER, observedAt: 1500 }
+    ])
     expect(f.turns().map((item) => item.body)).toEqual([
       {
         kind: 'turn',
@@ -167,23 +186,25 @@ it.each([true, false])(
 
 it('leaves an echoed fold on the existing turn', () => {
   const f = fixture()
-  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.arm(false, SENT, 'opener', 1000)
   f.frame(lifecycle('started'), 2000)
   f.frame(echo(SENT), 2500)
   const folded = 'c446ca04-5cac-4ac5-8fb8-7c08708fd5d9'
-  waitForReplay(f.session, false, folded, 'key', 'folded', 3000)
+  f.arm(false, folded, 'folded', 3000)
   f.frame(echo(folded), 3500)
   f.frame(lifecycle('started', folded), 4000)
   expect(f.turns()).toHaveLength(1)
-  expect(f.receipts).toEqual([{ clientMessageId: 'opener', fence: 3, observedAt: 2000 }])
+  expect(f.receipts).toEqual([
+    { clientMessageId: 'opener', fence: 3, handoverCursor: HANDOVER, observedAt: 2000 }
+  ])
 })
 
 it('opens a priority steer at its matched start after the parent ends', () => {
   const f = fixture()
-  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.arm(false, SENT, 'opener', 1000)
   f.frame(lifecycle('started'), 2000)
   f.frame(echo(SENT), 2500)
-  const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 4500)
+  const { waiter } = f.arm(false, FOLLOW_UP, 'steer', 4500)
   waiter.steers = true
   f.frame(lifecycle('queued', FOLLOW_UP), 4750)
   f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 5000)
@@ -197,8 +218,8 @@ it('opens a priority steer at its matched start after the parent ends', () => {
     { turnId: FOLLOW_UP, state: 'running', userItemId: 'orca:steer', startedAt: 6000 }
   ])
   expect(f.receipts).toEqual([
-    { clientMessageId: 'opener', fence: 3, observedAt: 2000 },
-    { clientMessageId: 'steer', fence: 3, observedAt: 4750 }
+    { clientMessageId: 'opener', fence: 3, handoverCursor: HANDOVER, observedAt: 2000 },
+    { clientMessageId: 'steer', fence: 3, handoverCursor: HANDOVER, observedAt: 4750 }
   ])
   expect(f.settled.at(-1)).toEqual({
     clientMessageId: 'steer',
@@ -210,10 +231,10 @@ it.each([false, true])(
   'revises an echoed follow-up to its matched start (output first: %s)',
   (outputFirst) => {
     const f = fixture()
-    waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+    f.arm(false, SENT, 'opener', 1000)
     f.frame(lifecycle('started'), 2000)
     f.frame(echo(SENT), 2500)
-    const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 4500)
+    const { waiter } = f.arm(false, FOLLOW_UP, 'steer', 4500)
     waiter.steers = true
     f.frame(lifecycle('queued', FOLLOW_UP), 4750)
     f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 5000)
@@ -233,8 +254,8 @@ it.each([false, true])(
       { turnId: FOLLOW_UP, state: 'running', startedAt: outputFirst ? 5500 : 6000 }
     ])
     expect(f.receipts).toEqual([
-      { clientMessageId: 'opener', fence: 3, observedAt: 2000 },
-      { clientMessageId: 'steer', fence: 3, observedAt: 4750 }
+      { clientMessageId: 'opener', fence: 3, handoverCursor: HANDOVER, observedAt: 2000 },
+      { clientMessageId: 'steer', fence: 3, handoverCursor: HANDOVER, observedAt: 4750 }
     ])
   }
 )
@@ -247,10 +268,10 @@ it('opens and can stop a late steer from its echo on CLIs without lifecycle fram
       return undefined
     }
   })
-  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.arm(false, SENT, 'opener', 1000)
   f.frame(echo(SENT), 2000)
   f.frame(output, 2500)
-  const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 3000)
+  const { waiter } = f.arm(false, FOLLOW_UP, 'steer', 3000)
   waiter.steers = true
   f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 4000)
   f.frame(echo(FOLLOW_UP), 5000)
@@ -277,10 +298,10 @@ it('opens and can stop a late steer from its echo on CLIs without lifecycle fram
 
 it.each([false, true])('keeps a steer in its open turn (cut-short step %s)', (cutShort) => {
   const f = fixture()
-  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.arm(false, SENT, 'opener', 1000)
   f.frame(lifecycle('started'), 2000)
   f.frame(echo(SENT), 2500)
-  const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 3000)
+  const { waiter } = f.arm(false, FOLLOW_UP, 'steer', 3000)
   waiter.steers = true
   if (cutShort) {
     f.frame({ ...stopFrames[3], is_error: false }, 3500)
@@ -314,7 +335,7 @@ it('starts and can stop a plain follow-up when its parent ends during send prepa
       return undefined
     }
   })
-  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.arm(false, SENT, 'opener', 1000)
   f.frame(lifecycle('started'), 2000)
   f.frame(echo(SENT), 2500)
   f.frame(output, 3000)
@@ -363,7 +384,7 @@ it.each(['started', 'echo', 'output'])('times compaction from provider %s eviden
     sentUuid: SENT,
     running: { kind: 'turn', turnId: command.turnId, state: 'running', requestedAt: 1000 }
   })
-  waitForReplay(f.session, true, SENT, 'key', 'compact-send', 1000)
+  f.arm(true, SENT, 'compact-send', 1000)
   if (evidence === 'started') {
     f.frame(lifecycle('queued'), 1500)
   }
@@ -388,16 +409,16 @@ it.each(['started', 'echo', 'output'])('times compaction from provider %s eviden
 
 it('ignores receipt and start evidence from retired and superseded dispatch attempts', () => {
   const f = fixture()
-  const { waiter } = waitForReplay(f.session, false, SENT, 'key', 'retired', 1000)
+  const { waiter } = f.arm(false, SENT, 'retired', 1000)
   retireWaiter(f.session, waiter)
   f.frame(lifecycle('started'), 2000)
 
   const rebound = '91c6ca44-dd3d-40dd-b059-3c18f4c6440c'
-  waitForReplay(f.session, false, rebound, 'key', 'rebound', 1000)
+  f.arm(false, rebound, 'rebound', 1000)
   f.frame(lifecycle('queued', rebound), 2500, false)
   f.frame(lifecycle('started', rebound), 3000, false)
   const stale = 'ea0b78b1-d411-4d2b-853a-ceca93caf2a0'
-  waitForReplay(f.session, false, stale, 'key', 'stale', 2000)
+  f.arm(false, stale, 'stale', 2000)
   f.session.fence = 4
   f.frame(lifecycle('started', stale), 3500)
   expect(f.receipts).toEqual([])
@@ -406,7 +427,7 @@ it('ignores receipt and start evidence from retired and superseded dispatch atte
 
 it('settles a dropped prompt as rejected and suppresses the already-opened turn duration', async () => {
   const f = fixture()
-  const { promise } = waitForReplay(f.session, false, SENT, 'key', 'client-1', 1000)
+  const { promise } = f.arm(false, SENT, 'client-1', 1000)
   for (const [index, frame] of stopFrames.entries()) {
     f.frame(frame, 1000 * (index + 2))
   }

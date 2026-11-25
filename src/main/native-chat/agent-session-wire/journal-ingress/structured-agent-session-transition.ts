@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type {
   JournalStepOutcome,
@@ -46,6 +47,7 @@ export type StructuredAgentSessionTransition = {
 
 export type StructuredAgentSessionTransitionSink = {
   recordProviderReceipt?(receipt: {
+    handoverCursor: AgentJournalCursor
     clientMessageId: string
     fence: number
     observedAt: number
