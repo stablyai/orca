@@ -32,29 +32,13 @@ export function nameRefusingComputer(error: unknown, computer: string): unknown 
 
 type PreflightRuntime = Pick<
   OrcaRuntimeService,
-  | 'getStructuredAgentSessionCreateSupport'
-  | 'detectProjectLaunchContext'
-  | 'resolveRepoMainWorktreeId'
-  | 'showManagedWorktree'
+  'getStructuredAgentSessionCreateSupport' | 'detectProjectLaunchContext'
 >
-
-/** A checkout Orca knows, never a guess: unknown support would turn a chat into a terminal. */
-async function repoCheckoutStandIn(
-  runtime: PreflightRuntime,
-  repoSelector: string
-): Promise<string | undefined> {
-  try {
-    const id = await runtime.resolveRepoMainWorktreeId(repoSelector)
-    return (await runtime.showManagedWorktree(`id:${id}`)).id
-  } catch {
-    return undefined
-  }
-}
 
 /**
  * Settle the worker's mode, and that its agent can run, on the computer that runs it, before any
- * workspace exists. A new workspace is checked through its repo's own checkout on the same host;
- * the created workspace is checked again once it exists.
+ * workspace exists. A new workspace is checked through the repo it will be created in, which runs
+ * where the workspace will; the created workspace is checked again once it exists.
  */
 export async function preflightWorkerAgentOnHost(args: {
   runtime: PreflightRuntime
@@ -66,13 +50,11 @@ export async function preflightWorkerAgentOnHost(args: {
   terminal?: string
 }): Promise<WorkerStartModeReceipt> {
   const { runtime, agent, creationTarget } = args
-  const hostWorktreeId =
-    args.resolvedWorktree?.id ??
-    (creationTarget ? await repoCheckoutStandIn(runtime, creationTarget.repoSelector) : undefined)
+  const place = args.resolvedWorktree ? { worktreeId: args.resolvedWorktree.id } : creationTarget
   // The chat check adds "new enough" for chats; a too-old CLI falls back or refuses there.
-  const mode = await resolveWorkerStartModeOnHost(runtime, args.mode, hostWorktreeId, agent)
+  const mode = await resolveWorkerStartModeOnHost(runtime, args.mode, place, agent)
   const repoSelector = creationTarget?.repoSelector ?? args.resolvedWorktree?.repoId
-  // Installed is checked for every mode: a chat check without a checkout to run in proves nothing.
+  // Installed is checked for every mode: a chat check alone never proves the CLI is there.
   await refuseUninstalledWorkerAgent(runtime, { agent, repoSelector, terminal: args.terminal })
   return mode
 }

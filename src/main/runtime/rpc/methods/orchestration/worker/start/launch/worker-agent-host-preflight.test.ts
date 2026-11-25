@@ -45,24 +45,53 @@ it('refuses a worker whose agent its computer lacks before any terminal or Dispa
   db.close()
 })
 
-it("refuses a new workspace's chat worker whose agent is missing when no checkout can stand in", async () => {
+/** A host whose repo `repo` has Claude installed, and whose chat support for it is `support`. */
+function repoHost(support: { supported: boolean; reason?: 'agent' }) {
+  const asked: string[] = []
   const runtime = {
-    // The repo's own checkout isn't one Orca manages, so the chat check has nowhere to run.
-    resolveRepoMainWorktreeId: async () => 'repo::/src/repo',
-    showManagedWorktree: async () => {
-      throw new Error('selector_not_found')
+    getStructuredAgentSessionCreateSupport: async (place: string | { repo: string }) => {
+      // A workspace about to be created has no worktree to ask about, only its repo.
+      if (typeof place === 'string') {
+        throw new Error(`asked about a worktree: ${place}`)
+      }
+      asked.push(place.repo)
+      return support
     },
-    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     detectProjectLaunchContext: async () => ({
       agents: ['claude' as const],
       workspaceKind: 'git-worktree' as const,
       executionContext: { kind: 'ssh' as const }
     })
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preflight reads only these runtime methods.
+  return { runtime: runtime as never, asked }
+}
+
+const DEFAULT_CHAT = {
+  mode: 'structured' as const,
+  preferred: 'structured' as const,
+  reason: 'user_default' as const,
+  detail: 'chat'
+}
+
+it("reads a new workspace's chat support from the repo it will be created in, before creating it", async () => {
+  const { runtime, asked } = repoHost({ supported: false, reason: 'agent' })
+  const mode = await preflightWorkerAgentOnHost({
+    runtime,
+    mode: DEFAULT_CHAT,
+    agent: 'claude',
+    creationTarget: { repoSelector: 'repo' }
+  })
+  expect(asked).toEqual(['repo'])
+  // A CLI too old for chats falls back to a terminal before any workspace exists.
+  expect(mode.mode).toBe('terminal')
+})
+
+it("refuses a new workspace's chat worker whose agent the repo's computer lacks", async () => {
+  const { runtime } = repoHost({ supported: true })
   const refused = await preflightWorkerAgentOnHost({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preflight reads only these runtime methods.
-    runtime: runtime as never,
-    mode: { mode: 'structured', preferred: 'structured', reason: 'requested', detail: 'chat' },
+    runtime,
+    mode: DEFAULT_CHAT,
     agent: 'codex',
     creationTarget: { repoSelector: 'repo' }
   }).catch((error: unknown) => error)

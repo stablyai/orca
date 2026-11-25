@@ -14,7 +14,7 @@ import { CLAUDE_STOP_GRACE_MS } from '../turns/claude-request-end-wait'
 /** The turn each session last interrupted for a rejected credential, so one turn interrupts once. */
 const authStoppedTurns = new WeakMap<ClaudeSession, string>()
 
-/** Claude retries a rejected credential ten times; the first retry already says sign-in is needed. */
+/** Claude's blind retry loop on a credential its refresh couldn't fix (see claudeAuthRetryStatus) never clears. */
 function stopClaudeAuthRetries(
   session: ClaudeSession,
   logger: ClaudeEventDelivery['deps']['logger']
