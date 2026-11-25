@@ -108,25 +108,26 @@ export function renderWorktreeSectionHeaderRow(
       ))
     : undefined
   const isDraggableRepoHeader = Boolean(
-    headerDrag.canReorderRepoHeaders &&
     projectIdForHeader &&
     repoHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
+    (headerDrag.canMoveRepoHeadersBetweenGroups ||
+      (headerDrag.canReorderRepoHeaders &&
+        (rootProjectHeaderCount !== undefined
+          ? rootProjectHeaderCount > 1
+          : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)))
   )
+  // Why: with nesting a lone group can still move into another group, so any group header drags.
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupDragIdForHeader &&
-    projectGroupHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-          0) > 1)
+    projectGroupHeaderBucketKey
   )
   const isDraggingThis =
-    headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
+    isDraggableRepoHeader && headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
+  const isProjectDropTarget =
+    projectGroupIdForHeader !== undefined &&
+    (headerDrag.repoDrag.state.dropTargetGroupId === projectGroupIdForHeader ||
+      headerDrag.projectGroupDrag.state.dropTargetGroupId === projectGroupIdForHeader)
   const isDraggingThisProjectGroup =
     headerDrag.canReorderProjectGroupHeaders &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
@@ -239,6 +240,8 @@ export function renderWorktreeSectionHeaderRow(
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
             (isDraggingThis || isDraggingThisProjectGroup) &&
               'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
+            isProjectDropTarget &&
+              'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
             headerWorkspaceStatus &&
               ctx.dragOverStatus === headerWorkspaceStatus &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
@@ -366,8 +369,10 @@ export function renderWorktreeSectionHeaderRow(
                 hostId={projectGroupHostIdForHeader}
                 label={label}
                 projectGroup={folderBackedProjectGroup}
+                projectGroups={ctx.projectGroups}
                 onRefreshProjectGroup={ctx.onRefreshProjectGroup}
                 onRename={ctx.onRenameProjectGroup}
+                onCreateSubgroup={ctx.onCreateProjectSubgroup}
                 onDelete={ctx.onDeleteProjectGroup}
               />
             ) : null}

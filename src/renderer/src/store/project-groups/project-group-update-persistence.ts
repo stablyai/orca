@@ -12,11 +12,14 @@ import {
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
+// Why: older hosts strip keys they don't know, so an unapplied move or order must read as a failure.
 function groupOrderMatchesUpdate(
   group: ProjectGroup,
   updates: ProjectGroupMutation['updates']
 ): boolean {
   return (
+    (updates.parentGroupId === undefined ||
+      (group.parentGroupId ?? null) === updates.parentGroupId) &&
     (updates.rootProjectOrder === undefined ||
       (group.rootProjectOrder ?? null) === updates.rootProjectOrder) &&
     (updates.tabOrder === undefined || group.tabOrder === updates.tabOrder)

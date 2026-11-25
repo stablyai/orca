@@ -29,7 +29,17 @@ export const ProjectGroupUpdateArgs = z.object({
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
     rootProjectOrder: z.number().finite().nullable().optional(),
-    color: z.string().nullable().optional()
+    parentGroupId: z.string().min(1).nullable().optional(),
+    color: z.string().nullable().optional(),
+    remoteMembers: z
+      .array(
+        z.object({
+          hostId: z.string().min(1),
+          projectId: z.string().min(1),
+          order: z.number().finite().optional()
+        })
+      )
+      .optional()
   })
 })
 

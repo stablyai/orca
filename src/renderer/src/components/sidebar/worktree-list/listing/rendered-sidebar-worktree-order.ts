@@ -13,6 +13,7 @@ import {
   getSettingsFocusedExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { selectSidebarRepos } from '@/store/project-groups/project-group-remote-members'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
@@ -76,7 +77,7 @@ export function computeRenderedSidebarRows(
     state.worktreeCardProperties
   )
 
-  const repoMap = getIndexedRepoMap(state.repos)
+  const repoMap = getIndexedRepoMap(selectSidebarRepos(state))
   const rows = planSidebarRows({
     groupBy: state.groupBy,
     sortBy: state.sortBy,

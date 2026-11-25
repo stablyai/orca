@@ -7,6 +7,13 @@ import type {
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
 import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
+import type { ProjectGroupHeaderNesting } from './project-group-header-nesting-drop'
+
+/** A drop that changes the dragged group's parent; null parent means the top level. */
+export type ProjectGroupNestingDrop = {
+  parentGroupId: string | null
+  rootOrder: { visibleKeys: string[]; dropIndex: number } | null
+}
 
 export type ProjectGroupDragState = {
   draggingGroupId: string | null
@@ -14,6 +21,8 @@ export type ProjectGroupDragState = {
   dropIndicatorY: number | null
   /** How far each other row slides to open the drop gap; only with a floating preview. */
   previewOffsetsById?: ReadonlyMap<string, number>
+  /** Group the dragged group would move into. */
+  dropTargetGroupId?: string | null
 }
 
 export const INITIAL_PROJECT_GROUP_DRAG_STATE: ProjectGroupDragState = {
@@ -32,6 +41,7 @@ export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
   getScrollContainer: () => HTMLElement | null
   /** Drag a floating copy of the row, as workspace rows do, rather than lifting it in place. */
   floatingPreview?: boolean
+  nesting?: ProjectGroupHeaderNesting
 }
 
 export type ProjectGroupHeaderDragController = {
@@ -41,6 +51,7 @@ export type ProjectGroupHeaderDragController = {
 
 export type ProjectGroupHeaderDragSession = {
   groupId: string
+  parentGroupId: string | null
   bucketKey: ProjectGroupHeaderDragBucketKey
   sidebarProjectGroupHeaderIds: readonly string[]
   rootProjectHeaderKeys?: readonly string[]
@@ -52,6 +63,7 @@ export type ProjectGroupHeaderDragSession = {
   startY: number
   latestPointerY: number
   promoted: boolean
+  nestingDrop?: ProjectGroupNestingDrop
 }
 
 export const PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX = 4

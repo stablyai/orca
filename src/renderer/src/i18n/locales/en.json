@@ -2520,7 +2520,7 @@
           "wslFilesystemBoundaryTitle": "This project is stored on a Windows drive",
           "wslFilesystemBoundaryDescription": "Git for this project runs in {{distro}}, which reaches Windows drives over the WSL filesystem bridge. Expect git to be roughly 20x slower than it would be on a copy stored inside {{distro}}.",
           "moveToGroupOtherHost": "Could not move project to group",
-          "moveToGroupOtherHostDesc": "The computer this project runs on does not have this group. A project can only join groups saved on its own computer.",
+          "moveToGroupOtherHostDesc": "This group is saved on another computer. A project can join groups saved on its own computer or on this one.",
           "pendingRemovalRefused": "The server kept a project you removed while it was offline",
           "removeProjectHostUnreachable": "Its server can’t be reached. Remove it from this desktop now, and Orca removes it from the server when it reconnects.",
           "removeProjectLocallyNow": "Remove from this desktop now",
@@ -7724,7 +7724,9 @@
           "92154beb7e": "New workspace",
           "addProject": "Add project",
           "expandAllProjects": "Expand all projects",
-          "collapseAllProjects": "Collapse all projects"
+          "collapseAllProjects": "Collapse all projects",
+          "newProjectGroupDesc": "Create an empty group. Drag projects into it or use Move to group.",
+          "newProjectGroupFailed": "Could not create group"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -8045,6 +8047,14 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "groupRenameFailed": "Failed to rename group",
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
+          "groupMoveFailed": "Failed to move group",
+          "groupMoveFailedDesc": "Orca could not confirm the move with the group's host. Recheck the group after reconnecting.",
+          "newSubgroup": "New subgroup…",
+          "newSubgroupTitle": "New Subgroup",
+          "newSubgroupDesc": "Create an empty group inside this group.",
+          "subgroupCreateFailed": "Failed to create subgroup",
+          "moveGroupTo": "Move group to",
+          "groupTopLevel": "Top level",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
           "failedUnnestWorkspace": "Failed to unnest workspace",
@@ -8821,7 +8831,8 @@
           "addRemoteHost": "Add remote host…",
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
-          "createNewProject": "Create new project…"
+          "createNewProject": "Create new project…",
+          "newProjectGroup": "New project group…"
         }
       },
       "shared": {

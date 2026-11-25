@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
 import '@/store/project-groups/project-group-owner-routing'
+import { selectSidebarRepos } from '@/store/project-groups/project-group-remote-members'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
@@ -28,10 +29,12 @@ import {
   getRootProjectHeaderCountByOccurrenceKey,
   getSidebarRootProjectHeaderKeys
 } from './root-project-header-drop'
+import { useProjectHeaderGroupMove } from './use-project-header-group-move'
+import { useProjectGroupHeaderNesting } from './use-project-group-header-nesting'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
+const readLiveRepos = (): readonly Repo[] => selectSidebarRepos(useAppStore.getState())
 
 export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHeaderDrag>
 
@@ -89,6 +92,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
+  const canMoveRepoHeadersBetweenGroups = groupBy === 'repo' && hasProjectGroups
   const rootProjectHeaderKeys = useMemo(
     () =>
       hasProjectGroups
@@ -177,7 +181,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     [sidebarProjectGroupHeaderIdsByBucket]
   )
   const commitProjectGroupOrder = useCallback(
-    (project: Repo, projectGroupId: string | null, order: number) => {
+    (project: Repo, projectGroupId: string | null, order?: number) => {
       void moveProjectToGroup(project, projectGroupId, order)
     },
     [moveProjectToGroup]
@@ -219,18 +223,37 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [onScrollIntent]
   )
-  // Drag applies only in manual order; still construct the controller inert for stable hook order.
+  const groupMove = useProjectHeaderGroupMove({
+    enabled: canMoveRepoHeadersBetweenGroups,
+    renderRows,
+    sidebarRepoHeaderIdsByBucket,
+    projectGroupOwnerHostIdByGroupId,
+    moveProjectToGroup,
+    onCommitRootProjectOrder: commitRootProjectOrder,
+    onScrollIntent
+  })
+  // Drag applies in manual order or between groups; still construct the controller inert for stable hook order.
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
     repoById: repoMap,
     getLiveRepos: readLiveRepos,
     usesProjectGroupOrdering: hasProjectGroups,
+    canReorder: canReorderRepoHeaders,
+    groupMove,
     onCommitRepoOrder: commitRepoReorder,
     onCommitProjectGroupOrder: commitProjectGroupOrder,
     rootProjectHeaderKeys,
     onCommitRootProjectOrder: commitRootProjectOrder,
     getScrollContainer: () => scrollRef.current
+  })
+  const projectGroupNesting = useProjectGroupHeaderNesting({
+    groupMove,
+    projectGroups,
+    projectGroupOwnerHostIdByGroupId,
+    rootProjectHeaderKeys,
+    onCommitRootProjectOrder: commitRootProjectOrder,
+    onScrollIntent
   })
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket,
@@ -238,7 +261,8 @@ export function useWorktreeSidebarHeaderDrag(args: {
     onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
     rootProjectHeaderKeys,
     onCommitRootProjectOrder: commitRootProjectOrder,
-    getScrollContainer: () => scrollRef.current
+    getScrollContainer: () => scrollRef.current,
+    nesting: projectGroupNesting
   })
   const repoHeaderSectionEndByRepoId = useMemo(
     () =>
@@ -270,6 +294,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     rootProjectHeaderSectionEndByKey,
     canReorderRepoHeaders,
     canReorderProjectGroupHeaders,
+    canMoveRepoHeadersBetweenGroups,
     rootProjectHeaderKeys,
     orderedHostIds,
     hostDrag,

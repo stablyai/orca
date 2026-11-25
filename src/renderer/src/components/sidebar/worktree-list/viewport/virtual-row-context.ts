@@ -96,6 +96,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       toggleAllProjects: props.onToggleAllProjects,
       projectActions: args.projectActions,
       onRenameProjectGroup: props.handleRenameProjectGroup,
+      onCreateProjectSubgroup: props.handleCreateProjectSubgroup,
       onDeleteProjectGroup: props.handleDeleteProjectGroup,
       onRefreshProjectGroup: props.handleRefreshProjectGroup,
       onCreateFolderWorkspace: props.handleCreateFolderWorkspace,

@@ -15,6 +15,7 @@ import type { ProjectGroup } from '../../../../../../shared/project/groups/proje
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
+import { ProjectGroupNestingMenuItems } from './project-group-nesting-menu'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
@@ -27,8 +28,10 @@ export function ProjectGroupHeaderMenu({
   hostId,
   label,
   projectGroup,
+  projectGroups,
   onRefreshProjectGroup,
   onRename,
+  onCreateSubgroup,
   onDelete
 }: {
   groupId: string
@@ -36,8 +39,10 @@ export function ProjectGroupHeaderMenu({
   hostId?: ExecutionHostId
   label: string
   projectGroup: ProjectGroup | null
+  projectGroups: readonly ProjectGroup[]
   onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
+  onCreateSubgroup: (parentGroupId: string, hostId: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -84,6 +89,14 @@ export function ProjectGroupHeaderMenu({
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
+        {hostId ? (
+          <ProjectGroupNestingMenuItems
+            groupId={groupId}
+            hostId={hostId}
+            projectGroups={projectGroups}
+            onCreateSubgroup={onCreateSubgroup}
+          />
+        ) : null}
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
           {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>

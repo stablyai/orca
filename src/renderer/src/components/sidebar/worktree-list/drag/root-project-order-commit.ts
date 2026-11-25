@@ -3,6 +3,7 @@ import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from '../../../../../../shared/
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import '@/store/project-groups/project-group-owner-routing'
+import { selectSidebarRepos } from '@/store/project-groups/project-group-remote-members'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRootProjectOrderUpdatesForSidebarDrop } from './root-project-header-drop'
@@ -15,9 +16,10 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
   onCommit: () => void
 }): Promise<boolean> {
   const { state } = args
+  const repos = selectSidebarRepos(state)
   const updates = getRootProjectOrderUpdatesForSidebarDrop({
     ...args,
-    repos: state.repos,
+    repos,
     projectGroups: state.projectGroups
   })
   if (updates.length === 0) {
@@ -37,7 +39,7 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
     }
     const repoId = update.entry.repo.id
     const order = update.rootProjectOrder
-    return getIndexedReposById(state.repos, repoId)
+    return getIndexedReposById(repos, repoId)
       .filter((repo) => !repo.projectGroupId || !groupCopiesById.has(repo.projectGroupId))
       .map((repo) => ({ repo, order }))
   })
