@@ -75,6 +75,8 @@ export async function sendRequest<TResult>(
     const statusRequestId = requestSelection ? randomUUID() : null
     let awaitingStatus = statusRequestId !== null
     let selectedParams = params
+    // Until the request itself is written, a timeout proves it never reached the runtime.
+    let requestWritten = false
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -86,7 +88,8 @@ export async function sendRequest<TResult>(
       reject(
         new RuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the Orca runtime to respond.'
+          'Timed out waiting for the Orca runtime to respond.',
+          requestWritten ? undefined : { requestSent: false }
         )
       )
     }, timeoutMs)
@@ -242,7 +245,6 @@ export async function sendRequest<TResult>(
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
-          orchestrationRetryAfterTimeout: envelope?.orchestrationRetryAfterTimeout,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource
@@ -256,6 +258,7 @@ export async function sendRequest<TResult>(
         }
         if (id === requestId) {
           requestSelection?.onDispatch?.()
+          requestWritten = true
         }
         socket.write(serialized)
       } catch (error) {

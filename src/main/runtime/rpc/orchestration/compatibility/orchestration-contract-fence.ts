@@ -5,6 +5,7 @@ import {
   type OrchestrationMigrationReason
 } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { isReplayOnlyRequest } from '../../../orchestration/db/mutation-receipts/replay-only-request'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from '../../core'
 import { errorResponse } from '../../responses/rpc-response'
 
@@ -20,7 +21,11 @@ export function orchestrationMigrationFence(
     reason = 'command_retired'
   } else if (request.orchestrationContractVersion === undefined) {
     reason = 'client_contract_missing'
-  } else if (request.orchestrationContractVersion !== ORCHESTRATION_CONTRACT_VERSION) {
+  } else if (
+    request.orchestrationContractVersion !== ORCHESTRATION_CONTRACT_VERSION &&
+    // Replay-only needs the request id whose receipt it replays.
+    !(isReplayOnlyRequest(request) && request.orchestrationRequestId)
+  ) {
     reason = 'client_contract_unsupported'
   }
   if (!reason) {

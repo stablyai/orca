@@ -2,6 +2,7 @@ import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { MessageType } from '../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { refuseReplayOnly } from '../../../orchestration/db/mutation-receipts/replay-only-request'
 import { bindCoordinatorMutationPayload } from '../../../orchestration/workers/reports/dispatch-message-binding'
 import type { LegacyCompatibilityAuthority } from './orchestration-legacy-authority'
 import {
@@ -38,6 +39,8 @@ export async function handleLegacyLifecycleSend(args: {
     }
     return undefined
   }
+  // Legacy lifecycle mail keeps its own operation record, not the receipt a replay-only retry needs.
+  refuseReplayOnly(request)
   if (!params.to) {
     throw new OrchestrationError('invalid_argument', 'Legacy lifecycle mail requires --to.')
   }

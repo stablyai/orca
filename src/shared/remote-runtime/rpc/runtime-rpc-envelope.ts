@@ -78,8 +78,6 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
-  /** Same-key retry after a timeout that may have reached the runtime; an absent receipt is refused. */
-  orchestrationRetryAfterTimeout?: true
   /** A paired Orca acting as the coordinator of one of its Runs on this server. */
   orchestrationPeerRun?: RemoteOwnedPeerRun
   compatibilityInvocationId?: string

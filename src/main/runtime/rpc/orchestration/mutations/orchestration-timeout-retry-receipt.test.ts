@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
+} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 
@@ -135,7 +138,7 @@ describe('worker_done retry after a possibly delivered timeout', () => {
     const retried = await dispatcher.dispatch({
       ...workerDone,
       id: 'rpc_worker_done_retry',
-      orchestrationRetryAfterTimeout: true
+      orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
     })
 
     expect(retried).toMatchObject({
@@ -180,12 +183,12 @@ describe('worker_done retry after a possibly delivered timeout', () => {
     const retried = await dispatcher.dispatch({
       ...workerDone,
       id: 'rpc_worker_done_retry',
-      orchestrationRetryAfterTimeout: true
+      orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
     })
 
     expect(retried).toMatchObject({
       ok: false,
-      error: { code: 'retry_receipt_absent' }
+      error: { code: 'retry_not_replayable', data: { reason: 'receipt_absent' } }
     })
     const messages = workerMessages()
     expect(messages).toHaveLength(1)
@@ -194,5 +197,51 @@ describe('worker_done retry after a possibly delivered timeout', () => {
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
     expect(db.getMutationReceipt(callerFingerprint, 'mutation_worker_done')).toBeUndefined()
     expect(receiptCount(db)).toBe(ledgerBeforeRetry)
+  })
+
+  it('refuses a contract it does not know before any effect, as an older runtime refuses replay-only', async () => {
+    const { db, activeRunId, workerDone, dispatcher, workerMessages } = setupWorker()
+    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
+    fillLedgerToOneFreeSlot(db)
+    const original = await dispatcher.dispatch(workerDone)
+    const originalMessageId = sentMessageId(original)
+    await dispatcher.dispatch({
+      id: 'rpc_competing',
+      authToken: 'test-token',
+      method: 'orchestration.taskCreate',
+      params: { spec: 'Competing work', run: activeRunId, callerTerminalHandle: 'term_coord' },
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'mutation_competing'
+    })
+    expect(db.getMutationReceipt(callerFingerprint, 'mutation_worker_done')).toBeUndefined()
+
+    // A runtime that predates replay-only takes it as an unknown contract, the same refusal.
+    const retried = await dispatcher.dispatch({
+      ...workerDone,
+      id: 'rpc_worker_done_retry',
+      orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION + 1
+    })
+
+    expect(retried).toMatchObject({
+      ok: false,
+      error: { code: 'orchestration_migration_required' }
+    })
+    expect(workerMessages().map((message) => message.id)).toEqual([originalMessageId])
+  })
+
+  it('refuses a replay-only request that carries no request id to replay', async () => {
+    const { workerDone, dispatcher, workerMessages } = setupWorker()
+    const { orchestrationRequestId: _omitted, ...unkeyed } = workerDone
+
+    const refused = await dispatcher.dispatch({
+      ...unkeyed,
+      orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
+    })
+
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { code: 'orchestration_migration_required' }
+    })
+    expect(workerMessages()).toHaveLength(0)
   })
 })

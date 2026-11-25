@@ -139,6 +139,8 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       sendParams,
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined,
       // Workers report once before ending their turn; retry outages and timeouts so worker_done is not lost.
+      // The budget bounds when a retry may start: an attempt can wait the full send timeout, so a
+      // timed-out report gets one replay of the same request, not a series.
       type === 'worker_done' ? WORKER_DONE_RETRY_MS : 0
     )
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)

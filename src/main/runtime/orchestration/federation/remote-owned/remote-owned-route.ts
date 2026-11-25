@@ -28,6 +28,7 @@ import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { OrchestrationError } from '../../orchestration-error'
+import { refuseReplayOnly } from '../../db/mutation-receipts/replay-only-request'
 import { latestRunLink, repairedListError } from './re-paired-run-list'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
@@ -76,6 +77,8 @@ export async function routeRemoteOwnedCall(
     return on === undefined ? LOCAL : routeServerCall(runtime, request, access, values, ctx, on)
   }
   checkDeclaredOrchestrationAccess(access, params, ctx)
+  // The forward carries the ordinary contract, so the server would run a missing receipt anew.
+  refuseReplayOnly(request)
   const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined
   if (request.method === 'orchestration.workerShow' && record) {
     // A status read is this Orca's record, never a call there: instant whatever the server is doing.
@@ -141,6 +144,7 @@ async function routeServerCall(
       // An older server: today's remote attachment, the one legacy branch for new work.
       return LOCAL
     }
+    refuseReplayOnly(request)
     return {
       handled: true,
       result: await startRemoteOwnedWorker(

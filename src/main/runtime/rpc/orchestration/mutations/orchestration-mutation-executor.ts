@@ -5,7 +5,10 @@ import {
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationEntryCaller } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { retryReceiptAbsent } from '../../../orchestration/db/mutation-receipts/mutation-receipt-store'
+import {
+  isReplayOnlyRequest,
+  retryNotReplayable
+} from '../../../orchestration/db/mutation-receipts/replay-only-request'
 import type { RpcRequest } from '../../core'
 import {
   attachMutationReceipt,
@@ -61,7 +64,12 @@ export class OrchestrationMutationExecutor {
     caller?: OrchestrationEntryCaller
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
+    // A retry after a possibly delivered timeout must replay or join; absence may mean eviction.
+    const requireExisting = isReplayOnlyRequest(request)
     if (!requestId || !isDurableMutation(request.method, params)) {
+      if (requireExisting) {
+        throw retryNotReplayable(requestId, 'route_keeps_no_receipt')
+      }
       return await invoke()
     }
     const callerFingerprint =
@@ -100,8 +108,6 @@ export class OrchestrationMutationExecutor {
           )}`
         : basePayloadHash
     const identity = { callerFingerprint, requestId, method: request.method, payloadHash }
-    // A retry after a possibly delivered timeout must replay or join; absence may mean eviction.
-    const requireExisting = request.orchestrationRetryAfterTimeout === true
     const atomicWorkerAcceptance =
       request.method === 'orchestration.workerStart' ||
       request.method === 'orchestration.federationAttachStart'
@@ -125,7 +131,7 @@ export class OrchestrationMutationExecutor {
             const row = db.getMutationReceipt(callerFingerprint, requestId)
             if (!row) {
               if (requireExisting) {
-                throw retryReceiptAbsent(requestId)
+                throw retryNotReplayable(requestId, 'receipt_absent')
               }
               return { disposition: 'started' as const }
             }

@@ -107,8 +107,6 @@ export type RpcRequest = {
   params?: unknown
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
-  // Untrusted wire input; only the literal true marks a retry after a possibly delivered timeout.
-  orchestrationRetryAfterTimeout?: unknown
   // Untrusted wire input; only a paired Orca's runtime pairing admits it (orchestration-peer-caller).
   orchestrationPeerRun?: unknown
   compatibilityInvocationId?: string
