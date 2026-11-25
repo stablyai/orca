@@ -1,9 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { parse as parseToml } from 'smol-toml'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { markMistralVibeWorkspaceTrusted } from './agent-trust-presets'
+import {
+  applyWorkspaceTrustOnThisHost,
+  type WorkspaceTrustHost
+} from './execution-host-workspace-trust'
 
 let home: string
 let workspace: string
@@ -87,5 +91,37 @@ describe('markMistralVibeWorkspaceTrusted', () => {
     markMistralVibeWorkspaceTrusted(workspace, {}, home)
 
     expect(readFileSync(trustFile(), 'utf-8')).toBe('trusted = "not a list"\n')
+  })
+})
+
+describe('applyWorkspaceTrustOnThisHost for Mistral Vibe', () => {
+  function host(): WorkspaceTrustHost {
+    return {
+      homes: [home],
+      agentHome: home,
+      claudeConfig: () => null,
+      codexConfigFiles: () => [],
+      deadlineMs: 1000
+    }
+  }
+
+  it('writes no trust when the launch folder is the agent home itself', async () => {
+    await applyWorkspaceTrustOnThisHost('mistral-vibe', home, host)
+
+    expect(existsSync(trustFile())).toBe(false)
+  })
+
+  it('writes no trust when the launch folder contains the agent home', async () => {
+    const root = dirname(home)
+
+    await applyWorkspaceTrustOnThisHost('mistral-vibe', root, host)
+
+    expect(existsSync(trustFile())).toBe(false)
+  })
+
+  it('still trusts an ordinary workspace folder', async () => {
+    await applyWorkspaceTrustOnThisHost('mistral-vibe', workspace, host)
+
+    expect(readLists()).toEqual({ trusted: [workspace], untrusted: [] })
   })
 })

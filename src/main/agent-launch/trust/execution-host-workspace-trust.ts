@@ -62,7 +62,7 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
 }
 
 /** Exact-folder agents that load project config (Kimi: MCP servers) from a trusted home or root. */
-const AGENT_TRUST_UNSAFE_AT_A_HOME: ReadonlySet<AgentTrustPreset> = new Set(['kimi'])
+const AGENT_TRUST_UNSAFE_AT_A_HOME: ReadonlySet<AgentTrustPreset> = new Set(['kimi', 'mistral-vibe'])
 
 /** Trust these agents’ starting folders; a workspace ancestor may not be a valid trust key. */
 export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean> = {
