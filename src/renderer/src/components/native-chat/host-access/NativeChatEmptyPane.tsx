@@ -9,18 +9,27 @@ import { useNativeChatTabOwnerWorktreeId } from '../pane/ownership/use-native-ch
 
 export function NativeChatEmptyPane(props: {
   slot: NativeChatInstallSlotState
-  pane: Pick<NativeChatStructuredViewProps, 'agent' | 'tabId' | 'target'>
+  pane: Pick<NativeChatStructuredViewProps, 'agent' | 'tabId' | 'target' | 'isVisible'>
 }): React.JSX.Element {
   const { slot, pane } = props
   const { agent } = pane
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
   // A chat in a bot's home greets as the bot.
   const persona = useBotChatPersona(worktreeId)
+  const retained = (
+    <NativeChatRetainedWorkerChats
+      worktreeId={worktreeId}
+      target={pane.target}
+      visible={pane.isVisible}
+    />
+  )
   return slot.kind === 'install' ? (
-    <NativeChatInstallHero slot={slot} agentLabel={structuredAgentLabel(agent)} />
+    <NativeChatInstallHero slot={slot} agentLabel={structuredAgentLabel(agent)}>
+      {retained}
+    </NativeChatInstallHero>
   ) : (
     <NativeChatEmptyState kind="empty" agent={agent} persona={persona}>
-      <NativeChatRetainedWorkerChats worktreeId={worktreeId} target={pane.target} />
+      {retained}
     </NativeChatEmptyState>
   )
 }

@@ -9,8 +9,9 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 export function NativeChatRetainedWorkerChats(props: {
   worktreeId: string | null
   target: RuntimeClientTarget
+  visible: boolean
 }): React.JSX.Element | null {
-  const workers = useWorkspaceRetainedChats(props.target, props.worktreeId)
+  const workers = useWorkspaceRetainedChats(props.target, props.worktreeId, props.visible)
   return (
     <RetainedWorkerChatList
       workers={workers}

@@ -10,7 +10,7 @@ export function closedWorkerFollowUpHint(
 ): string {
   const action = db && dispatchId ? reportFollowUpAction(db, dispatchId) : undefined
   return action?.kind === 'send' && !action.active
-    ? ` To give this worker new work, run \`${formatReportFollowUpCommand(action)}\`; it reopens the same conversation.`
+    ? ` To give this worker new work, run \`${formatReportFollowUpCommand(action)}\`; Orca reopens its saved conversation when it can, and otherwise starts a fresh worker with the earlier task and report.`
     : ''
 }
 

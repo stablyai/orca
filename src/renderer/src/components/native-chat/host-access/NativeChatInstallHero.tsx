@@ -11,6 +11,8 @@ import { NativeChatInstallTile } from './NativeChatInstallTile'
 export function NativeChatInstallHero(props: {
   slot: NativeChatInstallSlotInstall
   agentLabel: string
+  /** Below the install card: what the empty chat's workspace already holds. */
+  children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const { slot, agentLabel } = props
@@ -24,7 +26,7 @@ export function NativeChatInstallHero(props: {
   return (
     <div
       data-native-chat-install="hero"
-      className="flex h-full w-full flex-col items-center justify-center p-6 text-center"
+      className="scrollbar-sleek flex h-full w-full flex-col items-center justify-center-safe overflow-y-auto p-6 text-center"
     >
       <div className="flex w-full max-w-sm flex-col items-center">
         <NativeChatInstallTile
@@ -100,6 +102,7 @@ export function NativeChatInstallHero(props: {
             {refusal}
           </p>
         ) : null}
+        {props.children}
       </div>
     </div>
   )

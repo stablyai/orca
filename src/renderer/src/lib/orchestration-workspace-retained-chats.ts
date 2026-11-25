@@ -9,10 +9,11 @@ import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-ca
 
 const NONE: readonly OrchestrationSessionWorker[] = []
 
-/** The workspace's finished chat workers whose chats Orca closed, read once per mount. An older host answers nothing. */
+/** The workspace's finished chat workers whose chats Orca closed, read each time the pane is shown. An older host answers nothing. */
 export function useWorkspaceRetainedChats(
   target: RuntimeClientTarget,
-  worktreeId: string | null
+  worktreeId: string | null,
+  visible: boolean
 ): readonly OrchestrationSessionWorker[] {
   const [read, setRead] = useState<{
     key: string
@@ -29,7 +30,7 @@ export function useWorkspaceRetainedChats(
     )
   )
   useEffect(() => {
-    if (!key || !worktreeId) {
+    if (!key || !worktreeId || !visible) {
       return
     }
     let current = true
@@ -40,6 +41,6 @@ export function useWorkspaceRetainedChats(
     return () => {
       current = false
     }
-  }, [key, worktreeId])
+  }, [key, worktreeId, visible])
   return read && read.key === key ? read.workers : NONE
 }

@@ -8,6 +8,10 @@ import { createOrcaSessionId } from '../../../../../../shared/agent-session/iden
 import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
 import type { SessionWorkersRuntime } from './session-workers-method'
 import { readWorkspaceRetainedChats } from './workspace-retained-chats-method'
+import {
+  mintStructuredWorkerPaneKey,
+  structuredWorkerProcessIncarnation
+} from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 const mocks = vi.hoisted(() => {
   const state: { host: unknown; workers: Map<string, OrchestrationSessionWorker> } = {
@@ -69,8 +73,9 @@ describe('a workspace finished chat workers stay reachable', () => {
     db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       handle: args.handle ?? `structworker_${dispatch.id}`,
-      paneKey: `chat_${dispatch.id}`,
-      processIncarnation: `structured:${dispatch.id}`,
+      paneKey: mintStructuredWorkerPaneKey(args.chat),
+      hostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
+      processIncarnation: structuredWorkerProcessIncarnation(args.chat),
       worktreeId: args.worktreeId,
       setupState: 'not_applicable',
       effects: [],
@@ -98,6 +103,28 @@ describe('a workspace finished chat workers stay reachable', () => {
     })
     return dispatch.id
   }
+
+  const keptChatsHost = () => ({
+    isSessionTabVisible: (id: string) => openTabs.has(id),
+    deps: {
+      store: {
+        getConversation: (id: string) =>
+          kept.has(id)
+            ? {
+                sessionId: id,
+                location: {
+                  executionHostId: 'local',
+                  wslDistro: null,
+                  workspaceId: 'wt-shared',
+                  workspaceKind: 'git-worktree'
+                }
+              }
+            : undefined,
+        listConversations: () => [],
+        getVisibleSessionTabIndex: () => undefined
+      }
+    }
+  })
 
   const runtime = (): SessionWorkersRuntime =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only the database.
@@ -127,15 +154,34 @@ describe('a workspace finished chat workers stay reachable', () => {
       handle: 'term_1'
     })
 
-    mocks.host = {
-      isSessionTabVisible: (id: string) => openTabs.has(id),
-      deps: { store: { getConversation: (id: string) => (kept.has(id) ? {} : undefined) } }
-    }
+    mocks.host = keptChatsHost()
     const listed = await readWorkspaceRetainedChats(runtime(), 'wt-shared')
 
     expect(listed.map((worker) => worker.dispatchId).sort()).toEqual(
       [implementation, review].sort()
     )
+  })
+
+  it('finds an older kept chat behind a full page of open ones', async () => {
+    const older = finishedChatWorker({
+      worktreeId: 'wt-shared',
+      chat: 'chat-old',
+      release: 'released'
+    })
+    db.db
+      .prepare(
+        `UPDATE worker_terminal_resources SET updated_at = '2000-01-01 00:00:00' WHERE owner_dispatch_id = ?`
+      )
+      .run(older)
+    for (let i = 0; i < 60; i++) {
+      finishedChatWorker({ worktreeId: 'wt-shared', chat: `chat-open-${i}`, release: 'released' })
+      openTabs.add(`chat-open-${i}`)
+    }
+    mocks.host = keptChatsHost()
+
+    const listed = await readWorkspaceRetainedChats(runtime(), 'wt-shared')
+
+    expect(listed.map((worker) => worker.dispatchId)).toEqual([older])
   })
 
   it('names the send that reopens a worker whose chat is still being released', () => {
