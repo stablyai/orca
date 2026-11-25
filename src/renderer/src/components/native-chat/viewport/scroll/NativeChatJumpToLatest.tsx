@@ -36,7 +36,7 @@ export function NativeChatJumpToLatest({
           aria-hidden={!visible || undefined}
           onMouseDown={keepFocus}
           onClick={onJump}
-          className="absolute bottom-[max(calc(var(--spacing)*3),var(--native-chat-worker-jump-lift,0px))] left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-chat-composer-border bg-[color-mix(in_srgb,var(--popover)_80%,transparent)] text-popover-foreground shadow-sm backdrop-blur-md transition-[opacity,translate,background-color] duration-150 ease-out hover:bg-[color-mix(in_srgb,var(--popover)_95%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none [[data-worker-dock-cramped]_&]:invisible data-[shown=false]:pointer-events-none data-[shown=false]:translate-y-1 data-[shown=false]:opacity-0"
+          className="absolute bottom-[max(calc(var(--spacing)*3),var(--native-chat-worker-jump-lift,0px))] left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-chat-composer-border bg-popover/80 text-popover-foreground shadow-sm backdrop-blur-md transition-[opacity,translate,background-color] duration-150 ease-out hover:bg-popover/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none [[data-worker-dock-cramped]_&]:invisible data-[shown=false]:pointer-events-none data-[shown=false]:translate-y-1 data-[shown=false]:opacity-0"
         >
           <ArrowDown className="size-4" />
         </button>
