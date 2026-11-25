@@ -27,7 +27,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import { disposeTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { disposeTestJournalHostProfile } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import {
@@ -62,10 +62,8 @@ export async function createQueuedMessageTestRig(
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  const journalDatabase = await openTestAgentSessionDatabase(
-    root,
-    await options.writerBundle?.(root)
-  )
+  const writerPath = await options.writerBundle?.(root)
+  const journalDatabase = await openTestAgentSessionDatabase(root, writerPath)
   let store = await openTestAgentSessionRecordStore(root)
   const provider = createQueuedRigProvider(store, options, () => host)
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
@@ -326,6 +324,6 @@ export async function createQueuedMessageTestRig(
     restartOffers,
     resume,
     proveStart,
-    dispose: () => disposeTestJournalHostDatabase(root, () => host.flushAllStreamedEvents())
+    dispose: () => disposeTestJournalHostProfile(root, () => host.flushAllStreamedEvents())
   }
 }

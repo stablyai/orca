@@ -1,5 +1,5 @@
 import type { CodexTurnHost, CodexTurnInput } from './codex-structured-turn-contract'
-import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalHandoverIdentity } from '../../../native-chat/agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { captureCodexMessageCompilerInputs } from '../catalog/codex-structured-service-tier'
 import {
@@ -155,8 +155,10 @@ export async function startCodexTurn(
             onReply: (reply) => {
               // Record before the rest of the reply's stdout chunk is translated.
               const turnId = readCodexTurnId(reply)
-              if (turnId) {
+              if (
+                turnId &&
                 host.dispatchEchoes.repliedTurn(input.clientMessageId, host.threadId, turnId)
+              ) {
                 recordReceipt?.()
               }
               input.onReply?.()
@@ -225,7 +227,7 @@ export async function dispatchCodexTurn(
   session: CodexTurnHost & { fence: number; events?: StructuredAgentSessionTransitionSink },
   input: CodexTurnInput & {
     sessionId: string
-    handoverCursor?: () => AgentJournalCursor | undefined
+    handover?: () => JournalHandoverIdentity | undefined
   },
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
@@ -237,16 +239,16 @@ export async function dispatchCodexTurn(
   }
   const captureStartReceipt = () => {
     // A refused steer can re-handover before turn/start while the journal still sees its old turn.
-    const handoverCursor = input.handoverCursor?.()
+    const handover = input.handover?.()
     const fence = session.fence
-    if (!handoverCursor) {
+    if (!handover) {
       return undefined
     }
     return () => {
       if (input.isCurrent?.() !== false) {
         session.events?.recordProviderReceipt?.({
           clientMessageId: input.clientMessageId,
-          handoverCursor,
+          ...handover,
           fence,
           observedAt: Date.now()
         })

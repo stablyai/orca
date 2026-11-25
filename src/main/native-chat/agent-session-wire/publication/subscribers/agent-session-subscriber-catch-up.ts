@@ -261,8 +261,11 @@ export async function publishSubscriberSnapshot(
   journal: AgentSessionJournal,
   fence: number,
   hostNow: number
-): Promise<void> {
-  await unlessSuperseded(publishSnapshotFrame(port, subscriber, journal, fence, { hostNow }))
+): Promise<boolean> {
+  const frame = await unlessSuperseded(
+    publishSnapshotFrame(port, subscriber, journal, fence, { hostNow })
+  )
+  return frame !== undefined
 }
 
 async function publishSnapshotFrame(

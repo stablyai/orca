@@ -23,7 +23,7 @@ export async function dispatchClaudeCommand(
     const admission = await dispatchClaudeTurn(session, {
       clientMessageId: command.clientMessageId,
       fence,
-      handoverCursor: () => command.handoverCursor,
+      handover: () => command.handover,
       body: {
         kind: 'message',
         role: 'user',

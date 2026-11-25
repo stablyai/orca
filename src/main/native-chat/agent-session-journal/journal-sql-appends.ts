@@ -190,17 +190,6 @@ export abstract class SqlJournalAppends {
     return this.answerOf(this.write({ kind: 'dispatch', input }, receipted(receipt)))
   }
 
-  /** Record the provider's receipt of a pending send; the echo still settles delivery. */
-  async markDispatchWritten(input: {
-    clientMessageId: string
-    fence: number
-    observedAt: number
-    handoverCursor: AgentJournalCursor
-    providerReceipt?: true
-  }): Promise<void> {
-    await this.write({ kind: 'dispatch-written', ...input })
-  }
-
   appendStopEvent(event: Omit<JournalStopEvent, 'at'>, fence: number): Promise<AgentJournalCursor> {
     return this.answerOf(this.write({ kind: 'stop', event, fence }))
   }

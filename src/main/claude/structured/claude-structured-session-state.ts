@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalHandoverIdentity } from '../../native-chat/agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
 import type {
@@ -109,7 +109,7 @@ export type ClaudeDispatchWaiter = {
   /** Host submission instant owned by this exact dispatch. */
   requestedAt: number | null
   dispatchFence: number
-  handoverCursor?: AgentJournalCursor
+  handover?: JournalHandoverIdentity
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
   /** Sent with priority `now`: the step it interrupts hands its open turn to this send. */

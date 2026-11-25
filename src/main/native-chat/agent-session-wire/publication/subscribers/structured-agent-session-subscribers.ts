@@ -16,15 +16,10 @@ import {
   emitSubscriberFrame,
   subscriberCommandsChanged
 } from './agent-session-subscriber-frame-fields'
-import {
-  publishSubscriberSnapshot,
-  type SubscriberDeliveryPort
-} from './agent-session-subscriber-catch-up'
+import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { publishSubscriberLiveText, subscriberAtHead } from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
-import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 import type { SubscriberDeliveryRetention } from './agent-session-subscriber-delivery-lane'
 import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
@@ -39,6 +34,7 @@ export class AgentSessionSubscribers {
   private readonly lanes = new SubscriberLanes({
     deliveryPort: () => this.deliveryPort(),
     now: () => this.now(),
+    readLiveText: (id) => this.hooks.readLiveText?.(id) ?? [],
     isActive: (subscriber) => this.isActive(subscriber),
     fail: (subscriber, error) => this.fail(subscriber, error)
   })
@@ -75,49 +71,43 @@ export class AgentSessionSubscribers {
   open(
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
   ): () => void {
-    const { journal, ...fields } = input
+    const { journal, emitProviderReceipts, ...fields } = input
+    const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
+    const replaced = session.get(input.id)
+    if (replaced) {
+      replaced.closeProviderReceipts?.()
+      this.lanes.clear(replaced)
+    }
+    const receipts = emitProviderReceipts
+      ? this.hooks.subscribeProviderReceipts?.(input.sessionId, emitProviderReceipts)
+      : undefined
     const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
       ...fields,
+      openProviderReceipts: receipts?.open,
+      closeProviderReceipts: receipts?.close,
       readForkMarker: () => this.hooks.readForkMarker?.(fields.sessionId),
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
       boundedFrames: input.boundedFrames === true,
       readsCurrentRequests: input.readsCurrentRequests === true,
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
-    const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
     subscriber.stopped = this.lanes.of(subscriber).stopped
-    const replaced = session.get(input.id)
-    if (replaced) {
-      this.lanes.clear(replaced)
-    }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
 
     this.forkMarkers.add(subscriber)
-    this.enqueue(subscriber, async () => {
-      const hostNow = this.now()
-      const port = this.deliveryPort(input.sessionId, journal)
-      if (input.cursor) {
-        await resumeSubscriber(port, subscriber, journal, hostNow, () =>
-          this.forkMarkers.refresh(subscriber, journal, true)
-        )
-      } else {
-        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
-        subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
-      }
-      await publishSubscriberLiveText(this.deliveryPort(), {
-        sessionId: input.sessionId,
-        journal,
-        fence: input.fence,
-        items: this.sentLiveText(subscriber, input.sessionId, journal),
-        subscribers: [subscriber],
-        hostNow
-      })
+    this.lanes.open(subscriber, journal, input.cursor !== undefined, {
+      port: () => this.deliveryPort(input.sessionId, journal),
+      refreshForkMarkers: () => this.forkMarkers.refresh(subscriber, journal, true)
     })
     this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
-    return () => this.close(sessionId, id)
+    return () => {
+      if (this.isActive(subscriber)) {
+        this.close(sessionId, id)
+      }
+    }
   }
 
   close(sessionId: string, id: string): void {
@@ -198,17 +188,7 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, async () => {
-        await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
-        await publishSubscriberLiveText(this.deliveryPort(), {
-          sessionId,
-          journal,
-          fence,
-          items: this.sentLiveText(subscriber, sessionId, journal),
-          subscribers: [subscriber],
-          hostNow
-        })
-      })
+      this.lanes.snapshot(subscriber, journal, port, fence, hostNow)
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
@@ -245,16 +225,6 @@ export class AgentSessionSubscribers {
     sourceIds?: readonly string[]
   ): void {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
-  }
-
-  /** Live text an opening or snapshot sends itself counts against its subscriber's cap. */
-  private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
-    const items = this.hooks.readLiveText?.(sessionId) ?? []
-    // Sending nothing leaves any waiting live text for after the subscriber catches up.
-    if (items.length === 0 || !subscriberAtHead(subscriber, journal)) {
-      return []
-    }
-    return this.lanes.of(subscriber).sendsLiveText(items) ? items : []
   }
 
   private subscribers = (sessionId: string): Subscriber[] => [
@@ -328,6 +298,7 @@ export class AgentSessionSubscribers {
   }
 
   private drop(subscriber: Subscriber): void {
+    subscriber.closeProviderReceipts?.()
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)

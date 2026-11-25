@@ -1,4 +1,6 @@
+import type { AgentSessionProviderReceiptFrame } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-provider-receipts'
 import { defineStreamingMethod } from '../../../core'
+import { sendProviderReceiptFrame } from './structured-agent-session-provider-receipt-acks'
 import { sendingTextAppends } from '../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-telemetry'
 import { clientRequestsCommands } from '../structured-agent-session-policy'
@@ -31,6 +33,18 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     }
     // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
     dispose = await host.subscribe({
+      ...(capabilities?.providerReceipts === 1
+        ? {
+            emitProviderReceipts: (
+              frame: AgentSessionProviderReceiptFrame,
+              signal: AbortSignal
+            ) => {
+              return stream.isClosed()
+                ? undefined
+                : sendProviderReceiptFrame(ctx, frame, signal, emitFrame)
+            }
+          }
+        : {}),
       commandsOnRequest: clientRequestsCommands(ctx),
       readsCurrentRequests: clientReadsCurrentRequests(ctx),
       id: subscriptionId,

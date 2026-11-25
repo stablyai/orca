@@ -64,7 +64,7 @@ export function applyJournalDomainDispatchCommand(
     ...result,
     value: {
       carried,
-      handoverCursor: result.handoverScope ? result.cursor : undefined
+      handover: result.handover
     }
   }
 }

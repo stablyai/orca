@@ -1,6 +1,7 @@
-import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalHandoverIdentity } from '../../../native-chat/agent-session-journal/journal-store-contracts'
 import type { ClaudeDispatchWaiter, ClaudeSession } from '../claude-structured-session-state'
 
+export const MAX_ACTIVE_DISPATCH_WAITERS = 64
 const MAX_RETIRED_DISPATCH_WAITERS = 64
 
 export function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
@@ -19,7 +20,7 @@ export function waitForReplay(
   clientMessageId: string | null,
   requestedAt: number | null,
   dispatchFence = session.fence,
-  handoverCursor?: AgentJournalCursor
+  handover?: JournalHandoverIdentity
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -30,7 +31,7 @@ export function waitForReplay(
       dispatchSequence: session.dispatchSequence,
       requestedAt,
       dispatchFence,
-      handoverCursor,
+      handover,
       replayContentKey,
       resolve
     }
@@ -46,10 +47,24 @@ export function forgetWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaite
   }
 }
 
+export function withdrawClaudeDispatchReceipt(
+  session: ClaudeSession,
+  waiter: ClaudeDispatchWaiter
+): void {
+  if (waiter.clientMessageId !== null && waiter.handover !== undefined) {
+    session.events?.withdrawProviderReceipt?.({
+      clientMessageId: waiter.clientMessageId,
+      ...waiter.handover,
+      fence: waiter.dispatchFence
+    })
+  }
+}
+
 export function retireWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
   forgetWaiter(session, waiter)
   if (!waiter.retired) {
     waiter.retired = true
+    withdrawClaudeDispatchReceipt(session, waiter)
     session.retiredDispatchWaiters.push(waiter)
     if (session.retiredDispatchWaiters.length > MAX_RETIRED_DISPATCH_WAITERS) {
       session.replayContentFallbackBlocked = true

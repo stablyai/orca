@@ -98,6 +98,7 @@ export async function beginSubmissionHandover(
       turnScope,
       body
     })
+    ctx.registerProviderReceipt?.(handover.handover)
     await rideAlong.claim(ctx.fence, turnScope)
   } catch (error) {
     attempt?.end()
@@ -113,6 +114,7 @@ export async function beginSubmissionHandover(
       turnScope: AGENT_JOURNAL_THREAD_SCOPE,
       body
     })
+    ctx.registerProviderReceipt?.(handover.handover)
     await rideAlong.claim(fence, AGENT_JOURNAL_THREAD_SCOPE)
     return outgoing()
   }
@@ -267,7 +269,7 @@ async function dispatchSafely(
         : {}),
       isCurrent,
       fence: ctx.fence,
-      handoverCursor: () => handover().handoverCursor,
+      handover: () => handover().handover,
       requestedAt,
       onInputPreparation: ctx.recordRanOptions?.prepareInput,
       onExecutionSnapshot: ctx.recordRanOptions?.checkpoint

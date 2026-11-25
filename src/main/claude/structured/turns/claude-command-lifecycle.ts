@@ -92,14 +92,14 @@ export function recordClaudeDispatchReceipt(
 ): void {
   if (
     waiter.clientMessageId !== null &&
-    waiter.handoverCursor !== undefined &&
+    waiter.handover !== undefined &&
     waiter.dispatchFence === session.fence &&
     session.dispatchWaiters.includes(waiter)
   ) {
     record?.({
       clientMessageId: waiter.clientMessageId,
       fence: waiter.dispatchFence,
-      handoverCursor: waiter.handoverCursor,
+      ...waiter.handover,
       observedAt
     })
   }

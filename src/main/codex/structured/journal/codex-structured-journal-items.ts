@@ -31,7 +31,7 @@ import {
 import { appendCodexLifecycleItem, publishCodexLifecycle } from './codex-structured-journal-sink'
 import { readCodexJournalString } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
-import { readCodexDispatchEcho } from '../turns/codex-structured-dispatch-echo'
+import { readCodexDispatchEcho } from '../turns/codex-dispatch-receipt-correlation'
 import { codexCompletedItem, interruptedCodexItemBody } from '../items/codex-unfinished-item-body'
 import {
   endedJournalReasoning,

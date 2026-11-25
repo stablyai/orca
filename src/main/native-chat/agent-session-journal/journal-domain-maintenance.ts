@@ -45,7 +45,6 @@ export const JOURNAL_EPOCH_TABLES: readonly {
     key: 'message_id,attempt_sequence,attempt_index',
     payload: ['payload_json']
   },
-  { name: 'journal_dispatch_written', key: 'handover_sequence' },
   { name: 'journal_send_receipts', key: 'message_id', payload: ['payload_json'] },
   { name: 'journal_settlements', key: 'settlement_id' },
   { name: 'journal_input_end_observations', key: 'source_item_key', payload: ['observation_json'] },

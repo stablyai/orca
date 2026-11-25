@@ -1,9 +1,13 @@
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import {
   deliverToSubscriber,
+  publishSubscriberSnapshot,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import {
   publishSubscriberLiveText,
+  subscriberAtHead,
   republishSubscriberBackgroundTasks
 } from './agent-session-live-publications'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
@@ -18,6 +22,7 @@ import type { Subscriber } from './agent-session-subscribe-input'
 type LaneOwner = {
   deliveryPort: () => SubscriberDeliveryPort
   now: () => number
+  readLiveText: (sessionId: string) => readonly AgentJournalRenderItem[]
   isActive: (subscriber: Subscriber) => boolean
   fail: (subscriber: Subscriber, error: unknown) => void
 }
@@ -29,8 +34,18 @@ export function subscriberLaneRunners(
 ): SubscriberDeliveryLaneRunners {
   const { sessionId } = subscriber
   return {
-    catchUp: ({ journal, port, hostNow, activity }) =>
-      deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity }),
+    catchUp: async ({ journal, port, hostNow, activity }) => {
+      const captured = await deliverToSubscriber(port, {
+        subscriber,
+        journal,
+        hostNow,
+        emitCheckpoint: false,
+        activity
+      })
+      if (captured) {
+        openProviderReceiptsAtHead(subscriber, journal)
+      }
+    },
     backgroundTasks: (fence) =>
       republishSubscriberBackgroundTasks(
         owner.deliveryPort(),
@@ -85,6 +100,65 @@ export class SubscriberLanes {
 
   constructor(private readonly owner: LaneOwner) {}
 
+  open(
+    subscriber: Subscriber,
+    journal: SubscriberCatchUp['journal'],
+    resume: boolean,
+    input: { port: () => SubscriberDeliveryPort; refreshForkMarkers: () => Promise<void> }
+  ): void {
+    this.of(subscriber).ordered(async () => {
+      const hostNow = this.owner.now()
+      const port = input.port()
+      const fence = subscriber.fence
+      const caughtUp = resume
+        ? await resumeSubscriber(port, subscriber, journal, hostNow, input.refreshForkMarkers)
+        : await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
+      if (!resume) {
+        subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
+      }
+      await this.finishOpening(subscriber, journal, fence, hostNow, caughtUp)
+    })
+  }
+
+  snapshot(
+    subscriber: Subscriber,
+    journal: SubscriberCatchUp['journal'],
+    port: SubscriberDeliveryPort,
+    fence: number,
+    hostNow: number
+  ): void {
+    this.of(subscriber).ordered(async () => {
+      const caughtUp = await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
+      await this.finishOpening(subscriber, journal, fence, hostNow, caughtUp)
+    })
+  }
+
+  private async finishOpening(
+    subscriber: Subscriber,
+    journal: SubscriberCatchUp['journal'],
+    fence: number,
+    hostNow: number,
+    caughtUp: boolean
+  ): Promise<void> {
+    const { sessionId } = subscriber
+    const items = this.owner.readLiveText(sessionId)
+    const sends =
+      items.length > 0 &&
+      subscriberAtHead(subscriber, journal) &&
+      this.of(subscriber).sendsLiveText(items)
+    await publishSubscriberLiveText(this.owner.deliveryPort(), {
+      sessionId,
+      journal,
+      fence,
+      items: sends ? items : [],
+      subscribers: [subscriber],
+      hostNow
+    })
+    if (caughtUp) {
+      openProviderReceiptsAtHead(subscriber, journal)
+    }
+  }
+
   of(subscriber: Subscriber): SubscriberDeliveryLane {
     let lane = this.lanes.get(subscriber)
     if (!lane) {
@@ -114,5 +188,19 @@ export class SubscriberLanes {
       }
     }
     return retained
+  }
+}
+
+function openProviderReceiptsAtHead(
+  subscriber: Subscriber,
+  journal: SubscriberCatchUp['journal']
+): void {
+  if (
+    subscriber.openProviderReceipts &&
+    subscriber.owedSnapshotFence === undefined &&
+    subscriberAtHead(subscriber, journal)
+  ) {
+    subscriber.openProviderReceipts()
+    subscriber.openProviderReceipts = undefined
   }
 }

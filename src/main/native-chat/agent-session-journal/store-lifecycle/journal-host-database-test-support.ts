@@ -53,7 +53,7 @@ export async function closeTestJournalHostDatabase(stateDirectory: string): Prom
   opened.delete(directory)
 }
 
-export async function disposeTestJournalHostDatabase(
+export async function disposeTestJournalHostProfile(
   stateDirectory: string,
   flush: () => Promise<void>
 ): Promise<void> {

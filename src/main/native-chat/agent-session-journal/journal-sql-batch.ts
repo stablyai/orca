@@ -53,8 +53,7 @@ export class JournalSqlBatch {
     commands: readonly Command[],
     apply: (command: Command) => Value | Promise<Value>,
     durability: 'normal' | 'full' | 'retirement' = 'normal',
-    urgent = false,
-    receiptCommitted?: (value: Value) => boolean
+    urgent = false
   ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
       throw new JournalSqlBatchError('not-dispatched', this.failure)
@@ -62,9 +61,6 @@ export class JournalSqlBatch {
     const outcomes: JournalSqlBatchOutcome<Value>[] = []
     if (commands.length === 0) {
       return { outcomes }
-    }
-    if (receiptCommitted && (commands.length !== 1 || durability !== 'normal')) {
-      throw new Error('journal receipt recovery requires a standalone transaction')
     }
     const drain = commands.slice()
     const pragmas =
@@ -107,48 +103,25 @@ export class JournalSqlBatch {
       committing = true
       this.db.exec('COMMIT')
     } catch (cause) {
-      const receipt = outcomes[0]
-      if (committing && receiptCommitted && receipt?.committed) {
+      let rollback: unknown
+      let rolledBack = !this.db.isTransaction && storageCapacityErrorCode(cause) === 'SQLITE_FULL'
+      if (this.db.isTransaction) {
         try {
-          if (this.db.isTransaction) {
-            this.db.exec('ROLLBACK')
-          }
-          // Verify both the receipt and the ability to acquire and release a fresh write transaction.
-          this.db.exec('BEGIN IMMEDIATE')
-          const committed = receiptCommitted(receipt.value)
           this.db.exec('ROLLBACK')
-          if (this.db.isTransaction) {
-            throw new Error('journal receipt recovery left a transaction open')
-          }
-          if (!committed) {
-            failed = new JournalSqlBatchError('rolled-back', cause)
-          }
-        } catch (recoveryError) {
-          failed = new JournalSqlBatchError('indeterminate', cause, recoveryError)
-          this.failure = failed
+          rolledBack = true
+        } catch (error) {
+          rollback = error
         }
-      } else {
-        let rollback: unknown
-        let rolledBack = !this.db.isTransaction && storageCapacityErrorCode(cause) === 'SQLITE_FULL'
-        if (this.db.isTransaction) {
-          try {
-            this.db.exec('ROLLBACK')
-            rolledBack = true
-          } catch (error) {
-            rollback = error
-          }
-        }
-        // A COMMIT is settled only when SQLite itself rejected it and the rollback is confirmed.
-        const indeterminate =
-          rollback || (committing && !(rolledBack && isSqliteDriverError(cause)))
-        failed = new JournalSqlBatchError(
-          indeterminate ? 'indeterminate' : began ? 'rolled-back' : 'not-dispatched',
-          cause,
-          rollback
-        )
-        if (indeterminate) {
-          this.failure = failed
-        }
+      }
+      // A COMMIT is settled only when SQLite itself rejected it and the rollback is confirmed.
+      const indeterminate = rollback || (committing && !(rolledBack && isSqliteDriverError(cause)))
+      failed = new JournalSqlBatchError(
+        indeterminate ? 'indeterminate' : began ? 'rolled-back' : 'not-dispatched',
+        cause,
+        rollback
+      )
+      if (indeterminate) {
+        this.failure = failed
       }
     } finally {
       if (durability !== 'normal' && !this.db.isTransaction) {
@@ -165,10 +138,7 @@ export class JournalSqlBatch {
           this.failure = failed
         }
       }
-      // An unusable receipt connection must report its fatal outcome to the owner.
-      if (!receiptCommitted || !this.failure) {
-        this.checkpoint?.afterCommit()
-      }
+      this.checkpoint?.afterCommit()
     }
     if (failed) {
       throw failed

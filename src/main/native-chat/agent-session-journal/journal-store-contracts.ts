@@ -223,8 +223,13 @@ export type JournalHandoverInput = Pick<
   'clientMessageId' | 'fence' | 'turnScope'
 > & { body: AgentJournalMessageItem }
 
+export type JournalHandoverIdentity = {
+  handoverCursor: AgentJournalCursor
+  attempt: number
+}
+
 export type JournalHandoverResult = {
-  handoverCursor: AgentJournalCursor | undefined
+  handover?: JournalHandoverIdentity
   carried: StoppedHistoryDelivery | null
 }
 
@@ -264,7 +269,7 @@ export type JournalStopAcceptance = {
 }
 
 export type JournalCommandOpenResult = {
-  handoverCursor: AgentJournalCursor | undefined
+  handover?: JournalHandoverIdentity
   turn: ReturnType<typeof structuredAgentSessionCommandTurn>
   running: AgentJournalTurnItem
 }
