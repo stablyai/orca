@@ -253,7 +253,9 @@ export function MobileDiffReviewLines({
   // A tap picks one line, and a tap inside the pick clears it. Through a ref, so a drag step
   // re-renders only the rows whose highlight changed.
   const selectedRef = useRef(selectedRange)
-  selectedRef.current = selectedRange
+  useEffect(() => {
+    selectedRef.current = selectedRange
+  }, [selectedRange])
   const pickOneLine = useCallback(
     (line: number) => {
       if (pickConsumedTapRef.current) {
