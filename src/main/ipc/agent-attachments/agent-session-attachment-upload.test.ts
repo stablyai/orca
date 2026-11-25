@@ -12,7 +12,10 @@ import {
 } from '../../runtime/rpc/methods/rpc-method-share'
 import nacl from 'tweetnacl'
 import { openBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
-import { SHARED_BOT_HOST_ERRORS } from '../../../shared/bots/shared-bot-hosts'
+import {
+  SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY
+} from '../../../shared/bots/shared-bot-hosts'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import type { ConnectorShareHoldRequest } from '../../../shared/connector-share-contract'
@@ -99,52 +102,56 @@ describe('attachment uploads to a shared agent’s host', () => {
     expect(paired.resolve).not.toHaveBeenCalled()
   })
 
-  it('are kept here for a chat whose message will be held, and sealed into that message', async () => {
-    const { hosts, userDataPath, holds } = await awayHost(HOST_KEY)
-    const environmentId = hosts.views()[0]!.environmentId
-    const upload = {
-      environmentId,
-      sessionId: 'chat-0001',
-      expectedEnvironmentRuntimeId: 'r',
-      userDataPath
-    }
-    const stored = await uploadBufferToAgentSessionAttachments(
-      upload,
-      'shot.png',
-      Buffer.from('png bytes')
-    )
-    const sent = await hosts.call(
-      environmentId,
-      'agentSession.send',
-      structuredAgentSessionMessageSendMutation({
+  // Held sends are off for now; nothing is held, so nothing is kept for one.
+  it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)(
+    'are kept here for a chat whose message will be held, and sealed into that message',
+    async () => {
+      const { hosts, userDataPath, holds } = await awayHost(HOST_KEY)
+      const environmentId = hosts.views()[0]!.environmentId
+      const upload = {
+        environmentId,
         sessionId: 'chat-0001',
-        clientOperationId: 'm1',
-        expectedRuntimeFence: null,
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [
-            { type: 'text', text: 'See this' },
-            { type: 'image-ref', path: stored.path }
-          ]
-        }
+        expectedEnvironmentRuntimeId: 'r',
+        userDataPath
+      }
+      const stored = await uploadBufferToAgentSessionAttachments(
+        upload,
+        'shot.png',
+        Buffer.from('png bytes')
+      )
+      const sent = await hosts.call(
+        environmentId,
+        'agentSession.send',
+        structuredAgentSessionMessageSendMutation({
+          sessionId: 'chat-0001',
+          clientOperationId: 'm1',
+          expectedRuntimeFence: null,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [
+              { type: 'text', text: 'See this' },
+              { type: 'image-ref', path: stored.path }
+            ]
+          }
+        })
+      )
+      expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+      const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
+        hostSecretKey: HOST.secretKey,
+        hostKey: HOST_KEY,
+        sealed: holds[0]!.sealed,
+        expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
       })
-    )
-    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
-    const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
-      hostSecretKey: HOST.secretKey,
-      hostKey: HOST_KEY,
-      sealed: holds[0]!.sealed,
-      expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
-    })
-    expect(opened?.text).toBe('See this')
-    expect(opened?.attachments).toEqual([
-      { name: 'shot.png', contentBase64: Buffer.from('png bytes').toString('base64') }
-    ])
-    // Past one held message's budget it is refused before a byte is kept.
-    await expect(
-      uploadBufferToAgentSessionAttachments(upload, 'big.bin', Buffer.alloc(800 * 1024))
-    ).rejects.toThrow('Too large to hold')
-    expect(paired.resolve).not.toHaveBeenCalled()
-  })
+      expect(opened?.text).toBe('See this')
+      expect(opened?.attachments).toEqual([
+        { name: 'shot.png', contentBase64: Buffer.from('png bytes').toString('base64') }
+      ])
+      // Past one held message's budget it is refused before a byte is kept.
+      await expect(
+        uploadBufferToAgentSessionAttachments(upload, 'big.bin', Buffer.alloc(800 * 1024))
+      ).rejects.toThrow('Too large to hold')
+      expect(paired.resolve).not.toHaveBeenCalled()
+    }
+  )
 })
