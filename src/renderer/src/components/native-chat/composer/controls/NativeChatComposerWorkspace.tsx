@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import { Folder, GitBranch, GitCommitHorizontal, Server } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -17,6 +17,9 @@ import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker
 import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
 import { NativeChatAntigravityAuthChip } from '../../antigravity-auth/NativeChatAntigravityAuthChip'
 
+import { NativeChatPluginComposerItem } from './NativeChatPluginComposerItem'
+import { NativeChatPluginComposerItems } from './use-native-chat-plugin-composer-items'
+
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
   'min-w-0 overflow-x-clip text-ellipsis text-2xs whitespace-nowrap [text-box:trim-both_cap_alphabetic]'
@@ -33,6 +36,7 @@ export function NativeChatComposerWorkspace({
   isWorking?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const pluginItems = useContext(NativeChatPluginComposerItems)
   const { worktreeId, runtimeEnvironmentId } = structuredTransport ?? {}
   const creationId = pendingCreationId ?? structuredTransport?.pendingCreationId
   const hasTransport = structuredTransport !== undefined
@@ -204,9 +208,14 @@ export function NativeChatComposerWorkspace({
           )}
         </div>
       )}
-      <span className="ml-auto flex min-w-0 shrink items-center empty:hidden">
+      <div className="ml-auto flex min-w-0 max-w-1/2 shrink items-center justify-end gap-1 empty:hidden">
+        {pluginItems
+          .filter((item) => item.placement === 'footer')
+          .map((item) => (
+            <NativeChatPluginComposerItem key={item.key} item={item} />
+          ))}
         <NativeChatAntigravityAuthChip textClassName={FOOTER_TEXT} />
-      </span>
+      </div>
     </div>
   )
 }
