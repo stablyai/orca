@@ -5717,7 +5717,13 @@
         "github": "이슈와 PR의 멘션 및 이벤트",
         "slack": "메시지 및 멘션",
         "linear": "할당된 이슈 및 멘션",
-        "google": "내 계정으로 Gmail, 캘린더, 드라이브 사용"
+        "google": "내 계정으로 Gmail, 캘린더, 드라이브 사용",
+        "clickup": "작업, 목록, 문서 관리",
+        "airtable": "베이스, 테이블, 레코드 조회 및 편집",
+        "todoist": "작업 추가, 정리, 완료",
+        "zapier": "Zapier에 설정한 앱에서 작업 실행",
+        "granola": "회의 노트와 녹취록 검색",
+        "intercom": "대화, 연락처, 문서 검색"
       },
       "composioLine": {
         "outlook": "메일, 캘린더, 연락처",
