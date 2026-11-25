@@ -2255,6 +2255,11 @@
     },
     "artifacts": {
       "teamDisabled": "O compartilhamento de Artefatos foi desativado pela sua equipe."
+    },
+    "mcpServers": {
+      "agents": {
+        "claudeBlocked": "Bloqueado pelas configurações do Claude da sua organização"
+      }
     }
   },
   "auto": {

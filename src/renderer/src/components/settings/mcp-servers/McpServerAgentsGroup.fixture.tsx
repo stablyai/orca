@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { McpServerAgentsGroup } from './McpServerAgentsGroup'
@@ -32,4 +33,9 @@ export const blockedForClaude = defineFixture({
       </div>
     </ConfirmationDialogProvider>
   )
+})
+
+export const blockedForClaudeTraditionalChinese = defineFixture({
+  ...blockedForClaude,
+  store: { settings: { ...getDefaultSettings('/home/fixture'), uiLanguage: 'zh-Hant' } }
 })

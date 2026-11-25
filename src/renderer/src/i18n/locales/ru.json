@@ -1287,6 +1287,11 @@
       "keywordDelay": "задержка",
       "keywordCooldown": "ожидание",
       "keywordSecurity": "безопасность"
+    },
+    "mcpServers": {
+      "agents": {
+        "claudeBlocked": "Заблокировано настройками Claude вашей организации"
+      }
     }
   },
   "menu": {

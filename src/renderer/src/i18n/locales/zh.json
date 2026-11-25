@@ -1349,6 +1349,11 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "mcpServers": {
+      "agents": {
+        "claudeBlocked": "被组织的 Claude 设置阻止"
+      }
     }
   },
   "menu": {

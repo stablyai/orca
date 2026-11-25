@@ -1239,6 +1239,11 @@
       "keywordDelay": "Verzögerung",
       "keywordCooldown": "Wartezeit",
       "keywordSecurity": "Sicherheit"
+    },
+    "mcpServers": {
+      "agents": {
+        "claudeBlocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
+      }
     }
   },
   "menu": {

@@ -1192,6 +1192,11 @@
       "keywordDelay": "延遲",
       "keywordCooldown": "等待",
       "keywordSecurity": "安全性"
+    },
+    "mcpServers": {
+      "agents": {
+        "claudeBlocked": "遭到組織的 Claude 設定封鎖"
+      }
     }
   },
   "menu": {

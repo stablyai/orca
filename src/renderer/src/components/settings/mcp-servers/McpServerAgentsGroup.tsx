@@ -168,7 +168,14 @@ export function McpServerAgentsGroup({
                       problem.kind === 'blocked' ? 'bg-status-warning' : 'bg-muted-foreground/40'
                     )}
                   />
-                  <span className="truncate">{problem.detail}</span>
+                  <span className="truncate">
+                    {agent === 'claude' && problem.kind === 'blocked'
+                      ? t(
+                          'settings.mcpServers.agents.claudeBlocked',
+                          'Blocked by your organization’s Claude settings'
+                        )
+                      : problem.detail}
+                  </span>
                 </span>
               ) : null}
             </span>

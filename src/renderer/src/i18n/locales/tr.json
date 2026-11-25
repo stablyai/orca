@@ -2033,6 +2033,11 @@
       "results": "Ayar arama sonuçları",
       "noResults": "“{{value0}}” ile eşleşen ayar yok",
       "moreResults": "{{value0}} sonuç daha var · daraltmak için yazmaya devam edin"
+    },
+    "mcpServers": {
+      "agents": {
+        "claudeBlocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
+      }
     }
   },
   "menu": {

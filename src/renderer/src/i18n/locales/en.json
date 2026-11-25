@@ -2094,7 +2094,8 @@
         "all": "All agents",
         "someOff": "{{count}} agents off",
         "none": "No agents",
-        "some": "{{on}} of {{total}} agents"
+        "some": "{{on}} of {{total}} agents",
+        "claudeBlocked": "Blocked by your organization’s Claude settings"
       },
       "stale": "This server changed elsewhere. Showing it as it is now.",
       "launch": {
