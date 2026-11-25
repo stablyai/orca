@@ -8,6 +8,11 @@ import { isBotAppTool } from '../../../../shared/bots/bot-connector-entries'
 import type { BotOwnTool, BotToolProblem, BotTools } from '../../../../shared/bot-tools'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  botChangeConcerns,
+  type BotChangeKind,
+  type BotChangeScope
+} from '../../../../shared/bots/bot-change-scope'
 import { notifyToolReaders, subscribe, toolsRevision } from './bot-tools-revision'
 
 type Problems = Record<string, BotToolProblem>
@@ -35,15 +40,19 @@ const reads = new Map<string, BotToolReads>()
 // Readers of a bot's tools, told when another window or the host changed them (a sign-in's state).
 const listReaders = new Map<string, Set<(tools: BotTools) => void>>()
 let listeningForHost = false
+const TOOL_KINDS: readonly BotChangeKind[] = ['settings', 'bot']
 
 /**
  * The host says its bots changed (in any window, or on its own: a sign-in ended, couldn't start):
  * every shown bot's tools are read again, and the checks under way keep running. A bot no view
  * shows waits for its next view instead, and is forgotten unless it holds a finished check.
  */
-function rereadToolLists(hostId: ExecutionHostId): void {
+function rereadToolLists(hostId: ExecutionHostId, scope: BotChangeScope | undefined): void {
   for (const [key, read] of reads) {
-    if (read.bot.hostId !== hostId) {
+    if (
+      read.bot.hostId !== hostId ||
+      !botChangeConcerns(scope, { botId: read.bot.id, kinds: TOOL_KINDS })
+    ) {
       continue
     }
     if (!listReaders.has(key)) {
@@ -70,7 +79,7 @@ function rereadToolLists(hostId: ExecutionHostId): void {
 function listenForHostChanges(): void {
   if (!listeningForHost && typeof window !== 'undefined') {
     listeningForHost = true
-    onBotsChanged(rereadToolLists, undefined, { kinds: ['settings', 'bot'] })
+    onBotsChanged(rereadToolLists, undefined, { kinds: TOOL_KINDS })
   }
 }
 

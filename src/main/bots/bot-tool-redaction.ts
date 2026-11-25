@@ -1,11 +1,11 @@
 import type { BotToolProblem, BotToolServer } from '../../shared/bot-tools'
 
-/** The servers' saved values, longest first, so a value inside another never leaves part of it. */
+/** The servers' saved values, each once, longest first so a value inside another leaves no part. */
 function botToolSecrets(servers: readonly BotToolServer[]): string[] {
-  return servers
-    .flatMap((server) => Object.values(('url' in server ? server.headers : server.env) ?? {}))
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length)
+  const values = servers.flatMap((server) =>
+    Object.values(('url' in server ? server.headers : server.env) ?? {})
+  )
+  return [...new Set(values.filter(Boolean))].sort((a, b) => b.length - a.length)
 }
 
 const redacted = (text: string, secrets: readonly string[]): string =>
@@ -19,11 +19,13 @@ export function redactBotToolProblems(
   problems: Map<string, BotToolProblem>,
   servers: readonly BotToolServer[]
 ): Record<string, BotToolProblem> {
-  const secrets = botToolSecrets(servers)
+  let secrets: string[] | undefined
   return Object.fromEntries(
     [...problems].map(([name, problem]) => [
       name,
-      problem.detail ? { ...problem, detail: redacted(problem.detail, secrets) } : problem
+      problem.detail
+        ? { ...problem, detail: redacted(problem.detail, (secrets ??= botToolSecrets(servers))) }
+        : problem
     ])
   )
 }

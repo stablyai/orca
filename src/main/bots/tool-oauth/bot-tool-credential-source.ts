@@ -72,8 +72,8 @@ export function botToolCredentialSource(
       let grant: Awaited<ReturnType<typeof botToolAccessToken>>
       try {
         grant = request.rejected
-          ? await refreshBotToolAccessToken(key, request.rejected, request.signal)
-          : await botToolAccessToken(key, request.signal)
+          ? await refreshBotToolAccessToken(key, request.rejected, request.signal, signIn)
+          : await botToolAccessToken(key, request.signal, signIn)
       } catch {
         // The caller hung up, or a rotated token couldn't be stored: nothing to send now.
         return { kind: 'unavailable' }

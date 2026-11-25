@@ -4,6 +4,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
+import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import { useBotTools } from './bot-tool-checks'
 
 let lists = 0
@@ -33,14 +34,18 @@ const viewOf = () => {
   return renderHook(() => useBotTools({ hostId: 'local', id }, 'none'))
 }
 
-async function readsOnChange(closed: number, shown: number): Promise<number> {
+async function readsOnChange(
+  closed: number,
+  shown: number,
+  scope?: BotChangeScope
+): Promise<number> {
   const views = Array.from({ length: closed + shown }, viewOf)
   await act(async () => {})
   for (const view of views.slice(0, closed)) {
     view.unmount()
   }
   lists = 0
-  await act(async () => emitBotsChangedWindowEvent('local'))
+  await act(async () => emitBotsChangedWindowEvent('local', scope))
   for (const view of views.slice(closed)) {
     view.unmount()
   }
@@ -54,8 +59,14 @@ it('rereads only the shown bots on a change, however many views closed before it
   expect(await readsOnChange(0, 0)).toBe(0)
 })
 
+it('rereads no shown bot on a change the host scoped to another bot', async () => {
+  const elsewhere: BotChangeScope = { botIds: ['another-bot'], kinds: ['settings'] }
+  expect(await readsOnChange(0, 10, elsewhere)).toBe(0)
+  expect(await readsOnChange(0, 100, elsewhere)).toBe(0)
+})
+
 it("keeps a closed bot's finished check for the next badge, and rereads only its tools", async () => {
-  const bot = { hostId: 'local', id: 'checked' }
+  const bot = { hostId: 'local' as const, id: 'checked' }
   const tools = renderHook(() => useBotTools(bot, 'check'))
   await waitFor(() => expect(tools.result.current.view).toMatchObject({ problems: { app: {} } }))
   tools.unmount()
