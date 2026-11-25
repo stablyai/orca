@@ -25920,19 +25920,6 @@
       }
     }
   },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} sekme",
-      "chipOnlyName_other": "{{title}}, {{count}} sekme",
-      "entryNeedsAttention": "{{title}}, ilgilenmeniz gerekiyor",
-      "moreTabs_one": "{{count}} sekme daha",
-      "moreTabs_other": "{{count}} sekme daha",
-      "needAttention_one": ", {{count}} sekme ilgilenmenizi bekliyor",
-      "needAttention_other": ", {{count}} sekme ilgilenmenizi bekliyor",
-      "openTabs_one": "{{count}} açık sekme",
-      "openTabs_other": "{{count}} açık sekme"
-    }
-  },
   "updates": {
     "installOnQuit": {
       "title": "Güncelleme yüklenmeye hazır",
