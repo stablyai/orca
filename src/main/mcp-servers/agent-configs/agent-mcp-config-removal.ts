@@ -3,10 +3,6 @@
 // published only while the file still holds what the edit was made from, with a rolling `.bak`.
 import { isDeepStrictEqual } from 'node:util'
 import { agentMcpServerMergeKey } from '../../../shared/mcp/agent-mcp-config-entry'
-import {
-  readRawTomlConfig,
-  writeTomlConfigAtomically
-} from '../../codex/configuration/toml/config-toml-atomic-write'
 import { ConcurrentFileEditError } from '../../filesystem/concurrent-file-edit-guard'
 import {
   agentMcpConfigServersIn,
@@ -16,6 +12,7 @@ import {
 } from './agent-mcp-config-read'
 import { removeTomlMcpServers } from './toml-mcp-server-removal'
 import { removeJsonProperty } from './json-property-removal'
+import { readAgentConfigText, writeAgentConfigIfUnchanged } from './agent-config-file-write'
 import { withClaudeGlobalConfigLock } from '../../claude/configuration/claude-global-config-lock'
 
 export class AgentMcpConfigEditError extends Error {
@@ -121,19 +118,19 @@ type RemovalOptions = {
 }
 
 /** Edits one file until it publishes; false when another writer kept changing it. */
-function removeFromFile(
+async function removeFromFile(
   path: string,
   sources: readonly AgentMcpConfigSource[],
   mergeKey: string,
   differing: RemovalOptions['differing']
-): boolean {
+): Promise<boolean> {
   for (let attempt = 0; attempt < PUBLISH_ATTEMPTS; attempt++) {
-    const raw = readRawTomlConfig(path)
+    const raw = await readAgentConfigText(path)
     const next = raw === null ? null : removalFrom(raw, sources, mergeKey, differing)
-    if (next === null) {
+    if (raw === null || next === null) {
       return false
     }
-    if (writeTomlConfigAtomically(path, next, raw, { backup: true })) {
+    if (await writeAgentConfigIfUnchanged(path, next, raw)) {
       return true
     }
   }
@@ -159,9 +156,12 @@ export async function removeAgentMcpServerEntries(
   }
   const changed: string[] = []
   for (const [path, fileSources] of byFile) {
-    const edit = (): boolean => removeFromFile(path, fileSources, mergeKey, options.differing)
+    const edit = (): Promise<boolean> =>
+      removeFromFile(path, fileSources, mergeKey, options.differing)
     const outcome =
-      fileSources[0]!.agent === 'claude' ? await withClaudeGlobalConfigLock(path, edit) : edit()
+      fileSources[0]!.agent === 'claude'
+        ? await withClaudeGlobalConfigLock(path, edit)
+        : await edit()
     if (outcome === 'locked') {
       throw new AgentMcpConfigEditError('locked', path)
     }

@@ -155,7 +155,8 @@ function fieldsSubstitute(fields: ServerFields, dialect: AgentMcpConfigDialect):
   return values.some((value) => substitutes(value, dialect))
 }
 
-const STREAMABLE_HTTP = new Set([undefined, 'http', 'streamable-http'])
+const isStreamableHttp = (type: unknown): boolean =>
+  type === undefined || type === 'http' || type === 'streamable-http'
 
 function mcpJsonFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDialect) {
   const type = entry.type ?? entry.transport
@@ -172,9 +173,7 @@ function mcpJsonFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDi
   if (dialect === 'gemini' && type !== 'http') {
     return null
   }
-  return STREAMABLE_HTTP.has(type as string | undefined)
-    ? remoteFields(entry.url ?? entry.serverUrl, entry.headers)
-    : null
+  return isStreamableHttp(type) ? remoteFields(entry.url ?? entry.serverUrl, entry.headers) : null
 }
 
 function openCodeFields(entry: Record<string, unknown>): ServerFields | null {
@@ -195,7 +194,7 @@ function tomlFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDiale
       ? commandFields(entry.command, entry.args, entry.env)
       : null
   }
-  return STREAMABLE_HTTP.has(entry.type as string | undefined)
+  return isStreamableHttp(entry.type)
     ? remoteFields(entry.url, dialect === 'codex-toml' ? entry.http_headers : entry.headers)
     : null
 }
@@ -211,7 +210,8 @@ function entryFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDial
     case 'codex-toml':
     case 'grok-toml':
       return tomlFields(entry, dialect)
-    default:
+    case 'mcp-json':
+    case 'gemini':
       return mcpJsonFields(entry, dialect)
   }
 }

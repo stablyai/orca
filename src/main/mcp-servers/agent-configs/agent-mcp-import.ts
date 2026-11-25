@@ -1,7 +1,6 @@
 // "In your agents": list the servers agents keep in their own configs, and Move or Copy one into
 // Orca's host list. Move adds first, then takes the entries out of the agents' files, so a failed
 // removal never loses the server.
-import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import { botToolDetail, type BotToolServer } from '../../../shared/bot-tools'
@@ -9,10 +8,9 @@ import { agentMcpServerMergeKey } from '../../../shared/mcp/agent-mcp-config-ent
 import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
-import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
 import { getOrcaUserDataPath } from '../../codex/configuration/homes/codex-home-paths'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
-import type { AgentMcpConfigContext } from './agent-mcp-config-locations'
+import { claudeGlobalConfigFile, type AgentMcpConfigContext } from './agent-mcp-config-locations'
 import {
   discoverAgentMcpServers,
   type AgentMcpConfigSource,
@@ -168,15 +166,8 @@ async function claudeProfileCopies(
     return []
   }
   const homes = await listClaudeProfileHomesAsync(host.userDataPath)
-  return homes.flatMap((home) => {
-    const path = resolveClaudeGlobalConfigFile({
-      env: { CLAUDE_CONFIG_DIR: home },
-      homeDir: host.context.homeDir,
-      style: host.context.platform === 'win32' ? 'win32' : 'posix',
-      exists: existsSync
-    })
-    return claude.map((source) => ({ ...source, path }))
-  })
+  const files = await Promise.all(homes.map((home) => claudeGlobalConfigFile(host.context, home)))
+  return files.flatMap((path) => claude.map((source) => ({ ...source, path })))
 }
 
 /**

@@ -125,7 +125,7 @@ export async function readAgentMcpServers(
   context: AgentMcpConfigContext,
   options: { projectPath?: string; skipProject?: (projectPath: string) => boolean } = {}
 ): Promise<AgentMcpConfigServer[]> {
-  const locations = agentMcpConfigLocations(agent, context, options.projectPath)
+  const locations = await agentMcpConfigLocations(agent, context, options.projectPath)
   const read = await Promise.all(
     locations.map((location) => readLocation(location, options.skipProject))
   )

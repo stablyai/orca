@@ -1,5 +1,5 @@
 // Where each agent keeps its own MCP servers on this host, and how each file spells them.
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentMcpConfigDialect } from '../../../shared/mcp/agent-mcp-config-entry'
 import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
@@ -48,22 +48,34 @@ export function codexSourceHome(context: AgentMcpConfigContext): string {
 const xdgConfigHome = (context: AgentMcpConfigContext): string =>
   envDir(context.env, 'XDG_CONFIG_HOME') ?? join(context.homeDir, '.config')
 
-function userFiles(agent: McpConfigAgent, context: AgentMcpConfigContext): string[] {
+/** Claude's global config file for `configDir` (its default when undefined), as Claude picks it. */
+export async function claudeGlobalConfigFile(
+  context: AgentMcpConfigContext,
+  configDir: string | undefined
+): Promise<string> {
+  const args = {
+    env: {
+      CLAUDE_CONFIG_DIR: configDir,
+      CLAUDE_CODE_CUSTOM_OAUTH_URL: context.env.CLAUDE_CODE_CUSTOM_OAUTH_URL
+    },
+    homeDir: context.homeDir,
+    style: context.platform === 'win32' ? ('win32' as const) : ('posix' as const)
+  }
+  // The resolver checks for one legacy file; look for it here without blocking.
+  const legacy = resolveClaudeGlobalConfigFile({ ...args, exists: () => true })
+  const present = await access(legacy).then(
+    () => true,
+    () => false
+  )
+  return present ? legacy : resolveClaudeGlobalConfigFile({ ...args, exists: () => false })
+}
+
+async function userFiles(agent: McpConfigAgent, context: AgentMcpConfigContext): Promise<string[]> {
   const { homeDir, env } = context
   switch (agent) {
     case 'claude':
-      return [
-        resolveClaudeGlobalConfigFile({
-          // A config dir Orca injected for a managed account is not the user's own.
-          env: {
-            CLAUDE_CONFIG_DIR: readUserClaudeConfigDir(env),
-            CLAUDE_CODE_CUSTOM_OAUTH_URL: env.CLAUDE_CODE_CUSTOM_OAUTH_URL
-          },
-          homeDir,
-          style: context.platform === 'win32' ? 'win32' : 'posix',
-          exists: existsSync
-        })
-      ]
+      // A config dir Orca injected for a managed account is not the user's own.
+      return [await claudeGlobalConfigFile(context, readUserClaudeConfigDir(env))]
     case 'codex':
       return [join(codexSourceHome(context), 'config.toml')]
     case 'opencode': {
@@ -120,15 +132,20 @@ function projectFiles(agent: McpConfigAgent, projectPath: string): string[] {
 }
 
 /** The agent's user files, plus its files in `projectPath`'s repo when one is given. */
-export function agentMcpConfigLocations(
+export async function agentMcpConfigLocations(
   agent: McpConfigAgent,
   context: AgentMcpConfigContext,
   projectPath?: string
-): AgentMcpConfigLocation[] {
+): Promise<AgentMcpConfigLocation[]> {
   const format: AgentMcpConfigLocation['format'] =
     agent === 'codex' || agent === 'grok' ? 'toml' : 'json'
   return [
-    ...userFiles(agent, context).map((path) => ({ agent, path, format, scope: 'user' as const })),
+    ...(await userFiles(agent, context)).map((path) => ({
+      agent,
+      path,
+      format,
+      scope: 'user' as const
+    })),
     ...(projectPath ? projectFiles(agent, projectPath) : []).map((path) => ({
       agent,
       path,
@@ -207,7 +224,10 @@ export function agentMcpServerBlocks(
     }
     case 'amp':
       return [{ path: ['amp.mcpServers'], dialect: 'mcp-json' }]
-    default:
+    case 'copilot':
+    case 'cursor':
+    case 'droid':
+    case 'pi':
       return [{ path: ['mcpServers'], dialect: 'mcp-json' }]
   }
 }

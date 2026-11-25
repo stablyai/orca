@@ -226,7 +226,7 @@ export function parseMcpAddCommand(tokens: readonly string[]): AgentMcpConfigEnt
       return parseClaudeAddJson(rest)
     case 'codex':
       return parseCodexAdd(rest)
-    default:
+    case null:
       throw new McpAddCommandError('invalid')
   }
 }

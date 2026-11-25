@@ -28,12 +28,12 @@ export function lockClaudeConfig(configFile: string): Promise<() => Promise<void
 }
 
 /**
- * Runs `edit` (synchronous, read through publish) under Claude's lock and Orca's queue for the file,
- * for writers that splice the text instead of rewriting the whole object.
+ * Runs `edit` (read through publish) under Claude's lock and Orca's queue for the file, for writers
+ * that splice the text instead of rewriting the whole object.
  */
 export function withClaudeGlobalConfigLock<T>(
   configFile: string,
-  edit: () => T
+  edit: () => Promise<T>
 ): Promise<T | 'locked'> {
   return runSerializedForClaudeConfig(configFile, async () => {
     let release: () => Promise<void>
@@ -43,7 +43,7 @@ export function withClaudeGlobalConfigLock<T>(
       return 'locked' as const
     }
     try {
-      return edit()
+      return await edit()
     } finally {
       await release().catch(() => {})
     }
