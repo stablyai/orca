@@ -18,10 +18,11 @@ import {
   McpServersList
 } from '../../../../shared/rpc-contract/mcp-servers-params'
 import { botToolProblems } from '../../../bots/bot-tools-host'
+import { botToolsEpoch } from '../../../bots/bot-tools-revision'
 import {
-  cancelBotToolHealthChecks,
-  sharedBotToolHealthCheck
-} from '../../../bots/bot-tool-health-checks'
+  cancelHostListHealthChecks,
+  joinHostListHealthCheck
+} from '../../../mcp-servers/mcp-host-list-health-checks'
 import { resolveBotToolInput } from '../../../bots/bot-tool-details'
 import { MCP_HOST_LIST_RELAY_OWNER } from '../../../bots/tool-relay/bot-tool-relay'
 import {
@@ -41,6 +42,7 @@ import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers
 import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
 import { mcpServerConnection } from '../../../mcp-servers/mcp-server-connection'
+import { rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { defineMethod, type RpcContext } from '../core'
 import { botToolServerOf, toolsHomeFor } from './bots-tools'
 import {
@@ -66,6 +68,14 @@ export async function onHost<T>(
 }
 
 export const changed = (server: McpServer) => ({ server })
+
+/** The client a problems request is from: its window or socket, so a cancel lets go of only its own. */
+function problemsClient(context: RpcContext): string {
+  return (
+    context.connectionId ??
+    (context.caller ? rpcCallerOperationKey(context.caller) : 'unidentified')
+  )
+}
 
 /** A method later hosts fill in; this one refuses it in words a client can tell apart. */
 async function notYet(method: string): Promise<never> {
@@ -144,11 +154,14 @@ export const MCP_SERVER_METHODS = [
         const agent = params.agent ?? 'claude'
         const remote = params.scope === 'remote'
         const folder = mcpHostListFolder()
-        // The bots' check, run by that agent's CLI over the host's list: one per agent and scope at a
-        // time. Ids come from the checked run's own read, so a request that joins it gets that run's.
-        const problems = await sharedBotToolHealthCheck(
-          MCP_HOST_LIST_RELAY_OWNER,
-          `${agent}\0${remote ? 'remote' : 'all'}`,
+        // The bots' check, run by that agent's CLI over the host's list: one per agent, scope and list
+        // write (epoch) at a time, so a request after an edit never joins a check of the old list. Read
+        // without waiting, so the request joins before a cancel sent right after it can arrive.
+        // Ids come from the checked run's own read, so a request that joins it gets that run's.
+        const problems = await joinHostListHealthCheck(
+          `${agent}\0${remote ? 'remote' : 'all'}\0${botToolsEpoch(folder)}`,
+          problemsClient(context),
+          context.signal,
           async (signal) => {
             const ids = await mcpServerIdsByName(folder)
             const home = await toolsHomeFor(context.runtime, agent, {
@@ -170,13 +183,13 @@ export const MCP_SERVER_METHODS = [
       })
   }),
   defineMethod({
-    // The asking window let go: its check's CLI and servers close now, not at the check's timeout.
+    // The asking window let go; the check's CLI and servers close once no other client waits on it.
     name: 'mcpServers.cancelProblems',
     permission: 'workspace',
     params: McpServersList,
     handler: (_params, context) =>
       onHost(context, async () => {
-        cancelBotToolHealthChecks(MCP_HOST_LIST_RELAY_OWNER)
+        cancelHostListHealthChecks(problemsClient(context))
         return { cancelled: true }
       })
   }),
