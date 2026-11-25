@@ -117,7 +117,8 @@ export function forwardedUrlForRemoteUrl(
     return null
   }
   const hostname = url.hostname.toLowerCase()
-  // Keep the page's own localhost name for its Host header, cookies and redirect URIs; the listener is IPv4 only.
+  // Keep the page's own localhost name for its Host header, cookies and redirect URIs; main opens
+  // 127.0.0.1 instead when another local server holds [::1] on the port, since the listener is IPv4 only.
   if (hostname !== 'localhost' && !hostname.endsWith('.localhost') && hostname !== '127.0.0.1') {
     url.hostname = '127.0.0.1'
   }

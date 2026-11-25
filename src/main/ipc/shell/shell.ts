@@ -23,6 +23,7 @@ import {
 import { resolveRemoteSshEditorLaunchSpec } from '../../external-editors/remote-ssh-editor-launch'
 import { resolveOpenInEditorCommand } from '../../external-editors/open-in-editor-command'
 import { openPathInDefaultApp } from '../../external-editors/default-app-location-open'
+import { systemBrowserUrlForForwardedLoopback } from '../../ssh/port-forwarding/forwarded-loopback-open-url'
 import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -171,7 +172,7 @@ export function registerShellHandlers(
       openInExternalEditor(store, request, listRuntimeEnvironments)
   )
 
-  ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
+  ipcMain.handle('shell:openUrl', async (_event, rawUrl: string) => {
     let parsed: URL
     try {
       parsed = new URL(rawUrl)
@@ -183,7 +184,7 @@ export function registerShellHandlers(
       return
     }
 
-    return shell.openExternal(parsed.toString())
+    return shell.openExternal((await systemBrowserUrlForForwardedLoopback(parsed)).toString())
   })
 
   ipcMain.handle(
