@@ -21,6 +21,7 @@ import {
   readKeptCodexSnapshot
 } from '../structured/threads/codex-kept-snapshot'
 import { KeptProviderRelayUnreachableError } from '../../provider-relay/provider-relay-kept-rebind'
+import { AgentSessionStartFailure } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { readRecord } from './codex-item-field-readers'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
@@ -511,7 +512,9 @@ describe('codex rows across a reattach', () => {
       timeoutMs: 1_000,
       onError: () => {}
     })
-    await expect(opening).rejects.toBeInstanceOf(KeptProviderRelayUnreachableError)
+    const failure: unknown = await opening.catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(AgentSessionStartFailure)
+    expect(failure).toMatchObject({ cause: expect.any(KeptProviderRelayUnreachableError) })
     // Asked again once before giving up; the agent is kept, not closed.
     expect(asked).toBeGreaterThanOrEqual(2)
     expect(kept).toEqual(['kept'])

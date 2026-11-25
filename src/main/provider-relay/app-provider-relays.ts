@@ -76,6 +76,8 @@ export type RelayedProviderProcess = {
 /** Quit waits at most this for detaches before disconnecting; a closing stream detaches anyway. */
 const QUIT_DETACH_WAIT_MS = 5_000
 const CONNECT_TIMEOUT_MS = 1_000
+/** How long one chat's hand-back waits for its paused reader, apart from quit's shared deadline. */
+const KEEP_READER_WAIT_MS = 2_000
 
 let route: ProviderRelayRoute | null = null
 /** Every relay this app is attached to, by chat; quit detaches these instead of closing them. */
@@ -203,8 +205,9 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
       carriedFor.get(child)?.take(child.attachResult?.openWork)
       track(launch.chatKey, child, launch.markers)
       const keep = async (): Promise<void> => {
-        await child.detach(policyFor(launch.markers))
-        // Listed again, so the next open reattaches it rather than starting a second agent.
+        // A failed detach request still hands the agent off (as at quit); it is listed again
+        // either way, so the next open reattaches it rather than starting a second agent.
+        await child.detach(policyFor(launch.markers), KEEP_READER_WAIT_MS).catch(() => {})
         rememberKeptProviderRelay(launch.chatKey, relay)
       }
       return { managed: relayedManagedProcess(child), child, reattached: true, keep }

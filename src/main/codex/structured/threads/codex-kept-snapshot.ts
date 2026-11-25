@@ -16,6 +16,11 @@ import {
   type KeptCodexTurn
 } from './codex-kept-turn-ordinals'
 import { KeptProviderRelayUnreachableError } from '../../../provider-relay/provider-relay-kept-rebind'
+import { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 /** The chat's own thread and the children a reattach follows; past it the rest are logged. */
@@ -23,6 +28,9 @@ const MAX_SNAPSHOT_THREADS = 65
 /** Recent turns read for their state: a replay rarely spans more of one thread's turns. */
 const SNAPSHOT_TURNS = 16
 const PRIMARY_RETRY_MS = 500
+const PRIMARY_RETRY_TIMEOUT_MS = 5_000
+const KEPT_UNREACHABLE_DETAIL =
+  "Orca couldn't reconnect to this chat's agent, which is still running. Send again to reconnect."
 
 type Connection = Pick<CodexAppServerConnection, 'request'>
 
@@ -72,7 +80,14 @@ async function readKeptThread(input: {
     ? turnPage(connection, threadId, 1, 'full', timeoutMs).catch(async (error: unknown) => {
         input.onError(threadId, error)
         await new Promise((resolve) => setTimeout(resolve, PRIMARY_RETRY_MS))
-        return turnPage(connection, threadId, 1, 'full', timeoutMs)
+        // Bounded, so a wedged agent holds a launch slot only a little past one request.
+        return turnPage(
+          connection,
+          threadId,
+          1,
+          'full',
+          Math.min(timeoutMs, PRIMARY_RETRY_TIMEOUT_MS)
+        )
       })
     : turnPage(connection, threadId, 1, 'full', timeoutMs)
   const [[turn], recent, parentThreadId] = await Promise.all([
@@ -290,7 +305,14 @@ export async function openKeptCodexState(input: {
   }).catch(async (error: unknown) => {
     input.onError(input.threadId, error)
     await connection.relay?.keep?.()
-    throw new KeptProviderRelayUnreachableError(input.chatKey)
+    throw new AgentSessionStartFailure(
+      new KeptProviderRelayUnreachableError(input.chatKey),
+      'never',
+      agentSessionFailureFact('startFailed', {
+        detail: providerDiagnostic(KEPT_UNREACHABLE_DETAIL, 'person'),
+        neverReachedAgent: true
+      })
+    )
   })
   await seedKeptCodexCommandOutput(translator, journal, snapshot.turns)
   await seedCarriedKeptCodexCommands(

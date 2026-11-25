@@ -200,13 +200,14 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   }
 
   /** Everything handed on is durable and acked, so a later attach replays nothing twice. */
-  async settle(handingOff = false): Promise<void> {
+  /** `waitMs`: a hand-off of this chat alone waits its own time for its reader, not quit's. */
+  async settle(handingOff = false, waitMs?: number): Promise<void> {
     await this.writing
-    await (handingOff ? this.output.flush() : this.output.settle())
+    await (handingOff ? this.output.flush(waitMs) : this.output.settle())
   }
 
   /** The agent keeps running under the daemon; this app stops seeing it. */
-  async detach(policy: ProviderRelayDetachPolicy): Promise<void> {
+  async detach(policy: ProviderRelayDetachPolicy, waitMs?: number): Promise<void> {
     if (this.state === 'exited' || this.handedOff) {
       return
     }
@@ -214,7 +215,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     // Nothing more is read first: a line read during the last ack would be saved but not acked.
     this.unbind?.()
     this.unbind = null
-    await this.settle(true)
+    await this.settle(true, waitMs)
     this.state = 'detached'
     this.output.stop()
     await this.options.channel.detach(this.relayId, policy)
