@@ -307,7 +307,7 @@ export function readLiveBotHostIds(): readonly ExecutionHostId[] {
   return liveHostIds
 }
 
-/** Null for a host that lists no bots here. */
+/** Null for a host that lists no bots here. Whether it can be reached: `readBotHostDown`. */
 export function readBotHostState(hostId: ExecutionHostId): BotHostState | null {
   return entryOf(hostId)?.state ?? null
 }

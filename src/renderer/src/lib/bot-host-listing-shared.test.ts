@@ -6,7 +6,8 @@ import {
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
-import { publishBots, readHostBots } from './bot-catalog-snapshot'
+import { publishBots, readHostBots, setBotHostListing } from './bot-catalog-snapshot'
+import { isBotHostDown, readBotHostDown } from './bot-host-views'
 import { computeBotHostListing, installBotHostListing } from './bot-host-listing'
 import { getBotHomes, isHome } from '../../../shared/bots/bot-homes'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -149,5 +150,29 @@ describe('a shared agent just accepted', () => {
     expect(state({ ...SHARED, link: 'unpaired', accepting: true })).toBe('connecting')
     expect(state({ ...SHARED, link: 'offline', accepting: false })).toBe('offline')
     expect(state({ ...SHARED, link: 'live', accepting: true })).toBe('live')
+  })
+
+  it('is unreachable to every reader while connecting, as while offline', () => {
+    const listed = (state: 'live' | 'connecting' | 'offline') => {
+      setBotHostListing({
+        hosts: [
+          { hostId: LOCAL_EXECUTION_HOST_ID, state: 'live' },
+          { hostId: HOST, state }
+        ],
+        updateNeeded: []
+      })
+      return [readBotHostDown(HOST), isBotHostDown(HOST)]
+    }
+    try {
+      expect(listed('connecting')).toEqual(['connecting', true])
+      expect(listed('offline')).toEqual(['offline', true])
+      expect(listed('live')).toEqual([null, false])
+      expect(isBotHostDown(LOCAL_EXECUTION_HOST_ID)).toBe(false)
+    } finally {
+      setBotHostListing({
+        hosts: [{ hostId: LOCAL_EXECUTION_HOST_ID, state: 'live' }],
+        updateNeeded: []
+      })
+    }
   })
 })
