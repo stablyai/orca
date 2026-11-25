@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
-import type {
-  ProviderRelayAttachResult,
-  ProviderRelayListResult,
-  ProviderRelaySpawnResult,
-  ProviderRelaySpawnSpec
+import {
+  readProviderRelayCutKeys,
+  type ProviderRelayAttachResult,
+  type ProviderRelayListResult,
+  type ProviderRelaySpawnResult,
+  type ProviderRelaySpawnSpec
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelay } from './provider-relay'
 import type { ProviderRelayStream } from './provider-relay-attachment'
@@ -180,13 +181,17 @@ export class ProviderRelayHost {
     relayId: unknown,
     seq: unknown,
     keepFrom?: unknown,
-    flags?: { cut?: unknown; held?: unknown }
+    flags?: { cut?: unknown; held?: unknown; cutKeys?: unknown }
   ): number {
     const relay = this.requireAttached(clientId, relayId)
     const ackedThrough = relay.ack(
       typeof seq === 'number' ? seq : 0,
       typeof keepFrom === 'number' ? keepFrom : undefined,
-      { cut: flags?.cut === true, held: flags?.held === true }
+      {
+        cut: flags?.cut === true,
+        held: flags?.held === true,
+        cutKeys: flags?.cutKeys === undefined ? undefined : readProviderRelayCutKeys(flags.cutKeys)
+      }
     )
     this.removeIfFinished(relay)
     return ackedThrough

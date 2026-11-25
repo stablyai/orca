@@ -112,4 +112,23 @@ describe('ACP relay item continuation', () => {
     expect(ids).toEqual(['relay:r1:11:k1', 'answer', 'relay:r1:11:k1'])
     expect(cut?.done).toBe(false)
   })
+
+  it('moves exactly the messages the cut named, wherever they come in the replay', () => {
+    const hook = new AcpRelayItemContinuation()
+    const named = {
+      ...attach([{ id: 7, method: 'session/prompt' }], 10),
+      cutKeys: [JSON.stringify(['s', 'm1'])]
+    }
+    const cut = attachContinuation(hook, 'r1', 10, named)
+    const replay = [
+      update({ sessionUpdate: 'tool_call', toolCallId: 'c1' }),
+      chunk('m2', 'new, already saved'),
+      chunk('m1', 'resumed tail')
+    ]
+    const ids = replay.map((line, at) => {
+      const [out = ''] = cut?.lines(11 + at, line, undefined) ?? [line]
+      return idOf(out)
+    })
+    expect(ids).toEqual([undefined, 'm2', 'relay:r1:13:m1'])
+  })
 })

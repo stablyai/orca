@@ -58,7 +58,8 @@ export type CodexStructuredItemStreams = {
   ) => CodexStructuredItemStreamHandleResult
   forget: (threadId: string, itemId: string) => void
   /** A tracked item's already-saved text, where its stream resumes after a reattach. */
-  seedText: (threadId: string, itemId: string, text: string) => void
+  /** Null: the saved row is a truncated preview, kept as is until the item ends. */
+  seedText: (threadId: string, itemId: string, text: string | null) => void
   /** Force-saves streamed text before a row; a thread limits that to its own streams, the only text its row follows. */
   flush: (threadId?: string) => boolean
   dispose: () => void

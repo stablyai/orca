@@ -5,6 +5,8 @@ import type {
   ProviderRelayDataEvent
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
+import { boundedCutKeys } from './relayed-provider-cut-keys'
+import { RelayedProviderKeptLines, relayHandOffWaitMs } from './relayed-provider-kept-lines'
 import type { RelayedProviderContinuation } from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
@@ -23,14 +25,20 @@ const RELEASE_SLICE_CHARS = 64 * 1024
  */
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
-  /** The first line still needed after a crash, for an ack covering lines through `through`. */
-  floor: (through?: number) => number | null
+  /** The first line still needed after a crash, for an ack covering lines through `through`;
+   *  items starting at or before `released` (let go already) are held no more. */
+  floor: (through?: number, released?: number) => number | null
   /** True once after the floor rose past an open item's start on purpose (its replay will be cut). */
   tookCut?: () => boolean
   /** A forced ack (the daemon's file cap) released everything through `seq`: items it held that
    *  started there can't be kept whole any more, so they hold nothing from now on. */
   released?: (seq: number) => void
+  /** The items a cut now splits, as the continuation keys them; a reattach moves exactly those.
+   *  `through`: a release lets go of lines through it, splitting items open there too. */
+  cutKeys?: (through?: number) => string[]
 }
+
+export type ProviderRelayAckFlags = { cut?: true; held?: true; cutKeys?: string[] }
 
 type OutputOptions = {
   ackFloor?: ProviderRelayAckFloor
@@ -47,7 +55,7 @@ type OutputOptions = {
    * `cut`: this ack gives up an open kept span. `held`: the kept lines are a held replay the
    * journal can't save yet. The reply's `ackedThrough` says how far the daemon really released.
    */
-  ack: (seq: number, keepFrom?: number, flags?: { cut?: true; held?: true }) => Promise<unknown>
+  ack: (seq: number, keepFrom?: number, flags?: ProviderRelayAckFlags) => Promise<unknown>
 }
 
 /**
@@ -57,10 +65,7 @@ type OutputOptions = {
 export class RelayedProviderOutput {
   /** The agent's answer to the first client's `initialize`, when the relay was reattached. */
   initializeLine: string | null = null
-  /** Lines the daemon kept for this attach (session state long since acked), by seq. */
-  readonly keptLines = new Map<number, string>()
-  /** Once read, a later attach's kept lines (after a dropped stream) are not held again. */
-  private keptLinesRead = false
+  readonly kept = new RelayedProviderKeptLines()
   /** Highest data seq handed on or held; spool lines at or below it are already seen. */
   private deliveredSeq = 0
   /** Highest data seq actually handed on; the next attach and every ack start here. */
@@ -69,6 +74,7 @@ export class RelayedProviderOutput {
   /** The floor the last ack kept from (the daemon keeps lines from it on for a later attach). */
   private keptFrom: number | null = null
   /** A forced ack released lines through here; a floor at or below it was already given up. */
+  private cutKeys: string[] | null = null
   private releasedThrough = 0
   /**
    * The daemon's ask covers through here. A first answer can fall short (lines still on their way),
@@ -114,7 +120,7 @@ export class RelayedProviderOutput {
       this.held = []
       this.releasedTo = 0
     }
-    this.keptLines.clear()
+    this.kept.lines.clear()
     this.deliveredSeq = this.pushedSeq
     return this.pushedSeq
   }
@@ -128,14 +134,9 @@ export class RelayedProviderOutput {
       this.preambleArrived?.()
       return
     }
-    // Only an attach whose output is held for its consumer reads kept lines: a fresh spawn's
-    // re-sent ones after a dropped stream are never read, so never held.
+    // A fresh spawn's re-sent kept lines after a dropped stream are never read, so never held.
     if (event === 'relayKept') {
-      if (this.wantsKeptLines) {
-        this.keptLines.set(seq, line)
-        this.preambleArrived?.()
-      }
-      return
+      return void (this.kept.take(this.held !== null, seq, line) && this.preambleArrived?.())
     }
     if (event === 'relayPending') {
       if (!this.deliveredPending.has(seq)) {
@@ -165,7 +166,7 @@ export class RelayedProviderOutput {
     const here = (): boolean =>
       (!initialize || this.initializeLine !== null) &&
       pendingSeqs.every((seq) => this.deliveredPending.has(seq)) &&
-      keptSeqs.every((seq) => this.keptLines.has(seq))
+      keptSeqs.every((seq) => this.kept.lines.has(seq))
     if (here()) {
       return Promise.resolve()
     }
@@ -189,16 +190,6 @@ export class RelayedProviderOutput {
   /** Output waits for the chat to be ready (`release()`). */
   get holding(): boolean {
     return this.held !== null
-  }
-
-  /** Only an attach whose output is held for its consumer reads kept lines. */
-  get wantsKeptLines(): boolean {
-    return !this.keptLinesRead && this.held !== null
-  }
-
-  dropKeptLines(): void {
-    this.keptLinesRead = true
-    this.keptLines.clear()
   }
 
   /** Hands held output on in order, in slices; settles once nothing is held. */
@@ -238,7 +229,9 @@ export class RelayedProviderOutput {
 
   /** Before a hand-off: streamed text is saved first, so the last ack covers every line handed on
    *  (a cut item isn't kept whole, so a replay of a line the journal holds would show it twice). */
-  flush(): Promise<void> {
+  async flush(waitMs = relayHandOffWaitMs()): Promise<void> {
+    // A reader paused by its sink takes its buffered lines once that drains; they count too.
+    await this.allTaken(waitMs)
     this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
     this.clearAckTimer()
     return this.ack(false)
@@ -345,7 +338,7 @@ export class RelayedProviderOutput {
       // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites the
       // item whole. The daemon's ask while keeping (its file cap) releases them, and the forced
       // save keeps the text; an ask before any keep (its memory cap) starts keeping instead.
-      const floor = this.options.ackFloor?.floor(target) ?? null
+      const floor = this.options.ackFloor?.floor(target, this.releasedThrough) ?? null
       const usable = floor !== null && floor > this.releasedThrough && floor <= target
       const keepAt = usable ? Math.min(floor, heldFrom ?? floor) : heldFrom
       // Held lines the journal hasn't saved are never let go; the daemon spools them instead.
@@ -365,15 +358,22 @@ export class RelayedProviderOutput {
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
         this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
         const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
+        // Named when the cut is taken, so a retried ack names the same items.
+        this.cutKeys = cut
+          ? (this.cutKeys ??
+            boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined))
+          : null
         const flags = {
           ...(cut ? { cut: true as const } : {}),
-          ...(heldFrom !== null ? { held: true as const } : {})
+          ...(heldFrom !== null ? { held: true as const } : {}),
+          ...(this.cutKeys ? { cutKeys: this.cutKeys } : {})
         }
         const reply = await (keepFrom === null && !cut
           ? this.options.ack(target)
           : this.options.ack(target, keepFrom ?? undefined, flags))
         this.ackedSeq = Math.max(this.ackedSeq, target)
         this.pendingCut = false
+        this.cutKeys = null
         this.keptFrom = keepFrom
         if (force && keepFrom === null) {
           this.releasedThrough = Math.max(this.releasedThrough, target)

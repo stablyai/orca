@@ -260,7 +260,8 @@ export async function openCodexStructuredSession(
   restateKeptCodexBackgroundWork(
     session.backgroundTasks,
     keptTurns,
-    connection.relay?.endedWork()?.command
+    connection.relay?.endedWork()?.command,
+    connection.relay?.openWork()?.command
   )
   connection.relay?.releaseOutput()
   current()

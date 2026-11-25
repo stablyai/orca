@@ -106,6 +106,8 @@ export function acpChildSessionEnded(line: string): string | null {
 }
 
 type Item = { session?: string; child: boolean }
+/** The tag a continuation puts before a moved message's id (`relay:<relay>:<seq>:`). */
+const CONTINUED_ID = /^relay:[^:]*:\d+:/
 
 function moveSession(from: Map<string, Item>, to: Map<string, Item>, session?: string): void {
   for (const [id, item] of from) {
@@ -233,8 +235,26 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     }
   }
 
+  /** Until each cut message ends, even past a call (it may resume under its id), acks are cuts. */
   tookCut(): boolean {
-    return this.cutMessages.size > 0
+    return this.cutMessages.size > 0 || this.pausedCuts.size > 0
+  }
+
+  /** The messages a cut splits, keyed as the continuation keys them from the agent's own lines (a
+   *  continuation's re-keyed id names its original): the cut ones and, for a release through
+   *  `through`, those open there. A reattach moves exactly these. */
+  cutKeys(through?: number): string[] {
+    const keys = new Set<string>()
+    const name = (id: string, item: Item) =>
+      keys.add(JSON.stringify([item.session, id.replace(CONTINUED_ID, '')]))
+    this.cutMessages.forEach((item, id) => name(id, item))
+    this.pausedCuts.forEach((item, id) => name(id, item))
+    for (const [id, item] of this.messages) {
+      if (through !== undefined && item.seq <= through) {
+        name(id, item)
+      }
+    }
+    return [...keys]
   }
 
   /** The call reported its final status. */
