@@ -8,13 +8,20 @@ import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line
 import { quotePowerShellNativeArgument } from '../../../shared/shell/launch/powershell-native-argument'
 import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
 import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { recoverySelection, type OrchestrationRecoveryRoute } from './recovery-route'
 
 export function orchestrationMutationRecoveryError(
   error: unknown,
   {
     unsent = false,
-    flags
-  }: { unsent?: boolean; flags?: ReadonlyMap<string, string | boolean> } = {}
+    flags,
+    route
+  }: {
+    unsent?: boolean
+    flags?: ReadonlyMap<string, string | boolean>
+    /** The route and profile the client actually used, which flags alone can miss. */
+    route?: OrchestrationRecoveryRoute
+  } = {}
 ): unknown {
   if (!(error instanceof RuntimeClientError) || !isUnknownMutationOutcomeCode(error.code)) {
     return error
@@ -33,12 +40,16 @@ export function orchestrationMutationRecoveryError(
     : undefined
   const safeData = { ...data }
   delete safeData.originalCommand
-  const retryCommand = originalCommand
-    ? [...originalCommand, '--retry-request', requestId]
-    : undefined
+  const selection = recoverySelection(flags, route)
+  // A pairing code taken from the environment cannot be repeated, so no command runs standalone.
+  const pairingEnv = selection.pairingEnv
+  const retryCommand =
+    originalCommand && !pairingEnv
+      ? [...originalCommand, ...selection.retryTarget, '--retry-request', requestId]
+      : undefined
   const executable = originalCommand?.[0] ?? resolveOrchestrationCliExecutable()
   // A command forwarded to a paired server keeps its receipt there; else ask the Orca it chose.
-  const target = recoveryTargetArgs(flags)
+  const target = selection.target
   const receiptTarget = typeof data?.server === 'string' ? [...target, '--on', data.server] : target
   // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
   const query = dispatchId
@@ -53,37 +64,53 @@ export function orchestrationMutationRecoveryError(
         '--json'
       ]
   // Without the pairing code it would ask a different Orca, whose answer would mislead.
-  const queryCommand = typeof flags?.get('pairing-code') === 'string' ? undefined : query
+  const queryCommand =
+    typeof flags?.get('pairing-code') === 'string' || pairingEnv ? undefined : query
+  const requiredEnv = [
+    ...(pairingEnv ? [pairingEnv] : []),
+    ...(route?.profileFromEnv ? ['ORCA_USER_DATA_PATH'] : [])
+  ]
   const recovery = {
     orchestrationRequestId: requestId,
     ...(dispatchId ? { dispatchId } : {}),
     ...(queryCommand ? { queryCommand } : {}),
     ...(retryCommand ? { retryCommand } : {}),
+    ...(requiredEnv.length > 0 ? { requiredEnv } : {}),
     recoveryBlocked: !retryCommand,
     disposition: inProgress ? 'in_progress' : unsent ? 'not_sent' : 'outcome_unknown',
     workerDeathInferred: false
   }
-  const retryStep = retryCommand
-    ? dispatchId
-      ? `After inspecting the Dispatch, if keyed recovery is still needed, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
-      : `If request-show reports completed or pending, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. If request-show reports absent, inspect the affected state before deciding whether to retry; absence does not prove a retry is safe.`
-    : 'Recovery is blocked until the exact original command is available; no retry command was emitted.'
+  const withPairing = pairingEnv
+    ? ` with ${pairingEnv} set to the same pairing this command used (it is not repeated here)`
+    : ''
+  const retryStep = pairingEnv
+    ? `If it reports completed or pending, rerun the same command${withPairing} and --retry-request ${requestId}. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. If it reports absent, inspect the affected state before deciding whether to retry; absence does not prove a retry is safe.`
+    : retryCommand
+      ? dispatchId
+        ? `After inspecting the Dispatch, if keyed recovery is still needed, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
+        : `If request-show reports completed or pending, run ${renderCommand(retryCommand)} from this same terminal. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. If request-show reports absent, inspect the affected state before deciding whether to retry; absence does not prove a retry is safe.`
+      : 'Recovery is blocked until the exact original command is available; no retry command was emitted.'
   const readsStdin = retryCommand?.some(
     (arg, i) => arg === '-' && /^--[\w-]+-file$/.test(retryCommand[i - 1] ?? '')
   )
   const nextSteps = [
+    ...(route?.profileFromEnv
+      ? [
+          'Run these commands where ORCA_USER_DATA_PATH names the same Orca profile as this command did; another profile keeps a different record of it.'
+        ]
+      : []),
     ...(inProgress && retryCommand
       ? [
           `In a moment, run ${renderCommand(retryCommand)} from this same terminal. --retry-request resends the same message, so it is delivered once; a fresh send would be a second message.`
         ]
       : unsent
         ? [
-            `Once Orca responds, run ${retryCommand ? renderCommand(retryCommand) : `the same original command with --retry-request ${requestId}`} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
+            `Once Orca responds, run ${retryCommand ? renderCommand(retryCommand) : `the same original command${withPairing} and --retry-request ${requestId}`} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
           ]
         : [
             queryCommand
               ? `Run ${renderCommand(queryCommand)} before retrying.`
-              : `Run ${renderCommand(query)} with the same --pairing-code this command used (it is not repeated here) before retrying.`,
+              : `Run ${renderCommand(query)}${withPairing || ' with the same --pairing-code this command used (it is not repeated here)'} before retrying.`,
             retryStep
           ]),
     ...(readsStdin ? ['Pipe the same input into the retry again; it reads stdin.'] : [])
@@ -93,7 +120,7 @@ export function orchestrationMutationRecoveryError(
     inProgress
       ? undefined
       : unsent
-        ? 'Nothing was sent: Orca did not answer the check that runs before the orchestration mutation, so the mutation did not run.'
+        ? 'Nothing was sent: Orca did not respond before the orchestration mutation was written, so the mutation did not run.'
         : 'The orchestration mutation may already have taken effect; do not assume it failed.',
     ...nextSteps,
     typeof data?.failedStage === 'string' ? `Failed stage: ${data.failedStage}.` : undefined,
@@ -120,15 +147,6 @@ export function orchestrationMutationRecoveryError(
     })
   }
   return new RuntimeClientError(error.code, message.join('\n'), recoveredData)
-}
-
-function recoveryTargetArgs(flags?: ReadonlyMap<string, string | boolean>): string[] {
-  // An outer --on send goes through the caller's Orca, suppressing any ambient pairing.
-  if (flags?.has('on')) {
-    return ['--environment', 'local']
-  }
-  const environment = flags?.get('environment')
-  return typeof environment === 'string' ? ['--environment', environment] : []
 }
 
 function isUnknownMutationOutcomeCode(code: string): boolean {

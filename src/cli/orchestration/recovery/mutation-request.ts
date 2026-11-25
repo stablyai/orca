@@ -5,6 +5,7 @@ import { readRetryRequestFlag } from './retry-request-flag'
 import { orchestrationMutationRecoveryError } from './orchestration-mutation-recovery'
 import { isRequestUnsent } from '../../runtime/connection/client-error-recovery'
 import { replayOnlyRecipientCheck } from './replay-only-recipient'
+import { recoveryRouteOf } from './recovery-route'
 
 const MAX_RETRY_DELAY_MS = 15_000
 // The same request id replays a committed mutation or joins one still running, so these are safe to resend.
@@ -73,9 +74,10 @@ export async function callOrchestrationMutation<TResult>(
       throw orchestrationMutationRecoveryError(
         sentTimeout ?? (sent ? error : (sentError ?? error)),
         {
-          // Only a fresh id that never got past the contract check is known not to have run.
+          // Only a fresh id this loop never wrote is known not to have run.
           unsent: !retryRequest && !sentError && isRequestUnsent(error),
-          flags
+          flags,
+          route: recoveryRouteOf(client)
         }
       )
     }

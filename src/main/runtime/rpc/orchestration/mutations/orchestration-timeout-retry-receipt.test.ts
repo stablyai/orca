@@ -321,6 +321,103 @@ describe('worker_done retry after a possibly delivered timeout', () => {
     expect(workerMessages()).toHaveLength(1)
   })
 
+  describe('from a paired computer that coordinates a Run here', () => {
+    const PEER = {
+      authenticatedCallerFingerprint: 'fingerprint_peer',
+      pairedDeviceId: 'device_peer',
+      clientKind: 'runtime'
+    } as const
+    const peerRun = (conversationId: string, label: string) => ({
+      runId: 'run_on_peer',
+      conversationId,
+      label
+    })
+    const peerState = (db: OrchestrationDb, conversationId: string) => {
+      const run = db.getPeerRunForConversation(conversationId)
+      return {
+        conversation: db.getPeerMailConversation(conversationId) ?? null,
+        peerRun: run ?? null,
+        run: run ? (db.getRunRaw(run.run_id) ?? null) : null
+      }
+    }
+
+    it('refuses a replay-only retry with a new peer Run before writing its conversation or Run', async () => {
+      const { db, workerDone, dispatcher, workerMessages } = setupWorker()
+      const conversationId = 'peerconv_bbbbbbbbbbbb'
+      const receiptsBefore = receiptCount(db)
+
+      const refused = await dispatcher.dispatch(
+        {
+          ...workerDone,
+          id: 'rpc_peer_replay',
+          orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION,
+          orchestrationPeerRun: peerRun(conversationId, 'Home Run')
+        },
+        PEER
+      )
+
+      // State first: a refusal after the peer writer would still have committed these rows.
+      expect(peerState(db, conversationId)).toEqual({
+        conversation: null,
+        peerRun: null,
+        run: null
+      })
+      expect(receiptCount(db)).toBe(receiptsBefore)
+      expect(workerMessages()).toHaveLength(0)
+      expect(refused).toMatchObject({
+        ok: false,
+        error: {
+          code: 'orchestration_migration_required',
+          data: { reason: 'client_contract_unsupported' }
+        }
+      })
+    })
+
+    it('leaves an existing peer Run, its label and its restored Run untouched', async () => {
+      const { db, workerDone, dispatcher, workerMessages } = setupWorker()
+      const conversationId = 'peerconv_cccccccccccc'
+      // v1 peer admission still writes the peer Run, so the refusal below is the v2 fence alone.
+      const v1 = await dispatcher.dispatch(
+        {
+          ...workerDone,
+          id: 'rpc_peer_original',
+          orchestrationRequestId: 'mutation_peer_original',
+          orchestrationPeerRun: peerRun(conversationId, 'Home Run')
+        },
+        PEER
+      )
+      expect(v1).not.toMatchObject({ error: { code: 'orchestration_migration_required' } })
+      const admitted = peerState(db, conversationId)
+      expect(admitted.peerRun).toMatchObject({ home_label: 'Home Run', home_run_id: 'run_on_peer' })
+      expect(admitted.run).not.toBeNull()
+      // A reset here removed the Run row; only a real peer call may restore it.
+      db.db.prepare('DELETE FROM runs WHERE id = ?').run(admitted.peerRun?.run_id)
+      const before = peerState(db, conversationId)
+      expect(before.run).toBeNull()
+      const receiptsBefore = receiptCount(db)
+      const messagesBefore = workerMessages().map((message) => message.id)
+
+      const refused = await dispatcher.dispatch(
+        {
+          ...workerDone,
+          id: 'rpc_peer_replay',
+          orchestrationRequestId: 'mutation_peer_absent',
+          orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION,
+          orchestrationPeerRun: peerRun(conversationId, 'Renamed Run')
+        },
+        PEER
+      )
+
+      expect(peerState(db, conversationId)).toEqual(before)
+      expect(receiptCount(db)).toBe(receiptsBefore)
+      expect(workerMessages().map((message) => message.id)).toEqual(messagesBefore)
+      expect(refused).toMatchObject({
+        ok: false,
+        error: { code: 'orchestration_migration_required' }
+      })
+    })
+  })
+
   it.each([undefined, ''])('refuses a replay-only request with key %j', async (key) => {
     const { workerDone, dispatcher, workerMessages } = setupWorker()
 

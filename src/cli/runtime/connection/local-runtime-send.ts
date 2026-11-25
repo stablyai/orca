@@ -36,6 +36,8 @@ export type LocalRuntimeRequest = {
   pinnedRuntimeId?: string | null | undefined
   /** Attaches mutation recovery to a failure that may have reached the runtime. */
   recover: (error: unknown, runtimeId: string | null) => unknown
+  /** Also recover a request this dial never wrote: its key may name an earlier attempt that ran. */
+  recoverUnsent?: boolean
 }
 
 /** Sends to the local runtime, waiting out an announced restart while nothing has been sent. */
@@ -131,7 +133,9 @@ export async function sendLocalRuntimeRequest<TResult>(
         }
       }
       // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
-      throw isRequestUnsent(error) ? error : request.recover(error, metadata.runtimeId ?? null)
+      throw isRequestUnsent(error) && !request.recoverUnsent
+        ? error
+        : request.recover(error, metadata.runtimeId ?? null)
     }
   }
 }
