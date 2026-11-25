@@ -69,9 +69,7 @@ describe('a Google account whose access ended', () => {
       }
     })
     const view = googleAccountView(record!)
-    expect(view.reason).toBe(
-      'Google access ended (revoked, expired, or the password changed). Reconnect.'
-    )
+    expect(view.reason).toBe('Google access ended (revoked, expired, or the password changed).')
     expect(view.googleError).toBe(
       'reauth related error (invalid_rapt) (invalid_grant, invalid_rapt)'
     )

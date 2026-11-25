@@ -13,18 +13,17 @@ import { defaultGoogleHttp, GOOGLE_TOKEN_URL, type GoogleHttp } from './google-t
 export type GoogleTokenDeps = { http: GoogleHttp; now: () => number }
 export const defaultGoogleTokenDeps: GoogleTokenDeps = { http: defaultGoogleHttp, now: Date.now }
 
-const CLIENT_GONE =
-  'The Google client this account signed in with was deleted or changed. Reconnect.'
+const CLIENT_GONE = 'The Google client this account signed in with was deleted or changed.'
 // Refusals a retry can't fix, from Google's OAuth error list: revoked or expired (an unpublished
 // External app's 7 days), the client deleted, an admin policy, or an account outside an internal
 // app's organization. Anything else (5xx, rate limits, an unreachable network) stays temporary.
 const GRANT_ENDED: Record<string, string> = {
-  invalid_grant: 'Google access ended (revoked, expired, or the password changed). Reconnect.',
+  invalid_grant: 'Google access ended (revoked, expired, or the password changed).',
   invalid_client: CLIENT_GONE,
   unauthorized_client: CLIENT_GONE,
   deleted_client: CLIENT_GONE,
-  admin_policy_enforced: "Your Google Workspace admin's policy blocked Orca's access. Reconnect.",
-  org_internal: "This account isn't in the organization the Google client is limited to. Reconnect."
+  admin_policy_enforced: "Your Google Workspace admin's policy blocked Orca's access.",
+  org_internal: "This account isn't in the organization the Google client is limited to."
 }
 
 /** Google's refusal as one line: its description, then its code and subtype. */

@@ -120,7 +120,7 @@ describe('orca google bot', () => {
         {
           email: 'me@work.com',
           status: 'reconnect',
-          reason: 'Google access ended (revoked, expired, or the password changed). Reconnect.',
+          reason: 'Google access ended (revoked, expired, or the password changed).',
           googleError: 'Token has been expired or revoked. (invalid_grant)',
           services: [],
           connectedAt: 0
