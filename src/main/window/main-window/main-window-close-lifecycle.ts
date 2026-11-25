@@ -1,4 +1,5 @@
 import { ipcMain, Menu, Notification, type BrowserWindow } from 'electron'
+import { browserSiteDisplayController } from '../../browser/site-settings/display/browser-site-display-controller'
 import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 import { translateMain } from '../../i18n/main-i18n'
 import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
@@ -221,11 +222,14 @@ export function installMainWindowCloseLifecycle(args: {
       mainWindow.close()
     }
   }
-  const trafficLightChannel = 'ui:sync-traffic-lights'
-  const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
-    syncTrafficLightPosition(mainWindow, zoomFactor)
+  const panelZoomChannel = 'ui:sync-panel-zoom'
+  const onPanelZoom = (event: Electron.IpcMainEvent): void => {
+    if (event.sender === rendererWebContents && !mainWindow.isDestroyed()) {
+      syncTrafficLightPosition(mainWindow, rendererWebContents.getZoomFactor())
+      browserSiteDisplayController.reapplyZoom()
+    }
   }
-  ipcMain.on(trafficLightChannel, onSyncTrafficLights)
+  ipcMain.on(panelZoomChannel, onPanelZoom)
 
   // Custom Windows/Linux controls replace hidden native titlebar buttons.
   const minimizeChannel = 'window:minimize'
@@ -282,7 +286,7 @@ export function installMainWindowCloseLifecycle(args: {
 
   const dispose = (): void => {
     clearQuitRendererAckTimer()
-    ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
+    ipcMain.removeListener(panelZoomChannel, onPanelZoom)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)

@@ -85,7 +85,7 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
         if (row.isConnected) {
           virtualizer.resizeItem(
             virtualizer.indexFromElement(row),
-            Math.round(row.getBoundingClientRect().height)
+            Math.round(row.getBoundingClientRect().height / (row.currentCSSZoom || 1))
           )
         }
       }

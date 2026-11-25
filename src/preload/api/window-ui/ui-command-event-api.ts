@@ -2,6 +2,10 @@ import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../../shared/file-access/runtime-editor-file-open'
+import type {
+  UIZoomDirection,
+  UIZoomRegion
+} from '../../../shared/app-lifecycle/windows/ui-zoom-level'
 import type { JiraQuickFilterState } from '../../../shared/jira/jira-quick-filters'
 import type {
   JiraSavedFilterState,
@@ -297,6 +301,7 @@ export type UiCommandEventApi = {
   onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
   respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
+  onRegionZoom: (callback: (region: UIZoomRegion, direction: UIZoomDirection) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void
 }

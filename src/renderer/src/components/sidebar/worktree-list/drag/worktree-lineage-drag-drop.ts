@@ -110,7 +110,9 @@ export function getWorktreeReorderDropPoint(
     clientX: pointer.clientX,
     clientY: pointer.clientY,
     // The indicator is in scroll-content pixels.
-    lineClientY: container.getBoundingClientRect().top + drop.dropIndicatorY - container.scrollTop
+    lineClientY:
+      container.getBoundingClientRect().top +
+      (drop.dropIndicatorY - container.scrollTop) * (container.currentCSSZoom || 1)
   }
 }
 

@@ -13,7 +13,11 @@ export function sendResolvedWindowShortcutAction(
       mainWindow.webContents.send('ui:dictationKeyDown')
       return
     case 'zoom':
-      mainWindow.webContents.send('terminal:zoom', action.direction)
+      if (action.region) {
+        mainWindow.webContents.send('ui:regionZoom', action.region, action.direction)
+      } else {
+        mainWindow.webContents.send('terminal:zoom', action.direction)
+      }
       return
     case 'openSettings':
       mainWindow.webContents.send('ui:openSettings')

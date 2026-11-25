@@ -1,3 +1,4 @@
+import { resolveUIZoomLevels } from '../../../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
@@ -104,7 +105,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const petId = ui.petId ?? ui.sidekickId
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
-        const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
@@ -182,7 +182,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
           agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),
-          uiZoomLevel: ui.uiZoomLevel ?? 0,
+          ...resolveUIZoomLevels(ui),
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
           worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
@@ -192,7 +192,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
           workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
           syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
-          statusBarItems: statusBarItemsWithGrok,
+          statusBarItems: hydrateStatusBarItems(ui),
           statusBarVisible: ui.statusBarVisible ?? true,
           usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
           statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),

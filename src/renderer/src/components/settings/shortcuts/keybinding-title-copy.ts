@@ -58,9 +58,16 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.3e3a2d18d4', 'Maximize floating workspace panel'),
   'floatingWorkspace.minimize': () =>
     translate('keybindings.title.746ff0c872', 'Minimize floating workspace panel'),
-  'zoom.in': () => translate('keybindings.title.f233164080', 'Zoom in'),
-  'zoom.out': () => translate('keybindings.title.2b20f1f14a', 'Zoom out'),
-  'zoom.reset': () => translate('keybindings.title.bb3beaeef6', 'Reset size'),
+  'zoom.in': () => translate('keybindings.title.zoomFocusedIn', 'Zoom in on focused item'),
+  'zoom.out': () => translate('keybindings.title.zoomFocusedOut', 'Zoom out of focused item'),
+  'zoom.reset': () =>
+    translate('keybindings.title.zoomFocusedReset', 'Reset zoom for focused item'),
+  'zoom.sidebar.in': () => translate('keybindings.title.zoomSidebarIn', 'Zoom in on sidebar'),
+  'zoom.sidebar.out': () => translate('keybindings.title.zoomSidebarOut', 'Zoom out of sidebar'),
+  'zoom.sidebar.reset': () => translate('keybindings.title.zoomSidebarReset', 'Reset sidebar zoom'),
+  'zoom.panel.in': () => translate('keybindings.title.zoomPanelIn', 'Zoom in on panels'),
+  'zoom.panel.out': () => translate('keybindings.title.zoomPanelOut', 'Zoom out of panels'),
+  'zoom.panel.reset': () => translate('keybindings.title.zoomPanelReset', 'Reset panel zoom'),
   'worktree.history.back': () => translate('keybindings.title.02dd0f77a0', 'Worktree history back'),
   'worktree.history.forward': () =>
     translate('keybindings.title.57c4fb0edd', 'Worktree history forward'),

@@ -1,3 +1,4 @@
+import { getZoomEntries } from './appearance-zoom-search'
 import type React from 'react'
 import { useLayoutEffect } from 'react'
 
@@ -19,8 +20,7 @@ import {
   getThemeEntries,
   getTilingWindowModeEntry,
   getTitlebarEntries,
-  getTypographyEntries,
-  getZoomEntries
+  getTypographyEntries
 } from './appearance-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import {

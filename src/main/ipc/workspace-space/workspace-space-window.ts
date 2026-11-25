@@ -9,10 +9,14 @@ import { safelyRevealWindow } from '../../window/activation/focus-existing-windo
 import { isBackgroundLaunch } from '../../window/activation/foreground-activation-policy'
 import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { isWorkspaceSpaceChange } from '../../../shared/workspace-disk-space/workspace-space-change'
+import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { Store } from '../../persistence/loading-store/store'
 import { createStoreNativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 
-export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
+export function registerWorkspaceSpaceWindowHandlers(
+  store: Store,
+  keybindings?: KeybindingService
+): void {
   const nativeSettings = createStoreNativeSettingsProjection(store)
   for (const channel of [
     'workspaceSpace:openWindow',
@@ -28,7 +32,7 @@ export function registerWorkspaceSpaceWindowHandlers(store: Store): void {
 
   ipcMain.handle('workspaceSpace:openWindow', (event): void => {
     if (isTrustedUIRenderer(event.sender)) {
-      createOrFocusWorkspaceSpaceWindow(nativeSettings)
+      createOrFocusWorkspaceSpaceWindow(nativeSettings, () => keybindings?.getOverrides())
     }
   })
   ipcMain.handle('workspaceSpace:publishWindowState', (event, state: unknown): void => {

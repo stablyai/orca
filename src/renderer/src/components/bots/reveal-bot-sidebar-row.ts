@@ -9,12 +9,13 @@ const READY_DEADLINE_MS = 500
 
 /** Scrolls only the bot list, never its overflow-hidden ancestors, so the sidebar shell can't shift. */
 function scrollListToRow(list: HTMLElement, row: HTMLElement): void {
+  const zoom = list.currentCSSZoom || 1
   const listBox = list.getBoundingClientRect()
   const rowBox = row.getBoundingClientRect()
   if (rowBox.top < listBox.top) {
-    list.scrollTop -= listBox.top - rowBox.top
+    list.scrollTop -= (listBox.top - rowBox.top) / zoom
   } else if (rowBox.bottom > listBox.bottom) {
-    list.scrollTop += rowBox.bottom - listBox.bottom
+    list.scrollTop += (rowBox.bottom - listBox.bottom) / zoom
   }
 }
 

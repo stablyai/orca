@@ -1,5 +1,6 @@
 'use client'
 
+import { SidebarZoomContext } from './sidebar-zoom-context'
 import { SECURITY_SURFACE_CLASS } from './security-surface'
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
@@ -23,7 +24,11 @@ import {
 } from './dialog-layout-context'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  return (
+    <SidebarZoomContext value={false}>
+      <DialogPrimitive.Root data-slot="dialog" {...props} />
+    </SidebarZoomContext>
+  )
 }
 
 function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {

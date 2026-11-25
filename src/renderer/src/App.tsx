@@ -31,6 +31,7 @@ import { useAppStartupHydration } from './app-shell/startup/use-app-startup-hydr
 import { startNativeChatDraftLoad } from './components/native-chat/drafts/native-chat-draft-startup'
 import { runWslMoveRendererStoreRewrites } from './lib/workspace/persistence/wsl-move-renderer-store-rewrites'
 import { runWslDriveUncRendererStoreRewrites } from './lib/workspace/persistence/wsl-drive-unc-renderer-store-rewrites'
+import { useRegionZoom } from './app-shell/chrome/region-zoom'
 import { useDocumentAppearance } from './app-shell/appearance/use-document-appearance'
 import { useFloatingWorkspacePanel } from './components/floating-terminal/workspace/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './hooks/app-commands/use-global-keybindings'
@@ -74,6 +75,7 @@ function App(): React.JSX.Element {
   useRuntimeGraphSync()
   usePersistedUIWriter()
   useDocumentAppearance()
+  useRegionZoom()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
   // App owns active-selection removal; the Space window only mirrors selection.

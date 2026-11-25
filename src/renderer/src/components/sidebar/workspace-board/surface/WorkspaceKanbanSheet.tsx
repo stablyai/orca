@@ -85,16 +85,14 @@ export default function WorkspaceKanbanSheet({
           left: drawerLeftCss,
           pointerEvents: 'none'
         }}
-        style={
-          {
-            ...leftSidebarStyle,
-            left: drawerLeftCss,
-            top: WORKSPACE_TOP_CHROME_HEIGHT,
-            bottom: drawerBottom,
-            height: 'auto',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
-          } as React.CSSProperties
-        }
+        style={{
+          ...leftSidebarStyle,
+          left: drawerLeftCss,
+          top: WORKSPACE_TOP_CHROME_HEIGHT,
+          bottom: drawerBottom,
+          height: 'auto',
+          width: `min(calc(100vw / var(--web-panel-zoom, 1) - ${drawerLeftCss}), 1294px)`
+        }}
         data-contextual-tour-target="workspace-board-surface"
         data-workspace-board-sheet=""
         data-workspace-board-drag-preview={dragPreview ? 'true' : undefined}

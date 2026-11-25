@@ -42,7 +42,9 @@ export function findVirtualizedDomScrollAnchor<TItemElement extends Element>({
   return {
     fallbackKeys: visibleItems.slice(1).map((item) => item.key),
     key: firstVisible.key,
-    offset: Math.min(firstVisible.rect.height, Math.max(0, scrollRect.top - firstVisible.rect.top)),
+    offset:
+      Math.min(firstVisible.rect.height, Math.max(0, scrollRect.top - firstVisible.rect.top)) /
+      (scrollElement.currentCSSZoom || 1),
     scrollTop: scrollElement.scrollTop
   }
 }

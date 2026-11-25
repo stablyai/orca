@@ -21,18 +21,19 @@ export function useBotSearchViewport(
         .querySelector('[data-sidebar-bots-resize-handle]')
         ?.getBoundingClientRect()
       const style = getComputedStyle(split)
+      const zoom = split.currentCSSZoom || 1
       const required =
-        box.height +
+        box.height / zoom +
         Math.max(
           Number.parseFloat(style.scrollMarginTop) || 0,
-          box.top - (handle?.top ?? box.top)
+          (box.top - (handle?.top ?? box.top)) / zoom
         ) +
         Math.max(
           Number.parseFloat(style.scrollMarginBottom) || 0,
-          (handle?.bottom ?? box.bottom) - box.bottom
+          ((handle?.bottom ?? box.bottom) - box.bottom) / zoom
         )
       const viewportBox = viewport.getBoundingClientRect()
-      const available = Math.min(viewport.clientHeight, viewportBox.height)
+      const available = viewport.clientHeight
       const fieldOnly = required > available
       if (split.hasAttribute('data-bot-search-field-only') !== fieldOnly) {
         split.toggleAttribute('data-bot-search-field-only', fieldOnly)

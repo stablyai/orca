@@ -1,3 +1,4 @@
+import { sidebarContentY } from '../viewport/sidebar-scroll-coordinates'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
@@ -36,8 +37,8 @@ export function readHostHeaderRects(container: HTMLElement): HostHeaderRect[] {
     const rect = header.getBoundingClientRect()
     headerRects.push({
       hostId,
-      top: rect.top - containerRect.top + container.scrollTop,
-      bottom: rect.bottom - containerRect.top + container.scrollTop
+      top: sidebarContentY(container, rect.top, containerRect.top),
+      bottom: sidebarContentY(container, rect.bottom, containerRect.top)
     })
   }
   return headerRects

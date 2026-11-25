@@ -1,5 +1,6 @@
 'use client'
 
+import { SidebarZoomContext } from './sidebar-zoom-context'
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Command as CommandPrimitive } from 'cmdk'
@@ -141,7 +142,7 @@ function CommandDialog({
               )}
               {...commandRootProps}
             >
-              {children}
+              <SidebarZoomContext value={false}>{children}</SidebarZoomContext>
             </Command>
           </DialogPrimitive.Content>
         </OverlayFocusScope>

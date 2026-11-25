@@ -77,6 +77,7 @@ export function useSidebarResize<T extends HTMLElement>({
   const containerRef = useRef<T | null>(null)
   const isResizingRef = useRef(false)
   const startXRef = useRef(0)
+  const dragZoomRef = useRef(1)
   const startWidthRef = useRef(width)
   const draftWidthRef = useRef(width)
   const measuredMaxWidthRef = useRef<number | null>(null)
@@ -158,7 +159,7 @@ export function useSidebarResize<T extends HTMLElement>({
       }
 
       const nextWidth = getNextSidebarResizeWidth({
-        clientX: axis === 'y' ? event.clientY : event.clientX,
+        clientX: (axis === 'y' ? event.clientY : event.clientX) / dragZoomRef.current,
         startX: startXRef.current,
         startWidth: startWidthRef.current,
         deltaSign,
@@ -220,7 +221,8 @@ export function useSidebarResize<T extends HTMLElement>({
       const cursor = axis === 'y' ? 'row-resize' : 'col-resize'
       isResizingRef.current = true
       setIsResizing(true)
-      startXRef.current = axis === 'y' ? event.clientY : event.clientX
+      dragZoomRef.current = container?.currentCSSZoom || 1
+      startXRef.current = (axis === 'y' ? event.clientY : event.clientX) / dragZoomRef.current
       startWidthRef.current = startWidth
       draftWidthRef.current = startWidth
       onDraftWidthChange?.(startWidth)

@@ -7,6 +7,7 @@ import { useBotShareReceiveRequest } from '@/components/bots/sharing/bot-share-r
 import { useHandToBotRequest } from '@/components/bots/hand-to-bot/hand-to-bot-open'
 import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import { scaledSidebarWidthCss } from '../components/sidebar/chrome/sidebar-drawer-left-edge'
 import Sidebar from '../components/sidebar/index'
 import { AppRail } from '../components/app-rail/AppRail'
 import { APP_RAIL_WIDTH } from '../components/app-rail/app-rail-layout'
@@ -215,7 +216,7 @@ export function AppWorkspaceShell(props: {
                 style={
                   layout.listHiddenByRailPage && layout.savedSidebarOpen
                     ? {
-                        width: APP_RAIL_WIDTH + layout.sidebarWidth,
+                        width: `calc(${APP_RAIL_WIDTH}px + ${scaledSidebarWidthCss(`${layout.sidebarWidth}px`)})`,
                         alignSelf: 'stretch',
                         marginRight: 0
                       }

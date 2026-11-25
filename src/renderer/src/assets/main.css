@@ -976,7 +976,7 @@ body[data-modal-overlay-open]
     padding: 0;
     overflow: hidden;
     /* Why: mobile browser chrome changes the visible viewport while open. */
-    height: 100dvh;
+    height: calc(100dvh / var(--web-panel-zoom, 1));
     font-family: var(
       --app-font-family,
       'Geist',
@@ -1314,16 +1314,16 @@ body[data-modal-overlay-open]
 }
 
 #root {
-  height: 100dvh;
-  width: 100vw;
+  height: calc(100dvh / var(--web-panel-zoom, 1));
+  width: calc(100vw / var(--web-panel-zoom, 1));
   overflow: hidden;
 }
 
 .app-layout {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
-  width: 100vw;
+  height: calc(100dvh / var(--web-panel-zoom, 1));
+  width: calc(100vw / var(--web-panel-zoom, 1));
   overflow: hidden;
 }
 
@@ -1430,6 +1430,38 @@ html.native-shell body,
 html.native-shell #root,
 html.native-shell .app-layout {
   height: 100%;
+}
+
+/* Scale the content inside a floating positioner so its anchor stays in viewport coordinates. */
+[data-sidebar-zoom]:not([data-sidebar-zoom] *) {
+  zoom: var(--sidebar-zoom-ratio, 1);
+}
+
+/* Radix measures in the positioner's units; the content reads dimensions in its own pixels. */
+[data-radix-popper-content-wrapper]:has(> [data-sidebar-zoom]) {
+  --sidebar-popper-width: calc(var(--radix-popper-available-width) / var(--sidebar-zoom-ratio, 1));
+  --sidebar-popper-height: calc(
+    var(--radix-popper-available-height) / var(--sidebar-zoom-ratio, 1)
+  );
+  --sidebar-anchor-width: calc(var(--radix-popper-anchor-width) / var(--sidebar-zoom-ratio, 1));
+  --sidebar-anchor-height: calc(var(--radix-popper-anchor-height) / var(--sidebar-zoom-ratio, 1));
+}
+
+[data-radix-popper-content-wrapper] > [data-sidebar-zoom]:not([data-sidebar-zoom] *) {
+  --radix-popper-available-width: var(--sidebar-popper-width);
+  --radix-popper-available-height: var(--sidebar-popper-height);
+  --radix-popper-anchor-width: var(--sidebar-anchor-width);
+  --radix-popper-anchor-height: var(--sidebar-anchor-height);
+}
+
+/* Body drag overlays receive viewport coordinates; their copies retain the source row's size. */
+[data-worktree-sidebar-drag-preview],
+.sidebar-section-drag-overlay {
+  zoom: calc(1 / var(--web-panel-zoom, 1));
+}
+
+[data-sidebar-drag-copy] {
+  zoom: calc(var(--web-panel-zoom, 1) * var(--sidebar-zoom-ratio, 1));
 }
 
 /* Tab-group split resize handle — wide hit area, visible center line. */

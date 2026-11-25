@@ -5,8 +5,9 @@ import {
   rebuildAppMenu,
   getNextDefaultOnAppearanceSettingValue
 } from '../../menu/register-app-menu'
-import { zoomDashboardPopoutIfFocused } from '../../window/dashboard-popout-window'
-import { zoomWorkspaceSpaceWindowIfFocused } from '../../window/workspace-space-window'
+import { zoomCompanionWindow } from '../../window/companion-window-zoom'
+import { getDashboardPopoutWindow } from '../../window/dashboard-popout-window'
+import { getWorkspaceSpaceWindow } from '../../window/workspace-space-window'
 import { recordCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { mainProcessState as state } from '../main-process-state'
 import {
@@ -59,20 +60,21 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       // Route to the invoking renderer so hidden tests/multiple windows do not depend on global focus.
       sendOpenFeatureTour(targetWindow instanceof BrowserWindow ? targetWindow : null)
     },
-    // Zoom the focused popout rather than changing the main window behind it.
-    onZoomIn: () => {
-      if (!zoomDashboardPopoutIfFocused('in') && !zoomWorkspaceSpaceWindowIfFocused('in')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'in')
-      }
-    },
-    onZoomOut: () => {
-      if (!zoomDashboardPopoutIfFocused('out') && !zoomWorkspaceSpaceWindowIfFocused('out')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'out')
-      }
-    },
-    onZoomReset: () => {
-      if (!zoomDashboardPopoutIfFocused('reset') && !zoomWorkspaceSpaceWindowIfFocused('reset')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'reset')
+    onZoom: (direction, region, invokingWindow) => {
+      const target = invokingWindow ?? BrowserWindow.getFocusedWindow()
+      if (
+        target instanceof BrowserWindow &&
+        (target === getDashboardPopoutWindow() || target === getWorkspaceSpaceWindow())
+      ) {
+        if (region !== 'sidebar') {
+          zoomCompanionWindow(target, direction)
+        }
+      } else if (!target || target === state.mainWindow) {
+        if (region) {
+          state.mainWindow?.webContents.send('ui:regionZoom', region, direction)
+        } else {
+          state.mainWindow?.webContents.send('terminal:zoom', direction)
+        }
       }
     },
     onToggleLeftSidebar: () => state.mainWindow?.webContents.send('ui:toggleLeftSidebar'),

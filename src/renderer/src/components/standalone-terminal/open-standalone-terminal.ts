@@ -1,3 +1,4 @@
+import { installWebTerminalMouseCoordinates } from '@/lib/pane-manager/terminal-input/web-terminal-mouse-coordinates'
 /** Reuse pane Unicode/link/IME/shortcut and kitty policy outside panes; callers own transport and parse-completion backpressure. */
 import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -50,6 +51,7 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   const terminal = new Terminal(args.options)
   try {
     terminal.open(container)
+    installWebTerminalMouseCoordinates(terminal)
   } catch {
     terminal.dispose()
     return null

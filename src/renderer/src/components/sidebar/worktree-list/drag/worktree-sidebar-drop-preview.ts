@@ -119,9 +119,7 @@ function getWorktreeSidebarPointerDropIndex(args: {
 }
 
 export function computeWorktreeSidebarDropPreview(args: {
-  pointerY: number
-  containerTop: number
-  scrollTop: number
+  localY: number
   rects: readonly WorktreeSidebarDragRect[]
   groupIds: readonly string[]
   draggedIds: readonly string[]
@@ -137,7 +135,7 @@ export function computeWorktreeSidebarDropPreview(args: {
     return null
   }
 
-  const localY = args.pointerY - args.containerTop + args.scrollTop
+  const { localY } = args
   const activeGroupIndex = args.draggingWorktreeId
     ? args.groupIds.indexOf(args.draggingWorktreeId)
     : -1

@@ -1,3 +1,4 @@
+import { resolveUIZoomLevels } from '../../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { applyDefaultOnStatusBarItems } from '../../../../shared/status-bar/status-bar-defaults'
 import { normalizeGitGraphFilters } from '../../../../shared/git/history/git-graph-filters'
 import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../../shared/status-bar/status-bar-compact-change-notice'
@@ -213,6 +214,7 @@ export function normalizeLoadedUiState(
       loadedCompactWorktreeCards ? 'Compact' : 'Default'
     ),
     ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
+    ...resolveUIZoomLevels(parsed.ui),
     // The retired Appearance setting seeds chrome only without an explicit preference.
     rightSidebarOpen,
     rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),

@@ -142,8 +142,7 @@ export function mapSidebarRepoDropIndexToAllRepoInsertAt(
 }
 
 export function computeProjectHeaderDropPreview(args: {
-  pointerY: number
-  containerTop: number
+  localY: number
   scrollTop: number
   rects: readonly ProjectHeaderDragRect[]
   sidebarRepoHeaderIds: readonly string[]
@@ -151,8 +150,7 @@ export function computeProjectHeaderDropPreview(args: {
 }): ProjectHeaderDropPreview | null {
   const { rects, sidebarRepoHeaderIds } = args
   return computeWorktreeSidebarHeaderDropPreview({
-    pointerY: args.pointerY,
-    containerTop: args.containerTop,
+    localY: args.localY,
     scrollTop: args.scrollTop,
     rects,
     headerCount: sidebarRepoHeaderIds.length,

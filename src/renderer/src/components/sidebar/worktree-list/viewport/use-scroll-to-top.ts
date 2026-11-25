@@ -185,7 +185,8 @@ export function useWorktreeListScrollToTop({
       const nativeScrollbarWidth = scrollElement.offsetWidth - scrollElement.clientWidth
       const scrollbarHitWidth = Math.max(12, nativeScrollbarWidth)
       scrollbarDragRef.current =
-        event.target === scrollElement && event.clientX >= rect.right - scrollbarHitWidth
+        event.target === scrollElement &&
+        event.clientX >= rect.right - scrollbarHitWidth * (scrollElement.currentCSSZoom || 1)
     }
 
     const onPointerEnd = (): void => {

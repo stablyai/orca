@@ -1,5 +1,6 @@
 'use client'
 
+import { SidebarZoomContext } from './sidebar-zoom-context'
 import * as React from 'react'
 import { XIcon } from 'lucide-react'
 import * as SheetPrimitive from 'radix-ui/dialog'
@@ -13,7 +14,11 @@ import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { useTranslate } from '@/i18n/use-translate'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+  return (
+    <SidebarZoomContext value={false}>
+      <SheetPrimitive.Root data-slot="sheet" {...props} />
+    </SidebarZoomContext>
+  )
 }
 
 function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Close>) {

@@ -1,14 +1,10 @@
 import { writeNativeChatFontSize } from '@/components/native-chat/appearance/native-chat-font-size-write'
-import { applyUIZoom } from '@/app-shell/chrome/ui-zoom'
+import { changeRegionZoom } from '@/app-shell/chrome/region-zoom'
 import {
   computeEditorFontSize,
   nextEditorFontZoomLevel
 } from '../../../../../shared/editor/editor-font-zoom'
 import { resolveEditorBaseFontSize } from '../../../../../shared/editor/editor-typography'
-import {
-  zoomLevelToPercent,
-  stepUIZoomLevel
-} from '../../../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
 
 import { useAppStore } from '../../../store/index'
@@ -24,6 +20,7 @@ import {
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
+    window.api.ui.onRegionZoom(changeRegionZoom),
     window.api.ui.onTerminalZoom((direction) => {
       const store = useAppStore.getState()
       const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
@@ -70,15 +67,7 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
         return
       }
 
-      const current = window.api.ui.getZoomLevel()
-      const next = stepUIZoomLevel(current, direction)
-
-      applyUIZoom(next)
-      void window.api.ui.set({ uiZoomLevel: next })
-
-      dispatchZoomLevelChanged('ui', zoomLevelToPercent(next))
+      changeRegionZoom(target, direction)
     })
   )
-
-  // Why: re-parse main-process agent status here so the renderer applies the same normalization regardless of hook vs OSC source.
 }

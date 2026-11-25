@@ -1,3 +1,4 @@
+import { useSidebarZoomAttribute } from './sidebar-zoom-context'
 import * as React from 'react'
 import { cva } from 'class-variance-authority'
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
@@ -89,12 +90,14 @@ function DropdownMenuContent({
   const container = usePortalContainer(portalContainer)
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <PortalContainerContext value={container}>
       <DropdownMenuPrimitive.Portal container={container ?? undefined}>
         <OverlayFocusScope value={scope}>
           <MenuDensityProvider value={density}>
             <DropdownMenuPrimitive.Content
+              data-sidebar-zoom={sidebarZoom}
               data-slot="dropdown-menu-content"
               sideOffset={sideOffset}
               className={cn(
@@ -334,12 +337,14 @@ function DropdownMenuSubContent({
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   const subDensity = useMenuDensity(density)
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <PortalContainerContext value={container}>
       <DropdownMenuPrimitive.Portal container={container ?? undefined}>
         <OverlayFocusScope value={scope}>
           <MenuDensityProvider value={subDensity}>
             <DropdownMenuPrimitive.SubContent
+              data-sidebar-zoom={sidebarZoom}
               data-slot="dropdown-menu-sub-content"
               data-variant={variant}
               // Level the first submenu row with its trigger (border + padding).

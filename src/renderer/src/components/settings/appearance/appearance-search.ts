@@ -1,3 +1,4 @@
+import { getZoomEntries } from './appearance-zoom-search'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
 import { getSidebarEntries } from './appearance-sidebar-search'
@@ -102,21 +103,6 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
         'auto.components.settings.appearance.search.language.translation',
         'translation'
       )
-    ]
-  }
-])
-
-export const getZoomEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  {
-    title: translate('auto.components.settings.appearance.search.37e6b58b0e', 'UI zoom'),
-    description: translate(
-      'auto.components.settings.appearance.search.adddb91a3d',
-      'Scale the entire application interface.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.appearance.search.3ae5de6101', 'zoom'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.0952091186', 'scale'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.0c83659f48', 'shortcut')
     ]
   }
 ])

@@ -1,3 +1,4 @@
+import type { UIZoomDirection, UIZoomRegion } from '../app-lifecycle/windows/ui-zoom-level'
 import type { KeybindingReasonCode } from './keybinding-diagnostic-copy'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 
@@ -60,6 +61,7 @@ export type KeybindingActionId =
   | 'zoom.in'
   | 'zoom.out'
   | 'zoom.reset'
+  | `zoom.${UIZoomRegion}.${UIZoomDirection}`
   | 'worktree.history.back'
   | 'worktree.history.forward'
   | 'tab.newTerminal'

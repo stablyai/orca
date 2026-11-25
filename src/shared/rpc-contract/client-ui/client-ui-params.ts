@@ -16,8 +16,7 @@ import {
   ACTIVITY_GROUP_BY_VALUES,
   THREAD_READ_FILTER_VALUES
 } from '../../agent-status/presentation/agents-view-thread-filters'
-import { isReleaseChannel } from '../../updater/release-channel'
-import type { ReleaseChannel } from '../../updater/release-channel'
+import { isReleaseChannel, type ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'
@@ -190,6 +189,7 @@ export const UiUpdateFields = z
     notificationsMutedByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
+    sidebarZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),

@@ -98,6 +98,12 @@ export const uiClipboardAndWindowControlsApi = {
   replyAgentPaneActivity: (reply: AgentPaneActivityReply): void => {
     ipcRenderer.send('ui:agentPaneActivityReply', reply)
   },
+  onRegionZoom: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, ...args: Parameters<typeof callback>) =>
+      callback(...args)
+    ipcRenderer.on('ui:regionZoom', listener)
+    return () => ipcRenderer.removeListener('ui:regionZoom', listener)
+  },
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
       callback(direction)
@@ -164,8 +170,7 @@ export const uiClipboardAndWindowControlsApi = {
   ): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('clipboard:writeFile', args),
   getZoomLevel: (): number => webFrame.getZoomLevel(),
   setZoomLevel: (level: number): void => webFrame.setZoomLevel(level),
-  syncTrafficLights: (zoomFactor: number): void =>
-    ipcRenderer.send('ui:sync-traffic-lights', zoomFactor),
+  syncPanelZoom: (): void => ipcRenderer.send('ui:sync-panel-zoom'),
   setMarkdownEditorFocused: (focused: boolean): void => {
     ipcRenderer.send('ui:setMarkdownEditorFocused', focused)
   },

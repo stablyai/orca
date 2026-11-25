@@ -1,3 +1,4 @@
+import type { UIZoomDirection, UIZoomRegion } from '../app-lifecycle/windows/ui-zoom-level'
 import { getKeybindingDefinition } from './definitions'
 import { isKeybindingAllowedInTerminal, isKeybindingPotentialTerminalConflict } from './effective'
 import { keybindingMatchesAction, matchKeybindingDigitIndex } from './matching'
@@ -25,7 +26,7 @@ export type WindowShortcutInput = {
 }
 
 export type WindowShortcutAction =
-  | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
+  | ZoomShortcutAction
   | { type: 'openSettings' }
   | { type: 'forceReload' }
   | { type: 'toggleWorktreePalette' }
@@ -148,6 +149,34 @@ export function nativeZoomCommandMatchesKeybindings(
   )
 }
 
+export type ZoomShortcutAction = { type: 'zoom'; direction: UIZoomDirection; region?: UIZoomRegion }
+
+const ZOOM_ACTIONS: readonly ZoomShortcutAction[] = (['in', 'out', 'reset'] as const).flatMap(
+  (direction): ZoomShortcutAction[] => [
+    { type: 'zoom', direction },
+    { type: 'zoom', region: 'sidebar', direction },
+    { type: 'zoom', region: 'panel', direction }
+  ]
+)
+
+function zoomShortcutId({ region, direction }: ZoomShortcutAction): KeybindingActionId {
+  return region ? `zoom.${region}.${direction}` : `zoom.${direction}`
+}
+
+export function resolveZoomShortcut(
+  input: WindowShortcutInput,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): ZoomShortcutAction | null {
+  for (const action of ZOOM_ACTIONS) {
+    if (keybindingMatchesAction(zoomShortcutId(action), input, platform, keybindings, options)) {
+      return action
+    }
+  }
+  return null
+}
+
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
@@ -172,16 +201,9 @@ export function resolveWindowShortcutAction(
     return { type: 'toggleFloatingTerminal' }
   }
 
-  if (keybindingMatchesAction('zoom.in', input, platform, keybindings, options)) {
-    return { type: 'zoom', direction: 'in' }
-  }
-
-  if (keybindingMatchesAction('zoom.out', input, platform, keybindings, options)) {
-    return { type: 'zoom', direction: 'out' }
-  }
-
-  if (keybindingMatchesAction('zoom.reset', input, platform, keybindings, options)) {
-    return { type: 'zoom', direction: 'reset' }
+  const zoom = resolveZoomShortcut(input, platform, keybindings, options)
+  if (zoom) {
+    return zoom
   }
 
   if (keybindingMatchesAction('app.settings', input, platform, keybindings, options)) {
@@ -267,11 +289,7 @@ export function resolveWindowShortcutAction(
 export function getWindowShortcutActionId(action: WindowShortcutAction): KeybindingActionId | null {
   switch (action.type) {
     case 'zoom':
-      return action.direction === 'in'
-        ? 'zoom.in'
-        : action.direction === 'out'
-          ? 'zoom.out'
-          : 'zoom.reset'
+      return zoomShortcutId(action)
     case 'openSettings':
       return 'app.settings'
     case 'forceReload':

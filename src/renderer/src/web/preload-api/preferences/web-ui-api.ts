@@ -1,3 +1,4 @@
+import { subscribeWebContextualZoom } from './web-contextual-zoom'
 import { subscribeWebWorkspaceSleep } from '../workspaces/web-workspace-sleep-notices'
 import { savePastedTextAsWebAgentSessionAttachment } from '../agents/web-pasted-text-upload'
 import { createWebExplorerRootSync } from '../workspaces/web-explorer-root-sync'
@@ -69,7 +70,6 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           )
         }
         writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
         return next
       } catch {
         return readLocalWebUIState()
@@ -79,9 +79,11 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     set: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
-      zoomLevel = next.uiZoomLevel
       // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
+      if (Object.keys(hostUpdates).length === 0) {
+        return
+      }
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
         explorerRoots.acknowledge(environmentId, hostUpdates)
@@ -93,10 +95,11 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     setWithAck: async (updates) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
-      zoomLevel = next.uiZoomLevel
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
-      await callRuntimeResult('ui.set', hostUpdates, 15_000)
-      explorerRoots.acknowledge(environmentId, hostUpdates)
+      if (Object.keys(hostUpdates).length > 0) {
+        await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        explorerRoots.acknowledge(environmentId, hostUpdates)
+      }
       if (
         updates.explorerDisplayRootByWorktree !== undefined &&
         hostUpdates.explorerDisplayRootByWorktree === undefined
@@ -138,7 +141,6 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           )
         }
         writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
         return next
       } catch {
         return optimistic
@@ -271,10 +273,11 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorkspaceSleep: subscribeWebWorkspaceSleep,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is desktop-host-scoped and never reaches web.
     onResumeSleepingAgents: () => noopUnsubscribe,
-    onTerminalZoom: () => noopUnsubscribe,
+    onTerminalZoom: subscribeWebContextualZoom,
+    onRegionZoom: () => noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
     onSystemResumed: () => noopUnsubscribe,
-    syncTrafficLights: () => {},
+    syncPanelZoom: () => {},
     setMarkdownEditorFocused: () => {},
     setRichMarkdownContextMenuTarget: () => {},
     markPlainTextContextMenuTarget: () => {},

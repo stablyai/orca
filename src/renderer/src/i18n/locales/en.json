@@ -948,6 +948,12 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "zoom": {
+        "sidebar": "Sidebar zoom",
+        "panel": "Panel zoom",
+        "sidebarDescription": "Scale the bot list, projects, and worktree cards.",
+        "panelDescription": "Scale tabs, terminals, chats, editors, and the right sidebar."
       }
     },
     "browser": {
@@ -2080,7 +2086,9 @@
     "toggleFullScreen": "Toggle Full Screen",
     "undo": "Undo",
     "unhide": "Show All",
-    "zoom": "Zoom"
+    "zoom": "Zoom",
+    "sidebarZoom": "Sidebar Zoom",
+    "panelZoom": "Panel Zoom"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -8965,7 +8973,6 @@
           "0cd9b8228f": "Choose the app icon shown in the Dock and window switcher.",
           "61d842eca0": "Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.",
           "dc29f3cc0d": "Sidebar",
-          "ef89200c1f": "when not in a terminal pane.",
           "fd89b5487c": "Light",
           "7d26ccabe8": "Dark",
           "fb0e0b4453": "System",
@@ -8991,7 +8998,6 @@
           },
           "e0f9902e18": "Show tasks button",
           "7e958ee950": "Show Git-ignored files",
-          "173edfb768": "UI zoom",
           "907888cd09": "App icon",
           "8e374ce9a3": "File explorer",
           "3a5d06686d": "Status bar",
@@ -11103,7 +11109,6 @@
             "0c83659f48": "shortcut",
             "0952091186": "scale",
             "3ae5de6101": "zoom",
-            "adddb91a3d": "Scale the entire application interface.",
             "3a9b69d734": "system",
             "44d873fd18": "light",
             "262fe1d24f": "dark",
@@ -20617,7 +20622,6 @@
         "you": "You"
       },
       "ZoomOverlay": {
-        "uiZoom": "UI Zoom",
         "editorZoom": "Editor Zoom",
         "terminalZoom": "Terminal Zoom"
       },
@@ -26569,7 +26573,6 @@
       "57c4fb0edd": "Worktree history forward",
       "5468defe61": "Collapse / expand all projects",
       "02dd0f77a0": "Worktree history back",
-      "bb3beaeef6": "Reset size",
       "258e7f75ec": "Copy context",
       "e0d7e6b665": "Toggle right sidebar",
       "1d2c86248c": "Delete workspace",
@@ -26600,16 +26603,23 @@
       "3acf4e9eb1": "Search settings",
       "5c1a9f83e0": "Open plugins",
       "da4e681113": "Show search",
-      "f233164080": "Zoom in",
       "0feb1f0496": "Select workspace 1–9",
-      "2b20f1f14a": "Zoom out",
       "128cce6e6d": "Set title…",
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
-      "botItemNext": "Next item"
+      "botItemNext": "Next item",
+      "zoomFocusedIn": "Zoom in on focused item",
+      "zoomFocusedOut": "Zoom out of focused item",
+      "zoomFocusedReset": "Reset zoom for focused item",
+      "zoomSidebarIn": "Zoom in on sidebar",
+      "zoomSidebarOut": "Zoom out of sidebar",
+      "zoomSidebarReset": "Reset sidebar zoom",
+      "zoomPanelIn": "Zoom in on panels",
+      "zoomPanelOut": "Zoom out of panels",
+      "zoomPanelReset": "Reset panel zoom"
     },
     "group": {
       "global": "Global",

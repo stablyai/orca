@@ -128,7 +128,8 @@ export class BrowserSiteDisplayController {
     this.applyZoom(guestId)
   }
 
-  private reapplyZoom(): void {
+  /** Electron copies embedder zoom to guests even when a quick reset leaves the saved UI level unchanged. */
+  reapplyZoom(): void {
     for (const guestId of this.guests.keys()) {
       this.applyZoom(guestId)
     }

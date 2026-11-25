@@ -1,3 +1,4 @@
+import { sidebarContentY } from '../viewport/sidebar-scroll-coordinates'
 import { useCallback, useMemo, useRef } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
@@ -139,11 +140,8 @@ export function useWorktreeDragSession(args: {
       if (!group) {
         return null
       }
-      const containerRect = container.getBoundingClientRect()
       return computeWorktreeSidebarDropPreview({
-        pointerY: dropArgs.pointerY,
-        containerTop: containerRect.top,
-        scrollTop: container.scrollTop,
+        localY: sidebarContentY(container, dropArgs.pointerY),
         rects: dropArgs.rects,
         groupIds: group.worktreeIds,
         draggedIds: dropArgs.draggedIds,

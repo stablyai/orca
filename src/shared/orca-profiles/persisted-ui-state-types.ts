@@ -127,6 +127,8 @@ export type PersistedUIState = {
   agentsGroupBy?: ActivityGroupBy
   collapsedGroups: string[]
   uiZoomLevel: number
+  /** Older profiles used the panel zoom for the entire window. */
+  sidebarZoomLevel?: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
   /** One-shot migration flag for deriving card properties from the two worktree card modes. */

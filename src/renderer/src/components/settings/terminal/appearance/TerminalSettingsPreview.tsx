@@ -1,3 +1,4 @@
+import { installWebTerminalMouseCoordinates } from '@/lib/pane-manager/terminal-input/web-terminal-mouse-coordinates'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-rendering/terminal-ligatures-addon'
@@ -150,6 +151,7 @@ export function TerminalSettingsPreview({
 
     try {
       terminal.open(container)
+      installWebTerminalMouseCoordinates(terminal)
       terminal.write(PREVIEW_BUFFER)
     } catch (err) {
       terminalRef.current = null

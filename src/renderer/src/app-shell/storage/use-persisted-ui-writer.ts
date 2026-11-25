@@ -123,6 +123,8 @@ export function usePersistedUIWriter(): void {
     useShallow((s): PersistedUIWriteBaseline => ({
       gitGraphFiltersByWorktree: s.gitGraphFiltersByWorktree,
       sidebarWidth: s.sidebarWidth,
+      uiZoomLevel: s.uiZoomLevel,
+      sidebarZoomLevel: s.sidebarZoomLevel,
       sidebarOpen: s.sidebarOpen,
       rightSidebarOpen: s.rightSidebarOpen,
       rightSidebarTab: s.rightSidebarTab,

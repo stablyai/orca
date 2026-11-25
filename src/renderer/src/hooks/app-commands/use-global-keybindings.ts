@@ -40,6 +40,7 @@ import type { AppChromeLayout } from '../../app-shell/chrome/use-app-chrome-layo
 import type { FloatingWorkspacePanelState } from '../../components/floating-terminal/workspace/use-floating-workspace-panel'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { textInputOwnsComposition } from '../../../../shared/keybindings/text-input-shortcut-policy'
+import { handleWebZoomShortcut } from './web-zoom-shortcut'
 import { isAgentTerminalPreviewTarget } from '../../components/dashboard/terminal-preview/agent-terminal-preview-target'
 
 /** Register window listeners once; each key event reads the latest committed shortcut state through a ref. */
@@ -274,6 +275,15 @@ export function useGlobalKeybindings(args: {
     }
     const onKeyDown = (e: KeyboardEvent & { doubleTapModifier?: PhysicalModifierToken }): void => {
       const detected = detectDoubleTap(e, 'keyDown')
+      if (
+        handleWebZoomShortcut(
+          e,
+          detected?.modifier ?? e.doubleTapModifier,
+          shortcutStateRef.current
+        )
+      ) {
+        return
+      }
       if (e.repeat) {
         return
       }

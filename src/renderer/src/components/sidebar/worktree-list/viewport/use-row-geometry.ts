@@ -158,7 +158,8 @@ export function useWorktreeRowGeometry(args: {
         if (!first || !last) {
           return false
         }
-        const top = rect.top + first.start + frame.before
+        const zoom = scrollRef.current?.currentCSSZoom || 1
+        const top = rect.top + (first.start + frame.before) * zoom
         let trailing = 0
         let parent = frame.parent
         while (parent !== null) {
@@ -168,10 +169,10 @@ export function useWorktreeRowGeometry(args: {
           }
           parent = ancestor.parent
         }
-        const bottom = rect.top + last.end - projection.frames[frame.end].after - trailing
+        const bottom = rect.top + (last.end - projection.frames[frame.end].after - trailing) * zoom
         return isReorderInsideFolderBounds(point, {
-          left: rect.left + frame.left + 4,
-          right: rect.right - frame.right,
+          left: rect.left + (frame.left + 4) * zoom,
+          right: rect.right - frame.right * zoom,
           top,
           bottom
         })

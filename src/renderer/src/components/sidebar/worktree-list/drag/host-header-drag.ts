@@ -1,3 +1,4 @@
+import { sidebarContentY } from '../viewport/sidebar-scroll-coordinates'
 import {
   useCallback,
   useEffect,
@@ -94,8 +95,7 @@ export function useHostHeaderDrag({
         return null
       }
       session.headerRects = rects
-      const containerRect = container.getBoundingClientRect()
-      const localY = pointerY - containerRect.top + container.scrollTop
+      const localY = sidebarContentY(container, pointerY)
       let insertBefore = rects.length
       for (let i = 0; i < rects.length; i++) {
         const mid = (rects[i].top + rects[i].bottom) / 2

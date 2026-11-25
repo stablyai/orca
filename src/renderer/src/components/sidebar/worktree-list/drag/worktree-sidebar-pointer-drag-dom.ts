@@ -76,6 +76,7 @@ export function createSidebarDragPreview(args: {
   const rect = args.sourceRow.getBoundingClientRect()
   const preview = document.createElement('div')
   const clone = cloneSidebarDragSource(args.sourceRow)
+  clone.dataset.sidebarDragCopy = ''
   const offsetX = Math.min(Math.max(args.pointerX - rect.left, 0), rect.width)
   const offsetY = Math.min(Math.max(args.pointerY - rect.top, 0), rect.height)
 

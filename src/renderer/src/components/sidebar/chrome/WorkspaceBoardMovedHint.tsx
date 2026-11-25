@@ -51,6 +51,7 @@ export function WorkspaceBoardMovedHint({
             collisionPadding={{ left: sidebarLeft }}
             id={id}
             role="tooltip"
+            data-sidebar-zoom=""
             data-workspace-board-moved-hint=""
             data-state={open ? 'open' : 'closed'}
             // Same look as TooltipContent's default variant; zoom and slide only when motion is allowed.

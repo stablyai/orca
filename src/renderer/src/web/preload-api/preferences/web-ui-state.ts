@@ -1,3 +1,4 @@
+import { resolveUIZoomLevels } from '../../../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import {
   normalizeWorktreeCardProperties,
@@ -74,6 +75,7 @@ export function mergeHostWebUIState(
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
     sidebarOpen: local.sidebarOpen,
+    ...resolveUIZoomLevels(local),
     activityBarPosition: local.activityBarPosition,
     activityBarOrder: local.activityBarOrder,
     activityBarBotOrder: local.activityBarBotOrder,
@@ -141,8 +143,8 @@ export function mergeContextualTourSeenIds(
 }
 
 export function mergeOsc52ClipboardNoticePending(
-  current: PersistedUIState,
-  incoming: PersistedUIState
+  current: Pick<PersistedUIState, 'osc52ClipboardDefaultOnNoticePending'>,
+  incoming: Pick<PersistedUIState, 'osc52ClipboardDefaultOnNoticePending'>
 ): boolean {
   return (
     current.osc52ClipboardDefaultOnNoticePending === true ||
@@ -154,7 +156,12 @@ export function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
   // Settings migration arms OSC 52’s UI notice; reading UI first would later overwrite that arm after its one-shot stamp.
   const storedSettings = getStoredSettings()
-  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  const raw = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  // Legacy web cached the host's UI level, but rendered at 100% regardless of that value.
+  const stored = {
+    ...raw,
+    ...resolveUIZoomLevels(raw.sidebarZoomLevel === undefined ? undefined : raw)
+  }
   const base = {
     ...defaults,
     // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.

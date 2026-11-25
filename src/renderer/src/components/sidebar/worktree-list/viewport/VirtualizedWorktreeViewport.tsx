@@ -328,7 +328,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         return
       }
       const rect = event.currentTarget.getBoundingClientRect()
-      if (event.clientX >= rect.right - scrollbarWidth) {
+      if (
+        event.clientX >=
+        rect.right - scrollbarWidth * (event.currentTarget.currentCSSZoom || 1)
+      ) {
         markDirectScrollInput()
       }
     },

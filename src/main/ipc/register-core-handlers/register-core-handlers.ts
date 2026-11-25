@@ -178,7 +178,7 @@ export async function registerCoreHandlers(
     registerNotebookHandlers(store)
     registerOnboardingHandlers(store)
     registerDashboardPopoutHandlers(store, keybindings)
-    registerWorkspaceSpaceWindowHandlers(store)
+    registerWorkspaceSpaceWindowHandlers(store, keybindings)
     registerTerminalPreviewHandlers(runtime)
     registerDeveloperPermissionHandlers()
     // Diagnostics and telemetry register independent channels and keep separate data paths.

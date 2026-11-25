@@ -1,5 +1,6 @@
 'use client'
 
+import { useSidebarZoomAttribute } from './sidebar-zoom-context'
 import * as React from 'react'
 import * as PopoverPrimitive from 'radix-ui/popover'
 import { cva } from 'class-variance-authority'
@@ -178,11 +179,13 @@ function PopoverContent({
 
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(setContentRef)
 
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <PortalContainerContext value={container}>
       <PopoverPrimitive.Portal container={container ?? undefined}>
         <OverlayFocusScope value={scope}>
           <PopoverPrimitive.Content
+            data-sidebar-zoom={sidebarZoom}
             data-slot="popover-content"
             align={align}
             sideOffset={sideOffset}

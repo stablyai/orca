@@ -1,3 +1,4 @@
+import { getZoomEntries } from './appearance-zoom-search'
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -8,8 +9,6 @@ import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effect
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
 import { useAppStore } from '../../../store/index'
-import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
-import { ShortcutHintList } from './AppearanceShortcutHintList'
 import { FontAutocomplete } from './fonts/FontAutocomplete'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
@@ -18,8 +17,7 @@ import {
   getCodeEditorThemeEntries,
   getThemeEntries,
   getTitlebarEntries,
-  getTypographyEntries,
-  getZoomEntries
+  getTypographyEntries
 } from './appearance-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
@@ -93,15 +91,12 @@ export function AppearanceInterfaceSection({
     'Icon theme'
   )
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
-  const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
-  const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = t('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
-  const zoomEntry = getZoomEntries()[0]
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
@@ -247,28 +242,22 @@ export function AppearanceInterfaceSection({
         />
       ) : null}
 
-      <SearchableSetting
-        title={t('auto.components.settings.AppearancePane.173edfb768', 'UI zoom')}
-        description={zoomEntry?.description}
-        keywords={zoomEntry?.keywords ?? ['zoom', 'scale', 'shortcut']}
-        forceVisible={forceVisiblePrimary}
-      >
-        <SettingsRow
-          label={t('auto.components.settings.AppearancePane.173edfb768', 'UI zoom')}
-          // Explain the shortcut and terminal exception; the zoom buttons already explain scaling.
-          description={
-            <>
-              <ShortcutHintList combos={zoomInKeyCombos} /> /{' '}
-              <ShortcutHintList combos={zoomOutKeyCombos} />{' '}
-              {t(
-                'auto.components.settings.AppearancePane.ef89200c1f',
-                'when not in a terminal pane.'
-              )}
-            </>
-          }
-          control={<UIZoomControl />}
-        />
-      </SearchableSetting>
+      {getZoomEntries().map(({ region, targetSectionId, title, description, keywords }) => (
+        <SearchableSetting
+          key={region}
+          id={targetSectionId}
+          title={title}
+          description={description}
+          keywords={keywords}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={title}
+            description={description}
+            control={<UIZoomControl region={region} label={title} />}
+          />
+        </SearchableSetting>
+      ))}
 
       <SearchableSetting
         title={t('auto.components.settings.AppearancePane.657a7230a2', 'IDE font')}

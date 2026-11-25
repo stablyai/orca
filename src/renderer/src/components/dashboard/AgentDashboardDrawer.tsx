@@ -227,18 +227,16 @@ export function AgentDashboardDrawer({
           left: drawerLeftCss,
           pointerEvents: 'none'
         }}
-        style={
-          {
-            ...leftSidebarStyle,
-            // Why: the board is a companion to the workspace sidebar, so it
-            // expands from the sidebar edge instead of covering the sidebar.
-            left: drawerLeftCss,
-            top: WORKSPACE_TOP_CHROME_HEIGHT,
-            bottom: drawerBottom,
-            height: 'auto',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
-          } as React.CSSProperties
-        }
+        style={{
+          ...leftSidebarStyle,
+          // Why: the board is a companion to the workspace sidebar, so it
+          // expands from the sidebar edge instead of covering the sidebar.
+          left: drawerLeftCss,
+          top: WORKSPACE_TOP_CHROME_HEIGHT,
+          bottom: drawerBottom,
+          height: 'auto',
+          width: `min(calc(100vw / var(--web-panel-zoom, 1) - ${drawerLeftCss}), 1294px)`
+        }}
         data-agent-dashboard-sheet=""
         onOpenAutoFocus={(event) => {
           // Suppress default header focus, which reveals hover-style affordances without a pointer.

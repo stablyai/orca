@@ -79,6 +79,11 @@ export function forwardGuestShortcutInput(
       return renderer !== null && isLocalRenderer?.(renderer) === true
     })()
   if (action?.type === 'zoom') {
+    if (action.region) {
+      event.preventDefault()
+      resolveRenderer(browserTabId)?.send('ui:regionZoom', action.region, action.direction)
+      return true
+    }
     if (!page) {
       // Why: a plugin frame has no page zoom; Orca zooms what it would with focus outside a pane.
       event.preventDefault()

@@ -1,5 +1,6 @@
 'use client'
 
+import { useSidebarZoomAttribute } from './sidebar-zoom-context'
 import * as React from 'react'
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import * as SelectPrimitive from 'radix-ui/select'
@@ -83,10 +84,12 @@ function SelectContent({
   portalContainer?: HTMLElement | null
 }) {
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <SelectPrimitive.Portal container={usePortalContainer(portalContainer) ?? undefined}>
       <OverlayFocusScope value={scope}>
         <SelectPrimitive.Content
+          data-sidebar-zoom={sidebarZoom}
           data-slot="select-content"
           // Match dropdown surface/border/shadow tokens so options remain distinct from the dark canvas.
           className={cn(
