@@ -16,10 +16,10 @@ import {
 } from './AutomationControls'
 import { AutomationList } from './AutomationList'
 import { AutomationDetail, AutomationRunNowBar, automationDetailBar } from './AutomationDetail'
-import { AutomationEditor } from './AutomationEditor'
+import type { AutomationEditorSection } from './AutomationEditor'
+import { AutomationEditorSheet, type AutomationEditorRequest } from './AutomationEditorSheet'
 import { leaveThrough, type AutomationLeaveSlot } from './AutomationEditorNavigation'
 import { AutomationRecentRuns, AutomationRunsView } from './AutomationRunList'
-import { AutomationPageBotEditor } from './AutomationPageBotEditor'
 import { AutomationRunDetails } from './AutomationRunDetails'
 import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
 import {
@@ -31,14 +31,13 @@ import {
 import { automationUpdateParams, type AutomationDraft } from './automation-draft'
 import type { AutomationTargets } from './automation-target-inventory'
 import { useAutomationCatalog, useStartOnAutomation } from './use-automation-catalog'
-import { automationEditorDraftKey, dropAutomationEditorDraft } from './automation-editor-draft-row'
+import { dropAutomationEditorDraft } from './automation-editor-draft-row'
 import { automationStyles as styles } from './automation-styles'
 import { useAutomationProjectNames } from './use-automation-project-names'
 
 type AutomationView =
   | { kind: 'list' }
   | { kind: 'detail'; row: MobileAutomationRow }
-  | { kind: 'editor'; row?: MobileAutomationRow; initialDraft?: AutomationDraft }
   | { kind: 'run'; run: MobileAutomationRun; scope: AutomationRunScope }
 const ACTION_OPTIONS = { failWhenDisconnected: true }
 
@@ -57,20 +56,31 @@ export function AutomationManager(props: {
 }) {
   useMobileColorScheme()
   const catalog = useAutomationCatalog(props.hostId, props.client, props.executionHost)
-  const startView: AutomationView = props.startInEditor ? { kind: 'editor' } : { kind: 'list' }
-  const [view, setView] = useState<AutomationView>(startView)
+  const [view, setView] = useState<AutomationView>({ kind: 'list' })
+  // Kept while the sheet slides away, so it leaves with what it showed.
+  const [editor, setEditor] = useState<AutomationEditorRequest | null>(
+    props.startInEditor ? { key: 0 } : null
+  )
+  const [editorOpen, setEditorOpen] = useState(props.startInEditor === true)
+  function openEditor(request: Omit<AutomationEditorRequest, 'key'>) {
+    setEditor((current) => ({ ...request, key: (current?.key ?? 0) + 1 }))
+    setEditorOpen(true)
+  }
   const [tab, setTab] = useState<'automations' | 'runs'>('automations')
   const [filter, setFilter] = useState<AutomationRunScope>(null)
   const [outcome, setOutcome] = useState('all')
   useStartOnAutomation(catalog, props.startOnAutomation, (row) => setView({ kind: 'detail', row }))
   const createAttempt = useAutomationCreateAttempt(
     catalog.rows,
-    view.kind === 'editor' && !view.row,
+    editorOpen && editor !== null && !editor.row,
     (saved, initialDraft) => {
       catalog.setError(null)
-      setView(
-        initialDraft ? { kind: 'editor', row: saved, initialDraft } : { kind: 'detail', row: saved }
-      )
+      setView({ kind: 'detail', row: saved })
+      if (initialDraft) {
+        openEditor({ row: saved, initialDraft })
+      } else {
+        setEditorOpen(false)
+      }
     },
     catalog.isCurrentSnapshot,
     () => dropAutomationEditorDraft(props.executionHost)
@@ -149,7 +159,7 @@ export function AutomationManager(props: {
       }
     )
   }
-  function edit(selected: MobileAutomationRow) {
+  function edit(selected: MobileAutomationRow, section?: AutomationEditorSection) {
     void catalog.perform(
       async (client) =>
         automationShowRead.interpret(
@@ -162,7 +172,11 @@ export function AutomationManager(props: {
             ACTION_OPTIONS
           )
         ),
-      ({ automation }) => setView({ kind: 'editor', row: { ...selected, automation } })
+      ({ automation }) =>
+        openEditor({
+          row: { ...selected, automation },
+          ...(automation.bot ? {} : { section })
+        })
     )
   }
   async function runNow(selected: MobileAutomationRow): Promise<boolean> {
@@ -216,7 +230,7 @@ export function AutomationManager(props: {
     )
   }
   function save(draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) {
-    const editing = view.kind === 'editor' ? view.row : undefined
+    const editing = editor?.row
     void catalog.perform(
       async (client, current) => {
         if (editing) {
@@ -254,6 +268,7 @@ export function AutomationManager(props: {
         const id = saved.automation.id
         dropAutomationEditorDraft(props.executionHost, id)
         catalog.setRows((rows) => [...rows.filter((row) => row.automation.id !== id), saved])
+        setEditorOpen(false)
         setView({ kind: 'detail', row: saved })
       }
     )
@@ -267,7 +282,7 @@ export function AutomationManager(props: {
   )
   const create = () => {
     createAttempt.reset()
-    setView({ kind: 'editor' })
+    openEditor({})
   }
   const bar: AutomationHeaderBar = row
     ? automationDetailBar(row, allAutomations, {
@@ -281,8 +296,8 @@ export function AutomationManager(props: {
           trailing: <AutomationNewButton disabled={disabled || !catalog.loaded} onPress={create} />
         }
       : {}
-  // Settings-style views lay out as grouped lists; the editor and a run keep their form spacing.
-  const grouped = view.kind === 'list' || view.kind === 'detail'
+  // Settings-style views lay out as grouped lists; a run keeps its form spacing.
+  const grouped = view.kind !== 'run'
   const loadFailed = !catalog.loaded && catalog.error !== null && view.kind === 'list'
   return (
     <>
@@ -298,41 +313,6 @@ export function AutomationManager(props: {
           failedLoad={loadFailed}
           onRetry={disabled ? null : () => void catalog.refresh(true)}
         />
-        {view.kind === 'editor' && view.row?.automation.bot ? (
-          <AutomationPageBotEditor
-            row={view.row}
-            client={props.client}
-            hostId={props.hostId}
-            executionHost={props.executionHost}
-            connected={catalog.connected}
-            leaveGuard={props.leaveGuard}
-            onBack={(back) => setView({ kind: 'detail', row: back })}
-            onSaved={(saved) => {
-              catalog.setRows((rows) =>
-                rows.map((entry) => (entry.automation.id === saved.automation.id ? saved : entry))
-              )
-              void catalog.refresh()
-              setView({ kind: 'detail', row: saved })
-            }}
-          />
-        ) : view.kind === 'editor' && props.client && catalog.loaded ? (
-          <AutomationEditor
-            key={view.row?.automation.id ?? 'create'}
-            client={props.client}
-            current={view.row?.automation}
-            initialDraft={view.initialDraft}
-            draftKey={automationEditorDraftKey(props.executionHost, view.row?.automation.id)}
-            onDraftChange={createAttempt.observeDraft}
-            leaveGuard={props.leaveGuard}
-            capabilities={catalog.capabilities}
-            busy={catalog.busy}
-            connected={catalog.connected}
-            onCancel={() =>
-              view.row ? setView({ kind: 'detail', row: view.row }) : allAutomations()
-            }
-            onSave={save}
-          />
-        ) : null}
         {row ? (
           <>
             <AutomationDetail
@@ -342,6 +322,7 @@ export function AutomationManager(props: {
               disabled={disabled}
               projectName={projectName(row.automation)}
               onToggle={(enabled) => toggle(row, enabled)}
+              onEdit={(section) => edit(row, section)}
             />
             <AutomationRecentRuns
               history={history}
@@ -394,7 +375,29 @@ export function AutomationManager(props: {
           onRun={() => runNow(row)}
         />
       ) : null}
-      <OrcaHookTrustDrawer {...setupConsent.drawer} />
+      <AutomationEditorSheet
+        request={editor}
+        open={editorOpen}
+        client={props.client}
+        hostId={props.hostId}
+        executionHost={props.executionHost}
+        catalog={catalog}
+        leaveGuard={props.leaveGuard}
+        onDraftChange={createAttempt.observeDraft}
+        onClose={() => setEditorOpen(false)}
+        onAfterClose={() => setEditor(null)}
+        onSave={save}
+        onBotSaved={(saved) => {
+          catalog.setRows((rows) =>
+            rows.map((entry) => (entry.automation.id === saved.automation.id ? saved : entry))
+          )
+          void catalog.refresh()
+          setEditorOpen(false)
+          setView({ kind: 'detail', row: saved })
+        }}
+      >
+        <OrcaHookTrustDrawer {...setupConsent.drawer} />
+      </AutomationEditorSheet>
     </>
   )
 }

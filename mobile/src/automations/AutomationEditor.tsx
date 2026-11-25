@@ -1,22 +1,20 @@
-import { AutomationDraftReview } from './AutomationDraftReview'
-import {
-  AutomationEditorHeader,
-  AutomationEditorNavigation,
-  useAutomationLeaveGuard,
-  type AutomationLeaveSlot
-} from './AutomationEditorNavigation'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+// The automation editor: one sheet like the agents' editor (Name, What should it do?, Where, When),
+// with Advanced one page down. A detail row opens it on just its own section.
 import { useEffect, useRef, useState } from 'react'
-import { useAutomationTargetDrafts } from './use-automation-target-drafts'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
+import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../../src/shared/automations/automation-runtime-capabilities'
+import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
+import { FieldTextInput } from '../components/composer-input/FieldTextInput'
+import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SettingsNote } from '../settings/settings-screen-frame'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { MobileAutomation } from './automation-reply-schema'
-import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
 import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
-import { AutomationAdvancedFields } from './AutomationAdvancedFields'
-import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
-import { AutomationScheduleFields } from './AutomationScheduleFields'
+import type { MobileAutomation } from './automation-reply-schema'
 import {
   automationSetupKey,
   workspaceMatchesSetup,
@@ -25,17 +23,34 @@ import {
   type AutomationTargets
 } from './automation-target-inventory'
 import {
+  automationDraftEdits,
   newAutomationDraft,
   validateAutomationDraft,
   type AutomationDraft
 } from './automation-draft'
 import { useAutomationEditorDraft } from './use-automation-editor-draft'
+import { useAutomationTargetDrafts } from './use-automation-target-drafts'
+import { useAutomationLeaveGuard, type AutomationLeaveSlot } from './AutomationEditorNavigation'
+import type { PresentAutomationSheet } from './AutomationSheets'
+import { BotAutomationWhenRows } from './BotAutomationWhenRows'
+import { AutomationWhereRows } from './AutomationWhereRows'
+import { AutomationAdvancedRows, AutomationTimeZoneRow } from './AutomationAdvancedRows'
 import { automationErrorMessage } from './automation-error'
-import { automationStyles as styles } from './automation-styles'
+import { automationStyles } from './automation-styles'
+
+/** Which part of the editor a detail row opens; none opens all of it. */
+export type AutomationEditorSection = 'prompt' | 'where' | 'when'
+const SECTION_FIELDS: Record<AutomationEditorSection, readonly string[]> = {
+  prompt: ['prompt'],
+  where: ['setupId', 'workspaceMode', 'workspaceId', 'agentId', 'reuseSession'],
+  when: ['rrule', 'timezone']
+}
 
 export function AutomationEditor(props: {
+  visible: boolean
   client: RpcClient
   current?: MobileAutomation
+  section?: AutomationEditorSection
   initialDraft?: AutomationDraft
   /** Where unsaved edits are kept; they come back when this editor opens again, even after a kill. */
   draftKey: string
@@ -43,23 +58,34 @@ export function AutomationEditor(props: {
   busy: boolean
   connected: boolean
   capabilities: readonly string[]
-  onCancel: () => void
+  present: PresentAutomationSheet
+  onClose: () => void
+  onAfterClose: () => void
   leaveGuard?: AutomationLeaveSlot
   onSave: (draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const { present } = props
   const form = useAutomationEditorDraft(props.draftKey, props.current, props.initialDraft)
   const { draft, setDraft, original } = form
-  const leave = useAutomationLeaveGuard(draft, original, props.leaveGuard, form.discard)
+  // Unsaved edits restored from outside the row's section open the whole editor, so none hide.
+  const requested = props.section
+  const section =
+    requested &&
+    Object.keys(automationDraftEdits(original.current, draft) ?? {}).every(
+      (field) => field.endsWith('Edited') || SECTION_FIELDS[requested].includes(field)
+    )
+      ? requested
+      : undefined
+  const leave = useAutomationLeaveGuard(draft, original, props.leaveGuard, form.discard, present)
   const selectTargetDraft = useAutomationTargetDrafts()
+  const pager = useOptionPager<'advanced'>()
   const initialized = useRef(false)
   const [targets, setTargets] = useState<AutomationTargets | null>(null)
   const [agents, setAgents] = useState<MobileNewTabAgentOption[]>([])
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentError, setAgentError] = useState<string | null>(null)
-  const [step, setStep] = useState(props.initialDraft ? 3 : 1)
-  const [advanced, setAdvanced] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inventoryLimit, setInventoryLimit] = useState(200)
   const [reload, setReload] = useState(0)
@@ -159,247 +185,210 @@ export function AutomationEditor(props: {
     props.onDraftChange(draft)
   }, [draft, props.onDraftChange])
 
-  const agentOptions: { value: string; label: string }[] = agents.map((option) => ({
-    value: option.agent,
-    label: option.label
-  }))
-  if (draft.agentId && !agentOptions.some((option) => option.value === draft.agentId)) {
-    agentOptions.unshift({
-      value: draft.agentId,
-      label: t('automations.mobile.savedAgent', '{{agent}} (saved)', {
-        agent: mobileTuiAgentLabel(draft.agentId)
-      })
-    })
-  }
   function change(patch: Partial<AutomationDraft>) {
-    setDraft((current) => ({
-      ...current,
-      ...patch,
-      ...('setupId' in patch || 'workspaceMode' in patch || 'workspaceId' in patch
-        ? { targetEdited: true }
-        : {})
-    }))
+    setDraft((current) => ({ ...current, ...patch }))
     setError(null)
   }
   function changeTarget(patch: Partial<AutomationDraft>) {
-    setDraft((current) => {
-      return selectTargetDraft(current, patch)
-    })
+    setDraft((current) => selectTargetDraft(current, patch))
     setError(null)
   }
-  function next() {
-    const validation = validateAutomationDraft(draft, step, props.current)
+  const ready =
+    targets !== null &&
+    !agentsLoading &&
+    draft.name.trim() !== '' &&
+    draft.prompt.trim() !== '' &&
+    draft.agentId !== null &&
+    (draft.workspaceMode !== 'existing' || draft.workspaceId !== '') &&
+    (props.current !== undefined || setup !== undefined)
+  function submit() {
+    const validation = validateAutomationDraft(draft, 3, props.current)
     if (validation) {
       setError(validation)
       return
     }
-    if (!targets || (!props.current && !setup)) {
-      setError(
-        t(
-          'automations.mobile.chooseAProjectSetUpOnThisHost',
-          'Choose a project set up on this host.'
-        )
-      )
-      return
-    }
-    if (step < 3) {
-      setStep(step + 1)
-    } else {
+    if (targets) {
       props.onSave(draft, original.current, targets)
     }
   }
-  return (
-    <View style={styles.stack}>
-      <AutomationEditorHeader
-        step={step}
-        editing={!!props.current}
-        busy={props.busy}
-        onCancel={() => leave.guard(props.onCancel)}
+
+  const whereRows = (
+    <AutomationWhereRows
+      draft={draft}
+      current={props.current}
+      targets={targets}
+      setup={setup}
+      workspaces={workspaces}
+      agents={agents}
+      agentsLoading={agentsLoading}
+      disabled={disabled}
+      present={present}
+      change={change}
+      changeTarget={changeTarget}
+      onLoadMore={() =>
+        setInventoryLimit(Math.max(inventoryLimit + 200, targets?.coverage.totalCount ?? 0))
+      }
+    />
+  )
+  const noAgents = !agentsLoading && !agentError && setup && agents.length === 0 && !props.current
+  const note = error ?? agentError
+  const main = (
+    <View>
+      <SheetHeader
+        title={
+          section === 'prompt'
+            ? t('automations.mobile.instructions', 'Instructions')
+            : section === 'where'
+              ? t('automations.mobile.where', 'Where')
+              : section === 'when'
+                ? t('automations.mobile.schedule', 'Schedule')
+                : props.current
+                  ? t('automations.mobile.editAutomation', 'Edit automation')
+                  : t('automations.mobile.newAutomation', 'New automation')
+        }
+        subtitle={section ? props.current?.name : undefined}
+        leading={{
+          label: t('automations.mobile.cancel', 'Cancel'),
+          onPress: () => leave.guard(props.onClose),
+          disabled: props.busy
+        }}
+        trailing={{
+          label: props.current ? t('common.save', 'Save') : t('automations.mobile.add', 'Add'),
+          onPress: submit,
+          disabled: !ready || !props.connected || (props.current !== undefined && !leave.changed),
+          busy: props.busy
+        }}
       />
-      {error || agentError ? (
-        <View style={styles.stack}>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {error ?? agentError}
-          </Text>
-          {!targets ? (
-            <AutomationButton
-              label={t('automations.mobile.retryProjectLoading', 'Retry project loading')}
+      <View style={[styles.content, section && styles.sectionOnly]}>
+        {note ? <SettingsNote error>{note}</SettingsNote> : null}
+        {error && !targets ? (
+          <ListGroup>
+            <ListRow
+              title={t('automations.mobile.refresh', 'Refresh')}
+              accent
+              disabled={props.busy || !props.connected}
               onPress={() => setReload((value) => value + 1)}
-              disabled={props.busy || !props.connected}
             />
-          ) : null}
-        </View>
-      ) : null}
-      {!targets && !error ? (
-        <Text style={styles.meta}>
-          {t('automations.mobile.loadingProjects', 'Loading projects…')}
-        </Text>
-      ) : null}
-      {step === 1 ? (
-        <>
-          <AutomationField
-            label={t('automations.mobile.name', 'Name')}
-            value={draft.name}
-            onChange={(name) => change({ name })}
-            disabled={disabled}
-          />
-          <AutomationField
-            label={t('automations.mobile.instructions', 'Instructions')}
-            value={draft.prompt}
-            onChange={(prompt) => change({ prompt })}
-            multiline
-            disabled={disabled}
-          />
-          <AutomationChoice
-            label={t('automations.mobile.projectAndHostSetup', 'Project and host setup')}
-            value={draft.setupId}
-            options={[
-              ...(targets?.setups
-                .filter((entry) => !entry.hostId.startsWith('runtime:'))
-                .map((entry) => ({
-                  value: automationSetupKey(entry),
-                  label: entry.label,
-                  subtitle: `${entry.displayName} · ${entry.path}`
-                })) ?? []),
-              ...(!setup && props.current
-                ? [
-                    {
-                      value: draft.setupId,
-                      label: t('automations.mobile.savedTarget', 'Saved target'),
-                      subtitle: props.current.runContext?.path ?? props.current.projectId
-                    }
-                  ]
-                : [])
-            ]}
-            disabled={disabled || !targets}
-            onSelect={(setupId) => {
-              const target = targets?.setups.find((entry) => automationSetupKey(entry) === setupId)
-              changeTarget({
-                setupId,
-                workspaceId: '',
-                workspaceMode: target?.kind === 'folder' ? 'existing' : draft.workspaceMode,
-                reuseSession: false,
-                agentId: null
-              })
-            }}
-          />
-          <AutomationChoice
-            label={t('automations.mobile.workspace', 'Workspace')}
-            value={draft.workspaceMode}
-            options={[
-              {
-                value: 'new_per_run',
-                label: t('automations.mobile.newWorkspacePerRun', 'New workspace per run'),
-                disabled: setup?.kind === 'folder'
-              },
-              {
-                value: 'existing',
-                label: t('automations.mobile.useAnExistingWorkspace', 'Use an existing workspace')
-              }
-            ]}
-            onSelect={(workspaceMode) => changeTarget({ workspaceMode, reuseSession: false })}
-            disabled={disabled}
-          />
-          {draft.workspaceMode === 'existing' ? (
-            <AutomationChoice
-              label={t('automations.mobile.existingWorkspace', 'Existing workspace')}
-              value={draft.workspaceId}
-              options={[
-                ...workspaces.map((workspace) => ({
-                  value: workspace.worktreeId,
-                  label: workspace.displayName || workspace.path,
-                  subtitle: workspace.path
-                })),
-                ...(props.current &&
-                draft.workspaceId &&
-                !workspaces.some((workspace) => workspace.worktreeId === draft.workspaceId)
-                  ? [
-                      {
-                        value: draft.workspaceId,
-                        label: t('automations.mobile.savedWorkspace', 'Saved workspace'),
-                        subtitle: draft.workspaceId
-                      }
-                    ]
-                  : [])
-              ]}
-              onSelect={(workspaceId) =>
-                changeTarget({ workspaceId, agentId: props.current?.agentId ?? null })
-              }
-              disabled={disabled || !targets}
+          </ListGroup>
+        ) : null}
+        {section === undefined ? (
+          <>
+            <SectionHeader title={t('automations.mobile.name', 'Name')} first />
+            <FieldTextInput
+              style={automationStyles.input}
+              value={draft.name}
+              onChangeText={(name) => change({ name })}
+              editable={!disabled}
+              accessibilityLabel={t('automations.mobile.name', 'Name')}
             />
-          ) : null}
-          {targets?.coverage.truncated ? (
-            <AutomationButton
-              label={t('automations.mobile.loadMoreWorkspaces', 'Load more workspaces')}
-              onPress={() =>
-                setInventoryLimit(Math.max(inventoryLimit + 200, targets.coverage.totalCount))
-              }
-              disabled={props.busy || !props.connected}
+          </>
+        ) : null}
+        {section === undefined || section === 'prompt' ? (
+          <>
+            {section === undefined ? (
+              <SectionHeader title={t('automations.botTarget.prompt', 'What should it do?')} />
+            ) : null}
+            <FieldTextInput
+              style={[automationStyles.input, automationStyles.multiline]}
+              value={draft.prompt}
+              onChangeText={(prompt) => change({ prompt })}
+              multiline
+              editable={!disabled}
+              accessibilityLabel={t('automations.botTarget.prompt', 'What should it do?')}
             />
-          ) : null}
-          {setup && targets?.coverage.hostScope.omittedHostIds.includes(setup.hostId) ? (
-            <Text style={styles.meta}>
-              {t(
-                'automations.mobile.thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces',
-                'This host’s workspace inventory is incomplete. Refresh or load more workspaces.'
-              )}
-            </Text>
-          ) : null}
-          <AutomationChoice
-            label={
-              agentsLoading
-                ? t('automations.mobile.agentDetecting', 'Agent · detecting…')
-                : t('automations.mobile.agent', 'Agent')
-            }
-            value={draft.agentId ?? ''}
-            options={agentOptions}
-            onSelect={(value) => {
-              const agent = agentOptions.find((option) => option.value === value)
-              if (agent) {
-                change({ agentId: agent.value })
+          </>
+        ) : null}
+        {section === undefined || section === 'where' ? (
+          <>
+            {section === undefined ? (
+              <SectionHeader title={t('automations.mobile.where', 'Where')} />
+            ) : null}
+            {whereRows}
+            {noAgents ? (
+              <SettingsNote>
+                {t(
+                  'automations.mobile.installAndEnableAnAgentOnThisHostThenRetry',
+                  'Install and enable an agent on this host, then retry.'
+                )}
+              </SettingsNote>
+            ) : null}
+          </>
+        ) : null}
+        {section === undefined || section === 'when' ? (
+          <>
+            {section === undefined ? (
+              <SectionHeader title={t('automations.botTarget.when', 'When')} />
+            ) : null}
+            <BotAutomationWhenRows
+              draft={{ eventsOnly: false, rrule: draft.rrule }}
+              hasEvents={false}
+              change={(patch) =>
+                patch.rrule === undefined ? undefined : change({ rrule: patch.rrule })
               }
-            }}
-            disabled={disabled || agentsLoading}
-          />
-          {!agentsLoading && !agentError && setup && agents.length === 0 && !props.current ? (
-            <Text style={styles.meta}>
-              {t(
-                'automations.mobile.installAndEnableAnAgentOnThisHostThenRetry',
-                'Install and enable an agent on this host, then retry.'
-              )}
-            </Text>
-          ) : null}
-          <AutomationButton
-            label={
-              advanced
-                ? t('automations.mobile.hideAdvancedOptions', 'Hide advanced options')
-                : t('automations.mobile.advancedOptions', 'Advanced options')
-            }
-            onPress={() => setAdvanced(!advanced)}
-          />
-          {advanced ? (
-            <AutomationAdvancedFields
-              draft={draft}
-              change={change}
+              onSetUpEvents={null}
+              present={present}
               disabled={disabled}
-              capabilities={props.capabilities}
             />
-          ) : null}
-        </>
-      ) : step === 2 ? (
-        <AutomationScheduleFields draft={draft} change={change} disabled={disabled} />
-      ) : (
-        <AutomationDraftReview draft={draft} setup={setup} workspaces={workspaces} />
-      )}
-      <AutomationEditorNavigation
-        step={step}
-        editing={!!props.current}
-        busy={props.busy}
-        disabled={disabled || !targets || agentsLoading}
-        onBack={() => setStep(step - 1)}
-        onNext={next}
-      />
-      {leave.confirm}
+            {section === 'when' ? (
+              <ListGroup style={styles.advanced}>
+                <AutomationTimeZoneRow
+                  draft={draft}
+                  change={change}
+                  present={present}
+                  disabled={disabled}
+                />
+              </ListGroup>
+            ) : null}
+          </>
+        ) : null}
+        {section === undefined ? (
+          <ListGroup style={styles.advanced}>
+            <ListRow
+              title={t('automations.mobile.advanced', 'Advanced')}
+              navigates
+              disabled={disabled}
+              onPress={() => pager.open('advanced')}
+            />
+          </ListGroup>
+        ) : null}
+      </View>
     </View>
   )
+  const page =
+    pager.page === 'advanced' ? (
+      <View>
+        <SheetHeader
+          title={t('automations.mobile.advanced', 'Advanced')}
+          onBack={{ label: t('automations.mobile.back', 'Back'), onPress: pager.close }}
+        />
+        <AutomationAdvancedRows
+          draft={draft}
+          change={change}
+          present={present}
+          disabled={disabled}
+          extraArgs={props.capabilities.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)}
+        />
+      </View>
+    ) : null
+  return (
+    <BottomDrawer
+      visible={props.visible}
+      // Unsaved edits stay until Cancel asks about them; a swipe would drop them unasked.
+      // A swipe keeps unsaved edits in the draft row; Cancel is the way to drop them.
+      dismissible={!props.busy}
+      onClose={props.onClose}
+      onAfterClose={() => {
+        pager.forget()
+        props.onAfterClose()
+      }}
+    >
+      <OptionPager pager={pager} main={main} page={page} />
+    </BottomDrawer>
+  )
 }
+
+const styles = themedStyleSheet(() => ({
+  content: { gap: spacing.sm, paddingBottom: spacing.xl },
+  sectionOnly: { paddingTop: spacing.xs },
+  advanced: { marginTop: spacing.sm }
+}))

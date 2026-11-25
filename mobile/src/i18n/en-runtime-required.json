@@ -116,6 +116,12 @@
     }
   },
   "automations": {
+    "mobile": {
+      "catchUpHours_one": "Within {{count}} hour",
+      "catchUpHours_other": "Within {{count}} hours",
+      "catchUpMinutes_one": "Within {{count}} minute",
+      "catchUpMinutes_other": "Within {{count}} minutes"
+    },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
       "malformed": "Its stored host record is incomplete.",
