@@ -7,15 +7,9 @@ import {
 } from '../../../shared/skills/discovery/custom-slash-commands'
 import { SKILL_FILE_MAX_DEPTH } from '../../../shared/skills/discovery/skill-discovery-depth'
 import { quotePosixShell as quoteBashString } from '../../../shared/shell/launch/shell-argument-quoting'
-import { runWslProcess } from '../../wsl/execution/wsl-runner'
-import {
-  buildCustomSlashCommandRoots,
-  type CustomSlashCommandRoot
-} from './custom-slash-command-discovery'
+import type { CustomSlashCommandRoot } from './custom-slash-command-discovery'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
-const WSL_COMMAND_SCAN_TIMEOUT_MS = 10_000
-const WSL_COMMAND_SCAN_MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 
 export function buildWslCustomSlashCommandDiscoveryCommand(
   roots: readonly CustomSlashCommandRoot[]
@@ -68,34 +62,4 @@ export function parseWslCustomSlashCommandOutput(
     })
   }
   return dedupeCustomSlashCommands(commands)
-}
-
-/** Its own wsl.exe call so a stalled or oversized commands tree degrades to no commands
- *  instead of failing the skill scan that shares the picker. */
-export async function discoverCustomSlashCommandsInWsl(args: {
-  distro: string
-  homeDir: string
-  cwd: string
-}): Promise<DiscoveredSlashCommand[]> {
-  const roots = buildCustomSlashCommandRoots({
-    homeDir: args.homeDir,
-    cwd: args.cwd,
-    pathApi: pathPosix
-  })
-  try {
-    const result = await runWslProcess({
-      distro: args.distro,
-      loginPath: 'none',
-      script: buildWslCustomSlashCommandDiscoveryCommand(roots),
-      shell: 'bash',
-      timeoutMs: WSL_COMMAND_SCAN_TIMEOUT_MS,
-      maxOutputBytes: WSL_COMMAND_SCAN_MAX_OUTPUT_BYTES
-    })
-    if (result.code !== 0 || result.timedOut || result.outputTruncated) {
-      return []
-    }
-    return parseWslCustomSlashCommandOutput(result.stdout, roots)
-  } catch {
-    return []
-  }
 }
