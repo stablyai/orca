@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { feishuCommand, type FeishuMessage } from './feishu-cli'
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
-import { threadKey } from './feishu-routes'
+import { threadKey } from './feishu-route-key'
 import { feishuThreadContext } from './feishu-thread-history'
 
 export class FeishuMessageIngress {

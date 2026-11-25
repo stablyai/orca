@@ -20,6 +20,13 @@ it('persists one answer per card, rejects cross-chat and invalid options, and ne
         { id: 'no', label: 'Deny' }
       ]
     }
+    store.putCard(b.account, 'choices:once', 'lane', 'om_origin', 'oc_chat', {
+      ...data,
+      kind: 'choices'
+    })
+    expect(store.pendingChoice(b.account, 'om_origin')).toBe(true)
+    store.postedCard(b.account, 'choices:once', 1, 'om_choices')
+    expect(store.pendingChoice(b.account, 'om_origin')).toBe(false)
     store.putCard(b.account, 'p1', 'lane', 'om_origin', 'oc_chat', data)
     expect(store.sendingCard(b.account, 'p1', 1000)).toBe(true)
     store.postedCard(b.account, 'p1', 1, 'om_card')

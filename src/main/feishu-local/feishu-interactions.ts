@@ -7,7 +7,7 @@ import type {
 } from '../external-conversations/external-conversation-events'
 import { dmKey, type Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
-import { cardData } from './feishu-card-store'
+import { cardData } from './feishu-card-data'
 import { feishuControlCard } from './feishu-card-render'
 import { feishuCommand, consumeFeishuEvent } from './feishu-cli'
 import { setTimeout as delay } from 'node:timers/promises'

@@ -40,6 +40,9 @@ export async function drainFeishuOutbox(
       ) {
         continue
       }
+      if (await inbox.pendingChoice(b.account, row.deliveryId)) {
+        continue
+      }
       if (fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet') {
         await checkProfile()
         if (!active()) {

@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import Database from '../sqlite/sync-database'
 import type { FeishuMessage, FeishuProfile } from './feishu-cli'
-import { FeishuCardStore, type FeishuCardData } from './feishu-card-store'
-import { FeishuRoutes, type FeishuRoute } from './feishu-routes'
+import { FeishuCardStore } from './feishu-card-store'
+import type { FeishuCardData } from './feishu-card-data'
+import { FeishuRoutes } from './feishu-routes'
+import type { FeishuRoute } from './feishu-route-key'
 import { binding, type Binding } from './feishu-binding'
 
 const inReplyWindow = (first: number, now: number): boolean =>
@@ -55,6 +57,9 @@ export class FeishuInbox {
     data: FeishuCardData
   ) {
     this.cards.put(account, id, external, original, chat, data)
+  }
+  pendingChoice(account: string, original: string) {
+    return this.cards.pendingChoice(account, original)
   }
   pendingCards(account: string) {
     return this.cards.pending(account)

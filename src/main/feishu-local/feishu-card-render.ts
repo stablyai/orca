@@ -1,4 +1,4 @@
-import type { FeishuCardData } from './feishu-card-store'
+import type { FeishuCardData } from './feishu-card-data'
 
 export function feishuControlCard(data: FeishuCardData, botName: string, open: boolean) {
   const options = open ? data.options : []

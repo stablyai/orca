@@ -1,14 +1,7 @@
 import { z } from 'zod'
 import type Database from '../sqlite/sync-database'
 
-export const cardData = z.object({
-  kind: z.enum(['status', 'prompt', 'choices']),
-  text: z.string(),
-  options: z.array(z.object({ id: z.string(), label: z.string() })).default([]),
-  promptId: z.string().optional(),
-  note: z.string().optional()
-})
-export type FeishuCardData = z.infer<typeof cardData>
+import { cardData, type FeishuCardData } from './feishu-card-data'
 const row = z.object({
   id: z.string(),
   external: z.string(),
@@ -72,6 +65,15 @@ export class FeishuCardStore {
       .prepare('SELECT * FROM feishu_cards WHERE account=? AND id=?')
       .get(account, id)
     return found ? row.parse(found) : null
+  }
+  pendingChoice(account: string, original: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          "SELECT 1 FROM feishu_cards WHERE account=? AND original=? AND id LIKE 'choices:%' AND message IS NULL AND review=0 LIMIT 1"
+        )
+        .get(account, original)
+    )
   }
   pending(account: string) {
     return this.db
