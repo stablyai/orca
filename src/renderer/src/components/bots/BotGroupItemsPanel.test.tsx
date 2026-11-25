@@ -35,6 +35,8 @@ let outside = 0
 let capturedFilter: BotItemFilter | undefined
 let capturedMembers: readonly { id: string; hostId: string }[] = []
 let paneBot: { id: string } | null = null
+// A function read keeps TS from narrowing paneBot after the test resets it.
+const currentPaneBot = (): { id: string } | null => paneBot
 
 vi.mock('@/lib/bot-catalog', () => ({ useBots: () => members }))
 vi.mock('./BotGroupPanelHeader', () => ({ BotGroupPanelHeader: () => null }))
@@ -150,6 +152,6 @@ it("keeps an open paired member's item up while its computer is offline", () => 
   expect(paneBot?.id).toBe('p')
   paneBot = null
   act(() => pairedHost('offline'))
-  expect(paneBot?.id).toBe('p')
+  expect(currentPaneBot()?.id).toBe('p')
   expect(capturedMembers.map(({ id }) => id)).toContain('p')
 })
