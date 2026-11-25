@@ -175,7 +175,7 @@ export function sanitizeWorkspaceCleanupDismissals(
 
 export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have falls back to terminal rather than rendering nothing.
-  if (!isTopLevelView(value)) {
+  if (!isTopLevelView(value) || value === 'shareRequest') {
     return 'terminal'
   }
   return value

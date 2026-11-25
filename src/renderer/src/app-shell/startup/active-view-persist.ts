@@ -10,5 +10,7 @@ export function buildActiveViewUnloadPatch(
   state: ActiveViewUnloadState
 ): Partial<PersistedUIState> {
   // Startup unload must not replace the saved view with defaults before hydration.
-  return state.persistedUIReady ? { activeView: state.activeView } : {}
+  // A share request's page names a request of this run only, so launch reopens the workspace.
+  const activeView = state.activeView === 'shareRequest' ? 'terminal' : state.activeView
+  return state.persistedUIReady ? { activeView } : {}
 }

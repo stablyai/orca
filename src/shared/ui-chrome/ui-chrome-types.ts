@@ -135,3 +135,5 @@ export type TopLevelView =
   | 'skills'
   | 'artifacts'
   | 'mobile'
+  // A share request's page; never restored at launch (its request lives in this run only).
+  | 'shareRequest'

@@ -154,9 +154,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
-      <Suspense fallback={null}>
-        <SharedBotRequestPageMount />
-      </Suspense>
+      {activeView === 'shareRequest' ? <SharedBotRequestPageMount /> : null}
       <BotShareReceiveMount />
       <BotTemplatesMount />
       <HandToBotMount />

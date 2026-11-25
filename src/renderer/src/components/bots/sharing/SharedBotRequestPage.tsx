@@ -1,5 +1,5 @@
 // A share request's own page, opened from its row: who shared which agent, and Accept or Decline.
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Laptop, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -9,7 +9,6 @@ import type { SharedBotRequestView } from '../../../../../shared/bots/shared-bot
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { useMobilePageEscape } from '@/components/mobile/use-mobile-page-escape'
 import { BotAvatarTile } from '../BotAvatar'
-import { closeSharedBotRequest, useOpenSharedBotRequest } from './shared-bot-request-open'
 import { useSharedBotRequestAnswer } from './use-shared-bot-request-answer'
 import { ownerShortName } from './SharedBotRequestRows'
 
@@ -20,11 +19,11 @@ export function SharedBotRequestPage({
 }): React.JSX.Element {
   const t = useTranslate()
   const { answering, answer } = useSharedBotRequestAnswer(request.shareId)
-  useMobilePageEscape(closeSharedBotRequest)
+  useMobilePageEscape(useAppStore((s) => s.closeShareRequestPage))
   return (
     <div
       data-shared-bot-request-page={request.shareId}
-      className="absolute inset-0 z-[5] flex items-center justify-center overflow-auto scrollbar-sleek bg-background p-6"
+      className="flex min-h-0 flex-1 items-center justify-center overflow-auto scrollbar-sleek bg-background p-6"
     >
       <div className="flex w-full max-w-md flex-col items-center text-center">
         <BotAvatarTile
@@ -73,26 +72,16 @@ export function SharedBotRequestPage({
   )
 }
 
-/** The open request's page while it is still offered and the main column hasn't moved on. */
+/** The shareRequest view: the open request's page while it is still offered. */
 export function SharedBotRequestPageMount(): React.JSX.Element | null {
-  const shareId = useOpenSharedBotRequest()
+  const shareId = useAppStore((s) => s.shareRequestId)
+  const close = useAppStore((s) => s.closeShareRequestPage)
   const request = useSharedBotRequests().find((candidate) => candidate.shareId === shareId)
-  const place = useAppStore((s) => `${s.activeView}\0${s.activeWorktreeId ?? ''}`)
-  const pinned = useRef<{ shareId: string; place: string } | null>(null)
   useEffect(() => {
-    if (shareId === null) {
-      pinned.current = null
-    } else if (pinned.current?.shareId !== shareId) {
-      // Opening pins the page to where the main column was; any move from there closes it.
-      pinned.current = { shareId, place }
-    } else if (pinned.current.place !== place) {
-      closeSharedBotRequest()
+    // Answered here or elsewhere, or no longer offered: back to where it was opened from.
+    if (!request) {
+      close()
     }
-  }, [place, shareId])
-  useEffect(() => {
-    if (shareId !== null && !request) {
-      closeSharedBotRequest()
-    }
-  }, [request, shareId])
+  }, [close, request])
   return request ? <SharedBotRequestPage request={request} /> : null
 }

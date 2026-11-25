@@ -9,7 +9,7 @@ import type { SharedBotRequestView } from '../../../../../shared/bots/shared-bot
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatarTile } from '../BotAvatar'
 import { BotShareMark } from './BotShareMark'
-import { openSharedBotRequest, useOpenSharedBotRequest } from './shared-bot-request-open'
+import { useAppStore } from '@/store'
 import { useSharedBotRequestAnswer } from './use-shared-bot-request-answer'
 
 /** The name a request calls its owner by: their first name. */
@@ -24,7 +24,10 @@ export function SharedBotRequestRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const { answering, answer } = useSharedBotRequestAnswer(request.shareId)
-  const open = useOpenSharedBotRequest() === request.shareId
+  const open = useAppStore(
+    (s) => s.activeView === 'shareRequest' && s.shareRequestId === request.shareId
+  )
+  const openPage = useAppStore((s) => s.openShareRequestPage)
   const sharedBy = t('bots.share.sharedBy', 'Shared by {{name}}', { name: request.ownerName })
   return (
     <div
@@ -37,11 +40,11 @@ export function SharedBotRequestRow({
         'flex items-start pt-1.25 pb-2 pl-1.25',
         !open && 'worktree-sidebar-card-hover'
       )}
-      onClick={() => openSharedBotRequest(request.shareId)}
+      onClick={() => openPage(request.shareId)}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault()
-          openSharedBotRequest(request.shareId)
+          openPage(request.shareId)
         }
       }}
     >

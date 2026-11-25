@@ -137,6 +137,21 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       set((state) => ({
         activeView: state.previousViewBeforeMobile
       })),
+    openShareRequestPage: (shareId) =>
+      set((state) => ({
+        activeView: 'shareRequest',
+        shareRequestId: shareId,
+        previousViewBeforeShareRequest:
+          state.activeView === 'shareRequest'
+            ? state.previousViewBeforeShareRequest
+            : state.activeView
+      })),
+    closeShareRequestPage: () =>
+      set((state) =>
+        state.activeView === 'shareRequest'
+          ? { activeView: state.previousViewBeforeShareRequest, shareRequestId: null }
+          : { shareRequestId: null }
+      ),
     setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
     clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null })
   }
