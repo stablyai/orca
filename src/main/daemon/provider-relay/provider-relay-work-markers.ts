@@ -1,7 +1,6 @@
 import type { ProviderRelayWorkMarker } from '../protocol/daemon-provider-relay-protocol'
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
-import { mayHideKey } from './provider-relay-pending-requests'
 
 /** More open tasks than this in one group reads as busy rather than growing without bound. */
 const MAX_GROUP_TASKS = 1_024
@@ -76,9 +75,18 @@ export function isProviderRelayQuietLine(line: string, names: ReadonlySet<string
   return typeof name === 'string' && names.has(name)
 }
 
-/** A value spelled with escapes (`\/`, an escaped ASCII letter) can't be found as a substring. */
-function mayEscapeValue(line: string): boolean {
-  return line.includes('\\/') || mayHideKey(line)
+/**
+ * Matches an escape that can spell one of `values`' characters (`\u0063`, `\/`), so a value spelled
+ * with escapes is still found; others (an escaped `<` in tool output) never cost a parse.
+ */
+function hidingEscape(values: readonly string[]): RegExp | null {
+  const chars = new Set(values.join(''))
+  if (chars.size === 0) {
+    return null
+  }
+  const codes = [...chars].map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+  const solidus = chars.has('/') ? '|\\\\/' : ''
+  return new RegExp(`\\\\u00(?:${codes.join('|')})${solidus}`, 'i')
 }
 
 /**
@@ -88,14 +96,23 @@ function mayEscapeValue(line: string): boolean {
  */
 export class ProviderRelayWorkReader {
   /** Per marker: its quoted name, and the quoted values its positive `when` tests need. */
-  private readonly needles: { name: string; quoted: string; values: string[] }[]
+  private readonly needles: {
+    name: string
+    quoted: string
+    values: string[]
+    hiding: RegExp | null
+  }[]
 
   constructor(private readonly markers: readonly ProviderRelayWorkMarker[]) {
-    this.needles = markers.map((marker) => ({
-      name: marker.name,
-      quoted: JSON.stringify(marker.name),
-      values: (marker.when ?? []).filter((test) => !test.not).map((test) => JSON.stringify(test.is))
-    }))
+    this.needles = markers.map((marker) => {
+      const values = (marker.when ?? []).filter((test) => !test.not).map((test) => test.is)
+      return {
+        name: marker.name,
+        quoted: JSON.stringify(marker.name),
+        values: values.map((value) => JSON.stringify(value)),
+        hiding: hidingEscape(values)
+      }
+    })
   }
 
   private mayMatch(line: string): boolean {
@@ -104,11 +121,10 @@ export class ProviderRelayWorkReader {
       return false
     }
     // Only a line its name can match is searched for values or escapes; others cost one scan.
-    let escaped: boolean | undefined
     return this.needles.some(
       (marker) =>
         (scanned === undefined ? line.includes(marker.quoted) : marker.name === scanned) &&
-        ((escaped ??= mayEscapeValue(line)) || marker.values.every((value) => line.includes(value)))
+        (marker.values.every((value) => line.includes(value)) || marker.hiding?.test(line) === true)
     )
   }
 
