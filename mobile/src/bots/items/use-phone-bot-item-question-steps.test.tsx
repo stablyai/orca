@@ -90,9 +90,13 @@ it('holds a photo answer until the last line is answered, then posts every answe
   act(() => {
     tree = create(createElement(Steps))
   })
-  act(() => steps!.fromBox('[Image #1] this one', ['/shot.png'], 'e3:0'))
+  act(() => {
+    expect(steps!.fromBox('[Image #1] this one', ['/shot.png'], 'e3:0')).toBeNull()
+  })
   expect(send).not.toHaveBeenCalled()
-  act(() => steps!.fromBox('[Image #1] and here', ['/tag.png'], 'e3:1'))
+  act(() => {
+    expect(steps!.fromBox('[Image #1] and here', ['/tag.png'], 'e3:1')).toBeNull()
+  })
   expect(send).toHaveBeenCalledTimes(1)
   const [text, paths] = send.mock.calls[0]!
   expect(text).toBe('Merge? → [Image #1] this one\nTag it? → [Image #2] and here')
