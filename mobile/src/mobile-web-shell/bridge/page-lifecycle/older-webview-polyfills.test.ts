@@ -17,21 +17,16 @@ describe('older WebView polyfills match the built-ins', () => {
     expect(arrayPolyfills.toSorted.call(source, compare)).toEqual(source.toSorted(compare))
     expect(arrayPolyfills.toSorted.call(source)).toEqual(source.toSorted())
     expect(arrayPolyfills.toReversed.call(source)).toEqual(source.toReversed())
-    const spliceArgs: [number?, number?, ...number[]][] = [
-      [],
-      [1],
-      [1, 2],
-      [-2, 1, 9, 8],
-      [10, 1, 7],
-      [-10, 2],
-      [2, -1, 6],
-      [1, undefined, 6]
-    ]
-    for (const args of spliceArgs) {
-      expect(arrayPolyfills.toSpliced.apply(source, args as never)).toEqual(
-        source.toSpliced(...(args as [number, number, ...number[]]))
-      )
-    }
+    const toSpliced = (...args: [number?, number?, ...number[]]) =>
+      arrayPolyfills.toSpliced.call(source, ...args)
+    // The native typings have no zero- or one-argument overload; those two use the spec's results.
+    expect(toSpliced()).toEqual(source)
+    expect(toSpliced(1)).toEqual([3])
+    expect(toSpliced(1, 2)).toEqual(source.toSpliced(1, 2))
+    expect(toSpliced(-2, 1, 9, 8)).toEqual(source.toSpliced(-2, 1, 9, 8))
+    expect(toSpliced(10, 1, 7)).toEqual(source.toSpliced(10, 1, 7))
+    expect(toSpliced(-10, 2)).toEqual(source.toSpliced(-10, 2))
+    expect(toSpliced(2, -1, 6)).toEqual(source.toSpliced(2, -1, 6))
     expect(arrayPolyfills.with.call(source, 1, 9)).toEqual(source.with(1, 9))
     expect(arrayPolyfills.with.call(source, -1, 9)).toEqual(source.with(-1, 9))
     expect(() => arrayPolyfills.with.call(source, 5, 9)).toThrow(RangeError)

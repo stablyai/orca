@@ -165,7 +165,6 @@ export function promiseWithResolvers<T>(): {
 
 export function urlCanParse(url: string | URL, base?: string | URL): boolean {
   try {
-    // oxlint-disable-next-line no-new -- constructing is the parse check.
     new URL(url, base)
     return true
   } catch {
@@ -173,7 +172,15 @@ export function urlCanParse(url: string | URL, base?: string | URL): boolean {
   }
 }
 
-function defineMissing(target: object, methods: Record<string, unknown>): void {
+type BuiltInOwner =
+  | unknown[]
+  | Set<unknown>
+  | MapConstructor
+  | ObjectConstructor
+  | PromiseConstructor
+  | typeof URL
+
+function defineMissing(target: BuiltInOwner, methods: Record<string, unknown>): void {
   for (const [name, value] of Object.entries(methods)) {
     if (name in target) {
       continue
