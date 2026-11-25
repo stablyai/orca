@@ -22,6 +22,7 @@ import {
 } from '@/components/sidebar/chrome/help-menu-controller'
 import { OrcaProfileSignOutConfirmDialog } from '@/components/orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
+import { refocusTriggerIfFocusLost } from './AppRailCustomizeMenu'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 
 export type AppRailAccount = { name: string; email: string | undefined; initial: string }
@@ -173,6 +174,9 @@ export function AppRailAccountMenu({
               viewAtOpenRef.current !== 'settings'
             ) {
               event.preventDefault()
+            } else {
+              // A dismissing click on blank space leaves focus on the body; hand it back, as the rail's other menus do.
+              refocusTriggerIfFocusLost(triggerRef.current)
             }
           }}
         >
