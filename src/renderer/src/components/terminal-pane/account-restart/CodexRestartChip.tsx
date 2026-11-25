@@ -147,9 +147,11 @@ function LoudRestartOverlay({
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
           {manual
-            ? t(
+            ? // This pane's shell still carries the old account's CODEX_HOME, and after an unknown
+              // stop there may be no Codex left to exit: only a new pane is on the new account.
+              t(
                 'auto.components.CodexRestartChip.5b8e1d2f40',
-                "Can't restart automatically. Exit Codex and start it again."
+                "Can't restart automatically. Close this pane and start Codex in a new one."
               )
             : t(
                 'auto.components.CodexRestartChip.9375620cc3',
