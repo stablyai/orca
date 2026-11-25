@@ -174,7 +174,6 @@ function ActivityThreadHoverCardContent({
     linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
     linkedGiteaPR: review.linkedGiteaPR,
     newCardStyle: foundation.newCardStyle,
-    isSleeping: foundation.isSleeping,
     compactCards: foundation.compactCards,
     cardDetails: foundation.cardDetails,
     agentActivityDisplayMode: foundation.agentActivityDisplayMode,

@@ -39,7 +39,7 @@ export function useWorktreeCardSecondaryDetails({
   linkedAzureDevOpsPR,
   linkedGiteaPR,
   newCardStyle,
-  isSleeping,
+  isSleeping = false,
   compactCards,
   cardDetails,
   agentActivityDisplayMode,

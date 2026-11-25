@@ -13,7 +13,6 @@ export type WorktreeCardSecondaryDetailsInputs = Pick<
 > &
   Pick<
     Foundation,
-    | 'isSleeping'
     | 'newCardStyle'
     | 'compactCards'
     | 'cardDetails'
@@ -39,4 +38,5 @@ export type WorktreeCardSecondaryDetailsInputs = Pick<
     showBot?: boolean
     showComment: boolean
     showPorts: boolean
+    isSleeping?: boolean
   }
