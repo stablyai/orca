@@ -33,10 +33,14 @@ const ESCAPES: Record<string, string> = {
   "'": '&#39;'
 }
 
-/** Plain text as Teams HTML: every markup character escaped, each line break kept. */
+/** Plain text as Teams HTML: every markup character escaped, line breaks and indents kept. */
 export function teamsPostHtml(text: string): string {
-  return text
-    .replace(/\r\n?/g, '\n')
-    .replace(/[&<>"']/g, (character) => ESCAPES[character] ?? character)
-    .replace(/\n/g, '<br>')
+  return (
+    text
+      .replace(/\r\n?/g, '\n')
+      .replace(/[&<>"']/g, (character) => ESCAPES[character] ?? character)
+      // HTML folds runs of spaces; single spaces between words stay plain so lines still wrap.
+      .replace(/^ +| {2,}/gm, (spaces) => '&nbsp;'.repeat(spaces.length))
+      .replace(/\n/g, '<br>')
+  )
 }

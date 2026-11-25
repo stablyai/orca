@@ -31,7 +31,8 @@ function refresherFor(tenantId: string): HostOAuthRefresher {
       tokenUrl: teamsTokenUrl(tenantId),
       refreshAheadMs: 5 * 60_000,
       rotates: false,
-      endedErrors: ['interaction_required', 'invalid_client', 'unauthorized_client'],
+      // Not invalid_client: an admin fixes that in the app's settings, and the grant still works after.
+      endedErrors: ['interaction_required', 'unauthorized_client'],
       read: () => readTeamsAccount(),
       grantOf: (record) =>
         record.status === 'connected' && record.refreshToken && record.tenantId === tenantId
@@ -92,7 +93,7 @@ export async function teamsAccount(
   }
   if (outcome === 'offline' && record.expiresAt <= deps.now()) {
     throw new TeamsNotConnectedError(
-      "Couldn't reach Microsoft to renew the Teams sign-in. Try again in a moment."
+      "Couldn't renew the Teams sign-in: Microsoft didn't answer, or refused the app (check that its Entra app still allows public client flows). Try again in a moment."
     )
   }
   return { ...record, accessToken: record.accessToken }

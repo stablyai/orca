@@ -76,6 +76,11 @@ export function saveTeamsAccount(
 
 export function removeTeamsAccount(): Promise<void> {
   return inCredentialFileOrder(lock(), async () => {
-    await unlink(accountPath()).catch(() => undefined)
+    // Gone already is removed; any other failure leaves the grant on disk, so it is reported.
+    await unlink(accountPath()).catch((error: unknown) => {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        throw error
+      }
+    })
   })
 }

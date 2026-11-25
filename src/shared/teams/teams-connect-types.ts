@@ -51,7 +51,7 @@ export type TeamsFindView = { matches: TeamsPlaceView[]; note?: string }
 export type TeamsReadView = {
   place: TeamsPlaceView
   messages: TeamsMessageView[]
-  /** Older messages exist past what was read. */
+  /** More messages exist past what was read (older ones in a chat or thread). */
   more: boolean
 }
 

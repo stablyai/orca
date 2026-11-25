@@ -146,15 +146,22 @@ export function createHostOAuthRefresher<TLogin>(
     return 'offline'
   }
 
-  return {
-    isDue,
-    refresh: (id, deps = defaultHostOAuthRefreshDeps, force = false) => {
-      let refresh = running.get(id)
-      if (!refresh) {
-        refresh = refreshOnce(id, deps, force).finally(() => running.delete(id))
-        running.set(id, refresh)
-      }
-      return refresh
+  const refresh = (
+    id: string,
+    deps: HostOAuthRefreshDeps = defaultHostOAuthRefreshDeps,
+    force = false
+  ): Promise<HostOAuthRefreshOutcome> => {
+    const joined = running.get(id)
+    if (joined) {
+      // A refused token needs a new one; a run that found the old one fresh didn't get it.
+      return force
+        ? joined.then((outcome) => (outcome === 'fresh' ? refresh(id, deps, true) : outcome))
+        : joined
     }
+    const started = refreshOnce(id, deps, force).finally(() => running.delete(id))
+    running.set(id, started)
+    return started
   }
+
+  return { isDue, refresh }
 }

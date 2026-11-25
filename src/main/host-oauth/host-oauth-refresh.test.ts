@@ -62,6 +62,15 @@ describe('a login refreshed on this host', () => {
     ])
     expect(outcomes).toEqual(['refreshed', 'refreshed'])
     expect(due.forms).toHaveLength(1)
+
+    // A token the provider refused still gets renewed when it joins a run that found it fresh.
+    const refused = setup({ rotates: false, login: { expiresAt: NOW + 60 * 60_000 } })
+    const joined = await Promise.all([
+      refused.refresher.refresh('a', refused.deps),
+      refused.refresher.refresh('a', refused.deps, true)
+    ])
+    expect(joined).toEqual(['fresh', 'refreshed'])
+    expect(refused.forms).toHaveLength(1)
   })
 
   it('sends a client secret only for a login that has one', async () => {

@@ -250,14 +250,15 @@ describe('Teams Graph calls', () => {
     const posted = await postTeamsMessage(
       graph,
       read.messages[1]!.ref,
-      '<b>done</b> & "shipped"\nnext'
+      '<b>done</b> & "shipped"\n  next  step'
     )
     expect(fake.calls.at(-1)).toMatchObject({
       url: `${THREAD}/replies`,
       json: {
         body: {
           contentType: 'html',
-          content: '&lt;b&gt;done&lt;/b&gt; &amp; &quot;shipped&quot;<br>next'
+          content:
+            '&lt;b&gt;done&lt;/b&gt; &amp; &quot;shipped&quot;<br>&nbsp;&nbsp;next&nbsp;&nbsp;step'
         }
       }
     })

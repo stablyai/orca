@@ -55,7 +55,8 @@ function graphUrl(pathOrLink: string): string {
 export type TeamsGraph = {
   /** Each answer is checked against `shape`; one that doesn't fit is refused, not guessed at. */
   get: <T>(pathOrLink: string, shape: z.ZodType<T>) => Promise<T>
-  post: <T>(path: string, body: unknown, shape: z.ZodType<T>) => Promise<T>
+  /** `asUser`: the person whose permissions were checked; a sign-in that changed since sends nothing. */
+  post: <T>(path: string, body: unknown, shape: z.ZodType<T>, asUser?: string) => Promise<T>
   /** What the signed-in person allowed, and who they are. */
   account: () => Promise<{ userId: string; grantedScopes: string[] }>
 }
@@ -65,13 +66,22 @@ export function teamsGraph(deps: TeamsTokenDeps): TeamsGraph {
     method: 'GET' | 'POST',
     target: string,
     shape: z.ZodType<T>,
-    body?: unknown
+    body?: unknown,
+    asUser?: string
   ): Promise<T> => {
     const url = graphUrl(target)
     let renewed = false
+    let forceRenewal = false
     let waited = false
     for (;;) {
-      const { accessToken } = await teamsAccount(deps, renewed)
+      const { accessToken, userId } = await teamsAccount(deps, forceRenewal)
+      forceRenewal = false
+      if (asUser !== undefined && userId !== asUser) {
+        throw new TeamsGraphError(
+          0,
+          'The Teams sign-in changed during this request; nothing was sent.'
+        )
+      }
       const response = await deps.http(url, {
         method,
         headers: {
@@ -94,6 +104,7 @@ export function teamsGraph(deps: TeamsTokenDeps): TeamsGraph {
       }
       if (response.status === 401 && !renewed) {
         renewed = true
+        forceRenewal = true
         continue
       }
       const retryAfterMs = Number(response.headers.get('retry-after') ?? '1') * 1000
@@ -112,7 +123,7 @@ export function teamsGraph(deps: TeamsTokenDeps): TeamsGraph {
   }
   return {
     get: (pathOrLink, shape) => send('GET', pathOrLink, shape),
-    post: (path, body, shape) => send('POST', path, shape, body),
+    post: (path, body, shape, asUser) => send('POST', path, shape, body, asUser),
     account: async () => {
       const record = await teamsAccount(deps)
       return { userId: record.userId, grantedScopes: record.grantedScopes }

@@ -9,9 +9,7 @@ import type {
 import { z } from 'zod'
 import {
   ChatPage,
-  GraphChat,
   GraphMessage,
-  GraphNamed,
   MessagePage,
   NamedPage,
   type GraphChannel,
@@ -20,52 +18,27 @@ import {
 import type { TeamsGraph } from './teams-graph'
 import { teamsMessageText, teamsPostHtml } from './teams-message-text'
 import { formatTeamsRef, parseTeamsPlace, type TeamsPlace } from './teams-place-ref'
-import { hasTeamsScope, type TeamsScope } from './teams-scopes'
+import {
+  channelPath,
+  chatLabel,
+  chatPath,
+  describe,
+  id,
+  missingScope,
+  pagesOf,
+  placeOf,
+  requireScope
+} from './teams-places'
+import { hasTeamsScope } from './teams-scopes'
 
 const CHAT_PAGES = 4
+const CHANNEL_PAGES = 3
+const READ_PAGES = 3
+// Graph lists at most this many of a chat's members when they are expanded.
+const EXPANDED_MEMBERS = 25
 const TEAMS_SCANNED = 50
 const CHANNEL_LOOKUPS_AT_ONCE = 5
 const DEFAULT_LIMIT = 20
-
-const NOT_A_PLACE =
-  'Pass a ref from `orca teams find` (teams:chat/… or teams:channel/…) or a link copied from Teams.'
-
-const missingScope = (scope: TeamsScope) =>
-  `Your Teams sign-in doesn't include ${scope}. Your owner runs \`orca teams connect\` again without --chats-only; ChannelMessage.Read.All needs an admin to approve it for the app.`
-
-async function requireScope(graph: TeamsGraph, scope: TeamsScope): Promise<void> {
-  const { grantedScopes } = await graph.account()
-  if (!hasTeamsScope(grantedScopes, scope)) {
-    throw new Error(missingScope(scope))
-  }
-}
-
-function placeOf(input: string): TeamsPlace {
-  const place = parseTeamsPlace(input)
-  if (!place) {
-    throw new Error(NOT_A_PLACE)
-  }
-  return place
-}
-
-const id = (value: string) => encodeURIComponent(value)
-const chatPath = (chatId: string) => `/chats/${id(chatId)}`
-const channelPath = (place: { teamId: string; channelId: string }) =>
-  `/teams/${id(place.teamId)}/channels/${id(place.channelId)}`
-
-function chatLabel(chat: GraphChat, userId: string): string {
-  const others = (chat.members ?? [])
-    .filter((member) => member.userId !== userId)
-    .map((member) => member.displayName?.trim())
-    .filter((name): name is string => Boolean(name))
-  if (chat.topic?.trim()) {
-    return chat.topic.trim()
-  }
-  if (chat.chatType === 'oneOnOne' && others.length === 1) {
-    return `Chat with ${others[0]}`
-  }
-  return others.length > 0 ? `Chat with ${others.join(', ')}` : 'Chat'
-}
 
 /** Best first: the whole label, then a label that starts with it, then one that has it. */
 function rank(label: string, query: string): number {
@@ -73,58 +46,30 @@ function rank(label: string, query: string): number {
   return l === query ? 0 : l.startsWith(query) ? 1 : 2
 }
 
-async function allChats(graph: TeamsGraph): Promise<GraphChat[]> {
-  const chats: GraphChat[] = []
-  let next: string | undefined = '/me/chats?$expand=members&$top=50'
-  for (let page = 0; next && page < CHAT_PAGES; page++) {
-    const answer = await graph.get(next, ChatPage)
-    chats.push(...(answer.value ?? []))
-    next = answer['@odata.nextLink']
-  }
-  return chats
-}
-
 async function allChannels(
   graph: TeamsGraph
-): Promise<{ team: GraphTeam; channel: GraphChannel }[]> {
-  const teams = (await graph.get('/me/joinedTeams?$select=id,displayName', NamedPage)).value
-  const scanned = (teams ?? []).slice(0, TEAMS_SCANNED)
+): Promise<{ found: { team: GraphTeam; channel: GraphChannel }[]; partial: boolean }> {
+  const teams = (await graph.get('/me/joinedTeams?$select=id,displayName', NamedPage)).value ?? []
+  const scanned = teams.slice(0, TEAMS_SCANNED)
   const found: { team: GraphTeam; channel: GraphChannel }[] = []
+  let partial = teams.length > scanned.length
   for (let start = 0; start < scanned.length; start += CHANNEL_LOOKUPS_AT_ONCE) {
     const batch = scanned.slice(start, start + CHANNEL_LOOKUPS_AT_ONCE)
     const lists = await Promise.all(
-      batch.map((team) =>
-        graph
-          .get(`/teams/${id(team.id)}/channels?$select=id,displayName`, NamedPage)
-          .then((answer) => (answer.value ?? []).map((channel) => ({ team, channel })))
-      )
+      batch.map(async (team) => {
+        const channels = await pagesOf(
+          graph,
+          `/teams/${id(team.id)}/channels?$select=id,displayName`,
+          NamedPage,
+          CHANNEL_PAGES
+        )
+        partial ||= channels.partial
+        return channels.items.map((channel) => ({ team, channel }))
+      })
     )
     found.push(...lists.flat())
   }
-  return found
-}
-
-/** A chat or channel's label from Graph, for a place named by ref or link. */
-async function describe(graph: TeamsGraph, place: TeamsPlace): Promise<TeamsPlaceView> {
-  if (place.kind === 'chat') {
-    const [chat, { userId }] = await Promise.all([
-      graph.get(`${chatPath(place.chatId)}?$expand=members`, GraphChat),
-      graph.account()
-    ])
-    return {
-      ref: formatTeamsRef({ kind: 'chat', chatId: place.chatId }),
-      label: chatLabel(chat, userId),
-      kind: 'chat'
-    }
-  }
-  const [team, channel] = await Promise.all([
-    graph.get(`/teams/${id(place.teamId)}?$select=id,displayName`, GraphNamed),
-    graph.get(`${channelPath(place)}?$select=id,displayName`, GraphNamed)
-  ])
-  const label = `${team.displayName ?? 'Team'} › ${channel.displayName ?? 'Channel'}`
-  return place.messageId
-    ? { ref: formatTeamsRef(place), label: `Thread in ${label}`, kind: 'thread' }
-    : { ref: formatTeamsRef(place), label, kind: 'channel' }
+  return { found, partial }
 }
 
 /**
@@ -146,14 +91,21 @@ export async function findTeamsPlaces(
   }
   const { userId, grantedScopes } = await graph.account()
   const canChannels = hasTeamsScope(grantedScopes, 'Channel.ReadBasic.All')
-  const [chats, channels] = await Promise.all([
-    only === 'channels' ? [] : allChats(graph),
-    only === 'chats' || !canChannels ? [] : allChannels(graph)
+  const none = { items: [], found: [], partial: false }
+  const [chatList, channelList] = await Promise.all([
+    only === 'channels'
+      ? none
+      : pagesOf(graph, '/me/chats?$expand=members&$top=50', ChatPage, CHAT_PAGES),
+    only === 'chats' || !canChannels ? none : allChannels(graph)
   ])
+  let chatsPartial = chatList.partial
   const matches: TeamsPlaceView[] = [
-    ...chats.flatMap((chat) => {
+    ...chatList.items.flatMap((chat) => {
       const names = [chat.topic ?? '', ...(chat.members ?? []).map((m) => m.displayName ?? '')]
-      return names.some((name) => name.toLowerCase().includes(words))
+      const hit = names.some((name) => name.toLowerCase().includes(words))
+      // A big group chat's other members aren't listed, so a miss there isn't certain.
+      chatsPartial ||= !hit && (chat.members?.length ?? 0) >= EXPANDED_MEMBERS
+      return hit
         ? [
             {
               ref: formatTeamsRef({ kind: 'chat', chatId: chat.id }),
@@ -163,7 +115,7 @@ export async function findTeamsPlaces(
           ]
         : []
     }),
-    ...channels.flatMap(({ team, channel }) => {
+    ...channelList.found.flatMap(({ team, channel }) => {
       const label = `${team.displayName ?? 'Team'} › ${channel.displayName ?? 'Channel'}`
       return label.toLowerCase().includes(words) ||
         `${team.displayName} ${channel.displayName}`.toLowerCase().includes(words)
@@ -185,12 +137,21 @@ export async function findTeamsPlaces(
     .sort((a, b) => a.rank - b.rank || a.order - b.order)
     .slice(0, limit)
     .map(({ match }) => match)
-  const note =
+  const note = [
     only === 'channels' && !canChannels
       ? missingScope('Channel.ReadBasic.All')
       : !canChannels && only === null
         ? 'Only chats were searched: this sign-in has no channel permissions.'
-        : undefined
+        : '',
+    chatsPartial
+      ? `Some chats weren't fully searched (over ${CHAT_PAGES * 50} chats, or group chats with more than ${EXPANDED_MEMBERS} people, whose other members Graph doesn't list); search by the chat's topic, or pass a link to it.`
+      : '',
+    channelList.partial
+      ? `Some channels weren't searched (over ${TEAMS_SCANNED} teams, or a team with over ${CHANNEL_PAGES} pages of channels); pass a link to the channel.`
+      : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
   return { matches, ...(note ? { note } : {}) }
 }
 
@@ -210,15 +171,37 @@ function messageView(place: TeamsPlace, message: GraphMessage): TeamsMessageView
   }
 }
 
+const wrote = (message: GraphMessage) =>
+  message.messageType === 'message' && !message.deletedDateTime
+
+/** Reads on until `limit` messages people wrote are in hand, so system events never fill the window. */
+async function messagesWritten(
+  graph: TeamsGraph,
+  first: string,
+  limit: number
+): Promise<{ messages: GraphMessage[]; more: boolean }> {
+  const kept: GraphMessage[] = []
+  let next: string | undefined = first
+  for (let page = 0; next && kept.length < limit && page < READ_PAGES; page++) {
+    const answer = await graph.get(next, MessagePage)
+    kept.push(...(answer.value ?? []).filter(wrote))
+    next = answer['@odata.nextLink']
+  }
+  return { messages: kept.slice(0, limit), more: next !== undefined || kept.length > limit }
+}
+
 /** Messages people wrote, oldest first: system events and deleted messages are left out. */
 function shown(place: TeamsPlace, messages: GraphMessage[]): TeamsMessageView[] {
   return messages
-    .filter((message) => message.messageType === 'message' && !message.deletedDateTime)
+    .filter(wrote)
     .sort((a, b) => (a.createdDateTime ?? '').localeCompare(b.createdDateTime ?? ''))
     .map((message) => messageView(place, message))
 }
 
-/** A chat or channel's latest messages, or a thread's root and its latest replies, oldest first. */
+/**
+ * A chat's latest messages, a channel's threads with the latest activity (Graph's order), or a
+ * thread's root and its latest replies; each shown oldest first.
+ */
 export async function readTeamsPlace(
   graph: TeamsGraph,
   ref: string,
@@ -239,34 +222,23 @@ export async function readTeamsPlace(
   const view = await describe(graph, place)
   if (place.kind === 'chat') {
     const chat = { kind: 'chat' as const, chatId: place.chatId }
-    const page = await graph.get(
+    const read = await messagesWritten(
+      graph,
       `${chatPath(place.chatId)}/messages?$top=${limit}&$orderby=createdDateTime desc`,
-      MessagePage
+      limit
     )
-    return {
-      place: view,
-      messages: shown(chat, page.value ?? []),
-      more: Boolean(page['@odata.nextLink'])
-    }
+    return { place: view, messages: shown(chat, read.messages), more: read.more }
   }
   if (!place.messageId) {
-    const page = await graph.get(`${channelPath(place)}/messages?$top=${limit}`, MessagePage)
-    return {
-      place: view,
-      messages: shown(place, page.value ?? []),
-      more: Boolean(page['@odata.nextLink'])
-    }
+    const read = await messagesWritten(graph, `${channelPath(place)}/messages?$top=${limit}`, limit)
+    return { place: view, messages: shown(place, read.messages), more: read.more }
   }
   const thread = `${channelPath(place)}/messages/${id(place.messageId)}`
   const [root, replies] = await Promise.all([
     graph.get(thread, GraphMessage),
-    graph.get(`${thread}/replies?$top=${limit}`, MessagePage)
+    messagesWritten(graph, `${thread}/replies?$top=${limit}`, limit)
   ])
-  return {
-    place: view,
-    messages: shown(place, [root, ...(replies.value ?? [])]),
-    more: Boolean(replies['@odata.nextLink'])
-  }
+  return { place: view, messages: shown(place, [root, ...replies.messages]), more: replies.more }
 }
 
 /** Posts in a chat or channel, or replies in a channel thread (any message ref in it), as the signed-in person. */
@@ -276,7 +248,10 @@ export async function postTeamsMessage(
   text: string
 ): Promise<TeamsPostView> {
   const place = placeOf(ref)
-  await requireScope(graph, place.kind === 'chat' ? 'ChatMessage.Send' : 'ChannelMessage.Send')
+  const asUser = await requireScope(
+    graph,
+    place.kind === 'chat' ? 'ChatMessage.Send' : 'ChannelMessage.Send'
+  )
   const body = { body: { contentType: 'html', content: teamsPostHtml(text) } }
   const path =
     place.kind === 'chat'
@@ -284,7 +259,7 @@ export async function postTeamsMessage(
       : place.messageId
         ? `${channelPath(place)}/messages/${id(place.messageId)}/replies`
         : `${channelPath(place)}/messages`
-  const posted = await graph.post(path, body, GraphMessage)
+  const posted = await graph.post(path, body, GraphMessage, asUser)
   const at: TeamsPlace =
     place.kind === 'chat'
       ? { kind: 'chat', chatId: place.chatId, messageId: posted.id }
@@ -304,11 +279,14 @@ export async function reactToTeamsMessage(
   if (!place.messageId) {
     throw new Error('Pass a message ref from `orca teams read`, not a chat or channel.')
   }
-  await requireScope(graph, place.kind === 'chat' ? 'ChatMessage.Send' : 'ChannelMessage.Send')
+  const asUser = await requireScope(
+    graph,
+    place.kind === 'chat' ? 'ChatMessage.Send' : 'ChannelMessage.Send'
+  )
   const message =
     place.kind === 'chat'
       ? `${chatPath(place.chatId)}/messages/${id(place.messageId)}`
       : `${channelPath(place)}/messages/${id(place.messageId)}${place.replyId ? `/replies/${id(place.replyId)}` : ''}`
-  await graph.post(`${message}/setReaction`, { reactionType: emoji }, z.unknown())
+  await graph.post(`${message}/setReaction`, { reactionType: emoji }, z.unknown(), asUser)
   return { ref: formatTeamsRef(place), reaction: emoji }
 }

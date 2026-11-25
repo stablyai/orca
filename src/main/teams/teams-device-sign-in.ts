@@ -28,6 +28,7 @@ export const defaultTeamsSignInDeps: TeamsSignInDeps = {
 export type TeamsSignInInput = { tenantId: string; clientId: string; channels: boolean }
 
 const REQUEST_TIMEOUT_MS = 15_000
+const MAX_POLL_INTERVAL_MS = 60_000
 export const GRAPH_ME_URL =
   'https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName'
 
@@ -122,13 +123,14 @@ async function pollForTokens(
       },
       signal
     ).catch((error: unknown) => {
-      // A dropped request is retried at the next interval; a cancel ends the loop.
+      // A dropped request is retried at a slower interval (RFC 8628 §3.5); a cancel ends the loop.
       if (signal.aborted) {
         throw error
       }
       return null
     })
     if (!answer) {
+      intervalMs = Math.min(intervalMs * 2, MAX_POLL_INTERVAL_MS)
       continue
     }
     if (answer.ok) {
@@ -201,6 +203,10 @@ export async function runTeamsDeviceSignIn(
     grantedScopes: tokens.scope?.split(' ').filter(Boolean) ?? scopes,
     status: 'connected',
     connectedAt: now
+  }
+  // A disconnect or cancel while Graph answered wins: the grant is never saved.
+  if (signal.aborted) {
+    throw new Error('The Microsoft sign-in was cancelled.')
   }
   await saveTeamsAccount(record)
   return record

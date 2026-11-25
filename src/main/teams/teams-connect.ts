@@ -93,6 +93,11 @@ export class TeamsConnect {
 
   /** Forgets the sign-in here. Microsoft keeps the consent until it is removed at myapps.microsoft.com. */
   async disconnect(): Promise<{ removed: string | null }> {
+    // A code approved after this must not sign the host back in.
+    const pending = this.flows.activeFlow()
+    if (pending) {
+      await this.flows.cancel(pending.owner, pending.flowId)
+    }
     const record = await readTeamsAccount()
     await removeTeamsAccount()
     return { removed: record ? (record.email ?? record.name) : null }

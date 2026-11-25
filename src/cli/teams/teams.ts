@@ -51,7 +51,7 @@ function formatRead({ place, messages, more }: TeamsReadView): string {
       `${message.from} · ${message.at}  ${message.ref}`,
       ...message.text.split('\n').map((line) => `  ${line}`)
     ]),
-    ...(more ? ['', 'Older messages remain; pass a larger --limit (at most 50) to read them.'] : [])
+    ...(more ? ['', 'More messages remain; pass a larger --limit (at most 50) to read them.'] : [])
   ].join('\n')
 }
 
