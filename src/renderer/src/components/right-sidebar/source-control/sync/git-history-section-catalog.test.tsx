@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
 
 // A folder section reads its scope from context; the ordinary panel has none.
-const scopeState = vi.hoisted(() => ({ current: null as { worktreeId: string } | null }))
+const scopeState = vi.hoisted((): { current: { worktreeId: string } | null } => ({ current: null }))
 vi.mock('../panel/worktree-scope', () => ({
   useSourceControlScope: () => scopeState.current,
   sourceControlConnectionId: () => undefined
