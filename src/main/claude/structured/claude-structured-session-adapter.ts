@@ -203,8 +203,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   backgroundTaskStops = controlActions.claudeBackgroundTaskStops(this.sessions)
   relayOpenWork = controlActions.claudeRelayOpenWorkOf(this.sessions)
-  readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
-    this.sessions.get(sessionId)?.commands.commands
+  readCommands = (id: string) => this.sessions.get(id)?.commands.commands
   manageMcp: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = (record, operation) =>
     manageClaudeMcp(this.sessions, record.sessionId, operation)
   readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
@@ -213,6 +212,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   permissionModeRequiresAcquisition = keptPermission.requiresAcquisition(this.sessions)
   applyPermissionMode = keptPermission.applyLive(this.sessions, () => this.deps.requestTimeoutMs)
   permissionPickedWhileStarting = keptPermission.pickedWhileStarting(this.sessions)
+  runningPermissionMode = keptPermission.runningMode(this.sessions)
   liveTurnId = (id: string) => this.sessions.get(id)?.translator?.currentTurnId
   heldSends = (sessionId: string): ReadonlySet<string> | undefined => {
     const session = this.sessions.get(sessionId) ?? this.exits.get(sessionId)?.session

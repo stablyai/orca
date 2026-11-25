@@ -213,6 +213,22 @@ export function pickedWhileStarting(
   }
 }
 
+const CHOICE_OF_MODE: Readonly<Record<string, AgentChatPermissionChoice>> = {
+  default: 'ask',
+  acceptEdits: 'accept-edits',
+  auto: 'auto',
+  bypassPermissions: 'full-access'
+}
+
+/** A kept agent takes picks live, so the mode it runs is its latest applied pick, not its launch. */
+export function runningMode(sessions: Sessions): NonNullable<Adapter['runningPermissionMode']> {
+  return (sessionId) => {
+    const session = keptSession(sessions, sessionId)
+    const applied = session?.appliedInputOptions.get('buildPermissionMode')
+    return applied === undefined ? undefined : CHOICE_OF_MODE[applied]
+  }
+}
+
 export function applyLive(
   sessions: Sessions,
   timeoutMs: () => number | undefined
