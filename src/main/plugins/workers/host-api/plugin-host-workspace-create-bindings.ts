@@ -88,6 +88,7 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
         ? { displayName: name, displayNameKind: 'user' }
         : { nameWasGenerated: true, displayNameKind: 'generated' }),
       ...(params.baseBranch ? { baseBranch: params.baseBranch } : {}),
+      ...(params.branch ? { branchNameOverride: params.branch } : {}),
       setupDecision: params.setup === 'skip' ? 'skip' : 'inherit',
       activate: open,
       // A plugin moves this window only: paired clients are not steered.
