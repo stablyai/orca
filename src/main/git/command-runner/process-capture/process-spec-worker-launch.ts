@@ -33,7 +33,29 @@ export function launchProcessSpecOnWindowsWorker(
   /** The caller holds no mutation fence: worker loss ends its lifetime without proof. */
   lifetimeEndsOnLoss = false
 ): LaunchedProcess | null {
-  if (process.platform !== 'win32' || !isPlainPiped(spec) || !canSpawnOnWorkerThread()) {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  return launchProcessSpecOnWorker(spec, onWorkerLost, onTerminated, lifetimeEndsOnLoss)
+}
+
+/** Main's default runProcess launcher on POSIX: posix_spawn blocks its calling thread, for minutes under memory or disk pressure.
+ * Specs that own a process group or termination barrier keep their proven launch on main. */
+export function launchPlainProcessSpecOnPosixWorker(spec: ProcessSpec): LaunchedProcess | null {
+  if (process.platform === 'win32' || spec.terminationBarrier) {
+    return null
+  }
+  const onTerminated = spec.onChildTerminated ?? (() => {})
+  return launchProcessSpecOnWorker(spec, undefined, onTerminated, !spec.onChildTerminated)
+}
+
+function launchProcessSpecOnWorker(
+  spec: ProcessSpec,
+  onWorkerLost: (() => void) | undefined,
+  onTerminated: () => void,
+  lifetimeEndsOnLoss: boolean
+): LaunchedProcess | null {
+  if (!isPlainPiped(spec) || !canSpawnOnWorkerThread()) {
     return null
   }
   const args = [...(spec.args ?? [])]
@@ -66,6 +88,15 @@ export function launchProcessSpecOnWindowsWorker(
       return
     }
     onWorkerLost?.()
+    if (process.platform !== 'win32') {
+      const ended = killAbandonedPosixWorkerChild(child)
+      if (lifetimeEndsOnLoss) {
+        onTerminated()
+        return
+      }
+      reportWhenAbandonedRootEnds(child.pid, Promise.resolve(ended), onTerminated)
+      return
+    }
     // runProcess's own stop may already be walking this tree; join its verdict rather than walk the pid again.
     const stopping = windowsTreeKillFor(launched)
     const rootExited = child.exitCode !== null || child.signalCode !== null
@@ -88,4 +119,21 @@ export function launchProcessSpecOnWindowsWorker(
     reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
   })
   return { child: launched, withdrawPendingLaunch: () => child.cancelPendingSpawn() }
+}
+
+// The dead worker never reaped this child, so its pid cannot have been reused; true once the root is known to end.
+function killAbandonedPosixWorkerChild(child: {
+  pid: number | undefined
+  exitCode: number | null
+  signalCode: NodeJS.Signals | null
+}): boolean {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) {
+    return true
+  }
+  try {
+    process.kill(child.pid, 'SIGKILL')
+    return true
+  } catch {
+    return false
+  }
 }

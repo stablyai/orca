@@ -3,7 +3,7 @@ import { resolveSpawn } from './spawn-resolution'
 import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { spawnNativeProcess } from './native-process-spawn'
 import type { NativeExecutableSelection } from './native-executable-resolution'
-import type { PipedProcessSpec, ProcessSpec } from './process-spec'
+import type { LaunchedProcess, PipedProcessSpec, ProcessSpec } from './process-spec'
 
 /** Callers own stream error handling; unhandled stream errors can crash the host process.
  * A selection from resolveAsync spares this thread the synchronous PATH lookup. */
@@ -24,4 +24,18 @@ export function spawnProcess(
     selection?.program === resolved.file ? selection : undefined,
     hasSpawnObserver() ? notifySpawnObserver : undefined
   )
+}
+
+export type ProcessLauncher = (spec: ProcessSpec) => LaunchedProcess | null
+
+// Main installs this; daemon, relay, and CLI cannot depend on main code.
+let defaultLauncher: ProcessLauncher | null = null
+
+/** runProcess uses it for specs without their own launch; returning null spawns on this thread. */
+export function setDefaultProcessLauncher(next: ProcessLauncher | null): void {
+  defaultLauncher = next
+}
+
+export function launchWithDefaultProcessLauncher(spec: ProcessSpec): LaunchedProcess | null {
+  return spec.launch ? spec.launch(spec) : (defaultLauncher?.(spec) ?? null)
 }
