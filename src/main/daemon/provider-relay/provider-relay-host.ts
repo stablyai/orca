@@ -193,7 +193,7 @@ export class ProviderRelayHost {
     relayId: unknown,
     seq: unknown,
     keepFrom?: unknown,
-    flags?: { cut?: unknown; held?: unknown; cutKeys?: unknown }
+    flags?: { cut?: unknown; held?: unknown; cutKeys?: unknown; savedThrough?: unknown }
   ): { ackedThrough: number; truncatedThrough: number } {
     const relay = this.requireAttached(clientId, relayId)
     const acked = relay.ack(
@@ -202,7 +202,10 @@ export class ProviderRelayHost {
       {
         cut: flags?.cut === true,
         held: flags?.held === true,
-        cutKeys: flags?.cutKeys === undefined ? undefined : readProviderRelayCutKeys(flags.cutKeys)
+        cutKeys: flags?.cutKeys === undefined ? undefined : readProviderRelayCutKeys(flags.cutKeys),
+        ...(Number.isSafeInteger(flags?.savedThrough)
+          ? { savedThrough: Number(flags?.savedThrough) }
+          : {})
       }
     )
     this.removeIfFinished(relay)

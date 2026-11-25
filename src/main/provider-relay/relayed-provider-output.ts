@@ -2,8 +2,12 @@ import type { Readable } from 'node:stream'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type * as RelayProtocol from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
-import { boundedCutKeys } from './relayed-provider-cut-keys'
-import { RelayedProviderKeptLines, relayHandOffWaitMs } from './relayed-provider-kept-lines'
+import { relayAckFlags, type ProviderRelayAckFlags } from './relayed-provider-cut-keys'
+import {
+  firstHeldSeq,
+  RelayedProviderKeptLines,
+  relayHandOffWaitMs
+} from './relayed-provider-kept-lines'
 import type { RelayedProviderContinuation } from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
@@ -40,8 +44,6 @@ export type ProviderRelayAckFloor = {
   namesEveryAck?: boolean
 }
 
-export type ProviderRelayAckFlags = { cut?: true; held?: true; cutKeys?: string[] }
-
 type OutputOptions = {
   ackFloor?: ProviderRelayAckFloor
   stdout: Readable
@@ -75,6 +77,8 @@ export class RelayedProviderOutput {
   /** Highest data seq actually handed on; the next attach and every ack start here. */
   private pushedSeq = 0
   private ackedSeq = 0
+  /** Every line through here was handed on and is in the journal (its barrier held). */
+  private savedSeq = 0
   /** The floor the last ack kept from (the daemon keeps lines from it on for a later attach). */
   private keptFrom: number | null = null
   /** A forced ack released lines through here; a floor at or below it was already given up. */
@@ -116,6 +120,7 @@ export class RelayedProviderOutput {
     if (fromSeq !== undefined) {
       this.pushedSeq = fromSeq
       this.ackedSeq = fromSeq
+      this.savedSeq = fromSeq
       this.keptFrom = null
       this.releasedThrough = fromSeq
       this.consumption.reset(fromSeq)
@@ -301,18 +306,6 @@ export class RelayedProviderOutput {
     }
   }
 
-  /** The first spool line still held, not yet handed on to the chat. */
-  private heldFrom(): number | null {
-    const held = this.held ?? []
-    for (let at = this.releasedTo; at < held.length; at++) {
-      const { seq } = held[at]!
-      if (seq !== null && seq > this.releasedThrough) {
-        return seq
-      }
-    }
-    return null
-  }
-
   private scheduleAck(): void {
     if (this.cancelAck || this.stopped) {
       return
@@ -334,7 +327,7 @@ export class RelayedProviderOutput {
       // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
       // Held for an opening chat, lines are received but not taken; the open waits on the agent,
       // which the daemon pauses at its cap until an ack, so its ask is answered by keeping them.
-      const heldFrom = force ? this.heldFrom() : null
+      const heldFrom = force ? firstHeldSeq(this.held, this.releasedTo, this.releasedThrough) : null
       const target = Math.max(
         this.consumption.upTo(this.pushedSeq),
         heldFrom === null ? 0 : this.deliveredSeq
@@ -348,8 +341,11 @@ export class RelayedProviderOutput {
       // Held lines the journal hasn't saved are never let go; the daemon spools them instead.
       const releasing = force && this.keptFrom !== null && heldFrom === null
       const keepFrom = keepAt !== null && !releasing ? keepAt : null
+      // A hand-off owes the daemon the save point a named item's replay starts after.
+      const names = this.options.ackFloor?.namesEveryAck === true
+      const unsaved = names && this.savedSeq < Math.min(target, this.askedThrough)
       if (
-        (target <= this.ackedSeq && keepFrom === this.keptFrom && !this.pendingCut) ||
+        (target <= this.ackedSeq && keepFrom === this.keptFrom && !this.pendingCut && !unsaved) ||
         this.stopped
       ) {
         return
@@ -357,25 +353,28 @@ export class RelayedProviderOutput {
       // Wait one turn so records just parsed reach the journal before its barrier is taken.
       await new Promise((resolve) => setImmediate(resolve))
       try {
-        // Unsaved streamed text is only in a kept item, which a reattach replays whole.
-        const owed = force || this.ackedSeq < this.askedThrough
-        if ((await this.options.durable?.(owed)) === false && keepFrom === null) {
+        const owed = force || unsaved || this.ackedSeq < this.askedThrough
+        const durable = (await this.options.durable?.(owed)) !== false
+        // Unsaved text is only in a kept item, a replay rewrites whole, unless the floor lets go of
+        // open items (it names them): then only a held barrier lets the cursor move.
+        if (!durable && (keepFrom === null || names)) {
           return
         }
+        const taken = this.consumption.upTo(this.pushedSeq)
+        this.savedSeq = durable ? Math.max(this.savedSeq, Math.min(target, taken)) : this.savedSeq
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
         this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
         const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
         // Named on each try: a retry after a failed ack may carry a different cut.
-        const cutKeys =
-          cut || this.options.ackFloor?.namesEveryAck === true
-            ? boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined)
-            : null
-        const flags = {
-          ...(cut ? { cut: true as const } : {}),
-          ...(heldFrom !== null ? { held: true as const } : {}),
-          ...(cutKeys ? { cutKeys } : {})
-        }
-        const reply = await (keepFrom === null && !cut && !cutKeys
+        const flags = relayAckFlags(
+          this.options.ackFloor,
+          cut,
+          heldFrom,
+          keepFrom,
+          target,
+          this.savedSeq
+        )
+        const reply = await (keepFrom === null && Object.keys(flags).length === 0
           ? this.options.ack(target)
           : this.options.ack(target, keepFrom ?? undefined, flags))
         this.ackedSeq = Math.max(this.ackedSeq, target)

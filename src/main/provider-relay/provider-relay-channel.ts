@@ -1,6 +1,6 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
-import type { ProviderRelayAckFlags } from './relayed-provider-output'
+import type { ProviderRelayAckFlags } from './relayed-provider-cut-keys'
 import { ProviderRelayAckBatch } from './provider-relay-ack-batch'
 import type {
   ProviderRelayAckWantedEvent,

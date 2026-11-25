@@ -34,6 +34,9 @@ export type ProviderRelayItemContinuation = {
   settles?(line: string): string | null
 }
 
+/** With no work open, a moved item this many lines quiet has ended. */
+const MOVED_QUIET_LINES = 256
+
 /**
  * The items open at an attach that replays from `cutThrough`: each one first seen past that point
  * without its start is re-keyed `relay:<relayId>:<first seq>` for the rest of its life. The first
@@ -62,6 +65,8 @@ export class RelayedProviderContinuation {
   }
 
   private lastSeq = 0
+  /** Lines since a moved item's last one. */
+  private sinceMoved = 0
   /** Moved items seen only through `follows` lines: maybe whole already, so they hold nothing open. */
   private readonly whole = new Set<string>()
 
@@ -75,7 +80,9 @@ export class RelayedProviderContinuation {
     if (this.lastSeq < this.replayThrough) {
       return false
     }
-    const settled = this.moved.size === this.whole.size && this.awaited.size === 0
+    // With no work open, a moved item that stops streaming has ended (it reports no end itself).
+    const quiet = this.open === null && this.sinceMoved >= MOVED_QUIET_LINES
+    const settled = (this.moved.size === this.whole.size || quiet) && this.awaited.size === 0
     // Past what a cut names, an unnamed item may resume later, until its open work ends.
     const unnamed = this.open !== null && this.cutKeys?.has(RELAY_CUT_KEYS_OVERFLOW) === true
     return (settled && !unnamed) || (this.open !== null && this.open.size === 0)
@@ -84,6 +91,7 @@ export class RelayedProviderContinuation {
   /** The lines to hand on for this one: itself, re-keyed, or a moved item's finishing lines. */
   lines(seq: number, line: string, floor: ProviderRelayAckFloor | undefined): string[] {
     this.lastSeq = seq
+    this.sinceMoved += 1
     if (this.open?.size) {
       const settled = this.hook.settles?.(line)
       if (settled) {
@@ -120,6 +128,7 @@ export class RelayedProviderContinuation {
       this.whole.add(item.key)
       floor?.observe(seq, this.hook.start(line, tag))
     }
+    this.sinceMoved = 0
     if (!item.follows) {
       this.whole.delete(item.key)
     }

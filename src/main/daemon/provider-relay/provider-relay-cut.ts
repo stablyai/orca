@@ -1,16 +1,25 @@
 import type { ProviderRelayAttachResult } from '../protocol/daemon-provider-relay-protocol'
 
-export type ProviderRelayAckOptions = { cut?: boolean; held?: boolean; cutKeys?: string[] }
+export type ProviderRelayAckOptions = {
+  cut?: boolean
+  held?: boolean
+  cutKeys?: string[]
+  savedThrough?: number
+}
 
 /** Kept lines the client gave up through its own acks, and the items it said the cut split. */
 export class ProviderRelayCut {
   private through = 0
   private keys: string[] | null = null
-  /** The client's last ack: every line through it is saved on its side. */
+  /** Every line through here is in the client's journal, as it said. */
   private saved = 0
 
-  record(seq: number, keepFrom: number | undefined, { cut, cutKeys }: ProviderRelayAckOptions) {
-    this.saved = Math.max(this.saved, seq)
+  record(
+    seq: number,
+    keepFrom: number | undefined,
+    { cut, cutKeys, savedThrough }: ProviderRelayAckOptions
+  ) {
+    this.saved = Math.max(this.saved, Math.min(seq, savedThrough ?? 0))
     if (cut) {
       // Kept from `keepFrom` on, the cut is before it: a replay from there starts inside the item.
       this.through = Math.max(this.through, keepFrom === undefined ? seq : keepFrom - 1)

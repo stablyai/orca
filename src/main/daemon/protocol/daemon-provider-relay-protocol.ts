@@ -63,7 +63,9 @@ export type ProviderRelayRequest =
    * on an ack or an append), so the client records each such release as a cut. Older daemons omit it.
    * `cutKeys` (opaque to the daemon) name the items the cut split, or, without `cut`, the items a
    * replay from `keepFrom` would show without their start; each ack carrying them replaces them, and
-   * a later attach reports them with `savedThrough`. Older daemons keep them only with `cut`.
+   * a later attach reports them with `savedThrough`, the furthest line the client said its journal
+   * holds (an ack's `seq` may pass unsaved text a kept span replays). Older daemons keep them only
+   * with `cut`.
    */
   | { id: string; type: 'relayAck'; payload: ProviderRelayAckPayload }
   /** Several relays' acks in one request; `results` answers each in order, `{ error }` for a refused one. */
@@ -96,6 +98,8 @@ export type ProviderRelayAckPayload = {
   cut?: true
   held?: true
   cutKeys?: string[]
+  /** Every line through here is in the client's journal. */
+  savedThrough?: number
 }
 
 /** More acks than this in one `relayAcks` is refused whole. */
@@ -228,7 +232,8 @@ export type ProviderRelayAttachResult = {
   outstanding?: ProviderRelayOutstandingRequest[]
   /** The items the client said its last cut split, when that cut is the one `truncatedThrough` names. */
   cutKeys?: string[]
-  /** With `cutKeys`: the client's last ack. A named item's lines through it are saved already. */
+  /** With `cutKeys`: the furthest line the client's journal holds. A named item's lines through
+   *  it are saved already. */
   savedThrough?: number
   /** The keep spec's `note`, from the app that spawned this agent. */
   launchNote?: string
