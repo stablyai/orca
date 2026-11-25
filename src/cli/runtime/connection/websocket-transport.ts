@@ -12,6 +12,7 @@ import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
 } from '../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
@@ -55,10 +56,19 @@ const CHAT_CLIENT_CAPABILITIES = [
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
 ] as const
 
-const CHAT_METHODS = new Set(['agent.read', 'agent.send'])
+// A paired `agent send` returns once the host accepts the message, as a local one does. Without it
+// the host holds the reply until the agent answers (up to 120 s), past the CLI's 60 s timeout, and a
+// message the chat took reads as a failure.
+const CHAT_SEND_CLIENT_CAPABILITIES = [
+  ...CHAT_CLIENT_CAPABILITIES,
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+] as const
 
 function clientCapabilitiesFor(method: string) {
-  return CHAT_METHODS.has(method) ? CHAT_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
+  if (method === 'agent.send') {
+    return CHAT_SEND_CLIENT_CAPABILITIES
+  }
+  return method === 'agent.read' ? CHAT_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
 }
 
 export async function sendWebSocketRequest<TResult>(
