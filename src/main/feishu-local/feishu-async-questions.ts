@@ -77,6 +77,17 @@ export class FeishuAsyncQuestions {
   async flush(): Promise<void> {
     await this.pending
   }
+  workStatus(external: string): string {
+    const linked = this.runtime
+      .getExternalConversationSeam()
+      ?.linkedChat({ source: 'feishu-local', externalId: external }, this.b.bot)
+    const summary = linked && getStructuredAgentSessionHost()?.readStatusSummary(linked.sessionId)
+    return summary?.awaitsAnswer || summary?.status === 'attention'
+      ? '等待你的回答'
+      : summary?.status === 'working'
+        ? '正在处理'
+        : '已完成'
+  }
   isCurrent(data: FeishuCardData, external: string): boolean {
     const linked = this.runtime
       .getExternalConversationSeam()

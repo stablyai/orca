@@ -164,7 +164,11 @@ export class FeishuInteractions {
     } else if (event.kind === 'activity' && event.text) {
       await this.status(source, externalId, event.text)
     } else if (event.kind === 'workers') {
-      await this.status(source, externalId, event.running ? '子任务仍在运行' : '子任务已结束')
+      await this.status(
+        source,
+        externalId,
+        event.running ? '子任务仍在运行' : this.asyncQuestions.workStatus(externalId)
+      )
     }
     this.wake()
   }
