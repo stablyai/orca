@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { useTranslate } from '@/i18n/use-translate'
 import { openOwnedHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { DiscordIcon } from '../icons/DiscordIcon'
+import { FeishuIcon } from '../icons/FeishuIcon'
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
 import { SlackIcon } from '../icons/SlackIcon'
@@ -12,7 +13,13 @@ import type { ConnectorMessageAsker } from '../../../../shared/connector-message
 
 export const CONNECTOR_SOURCE_ICONS: Partial<
   Record<ConnectorMessageAsker['source'], ComponentType<{ className?: string }>>
-> = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon, discord: DiscordIcon }
+> = {
+  slack: SlackIcon,
+  github: GitHubIcon,
+  linear: LinearIcon,
+  discord: DiscordIcon,
+  'feishu-local': FeishuIcon
+}
 
 /** "Sam Lee · Slack" over a message Orca delivered from a connector; opens where it was written. */
 export function NativeChatConnectorAskerTag({

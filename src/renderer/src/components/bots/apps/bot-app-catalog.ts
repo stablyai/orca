@@ -58,6 +58,7 @@ export type BotDirectApp = { category: BotAppCategory; composio?: readonly strin
 
 export const DIRECT_APPS: readonly BotDirectApp[] = [
   { route: 'connector', connector: 'github', category: 'coding', composio: ['github'] },
+  { route: 'connector', connector: 'feishu-local', category: 'chat' },
   { route: 'connector', connector: 'slack', category: 'chat', composio: ['slack'] },
   { route: 'connector', connector: 'linear', category: 'docs', composio: ['linear'] },
   { route: 'connector', connector: 'google', category: 'mail', composio: ['gmail'] },
@@ -82,6 +83,8 @@ export function directAppLine(app: BotDirectApp): string {
     return botMcpAppLine(app, translate)
   }
   switch (app.connector) {
+    case 'feishu-local':
+      return translate('bots.feishu.line', 'Private messages through Feishu CLI on this host')
     case 'github':
       return translate('bots.apps.line.github', 'Mentions and events on issues and PRs')
     case 'slack':

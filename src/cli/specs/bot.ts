@@ -94,13 +94,14 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     path: ['bot', 'reply'],
     summary: 'Answer, as this bot, in the issue, pull request or thread that woke this run',
     usage:
-      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]\n       orca bot reply --leave-thread [--json]',
+      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]\n       orca bot reply --file-stdin <filename> [--json]\n       orca bot reply --leave-thread [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'text',
       'text-file',
       'note',
       'file',
+      'file-stdin',
       'choice',
       'react',
       'leave-thread'

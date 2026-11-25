@@ -4,12 +4,14 @@ import type {
   ExternalConversationBot,
   ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
+import { refusalOf } from './external-conversation-chain'
 import { linkedChat, type LinkableChat } from './external-conversation-chat-delivery'
 import { findLink, type ExternalConversationLinkStore } from './external-conversation-links'
-import type { Bot } from '../../shared/bot-types'
+import { isBotAgent, type Bot } from '../../shared/bot-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
   refused,
+  type ConnectorStartInput,
   type ConversationKey,
   type Delivery,
   type ReplyTarget
@@ -22,6 +24,21 @@ export type ConversationBots = {
   open(target: ExternalConversationBot): Promise<LinkableChat>
   /** The pull requests a bot conversation's work opened. */
   workLinks(link: ExternalConversationLink): Promise<ConnectorWorkLink[]>
+}
+
+export async function startBotChat(
+  store: ExternalConversationLinkStore,
+  bots: ConversationBots | undefined,
+  key: ConversationKey,
+  input: ConnectorStartInput
+): Promise<LinkableChat | Delivery> {
+  if (input.transportSignal?.aborted) {
+    return refused(refusalOf(input.transportSignal))
+  }
+  if (!isBotAgent(input.agent)) {
+    return refused('unsupported_agent')
+  }
+  return botChatFor(store, bots, key, input.target)
 }
 
 /**

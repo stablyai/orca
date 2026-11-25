@@ -1,3 +1,4 @@
+import type { FeishuLocalHost } from '../feishu-local/feishu-local-host'
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
@@ -205,8 +206,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     linkStore: () => this.store
   }
 
+  feishuLocal: FeishuLocalHost | null = null
+
   /** The runtime's one bots DB worker: every bot store's SQL runs in it, off this thread. */
-  private readonly botsDb = new BotsDbWorkerClient()
+  readonly botsDb = new BotsDbWorkerClient()
 
   /** Which worker each bot conversation's code work went to. */
   readonly botWork = runtimeBotWork(this.botWorkRuntime, this.botsDb)
