@@ -11,6 +11,7 @@ import {
   SOFT_READ_TIMEOUT_MS,
   type ChildSource
 } from './codex-kept-loaded-threads'
+import { parentsFirst, spawnOf } from './codex-kept-spawns'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { isCodexMessageItemType, readCodexThreadItem } from '../items/codex-thread-item-identity'
 import {
@@ -112,44 +113,6 @@ async function readKeptThread(input: {
   }
 }
 
-/** A child as the tracker learns of it from a spawn, so Stop reaches it and its end settles it. */
-function spawnOf(
-  parentThreadId: string,
-  childThreadId: string,
-  label: string | null = null
-): KeptCodexSpawn {
-  return {
-    threadId: parentThreadId,
-    turnId: '',
-    item: {
-      type: CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE,
-      id: `kept-subagent:${childThreadId}`,
-      tool: 'spawnAgent',
-      status: 'completed',
-      // A spawn's prompt is what names its child's row.
-      ...(label ? { prompt: label } : {}),
-      receiverThreadIds: [childThreadId]
-    }
-  }
-}
-
-/** Parents before their children, so each registers under one already known. */
-function parentsFirst(spawns: KeptCodexSpawn[], primaryThreadId: string): KeptCodexSpawn[] {
-  const known = new Set([primaryThreadId])
-  const ordered: KeptCodexSpawn[] = []
-  let rest = spawns
-  while (rest.length > 0) {
-    const ready = rest.filter((spawn) => known.has(spawn.threadId))
-    const next = ready.length > 0 ? ready : rest
-    for (const spawn of next) {
-      ordered.push(spawn)
-      readReceiverThreadIds(spawn.item).forEach((id) => known.add(id))
-    }
-    rest = rest.filter((spawn) => !next.includes(spawn))
-  }
-  return ordered
-}
-
 /**
  * The terminal daemon's model for a kept agent: before its replay, the app learns the live state
  * from the agent itself — the chat's thread and every other thread its app-server has loaded (its
@@ -234,20 +197,30 @@ export async function readKeptCodexSnapshot(input: {
     )
   }
   // Loaded threads the budget skipped get one short read after every named child's, so a running
-  // child among them still keeps its numbering and Stop target. One whose turn doesn't come back,
-  // or that is known not to be a spawned agent (a review's thread), is left out.
+  // child among them still keeps its numbering and Stop target. Its metadata is asked beside it but
+  // holds no read slot; one whose turn doesn't come back, or known not to be a spawned agent (a
+  // review's thread), is left out.
   const readSkipped = async (skipped: readonly string[]) => {
     const deadline = Date.now() + SKIPPED_READ_GRACE_MS
+    const found: Promise<void>[] = []
     await readBounded(skipped, SKIPPED_READ_CONCURRENCY, deadline, async (threadId, ms) => {
       if (seen.has(threadId) || seen.size >= MAX_SNAPSHOT_THREADS) {
         return
       }
       seen.add(threadId)
-      const read = await readThread(threadId, ms)
-      if (read.turn && read.source?.spawned !== false) {
-        record(threadId, read)
+      const source = readSource(input.connection, threadId, ms).catch(() => null)
+      const read = await readThread(threadId, ms, null)
+      if (read.turn) {
+        found.push(
+          source.then((known) => {
+            if (known?.spawned !== false) {
+              record(threadId, { turn: read.turn, source: known })
+            }
+          })
+        )
       }
     })
+    await Promise.all(found)
   }
   // The chat's thread and the children named by carried work or a read turn come first.
   let wave = [input.threadId, ...(input.carriedThreadIds ?? [])].map((threadId) => ({ threadId }))

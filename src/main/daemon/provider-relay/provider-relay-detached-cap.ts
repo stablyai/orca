@@ -24,6 +24,7 @@ export type CappableRelay = {
   readonly attachedClientId: string | null
   readonly idleStopPolicy: {
     readonly tracking: boolean
+    readonly unaccounted: boolean
     readonly unread: boolean
     readonly finished: boolean
   }
@@ -53,7 +54,7 @@ export class ProviderRelayDetachedCap {
   detached(relay: CappableRelay): void {
     if (relay.live && relay.attachedClientId === null) {
       this.detachedAt.set(relay, this.now())
-      if (!relay.idleStopPolicy.tracking) {
+      if (!relay.idleStopPolicy.tracking || relay.idleStopPolicy.unaccounted) {
         this.counted.add(relay)
       }
       this.update()
@@ -134,7 +135,7 @@ export class ProviderRelayDetachedCap {
       }
       const policy = relay.idleStopPolicy
       // Busy again since it counted: not stopped, and not counted until it is idle with unread again.
-      if (policy.tracking && !(policy.unread && policy.finished)) {
+      if (policy.tracking && !policy.unaccounted && !(policy.unread && policy.finished)) {
         this.counted.delete(relay)
         continue
       }

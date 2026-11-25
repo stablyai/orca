@@ -93,12 +93,22 @@ export class ProviderRelayIdleStop {
     })
   }
 
-  /**
-   * Armed by a detach that said what is open; a detach without (work unknown) is never idle-stopped.
-   * Work it lost count of is unknown too, so the detached cap bounds it.
-   */
+  /** Armed by a detach that said what is open; a detach without (work unknown) is never idle-stopped. */
   get tracking(): boolean {
-    return this.armed && this.work?.unaccounted !== true
+    return this.armed
+  }
+
+  /**
+   * Tracked, but it lost count of the work (lines it never saw, or too many tasks), and nothing it
+   * does know of is open or waiting: the detached cap bounds it as it does unknown work.
+   */
+  get unaccounted(): boolean {
+    return (
+      this.armed &&
+      this.work?.unaccounted === true &&
+      !this.work.knownBusy &&
+      this.host.pendingCount() === 0
+    )
   }
 
   get unread(): boolean {
@@ -242,7 +252,7 @@ export class ProviderRelayIdleStop {
     }
     if (this.work.busy || this.host.pendingCount() > 0) {
       this.waitingForLine = true
-      if (this.work.unaccounted) {
+      if (this.unaccounted) {
         // Counted from now by the detached cap, as unknown work is.
         this.host.idleUnread?.()
       }

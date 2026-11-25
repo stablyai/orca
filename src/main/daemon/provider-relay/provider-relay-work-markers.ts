@@ -206,7 +206,12 @@ export class ProviderRelayOpenWork {
   }
 
   get busy(): boolean {
-    return this.overflowed || [...this.groups.values()].some((tasks) => tasks.size > 0)
+    return this.overflowed || this.knownBusy
+  }
+
+  /** Work it saw start and not end (overflow aside). */
+  get knownBusy(): boolean {
+    return [...this.groups.values()].some((tasks) => tasks.size > 0)
   }
 
   /**

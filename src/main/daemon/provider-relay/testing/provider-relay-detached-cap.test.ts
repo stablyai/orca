@@ -21,7 +21,7 @@ function relay(
     relayId: id,
     live: true,
     attachedClientId: null,
-    idleStopPolicy: { finished: false, ...state },
+    idleStopPolicy: { finished: false, unaccounted: false, ...state },
     stoppedBy: null,
     close: vi.fn(async () => {})
   }
