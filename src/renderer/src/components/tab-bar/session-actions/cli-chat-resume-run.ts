@@ -1,6 +1,7 @@
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import {
+  captureCliChatResumeSurfaces,
   cliChatResumeClosingPaneKeys,
   closeCliChatResumeTerminal
 } from './cli-chat-resume-close-terminal'
@@ -181,6 +182,7 @@ export async function runCliChatResume(
           : {})
       }
     })
+    const sourceSurfaces = captureCliChatResumeSurfaces(useAppStore.getState(), source)
     const held: LaunchHeld = {}
     const plan = closes ? withoutJoiningLaunchHolder(verdict, source, agent, held) : verdict
     // Open and commit the chat before touching the terminal so any create failure leaves the terminal alive.
@@ -208,6 +210,7 @@ export async function runCliChatResume(
       try {
         await closeCliChatResumeTerminal(
           source,
+          sourceSurfaces,
           isCurrent,
           {
             // The close's own confirmations and exit waits have their own bounds.

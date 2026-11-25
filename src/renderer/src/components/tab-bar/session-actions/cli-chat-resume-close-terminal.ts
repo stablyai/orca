@@ -7,7 +7,8 @@ import { closeTerminalTab } from '../../terminal/tab-lifecycle/terminal-tab-acti
 import { toHostSessionPaneKey } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureTerminalSurfaceIdentity,
-  isRetainedTerminalSurfaceIdentity
+  isRetainedTerminalSurfaceIdentity,
+  type TerminalSurfaceCloseIdentity
 } from '../../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-close'
 import type {
   RuntimeTerminalResolvePane,
@@ -38,8 +39,19 @@ function closingLeaves(state: AppState, source: CliChatResumeSource): string[] {
   return [...new Set([leafId, ...Object.keys(bindings).filter((leaf) => bindings[leaf])])]
 }
 
+/** Taken before the chat launch, so a pane restarted in place while it runs fails the close's checks. */
+export function captureCliChatResumeSurfaces(
+  state: AppState,
+  source: CliChatResumeSource
+): (TerminalSurfaceCloseIdentity | null)[] {
+  return closingLeaves(state, source).map((leaf) =>
+    captureTerminalSurfaceIdentity(state, source.workspaceId, source.tabId, leaf)
+  )
+}
+
 export async function closeCliChatResumeTerminal(
   source: CliChatResumeSource,
+  originals: (TerminalSurfaceCloseIdentity | null)[],
   isCurrent: () => boolean,
   hooks: CliChatResumeCloseHooks,
   signal: AbortSignal,
@@ -52,12 +64,10 @@ export async function closeCliChatResumeTerminal(
   const ptyIds = collectTabPtyIds(state, source.tabId)
   const bindings = state.terminalLayoutsByTabId[source.tabId]?.ptyIdsByLeafId ?? {}
   const leaves = closingLeaves(state, source)
-  const originals = leaves.map((leaf) =>
-    captureTerminalSurfaceIdentity(state, source.workspaceId, source.tabId, leaf)
-  )
   if (
     !target ||
-    originals.some((original) => !original) ||
+    originals.length !== leaves.length ||
+    originals.some((original, index) => original?.leafId !== leaves[index]) ||
     ptyIds.some((id) => !Object.values(bindings).includes(id))
   ) {
     throw new Error('terminal unavailable')

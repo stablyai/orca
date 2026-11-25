@@ -130,6 +130,7 @@ vi.mock('./cli-chat-resume-source', () => ({
 }))
 
 vi.mock('./cli-chat-resume-close-terminal', () => ({
+  captureCliChatResumeSurfaces: () => [],
   cliChatResumeClosingPaneKeys: () => ['term-tab-1:leaf-1'],
   closeCliChatResumeTerminal: mocks.closeCliChatResumeTerminal
 }))
