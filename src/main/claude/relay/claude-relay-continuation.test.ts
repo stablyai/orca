@@ -52,10 +52,11 @@ describe('a Claude reply cut at two reattaches', () => {
       second.lines(41, delta('u41', 'b'), undefined)
     ]
       .flat()
-      .map((line) => blocks.observe(JSON.parse(line), 0)?.identity.uuid)
-    expect(rows).toEqual(['block:relay:r1:s|:0', 'block:relay:r1:s|:0'])
+      .map((line) => blocks.observe(JSON.parse(line), 0)?.identity)
+    const row = { provider: 'claude', sessionId: 's', uuid: 'block:relay:r1:s|:0' }
+    expect(rows).toEqual([row, row])
     const final = blocks.reconcile({ sessionId: 's', parentToolUseId: null, messageId: 'msg_1' })
-    expect(final?.retired?.uuid).toBe('block:relay:r1:s|:0')
+    expect(final?.retired).toEqual(row)
   })
 })
 
