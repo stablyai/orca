@@ -5453,7 +5453,7 @@
       "renderProcessGone": "Çalışma alanı yanıt vermeyi durdurdu.",
       "statusUnreadable": "Bu sunucunun durumu okunamadı. Geri dönüp yeniden açın.",
       "tryAgain": "Tekrar dene",
-      "isolationUnavailableAndroid": "Orca için Android System WebView veya Chrome 101 ya da daha yeni bir sürüm gerekir. Play Store’dan güncelleyin veya Geliştirici seçenekleri > WebView uygulaması bölümünden daha yeni bir sürüm seçin.",
+      "isolationUnavailableAndroid": "Orca için Android System WebView veya Chrome 99 ya da daha yeni bir sürüm gerekir. Play Store’dan güncelleyin veya Geliştirici seçenekleri > WebView uygulaması bölümünden daha yeni bir sürüm seçin.",
       "webViewInUse": "Bu cihazda {{name}} {{version}} var."
     },
     "pageRouteUnavailable": {

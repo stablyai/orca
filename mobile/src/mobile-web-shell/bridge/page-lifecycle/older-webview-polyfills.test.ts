@@ -14,7 +14,9 @@ describe('older WebView polyfills match the built-ins', () => {
 
   it('copies arrays like the native copy methods', () => {
     const compare = (a: number, b: number) => a - b
-    expect(arrayPolyfills.toSorted.call(source, compare)).toEqual(source.toSorted(compare))
+    expect((arrayPolyfills.toSorted<number>).call(source, compare)).toEqual(
+      source.toSorted(compare)
+    )
     expect(arrayPolyfills.toSorted.call(source)).toEqual(source.toSorted())
     expect(arrayPolyfills.toReversed.call(source)).toEqual(source.toReversed())
     const toSpliced = (...args: [number?, number?, ...number[]]) =>
