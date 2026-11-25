@@ -144,12 +144,13 @@ it('clears all only the settled failures this owner can acknowledge', () => {
 
 it('closes the card for good when the dock reads another host, so switching back cannot reopen it', async () => {
   rpc.calls = []
-  const hostA = { kind: 'local' } as const
-  const hostB = { kind: 'environment', environmentId: 'env-b' } as const
+  type Target = Parameters<typeof useWorkerDockOwnerActions>[0]
+  const hostA: Target = { kind: 'local' }
+  const hostB: Target = { kind: 'environment', environmentId: 'env-b' }
+  const initialProps: { target: Target } = { target: hostA }
   const hook = renderHook(
-    ({ target }: { target: Parameters<typeof useWorkerDockOwnerActions>[0] }) =>
-      useWorkerDockOwnerActions(target, party, undefined, () => {}),
-    { initialProps: { target: hostA as Parameters<typeof useWorkerDockOwnerActions>[0] } }
+    ({ target }) => useWorkerDockOwnerActions(target, party, undefined, () => {}),
+    { initialProps }
   )
   act(() => hook.result.current.open(row('a'), document.createElement('button')))
   const read = last('orchestration.workerDockResult')
