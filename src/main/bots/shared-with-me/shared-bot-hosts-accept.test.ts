@@ -8,7 +8,7 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay
 import { SharedBotHosts } from './shared-bot-hosts'
 import { newSharedBotHostEntry, SharedBotHostStore } from './shared-bot-host-store'
 import type { MineShare } from './shared-bot-pairing'
-import type { SharedBotsCloud } from './shared-bots-cloud'
+import type { SharedBotOfferWait, SharedBotsCloud } from './shared-bots-cloud'
 import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
@@ -32,15 +32,19 @@ const offered: MineShare = {
 /** The account's shared hosts in `dir`, over a cloud that lists `offered` and records each call. */
 function hosts(
   dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-')),
-  now: () => number = () => 1_000
+  options: { now?: () => number; waited?: () => Promise<void> } = {}
 ) {
   dirs.push(dir)
   const accepts: string[] = []
   const declines: string[] = []
-  const reads = { count: 0 }
+  // Each share-list read, with the offer it waited for, if any.
+  const reads: (SharedBotOfferWait | undefined)[] = []
   const cloud: SharedBotsCloud = {
-    mine: async () => {
-      reads.count += 1
+    mine: async (wait) => {
+      reads.push(wait)
+      if (wait) {
+        await options.waited?.()
+      }
       return { ok: true, value: { v: 1, shares: [offered] } }
     },
     accept: async (shareId) => {
@@ -60,7 +64,7 @@ function hosts(
     platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: () => {},
     homes: memorySharedBotHomes(dir).homes,
-    now
+    now: options.now ?? (() => 1_000)
   })
   return { service, accepts, declines, dir, reads }
 }
@@ -95,33 +99,51 @@ describe('a share offered to this account', () => {
     expect(service.state().requests).toEqual([])
   })
 
-  it("reads the share list again within seconds of Accept, for the host's offer", async () => {
+  it("after Accept, makes one read that waits for the host's offer, connecting until it answers", async () => {
     vi.useFakeTimers()
     try {
-      const { service, reads } = hosts(undefined, () => Date.now())
+      let answer = () => {}
+      const { service, reads } = hosts(undefined, {
+        now: () => Date.now(),
+        waited: () => new Promise((resolve) => (answer = resolve))
+      })
       await service.refresh()
       await service.accept('share-1')
-      const afterAccept = reads.count
-      await vi.advanceTimersByTimeAsync(5_000)
+      await vi.advanceTimersByTimeAsync(0)
+      const device = service.store.get('share-1')?.deviceKey.publicKeyB64
+      expect(reads.at(-1)).toEqual({ shareId: 'share-1', devicePublicKey: device })
+      expect(service.views()[0]?.accepting).toBe(true)
+      // The cloud holds it until the host's offer is on the share.
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(service.views()[0]?.accepting).toBe(true)
+      answer()
+      await vi.advanceTimersByTimeAsync(0)
       service.stop()
-      expect(reads.count).toBeGreaterThan(afterAccept)
+      expect(service.views()[0]?.accepting).toBe(false)
+      expect(reads.filter(Boolean)).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('reads as connecting from Accept until its link is made or two minutes pass', async () => {
-    let now = 1_000
-    const { service } = hosts(undefined, () => now)
-    await service.refresh()
-    expect(service.views()).toEqual([])
-    await service.accept('share-1')
-    service.stop()
-    expect(service.views()[0]?.accepting).toBe(true)
-    now += 119_000
-    expect(service.views()[0]?.accepting).toBe(true)
-    now += 1_000
-    expect(service.views()[0]?.accepting).toBe(false)
+  it('on a cloud that answers the wait at once with no offer: away, then the usual 30 s pace, no loop', async () => {
+    vi.useFakeTimers()
+    try {
+      const { service, reads } = hosts(undefined, { now: () => Date.now() })
+      await service.refresh()
+      await service.accept('share-1')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.views()[0]?.accepting).toBe(false)
+      const settled = reads.length
+      await vi.advanceTimersByTimeAsync(29_000)
+      expect(reads.length).toBe(settled)
+      await vi.advanceTimersByTimeAsync(1_000)
+      service.stop()
+      expect(reads.length).toBe(settled + 1)
+      expect(reads.filter(Boolean)).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('never pairs once declined, tells the cloud, and is not offered again after a restart', async () => {

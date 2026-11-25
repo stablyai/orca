@@ -33,8 +33,8 @@ export type SharedBotHostView = {
   /** This computer's folder workspace the agent's chats open in; null until main has made it. */
   homeWorkspaceId: string | null
   link: SharedBotHostLink
-  /** Accepted moments ago and not live yet: its first link is being made, so it reads as connecting
-   *  rather than away. Absent from an older main. */
+  /** Accepted here and not live yet, while its one share-list read that waits for the host's offer,
+   *  and that offer's dial, are out: it reads as connecting rather than away. Absent from an older main. */
   accepting?: boolean
   /** Whether a message can be held for the host while it is away (it published its key). */
   holds: boolean
