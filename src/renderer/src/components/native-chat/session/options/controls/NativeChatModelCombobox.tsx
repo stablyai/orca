@@ -15,6 +15,7 @@ import type {
   SessionOptionSelectChoice
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
+import { nativeChatModelSearchMatcher } from '../../../../../../../shared/native-chat/input/session-options/native-chat-model-search'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
@@ -38,9 +39,8 @@ type NativeChatModelComboboxProps = {
 
 // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
 function modelChoiceFilter(value: string, search: string, keywords?: string[]): number {
-  const haystack = [value, ...(keywords ?? [])].join(' ').toLowerCase()
-  const terms = search.toLowerCase().split(/\s+/).filter(Boolean)
-  return terms.every((term) => haystack.includes(term)) ? 1 : 0
+  const matches = nativeChatModelSearchMatcher(search)
+  return !matches || matches([value, ...(keywords ?? [])]) ? 1 : 0
 }
 
 export function NativeChatModelCombobox({
