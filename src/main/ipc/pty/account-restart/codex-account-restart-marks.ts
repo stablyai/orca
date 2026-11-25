@@ -41,8 +41,9 @@ export class CodexAccountRestartMarks {
   protected readonly markByPane = new Map<string, RestartMark>()
   // A granted intent stays reachable until its launch starts, so Dismiss still applies to it.
   protected readonly spentMarkByPane = new Map<string, RestartMark>()
-  // Panes whose stopped conversation came back missing; bounded by panes.
-  protected readonly refusedPanes = new Set<string>()
+  // Panes whose stopped conversation came back missing, with the operations of the stop that did it;
+  // bounded by panes.
+  protected readonly refusedPanes = new Map<string, ReadonlySet<string>>()
   protected readonly retiredIncarnations = new Set<string>()
   // Restart exits sent while no ready window existed; the next window that signals ready gets them.
   protected readonly rendererOwed = new Set<RestartMark>()
@@ -122,13 +123,19 @@ export class CodexAccountRestartMarks {
       return false
     }
     this.retireMark(mark)
-    this.refusedPanes.add(paneKey)
+    this.refusedPanes.set(paneKey, new Set(mark.opIds))
     return true
   }
 
-  /** The user dismissed the failure: the pane's next start is ordinary. */
-  releaseRefusedPane(paneKey: string): void {
+  /** The user dismissed this failure: the pane's next start is ordinary. A Dismiss naming another
+   *  stop's operations (a late one, from an earlier refusal) leaves a newer refusal standing. */
+  releaseRefusedPane(paneKey: string, opIds: readonly string[]): boolean {
+    const refusedBy = this.refusedPanes.get(paneKey)
+    if (!refusedBy || !opIds.some((opId) => refusedBy.has(opId))) {
+      return false
+    }
     this.refusedPanes.delete(paneKey)
+    return true
   }
   /** Close or rebind of the pane: its intent no longer applies. */
   forgetPane(paneKey: string): void {

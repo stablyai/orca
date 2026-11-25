@@ -1,5 +1,5 @@
 import type {
-  CodexAccountRestartPane,
+  CodexAccountRestartReleaseRequest,
   CodexAccountRestartStopRequest,
   CodexAccountRestartStopResult,
   CodexAccountRestartWithdrawRequest
@@ -151,7 +151,7 @@ export type PtyApi = {
   ) => Promise<CodexAccountRestartStopResult>
   withdrawCodexAccountRestart: (request: CodexAccountRestartWithdrawRequest) => Promise<boolean>
   /** The user dismissed a failed account-restart resume; the pane may start normally again. */
-  releaseCodexAccountRestartPane: (pane: CodexAccountRestartPane) => Promise<void>
+  releaseCodexAccountRestartPane: (request: CodexAccountRestartReleaseRequest) => Promise<void>
   /** `replaced` stops a restarted pane's old PTY without retiring the pane. */
   kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }) => Promise<void>
   /** Acknowledge the pane that actually painted the restored frame. */

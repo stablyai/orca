@@ -1,5 +1,5 @@
 import type {
-  CodexAccountRestartPane,
+  CodexAccountRestartReleaseRequest,
   CodexAccountRestartWithdrawRequest
 } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
@@ -55,13 +55,17 @@ export function installCodexAccountRestartIpcHandlers(deps: CodexAccountRestartI
   )
   getPtyIpc().handle(
     'pty:releaseCodexAccountRestartPane',
-    (_event, args: CodexAccountRestartPane) => {
+    (_event, args: CodexAccountRestartReleaseRequest) => {
       if (
         typeof args?.worktreeId === 'string' &&
         typeof args.tabId === 'string' &&
-        typeof args.leafId === 'string'
+        typeof args.leafId === 'string' &&
+        Array.isArray(args.opIds)
       ) {
-        codexAccountRestartStops.releaseRefusedPane(codexAccountRestartPaneKey(args))
+        codexAccountRestartStops.releaseRefusedPane(
+          codexAccountRestartPaneKey(args),
+          args.opIds.filter((opId): opId is string => typeof opId === 'string')
+        )
       }
     }
   )

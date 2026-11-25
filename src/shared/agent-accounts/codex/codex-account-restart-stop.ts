@@ -19,6 +19,11 @@ export type CodexAccountRestartPane = Pick<
   'worktreeId' | 'tabId' | 'leafId'
 >
 
+/** Dismissing a failed resume names the stop it followed; another stop's refusal stays. */
+export type CodexAccountRestartReleaseRequest = CodexAccountRestartPane & {
+  opIds: readonly string[]
+}
+
 /** Dismiss for one pane and operation; a stale opId changes nothing. */
 export type CodexAccountRestartWithdrawRequest = Pick<
   CodexAccountRestartStopRequest,

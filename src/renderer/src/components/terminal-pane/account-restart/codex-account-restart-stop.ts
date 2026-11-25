@@ -18,6 +18,11 @@ type CodexRestartOperation = CodexAccountRestartStopRequest & {
 
 // The notice row's current operation; a reply or Dismiss for any other opId changes nothing.
 const currentOperationByPtyId = new Map<string, CodexRestartOperation>()
+// The operations of each pane's last stop that ran; a failed resume's Dismiss names them, so a late
+// Dismiss cannot release a newer refusal. Bounded by panes.
+const stoppedOpIdsByPane = new Map<string, readonly string[]>()
+const paneKeyOf = (pane: CodexAccountRestartPane): string =>
+  `${pane.worktreeId}\0${pane.tabId}\0${pane.leafId}`
 let stopWatchingNotices: (() => void) | null = null
 
 let mintOpId = (): string => createBrowserUuid()
@@ -38,6 +43,9 @@ export async function stopCodexPaneForAccountRestart(
     result = { outcome: 'unknown', opIds: [operation.opId] }
   }
   undoSleep?.(result.outcome === 'stopped')
+  if (result.outcome === 'stopped') {
+    stoppedOpIdsByPane.set(paneKeyOf(pane), result.opIds)
+  }
   const current = currentOperationByPtyId.get(pane.ptyId)
   // A joined click shares the stop, so its opId is in the reply too; Dismiss or a newer question
   // removed the row's operation, and its own answer settles that newer notice.
@@ -137,7 +145,9 @@ export function releaseCodexAccountRestartRefusal(
     return
   }
   const pane: CodexAccountRestartPane = { worktreeId, tabId, leafId }
-  void window.api.pty.releaseCodexAccountRestartPane(pane).catch((err: unknown) => {
+  const opIds = stoppedOpIdsByPane.get(paneKeyOf(pane)) ?? []
+  stoppedOpIdsByPane.delete(paneKeyOf(pane))
+  void window.api.pty.releaseCodexAccountRestartPane({ ...pane, opIds }).catch((err: unknown) => {
     console.warn('[codex-restart] failed to release the refused pane:', err)
   })
 }
@@ -148,6 +158,7 @@ export const _testing = {
   },
   reset(): void {
     currentOperationByPtyId.clear()
+    stoppedOpIdsByPane.clear()
     stopWatchingNotices?.()
     stopWatchingNotices = null
     mintOpId = () => createBrowserUuid()

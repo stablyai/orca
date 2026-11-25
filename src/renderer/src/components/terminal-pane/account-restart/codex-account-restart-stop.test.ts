@@ -229,17 +229,30 @@ describe('renderer account restart stop', () => {
     expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
   })
 
-  it('dismissing the failed resume releases only that refusal', () => {
-    const { releasePane } = heldReplies()
+  it('dismissing the failed resume releases only the refusal of the stop that ran', async () => {
+    const { replies, releasePane } = heldReplies()
+    const stopped = stopCodexPaneForAccountRestart(pane)
+    replies[0]({ outcome: 'stopped', opIds: ['op-1'] })
+    await stopped
     releaseCodexAccountRestartRefusal('Something else failed.', 'wt', 'tab', 'leaf')
     expect(releasePane).not.toHaveBeenCalled()
-    releaseCodexAccountRestartRefusal(
-      "Couldn't resume on the new account. Restart the pane to try again.",
-      'wt',
-      'tab',
-      'leaf'
-    )
-    expect(releasePane).toHaveBeenCalledWith({ worktreeId: 'wt', tabId: 'tab', leafId: 'leaf' })
+    const refusal = "Couldn't resume on the new account. Restart the pane to try again."
+    releaseCodexAccountRestartRefusal(refusal, 'wt', 'tab', 'leaf')
+    // Main releases only a refusal that stop caused; a newer stop's refusal names other operations.
+    expect(releasePane).toHaveBeenCalledWith({
+      worktreeId: 'wt',
+      tabId: 'tab',
+      leafId: 'leaf',
+      opIds: ['op-1']
+    })
+    // A second, late Dismiss names nothing, so it cannot release a later refusal.
+    releaseCodexAccountRestartRefusal(refusal, 'wt', 'tab', 'leaf')
+    expect(releasePane).toHaveBeenLastCalledWith({
+      worktreeId: 'wt',
+      tabId: 'tab',
+      leafId: 'leaf',
+      opIds: []
+    })
   })
 
   it("the accepted stop's own exit removing the notice is not a withdrawal", async () => {
