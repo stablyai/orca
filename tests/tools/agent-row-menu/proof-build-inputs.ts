@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync, realpathSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 
 const git = (...args: string[]) => execFileSync('git', args, { encoding: 'utf8' }).trim()
 export const root = realpathSync(process.cwd())
@@ -29,17 +29,41 @@ export const sha256 = (content: string | Buffer) =>
   createHash('sha256').update(content).digest('hex')
 export const digest = (path: string) => sha256(readFileSync(join(root, path)))
 
-export const rowMenuModules = ['AgentRowMenuItems.tsx', 'agent-row-menu-target.ts'] as const
-export const pairedActivationModules = [
-  'web-runtime-session-tab-lifecycle.ts',
-  'legacy-relay-bridge-panes.ts',
-  'tracking-mappings.ts'
+export const rowMenuModules = [
+  'src/renderer/src/components/sidebar/workspace-actions/agent-row-menu/AgentRowMenuItems.tsx',
+  'src/renderer/src/components/sidebar/workspace-actions/agent-row-menu/agent-row-menu-target.ts',
+  'src/renderer/src/components/tab-bar/session-actions/NativeChatCliForkMenuItems.tsx'
 ] as const
-type ProofModule = (typeof rowMenuModules)[number] | (typeof pairedActivationModules)[number]
+export const pairedActivationModules = [
+  'src/renderer/src/lib/workspace/tabs/terminal-tab-owner-activation.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle.ts',
+  'src/renderer/src/components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/identity/tracking-mappings.ts'
+] as const
+
+type MappedSource = {
+  blob: string
+  sourceSha256: string
+  map: string
+  mapSha256: string
+  sourceEntry: string
+  sourceIndex: number
+  chunk: string
+}
 
 export function recordBuildInputs() {
   const source = assertFrozenSource()
-  const sources = new Map<ProofModule, string[]>()
+  const modules = [...rowMenuModules, ...pairedActivationModules]
+  const frozen = new Map<string, { blob: string; sourceSha256: string }>(
+    modules.map((file) => {
+      const blob = git('rev-parse', `${source.head}:${file}`)
+      const bytes = execFileSync('git', ['cat-file', 'blob', blob])
+      const sourceSha256 = sha256(bytes)
+      assert.equal(digest(file), sourceSha256, file)
+      return [file, { blob, sourceSha256 }]
+    })
+  )
+  const sources: Record<string, MappedSource[]> = {}
   const artifacts: Record<string, string> = {}
   for (const target of ['main', 'preload', 'renderer']) {
     const dir = join(root, 'out', target)
@@ -52,19 +76,38 @@ export function recordBuildInputs() {
       if (target !== 'renderer' || !path.endsWith('.js.map')) {
         continue
       }
-      const map: { sources: string[] } = JSON.parse(readFileSync(join(root, path), 'utf8'))
-      for (const module of [...rowMenuModules, ...pairedActivationModules]) {
-        if (
-          map.sources.some((sourcePath) => sourcePath.replaceAll('\\', '/').endsWith(`/${module}`))
-        ) {
-          const file = path.slice(0, -'.map'.length)
-          sources.set(module, [...(sources.get(module) ?? []), file])
+      const map: { sources: string[]; sourcesContent?: (string | null)[]; sourceRoot?: string } =
+        JSON.parse(readFileSync(join(root, path), 'utf8'))
+      for (const [sourceIndex, sourceEntry] of map.sources.entries()) {
+        const module = relative(
+          root,
+          resolve(dirname(join(root, path)), map.sourceRoot ?? '', sourceEntry)
+        )
+          .split(sep)
+          .join('/')
+        const input = frozen.get(module)
+        if (!input) {
+          continue
         }
+        const content = map.sourcesContent?.[sourceIndex]
+        if (typeof content !== 'string' || sha256(content) !== input.sourceSha256) {
+          continue
+        }
+        const mapping = {
+          ...input,
+          map: path,
+          mapSha256: artifacts[path],
+          sourceEntry,
+          sourceIndex,
+          chunk: path.slice(0, -'.map'.length)
+        }
+        const sourceMappings = (sources[module] ??= [])
+        sourceMappings.push(mapping)
       }
     }
   }
-  for (const module of [...rowMenuModules, ...pairedActivationModules]) {
-    assert.ok(sources.has(module), `Fresh renderer build did not map ${module}`)
+  for (const module of modules) {
+    assert.ok(sources[module]?.length, `Unverified source content for ${module}`)
   }
   const driverDir = 'tests/tools/agent-row-menu'
   return {
@@ -77,6 +120,6 @@ export function recordBuildInputs() {
     ),
     lockfile: digest('pnpm-lock.yaml'),
     artifacts,
-    sources: Object.fromEntries(sources)
+    sources
   }
 }

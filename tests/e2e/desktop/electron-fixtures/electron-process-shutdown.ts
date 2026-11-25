@@ -158,7 +158,7 @@ async function forceKillPidTree(pid: number): Promise<void> {
   }
 }
 
-async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
+export async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
   const pid = proc.pid
   if (!pid || hasExited(proc)) {
     return

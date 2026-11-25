@@ -88,18 +88,22 @@ export async function observeProofRuntime(
   await page.setViewportSize({ width: 1600, height: 1000 })
 
   const assertServedModules = async (paired: boolean) => {
-    const served: Record<string, { path: string; sha256: string }> = {}
+    const served: Record<string, (typeof build.sources)[string][number] & { chunkSha256: string }> =
+      {}
     for (const module of paired
       ? [...rowMenuModules, ...pairedActivationModules]
       : rowMenuModules) {
-      const path = build.sources[module]?.find((file) => rendererScripts.has(file))
-      assert.ok(path, `Renderer did not load a chunk mapped to ${module}`)
-      const scriptId = rendererScripts.get(path)!
+      const mapping = build.sources[module]?.find(({ chunk }) => rendererScripts.has(chunk))
+      assert.ok(mapping, `Renderer did not load a chunk mapped to ${module}`)
+      const { chunk, map, mapSha256, sourceSha256 } = mapping
+      const scriptId = rendererScripts.get(chunk)!
       const content = await cdp.send('Debugger.getScriptSource', { scriptId })
       const hash = sha256(content.scriptSource)
-      assert.equal(hash, build.artifacts[path], path)
-      assert.equal(digest(path), hash, path)
-      served[module] = { path, sha256: hash }
+      assert.equal(hash, build.artifacts[chunk], chunk)
+      assert.equal(digest(chunk), hash, chunk)
+      assert.equal(digest(map), mapSha256, map)
+      assert.equal(digest(module), sourceSha256, module)
+      served[module] = { ...mapping, chunkSha256: hash }
     }
     assert.deepEqual(assertFrozenSource(), { head: build.head, base: build.base, tree: build.tree })
     for (const path of [main, preload, renderer]) {

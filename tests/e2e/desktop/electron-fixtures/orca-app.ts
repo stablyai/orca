@@ -3,16 +3,18 @@
 import {
   test as base,
   expect as playwrightExpect,
-  _electron as electron,
   type Page,
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { closeElectronAppForE2E } from './electron-process-shutdown'
-import { recordElectronShutdownTiming } from './electron-shutdown-timing'
+import {
+  launchElectronInE2EProfile,
+  removeUserDataDirAfterShutdown
+} from './electron-profile-launch'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
@@ -66,23 +68,6 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
   }
   return Math.max(parsed, 0)
 })()
-
-async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void> {
-  const started = performance.now()
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      rmSync(userDataDir, { recursive: true, force: true })
-      recordElectronShutdownTiming('profile-removal', started)
-      return
-    } catch (error) {
-      if (attempt === 4) {
-        throw error
-      }
-      // Windows profile handles may outlive process exit; retry removal without masking the flow result.
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
-    }
-  }
-}
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   // Allow isolated manual observation without retagging every spec.
@@ -175,7 +160,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     if (recordVideoDir) {
       mkdirSync(recordVideoDir, { recursive: true })
     }
-    const app = await electron.launch({
+    const app = await launchElectronInE2EProfile(userDataDir, {
       args: [...orcaAppExtraArgs, ...getOrcaElectronLaunchArgs(mainPath, headful)],
       ...(slowMo > 0 ? { slowMo } : {}),
       ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir } } : {}),
