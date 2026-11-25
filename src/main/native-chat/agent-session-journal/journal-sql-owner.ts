@@ -18,6 +18,9 @@ import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-w
 import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
+// A request its caller withdrew before it was posted: nothing reached the worker.
+const NOT_ADMITTED = Symbol('journal request not admitted')
+
 export class JournalIndeterminateWriteError extends Error {
   override readonly name = 'JournalIndeterminateWriteError'
 }
@@ -132,8 +135,23 @@ export class JournalSqlOwner {
     return response.results
   }
 
-  async maintain(operation: JournalSqlMaintenance): Promise<JournalSqlMaintenanceResult> {
-    const response = await this.request({ type: 'maintenance', operation })
+  /** `admit`: asked last, just before the request is posted to the worker (after any wait for
+   *  record installation); false posts nothing and resolves null. */
+  async maintain(
+    operation: JournalSqlMaintenance,
+    admit?: () => boolean
+  ): Promise<JournalSqlMaintenanceResult> {
+    const response = await this.request({ type: 'maintenance', operation }, admit).catch(
+      (error: unknown) => {
+        if (error === NOT_ADMITTED) {
+          return null
+        }
+        throw error
+      }
+    )
+    if (response === null) {
+      return null
+    }
     if (response.type !== 'maintenance') {
       throw new Error('journal writer returned no maintenance result')
     }
@@ -155,7 +173,10 @@ export class JournalSqlOwner {
     return this.closed
   }
 
-  private async request(command: JournalSqlRequest['command']): Promise<JournalSqlResponse> {
+  private async request(
+    command: JournalSqlRequest['command'],
+    admit?: () => boolean
+  ): Promise<JournalSqlResponse> {
     // A failed startup write preserves readers; every later writer request retries its prerequisite.
     if (
       this.recordInstallationRequired &&
@@ -169,6 +190,9 @@ export class JournalSqlOwner {
     }
     if (this.failure || this.didExit) {
       throw this.failure ?? new Error('journal SQL owner exited')
+    }
+    if (admit?.() === false) {
+      throw NOT_ADMITTED
     }
     const id = ++this.nextId
     return new Promise((resolve, reject) => {

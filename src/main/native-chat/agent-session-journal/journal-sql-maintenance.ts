@@ -45,7 +45,9 @@ import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
 import { recordJournalLegacyCopyFailure } from './database/journal-legacy-copies'
 import {
   cutJournalConnectorReplies,
+  fillEachJournalConnectorReply,
   fillJournalConnectorReplies,
+  probeJournalConnectorReplyExpiry,
   recutJournalConnectorReplies,
   holdJournalConnectorRepliesForRetry,
   releaseJournalConnectorClaim,
@@ -100,6 +102,12 @@ export type JournalSqlMaintenance =
   | { kind: 'legacy-copy-failed'; sessionId: string; error: string }
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
   | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
+  | {
+      kind: 'connector-replies-fill-each'
+      fills: readonly JournalConnectorReplyFill[]
+      now: number
+    }
+  | { kind: 'connector-replies-probe'; keys: readonly JournalConnectorReplyKey[] }
   | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
   | { kind: 'connector-replies-cut'; rows: JournalConnectorReplyCutRows }
   | {
@@ -123,6 +131,8 @@ export type JournalSqlMaintenanceResult =
   | JournalDomainImportDiscard
   | ReturnType<typeof discardForgottenJournalChatPage>
   | boolean
+  | boolean[]
+  | (string | null)[]
   | string
   | null
 
@@ -209,6 +219,10 @@ export function applyJournalSqlMaintenance(
       return discardForgottenJournalChatPage(db, operation.sessionId)
     case 'connector-replies-fill':
       return fillJournalConnectorReplies(db, operation.fills, operation.now) > 0
+    case 'connector-replies-fill-each':
+      return fillEachJournalConnectorReply(db, operation.fills, operation.now)
+    case 'connector-replies-probe':
+      return probeJournalConnectorReplyExpiry(db, operation.keys)
     case 'connector-replies-sent':
       sentJournalConnectorReplies(db, operation.keys, operation.now)
       return true

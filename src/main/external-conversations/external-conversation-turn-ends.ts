@@ -151,6 +151,8 @@ export async function endRepliedTurn(
     turnItemId: turn.turnItemId,
     stamps: turn.stamps,
     ...(turn.opener ? { openerItemId: turn.opener.itemId } : {}),
+    // A reset since this end began (another account, the watch gone) makes the fill write nothing.
+    current: end.current,
     outcome: end.news.outcome,
     prose: (link.bot ? turn.turnBotProse : turn.turnProse) ?? '',
     ...(link.bot && turn.turnProse ? { earlierProse: turn.turnProse } : {}),

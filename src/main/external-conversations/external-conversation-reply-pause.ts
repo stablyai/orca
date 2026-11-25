@@ -20,10 +20,13 @@ export function usageLimitReplyPause(
     const open = rows.filter((row) => row.claimMessageId === undefined)
     if (open.length > 0) {
       const keys = open.map((row) => ({ account: row.account, deliveryId: row.deliveryId }))
-      await store.cut({ keys, cut, ...(turn.failure ? { failure: turn.failure } : {}) })
+      await store.cut(
+        { keys, cut, ...(turn.failure ? { failure: turn.failure } : {}) },
+        turn.current
+      )
     }
     for (const claim of new Set(rows.flatMap((row) => row.claimMessageId ?? []))) {
-      await store.recut(claim, cut, turn.failure)
+      await store.recut(claim, cut, turn.failure, turn.current)
     }
     const resumesAt = await dueAt(turn.sessionId)
     return resumesAt === undefined ? {} : { resumesAt }

@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   quiet_rule TEXT,
   tools_ran INTEGER,
   empty_retried INTEGER,
+  admitted_at INTEGER,
+  expired_reason TEXT,
+  paused INTEGER,
   PRIMARY KEY(account, delivery_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
@@ -40,7 +43,8 @@ CREATE INDEX IF NOT EXISTS journal_connector_replies_open
 // them. turn_started_at: the answering turn's turn-started `at`, which its reply names. cut_turn_id / cut_kind: the cut that owes the row; claim_message_id: the continuation that
 // claimed it. quiet_rule: the quiet-marker rule the row was admitted under. tools_ran: a turn done
 // without an answer ran a tool call that may have changed something. empty_retried: its empty turn
-// was retried once.
+// was retried once. admitted_at: when the admission committed (the request's age). expired_reason:
+// local only, why a fill too old to post closed quiet. paused: a usage-limit cut ever owed the row.
 const ADDED_COLUMNS = [
   ['took_ms', 'INTEGER'],
   ['turn_started_at', 'INTEGER'],
@@ -49,7 +53,10 @@ const ADDED_COLUMNS = [
   ['claim_message_id', 'TEXT'],
   ['quiet_rule', 'TEXT'],
   ['tools_ran', 'INTEGER'],
-  ['empty_retried', 'INTEGER']
+  ['empty_retried', 'INTEGER'],
+  ['admitted_at', 'INTEGER'],
+  ['expired_reason', 'TEXT'],
+  ['paused', 'INTEGER']
 ] as const
 
 /** Creates the table, and adds the columns a table an earlier build made lacks. */

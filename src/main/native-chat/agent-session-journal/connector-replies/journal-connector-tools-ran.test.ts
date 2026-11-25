@@ -21,12 +21,19 @@ it('keeps a no_answer row’s tools-ran flag through the store and onto its own 
   const target = { sessionId: 'chat-1', epoch: 'e' }
   const conversation = { source: 'slack', externalId: 'slack:T1:C1:1.2' }
   for (const deliveryId of ['d1', 'd2']) {
-    recordJournalConnectorReplies(db, target, deliveryId, false, {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'run it' }],
-      connectorDelivery: { account: 'a', conversation, deliveryId }
-    })
+    recordJournalConnectorReplies(
+      db,
+      target,
+      deliveryId,
+      false,
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'run it' }],
+        connectorDelivery: { account: 'a', conversation, deliveryId }
+      },
+      1
+    )
   }
   const fill = { account: 'a', outcome: 'no_answer' as const, answerDeliveryId: 'd1' }
   fillJournalConnectorReplies(

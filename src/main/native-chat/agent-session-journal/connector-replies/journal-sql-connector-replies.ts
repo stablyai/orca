@@ -1,5 +1,6 @@
 import type { ConnectorFailure } from '../../../../shared/connectors/connector-cloud-contract'
 import type {
+  JournalConnectorReplyAdmit,
   JournalConnectorReplyCut,
   JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
@@ -68,35 +69,81 @@ export class JournalSqlConnectorReplies {
   }
 
   /** Fills rows with their outcomes, the first fill winning; whether any changed. */
-  async fillOutcomes(fills: readonly JournalConnectorReplyFill[]): Promise<boolean> {
+  async fillOutcomes(
+    fills: readonly JournalConnectorReplyFill[],
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean> {
     if (this.db.readOnly || fills.length === 0) {
       return false
     }
     const result = await this.db.serialize(LANE, (writer) =>
-      writer.maintain({ kind: 'connector-replies-fill', fills, now: Date.now() })
+      writer.maintain({ kind: 'connector-replies-fill', fills, now: Date.now() }, admit)
     )
     return result === true
   }
 
+  /** The same fills as one command in one transaction, each with whether it changed its row;
+   *  every one false when nothing was written (read-only, or `admit` false before posting). */
+  async fillEach(
+    fills: readonly JournalConnectorReplyFill[],
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean[]> {
+    if (this.db.readOnly || fills.length === 0) {
+      return fills.map(() => false)
+    }
+    const result = await this.db.serialize(LANE, (writer) =>
+      writer.maintain({ kind: 'connector-replies-fill-each', fills, now: Date.now() }, admit)
+    )
+    return Array.isArray(result) && result.length === fills.length
+      ? result.map((changed) => changed === true)
+      : fills.map(() => false)
+  }
+
+  /** Each key's local expired_reason (null: none, or the row is gone), by primary key. */
+  async probeExpired(keys: readonly JournalConnectorReplyKey[]): Promise<(string | null)[]> {
+    if (keys.length === 0) {
+      return []
+    }
+    const result = await this.db.serialize(LANE, (writer) =>
+      writer.maintain({ kind: 'connector-replies-probe', keys })
+    )
+    if (!Array.isArray(result) || result.length !== keys.length) {
+      throw new Error('journal writer returned no reply probe')
+    }
+    return result.map((reason) => (typeof reason === 'string' ? reason : null))
+  }
+
   /** Open rows a cut now owes a continuation; whether any changed. */
-  async cut(rows: JournalConnectorReplyCutRows): Promise<boolean> {
-    return await this.maintain({ kind: 'connector-replies-cut', rows }, rows.keys.length)
+  async cut(
+    rows: JournalConnectorReplyCutRows,
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean> {
+    return await this.maintain({ kind: 'connector-replies-cut', rows }, rows.keys.length, admit)
   }
 
   /** The continuation's own turn was cut and is owed again: its claimed rows become that cut's. */
   async recut(
     claimMessageId: string,
     cut: JournalConnectorReplyCut,
-    failure?: ConnectorFailure
+    failure?: ConnectorFailure,
+    admit?: JournalConnectorReplyAdmit
   ): Promise<boolean> {
-    return await this.maintain({ kind: 'connector-replies-recut', claimMessageId, cut, failure })
+    return await this.maintain(
+      { kind: 'connector-replies-recut', claimMessageId, cut, failure },
+      1,
+      admit
+    )
   }
 
   /** An empty turn's rows, held for its one retry to claim; whether any changed. */
-  async holdForRetry(rows: JournalConnectorReplyRetryRows): Promise<boolean> {
+  async holdForRetry(
+    rows: JournalConnectorReplyRetryRows,
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean> {
     return await this.maintain(
       { kind: 'connector-replies-retry-hold', rows },
-      rows.keys.length + rows.claims.length
+      rows.keys.length + rows.claims.length,
+      admit
     )
   }
 
@@ -105,11 +152,16 @@ export class JournalSqlConnectorReplies {
     return await this.maintain({ kind: 'connector-replies-release', claimMessageId })
   }
 
-  private async maintain(operation: JournalSqlMaintenance, size = 1): Promise<boolean> {
+  private async maintain(
+    operation: JournalSqlMaintenance,
+    size = 1,
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean> {
     if (this.db.readOnly || size === 0) {
       return false
     }
-    return (await this.db.serialize(LANE, (writer) => writer.maintain(operation))) === true
+    const result = await this.db.serialize(LANE, (writer) => writer.maintain(operation, admit))
+    return result === true
   }
 
   /** The cloud accepted these rows. */

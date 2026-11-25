@@ -168,7 +168,7 @@ export function applyJournalDomainSubmission(
   // claim moves to the send it was handed over as, and a send again after its claim was released
   // claims again.
   if (familyId === undefined) {
-    recordJournalConnectorReplies(db, target, input.clientMessageId, false, input.body)
+    recordJournalConnectorReplies(db, target, input.clientMessageId, false, input.body, savedAt)
   } else {
     repointJournalConnectorClaim(db, target, familyId, input.clientMessageId)
     claimJournalConnectorReplies(db, target, input.clientMessageId, input.body)

@@ -57,8 +57,9 @@ export function emptyTurnRetry(deps: {
   /** Whether the chat tried to post into Slack itself since `at` (ConnectorPostAttempts). */
   postedSince: (sessionId: string, at: number, until: number, conversation?: string) => boolean
   send: EmptyRetrySend
-  /** The ask is settled: recovery reads the rows again (a refused ask closes them as no answer). */
-  settled: (sessionId: string) => void
+  /** The ask is settled: recovery reads the rows again (a refused ask closes them as no answer).
+   *  `current`: the held turn end's, so a retired one schedules nothing. */
+  settled: (sessionId: string, current?: () => boolean) => void
 }): EmptyTurnRetry {
   const sending = new Set<string>()
   // With no known start, no post can be pinned to this turn: an earlier turn's never counts.
@@ -98,13 +99,16 @@ export function emptyTurnRetry(deps: {
       const release = () => keys.forEach((key) => sending.delete(key))
       const cut = { turnId: turn.turnItemId, kind: 'restart' as const }
       const held = await store
-        .holdForRetry({
-          keys: own
-            .filter((row) => row.claimMessageId === undefined)
-            .map(({ account, deliveryId }) => ({ account, deliveryId })),
-          claims: [...new Set(own.flatMap((row) => row.claimMessageId ?? []))],
-          cut
-        })
+        .holdForRetry(
+          {
+            keys: own
+              .filter((row) => row.claimMessageId === undefined)
+              .map(({ account, deliveryId }) => ({ account, deliveryId })),
+            claims: [...new Set(own.flatMap((row) => row.claimMessageId ?? []))],
+            cut
+          },
+          turn.current
+        )
         .catch(() => false)
       if (!held) {
         release()
@@ -128,13 +132,18 @@ export function emptyTurnRetry(deps: {
           }))
         }
       }
+      // Retired since the hold (a reset, another host): no ask is sent; recovery closes what it held.
+      if (turn.current?.() === false) {
+        release()
+        return true
+      }
       // Not awaited: the turn end goes on, and the retry's own turn fills the rows it claims.
       void deps
         .send(turn.sessionId, body, turn.turnItemId)
         .catch(() => 'unknown' as const)
         .finally(() => {
           release()
-          deps.settled(turn.sessionId)
+          deps.settled(turn.sessionId, turn.current)
         })
       return true
     }
@@ -248,18 +257,24 @@ export function liveEmptyTurnRetry(
   journal: () => ConnectorReplyCutJournal | null,
   chat: Parameters<typeof emptyRetrySend>[0],
   signal: AbortSignal
-): { retry: EmptyTurnRetry; settleWith: (recovery: { turnEnded: (id: string) => void }) => void } {
-  let settle: (sessionId: string) => void = () => {}
+): {
+  retry: EmptyTurnRetry
+  settleWith: (recovery: { turnEnded: (id: string, current?: () => boolean) => void }) => void
+} {
+  let settle: (sessionId: string, current?: () => boolean) => void = () => {}
   const retry = emptyTurnRetry({
     journal,
     postedSince: (sessionId, at, until, conversation) =>
       connectorPostAttempts.since(chatPaneKey(sessionId), at, until, conversation),
     send: emptyRetrySend(chat, signal),
-    settled: (sessionId) => {
+    settled: (sessionId, current) => {
       if (!signal.aborted) {
-        settle(sessionId)
+        settle(sessionId, current)
       }
     }
   })
-  return { retry, settleWith: (recovery) => (settle = (id) => recovery.turnEnded(id)) }
+  return {
+    retry,
+    settleWith: (recovery) => (settle = (id, current) => recovery.turnEnded(id, current))
+  }
 }

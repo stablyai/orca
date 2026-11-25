@@ -35,6 +35,16 @@ type StopReadingChat = {
   journalReads(sessionId: string): Promise<Pick<JournalSqlReads, 'latestStop'>>
 }
 
+/** Why a send was rejected, from its typed rejection, as the live end would say it. */
+export function submissionRejection(
+  submission: { rejection?: unknown },
+  agent: string
+): { failure?: ConnectorFailure } {
+  const fact = readAgentSessionFailureFact(submission.rejection)
+  const failure = fact && connectorFailure(fact, agent)
+  return failure ? { failure } : {}
+}
+
 /** The chat's latest saved Stop; unreadable reads as none, so the send keeps its failure. */
 export async function savedStop(chat: StopReadingChat, sessionId: string): Promise<SavedStop> {
   try {

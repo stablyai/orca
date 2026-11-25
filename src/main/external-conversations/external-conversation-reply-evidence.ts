@@ -21,10 +21,8 @@ import {
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ReplyRecoveryChat } from './external-conversation-reply-recovery'
-import { connectorReplyTurnOutcome } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-turn-reply'
-import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../shared/agent-session/journal/journal-connector-reply'
-import { capAnswer } from '../connector-cloud/connector-snapshot'
+import { heldAnswer } from './external-conversation-reply-held'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 
 // What the journal proves about reply outbox rows (Phase 1): which cut a row is in, what its claim's
@@ -36,6 +34,8 @@ export type ReplyRecoveryVerdict = {
   outcome: JournalConnectorReplyOutcome
   failure?: ConnectorFailure
   prose?: string
+  /** When the turn that wrote `prose` ended: a held answer is judged by it (REPLY_FRESH_MS). */
+  endedAt?: number
 }
 
 // The machine lost track of the request across a restart: it may have finished (Phase 1 §1.8).
@@ -197,7 +197,9 @@ export async function claimCut(
   chat: Pick<ReplyRecoveryChat, 'journalReads'>,
   sessionId: string,
   cut: JournalConnectorReplyCut,
-  rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
+  rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure },
+  /** Whether the recovery asking is still current: its cut writes ask when they reach the writer. */
+  admit?: () => boolean
 ): Promise<AgentJournalConnectorClaim | undefined> {
   const unfilled = (await journal.read(sessionId)).filter((row) => !row.fill)
   if (unfilled.length === 0) {
@@ -208,13 +210,13 @@ export async function claimCut(
     (row) => !row.cut && row.claimMessageId === undefined && view.inCut(row, cut.turnId)
   )
   if (members.length > 0) {
-    await journal.cut({ keys: members.map(keyOf), cut })
+    await journal.cut({ keys: members.map(keyOf), cut }, admit)
   }
   // A claim is cut again when its continuation's turn is the cut, or, cut before any turn took it,
   // when the continuation is the cut send itself (A6).
   for (const claim of new Set(unfilled.flatMap((row) => row.claimMessageId ?? []))) {
     if (claim === cut.turnId || view.turnOpenedBy(claim)?.turnId === cut.turnId) {
-      await journal.recut(claim, cut)
+      await journal.recut(claim, cut, undefined, admit)
     }
   }
   const owed = (await journal.read(sessionId)).filter(
@@ -317,23 +319,4 @@ export function rowVerdict(
   return (submission?.submittedAt ?? 0) < startedAt
     ? { outcome: 'interrupted', failure: UNCONFIRMED }
     : { outcome: 'unattributed' }
-}
-
-/** A row held for an empty turn's retry that never ran (refused, or the app quit first), whose
- *  turn finished: answered only by any words that turn wrote before its last tool. */
-function heldAnswer(
-  row: Unfilled,
-  view: Awaited<ReturnType<typeof readReplyEvidence>>
-): ReplyRecoveryVerdict | null {
-  if (!row.emptyRetried || !row.cut || view.cutTurnVerdict(row.cut.turnId) !== 'success') {
-    return null
-  }
-  const { outcome, prose } = connectorReplyTurnOutcome({
-    outcome: 'success',
-    prose: view.cutTurnWords(row.cut.turnId),
-    bot: true
-  })
-  return prose
-    ? { outcome, prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) }
-    : { outcome }
 }

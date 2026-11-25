@@ -140,7 +140,7 @@ export function applyJournalDomainQueueCommand(
       }
       changes = [{ prior: null, card }]
       result = { kind: 'queue-insert', card }
-      recordJournalConnectorReplies(db, target, input.messageId, true, input.body)
+      recordJournalConnectorReplies(db, target, input.messageId, true, input.body, savedAt)
       break
     }
     case 'queue-update': {

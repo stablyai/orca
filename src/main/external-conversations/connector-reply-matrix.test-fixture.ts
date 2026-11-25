@@ -12,22 +12,12 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { ensureAgentSessionAttachmentClaimTables } from '../native-chat/agent-session-attachments/agent-session-attachment-claims'
-import {
-  cutJournalConnectorReplies,
-  fillJournalConnectorReplies,
-  recutJournalConnectorReplies,
-  holdJournalConnectorRepliesForRetry,
-  releaseJournalConnectorClaim,
-  sentJournalConnectorReplies
-} from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies'
-import {
-  readJournalConnectorReplies,
-  readOwedJournalConnectorReplies
-} from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies-read'
+import { readJournalConnectorReplies } from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies-read'
 import { readJournalDomainDispatchItem } from '../native-chat/agent-session-journal/journal-domain-dispatch-placement'
 import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
 import Database from '../sqlite/sync-database'
+import { replyJournalOver } from './connector-reply-journal.test-fixture'
 import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-reply-outbox'
 import { conversationReplyFill } from './external-conversation-reply-fill'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
@@ -82,20 +72,7 @@ export function openJournal() {
     `INSERT OR IGNORE INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
      VALUES('workspace','chat-1','e',10,1)`
   ).run()
-  const journal: ConnectorReplyCutJournal = {
-    read: async (sessionId) =>
-      readJournalConnectorReplies(db).filter(
-        (row) => sessionId === undefined || row.sessionId === sessionId
-      ),
-    readOwed: async (account, after, limit) =>
-      readOwedJournalConnectorReplies(db, account, after, limit),
-    fillOutcomes: async (fills) => fillJournalConnectorReplies(db, fills, NOW) > 0,
-    sent: async (keys) => sentJournalConnectorReplies(db, keys, NOW),
-    cut: async (rows) => cutJournalConnectorReplies(db, rows) > 0,
-    recut: async (claim, cut, failure) => recutJournalConnectorReplies(db, claim, cut, failure) > 0,
-    releaseClaim: async (claim) => releaseJournalConnectorClaim(db, claim) > 0,
-    holdForRetry: async (rows) => holdJournalConnectorRepliesForRetry(db, rows) > 0
-  }
+  const journal = replyJournalOver(db, NOW)
   return { db, journal }
 }
 
@@ -157,10 +134,18 @@ export function start(
     bot?: boolean
     /** An empty turn's retry: whether the chat tried a post itself, and how its ask's send goes. */
     retry?: { posted?: boolean; send: EmptyRetrySend }
+    /** When this process started: a request admitted earlier crossed a restart. */
+    processStartedAt?: number
+    /** Wakes the sender: the fill's and recovery's. */
+    filled?: () => void
+    /** The journal the fill and recovery write through, around the real one (faults). */
+    wrapJournal?: (journal: ConnectorReplyCutJournal) => ConnectorReplyCutJournal
   } = {}
 ) {
-  const { bot = false, retry: retrying, ...recoveryOptions } = options
-  const { db, journal } = openJournal()
+  const { bot = false, retry: retrying, wrapJournal, ...recoveryOptions } = options
+  const { db, journal: real } = openJournal()
+  const journal = wrapJournal?.(real) ?? real
+  const filled = options.filled ?? (() => {})
   let items: AgentJournalRenderItem[] = []
   let submissions: AgentJournalSubmission[] = []
   const observers: (() => void)[] = []
@@ -185,14 +170,15 @@ export function start(
       journal: () => journal,
       postedSince: () => retrying.posted === true,
       send: retrying.send,
-      settled: (sessionId) => recovery.turnEnded(sessionId)
+      settled: (sessionId, current) => recovery.turnEnded(sessionId, current)
     })
   const fill = conversationReplyFill(
     () => journal,
-    () => {},
+    filled,
     usageLimitReplyPause(() => journal, options.usageLimitDisposition ?? (async () => 'ended')),
     undefined,
-    retry
+    retry,
+    { processStartedAt: options.processStartedAt }
   )
   const recovery: ConnectorReplyRecovery = new ConnectorReplyRecovery({
     ...(retry ? { retrySending: retry.sending } : {}),
@@ -203,7 +189,7 @@ export function start(
     isBot: () => bot,
     agentOf: () => 'claude',
     fillTurn: fill,
-    filled: () => {},
+    filled,
     ...recoveryOptions
   })
   const message = (messageId: string) =>
@@ -225,7 +211,7 @@ export function start(
               itemId: `said-${key}`,
               revision: 1,
               sequence: at,
-              observedAt: at,
+              observedAt: NOW + at,
               body: {
                 kind: 'message' as const,
                 role: 'assistant' as const,
@@ -239,7 +225,7 @@ export function start(
         itemId: key,
         revision: 1,
         sequence: at + 1,
-        observedAt: at + 1,
+        observedAt: NOW + at + 1,
         body: {
           kind: 'turn',
           turnId: `provider-${key}`,
@@ -288,7 +274,8 @@ export function start(
     })
   return {
     db,
-    journal,
+    // The real journal: a test's own writes never pass through its faults.
+    journal: real,
     recovery,
     message,
     turn,

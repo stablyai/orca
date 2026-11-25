@@ -9,6 +9,7 @@ import {
   type ConnectorFailure
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
+  JournalConnectorReplyAdmit,
   JournalConnectorReplyCut,
   JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
@@ -30,20 +31,34 @@ export type ConnectorReplyJournal = {
     after: string | null,
     limit: number
   ): Promise<JournalConnectorReplyRow[]>
-  fillOutcomes(fills: readonly JournalConnectorReplyFill[]): Promise<boolean>
+  fillOutcomes(
+    fills: readonly JournalConnectorReplyFill[],
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean>
   sent(keys: readonly JournalConnectorReplyKey[]): Promise<void>
 }
 
 /** The rows' cut and claim writes (Phase 1): what restart and usage-limit recovery change. */
 export type ConnectorReplyCutJournal = ConnectorReplyJournal & {
-  cut(rows: JournalConnectorReplyCutRows): Promise<boolean>
+  cut(rows: JournalConnectorReplyCutRows, admit?: JournalConnectorReplyAdmit): Promise<boolean>
   recut(
     claimMessageId: string,
     cut: JournalConnectorReplyCut,
-    failure?: ConnectorFailure
+    failure?: ConnectorFailure,
+    admit?: JournalConnectorReplyAdmit
   ): Promise<boolean>
   releaseClaim(claimMessageId: string): Promise<boolean>
-  holdForRetry(rows: JournalConnectorReplyRetryRows): Promise<boolean>
+  holdForRetry(
+    rows: JournalConnectorReplyRetryRows,
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean>
+  /** Fills as one command in one transaction, each with whether it changed its row. */
+  fillEach(
+    fills: readonly JournalConnectorReplyFill[],
+    admit?: JournalConnectorReplyAdmit
+  ): Promise<boolean[]>
+  /** Each key's local expired_reason, null where none: one primary-key lookup per key. */
+  probeExpired(keys: readonly JournalConnectorReplyKey[]): Promise<(string | null)[]>
 }
 
 export type ConnectorReplyEvent = Extract<ConnectorEvent, { kind: 'reply' }>

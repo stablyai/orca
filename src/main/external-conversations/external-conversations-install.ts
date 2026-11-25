@@ -31,6 +31,7 @@ import { ExternalConversationSeam } from './external-conversation-seam'
 import {
   conversationReplyFill,
   journalAskedByOwner,
+  recoveredLiveFill,
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
@@ -274,6 +275,10 @@ function connectorReplyOutbox(
   let unwatchStatus: (() => void) | undefined
   let unwatchPauses: (() => void) | undefined
   const boot = () => {
+    // Connectors off: no host change starts recovery again.
+    if (signal.aborted) {
+      return
+    }
     recovery.dispose()
     unwatchStatus?.()
     unwatchPauses?.()
@@ -305,11 +310,7 @@ function connectorReplyOutbox(
   })
   boot()
   return {
-    fill: async (turn) => {
-      const filledTurn = await fill(turn)
-      recovery.turnEnded(turn.sessionId)
-      return filledTurn
-    },
+    fill: recoveredLiveFill(fill, recovery),
     admitted: (sessionId) => recovery.admitted(sessionId)
   }
 }

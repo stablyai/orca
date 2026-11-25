@@ -10,7 +10,7 @@ import {
 } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
-import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
+import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-reply-outbox'
 import { capAnswer } from '../connector-cloud/connector-snapshot'
 import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
@@ -18,6 +18,7 @@ import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-messa
 import type { EmptyTurnRetry } from './external-conversation-reply-empty-retry'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { PROCESS_STARTED_AT, staleCloser } from './external-conversation-reply-freshness'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -47,6 +48,13 @@ export type EndedTurnReplies = {
   live?: true
   /** How a retry of the turn is asked (retryAskerOf): absent when the turn gets none. */
   askedBy?: Pick<AgentJournalMessageItem, 'origin' | 'asker' | 'connectorConversation'>
+  /** A fill recovery makes from an ended turn, and when that turn ended: too old to post, its rows
+   *  close quietly (REPLY_FRESH_MS). */
+  recovered?: { endedAt: number }
+  /** Whether the turn end or recovery pass filling is still current: asked when each write is
+   *  posted to the writer, and before a retry is held or sent; a retired fill writes and wakes
+   *  nothing. */
+  current?: () => boolean
 }
 
 /** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
@@ -84,6 +92,7 @@ export type UsageLimitPause = (
 ) => Promise<false | { resumesAt?: number }>
 
 const keyOf = (account: string, deliveryId: string): string => `${account}\0${deliveryId}`
+const rowKey = (row: JournalConnectorReplyRow): string => keyOf(row.account, row.deliveryId)
 
 /**
  * Takes the session's rows the turn's stamps name and fills the unfilled ones. Returns the
@@ -91,11 +100,12 @@ const keyOf = (account: string, deliveryId: string): string => `${account}\0${de
  * legacy turn end.
  */
 export function conversationReplyFill(
-  journal: () => ConnectorReplyJournal | null,
+  journal: () => ConnectorReplyCutJournal | null,
   filled: () => void,
   pause?: UsageLimitPause,
   askedByOwner?: AskedByOwner,
-  retry?: Pick<EmptyTurnRetry, 'hold' | 'posted'>
+  retry?: Pick<EmptyTurnRetry, 'hold' | 'posted'>,
+  options: { processStartedAt?: number } = {}
 ): ConversationReplyFill {
   return async (turn) => {
     const store = journal()
@@ -122,15 +132,6 @@ export function conversationReplyFill(
           (order.get(keyOf(a.account, a.deliveryId)) ?? 0) -
           (order.get(keyOf(b.account, b.deliveryId)) ?? 0)
       )
-    // The group's head keys its answer: its earliest stamp per conversation, filled or sent or not,
-    // so a partial fill or a deleted row never moves the key.
-    const answers = new Map<string, string>()
-    for (const stamp of turn.stamps) {
-      const conversation = JSON.stringify([stamp.account, stamp.conversation])
-      if (!answers.has(conversation)) {
-        answers.set(conversation, stamp.deliveryId)
-      }
-    }
     const covered = new Set(rows.map((row) => row.conversation.externalId))
     // A row a continuation claimed is that continuation's turn's to fill; one a cut still owes is
     // its continuation's or its close's.
@@ -180,6 +181,26 @@ export function conversationReplyFill(
           (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false)) === true)
       silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)
     }
+    // Too old to post: closes quietly under its own key, never the answer's, so accepting the
+    // answer's event never takes a request it didn't answer (item 964).
+    const closer = staleCloser(options.processStartedAt ?? PROCESS_STARTED_AT)
+    const stale = new Set(
+      own.filter((row) => closer.isStale(row, turn.recovered?.endedAt)).map(rowKey)
+    )
+    // The group's head keys its answer: its earliest stamp per conversation, filled or sent or not,
+    // so a partial fill or a deleted row never moves the key; a request closed as too old never is.
+    const byKey = new Map(rows.map((row) => [rowKey(row), row]))
+    const answers = new Map<string, string>()
+    for (const stamp of turn.stamps) {
+      const conversation = JSON.stringify([stamp.account, stamp.conversation])
+      for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
+        const row = byKey.get(keyOf(stamp.account, deliveryId))
+        const expired = row && (stale.has(rowKey(row)) || row.fill?.expiredReason !== undefined)
+        if (!answers.has(conversation) && !expired) {
+          answers.set(conversation, deliveryId)
+        }
+      }
+    }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
       const conversation = JSON.stringify([row.account, row.conversation])
@@ -187,8 +208,11 @@ export function conversationReplyFill(
         ...answeredIn(row),
         silencedWhole: silencedWhole.get(conversation) === true
       })
-      const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
-      fills.push({
+      const expired = stale.has(rowKey(row))
+      const answerDeliveryId = expired
+        ? row.deliveryId
+        : (answers.get(conversation) ?? row.deliveryId)
+      const fill: JournalConnectorReplyFill = {
         account: row.account,
         deliveryId: row.deliveryId,
         ...(claimedHere(row) ? { expect: { claimMessageId: row.claimMessageId! } } : {}),
@@ -201,11 +225,37 @@ export function conversationReplyFill(
         ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {}),
         ...(outcome === 'no_answer' && turn.toolsRan ? { toolsRan: true as const } : {}),
         ...(turn.turnStartedAt === undefined ? {} : { turnStartedAt: turn.turnStartedAt })
-      })
+      }
+      fills.push(expired ? closer.close(row, fill, turn.recovered?.endedAt) : fill)
     }
-    if (await store.fillOutcomes(fills)) {
-      filled()
+    // A retired fill (its turn end or recovery pass gone) wakes no sender: another may run now.
+    const wake = () => turn.current?.() !== false && filled()
+    if (
+      await closer.write(store, turn.sessionId, fills, { admit: turn.current, committed: wake })
+    ) {
+      wake()
     }
     return { covered, paused: false }
+  }
+}
+
+/** A live end's fill and its follow-up belong to the recovery running when it began: a host change
+ *  or connectors off since then makes its writes, wakes and watch nothing. A fill that threw still
+ *  hands its rows to recovery. */
+export function recoveredLiveFill(
+  fill: ConversationReplyFill,
+  recovery: {
+    lifetime(): () => boolean
+    turnEnded(sessionId: string, current?: () => boolean): void
+  }
+): ConversationReplyFill {
+  return async (turn) => {
+    const lifetime = recovery.lifetime()
+    const current = () => lifetime() && turn.current?.() !== false
+    try {
+      return await fill({ ...turn, current })
+    } finally {
+      recovery.turnEnded(turn.sessionId, lifetime)
+    }
   }
 }

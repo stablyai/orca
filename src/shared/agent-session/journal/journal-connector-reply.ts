@@ -50,7 +50,13 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   turnStartedAt?: number
   /** A turn done without an answer ran a tool call that may have acted, so its line asks to check. */
   toolsRan?: true
+  /** Local only, never sent: why a fill too old to post closed its request quietly instead. */
+  expiredReason?: string
 }
+
+/** Asked when a write reaches the writer, not when it is queued: false drops it unwritten. A
+ *  recovery pass's writes ask whether that pass is still current. */
+export type JournalConnectorReplyAdmit = () => boolean
 
 /** An outbox row not yet accepted by the cloud. */
 export type JournalConnectorReplyRow = JournalConnectorReplyKey & {
@@ -71,6 +77,11 @@ export type JournalConnectorReplyRow = JournalConnectorReplyKey & {
    *  marker. Absent (admitted by an older build): the marker silences the whole reply, except an
    *  owner's own DM. */
   quietRule?: 'trailing'
+  /** When its admission committed; absent on rows an older build wrote, which never age. */
+  admittedAt?: number
+  /** A usage-limit cut ever owed it: its thread was told the work resumes, so it never ages. Kept
+   *  through every later cut and claim. */
+  paused?: true
 }
 
 /** An empty turn's rows held for its one retry: its open rows and the rows its continuation

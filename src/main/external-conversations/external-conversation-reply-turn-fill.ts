@@ -27,6 +27,8 @@ export async function fillRecoveredTurn(
     fillTurn: ConversationReplyFill
     isBot: (sessionId: string) => boolean
     agentOf: (sessionId: string) => string
+    /** Whether the recovery pass filling is still current (EndedTurnReplies.current). */
+    current?: () => boolean
   }
 ): Promise<{ kind: 'unresolved' | 'cut'; stamps: AgentJournalConnectorDelivery[] }> {
   const record = readAgentJournalTurn(turn.body)
@@ -58,6 +60,9 @@ export async function fillRecoveredTurn(
       ...(record?.completedAt ? { postsUntil: record.completedAt } : {}),
       ...turnReplyOf(snapshot.items, turn.itemId, deps.isBot(sessionId)),
       links: [],
+      // Recovery fills it after the fact: judged by when the turn ended (REPLY_FRESH_MS).
+      recovered: { endedAt: readAgentJournalTurn(turn.body)?.completedAt ?? turn.observedAt },
+      ...(deps.current ? { current: deps.current } : {}),
       ...(outcome === 'failure'
         ? {
             failure: connectorFailure(
