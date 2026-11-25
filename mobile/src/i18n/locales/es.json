@@ -5289,7 +5289,7 @@
       "hitLimit": "Límite alcanzado · se restablece a las {{time}}"
     },
     "new": {
-      "purposeTooLongForHost": "Orca en ese equipo admite hasta 200 caracteres para el propósito. Acórtalo o actualiza Orca allí."
+      "purposeTooLongForHost": "Orca en {{host}} admite hasta 200 caracteres para el propósito. Acórtalo o actualiza Orca en {{host}}."
     }
   },
   "sidebar": {

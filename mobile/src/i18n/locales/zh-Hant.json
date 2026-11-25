@@ -5171,7 +5171,7 @@
       "hitLimit": "已達上限 · {{time}} 重設"
     },
     "new": {
-      "purposeTooLongForHost": "該電腦上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或在那台電腦上更新 Orca。"
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或更新 {{host}} 上的 Orca。"
     }
   },
   "sidebar": {

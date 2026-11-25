@@ -24534,7 +24534,7 @@
     },
     "errors": {
       "unsavedDrafts": "它的資料夾中有尚未儲存的編輯器變更。請先儲存或關閉，再重新刪除。",
-      "purposeTooLongForHost": "該電腦上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或在那台電腦上更新 Orca。"
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或更新 {{host}} 上的 Orca。"
     },
     "automations": {
       "paused": "已暫停",

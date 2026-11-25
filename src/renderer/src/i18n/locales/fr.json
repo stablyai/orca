@@ -25476,7 +25476,7 @@
     },
     "errors": {
       "unsavedDrafts": "Son dossier contient des modifications non enregistrées dans l’éditeur. Enregistrez-les ou fermez les fichiers concernés, puis réessayez de le supprimer.",
-      "purposeTooLongForHost": "Orca sur cet ordinateur accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur cet ordinateur."
+      "purposeTooLongForHost": "Orca sur {{host}} accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur {{host}}."
     },
     "automations": {
       "paused": "En pause",

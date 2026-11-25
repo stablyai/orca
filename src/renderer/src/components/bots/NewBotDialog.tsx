@@ -135,7 +135,7 @@ export function NewBotDialog({
   const shown = shownDraft(proposal, draft, t)
   const keepDraft = (next: typeof draft): void => setDraft(canonicalDraft(proposal, next, t))
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
-  const { hostId, blocked } = hostChoice.host
+  const { hostId, blocked, label } = hostChoice.host
   const hostBots = useHostBots(hostId)
   const name = typedName ?? (fromShare ? freeBotName(fromShare.review.bot.name, hostBots) : '')
   const { model, choices } = useBotAgentMenu(hostId, open)
@@ -238,7 +238,7 @@ export function NewBotDialog({
       createInFlight.current = false
       setCreating(false)
       toast.error(
-        fromShare ? botShareErrorMessage(error) : botCreateErrorMessage(error, made?.purpose)
+        fromShare ? botShareErrorMessage(error) : botCreateErrorMessage(error, made?.purpose, label)
       )
       return
     }
@@ -386,7 +386,7 @@ export function NewBotDialog({
               <NewBotTemplateParts
                 template={template}
                 packages={templatePackages}
-                hostLabel={submitted && blocked ? undefined : hostChoice.host.label}
+                hostLabel={submitted && blocked ? undefined : label}
                 kept={kept}
                 onKeptChange={(skill, on) => {
                   const next = new Set(kept)

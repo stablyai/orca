@@ -26034,7 +26034,7 @@
     },
     "errors": {
       "unsavedDrafts": "A pasta dele tem alterações não salvas no editor. Salve ou feche os arquivos e tente excluir novamente.",
-      "purposeTooLongForHost": "O Orca nesse computador aceita até 200 caracteres para a finalidade. Encurte o texto ou atualize o Orca lá."
+      "purposeTooLongForHost": "O Orca em {{host}} aceita até 200 caracteres para a finalidade. Encurte o texto ou atualize o Orca em {{host}}."
     },
     "groups": {
       "handoffsPaused": "Pausado após {{count}} repasses. Responda para continuar.",

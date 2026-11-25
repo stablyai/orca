@@ -78,12 +78,18 @@ function hostSentenceOf(error: unknown): string | null {
 }
 
 /** A create's refusal; an older host that checks the earlier purpose limit says so. */
-export function botCreateErrorMessage(error: unknown, purpose: string | undefined): string {
+export function botCreateErrorMessage(
+  error: unknown,
+  purpose: string | undefined,
+  /** The picked computer's name, as Runs on shows it: an older paired one, not this Mac. */
+  host: string
+): string {
   return error instanceof RuntimeRpcCallError &&
     refusedForOlderHostPurposeLimit(error.code, error.message, purpose)
     ? translate(
         'bots.errors.purposeTooLongForHost',
-        "Orca on that computer takes up to 200 characters for what it's for. Shorten it, or update Orca there."
+        "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
+        { host }
       )
     : botErrorMessage(error)
 }

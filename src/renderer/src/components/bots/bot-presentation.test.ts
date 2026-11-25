@@ -87,11 +87,14 @@ describe('botCreateErrorMessage', () => {
   })
 
   it('names the older limit when the host refused a long purpose', () => {
-    expect(botCreateErrorMessage(olderHost, 'x'.repeat(201))).toContain('up to 200 characters')
+    const message = botCreateErrorMessage(olderHost, 'x'.repeat(201), 'build-box')
+    expect(message).toContain('up to 200 characters')
+    // Names the computer to update, so a paired one isn't read as this Mac.
+    expect(message).toContain('update Orca on build-box')
   })
 
   it('keeps the generic copy when the purpose was within the older limit', () => {
-    expect(botCreateErrorMessage(olderHost, 'x'.repeat(200))).toBe(
+    expect(botCreateErrorMessage(olderHost, 'x'.repeat(200), 'build-box')).toBe(
       'Something went wrong. Try again.'
     )
   })

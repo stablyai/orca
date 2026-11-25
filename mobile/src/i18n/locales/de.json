@@ -5177,7 +5177,7 @@
       "hitLimit": "Limit erreicht · Reset {{time}}"
     },
     "new": {
-      "purposeTooLongForHost": "Orca auf diesem Computer erlaubt höchstens 200 Zeichen für den Zweck. Kürze ihn oder aktualisiere Orca dort."
+      "purposeTooLongForHost": "Orca auf {{host}} erlaubt höchstens 200 Zeichen für den Zweck. Kürze ihn oder aktualisiere Orca auf {{host}}."
     }
   },
   "sidebar": {

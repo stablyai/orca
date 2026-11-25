@@ -5726,7 +5726,7 @@
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
       "purposeLabel": "Identity",
-      "purposeTooLongForHost": "Orca on that computer takes up to 200 characters for what it's for. Shorten it, or update Orca there.",
+      "purposeTooLongForHost": "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
       "purposePlaceholder": "Who it is and what it does",
       "create": "Create",
       "fromTemplate": "Use template",

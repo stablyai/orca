@@ -189,7 +189,8 @@ function NewBotForm(props: NewBotSheetProps) {
           refusedForOlderHostPurposeLimit(error.code, error.message, made.purpose)
           ? t(
               'bots.new.purposeTooLongForHost',
-              "Orca on that computer takes up to 200 characters for what it's for. Shorten it, or update Orca there."
+              "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
+              { host: computer.label }
             )
           : error instanceof Error
             ? error.message

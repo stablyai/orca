@@ -26142,7 +26142,7 @@
     },
     "errors": {
       "unsavedDrafts": "ボットのフォルダーに未保存の編集内容があります。保存するかエディターを閉じてから、もう一度削除してください。",
-      "purposeTooLongForHost": "そのコンピューターの Orca では、用途は 200 文字までです。短くするか、そのコンピューターの Orca を更新してください。"
+      "purposeTooLongForHost": "{{host}} の Orca では、用途は 200 文字までです。短くするか、{{host}} の Orca を更新してください。"
     },
     "automations": {
       "paused": "一時停止中",
