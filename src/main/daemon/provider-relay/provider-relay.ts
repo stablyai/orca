@@ -157,12 +157,8 @@ export class ProviderRelay {
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
-    const attachment = new ProviderRelayAttachment(
-      clientId,
-      stream,
-      this.relayId,
-      () => void this.detach(clientId)
-    )
+    const gone = () => void this.detach(clientId)
+    const attachment = new ProviderRelayAttachment(clientId, stream, this.relayId, gone)
     this.attachment = attachment
     const { initializeResult } = this.pending
     const { records: kept, lines: keptLines } = this.pending.kept.snapshot()
@@ -321,6 +317,7 @@ export class ProviderRelay {
   private release(): void {
     this.attachment?.release()
     this.attachment = null
+    this.pending.answerHeld()
   }
 
   private deliver(record: ProviderRelayRecord): void {

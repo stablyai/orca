@@ -42,7 +42,8 @@ export function readProviderRelayKeepSpec(value: unknown): ProviderRelayKeepSpec
   if (!keepNames(answers) || !keepNames(lines) || !keepNames(outstanding) || !keepNames(requests)) {
     return null
   }
-  return answers.length > 0 || lines.length > 0 || outstanding.length > 0 || requests.length > 0
+  const named = [answers, lines, outstanding, requests, Object.keys(replies ?? {})]
+  return named.some((names) => names.length > 0)
     ? { answers, lines, outstanding, requests, ...(replies ? { replies } : {}) }
     : null
 }

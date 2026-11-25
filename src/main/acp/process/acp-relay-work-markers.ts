@@ -141,10 +141,10 @@ export function acpRelayWorkMarkers(agent: string): ProviderRelayWorkMarkers {
   }
 }
 
-/** The background tasks and subagents a chat holds open at detach, keyed as the markers key them. */
 /** Work only the agent knows of; nothing ends it, so its agent is never idle-stopped while kept. */
 export const ACP_UNKNOWN_WORK = 'unknown'
 
+/** The background tasks and subagents a chat holds open at detach, keyed as the markers key them. */
 export function acpRelayOpenWork(open: {
   tasks: readonly string[]
   subagents: readonly string[]

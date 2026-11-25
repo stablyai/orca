@@ -432,6 +432,24 @@ describe('provider relay kept lines', () => {
     expect(pending.records().map((record) => record.seq)).toEqual([2])
   })
 
+  it('answers a held housekeeping request once the app lets go, unless its answer is being written', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const replies = { 'craft/drainMidTurnQueue': { messages: [], hasQueuedPrompt: false } }
+    pending.kept.configure({ answers: [], lines: [], outstanding: [], replies })
+    const written: string[] = []
+    let attached = true
+    pending.toAgent = (line) => !attached && written.push(line) > 0
+    // Both arrive while the app still holds the relay; the app is writing its answer to id 2.
+    agent(pending, 1, { id: 1, method: 'craft/drainMidTurnQueue', params: {} })
+    agent(pending, 2, { id: 2, method: 'craft/drainMidTurnQueue', params: {} })
+    const answering = pending.observeClientData(`${JSON.stringify({ id: 2, result: {} })}\n`)
+    attached = false
+    pending.answerHeld()
+    expect(written.map((line) => JSON.parse(line).id)).toEqual([1])
+    pending.releaseAnswered(answering)
+    expect(pending.records()).toEqual([])
+  })
+
   it('never answers a request that asks the person, whatever the spec names', () => {
     for (const method of [
       'session/request_permission',

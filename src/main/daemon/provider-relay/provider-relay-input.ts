@@ -11,6 +11,8 @@ type RelayStdin = {
 /** A relay's stdin: bounded, and a surrogate pair split between two writes encodes whole. */
 export class ProviderRelayInput {
   private carry = ''
+  /** Whether the agent's stdin ends at a line boundary, so a line of the daemon's own starts clean. */
+  private lineEnded = true
 
   constructor(private readonly stdin: RelayStdin) {}
 
@@ -27,12 +29,14 @@ export class ProviderRelayInput {
   }
 
   write(data: string, callback: (error?: Error | null) => void): void {
+    this.lineEnded = data.length > 0 ? data.endsWith('\n') : this.lineEnded
     this.stdin.write(data, callback)
   }
 
-  /** A line the daemon writes itself (no app is attached to answer it). */
+  /** A line the daemon writes itself (no app is attached to answer it); an app's cut-off line ends first. */
   writeLine(line: string): true {
-    this.stdin.write(line, () => {})
+    this.stdin.write(this.lineEnded ? line : `\n${line}`, () => {})
+    this.lineEnded = true
     return true
   }
 

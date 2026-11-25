@@ -87,6 +87,8 @@ export class ProviderRelayPendingRequests {
   /** Session state kept for the next attach, as `relaySpawn` named it. */
   readonly kept = new ProviderRelayKeptState()
 
+  /** Held requests whose answer from the app is being written. */
+  private readonly writing = new Set<string>()
   /** Writes a line to the agent while no app is attached; false while one is. */
   toAgent: ((line: string) => boolean) | null = null
   /** Spooled requests already answered, resolved or replaced, so a replay never asks again. */
@@ -260,6 +262,7 @@ export class ProviderRelayPendingRequests {
         const record = key ? this.pending.get(key) : undefined
         if (key && record) {
           answered.push({ key, record })
+          this.writing.add(key)
         }
       }
       this.clientLinePartial = ''
@@ -277,9 +280,25 @@ export class ProviderRelayPendingRequests {
     return answered
   }
 
+  /** Once no app is attached: held requests with a fixed reply are answered, but not one whose
+   *  answer from the app is still being written. */
+  answerHeld(): void {
+    for (const [key, record] of this.pending) {
+      const message = this.writing.has(key) ? null : parseObject(record.line)
+      if (
+        message &&
+        typeof message.method === 'string' &&
+        this.answerItself(message.method, message.id)
+      ) {
+        this.release(key)
+      }
+    }
+  }
+
   /** The answers reached the agent's stdin; a request re-sent under the same id since then stays held. */
   releaseAnswered(answered: AnsweredRequest[]): void {
     for (const { key, record } of answered) {
+      this.writing.delete(key)
       if (this.pending.get(key) === record) {
         this.release(key)
       }
