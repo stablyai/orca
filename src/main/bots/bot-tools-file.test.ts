@@ -266,7 +266,7 @@ describe('the tools a chat launched with', () => {
   ) =>
     sessionMcpLaunchTools({ id: 'scout' }, { provider, location: { workspaceId } }, folder, {
       relay
-    })
+    }).then(({ launched }) => ({ launched: launched?.bot }))
 
   it('changes the revision when the first tool is added and the last tool is removed', async () => {
     const folder = tempDir('bot-tools-revision-')

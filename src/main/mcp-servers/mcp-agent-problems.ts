@@ -8,6 +8,8 @@ const CLAUDE_BLOCKED: McpAgentProblem = {
 }
 
 let claudeBlocked = false
+/** By agent: why its terminals can't take the servers, as its latest terminal launch learned it. */
+const terminalOff = new Map<string, string>()
 
 /**
  * What a Claude launch or check learned: whether the organization's managed settings refuse
@@ -17,7 +19,25 @@ export function noteClaudeMcpConfigRefused(refused: boolean): void {
   claudeBlocked = refused
 }
 
+/**
+ * What an agent's terminal launch learned: null when its CLI took the servers, a reason when its
+ * CLI can't take them at all (too old for the route), undefined when only this launch couldn't.
+ */
+export function noteTerminalMcpDelivery(agent: string, reason: string | null | undefined): void {
+  if (reason === null) {
+    terminalOff.delete(agent)
+  } else if (reason !== undefined) {
+    terminalOff.set(agent, reason)
+  }
+}
+
 /** mcpServers.list's answer with the agents whose sessions get none of the list. */
 export function withMcpAgentProblems(list: Omit<McpHostList, 'agentProblems'>): McpHostList {
-  return claudeBlocked ? { ...list, agentProblems: { claude: CLAUDE_BLOCKED } } : list
+  const problems: Record<string, McpAgentProblem> = Object.fromEntries(
+    [...terminalOff].map(([agent, detail]) => [agent, { kind: 'terminal-off', detail }])
+  )
+  if (claudeBlocked) {
+    problems.claude = CLAUDE_BLOCKED
+  }
+  return Object.keys(problems).length > 0 ? { ...list, agentProblems: problems } : list
 }

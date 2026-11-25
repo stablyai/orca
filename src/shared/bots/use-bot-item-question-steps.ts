@@ -110,8 +110,23 @@ export type BotItemQuickReplyActions = {
   sent?: BotItemSentAnswers | null
 }
 
-/** Answers just posted as one comment: shown on their lines until the host's read has the comment. */
-export type BotItemSentAnswers = { askId: string; text: string; answers: (string | null)[] }
+/** Answers just posted as one comment: shown on their lines until the host's read has the comment.
+ *  `intent` is the one its pending comment carries, which names that comment whatever its words. */
+export type BotItemSentAnswers = {
+  askId: string
+  text: string
+  answers: (string | null)[]
+  intent: BotItemPendingIntent
+}
+
+/** `entry` is the comment `sent` posted, still on its way: by the intent it carries, so another
+ *  comment with the same words (a plain "Yes" beside a card's) is never taken for it. */
+export function isBotItemSentComment(
+  entry: Pick<BotItemPendingComment, 'failed' | 'intent'>,
+  sent: BotItemSentAnswers | null | undefined
+): boolean {
+  return !entry.failed && entry.intent !== undefined && entry.intent === sent?.intent
+}
 
 /** `questionId`: the ask the text answers, so a reply that lands after a new question is refused;
  *  `plain`: it answers none; `skipped`: that ask's lines it leaves unanswered, closing them; `intent`:
@@ -233,8 +248,9 @@ export function createBotItemQuestionStepsHooks(
       skipped?: readonly number[]
     ): void => {
       hold([])
-      setSent({ askId, text, answers })
-      send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers })
+      const intent = { askId, shape, answers }
+      setSent({ askId, text, answers, intent })
+      send(text, paths, askId, undefined, skills, skipped, intent)
     }
     // Typed words wait like a quick reply; files and skills aren't held here, so they post the answers so far.
     const settle = (
@@ -312,20 +328,22 @@ export function createBotItemQuestionStepsHooks(
     const quick = useLatest(
       (text: string, answering?: { askId: string; skipped: readonly number[] }) => {
         let intent: BotItemPendingIntent | undefined
-        if (asked) {
+        // The card names the ask it answered: a newer one read since isn't it, so the reply stays
+        // bound to the card's ask, the host refuses it, and its words go back to the comment box.
+        if (asked && (!answering || answering.askId === asked.askId)) {
           const { shape: own } = asked
           // Several lines: only those the text names; a line it skips stays open until the read.
           const answers =
             own.decisions.length > 1
               ? botItemNamedAnswers(own, text)
               : [botItemAnswerWords(own, 0, { text })]
-          setSent({ askId: asked.askId, text, answers })
           intent = { askId: asked.askId, shape: own, answers }
+          setSent({ askId: asked.askId, text, answers, intent })
         }
         send(
           text,
           [],
-          asked?.askId ?? answering?.askId,
+          answering?.askId ?? asked?.askId,
           undefined,
           undefined,
           answering?.skipped,
@@ -336,10 +354,7 @@ export function createBotItemQuestionStepsHooks(
     return {
       steps,
       // Shown on their lines while their comment is on its way; a refused or discarded one shows as itself.
-      sent:
-        sent && pending.some(({ event, failed }) => !failed && event.data.text === sent.text)
-          ? sent
-          : null,
+      sent: sent && pending.some((entry) => isBotItemSentComment(entry, sent)) ? sent : null,
       quick,
       fromBox,
       waitingLine: target.line

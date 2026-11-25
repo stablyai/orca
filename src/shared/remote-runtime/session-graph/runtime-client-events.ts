@@ -77,6 +77,8 @@ export type RuntimeClientEvent =
   | ({ type: 'botsChanged' } & BotChangeScope)
   /** A worker this chat session started appeared or changed state; that chat's worker list re-reads. Old clients drop it. */
   | { type: 'orchestrationSessionWorkersChanged'; sessionId: string }
+  /** Any Dispatch was written, by a chat or a terminal; desktops re-read this host's worker lineage. Old clients drop it. */
+  | { type: 'agentOrchestrationChanged' }
   /** A paired computer handed back replies to this host's agents' asks; their cards re-read. Old clients drop it. */
   | { type: 'peerMailReturned' }
   /** This host's MCP server list changed; clients showing it re-read. Old clients drop it. */
