@@ -191,23 +191,3 @@ export function countAgentsNeedingYouByHost(
   }
   return counts
 }
-
-export type AgentListHostSummary = Readonly<{
-  hostId: string
-  agents: number
-  needsYou: number
-  offline: boolean
-}>
-
-export function summarizeAgentListHosts(input: AgentListInput): AgentListHostSummary[] {
-  return input.hosts.map((host) => {
-    const agents = hostAgents(input, host.id)
-    const rows = everyRow(agents.roots)
-    return {
-      hostId: host.id,
-      agents: rows.length,
-      needsYou: rows.filter(rowNeedsYou).length,
-      offline: agents.offline
-    }
-  })
-}

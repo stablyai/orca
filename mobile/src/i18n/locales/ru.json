@@ -8804,13 +8804,13 @@
       "workers_many": "{{count}} исполнителей",
       "noMatches": "Нет агентов по запросу «{{query}}»",
       "emptyTitle": "Нет запущенных агентов",
-      "pairDesktop": "Сопрягите компьютер, чтобы увидеть здесь его агентов.",
       "emptyBody": "Запустите агента в любом рабочем пространстве, и он появится здесь.",
       "unread": "Не прочитано",
-      "noDesktopTitle": "Нет подключённого компьютера",
-      "noDesktopBody": "Агенты появятся здесь, когда подключится компьютер.",
       "hideWorkers": "Скрыть: {{workers}}",
-      "showWorkers": "Показать: {{workers}}"
+      "showWorkers": "Показать: {{workers}}",
+      "pairComputer": "Сопрягите компьютер, чтобы увидеть здесь его агентов.",
+      "noComputerTitle": "Нет подключённого компьютера",
+      "noComputerBody": "Агенты появятся здесь, когда подключится компьютер."
     },
     "actions": {
       "offlineHint": "Его компьютер не в сети.",
@@ -8828,32 +8828,17 @@
       "workspace": "Рабочее пространство",
       "project": "Проект",
       "agent": "Агент",
-      "desktop": "Компьютер"
+      "computer": "Компьютер"
     },
     "options": {
       "groupBy": "Группировать по",
       "showWorkers": "Показывать агентов-исполнителей",
-      "open": "Параметры списка агентов",
       "unreadOnly": "Только непрочитанные",
       "markAllRead": "Отметить все прочитанными",
       "clearFinished": "Убрать завершённые"
     },
     "search": {
-      "toggle": "Поиск агентов",
       "placeholder": "Поиск агентов"
-    },
-    "desktops": {
-      "pickerTitle": "Показать агентов на",
-      "agents_one": "{{count}} агент",
-      "agents_other": "{{count}} агента",
-      "agents_few": "{{count}} агента",
-      "agents_many": "{{count}} агентов",
-      "all": "Все компьютеры",
-      "offline": "Не в сети",
-      "needsYou_one": "{{count}} ждёт вас",
-      "needsYou_other": "{{count}} ждут вас",
-      "needsYou_few": "{{count}} ждут вас",
-      "needsYou_many": "{{count}} ждут вас"
     },
     "sections": {
       "needsYou": "Ждёт вас",
@@ -8874,6 +8859,9 @@
     "activity": {
       "needsWindow": "Не удалось обновить. Откройте Orca на {{desktop}}.",
       "failed": "Не удалось обновить список агентов."
+    },
+    "filterSheet": {
+      "allComputers": "Все компьютеры"
     }
   },
   "chats": {

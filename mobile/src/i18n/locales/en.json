@@ -8477,13 +8477,13 @@
       "workers_other": "{{count}} workers",
       "noMatches": "No agents match “{{query}}”",
       "emptyTitle": "No agents running",
-      "pairDesktop": "Pair a desktop to see its agents here.",
       "emptyBody": "Start an agent in any workspace and it shows up here.",
       "unread": "Unread",
-      "noDesktopTitle": "No desktop connected",
-      "noDesktopBody": "Agents show up here once a desktop connects.",
       "hideWorkers": "Hide {{workers}}",
-      "showWorkers": "Show {{workers}}"
+      "showWorkers": "Show {{workers}}",
+      "pairComputer": "Pair a computer to see its agents here.",
+      "noComputerTitle": "No computer connected",
+      "noComputerBody": "Agents show up here once a computer connects."
     },
     "actions": {
       "offlineHint": "Its desktop is offline.",
@@ -8501,28 +8501,18 @@
       "workspace": "Workspace",
       "project": "Project",
       "agent": "Agent",
-      "desktop": "Desktop"
+      "computer": "Computer"
     },
     "options": {
       "groupBy": "Group by",
       "showWorkers": "Show worker agents",
-      "open": "Agent list options",
       "unreadOnly": "Unread only",
       "markAllRead": "Mark all read",
-      "clearFinished": "Clear finished"
+      "clearFinished": "Clear finished",
+      "more": "More"
     },
     "search": {
-      "toggle": "Search agents",
       "placeholder": "Search agents"
-    },
-    "desktops": {
-      "pickerTitle": "Show agents on",
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "all": "All desktops",
-      "offline": "Offline",
-      "needsYou_one": "{{count}} needs you",
-      "needsYou_other": "{{count}} need you"
     },
     "sections": {
       "needsYou": "Needs you",
@@ -8543,6 +8533,16 @@
     "activity": {
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
+    },
+    "filterSheet": {
+      "title": "Filter",
+      "activeLabel": "Filter, {{count}} active",
+      "reset": "Reset",
+      "done": "Done",
+      "computer": "Computer",
+      "allComputers": "All computers",
+      "show": "Show",
+      "workers": "Workers"
     }
   },
   "sidebar": {

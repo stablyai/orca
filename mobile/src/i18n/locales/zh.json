@@ -8245,13 +8245,13 @@
       "workers_other": "{{count}} 个工作者",
       "noMatches": "没有与“{{query}}”匹配的智能体",
       "emptyTitle": "没有正在运行的智能体",
-      "pairDesktop": "配对桌面后，即可在这里查看它的智能体",
       "emptyBody": "在任意工作区中启动智能体，它就会显示在这里",
       "unread": "未读",
-      "noDesktopTitle": "未连接桌面",
-      "noDesktopBody": "连接桌面后，智能体会显示在这里",
       "hideWorkers": "隐藏 {{workers}}",
-      "showWorkers": "显示 {{workers}}"
+      "showWorkers": "显示 {{workers}}",
+      "pairComputer": "配对桌面后，即可在这里查看它的智能体",
+      "noComputerTitle": "未连接桌面",
+      "noComputerBody": "连接桌面后，智能体会显示在这里"
     },
     "actions": {
       "offlineHint": "它所在的桌面已离线",
@@ -8269,28 +8269,17 @@
       "workspace": "工作区",
       "project": "项目",
       "agent": "智能体",
-      "desktop": "桌面"
+      "computer": "桌面"
     },
     "options": {
       "groupBy": "分组依据",
       "showWorkers": "显示工作者智能体",
-      "open": "智能体列表选项",
       "unreadOnly": "仅显示未读",
       "markAllRead": "全部标记为已读",
       "clearFinished": "清除已完成"
     },
     "search": {
-      "toggle": "搜索智能体",
       "placeholder": "搜索智能体"
-    },
-    "desktops": {
-      "pickerTitle": "显示以下桌面的智能体",
-      "agents_one": "{{count}} 个智能体",
-      "agents_other": "{{count}} 个智能体",
-      "all": "所有桌面",
-      "offline": "离线",
-      "needsYou_one": "{{count}} 个需要你处理",
-      "needsYou_other": "{{count}} 个需要你处理"
     },
     "sections": {
       "needsYou": "需要你处理",
@@ -8311,6 +8300,9 @@
     "activity": {
       "needsWindow": "无法更新，请在 {{desktop}} 上打开 Orca",
       "failed": "无法更新智能体列表"
+    },
+    "filterSheet": {
+      "allComputers": "所有桌面"
     }
   },
   "sidebar": {

@@ -8494,13 +8494,13 @@
       "workers_other": "{{count}} alt ajan",
       "noMatches": "“{{query}}” ile eşleşen ajan yok",
       "emptyTitle": "Çalışan ajan yok",
-      "pairDesktop": "Ajanlarını burada görmek için bir bilgisayar eşleştirin.",
       "emptyBody": "Herhangi bir çalışma alanında başlattığınız ajan burada görünür.",
       "unread": "Okunmadı",
-      "noDesktopTitle": "Bağlı bilgisayar yok",
-      "noDesktopBody": "Bir bilgisayar bağlandığında ajanları burada görünür.",
       "hideWorkers": "Gizle: {{workers}}",
-      "showWorkers": "Göster: {{workers}}"
+      "showWorkers": "Göster: {{workers}}",
+      "pairComputer": "Ajanlarını burada görmek için bir bilgisayar eşleştirin.",
+      "noComputerTitle": "Bağlı bilgisayar yok",
+      "noComputerBody": "Bir bilgisayar bağlandığında ajanları burada görünür."
     },
     "actions": {
       "offlineHint": "Ajanın çalıştığı bilgisayar çevrimdışı.",
@@ -8518,28 +8518,17 @@
       "workspace": "Çalışma alanı",
       "project": "Proje",
       "agent": "Ajan",
-      "desktop": "Masaüstü"
+      "computer": "Masaüstü"
     },
     "options": {
       "groupBy": "Gruplama ölçütü",
       "showWorkers": "Alt ajanları göster",
-      "open": "Ajan listesi seçenekleri",
       "unreadOnly": "Yalnızca okunmamışlar",
       "markAllRead": "Tümünü okundu işaretle",
       "clearFinished": "Tamamlananları temizle"
     },
     "search": {
-      "toggle": "Ajanlarda ara",
       "placeholder": "Ajanlarda ara"
-    },
-    "desktops": {
-      "pickerTitle": "Ajanların gösterileceği cihaz",
-      "agents_one": "{{count}} ajan",
-      "agents_other": "{{count}} ajan",
-      "all": "Tüm masaüstü cihazları",
-      "offline": "Çevrimdışı",
-      "needsYou_one": "{{count}} sizi bekliyor",
-      "needsYou_other": "{{count}} sizi bekliyor"
     },
     "sections": {
       "needsYou": "Sizi bekliyor",
@@ -8560,6 +8549,9 @@
     "activity": {
       "needsWindow": "Güncellenemedi. {{desktop}} üzerinde Orca’yı açın.",
       "failed": "Ajan listesi güncellenemedi."
+    },
+    "filterSheet": {
+      "allComputers": "Tüm masaüstü cihazları"
     }
   }
 }
