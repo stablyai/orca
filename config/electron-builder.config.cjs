@@ -362,7 +362,6 @@ module.exports = {
     'out/main/copilot/**',
     'out/main/cursor/**',
     'out/main/droid/**',
-    'out/main/gemini/**',
     'out/main/gitlab/projects/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
@@ -383,6 +382,7 @@ module.exports = {
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
     // `orca agent hooks` gives main hook code an app environment in the CLI process.
     'out/main/backend/node-service-environment.js',
+    'out/main/mcp-servers/agent-files/mcp-connect-bridge.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',

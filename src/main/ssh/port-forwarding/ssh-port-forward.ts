@@ -222,6 +222,12 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
     return entries
   }
 
+  /** Whether a listed forward still rides `conn`: a reconnect leaves an ssh2 listener on its old client. */
+  isForwardServing(id: string, conn: TConnection): boolean {
+    const forward = this.forwards.get(id)
+    return forward !== undefined && forward.isLive?.(conn) !== false
+  }
+
   /** Local ports held by forwards, including ones still starting or closing. */
   heldLocalPorts(): number[] {
     return [

@@ -1,6 +1,6 @@
-// The items an open item steps through: the list it opened from, filters applied, in list order, fixed
-// when it opened. Closed items not paged in yet count toward the total and are read as the walk
-// reaches them; items arriving later (new, or closed since) show in the list after Back.
+// The items an open item steps through: the section it opened from, filters applied, in list order, fixed
+// when it opened. In Closed, items not paged in yet count toward the total and are read as the walk
+// reaches them; items arriving later (new, or moved since) show in the list after Back.
 import type { BotItem } from './bot-items'
 import { BOT_ITEM_GROUP_IDS, type BotItemGroups } from './bot-item-groups'
 
@@ -16,9 +16,20 @@ export type BotItemWalkStep =
   /** The next member is a Closed item not paged in yet. */
   | { kind: 'page' }
 
-export function botItemWalkOf(groups: BotItemGroups, closedTotal: number): BotItemWalk {
-  const uids = BOT_ITEM_GROUP_IDS.flatMap((id) => groups[id].map((item) => item.uid))
-  return { uids, total: uids.length + Math.max(0, closedTotal - groups.closed.length) }
+/** The walk of the section holding `uid`, or null when no section lists it. Its total is the section
+ *  header's count: Closed's counts the host's unloaded items too. */
+export function botItemWalkOf(
+  groups: BotItemGroups,
+  closedTotal: number,
+  uid: string
+): BotItemWalk | null {
+  const id = BOT_ITEM_GROUP_IDS.find((group) => groups[group].some((item) => item.uid === uid))
+  if (!id) {
+    return null
+  }
+  const uids = groups[id].map((item) => item.uid)
+  const unloaded = id === 'closed' ? Math.max(0, closedTotal - uids.length) : 0
+  return { uids, total: uids.length + unloaded }
 }
 
 /** Where `uid` is (0-based), or null when it isn't in the walk. */

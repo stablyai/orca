@@ -333,6 +333,7 @@
     "auto.components.settings.PluginUpdateAllDialog.newEvents",
     "auto.components.settings.PluginUpdateAllDialog.newFileTypes",
     "auto.components.settings.PluginUpdateAllDialog.newHooks",
+    "auto.components.settings.PluginUpdateAllDialog.newMcpServers",
     "auto.components.settings.PluginUpdateAllDialog.newPanels",
     "auto.components.settings.PluginUpdateAllDialog.newRecipes",
     "auto.components.settings.PluginUpdateAllDialog.newSettings",

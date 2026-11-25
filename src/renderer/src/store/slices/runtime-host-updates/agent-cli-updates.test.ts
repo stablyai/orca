@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_CLI_UPDATE_AGENTS } from '../../../../../shared/agent-launch/installation/agent-cli-update'
+import {
+  AGENT_CLI_UPDATE_AGENTS,
+  type AgentCliUpdate
+} from '../../../../../shared/agent-launch/installation/agent-cli-update'
+import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { createTestStore } from '../../testing/app-store-test-fixture'
+import { agentCliUpdateHostTarget } from './agent-cli-updates'
 
 const { callRuntimeRpc } = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc }))
@@ -9,13 +16,20 @@ vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
 }))
 
 const LOCAL = { kind: 'local' } as const
-const stale = {
+const stale: AgentCliUpdate = {
   agent: 'claude',
   installedVersion: '1.0.0',
   latestVersion: '2.0.0',
   command: 'claude update',
   runnable: true
 }
+
+const hostStatus = (): RuntimeEnvironmentStatus => ({
+  status: createCompatibleRuntimeStatusResponse().result,
+  checkedAt: 1
+})
+
+const listed = { updates: [stale], runs: {} }
 
 describe('checkAgentCliUpdatesOnOpen', () => {
   let hour = 0
@@ -77,5 +91,72 @@ describe('checkAgentCliUpdatesOnOpen', () => {
     answer()
     await Promise.all([startup, open])
     expect(opened).toBe(true)
+  })
+})
+
+describe('forgetAgentCliUpdateHosts', () => {
+  beforeEach(() => {
+    callRuntimeRpc.mockReset()
+  })
+
+  it('drops removed hosts and their late answers and run results, keeping this computer and remaining hosts', async () => {
+    const answers: ((value: unknown) => void)[] = []
+    callRuntimeRpc.mockImplementation(() => new Promise((resolve) => answers.push(resolve)))
+    const store = createTestStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([
+        publicRuntimeEnvironment({ id: 'kept' }),
+        publicRuntimeEnvironment({ id: 'left' })
+      ])
+    store.setState({
+      agentCliUpdates: new Map([
+        ['', listed],
+        ['kept', listed]
+      ]),
+      runtimeStatusByEnvironmentId: new Map([
+        ['kept', hostStatus()],
+        ['left', hostStatus()]
+      ])
+    })
+    const late = store.getState().checkAgentCliUpdates(agentCliUpdateHostTarget('left'))
+    const run = store.getState().runAgentCliUpdate(agentCliUpdateHostTarget('left'), 'claude')
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+    store.getState().setRuntimeEnvironments([publicRuntimeEnvironment({ id: 'kept' })])
+    answers[0]({ updates: [stale] })
+    answers[1]({ ok: false, output: 'failed' })
+    await late
+    await run
+    expect([...store.getState().agentCliUpdates.keys()]).toEqual(['', 'kept'])
+
+    store.getState().setRuntimeEnvironments([])
+    expect([...store.getState().agentCliUpdates.keys()]).toEqual([''])
+  })
+
+  it('asks a re-paired peer afresh and drops the old peer answer that arrives late', async () => {
+    const answers: (() => void)[] = []
+    callRuntimeRpc.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          const updates = answers.length === 0 ? [stale] : []
+          answers.push(() => resolve({ updates }))
+        })
+    )
+    const store = createTestStore()
+    const connected = new Map([['peer', hostStatus()]])
+    store.getState().setRuntimeEnvironments([publicRuntimeEnvironment({ id: 'peer' })])
+    store.setState({ runtimeStatusByEnvironmentId: connected })
+    const old = store.getState().checkAgentCliUpdates(agentCliUpdateHostTarget('peer'))
+    store
+      .getState()
+      .setRuntimeEnvironments([publicRuntimeEnvironment({ id: 'peer', pairingRevision: 2 })])
+    store.setState({ runtimeStatusByEnvironmentId: connected })
+    const fresh = store.getState().checkAgentCliUpdates(agentCliUpdateHostTarget('peer'))
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+    answers[1]()
+    await fresh
+    answers[0]()
+    await old
+    expect(store.getState().agentCliUpdates.has('peer')).toBe(false)
   })
 })

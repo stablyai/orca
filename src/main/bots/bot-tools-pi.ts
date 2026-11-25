@@ -1,6 +1,6 @@
 // A Pi bot's own tools reach its session through an extension Orca loads with it, which registers
 // them for that session only (Pi 0.99+); nothing is written to the owner's mcp.json or the folder's.
-import type { BotLaunchTools } from './bot-launch-tools'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 
 export const PI_BOT_TOOLS_ENV = 'ORCA_PI_BOT_TOOLS'
 export const PI_BOT_TOOLS_EXTENSION_FILE = 'orca-bot-tools.ts'
@@ -27,7 +27,7 @@ export const PI_BOT_TOOLS_EXTENSION_SOURCE = [
 ].join('\n')
 
 /** The servers as Pi's `mcp.json` entries, by name; null when there are none. */
-export function piBotToolsConfig(tools: BotLaunchTools): string | null {
+export function piBotToolsConfig(tools: SessionMcpTools): string | null {
   if (tools.servers.length === 0) {
     return null
   }

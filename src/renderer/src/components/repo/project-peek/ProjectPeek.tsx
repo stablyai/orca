@@ -1,5 +1,5 @@
 import React from 'react'
-import { GitFork, Github, Gitlab, Globe } from 'lucide-react'
+import { GitFork, Github, Gitlab, Globe, Settings } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { Button } from '@/components/ui/button'
@@ -128,14 +128,15 @@ function RemoteLines({
 function ProjectPeekHeader({
   repo,
   remote,
-  onRequestClose
+  onOpenSettings
 }: {
   repo: Repo
   remote: ProjectRemoteDisplay | null
-  onRequestClose: () => void
+  onOpenSettings: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const appearance = useRepoMarkAppearance(repo)
+  const openSettingsLabel = t('auto.components.repo.ProjectPeek.openSettings', 'Open Settings')
   return (
     <div className="flex items-start gap-3 px-3 pt-3 pb-2">
       <RepoMarkTile appearance={appearance} />
@@ -145,15 +146,23 @@ function ProjectPeekHeader({
         </span>
         <RemoteLines repo={repo} remote={remote} />
       </div>
-      <Button
-        type="button"
-        variant="secondary"
-        size="xs"
-        className="self-center"
-        onClick={onRequestClose}
-      >
-        {t('auto.components.repo.ProjectPeek.done', 'Done')}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="muted-field-icon"
+            size="icon-xs"
+            className="self-start"
+            aria-label={openSettingsLabel}
+            onClick={onOpenSettings}
+          >
+            <Settings />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {openSettingsLabel}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }
@@ -167,6 +176,8 @@ export function ProjectPeek({
   onRequestClose: () => void
 }): React.JSX.Element {
   const storeUpdateRepo = useAppStore((state) => state.updateRepo)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const autoColor = useRepoAutoMarkColor(repo)
   const hostId = getRepoExecutionHostId(repo)
   const remote = getProjectRemoteDisplay(repo)
@@ -176,15 +187,19 @@ export function ProjectPeek({
       void storeUpdateRepo(repoId, updates, { hostId }),
     [storeUpdateRepo, hostId]
   )
+  const openRepoSettings = React.useCallback(() => {
+    onRequestClose()
+    openSettingsTarget({ pane: 'repo', repoId: repo.id })
+    openSettingsPage()
+  }, [onRequestClose, openSettingsPage, openSettingsTarget, repo.id])
   return (
     <div className="text-xs">
-      <ProjectPeekHeader repo={repo} remote={remote} onRequestClose={onRequestClose} />
+      <ProjectPeekHeader repo={repo} remote={remote} onOpenSettings={openRepoSettings} />
       <ProjectAppearanceEditor
         repo={repo}
         remote={remote}
         autoColor={autoColor}
         updateRepo={updateRepo}
-        onRequestClose={onRequestClose}
       />
     </div>
   )
