@@ -9,8 +9,15 @@ export const DEFAULT_BASE_REF_PROBES: readonly { ref: string; returnAs: string }
 
 export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
 
-/** Resolve the same default-base ordering through a host-owned Git executor. */
-export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<string | null> {
+/**
+ * Resolve the same default-base ordering through a host-owned Git executor.
+ * A lookup that fails answers null, as a repo without any probe ref does;
+ * onError sees the failure, so a caller that must tell the two apart can.
+ */
+export async function resolveDefaultBaseRefViaExec(
+  exec: GitExec,
+  onError?: (error: unknown) => void
+): Promise<string | null> {
   const originHeadRef = 'refs/remotes/origin/HEAD'
   const refs = [originHeadRef, ...DEFAULT_BASE_REF_PROBES.map(({ ref }) => ref)]
   // A character class forces exact matching instead of including descendants such as main/topic.
@@ -31,7 +38,8 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
       presentRefs.add(ref)
     }
     return DEFAULT_BASE_REF_PROBES.find(({ ref }) => presentRefs.has(ref))?.returnAs ?? null
-  } catch {
+  } catch (error) {
+    onError?.(error)
     return null
   }
 }

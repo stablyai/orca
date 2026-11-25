@@ -1090,10 +1090,14 @@ async function performLocalWorktreeCreate(
     !args.branchNameOverride && settings.branchPrefix === 'git-username'
       ? resolveLocalGitUsername(repo.path)
       : Promise.resolve('')
+  let defaultBaseLookupError: unknown
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
-    resolveDefaultBaseRef: () => resolveDefaultBaseRefWithLocalGit(localGitExecOptions),
+    resolveDefaultBaseRef: () =>
+      resolveDefaultBaseRefWithLocalGit(localGitExecOptions, (error) => {
+        defaultBaseLookupError = error
+      }),
     isBaseUsable: async (baseBranchCandidate) => {
       if (runtime) {
         const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(
@@ -1120,6 +1124,12 @@ async function performLocalWorktreeCreate(
   const [username, resolvedBaseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
   let baseBranch = resolvedBaseBranch
   if (!baseBranch) {
+    if (defaultBaseLookupError !== undefined) {
+      throw new Error(
+        'Could not look up the default base ref for this repo. Pick a base branch explicitly or try again.',
+        { cause: defaultBaseLookupError }
+      )
+    }
     throw new Error(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )

@@ -31,13 +31,16 @@ export function gitExecOptions(
 }
 
 export function resolveDefaultBaseRefWithLocalGit(
-  options: LocalDefaultBaseRefGitOptions
+  options: LocalDefaultBaseRefGitOptions,
+  onError?: (error: unknown) => void
 ): Promise<string | null> {
-  return resolveDefaultBaseRefViaExec((argv) =>
-    gitExecFileAsync(argv, {
-      ...options,
-      timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
-    })
+  return resolveDefaultBaseRefViaExec(
+    (argv) =>
+      gitExecFileAsync(argv, {
+        ...options,
+        timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
+      }),
+    onError
   )
 }
 
