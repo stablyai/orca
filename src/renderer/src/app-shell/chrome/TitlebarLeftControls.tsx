@@ -193,7 +193,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
             <TooltipTrigger asChild>
               <button
                 ref={sidebarToggleRef}
-                className="sidebar-toggle"
+                className="sidebar-toggle titlebar-icon-button"
                 onClick={() => {
                   if (!showWorkspaceListThen(useAppStore)) {
                     toggleSidebar()
