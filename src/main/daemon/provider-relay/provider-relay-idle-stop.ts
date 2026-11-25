@@ -55,7 +55,7 @@ export class ProviderRelayIdleStop {
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
       }
-      close: () => Promise<unknown>
+      stopIdle: () => Promise<unknown>
     },
     options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void },
     unacked: () => readonly ProviderRelayRecord[] | null
@@ -69,7 +69,7 @@ export class ProviderRelayIdleStop {
         relay.pending.workMethods = new Set(methods)
       },
       unacked,
-      stop: () => void relay.close().catch(() => {}),
+      stop: () => void relay.stopIdle().catch(() => {}),
       log: (event, details) => options.log?.(event, { relayId: options.relayId, ...details })
     })
   }
