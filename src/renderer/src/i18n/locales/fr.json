@@ -25281,7 +25281,11 @@
           "hostLabel": "Adresse GitLab (facultative)",
           "hostHint": "Pour les instances autogérées ou Dedicated. Laissez vide pour GitLab.com."
         },
+        "intercom": {
+          "siteLabel": "Région Intercom"
+        },
         "place": {
+          "unitedStates": "États-Unis",
           "usEast": "Est des États-Unis",
           "usWest": "Ouest des États-Unis",
           "usCentral": "Centre des États-Unis",
@@ -25311,7 +25315,13 @@
         "github": "Mentions et événements sur les issues et les PR",
         "slack": "Messages et mentions",
         "linear": "Issues assignées et mentions",
-        "google": "Gmail, Agenda et Drive, en votre nom"
+        "google": "Gmail, Agenda et Drive, en votre nom",
+        "clickup": "Gérer les tâches, listes et docs",
+        "airtable": "Interroger et modifier les bases, tables et enregistrements",
+        "todoist": "Ajouter, trier et terminer des tâches",
+        "zapier": "Lancer des actions dans les apps configurées dans Zapier",
+        "granola": "Rechercher dans les notes et transcriptions de réunion",
+        "intercom": "Rechercher conversations, contacts et articles"
       },
       "composioLine": {
         "outlook": "E-mails, calendrier et contacts",
