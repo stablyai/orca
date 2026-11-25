@@ -23541,12 +23541,7 @@
     },
     "serverPage": {
       "download": {
-        "started": "{{host}}의 {{path}}(으)로 다운로드 중",
-        "saveHere": "이 컴퓨터에 저장",
-        "copying": "{{filename}}을(를) 이 컴퓨터로 다운로드 중…",
-        "copied": "{{path}}에 저장했습니다",
-        "copyFailed": "{{filename}}을(를) 이 컴퓨터에 저장하지 못했습니다.",
-        "showInFolder": "폴더에서 보기"
+        "started": "{{host}}의 {{path}}(으)로 다운로드 중"
       },
       "print": {
         "failed": "페이지를 PDF로 저장하지 못했습니다"
