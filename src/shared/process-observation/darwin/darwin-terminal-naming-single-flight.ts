@@ -53,7 +53,3 @@ export async function waitForDarwinTerminalNaming(
 export function isDarwinTerminalNamingInFlight(): boolean {
   return namingInFlight !== null
 }
-
-export function resetDarwinTerminalNamingForTests(): void {
-  namingInFlight = null
-}

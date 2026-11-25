@@ -57,12 +57,29 @@
   visibility: hidden;
 }
 
-/* Divider: the element is a wide transparent hit area; the visible line is
-   drawn by ::after so that setting `background` on the element never hides it. */
+/* Divider: the element is as wide as the visible line, drawn by ::after so that setting `background`
+   on the element never hides it. ::before is an invisible grab area reaching into one neighbor: right
+   of a vertical line (the left pane's scrollbar is on its right edge) and above a horizontal line (the
+   lower pane's drag handle is on its top edge). */
 .pane-divider.is-vertical,
 .pane-divider.is-horizontal {
   --divider-thickness: 4px;
+  z-index: 11;
   background: transparent !important;
+}
+
+.pane-divider::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.pane-divider.is-vertical::before {
+  right: calc(-1 * var(--divider-grab-reach, 7px));
+}
+
+.pane-divider.is-horizontal::before {
+  top: calc(-1 * var(--divider-grab-reach, 7px));
 }
 
 .pane-divider::after {
@@ -77,30 +94,38 @@
 
 .pane-divider.is-vertical::after {
   /* Negative insets on the cross axis extend the line into perpendicular
-     divider hit zones so that intersecting splits visually connect (├ not |-). */
-  top: calc(-1 * var(--divider-extension, 5px));
-  bottom: calc(-1 * var(--divider-extension, 5px));
-  left: 50%;
-  width: var(--divider-thickness);
-  transform: translateX(-50%);
+     dividers so that intersecting splits visually connect (├ not |-). */
+  top: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  bottom: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  left: 0;
+  right: 0;
 }
 
 .pane-divider.is-horizontal::after {
-  left: calc(-1 * var(--divider-extension, 5px));
-  right: calc(-1 * var(--divider-extension, 5px));
-  top: 50%;
-  height: var(--divider-thickness);
-  transform: translateY(-50%);
+  left: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  right: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  top: 0;
+  bottom: 0;
 }
 
+/* Crossing a divider should not flash it; the highlight waits for a resting pointer, a drag shows it at once. */
 .pane-divider.is-vertical:hover::after,
+.pane-divider.is-horizontal:hover::after {
+  background: var(
+    --orca-terminal-divider-color-strong,
+    var(--orca-terminal-divider-color, transparent)
+  );
+  transition-delay: var(--divider-hover-delay, 200ms);
+}
+
 .pane-divider.is-vertical.is-dragging::after,
-.pane-divider.is-horizontal:hover::after,
 .pane-divider.is-horizontal.is-dragging::after {
   background: var(
     --orca-terminal-divider-color-strong,
     var(--orca-terminal-divider-color, transparent)
   );
+  /* Dropping the transition also cancels a hover delay still pending from a quick grab. */
+  transition: none;
 }
 
 .pane-drag-handle {
@@ -353,6 +378,16 @@
   outline-offset: 1px;
 }
 
+.pane-title-text:has(~ .pane-title-recent-images) {
+  flex: 1 0 min(50%, calc(var(--spacing) * 32));
+}
+
+.pane-title-drag-handle:has(+ .pane-title-recent-images) {
+  position: static;
+  flex-shrink: 0;
+  transform: none;
+}
+
 .pane-title-bar[data-chromeless] {
   background: transparent;
   border-bottom: none;
@@ -360,7 +395,7 @@
   pointer-events: none;
 }
 
-.pane-title-bar[data-chromeless] .pane-title-actions {
+.pane-title-bar[data-chromeless] :is(.pane-title-actions, .pane-title-recent-images) {
   pointer-events: auto;
 }
 
@@ -406,7 +441,7 @@
     color 120ms ease;
 }
 
-.pane-title-actions {
+:is(.pane-title-actions, .pane-title-recent-images) {
   position: relative;
   z-index: 3;
 }
@@ -461,6 +496,40 @@
   color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
 }
 
+/* Terminal pane actions stay hidden (still focusable) until the pointer is on the pane's top
+   row or keyboard focus is inside it; data-top-row-hover covers the pass-through chromeless
+   strip. Touch-only devices cannot hover, so they keep the actions visible. */
+@media (hover: hover) and (pointer: fine) {
+  .pane-title-overlay-layer .pane-title-actions {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+}
+
+.pane-title-overlay-layer :is(.pane-title-split-trigger, .pane-title-close) {
+  opacity: 1;
+}
+
+.pane-title-overlay-layer .pane-title-split-trigger:disabled {
+  opacity: 0.5;
+}
+
+.pane-title-overlay-layer
+  .pane-title-bar:is(:hover, [data-top-row-hover], :has(:focus-visible))
+  .pane-title-actions,
+.pane-title-overlay-layer .pane-title-actions:has([data-state$='open']),
+body:has([data-contextual-tour-overlay])
+  .pane-title-overlay-layer
+  .pane-title-actions:has([data-contextual-tour-target]) {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-title-overlay-layer .pane-title-actions {
+    transition: none;
+  }
+}
+
 /* Match title text while editing to prevent layout shift. */
 /* Remove title padding while editing; the input supplies edge-to-edge padding. */
 .pane-title-bar[data-editing] {
@@ -508,8 +577,8 @@
   contain: paint;
 }
 
-/* Offset titled terminals and subtract the same height to prevent clipping. */
-.pane[data-has-title] .xterm-container {
+/* Reserve the header row for titles and image chips. */
+.pane:is([data-has-title], [data-has-recent-images]) .xterm-container {
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height) - var(--pane-padding-y, 4px));
 }
@@ -523,8 +592,29 @@
   z-index: 5;
 }
 
-.pane[data-has-title] .pane-top-banner {
+.pane:is([data-has-title], [data-has-recent-images]) .pane-top-banner {
   top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-offset, 0px));
+}
+
+/* A quiet banner sits on the terminal's own surface, so it takes the pane header's colours, which
+   follow that surface rather than the app theme. */
+.pane > .pane-top-banner[data-tone='quiet'] {
+  background: transparent;
+  border-color: var(--orca-pane-title-separator);
+  color: var(--orca-pane-title-fg);
+}
+
+.pane > .pane-top-banner[data-tone='quiet'] > p {
+  color: inherit;
+}
+
+.pane > .pane-top-banner[data-tone='quiet'] > button {
+  color: var(--orca-pane-title-input-fg);
+}
+
+.pane > .pane-top-banner[data-tone='quiet'] > button:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--orca-pane-title-button-fg) 10%, transparent);
+  color: var(--orca-pane-title-button-hover-fg);
 }
 
 .pane:has(> .pane-top-banner) .xterm-container {
@@ -532,7 +622,7 @@
   height: calc(100% - 2 * var(--pane-padding-y, 4px) - var(--orca-pane-top-banner-height, 0px));
 }
 
-.pane[data-has-title]:has(> .pane-top-banner) .xterm-container {
+.pane:is([data-has-title], [data-has-recent-images]):has(> .pane-top-banner) .xterm-container {
   margin-top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-height, 0px));
   height: calc(
     100% - var(--orca-pane-title-height) - var(--orca-pane-top-banner-height, 0px) -

@@ -1,5 +1,4 @@
 import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
-import { buildWorktreeDragPreviewOffsets } from './worktree-drag-preview-offsets'
 
 /** With a floating preview, slides the other rows open at the drop slot, as a workspace drag does, with the line in the gap. */
 export function shiftHeaderDrop(
@@ -10,21 +9,31 @@ export function shiftHeaderDrop(
   if (!floatingPreview || !session) {
     return drop
   }
-  const { offsets, placeholderTop } = buildWorktreeDragPreviewOffsets({
-    groupIds: session.sidebarProjectGroupHeaderIds,
-    draggedIds: [session.groupId],
-    draggingWorktreeId: session.groupId,
-    dropIndex: drop.dropIndex,
-    rects: session.headerRects.map((rect) => ({
-      worktreeId: rect.groupId,
-      groupIndex: rect.headerIndex,
-      top: rect.top,
-      bottom: rect.bottom
-    }))
-  })
+  const source = session.headerRects.find((rect) => rect.groupId === session.groupId)
+  const { dropIndex } = drop
+  if (!source || dropIndex === source.headerIndex || dropIndex === source.headerIndex + 1) {
+    return drop
+  }
+  const movingDown = dropIndex > source.headerIndex
+  const height = source.bottom - source.top
+  const firstShifted = movingDown ? source.headerIndex + 1 : dropIndex
+  const lastShifted = movingDown ? dropIndex - 1 : source.headerIndex - 1
+  const offsets = new Map<string, number>()
+  for (const rect of session.headerRects) {
+    if (rect.headerIndex >= firstShifted && rect.headerIndex <= lastShifted) {
+      offsets.set(rect.groupId, movingDown ? -height : height)
+    }
+  }
+  // Only the source and destination heights matter, even when intermediate rows are unmounted.
+  const next = session.headerRects.find((rect) => rect.headerIndex === dropIndex)
+  const previous = session.headerRects.find((rect) => rect.headerIndex === dropIndex - 1)
+  const boundary = next?.top ?? previous?.bottom
   return {
-    dropIndex: drop.dropIndex,
-    dropIndicatorY: placeholderTop === null ? drop.dropIndicatorY : Math.max(0, placeholderTop - 3),
+    dropIndex,
+    dropIndicatorY:
+      boundary === undefined
+        ? drop.dropIndicatorY
+        : Math.max(0, boundary - (movingDown ? height : 0) - 3),
     previewOffsetsById: offsets
   }
 }

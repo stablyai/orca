@@ -80,7 +80,8 @@ export const BotSearchResultRow = memo(function BotSearchResultRow({
         WORKTREE_CARD_SURFACE_CLASS_NAME,
         // shrink-0: the results scroll rather than squash rows when the split caps their height.
         'worktree-sidebar-card-hover flex w-[calc(100%-0.25rem)] shrink-0 scroll-my-0.5 items-center pt-1.25 pb-1.5 pl-1.5 text-left',
-        'focus-visible:ring-2 focus-visible:ring-sidebar-ring'
+        // Inset: the card reaches the scroller's edges, which would clip an outer ring.
+        'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset'
       )}
       onClick={() => onSelect(entry)}
       onFocus={(event) =>
@@ -117,8 +118,8 @@ export const BotSearchResultRow = memo(function BotSearchResultRow({
         <span className="mr-2 shrink-0">
           <BotGroupFaces
             faces={botGroupFaces(botGroupMemberBots(entry.group, botsById), (bot) => bot.id)}
-            className="size-9"
-            slot={36}
+            className="size-8"
+            slot={32}
           />
         </span>
       )}
@@ -149,14 +150,13 @@ function BotResultPicture({ bot, home }: { bot: Bot; home: FolderWorkspace }): R
   const status = foldBotStatus(useWorktreeActivityStatus(folderWorkspaceKey(home.id)), bot.paused)
   const badge = {
     status: offline || status === 'inactive' ? null : status,
-    isUnread: false,
     sleeping: useBotAvatarBadgeSleeping(folderWorkspaceKey(home.id), status)
   }
   return (
     <span className={cn('relative mr-2 shrink-0', (bot.paused || offline) && 'opacity-60')}>
       <BotAvatar
         bot={bot}
-        className="size-9 rounded-md text-sm"
+        className="size-8 rounded-md text-sm"
         style={botAvatarBadgeCutout(badge)}
       />
       <BotAvatarStatusBadge {...badge} />

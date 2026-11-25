@@ -48,7 +48,7 @@ export function useMobileBotTidyUp(
   const tidyNow = () =>
     void act(
       async (rpc) => {
-        tidyUpNow.interpret(await tidyUpNow.request(rpc, { botId }))
+        tidyUpNow.interpret(await tidyUpNow.request(rpc, { botId }, { failWhenDisconnected: true }))
       },
       (error) => {
         const code = error instanceof Error ? error.message : ''
@@ -65,7 +65,9 @@ export function useMobileBotTidyUp(
   const undo = (rowId: string) =>
     void act(
       async (rpc) => {
-        const reply = tidyUpUndo.interpret(await tidyUpUndo.request(rpc, { botId, rowId }))
+        const reply = tidyUpUndo.interpret(
+          await tidyUpUndo.request(rpc, { botId, rowId }, { failWhenDisconnected: true })
+        )
         if (!reply.undone) {
           showToast(
             t(

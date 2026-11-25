@@ -13,16 +13,24 @@ import {
   openJournalDomainDatabase
 } from './database/journal-domain-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
+import { journalWalWriterRelief } from './database/journal-wal-writer-relief'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
-import { takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
-import { applyJournalWriterEffect } from './journal-writer-effects'
+import {
+  applyJournalSqlWriteRequest,
+  journalSqlWriteDurability,
+  type JournalSqlCommitResponse,
+  type JournalSqlWriteContext,
+  type JournalSqlWriteRequest
+} from './journal-sql-write-request'
 import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
-import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { tryFoldJournalTextTails } from './journal-text-tail'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+import { JournalSqlQueueClock, journalSqlTimedGate } from './journal-sql-writer-timing'
+import { JournalSqlWriterQueue } from './journal-sql-writer-queue'
+import { JournalSqlWalParking } from './journal-sql-wal-parking'
 
 installWorkerSendLedger('orca-journal-sql-writer')
 
@@ -55,7 +63,10 @@ let readOnly = true
 let fault: unknown
 let closing = false
 let scheduled = false
-const queue: JournalSqlRequest[] = []
+const queue = new JournalSqlWriterQueue()
+let parking: JournalSqlWalParking | undefined
+const clock = new JournalSqlQueueClock(() => parking?.mark() ?? { bulk: 0, urgent: 0 })
+const gate = { ms: 0 }
 
 async function open(): Promise<void> {
   try {
@@ -78,9 +89,12 @@ async function open(): Promise<void> {
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)
     if (!readOnly) {
-      checkpoint = new JournalCheckpointOwner(db, workerData.filename)
+      checkpoint = new JournalCheckpointOwner(db, workerData.filename, {
+        relief: journalWalWriterRelief(db, workerData.filename)
+      })
+      parking = new JournalSqlWalParking(checkpoint)
     }
-    batch = new JournalSqlBatch(db, checkpoint)
+    batch = new JournalSqlBatch(db, checkpoint && journalSqlTimedGate(checkpoint, gate))
     reply({ type: 'ready', readOnly })
   } catch (error) {
     fault = error
@@ -97,6 +111,12 @@ async function open(): Promise<void> {
 void open()
 
 port.on('message', (request: JournalSqlRequest) => {
+  if (request.command.type === 'promote') {
+    if (queue.promote(request.command.sessionId)) {
+      parking?.interrupt()
+    }
+    return
+  }
   if (closing || !db) {
     reply({
       type: 'failed',
@@ -111,7 +131,10 @@ port.on('message', (request: JournalSqlRequest) => {
     checkpointClosing = checkpoint?.close()
     void checkpointClosing?.catch(() => undefined)
   }
-  queue.push(request)
+  clock.receive(request.id)
+  if (queue.push(request)) {
+    parking?.interrupt()
+  }
   if (!scheduled) {
     scheduled = true
     setImmediate(() => {
@@ -124,112 +147,68 @@ function reply(response: JournalSqlResponse): void {
   port.postMessage(response)
 }
 
-type WriteRequest = {
-  id: number
-  command: Exclude<JournalSqlRequest['command'], { type: 'close' }>
-}
-type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
+type TimedResponse = JournalSqlCommitResponse | Extract<JournalSqlResponse, { type: 'failed' }>
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
-  const pending = takeJournalSqlReadyBatch(queue)
+  const head = queue.peek()
+  if (head && head.command.type !== 'close' && parking && !checkpoint!.admits(!!head.urgent)) {
+    // Waiting for WAL room must not hold the writer while a send's urgent write queues behind it.
+    await parking.park(!!head.urgent)
+    scheduleNextDrain()
+    return
+  }
+  const depth = queue.size
+  const startedAt = performance.now()
+  const pending = queue.take()
+  const urgent = pending.every((request) => request.urgent)
   const writes = pending.filter(
-    (request): request is WriteRequest => request.command.type !== 'close'
+    (request): request is JournalSqlWriteRequest =>
+      request.command.type !== 'close' && request.command.type !== 'promote'
   )
   const close = pending.find((request) => request.command.type === 'close')
   const database = db
+  let retried = false
   if (writes.length > 0 && database && batch && commands) {
-    const executor = commands
-    let responses: JournalSqlResponse[] = []
-    try {
-      if (fault) {
-        throw fault
+    const context: JournalSqlWriteContext = {
+      database,
+      executor: commands,
+      forks: forks!,
+      stateDirectory,
+      destinationCurrent: (operation) =>
+        destinationMain === legacyDestinationMain(workerData.filename) &&
+        (!operation.destination ||
+          JSON.stringify(operation.destination) ===
+            JSON.stringify(legacyDestinationIdentity(workerData.filename)))
+    }
+    let { responses, rolledBack } = await runWrites(context, batch, writes, urgent)
+    // A whole-transaction failure (a full disk) sends each write back alone, so only its cause fails.
+    const runMs = performance.now() - startedAt - gate.ms
+    if (rolledBack && writes.length > 1) {
+      for (const request of writes) {
+        clock.retried(request.id, gate.ms, runMs)
       }
-      assertJournalWritable(readOnly, 'database')
-      const result = await batch.run<WriteRequest, CommitResponse>(
-        writes,
-        async (request) => {
-          const { command, id } = request
-          const checkpoint = forks!.checkpoint()
-          try {
-            if (command.type === 'maintenance') {
-              if (command.operation.kind === 'legacy-retirement-save') {
-                if (
-                  destinationMain !== legacyDestinationMain(workerData.filename) ||
-                  (command.operation.destination &&
-                    JSON.stringify(command.operation.destination) !==
-                      JSON.stringify(legacyDestinationIdentity(workerData.filename)))
-                ) {
-                  throw new Error('journal destination generation changed')
-                }
-              }
-              return {
-                type: 'maintenance',
-                id,
-                result:
-                  command.operation.kind === 'fork-source-hold' ||
-                  command.operation.kind === 'fork-source-release' ||
-                  command.operation.kind === 'fork-stage-begin' ||
-                  command.operation.kind === 'fork-stage-page' ||
-                  command.operation.kind === 'fork-abort'
-                    ? forks!.apply(command.operation, Date.now())
-                    : applyJournalSqlMaintenance(database, command.operation)
-              }
-            }
-            return command.type === 'write'
-              ? { type: 'committed', id, commit: await executor.apply(command.command, Date.now()) }
-              : {
-                  type: 'effects',
-                  id,
-                  results: command.effects.map((effect) =>
-                    applyJournalWriterEffect(database, stateDirectory, effect)
-                  )
-                }
-          } catch (error) {
-            forks!.rollback(checkpoint)
-            throw error
-          }
-        },
-        writes.some(
-          (request) =>
-            request.command.type === 'maintenance' &&
-            request.command.operation.kind === 'legacy-retirement-save' &&
-            request.command.operation.durable
-        )
-          ? 'retirement'
-          : writes.some(
-                (request) => request.command.type === 'write' && request.command.command.forkInstall
-              )
-            ? 'full'
-            : 'normal'
-      )
-      forks!.acknowledge()
-      // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
-      responses = result.outcomes.map((outcome, index) =>
-        outcome.committed
-          ? outcome.value
-          : {
-              type: 'failed',
-              id: writes[index]!.id,
-              outcome: 'rolled-back',
-              error: journalSqlFailure(outcome.error)
-            }
-      )
-    } catch (error) {
-      forks?.rollback()
-      const outcome = error instanceof JournalSqlBatchError ? error.outcome : 'not-dispatched'
-      fault ??= batch.fault
-      responses = writes.map((request) => ({
-        type: 'failed',
-        id: request.id,
-        outcome,
-        fatal: fault !== undefined,
-        error: journalSqlFailure(error)
-      }))
+      queue.retryAlone(writes)
+      retried = true
+      responses = []
     }
+    const walFrames = checkpoint?.log ?? 0
     // A transfer failure after COMMIT must surface as a lost acknowledgement, never a rollback.
-    for (const response of responses) {
-      reply(response)
+    for (const [index, response] of responses.entries()) {
+      const request = writes[index]!
+      reply({
+        ...response,
+        timing: {
+          depth,
+          ...clock.timing(request, startedAt, gate.ms, runMs),
+          batch: writes.length,
+          walFrames
+        }
+      })
     }
+    gate.ms = 0
+  }
+  for (const request of retried ? [] : pending) {
+    clock.forget(request.id)
   }
   if (close) {
     try {
@@ -255,10 +234,59 @@ async function drain(): Promise<void> {
   scheduleNextDrain()
 }
 
+async function runWrites(
+  context: JournalSqlWriteContext,
+  writer: JournalSqlBatch,
+  list: JournalSqlWriteRequest[],
+  urgent: boolean
+): Promise<{ responses: TimedResponse[]; rolledBack: boolean }> {
+  try {
+    if (fault) {
+      throw fault
+    }
+    assertJournalWritable(readOnly, 'database')
+    const result = await writer.run(
+      list,
+      (request) => applyJournalSqlWriteRequest(context, request),
+      journalSqlWriteDurability(list),
+      urgent
+    )
+    forks!.acknowledge()
+    // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
+    return {
+      rolledBack: false,
+      responses: result.outcomes.map((outcome, index) =>
+        outcome.committed
+          ? outcome.value
+          : {
+              type: 'failed',
+              id: list[index]!.id,
+              outcome: 'rolled-back',
+              error: journalSqlFailure(outcome.error)
+            }
+      )
+    }
+  } catch (error) {
+    forks?.rollback()
+    const outcome = error instanceof JournalSqlBatchError ? error.outcome : 'not-dispatched'
+    fault ??= writer.fault
+    return {
+      rolledBack: outcome === 'rolled-back',
+      responses: list.map((request) => ({
+        type: 'failed',
+        id: request.id,
+        outcome,
+        fatal: fault !== undefined,
+        error: journalSqlFailure(error)
+      }))
+    }
+  }
+}
+
 function scheduleNextDrain(): void {
   scheduled = false
   // Requests admitted while this drain awaited its commands start the next drain.
-  if (queue.length > 0 && db) {
+  if (queue.size > 0 && db) {
     scheduled = true
     setImmediate(() => {
       void drain()

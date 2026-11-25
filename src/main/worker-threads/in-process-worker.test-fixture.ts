@@ -18,8 +18,13 @@ class InProcessWorker<TRequest> {
 
   constructor(
     private readonly handle: (request: TRequest) => unknown,
-    private readonly controls: InProcessWorkerControls<TRequest>
-  ) {}
+    private readonly controls: InProcessWorkerControls<TRequest>,
+    spawnMessage?: unknown
+  ) {
+    if (spawnMessage !== undefined) {
+      setImmediate(() => this.emit('message', spawnMessage))
+    }
+  }
 
   on(event: string, listener: (arg?: unknown) => void): this {
     const set = this.listeners.get(event) ?? new Set()
@@ -48,7 +53,13 @@ class InProcessWorker<TRequest> {
     if (this.controls.crashesOn(request)) {
       this.exit(1)
     } else if (!this.controls.hangsOn(request)) {
-      setImmediate(() => this.emit('message', this.handle(request)))
+      setImmediate(() => {
+        void Promise.resolve(this.handle(request)).then((response) => {
+          if (!this.exited) {
+            this.emit('message', response)
+          }
+        })
+      })
     }
   }
 
@@ -66,7 +77,11 @@ class InProcessWorker<TRequest> {
   }
 }
 
-export function inProcessWorker<TRequest>(handle: (request: TRequest) => unknown): {
+/** `spawnMessage`: a message each worker posts unprompted once started, such as a ready signal. */
+export function inProcessWorker<TRequest>(
+  handle: (request: TRequest) => unknown,
+  spawnMessage?: unknown
+): {
   factory: WorkerThreadFactory
   controls: InProcessWorkerControls<TRequest>
 } {
@@ -77,7 +92,7 @@ export function inProcessWorker<TRequest>(handle: (request: TRequest) => unknown
   }
   const factory = () => {
     controls.spawned++
-    const worker = new InProcessWorker(handle, controls)
+    const worker = new InProcessWorker(handle, controls, spawnMessage)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: InProcessWorker implements every Worker member the request queue's host touches (on/off/removeAllListeners/unref/terminate/postMessage); the rest is never reached.
     return worker as unknown as Worker
   }

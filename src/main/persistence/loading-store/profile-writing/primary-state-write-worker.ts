@@ -6,7 +6,8 @@ import { prepareSelectiveProfileStateWrite } from './profile-state-selective-wri
 // Capture intent now; edits made while this operation waits belong to the next write.
 export async function writeProfileStateInWorker(
   { runtime, serialization }: PrimaryStateWriteOperationsContext,
-  authority: AsyncProfileStateAuthority
+  authority: AsyncProfileStateAuthority,
+  wholeSessions = false
 ): Promise<boolean> {
   authority.assertWritable()
   const generation = runtime.writeGeneration
@@ -41,7 +42,8 @@ export async function writeProfileStateInWorker(
       dirtyDomains,
       automationRuns,
       runtime.lastWrittenStateHash,
-      () => runtime.writeGeneration === generation
+      () => runtime.writeGeneration === generation,
+      wholeSessions
     )
     if (!prepared) {
       restoreIntent()
@@ -80,7 +82,8 @@ function beginWrite(
   dirtyDomains: ReadonlySet<string> | null,
   automationRuns: PrimaryStateWriteOperationsContext['runtime']['pendingAutomationRunsAfter'],
   lastWrittenStateHash: string | null,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  wholeSessions: boolean
 ) {
   const baseline = serialization.sessionSaveBaseline
   const selective = prepareSelectiveProfileStateWrite(
@@ -108,20 +111,26 @@ function beginWrite(
       protectedSecretUpdates: selective.protectedSecretUpdates
     }
   }
-  // Complete saves write every domain whole; the next session save re-establishes the baseline.
-  baseline.clear()
-  const complete = serialization.buildStateToSave(true)
+  // Session domains the writer holds travel as changed entries unless a deep capture is required.
+  const complete = serialization.buildStateToSave(true, wholeSessions ? 'whole' : 'patch')
   if (!isCurrent()) {
     return undefined
   }
-  const unchanged = complete.stateHash === lastWrittenStateHash
-  const completion = unchanged
+  if (!complete.domains) {
+    // A whole-document payload replaces the session without recording the writer's copy.
+    baseline.clear()
+  }
+  const { patches = [], sessionCandidates = [] } = complete
+  const unchanged =
+    complete.stateHash === lastWrittenStateHash &&
+    patches.every(({ operations }) => operations.length === 0)
+  const written = unchanged
     ? authority.assertCurrentRevision()
     : complete.domains
-      ? authority.writeCompleteSerializedDomains(complete.domains)
+      ? authority.writeCompleteSerializedDomains(complete.domains, patches)
       : authority.writeSerializedState(complete.payload)
   return {
-    completion,
+    completion: written.then(() => baseline.acknowledge(sessionCandidates)),
     stateHash: complete.stateHash,
     protectedSecretUpdates: unchanged ? [] : complete.protectedSecretUpdates
   }

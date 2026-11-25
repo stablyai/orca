@@ -33,6 +33,8 @@ export type WslOrcadLivenessDependencies = {
   readIdentity: (distro: string, orcadPid: number | null) => Promise<WslGuestIdentity | null>
   openWatch: (connection: WslOrcadConnection) => Promise<WslOrcadWatch>
   collectCensus: (connection: WslOrcadConnection) => Promise<OrcadTerminalCensus>
+  /** The distro's orcad closed its sockets saying it stopped idle (#46567). */
+  wasIdleStopped?: (distro: string) => boolean
   /** A WSL project or terminal the user can see is open on this distro. */
   hasUserVisibleWork: (distro: string) => boolean | Promise<boolean>
   /** E9: recovery reconnects only into a distro confirmed running right before it spawns. */

@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 // The live statuses of a bot's worker workspaces, for its fold's counts and its row line alike.
 import { useCallback, useMemo } from 'react'
 import { useWorktreeActivityStatuses } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses'
@@ -16,7 +17,7 @@ import type { WorktreeStatus } from '../../../../shared/worktree/row-display/wor
 export function useBotWorkerWorkspaces(
   home: FolderWorkspace
 ): ReturnType<typeof getFolderWorkspaceChildWorktrees> {
-  const childrenByParent = useAppStore(selectSidebarChildrenByParentIdentity)
+  const childrenByParent = useAppStoreWithHostStatuses(selectSidebarChildrenByParentIdentity)
   return useMemo(
     () => getFolderWorkspaceChildWorktrees(getFolderWorkspaceHostIdentity(home), childrenByParent),
     [home, childrenByParent]
@@ -52,8 +53,8 @@ export function useBotWorkerWorkspaceStatuses(
 /** Each workspace's status; a line whose own server is down shows no live work, whatever its bot's server does. */
 export function useLiveWorkspaceStatuses(workspaceIds: readonly string[]): WorktreeStatus[] {
   const statusById = useBotWorkerWorkspaceStatuses(workspaceIds)
-  const downIds = useAppStore((s) =>
-    workspaceIds.filter((id) => isWorktreeHostDisconnected(s, id)).join('\n')
+  const downIds = useAppStoreWithHostStatuses((s, statuses) =>
+    workspaceIds.filter((id) => isWorktreeHostDisconnected(s, statuses, id)).join('\n')
   )
   return useMemo(() => {
     const down = new Set(downIds ? downIds.split('\n') : [])

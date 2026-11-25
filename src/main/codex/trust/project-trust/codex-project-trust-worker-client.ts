@@ -3,6 +3,13 @@ import { WorkerThreadRequestQueue } from '../../../worker-threads/worker-thread-
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { runExclusivelyForCodexTrustConfig } from '../toml/codex-trust-config-mutation-queue'
 import { spawnCodexProjectTrustWorker } from './codex-project-trust-worker-spawn'
+import { getAntigravityTrustLedgerPath } from '../../../agent-launch/trust/antigravity-workspace-trust-ownership'
+import type {
+  CodexHookPassWorkerRequest,
+  CodexHookPassWorkerResult
+} from '../../hooks/installation/codex-hook-pass-worker'
+import type { CodexHookPassEffects } from '../../hooks/installation/codex-hook-install-effects'
+import type { ObservedFileContent } from '../../../filesystem/file-content-observation'
 import type {
   CodexProjectTrustWorkerFailure,
   CodexProjectTrustWorkerRequest,
@@ -66,6 +73,34 @@ async function request(
   return response
 }
 
+export type CodexHookPassOutcome = {
+  config?: { value: boolean } | { error: Error }
+  effects?: CodexHookPassEffects
+  effectsError?: Error
+  observation?: { matches: boolean; files: ObservedFileContent[] }
+}
+
+/**
+ * Runs a hook pass's file effects on the same queue as trust grants, so they never overlap.
+ * Call with the runtime-before-system lanes held; rejects only after a failed worker has exited.
+ */
+export async function runCodexHookPassOnTrustWorker(
+  pass: CodexHookPassWorkerRequest
+): Promise<CodexHookPassOutcome> {
+  const response = await request((id) => ({ id, kind: 'hookPass', ...pass }))
+  const result: CodexHookPassWorkerResult = response.hookPass ?? {}
+  return {
+    effects: result.effects,
+    observation: result.observation,
+    ...(result.effectsError ? { effectsError: toError(result.effectsError) } : {}),
+    ...(result.config
+      ? {
+          config: 'error' in result.config ? { error: toError(result.config.error) } : result.config
+        }
+      : {})
+  }
+}
+
 /** Call with every config's mutation lock held, in hook-installer order. */
 export async function grantCodexProjectTrustOffMain(
   configFiles: readonly string[],
@@ -116,4 +151,19 @@ export async function removeOrcaCreatedProjectTrustEntries(projectPath: string):
       }
     })
   }
+}
+
+/**
+ * Removes the Antigravity `trustedWorkspaces` entries Orca created for `workspacePath`, on the
+ * worker and inside the queue Antigravity grants use, so neither overwrites the other. Never throws.
+ */
+export function removeOrcaCreatedAntigravityTrustOffMain(workspacePath: string): Promise<void> {
+  const ledgerPath = getAntigravityTrustLedgerPath()
+  return runExclusivelyForCodexTrustConfig(ledgerPath, async () => {
+    try {
+      await request((id) => ({ id, kind: 'removeAntigravityOwned', workspacePath, ledgerPath }))
+    } catch (error) {
+      console.warn('[antigravity-trust] Failed to remove an Orca-created trust entry:', error)
+    }
+  })
 }

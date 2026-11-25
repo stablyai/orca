@@ -1,4 +1,5 @@
 import type { AutomationRunMessage } from '../../../../../shared/automations/automation-run-message'
+import type { AgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { automationRunInstructions } from '../../../../../shared/automations/automation-run-message'
 import {
   automationRunFacts,
@@ -14,6 +15,7 @@ import {
   NativeChatAutomationRunBody,
   NativeChatAutomationSendAgain
 } from './NativeChatAutomationRunBody'
+import type { MergedRunFailure } from '../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatAutomationRowFrame } from './NativeChatAutomationRowFrame'
 
 export type NativeChatAutomationRunRowProps = {
@@ -25,8 +27,12 @@ export type NativeChatAutomationRunRowProps = {
   timestamp: number | null
   /** A run that couldn't start: the send's own error. */
   error?: string
+  /** Why its chat was refused, worded here in place of `error`. */
+  refusal?: AgentSessionRefusalReference
   /** Whether Send again is offered here, or already went. */
   resend?: AutomationRunResend
+  /** Earlier tries of this run that couldn't start, newest first. */
+  earlierFailures?: readonly MergedRunFailure[]
   onRefolded: () => void
 }
 
@@ -39,7 +45,9 @@ export function NativeChatAutomationRunRow({
   text,
   timestamp,
   error,
+  refusal,
   resend = 'none',
+  earlierFailures,
   onRefolded
 }: NativeChatAutomationRunRowProps): React.JSX.Element {
   const wording = useAutomationRunWording(run.automation)
@@ -80,6 +88,8 @@ export function NativeChatAutomationRunRow({
         instructions={instructions}
         facts={facts}
         error={error}
+        refusal={refusal}
+        earlierFailures={earlierFailures}
         wording={wording}
         findQuery={findQuery}
       />

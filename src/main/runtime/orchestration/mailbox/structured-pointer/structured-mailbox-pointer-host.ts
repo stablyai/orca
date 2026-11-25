@@ -15,6 +15,7 @@ import type {
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
+import { failureHoldsMail } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-pause'
 import type { StructuredSessionGateFacts } from './structured-session-pointer-delivery'
 import {
   sendAgentTurn,
@@ -84,14 +85,14 @@ export async function readStructuredMailAdmitFacts(
   }
 }
 
-/** Send admission queues agent mail behind a failed last turn; say whether Orca will lift it. */
+/** Send admission queues agent mail behind a usage-limited last turn; say whether Orca will lift it. */
 async function readFailedTurnHold(
   host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
   sessionId: string
 ): Promise<NonNullable<Extract<ChatMailAdmitFacts, { attached: true }>['failedTurn']> | null> {
   try {
     const { journal } = await host.conversation(sessionId)
-    if (!(await journal.queuedMessages.pauses()).some((pause) => pause.reason === 'failed')) {
+    if (!(await journal.queuedMessages.pauses()).some(failureHoldsMail)) {
       return null
     }
     const cut = await journal.reads.usageLimitCut()

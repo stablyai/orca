@@ -19,6 +19,7 @@ import {
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { oversizedLineError } from './codex-app-server-frame-size-error'
 
 export type CodexAppServerInvocation = {
   command: string
@@ -150,7 +151,11 @@ export async function runCodexAppServerSession<T>(
         waiter.resolve(message)
       }
     },
-    onRejected: () => undefined,
+    onRejected: (rejected) => {
+      if (rejected.kind === 'line-too-long') {
+        failPending(oversizedLineError(rejected))
+      }
+    },
     onFatal: failPending
   })
 

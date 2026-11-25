@@ -153,6 +153,8 @@ export function BotSlackCard({
   const people = useSlackWhoCanAsk(bot, teamId)
   const team = view.status === 'ready' ? slackTeamState(view.slack, teamId) : null
   const installed = team?.state === 'installed' ? team : null
+  // A workspace's row can also remove an app that was never installed.
+  const removable = installed ?? (teamId !== undefined && team && 'teamId' in team ? team : null)
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
@@ -173,7 +175,7 @@ export function BotSlackCard({
     setRemoving(true)
     const result = await botSlackCalls(bot.hostId).remove({
       botId: bot.id,
-      teamId: installed?.teamId
+      teamId: removable?.teamId
     })
     setRemoving(false)
     if (!result.ok) {
@@ -229,8 +231,16 @@ export function BotSlackCard({
             }
           : null
       }
+      update={
+        installed?.updateAvailable && !installed.updateNeeded
+          ? {
+              label: t('bots.slack.connection.updatePermissions', 'Update Slack permissions…'),
+              onClick: openSetup
+            }
+          : null
+      }
       remove={
-        installed
+        removable
           ? {
               label: t('bots.connector.removeFrom', 'Remove from {{place}}…', {
                 place: face.workspace ?? 'Slack'

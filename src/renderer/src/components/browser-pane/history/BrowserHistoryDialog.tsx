@@ -259,7 +259,7 @@ function BrowserHistoryDialogContent({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="xs" disabled={!hasHistory}>
                 <Trash2 />
-                {t('browser.history.clear', 'Clear browsing history')}
+                {t('browser.history.clear', 'Clear history')}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="top">

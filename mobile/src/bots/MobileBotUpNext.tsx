@@ -1,3 +1,4 @@
+import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight } from 'lucide-react-native'
@@ -28,6 +29,7 @@ export type UpNextActions = {
   /** Null while no chat shows to put the request in. */
   start: ((suggestionId: string) => void) | null
   dismiss: (suggestionId: string) => void
+  /** Off while one runs or the host is offline. */
   busy: boolean
 }
 
@@ -109,7 +111,9 @@ export function MobileBotUpNext({
               : ''
         }
       />
-      {state.error && !state.running ? <Text style={upNextStyles.note}>{state.error}</Text> : null}
+      {state.error && !state.running ? (
+        <Text style={upNextStyles.note}>{botCodedText(state.error, state.failure, t)}</Text>
+      ) : null}
       {shown.length > 0 ? (
         <ListGroup separatorInset={LIST_LEADING_INSET}>
           {[

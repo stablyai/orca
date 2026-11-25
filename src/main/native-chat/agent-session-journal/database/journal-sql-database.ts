@@ -7,7 +7,7 @@ import type { AgentSessionStoreState } from '../../../runtime/agent-session/reco
 import { JournalSqlOwner } from '../journal-sql-owner'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
 import { JournalSqlConversions } from '../journal-sql-conversions'
-import { JournalSqlActivity } from '../journal-sql-activity'
+import { JournalSqlActivity, JournalSqlSendingChats } from '../journal-sql-activity'
 import { createJournalSqlMaintenance } from '../journal-sql-maintenance-owner'
 import type { JournalSqlBackgroundMaintenance } from '../journal-sql-background-maintenance'
 import type { JournalWriterCommand } from '../journal-writer-command'
@@ -33,6 +33,7 @@ export class JournalSqlDatabase {
   private readonly activity = new JournalSqlActivity()
   private readonly maintenance: JournalSqlBackgroundMaintenance
   private readonly sessions = new Map<string, Promise<unknown>>()
+  readonly sending = new JournalSqlSendingChats((sessionId) => this.writer.promote(sessionId))
   private closing: Promise<void> | undefined
   private closed = false
 

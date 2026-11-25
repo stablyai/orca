@@ -10,6 +10,7 @@
  * points its mail starts it again. For mail, a conversation has ended only when its chat was closed.
  */
 
+import type { SessionPartyReader } from '../../addressing/session-party-reader'
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   isOrcaSessionId,
@@ -66,7 +67,7 @@ export type StructuredSessionMailReach =
 export function structuredSessionMailReach(
   store: AgentSessionRecordReader,
   record: AgentSessionConversationView,
-  db: OrchestrationDb | null | undefined,
+  db: SessionPartyReader | null | undefined,
   canonicalStore?: Pick<AgentSessionRecordReader, 'listRecords'> | null
 ): StructuredSessionMailReach {
   return deriveStructuredSessionMailReach(
@@ -171,7 +172,7 @@ export function deriveStructuredSessionMailReach(
 /** Exclude only proven lost worker identity, which the party resolver refuses in every role. */
 export function addressableSessionParty(
   sessionId: OrcaSessionId,
-  db: OrchestrationDb | null | undefined,
+  db: SessionPartyReader | null | undefined,
   store?: Pick<AgentSessionRecordReader, 'listRecords'> | null
 ): OrchestrationSessionParty | null {
   try {

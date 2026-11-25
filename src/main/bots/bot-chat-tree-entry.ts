@@ -7,10 +7,25 @@ import { sessionTabClosedCheck } from '../runtime/orchestration/mailbox/routing/
 import type { BotHomeRecords } from './bot-home-records'
 import {
   botChatBaseChat,
-  botChatRecordShown,
   type BotChatBaseBuild,
   type BotChatBaseContext
 } from './bot-chat-tree-base'
+
+/** What of a record its chat row shows; a commit that leaves this as it was (a lease renewal, say)
+ *  changes no chat. */
+export function botChatRecordShown(record: AgentSessionConversationView): string {
+  return JSON.stringify([
+    record.location.workspaceId,
+    record.conversationName ?? null,
+    record.conversationNameSource ?? null,
+    record.conversationCommand ?? null,
+    record.lastTurn ?? null,
+    record.provider,
+    record.providerHandleChain.length > 0,
+    // An unturned chat lists by when its record last changed.
+    record.lastTurn ? null : record.updatedAt
+  ])
+}
 
 export type BotChatTreeEntry = {
   build: BotChatBaseBuild

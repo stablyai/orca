@@ -97,6 +97,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   })
   // Once Enter left, a later throw (an abort during verification) cannot unsend the text.
   let submitted = false
+  // An OpenCode held-paste retry outlives the send and still writes through the guard.
+  let heldPromptRetry: Promise<void> | undefined
   try {
     const wait = await waitThroughBlockingPrompts(
       args.runtime,
@@ -124,6 +126,9 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       requestId: randomUUID(),
       // Once handed over, let the pane show progress; the launch receipt does not claim turn observation.
       observationTimeoutMs: 0,
+      onHeldPromptRetry: (retry) => {
+        heldPromptRetry = retry
+      },
       ...(args.signal
         ? {
             signal: args.signal,
@@ -144,6 +149,10 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
     )
     return false
   } finally {
-    guard.dispose()
+    if (heldPromptRetry) {
+      void heldPromptRetry.finally(guard.dispose)
+    } else {
+      guard.dispose()
+    }
   }
 }

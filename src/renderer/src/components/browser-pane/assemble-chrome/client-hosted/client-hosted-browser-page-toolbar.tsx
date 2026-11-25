@@ -1,10 +1,15 @@
 import type { RefObject } from 'react'
-import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { useLocalBrowserPageSiteDisplaySource } from '../toolbar/browser-page-site-display-source'
+import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
+import type {
+  BrowserPage,
+  BrowserViewportPresetId
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
-import { getOpenableExternalUrl, toDisplayUrl } from '../../describe-page/browser-page-url-display'
+import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useServerPageOpenExternal } from '../../describe-page/use-server-page-open-external'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import BrowserAddressBar from '../address-bar/BrowserAddressBar'
@@ -15,7 +20,18 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
-import type { BrowserChromeMarkupTool } from '../toolbar/browser-annotate-tool-button'
+import { BrowserPageDeviceMoveItem } from '../../navigate/device-move/browser-page-device-move-item'
+import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
+import {
+  BrowserExtensionToolbar,
+  BrowserExtensionsMenuSub
+} from '../extensions/browser-extension-toolbar'
+import { useBrowserExtensionToolbar } from '../extensions/use-browser-extension-toolbar'
+import type {
+  BrowserChromeElementTools,
+  BrowserChromeMarkupTool,
+  BrowserChromeNoteActions
+} from '../toolbar/browser-annotate-tool-button'
 
 /** The local page toolbar over a desktop-hosted page of a remote workspace, minus what its route session can't run. */
 export function ClientHostedBrowserPageToolbar({
@@ -33,7 +49,7 @@ export function ClientHostedBrowserPageToolbar({
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
   navigateToUrl,
-  markup,
+  annotateTools,
   onOpenFind
 }: {
   browserTab: BrowserPage
@@ -50,12 +66,26 @@ export function ClientHostedBrowserPageToolbar({
   addressBarInputRef: RefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: RefObject<(() => void) | null>
   navigateToUrl: (url: string) => void
-  markup: BrowserChromeMarkupTool
+  annotateTools: {
+    elementTools: BrowserChromeElementTools
+    markup: BrowserChromeMarkupTool
+    notes: BrowserChromeNoteActions
+  }
   onOpenFind: () => void
 }): React.JSX.Element {
   const browserPageId = browserTab.id
+  const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    applyBrowserViewportPreset(browserPageId, nextId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
-  const externalUrl = getOpenableExternalUrl(browserTab.url)
+  const onOpenExternal = useServerPageOpenExternal(browserTab.url, runtimeEnvironmentId, worktreeId)
+  const browserProfileId = useServerBrowserPageProfileId(browserPageId)
+  // The page runs this desktop's extensions when its server profile is Default; main decides.
+  const extensionToolbar = useBrowserExtensionToolbar(
+    browserPageId,
+    isActive,
+    `${browserTab.url}\n${loading}`
+  )
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
@@ -94,8 +124,10 @@ export function ClientHostedBrowserPageToolbar({
               <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
               <BrowserPageStateChips
                 browserPageId={browserPageId}
+                siteDisplaySource={siteDisplaySource}
                 url={toDisplayUrl(browserTab.url)}
                 viewportPresetId={viewportPresetId}
+                onApplyViewportPreset={applyViewportPreset}
                 isActive={isActive}
               />
             </>
@@ -118,30 +150,57 @@ export function ClientHostedBrowserPageToolbar({
           onHardReload={() => reload.runReloadTrigger('hard-reload')}
         />
       }
-      // Extensions load only into this desktop's profile sessions, not route partitions (#35178).
-      extensionActions={null}
-      // The element picker isn't wired for desktop-hosted pages yet; Draw works.
-      elementTools={null}
-      markup={markup}
+      extensionActions={
+        extensionToolbar &&
+        ((compact, menuTriggerRef) => (
+          <BrowserExtensionToolbar
+            browserPageId={browserPageId}
+            state={extensionToolbar}
+            compact={compact}
+            fallbackAnchorRef={menuTriggerRef}
+          />
+        ))
+      }
+      {...annotateTools}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
-          currentProfileId={null}
+          currentProfileId={browserProfileId}
           workspaceId={workspaceId}
+          worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={applyViewportPreset}
+          siteDisplaySource={siteDisplaySource}
           isActive={isActive}
           isBlankTab={isBlankBrowserUrl(browserTab.url)}
           pageActions={{
             onFind: onOpenFind,
             onHardReload: () => reload.runReloadTrigger('hard-reload'),
             onOpenDevTools: () => void window.api.browser.openDevTools({ browserPageId }),
-            onOpenExternal: externalUrl
-              ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
-              : null
+            onOpenExternal,
+            deviceMoveItem: (
+              <BrowserPageDeviceMoveItem
+                target={{
+                  browserPageId,
+                  worktreeId,
+                  environmentId: runtimeEnvironmentId,
+                  url: browserTab.url,
+                  destination: 'server'
+                }}
+              />
+            )
           }}
-          extensionsSub={null}
-          // The page runs in the server's route session, not one of this desktop's profiles.
-          showProfiles={false}
+          extensionsSub={
+            extensionToolbar ? (
+              <BrowserExtensionsMenuSub
+                browserPageId={browserPageId}
+                state={extensionToolbar}
+                anchorRef={overflow.triggerRef}
+                deferUntilClose={overflow.deferUntilClose}
+              />
+            ) : null
+          }
+          clientHostEnvironmentId={runtimeEnvironmentId}
           overflow={overflow}
         />
       )}

@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck } from '../../../shared/automations/automation-definition'
 import type { AutomationPrecheckResult } from '../../../shared/automations/history/automation-run'
@@ -86,23 +88,28 @@ export function killLocalPrecheckProcessTree(
   }
 
   if (process.platform === 'win32') {
+    // An exited root's pid may be reused before close; only the handle kill is safe then.
     if (
+      childProcessHasExited(child) ||
       !admitSelfInitiatedTreeKill({
         pid,
         site: 'automation-precheck-timeout',
         scope: 'win-taskkill-tree'
       })
     ) {
-      // A refused tree walk still permits killing the root through its child handle.
       child.kill()
       return null
     }
     try {
       // Shell prechecks can leave descendants running after the root exits.
-      const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
+      const killer = spawn(
+        windowsSystem32Binary('taskkill.exe'),
+        ['/pid', String(pid), '/t', '/f'],
+        {
+          stdio: 'ignore',
+          windowsHide: true
+        }
+      )
       killer.on('error', () => child.kill())
       killer.unref()
     } catch {

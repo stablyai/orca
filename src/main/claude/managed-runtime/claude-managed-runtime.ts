@@ -8,6 +8,7 @@ import { getMainHttpClient } from '../../network/http-client'
 import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
 import { requireRuntimeAnswersVersion } from '../../node-runtime/managed-runtime-version-check'
+import { isMuslHost } from '../../node-runtime/linux-libc-probe'
 
 const RELEASES = 'https://downloads.claude.ai/claude-code-releases'
 
@@ -36,22 +37,6 @@ export function claudeManagedPlatform(
     return `${platform}-${arch}`
   }
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
-}
-
-let muslHost: boolean | undefined
-
-// Building a process report is slow and synchronous, and the libc can't change while running.
-function isMuslHost(): boolean {
-  if (process.platform !== 'linux') {
-    return false
-  }
-  if (muslHost === undefined) {
-    // glibc builds report their runtime glibc version; musl builds have none.
-    const report: unknown = process.report?.getReport()
-    const header = report && typeof report === 'object' && 'header' in report ? report.header : null
-    muslHost = !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
-  }
-  return muslHost
 }
 
 const channelSettingsSchema = z.object({

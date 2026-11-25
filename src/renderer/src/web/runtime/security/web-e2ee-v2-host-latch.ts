@@ -71,8 +71,3 @@ export function unlatchWebHostFromE2EEV2(hostPublicKeyB64: string): void {
     // The in-memory change still applies for this page.
   }
 }
-
-export function resetWebE2EEV2HostLatchForTests(): void {
-  latched = null
-  policies.clear()
-}

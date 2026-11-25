@@ -2,6 +2,10 @@ import type { StructuredAgentDefinition } from '../../native-chat/agent-session-
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  isManagedAgentCli,
+  managedAgentCli
+} from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export function acpAgentName(agent: string): string {
   return isTuiAgent(agent) ? TUI_AGENT_DISPLAY_NAMES[agent] : agent
@@ -16,11 +20,12 @@ export function isAcpStructuredOptionKey(key: string): boolean {
 }
 
 export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAgentDefinition {
-  const { managedRuntime, hostBackend } = spec
+  const { agent, managedRuntime, hostBackend } = spec
   return {
-    agent: spec.agent,
+    agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
     ...spec.account.pin,
+    instructionsEachStart: spec.instructions?.eachStart ?? false,
     capabilities: {
       // ACP has no stable rewind or goal methods.
       rewind: false,
@@ -38,7 +43,9 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       approvalEnforcement: 'orca'
     },
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
+    ...(isManagedAgentCli(agent) && { managedRuntime: () => managedAgentCli(agent).available() }),
     ...(hostBackend && { runsHostProgram: (home) => hostBackend.pins(home) }),
+    ...(hostBackend?.ownLogin && { usesOwnLogin: hostBackend.ownLogin }),
     restingOptions: {
       acceptsKey: (key) =>
         isAcpStructuredOptionKey(key) ||
@@ -46,7 +53,8 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
         (spec.dialect.interactionModes !== undefined && key === 'interactionMode'),
       // Populate catalogs from live agents.
       fallbackModels: () => null,
-      effortDefaultsToModel: false
+      effortDefaultsToModel: false,
+      listedSelection: spec.dialect.listedSelection
     }
   }
 }

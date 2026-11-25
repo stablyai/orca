@@ -9,6 +9,7 @@ const Caller = { botToken: OptionalString, callerSessionId: OptionalString }
 const Email = z.string().trim().toLowerCase().email().max(320)
 
 export const GoogleStatusParams = z.object({
+  ...Caller,
   /** Re-read every account's services now instead of showing the last check. */
   check: z.boolean().optional()
 })
@@ -27,7 +28,9 @@ export const GoogleSignInStartParams = z.object({
   callerLoopbackPort: z.number().int().min(1024).max(65_535).optional(),
   account: Email.optional(),
   /** Gmail, Calendar, Files; absent: what the account already has, else all. Always adds to what it has. */
-  services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).min(1).max(3).optional()
+  services: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).min(1).max(3).optional(),
+  /** A saved account signs in through this computer's app, not its own (a setup that just made it). */
+  currentApp: z.boolean().optional()
 })
 
 export const GoogleSignInFlowParams = z.object({ flowId: z.string().min(1).max(64) })
@@ -47,8 +50,34 @@ export const GoogleDisconnectParams = z.object({
   revoke: z.boolean().optional()
 })
 
+export const GoogleDefaultSetParams = z.object({ ...Caller, account: Email })
+
 export const GoogleBotAccessSetParams = z.object({
   ...Caller,
   botId: requiredString('Missing bot id'),
-  on: z.boolean()
+  on: z.boolean(),
+  /** With `on`: only these accounts. */
+  accounts: z.array(Email).min(1).max(100).optional(),
+  /** With `on` and no `accounts`: every account, now and later. Without it a bot that has Google keeps its list. */
+  allAccounts: z.literal(true).optional(),
+  /** With `on`: the bot's Google as the caller read it; refused when it has changed since, so a
+   *  stale save can't undo a newer edit. Absent (older clients) skips the check. */
+  basedOn: z
+    .object({
+      on: z.boolean(),
+      // As stored (bots.json keeps any short string), so a stray entry can't block every save.
+      accounts: z.array(z.string().min(1).max(320)).max(100).optional()
+    })
+    .optional(),
+  /** Keys (botAskerKeys) of the askers the caller showed for confirmation; Google stays off when Who can ask no longer matches. */
+  confirmedAskers: z.array(z.string()).max(1000).optional()
+})
+
+/** A Connect card signed `account` in for the bot; the bot is told so, as a hidden card answer. */
+export const GoogleBotConnectedParams = z.object({
+  ...Caller,
+  botId: requiredString('Missing bot id'),
+  account: Email,
+  /** The chat the card sits in, which gets the answer; the bot's Chat when absent. */
+  sessionId: OptionalString
 })

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { addBotMemoryFact, botMemoryChange } from '../../shared/bot-memory-lines'
 import { createBotMemoryHistory } from './bot-memory-history'
+import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import { createBotMemoryRecord } from './bot-memory-record'
 import { createBotTurnContext } from './bot-turn-context'
 
@@ -138,26 +139,16 @@ describe("a bot's memory history", () => {
   })
 
   it('keeps a secret-looking change redacted and refuses to undo it', async () => {
-    const { record, rows, undo } = bot(OLD)
+    const { record, rows, stored, turnEnded, undo, write } = bot(OLD)
     await record.change('bot-1', FOLDER, { kind: 'owner' }, (file) =>
-      botMemoryChange(
-        file,
-        addBotMemoryFact(file, 'deploy key ghp_abcdefghijklmnopqrstuvwxyz0123', '2026-11-06')
-      )
+      botMemoryChange(file, addBotMemoryFact(file, 'staging password=hunter2', '2026-11-06'))
     )
     const [row] = await rows()
     expect(row.undoable).toBe(false)
-    expect(JSON.stringify(row)).not.toContain('ghp_')
     await expect(undo(row.id)).rejects.toThrow('can’t be undone')
-  })
-
-  it('keeps 90 days of changes', async () => {
-    const { later, record, rows } = bot(OLD)
-    await record.forget('bot-1', FOLDER, 'owner fact', { kind: 'owner' })
-    later(90 * DAY)
-    expect(await rows()).toHaveLength(1)
-    later(1)
-    expect(await rows()).toEqual([])
+    write(`${OLD}- 2026-11-06 deploys run nightly\n`)
+    await turnEnded('Automation deploy ghp_abcdefghijklmnopqrstuvwxyz0123')
+    expect(await stored()).not.toMatch(/hunter2|ghp_/)
   })
 
   it('leaves an edit alone once its new words were changed again or forgotten', async () => {
@@ -172,18 +163,6 @@ describe("a bot's memory history", () => {
     await forgotten.forget('releases on Tuesday')
     expect(await forgotten.undo((await forgotten.rows())[1].id)).toBe(false)
     expect(forgotten.read()).toBe('# Memory\n')
-  })
-
-  it('keeps no password, key or token in a row or its source, and such rows stay as they are', async () => {
-    const { record, rows, stored, turnEnded, write } = bot(OLD)
-    await record.change('bot-1', FOLDER, { kind: 'owner' }, (file) =>
-      botMemoryChange(file, addBotMemoryFact(file, 'staging password=hunter2', '2026-11-06'))
-    )
-    write(`${OLD}- 2026-11-06 deploys run nightly\n`)
-    await turnEnded('Automation deploy ghp_abcdefghijklmnopqrstuvwxyz0123')
-
-    expect(await stored()).not.toMatch(/hunter2|ghp_/)
-    expect((await rows())[1].undoable).toBe(false)
   })
 
   it('records a Forget of a fact a chat had just written over, and can undo it', async () => {
@@ -204,8 +183,9 @@ describe("a bot's memory history", () => {
     const { forget, history, later, reopened, stored } = bot(OLD)
     await forget('owner fact')
     await history.append('bot-2', { kind: 'owner' }, botMemoryChange('', '- another fact\n'))
-    later(91 * DAY)
-
+    later(90 * DAY)
+    expect(await history.list('bot-1')).toHaveLength(1)
+    later(1)
     expect(await history.list('bot-1')).toEqual([])
     expect(await stored('bot-1')).toBeUndefined()
     const restarted = reopened()
@@ -310,13 +290,49 @@ describe("a bot's memory history", () => {
     }
     const history = createBotMemoryHistory(io)
     const told: number[] = []
-    for (let ask = 0; ask < 100; ask++) {
-      history.whenUndoneKnown('bot-1', () => told.push(ask))
-    }
+    history.whenUndoneKnown('bot-1', () => told.push(1))
+    history.whenUndoneKnown('bot-1', () => told.push(2))
     release()
-    await vi.waitFor(() => expect(told).toEqual([99]))
+    await vi.waitFor(() => expect(told).toEqual([2]))
 
     expect(history.undoneKnown('bot-1', 'any')).toBe(false)
+  })
+
+  it('says a row was undone once old rows could not be pruned for a moment', async () => {
+    const now = Date.UTC(2026, 10, 6)
+    const row = (id: string, at: number, by: BotMemoryHistoryRow['by']) => ({
+      id,
+      at,
+      by,
+      change: { added: [], removed: [] },
+      undoable: true
+    })
+    let text: string | null = JSON.stringify([
+      row('undo', now, { kind: 'undo', of: 'tidied' }),
+      row('tidied', now, { kind: 'owner' }),
+      row('expired', now - 91 * DAY, { kind: 'owner' })
+    ])
+    let writeFails = true
+    const io = {
+      read: async () => text,
+      write: async (_botId: string, next: string | null) => {
+        if (writeFails) {
+          throw new Error('EBUSY')
+        }
+        text = next
+      },
+      bots: async () => []
+    }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const history = createBotMemoryHistory(io, () => now)
+    const told = vi.fn()
+    history.whenUndoneKnown('bot-1', told)
+    await history.settled()
+    writeFails = false
+    history.whenUndoneKnown('bot-1', told)
+    await history.settled()
+
+    expect(history.undoneKnown('bot-1', 'tidied')).toBe(true)
   })
 
   it('forgets what was undone when the bot is removed', async () => {

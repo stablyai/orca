@@ -149,13 +149,12 @@ export function MobileHomeAgentsTab(props: {
         ]
 
   const filteredHosts = hosts.filter((host) => hostFilter === null || host.id === hostFilter)
-  // A desktop still connecting, or connected with its first list read pending, may yet have agents.
-  const awaitingDesktop = filteredHosts.some((host) => {
-    const state = data.hostStates[host.id]
-    return state === 'connected'
+  // A desktop still dialing, or connected with its first list read pending, may yet have agents.
+  const awaitingDesktop = filteredHosts.some((host) =>
+    data.hostStates[host.id] === 'connected'
       ? !data.worktreeInfo[host.id]?.catalogUnavailable
-      : state === undefined || state === 'connecting' || state === 'handshaking'
-  })
+      : !data.unreachableHosts.has(host.id)
+  )
   const emptyState = (): ReactNode => {
     const trimmed = query.trim()
     if (trimmed) {

@@ -5,7 +5,8 @@ import PackageDescription
 let package = Package(
     name: "OrcaComputerUseMacOS",
     platforms: [
-        .macOS(.v14)
+        // Keep equal to MACOS_DEPLOYMENT_TARGET, the helper's LSMinimumSystemVersion (#20418).
+        .macOS("13.4")
     ],
     products: [
         .library(

@@ -141,6 +141,8 @@ export type TuiIdleEvaluationInput = {
   readAgentRuleVerdict: () => AgentStateVerdict | null
   /** Whether an overlay on the agent's screen refuses input; null with no rule or no screen. */
   readScreenInputVeto: () => boolean | null
+  /** Whether the tail rests at a screen where a human must sign in (agy's login menu). */
+  readProgramSignInWaitScreen: () => boolean
   /** When the PTY's own current title was observed; null when it has none or no clock. */
   titleObservedAtEpochMs: number | null
   agent: TuiAgent | null | undefined
@@ -217,9 +219,13 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   const signInSince = input.firstPartyStatus?.programSignInRequiredSince
   if (signInSince !== undefined && hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
     const blockedAt = signInSince + PROGRAM_SIGN_IN_BLOCK_PERSIST_MS
-    return Date.now() >= blockedAt
+    if (Date.now() < blockedAt) {
+      return { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
+    }
+    // Why the screen: a slow saved-credential sign-in spins under the same blocked:auth (#44603).
+    return input.readProgramSignInWaitScreen()
       ? { kind: 'blocked', reason: 'agent-sign-in-prompt' }
-      : { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
+      : { kind: 'pending', quietForeground: 'closed' }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
   if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {

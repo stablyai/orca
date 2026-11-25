@@ -18,7 +18,7 @@ import {
   TriangleAlert,
   type LucideIcon
 } from 'lucide-react'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type {
@@ -100,6 +100,7 @@ function ActivityRun({
   onToggle: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const removed = run.rows.filter((row) => row.outcome === 'removed' || row.outcome === 'archived')
   const kept = run.rows.filter((row) => row.outcome === 'kept')
   const failed = run.rows.filter((row) => row.outcome === 'failed')
@@ -159,7 +160,10 @@ function ActivityRun({
                     'components.settings.workspaceCleanup.activity.nothingRemoved',
                     'Nothing to clean'
                   )
-                : summary.join(', ')}
+                : // Why: narrow conjunctions keep English "a, b" and give CJK its own comma.
+                  new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(
+                    summary
+                  )}
               {', '}
               {t('components.settings.workspaceCleanup.activity.keptCount', '{{count}} kept', {
                 count: run.counts.kept

@@ -98,7 +98,8 @@ export async function collectHostPtyEvidence(
             includeVisualLayouts: false,
             includeAttention: true
           },
-          { timeoutMs: 10_000 }
+          // A periodic evidence pass: no use of an idle WSL host (#46567).
+          { timeoutMs: 10_000, background: true }
         )
         if (result.truncated) {
           return

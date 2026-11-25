@@ -18,6 +18,7 @@ export function PanZoomImageSurface({
   content,
   className,
   background,
+  backdrop = false,
   fallback,
   onLoad,
   onError
@@ -28,18 +29,26 @@ export function PanZoomImageSurface({
   content: PanZoomSize | null
   className?: string
   background?: string
+  /** Over a see-through backdrop: the background fills only the image, and only the image shows a zoom cursor. */
+  backdrop?: boolean
   /** Shown instead of the image while it has no source. */
   fallback?: React.ReactNode
   onLoad?: React.ReactEventHandler<HTMLImageElement>
   onError?: React.ReactEventHandler<HTMLImageElement>
 }): React.JSX.Element {
   const { setCanvas, canvasHandlers, cursor, scale, offset } = panZoom
+  const imageCursor = backdrop && (cursor === 'zoom-in' || cursor === 'zoom-out')
+  const backgroundStyle = background ? { backgroundColor: background } : undefined
   return (
     <div
       ref={setCanvas}
       data-testid="pan-zoom-image-canvas"
-      className={cn('touch-none overflow-hidden', src && cursor && CURSOR_CLASS[cursor], className)}
-      style={background ? { backgroundColor: background } : undefined}
+      className={cn(
+        'touch-none overflow-hidden',
+        src && cursor && !imageCursor && CURSOR_CLASS[cursor],
+        className
+      )}
+      style={backdrop ? undefined : backgroundStyle}
       {...canvasHandlers}
     >
       {src ? (
@@ -50,12 +59,15 @@ export function PanZoomImageSurface({
           onLoad={onLoad}
           onError={onError}
           className={cn(
-            'pointer-events-none absolute top-0 left-0 max-w-none select-none',
+            'absolute top-0 left-0 max-w-none select-none',
+            // Hit-testable only to show the zoom cursor; presses still reach the canvas.
+            imageCursor ? CURSOR_CLASS[cursor] : 'pointer-events-none',
             !offset && 'invisible'
           )}
           style={
             content && offset
               ? {
+                  ...(backdrop ? backgroundStyle : undefined),
                   // Size the box rather than scale it, so an SVG redraws sharply at every zoom.
                   width: content.width * scale,
                   height: content.height * scale,

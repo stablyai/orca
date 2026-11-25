@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { Check, SquareTerminal } from 'lucide-react'
 import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { bindHorizontalWheelScroll } from '@/lib/horizontal-wheel-scroll'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
@@ -37,31 +38,11 @@ export function AgentPickerAgentTabs({
   onSelect: (agent: Agent) => void
 }) {
   const t = useTranslate()
-  const rail = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const node = rail.current
-    if (!node) {
-      return
-    }
-    // Why non-passive: a mouse wheel's vertical turn scrolls the overflowing rail sideways.
-    const onWheel = (event: WheelEvent) => {
-      if (
-        node.scrollWidth <= node.clientWidth ||
-        Math.abs(event.deltaY) <= Math.abs(event.deltaX)
-      ) {
-        return
-      }
-      event.preventDefault()
-      node.scrollLeft += event.deltaY
-    }
-    node.addEventListener('wheel', onWheel, { passive: false })
-    return () => node.removeEventListener('wheel', onWheel)
-  }, [])
   return (
     // Why: once one tab's label shows, the next tab's shows without a second wait.
     <TooltipProvider skipDelayDuration={300}>
       <div
-        ref={rail}
+        ref={bindHorizontalWheelScroll}
         role="tablist"
         aria-label={t('agentPicker.agents', 'Agents')}
         className="flex shrink-0 items-center overflow-x-auto border-b border-border px-1.5 hover-scrollbar-x"

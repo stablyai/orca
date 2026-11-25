@@ -4,6 +4,7 @@ import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 import { BROWSER_NETWORK_TUNNEL_MAX_STREAMS } from './browser-network-tunnel-stream-state'
 import { pipeUpstreamToClient } from './remote-browser-socks-upstream'
 import { reserveBrowserTunnelOrcaListenerPort } from './browser-network-tunnel-destination-policy'
+import { createSocksClientAdmission } from './remote-browser-socks-client-owner'
 
 const SOCKS_VERSION = 5
 const SOCKS_NO_AUTH = 0
@@ -39,6 +40,7 @@ export class RemoteBrowserSocksServer {
   private closePromise: Promise<void> | null = null
   private state: 'idle' | 'starting' | 'listening' | 'closing' | 'closed' = 'idle'
   private releaseTunnelReservation = (): void => {}
+  private readonly admitClient = createSocksClientAdmission()
 
   constructor(options: RemoteBrowserSocksServerOptions) {
     this.open = options.open
@@ -110,11 +112,16 @@ export class RemoteBrowserSocksServer {
   }
 
   private accept(socket: Socket): void {
-    if (!isLoopbackAddress(socket.remoteAddress)) {
-      socket.destroy()
-      return
-    }
     this.clients.add(socket)
+    const forget = (): void => {
+      this.clients.delete(socket)
+    }
+    socket.once('error', forget)
+    socket.once('close', forget)
+    this.admitClient(socket, () => this.serveHandshake(socket))
+  }
+
+  private serveHandshake(socket: Socket): void {
     let phase: 'greeting' | 'request' | 'opening' | 'connected' | 'closed' = 'greeting'
     let buffered = Buffer.alloc(0)
     const pendingUpstream = new GrowingByteBuffer()
@@ -305,12 +312,4 @@ function socksReply(code: number): Uint8Array {
   const reply = SUCCESS_RESPONSE.slice()
   reply[1] = code
   return reply
-}
-
-function isLoopbackAddress(address: string | undefined): boolean {
-  return (
-    address === '::1' ||
-    address?.startsWith('127.') === true ||
-    address?.toLowerCase().startsWith('::ffff:127.') === true
-  )
 }

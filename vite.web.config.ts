@@ -30,6 +30,10 @@ export default defineConfig({
   resolve: {
     alias: {
       ...markdownParserAliases,
+      // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
+      '@xterm/addon-ligatures': resolve(
+        'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
+      ),
       '@renderer': resolve('src/renderer/src'),
       '@': resolve('src/renderer/src')
     }

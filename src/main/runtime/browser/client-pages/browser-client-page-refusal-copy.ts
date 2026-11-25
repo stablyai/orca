@@ -5,8 +5,9 @@ const STALE_PAGE =
 
 // Desktops and this host refuse client-page commands with bare codes; agents read these sentences instead.
 const BROWSER_CLIENT_PAGE_REFUSAL_COPY: Record<string, string> = {
+  // Only a desktop older than this host's path-free download refuses it.
   browser_client_download_path_unsupported:
-    'This page runs on your desktop, so `orca download` cannot save its file to a path on this host. Nothing was downloaded.',
+    'The desktop showing this page runs an older Orca that cannot hand its downloads to this host, so `orca download` cannot save the file here. Update Orca on that desktop. Nothing was downloaded.',
   browser_client_file_channel_unsupported:
     'The desktop showing this page cannot exchange files with this host, so `orca upload` and `orca download` cannot run on it. Update Orca on that desktop and on this host.',
   browser_host_capability_unavailable:

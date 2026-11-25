@@ -1,17 +1,14 @@
 import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type {
-  DraftPasteMarkerSignal,
-  TuiAgentConfig
-} from '../../../../shared/agent-launch/catalog/tui-agent-config-types'
-import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { DraftPasteMarkerSignal } from '../../../../shared/agent-launch/catalog/tui-agent-config-types'
 import {
   createDraftPasteReadyScanner,
-  draftPasteReadySignalHasMarker,
   type DraftPasteReadyScanner
 } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
+import { AGENT_PAINT_SIGNALS } from './terminal-agent-paint-signal'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
+import { commandMarkAgent } from '../output/command-finish-arbiter'
+import type { TerminalReportHolder } from './terminal-command-paint-record'
 
 // eslint-disable-next-line no-control-regex -- control bytes are exactly what is not visible.
 const VISIBLE_CHARACTER_RE = /[^\s\u0000-\u001f\u007f-\u009f]/
@@ -20,37 +17,20 @@ function hasVisibleText(normalizedText: string): boolean {
   return VISIBLE_CHARACTER_RE.test(stripAnsiEscapeSequences(normalizedText))
 }
 
-/**
- * The composer marker that says this agent's command painted, for agents whose bare-name title
- * is weak and whose composer draws a marker only the agent emits (Claude: `❯`+NBSP after
- * DECSET 2031, which no shell sends). Why not any visible byte: Orca's zsh OSC 133;C hook runs
- * first in `preexec_functions`, so a later user or framework preexec hook can print before the
- * agent process exists, and a cold-starting agent can print a banner long before its composer
- * (STA-2380). Null for agents whose name-only idle keeps any post-marker paint as corroboration.
- */
-function paintSignalOf(config: TuiAgentConfig): DraftPasteMarkerSignal | null {
-  const signal = config.draftPasteReadySignal
-  return config.workerStartReadsComposerMarker === true &&
-    signal !== undefined &&
-    draftPasteReadySignalHasMarker(signal)
-    ? signal
-    : null
+/** The finished program's reports, retired by identity at its finish. */
+type FinishedReports = {
+  titleAt: number | null
+  status: NonNullable<TerminalReportHolder['lastExplicitAgentStatus']> | null
 }
 
-export function agentPaintSignal(
-  agent: TuiAgent | null | undefined
-): DraftPasteMarkerSignal | null {
-  return agent ? paintSignalOf(TUI_AGENT_CONFIG[agent]) : null
+function finishedReports(reports: TerminalReportHolder): FinishedReports {
+  return {
+    titleAt: reports.lastOscTitleAt ?? null,
+    status: reports.lastExplicitAgentStatus ?? null
+  }
 }
 
-/** One scanner per distinct agent-owned marker, so every PTY attributes paint the same way. */
-const AGENT_PAINT_SIGNALS: readonly DraftPasteMarkerSignal[] = [
-  ...new Set(
-    Object.values(TUI_AGENT_CONFIG)
-      .map(paintSignalOf)
-      .filter((signal): signal is DraftPasteMarkerSignal => signal !== null)
-  )
-]
+export type CommandPaintMarks = { finishHeld: boolean; heldFinishStarted: boolean }
 
 /** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
 export class TerminalCommandPaint {
@@ -66,6 +46,8 @@ export class TerminalCommandPaint {
   private startSeen = false
   /** A command finished or started since the reattach fence; lost output never erases it. */
   private boundarySinceReattach = false
+  // Output lost before this process was proven could hide a boundary, so its retained frame can't be vouched.
+  private gapSinceReattach = false
   private repaintOffered = false
   /** The last read finished a command and started the next. Its reports are stamped after this
    *  observer runs, so none of them count; at the next read they are retired by identity (a
@@ -76,6 +58,9 @@ export class TerminalCommandPaint {
   /** When a report restored across the reattach was admitted for the process now running. */
   private restoredReportAt: number | null = null
   private markerEndInChunk = -1
+  /** A finish mark in a pane with an agent, held until the foreground read says whose it was: the
+   *  reports it would retire. */
+  private heldFinish: FinishedReports | null = null
   /** Armed at each command start; absent before the first marker, where no command is attributable. */
   private composers: Map<
     DraftPasteMarkerSignal,
@@ -88,7 +73,14 @@ export class TerminalCommandPaint {
     }
   )
 
-  observe(data: string, normalizedText: string, at: number, reports: TerminalReportHolder): void {
+  /** What the arbiter must hear: a finish held for its read (`settleHeldFinish`), and a command
+   *  start that proved a held finish the shell's. */
+  observe(
+    data: string,
+    normalizedText: string,
+    at: number,
+    reports: TerminalReportHolder
+  ): CommandPaintMarks {
     if (this.startFollowsFinishInRead) {
       this.startFollowsFinishInRead = false
       this.startedAt = at
@@ -96,7 +88,19 @@ export class TerminalCommandPaint {
       this.retiredStatus = reports.lastExplicitAgentStatus ?? null
     }
     this.markerEndInChunk = -1
-    const finishEnd = this.scanner.scan(data)
+    let finishEnd = this.scanner.scan(data)
+    const marks: CommandPaintMarks = { finishHeld: false, heldFinishStarted: false }
+    // A command start before the read answers: the held finish counts, as before.
+    if (this.heldFinish && this.markerEndInChunk !== -1) {
+      this.settleHeldFinish(true)
+      marks.heldFinishStarted = true
+    }
+    // Why hold: agents (Devin) print their own 133;D at each turn's end; only the shell's ends the command.
+    if (finishEnd > this.markerEndInChunk && commandMarkAgent(reports) !== null) {
+      this.heldFinish = finishedReports(reports)
+      marks.finishHeld = true
+      finishEnd = -1
+    }
     if (finishEnd > this.markerEndInChunk) {
       // Why keep plain paint: with the shell in front, a command that printed and returned (a
       // background launch) is at rest; but no agent's composer, nor its ready screen (the evidence
@@ -106,16 +110,8 @@ export class TerminalCommandPaint {
           normalizeTerminalChunk(data.slice(this.markerEndInChunk)).text
         )
       }
-      this.betweenCommands = true
-      this.boundarySinceReattach = this.reattach === 'armed'
-      // Why identity at the finish: a gap later clears betweenCommands, and the finished
-      // program's reports must stay retired even then.
-      this.retiredTitleAt = reports.lastOscTitleAt ?? null
-      this.retiredStatus = reports.lastExplicitAgentStatus ?? null
-      this.startSeen = false
-      this.repaintRequestable = false
-      this.composers = new Map()
-      return
+      this.finishCommand(finishedReports(reports))
+      return marks
     }
     if (this.markerEndInChunk !== -1) {
       // Why only at a boundary: an agent that writes its own 133;C mid-session is not a new command.
@@ -132,28 +128,45 @@ export class TerminalCommandPaint {
           this.retiredStatus = reports.lastExplicitAgentStatus ?? null
         }
       }
-      this.betweenCommands = false
-      this.repaintRequestable = false
       // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
-      const commandOutput = data.slice(this.markerEndInChunk)
-      this.awaitingPaint = !hasVisibleText(normalizeTerminalChunk(commandOutput).text)
-      this.composers = new Map(
-        AGENT_PAINT_SIGNALS.map((signal) => [
-          signal,
-          { scanner: createDraftPasteReadyScanner(signal), seen: false }
-        ])
-      )
-      this.observeComposers(commandOutput)
-      return
+      this.runCommand(data.slice(this.markerEndInChunk))
+      return marks
     }
     if (this.betweenCommands) {
-      return
+      return marks
     }
     if (this.awaitingPaint && hasVisibleText(normalizedText)) {
       this.awaitingPaint = false
       this.repaintRequestable = false
     }
     this.observeComposers(data)
+    return marks
+  }
+
+  private finishCommand({ titleAt, status }: FinishedReports): void {
+    this.heldFinish = null
+    this.betweenCommands = true
+    this.boundarySinceReattach = this.reattach === 'armed'
+    // Why identity at the finish: a gap later clears betweenCommands, and the finished
+    // program's reports must stay retired even then.
+    this.retiredTitleAt = titleAt
+    this.retiredStatus = status
+    this.startSeen = false
+    this.repaintRequestable = false
+    this.composers = new Map()
+  }
+
+  private runCommand(commandOutput: string): void {
+    this.betweenCommands = false
+    this.repaintRequestable = false
+    this.awaitingPaint = !hasVisibleText(normalizeTerminalChunk(commandOutput).text)
+    this.composers = new Map(
+      AGENT_PAINT_SIGNALS.map((signal) => [
+        signal,
+        { scanner: createDraftPasteReadyScanner(signal), seen: false }
+      ])
+    )
+    this.observeComposers(commandOutput)
   }
 
   private observeComposers(data: string): void {
@@ -185,31 +198,43 @@ export class TerminalCommandPaint {
     }
   }
 
+  /** The foreground read for a held finish: the shell's ends the command; the agent's own changes nothing. */
+  settleHeldFinish(shellFinished: boolean): void {
+    const held = this.heldFinish
+    this.heldFinish = null
+    if (held && shellFinished) {
+      this.finishCommand(held)
+    }
+  }
+
   /** This run saw the process start: drop a fence a racing inventory armed before any command start. */
   vouchSpawn(): void {
     if (this.reattach === 'armed' && !this.startSeen) {
       this.startedAt = null
-      this.awaitingPaint = false
-      this.repaintRequestable = false
+      this.awaitingPaint = this.repaintRequestable = false
     }
     this.reattach = 'vouched'
   }
 
-  /** Output was lost: paint and boundaries since are unknown. A reattach fence still awaiting its
-   *  command keeps holding; otherwise every report and any paint count, as with no markers, except
-   *  the reports a seen boundary already retired. */
+  /** Output was lost: paint and boundaries since are unknown. A reattached process's retained frame
+   *  is never vouched after one, and a fence still awaiting its command holds until a fresh paint;
+   *  otherwise every report and any paint count, as with no markers, except the reports a seen
+   *  boundary already retired. */
   noteGap(): void {
     this.scanner.reset()
+    this.heldFinish = null
+    this.gapSinceReattach ||= this.reattach !== 'vouched'
     if (this.awaitsReattachedCommand()) {
+      // A gap only arrives on a live stream, so the program can be asked to repaint again.
+      this.awaitingPaint = this.repaintRequestable = true
       return
     }
     this.startedAt = null
     this.startSeen = false
     this.startFollowsFinishInRead = false
     this.betweenCommands = false
-    this.awaitingPaint = false
+    this.awaitingPaint = this.repaintRequestable = false
     this.composers = null
-    this.repaintRequestable = false
     this.restoredReportAt = null
   }
 
@@ -242,6 +267,13 @@ export class TerminalCommandPaint {
     )
   }
 
+  /** A ledger saved at quit proved the retained frame is this reattached command's own paint. */
+  vouchRetainedPaint(): void {
+    if (this.awaitsReattachedCommand() && !this.gapSinceReattach) {
+      this.awaitingPaint = this.repaintRequestable = false
+    }
+  }
+
   /** True once per reattach while nothing has painted: the one repaint request it allows. */
   takeReattachedRepaintRequest(): boolean {
     const take = this.repaintRequestable
@@ -249,13 +281,21 @@ export class TerminalCommandPaint {
     return take
   }
 
+  /** No host was asked (a phone or remote desktop owned the grid, or it failed): keep the request. */
+  returnReattachedRepaintRequest(): void {
+    if (this.awaitingPaint && this.awaitsReattachedCommand()) {
+      this.repaintRequestable = true
+    }
+  }
+
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */
   isCurrentReport(observedAt: number | null | undefined): boolean {
-    if (this.betweenCommands || this.startFollowsFinishInRead) {
-      return false
-    }
     return (
-      this.startedAt === null || (typeof observedAt === 'number' && observedAt >= this.startedAt)
+      !this.betweenCommands &&
+      !this.startFollowsFinishInRead &&
+      // Until the foreground read answers, the finished program's reports may be the shell's now.
+      this.heldFinish === null &&
+      (this.startedAt === null || (typeof observedAt === 'number' && observedAt >= this.startedAt))
     )
   }
 
@@ -268,6 +308,17 @@ export class TerminalCommandPaint {
     return !this.awaitingPaint
   }
 
+  /** It painted, it is still the command in front, and its start is known (a 133;C this run, or
+   *  the reattach that hid it). Markerless panes never are. */
+  hasAttributedPaint(): boolean {
+    return (
+      !this.awaitingPaint &&
+      this.startedAt !== null &&
+      !this.betweenCommands &&
+      !this.startFollowsFinishInRead
+    )
+  }
+
   /** Whether the agent's own composer marker has arrived since the command started; before any
    *  marker, whether it painted, like `hasPainted`. */
   hasAgentComposer(signal: DraftPasteMarkerSignal): boolean {
@@ -275,121 +326,4 @@ export class TerminalCommandPaint {
       ? !this.awaitingPaint
       : (this.composers.get(signal)?.seen ?? false)
   }
-}
-
-/** The pane's latest agent reports, as its record holds them. */
-type TerminalReportHolder = {
-  lastOscTitleAt?: number | null
-  lastExplicitAgentStatus?: object | null
-}
-
-export type TerminalCommandPaintRecord = TerminalReportHolder & {
-  commandPaint?: TerminalCommandPaint
-}
-
-/** `normalizedText` is the chunk as the tail buffer received it (pending escapes resolved). */
-export function observeTerminalCommandPaint(
-  record: TerminalCommandPaintRecord,
-  data: string,
-  normalizedText: string,
-  at: number
-): void {
-  record.commandPaint ??= new TerminalCommandPaint()
-  record.commandPaint.observe(data, normalizedText, at, record)
-}
-
-export function awaitReattachedTerminalPaint(
-  record: TerminalCommandPaintRecord | null | undefined,
-  at: number,
-  attached = true
-): void {
-  if (record) {
-    record.commandPaint ??= new TerminalCommandPaint()
-    record.commandPaint.awaitReattachedPaint(at, attached)
-  }
-}
-
-export function vouchTerminalSpawn(record: TerminalCommandPaintRecord | null | undefined): void {
-  if (record) {
-    record.commandPaint ??= new TerminalCommandPaint()
-    record.commandPaint.vouchSpawn()
-  }
-}
-
-/** Without a command boundary or reattach to fence on, every report counts, as before. */
-export function isCurrentCommandReport(
-  record: TerminalCommandPaintRecord,
-  observedAt: number | null | undefined
-): boolean {
-  return record.commandPaint?.isCurrentReport(observedAt) ?? true
-}
-
-/** The agent's own first-party report, current like `isCurrentCommandReport` and not retired. */
-export function isCurrentFirstPartyReport(
-  record: TerminalCommandPaintRecord,
-  status: { updatedAt: number }
-): boolean {
-  const paint = record.commandPaint
-  return !paint || (paint.isCurrentReport(status.updatedAt) && !paint.isRetired({ status }))
-}
-
-export function admitRestoredTerminalReport(
-  record: TerminalCommandPaintRecord | undefined,
-  at: number
-): void {
-  record?.commandPaint?.admitRestoredReport(at)
-}
-
-/** A title or the status a restored report set, current like `isCurrentCommandReport`. */
-export function isCurrentCommandStatus(
-  record: TerminalCommandPaintRecord,
-  titleObservedAt: number | null | undefined
-): boolean {
-  const paint = record.commandPaint
-  return (
-    !paint ||
-    (paint.isCurrentStatus(titleObservedAt) && !paint.isRetired({ titleAt: record.lastOscTitleAt }))
-  )
-}
-
-export function hasCommandBoundarySinceReattach(record: TerminalCommandPaintRecord): boolean {
-  return record.commandPaint?.hasBoundarySinceReattach() ?? false
-}
-
-export function isShellInFront(record: TerminalCommandPaintRecord): boolean {
-  return record.commandPaint?.isBetweenCommands() ?? false
-}
-
-export function takeReattachedRepaintRequest(
-  record: TerminalCommandPaintRecord | undefined
-): boolean {
-  return record?.commandPaint?.takeReattachedRepaintRequest() ?? false
-}
-
-/** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */
-export function hasTerminalCommandPainted(record: TerminalCommandPaintRecord): boolean {
-  return record.commandPaint?.hasPainted() ?? true
-}
-
-/** Whether `agent`'s command painted: its own composer marker where it has one, else any visible
- *  post-marker byte. Shares the markerless and lost-history defaults of `hasTerminalCommandPainted`.
- *
- *  Accepted trade-off (STA-2380 C2): a known Claude whose command-start history is complete but
- *  whose build or platform never sends the supported composer signal (`❯`+NBSP after DECSET 2031;
- *  the scanner's quiet fallback is deliberately not read here), and whose `✳` rest title is also
- *  off, now stays pending until the wait's own timeout instead of settling on quiet. There is no
- *  silence-only fallback by design: silence under a shell auto-title was the false-ready bug, and
- *  a reported timeout is recoverable where a lost dispatch is not. The marker has been seen in
- *  captures from 2.1.291 through 2.1.316; no older-version cutoff is claimed. Unchanged and still
- *  failing open: shells that send no OSC 133;C marker and panes whose output history has a gap
- *  report "painted" (the pre-existing `?? true`), so this does not prevent every premature ready. */
-export function hasTerminalAgentPainted(
-  record: TerminalCommandPaintRecord,
-  agent: TuiAgent | null | undefined
-): boolean {
-  const signal = agentPaintSignal(agent)
-  if (signal === null) {
-    return hasTerminalCommandPainted(record)
-  }
-  return record.commandPaint?.hasAgentComposer(signal) ?? true
 }

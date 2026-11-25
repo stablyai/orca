@@ -1,3 +1,7 @@
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import type { SkillSourceKind } from '../../../../../../shared/skills/discovery/skills'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 // The `@`, `/` and `$` menus' shared pieces: the portaled listbox, an option row and a status line.
 import { createPortal } from 'react-dom'
 import { autoUpdate, computePosition, offset, size } from '@floating-ui/dom'
@@ -26,9 +30,11 @@ export function PickerStatus({
 
 export function PickerListbox({
   id,
+  maxHeight = 'calc(var(--spacing) * 72)',
   children
 }: {
   id: string
+  maxHeight?: string
   children: React.ReactNode
 }): React.JSX.Element {
   const marker = useRef<HTMLSpanElement>(null)
@@ -63,7 +69,7 @@ export function PickerListbox({
             padding: 8,
             apply: ({ rects, availableHeight }) => {
               floating.style.width = `${rects.reference.width}px`
-              floating.style.maxHeight = `min(calc(var(--spacing) * 72), ${Math.max(0, availableHeight)}px)`
+              floating.style.maxHeight = `min(${maxHeight}, ${Math.max(0, availableHeight)}px)`
             }
           })
         ]
@@ -72,7 +78,7 @@ export function PickerListbox({
         floating.style.top = `${y}px`
       })
     })
-  }, [container])
+  }, [container, maxHeight])
   return (
     <>
       <span ref={marker} />
@@ -98,6 +104,7 @@ export function PickerOptionButton({
   selected,
   activeItemRef,
   onChoose,
+  onHover,
   title,
   onPointerEnter,
   className,
@@ -107,6 +114,9 @@ export function PickerOptionButton({
   selected: boolean
   activeItemRef: React.MutableRefObject<HTMLButtonElement | null>
   onChoose: () => void
+  /** One highlight: real pointer movement moves it, so rows sliding under a parked pointer during
+   *  arrow keys don't take it (mousemove, not mouseenter). */
+  onHover?: () => void
   title?: string
   onPointerEnter?: () => void
   className?: string
@@ -128,14 +138,68 @@ export function PickerOptionButton({
           onChoose()
         }
       }}
-      className={cn(
-        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground hover:[--muted-foreground:var(--accent-foreground)]',
-        selected &&
-          'border-border bg-accent text-accent-foreground [--muted-foreground:var(--accent-foreground)]',
-        className
-      )}
+      onMouseMove={(event) => {
+        // Opening or scrolling under a resting pointer sends a zero-movement mousemove.
+        const moved = event.movementX !== 0 || event.movementY !== 0
+        if (onHover && !selected && moved) {
+          onHover()
+        }
+      }}
+      className={
+        onHover
+          ? cn(
+              'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm',
+              // A tint alone vanishes under forced colors, so High Contrast gets an outline.
+              selected &&
+                'bg-foreground/10 dark:bg-foreground/12 forced-colors:outline forced-colors:outline-2 forced-colors:-outline-offset-2 forced-colors:outline-[Highlight]',
+              className
+            )
+          : cn(
+              'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground hover:[--muted-foreground:var(--accent-foreground)]',
+              selected &&
+                'border-border bg-accent text-accent-foreground [--muted-foreground:var(--accent-foreground)]',
+              className
+            )
+      }
     >
       {children}
     </button>
   )
+}
+
+export function getPickerAnnotation(
+  item: NativeChatPickerItem,
+  t: Translate = translate
+): string | null {
+  if (item.kind === 'skill' && item.location) {
+    return item.location
+  }
+  if (item.kind === 'command' && item.skillCollision) {
+    return t(
+      'components.native-chat.composer.skillCommandCollision',
+      'Also a skill name - agent decides'
+    )
+  }
+  if (item.kind === 'skill' && item.sources.length > 1) {
+    // Use sourceCount because i18next treats count as pluralization input and these keys have no plural variants.
+    return t(
+      'components.native-chat.composer.skillMultipleSources',
+      '{{sourceCount}} sources - agent resolves',
+      { sourceCount: item.sources.length }
+    )
+  }
+  return null
+}
+
+export function scopeLabel(
+  sourceKind: SkillSourceKind | undefined,
+  t: Translate = translate
+): string {
+  const labels: Record<string, string> = {
+    repo: t('components.native-chat.composer.skillScopeProject', 'Project'),
+    home: t('components.native-chat.composer.skillScopePersonal', 'Personal'),
+    bundled: t('components.native-chat.composer.skillScopeBuiltIn', 'Built-in'),
+    plugin: t('components.native-chat.composer.skillScopePlugin', 'Plugin')
+  }
+  return sourceKind ? (labels[sourceKind] ?? '') : ''
 }

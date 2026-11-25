@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
@@ -26,10 +27,9 @@ export function useSetupScriptPromptRevalidation(input: {
   const repoHost = parseExecutionHostId(activeRepo ? getRepoExecutionHostId(activeRepo) : null)
   const repoRuntimeEnvironmentId = repoHost?.kind === 'runtime' ? repoHost.environmentId : null
   // Subscribe to the repo’s owning runtime so unrelated reconnects do not trigger inspections.
-  const repoConnectionGeneration = useAppStore((s) =>
-    repoRuntimeEnvironmentId
-      ? (s.runtimeStatusByEnvironmentId.get(repoRuntimeEnvironmentId)?.connectionGeneration ?? 0)
-      : 0
+  const repoConnectionGeneration = useRuntimeHostStatusSelector(
+    repoRuntimeEnvironmentId,
+    (entry) => entry?.connectionGeneration ?? 0
   )
 
   // Revalidate stale negative/failed results; forbidden or already-effective setup needs no extra RPC.

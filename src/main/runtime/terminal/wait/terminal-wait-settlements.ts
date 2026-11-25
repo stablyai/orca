@@ -18,6 +18,7 @@ import {
   type TerminalCursorContext
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
@@ -113,6 +114,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
       return
     }
+    // As a tui-idle wait does: a reattached idle agent prints nothing, so ask for the paint that settles it.
+    this.requestReattachedRepaint(ptyId)
     // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
     const outputAt = this.readOutputClockAt(ptyId)
     const quietRemainingMs =
@@ -225,12 +228,17 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return holding ? (draft ? 'draft' : 'restoring') : null
   }
 
-  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  // Why: OpenCode's and Pi's composers have no prompt glyph, so only their own panes are read with
+  // their layouts.
   private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
     const agent = this.getPaneTerminalAgent(ptyId)
-    return (agent === 'opencode' || agent === 'opencode2') && context
-      ? openCodeComposerHoldsDraft(context)
-      : !!readTerminalComposerTypedText(context)
+    if (context && (agent === 'opencode' || agent === 'opencode2')) {
+      return openCodeComposerHoldsDraft(context)
+    }
+    if (context && agent === 'pi') {
+      return piComposerHoldsDraft(context)
+    }
+    return !!readTerminalComposerTypedText(context)
   }
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {

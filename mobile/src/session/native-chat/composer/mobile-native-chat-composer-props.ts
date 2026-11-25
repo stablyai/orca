@@ -58,6 +58,9 @@ export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   /** Set in a room: `@` lists these members instead of files. */
   roomMentions?: readonly ComposerRoomMention[]
   onNeedFiles?: (query: string) => void
+  /** How a picked file is written when the chat runs in a workspace sub-folder; absent keeps the
+   *  workspace-relative default. */
+  fileReference?: (path: string) => string | undefined
   /** The host's disk-scanned skills, loaded once a skill trigger opens. */
   skillDiscovery?: NativeChatSkillDiscoverySnapshot
   onNeedSkills?: () => void

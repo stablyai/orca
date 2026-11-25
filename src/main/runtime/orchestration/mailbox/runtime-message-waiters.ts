@@ -51,6 +51,13 @@ export type RuntimeMessageWaiter = {
 export class RuntimeMessageWaiters {
   private readonly waitersByHandle = new Map<string, Set<RuntimeMessageWaiter>>()
 
+  private readonly waitEndedListeners = new Set<(handle: string) => void>()
+
+  /** Hears a handle's last wait end with nothing delivered: it timed out or was cancelled. */
+  onWaitEnded(listener: (handle: string) => void): void {
+    this.waitEndedListeners.add(listener)
+  }
+
   notifyRouted(handle: string, types: readonly string[]): void {
     if (types.length === 0) {
       return
@@ -89,7 +96,7 @@ export class RuntimeMessageWaiters {
       }
       const signal = options?.signal
       const onAbort = (): void => {
-        this.remove(waiter)
+        this.remove(waiter, 'cancelled')
         resolve('cancelled')
       }
       if (signal) {
@@ -101,7 +108,7 @@ export class RuntimeMessageWaiters {
         signal.addEventListener('abort', onAbort, { once: true })
       }
       waiter.timeout = setTimeout(() => {
-        this.remove(waiter)
+        this.remove(waiter, 'timed_out')
         resolve('timed_out')
       }, options?.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS)
       let waiters = this.waitersByHandle.get(handle)
@@ -164,11 +171,11 @@ export class RuntimeMessageWaiters {
   }
 
   private resolve(waiter: RuntimeMessageWaiter, result: MessageWaitResult): void {
-    this.remove(waiter)
+    this.remove(waiter, result)
     waiter.resolve(result)
   }
 
-  private remove(waiter: RuntimeMessageWaiter): void {
+  private remove(waiter: RuntimeMessageWaiter, result: MessageWaitResult): void {
     if (waiter.timeout) {
       clearTimeout(waiter.timeout)
     }
@@ -182,6 +189,12 @@ export class RuntimeMessageWaiters {
     waiters.delete(waiter)
     if (waiters.size === 0) {
       this.waitersByHandle.delete(waiter.handle)
+      if (typeof result === 'string') {
+        const { handle } = waiter
+        for (const listener of this.waitEndedListeners) {
+          queueMicrotask(() => listener(handle))
+        }
+      }
     }
   }
 }

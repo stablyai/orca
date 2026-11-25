@@ -65,9 +65,3 @@ type AtlasFontProbeMismatch = { desired?: string; actual?: string }
 export function getTerminalFreezeBreadcrumbs(): PtyDeliveryBreadcrumb[] {
   return rendererDeliveryBreadcrumbs.snapshot()
 }
-
-export function resetTerminalFreezeBreadcrumbsForTesting(): void {
-  rendererDeliveryBreadcrumbs.reset()
-  lastAtlasCrashMirrorAt = Number.NEGATIVE_INFINITY
-  suppressedAtlasCrashMirrors = 0
-}

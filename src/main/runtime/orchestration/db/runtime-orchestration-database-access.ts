@@ -1,3 +1,4 @@
+import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
@@ -20,7 +21,10 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
 
   protected abstract scheduleRestoredMessageRepoints(): void
 
-  abstract hasLiveTerminalForPaneKey(paneKey: string): boolean
+  abstract hasLiveTerminalForPaneKey(
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): boolean
 
   /** Mail a worker left unread when it reported before a restart still continues it. */
   protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void

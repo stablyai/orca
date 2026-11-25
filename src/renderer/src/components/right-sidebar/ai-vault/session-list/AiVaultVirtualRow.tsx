@@ -28,7 +28,7 @@ import {
   canOpenAiVaultSessionLogInOrca,
   canUseLocalAiVaultSessionPathActions
 } from '../session-actions/ai-vault-session-path-actions'
-import { canContinueAiVaultSessionInNewSession } from '../session-actions/ai-vault-session-continuation'
+import { canContinueAiVaultSessionInNewSession } from '../../../../../../shared/ai-vault/resume/ai-vault-session-continuation'
 import { resolveAiVaultSessionRowChatActions } from '../session-actions/ai-vault-session-chat-action'
 import type { AiVaultResumeInChatEligibility } from '../session-actions/ai-vault-session-resume-in-chat'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'

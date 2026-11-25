@@ -46,6 +46,7 @@ export class HostedWorker extends EventEmitter {
   terminating = false
   lastReplyType: string | null = null
   receivedBytes = 0
+  unreleasedBytes = 0
 
   constructor(
     readonly id: number,
@@ -205,6 +206,10 @@ export class HostedWorker extends EventEmitter {
         ? message.type
         : null
     let acked = false
+    const size = bytes.byteLength
+    if (charged !== undefined) {
+      this.unreleasedBytes += size
+    }
     // The consumer calls this once it has taken the reply; a hosted reply's charge returns then.
     const release =
       charged === undefined
@@ -212,6 +217,7 @@ export class HostedWorker extends EventEmitter {
         : () => {
             if (!acked) {
               acked = true
+              this.unreleasedBytes -= size
               this.supervisor.ack(charged)
             }
           }

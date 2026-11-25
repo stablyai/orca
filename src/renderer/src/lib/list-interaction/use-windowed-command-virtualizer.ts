@@ -3,12 +3,22 @@ import {
   defaultRangeExtractor,
   useVirtualizer,
   type Range,
-  type Rect,
-  type Virtualizer
+  type Rect
 } from '@tanstack/react-virtual'
 
 // Why: matches CommandList's `scroll-pt-4 scroll-pb-4`, which cmdk's native reveal honoured.
 const COMMAND_LIST_SCROLL_PADDING = 16
+
+type WindowedCommandOptions = {
+  /** One unique key per row, in order; the row count is its length. */
+  itemKeys: readonly string[]
+  scrollElement: () => HTMLDivElement | null
+  estimateSize: (index: number) => number
+  activeIndex: number
+  overscan: number
+  initialRect?: Rect
+  padding?: { start: number; end: number }
+}
 
 function isSameKeySequence(a: readonly string[], b: readonly string[]): boolean {
   if (a === b) {
@@ -44,16 +54,9 @@ export function useWindowedCommandVirtualizer({
   estimateSize,
   activeIndex,
   overscan,
-  initialRect
-}: {
-  /** One unique key per row, in order; the row count is its length. */
-  itemKeys: readonly string[]
-  scrollElement: () => HTMLDivElement | null
-  estimateSize: (index: number) => number
-  activeIndex: number
-  overscan: number
-  initialRect: Rect
-}): Virtualizer<HTMLDivElement, Element> {
+  initialRect,
+  padding
+}: WindowedCommandOptions) {
   const keys = useRetainedKeySequence(itemKeys)
   const count = keys.length
   const getItemKey = useCallback((index: number) => keys[index] ?? index, [keys])
@@ -68,7 +71,7 @@ export function useWindowedCommandVirtualizer({
     },
     [activeIndex, count]
   )
-  return useVirtualizer({
+  const virtualizer = useVirtualizer({
     count,
     getScrollElement: scrollElement,
     estimateSize,
@@ -76,7 +79,17 @@ export function useWindowedCommandVirtualizer({
     overscan,
     rangeExtractor,
     initialRect,
-    scrollPaddingStart: COMMAND_LIST_SCROLL_PADDING,
-    scrollPaddingEnd: COMMAND_LIST_SCROLL_PADDING
+    paddingStart: padding?.start,
+    paddingEnd: padding?.end,
+    scrollPaddingStart: padding?.start ?? COMMAND_LIST_SCROLL_PADDING,
+    scrollPaddingEnd: padding?.end ?? COMMAND_LIST_SCROLL_PADDING
   })
+  // TanStack mutates the instance in place while scrolling.
+  return {
+    virtualItems: virtualizer.getVirtualItems(),
+    viewportHeight: virtualizer.scrollRect?.height ?? 0,
+    totalSize: virtualizer.getTotalSize(),
+    scrollToIndex: virtualizer.scrollToIndex,
+    scrollToOffset: virtualizer.scrollToOffset
+  }
 }

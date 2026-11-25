@@ -25,12 +25,10 @@ import { translate } from '@/i18n/i18n'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { ExecutionHostPlatformFact } from './execution-host-platform-fact'
 
-type HostFactsState = Pick<
-  AppState,
-  'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeStatusByEnvironmentId'
->
+type HostFactsState = Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>
 
 type WorktreeHostFactsState = HostFactsState &
   Pick<
@@ -82,10 +80,8 @@ function resolveLocalPlatform(
 }
 
 /** A paired server still being reached may yet report the facts a launch needs. */
-function runtimeContactPending(state: HostFactsState, environmentId: string | null): boolean {
-  const contact = environmentId
-    ? runtimeHostContactForEntry(state.runtimeStatusByEnvironmentId.get(environmentId))
-    : null
+function runtimeContactPending(statuses: RuntimeStatuses, environmentId: string | null): boolean {
+  const contact = environmentId ? runtimeHostContactForEntry(statuses.get(environmentId)) : null
   return (
     contact?.verdict === 'unverifiable' &&
     ['checking', 'transport-connecting'].includes(contact.reason)
@@ -103,6 +99,7 @@ export type ExecutionHostTarget = {
 
 export function resolveHostPlatform(
   state: HostFactsState,
+  statuses: RuntimeStatuses,
   args: ExecutionHostTarget & {
     workspacePath: string | null | undefined
     projectRuntime: () => ProjectExecutionRuntimeResolution | undefined
@@ -112,7 +109,7 @@ export function resolveHostPlatform(
     const platform = resolveLocalPlatform(args.projectRuntime(), args.workspacePath)
     return { kind: 'known', platform, hostKind: 'local' }
   }
-  return resolveRemoteHostPlatform(state, args, args.workspacePath)
+  return resolveRemoteHostPlatform(state, statuses, args, args.workspacePath)
 }
 
 /**
@@ -121,18 +118,20 @@ export function resolveHostPlatform(
  */
 export function executionHostTerminalPending(
   state: HostFactsState,
+  statuses: RuntimeStatuses,
   target: ExecutionHostTarget
 ): boolean {
   if (!target.host || target.host.kind === 'local') {
     return false
   }
-  const fact = resolveRemoteHostPlatform(state, target, undefined)
+  const fact = resolveRemoteHostPlatform(state, statuses, target, undefined)
   return fact.kind === 'withheld' && fact.pending === true
 }
 
 /** A remote host's OS, from that host's own connection and contact facts only. */
 function resolveRemoteHostPlatform(
   state: HostFactsState,
+  statuses: RuntimeStatuses,
   args: ExecutionHostTarget,
   workspacePath: string | null | undefined
 ): ExecutionHostPlatformFact {
@@ -156,15 +155,13 @@ function resolveRemoteHostPlatform(
           pending:
             ['connecting', 'reconnecting', 'deploying-relay'].includes(sshState?.status ?? '') ||
             sshState?.managedServer?.kind === 'setting-up' ||
-            runtimeContactPending(state, ownerEnvironmentId)
+            runtimeContactPending(statuses, ownerEnvironmentId)
         }
   }
   if (host.kind !== 'runtime') {
     return { kind: 'withheld', reason: hostUnresolvedWithheld(), recovery: 'refreshProjects' }
   }
-  const status = lastVerifiedRuntimeStatus(
-    state.runtimeStatusByEnvironmentId.get(host.environmentId)
-  )
+  const status = lastVerifiedRuntimeStatus(statuses.get(host.environmentId))
   const hostPlatform = status?.hostPlatform
   if (!hostPlatform) {
     const reason = status ? runtimePlatformUpdate() : runtimePlatformWithheld()
@@ -172,7 +169,7 @@ function resolveRemoteHostPlatform(
       kind: 'withheld',
       reason,
       recovery: status ? 'updateServer' : 'reconnectServer',
-      pending: runtimeContactPending(state, host.environmentId)
+      pending: runtimeContactPending(statuses, host.environmentId)
     }
   }
   // Why: a WSL UNC workspace on a Windows server runs its agents inside that distro.
@@ -191,11 +188,12 @@ function resolveRemoteHostPlatform(
 /** Read the repo owner’s execution platform; workspacePath refines it for host-local namespaces such as WSL, defaulting to repo path. */
 export function resolveRepoExecutionHostPlatform(
   state: HostFactsState,
+  statuses: RuntimeStatuses,
   repo: { connectionId?: string | null; executionHostId?: string | null; path: string },
   projectRuntime: () => ProjectExecutionRuntimeResolution | undefined,
   workspacePath: string | null | undefined = repo.path
 ): ExecutionHostPlatformFact {
-  return resolveHostPlatform(state, {
+  return resolveHostPlatform(state, statuses, {
     ...resolveRepoExecutionHostTarget(repo),
     workspacePath,
     projectRuntime
@@ -216,11 +214,12 @@ export function resolveRepoExecutionHostTarget(repo: {
 
 export function resolveWorktreeExecutionHostPlatform(
   state: WorktreeHostFactsState,
+  statuses: RuntimeStatuses,
   worktreeId: string,
   workspacePath: string | null | undefined,
   executionHostId?: ExecutionHostId
 ): ExecutionHostPlatformFact {
-  return resolveHostPlatform(state, {
+  return resolveHostPlatform(state, statuses, {
     // Why the routing default: an owner-less row launches where routing sends it, and a row-less
     // setup terminal on the focused default, so read that host.
     ...targetOnHost(
@@ -278,6 +277,7 @@ export function refineLocalLaunchPlatform(
 /** Preflight worktree-owner platform, then repo owner; undefined defers withheld-host errors to launch resolution. */
 export function resolveRepoWorktreeLaunchPlatform(
   state: WorktreeHostFactsState,
+  statuses: RuntimeStatuses,
   repo: { connectionId?: string | null; executionHostId?: string | null; path: string },
   worktree: {
     id: string
@@ -286,14 +286,15 @@ export function resolveRepoWorktreeLaunchPlatform(
     runtimeOwnerEnvironmentId?: string | null
   }
 ): NodeJS.Platform | undefined {
-  const fact = resolveRepoWorktreePlatformFact(state, repo, worktree)
+  const fact = resolveRepoWorktreePlatformFact(state, statuses, repo, worktree)
   return fact.kind === 'known' ? fact.platform : undefined
 }
 
 function resolveRepoWorktreePlatformFact(
   state: WorktreeHostFactsState,
-  repo: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[1],
-  worktree: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[2]
+  statuses: RuntimeStatuses,
+  repo: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[2],
+  worktree: Parameters<typeof resolveRepoWorktreeLaunchPlatform>[3]
 ): ExecutionHostPlatformFact {
   const repoHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownHost = parseExecutionHostId(worktree.hostId)
@@ -302,7 +303,7 @@ function resolveRepoWorktreePlatformFact(
   const serverOwner =
     worktree.runtimeOwnerEnvironmentId?.trim() ||
     (repoHost?.kind === 'runtime' ? repoHost.environmentId : null)
-  return resolveHostPlatform(state, {
+  return resolveHostPlatform(state, statuses, {
     host,
     nestedSshTargetId:
       host?.kind === 'runtime' && host === repoHost ? repo.connectionId?.trim() || null : null,

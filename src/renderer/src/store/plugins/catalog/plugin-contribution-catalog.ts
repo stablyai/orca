@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
+import { ensureRequiredPluginFailuresWatched } from '../updates/required-plugin-failures'
 import { ensurePluginAutoUpdatesWatched } from '../updates/plugin-auto-updates'
 import type {
   PluginHostListEntry,
@@ -144,6 +145,7 @@ export function ensurePluginPanelsLoaded(): void {
     void fetchPlugins()
   }
   ensurePluginAutoUpdatesWatched()
+  ensureRequiredPluginFailuresWatched()
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
     changeSubscriptionStarted = true
     window.api.plugins.onChanged(() => {
@@ -167,18 +169,23 @@ export function installedPluginDisplayNames(
   plugins: readonly PluginHostListEntry[],
   t?: Translate
 ): ReadonlyMap<string, string> {
-  let names = displayNamesByList.get(plugins)
+  // Translated names follow the UI language, so only the untranslated map is cached.
+  let names = t ? undefined : displayNamesByList.get(plugins)
   if (!names) {
     names = disambiguatedPluginNames(
       plugins.map((plugin) => ({
         key: plugin.pluginKey,
-        name: plugin.name,
+        // Why the key first: a blank name clashes with every other blank name, and the publisher
+        // added to that clash ("(acme)") would not tell two plugins of one publisher apart.
+        name: plugin.name.trim() ? plugin.name : plugin.pluginKey,
         publisher: plugin.publisher || null,
         official: plugin.official
       })),
       t
     )
-    displayNamesByList.set(plugins, names)
+    if (!t) {
+      displayNamesByList.set(plugins, names)
+    }
   }
   return names
 }

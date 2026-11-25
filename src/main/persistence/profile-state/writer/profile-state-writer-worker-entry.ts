@@ -52,8 +52,10 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
       authority.writeSerializedState(Buffer.from(request.payload))
       break
     case 'write-complete':
-      forgetCommittedProfileStateDomains()
-      authority.writeCompleteSerializedDomains(request.replacements)
+      authority.writeCompleteSerializedDomains(request.replacements, {
+        patches: request.patches,
+        patching: profileStateWriterPatching
+      })
       break
     case 'write-domains':
       authority.writeSerializedDomains(request.replacements, {

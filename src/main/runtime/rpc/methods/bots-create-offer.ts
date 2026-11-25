@@ -6,6 +6,7 @@ import { botCreateOfferBody } from '../../../../shared/bots/bot-proposal'
 import { BotCreateOfferRequest } from '../../../../shared/rpc-contract/bots-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
+import { refuseBotGroupRoomCard } from '../../../bots/bot-group-session-access'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { defineMethod, InvalidArgumentError } from '../core'
 
@@ -30,6 +31,7 @@ export const BOT_CREATE_OFFER_METHOD = defineMethod({
         message: `Your owner already has a bot named ${proposal.name}; no card was shown. Pick another name.`
       }
     }
+    refuseBotGroupRoomCard(callerSessionId)
     const host = getStructuredAgentSessionHost()
     // Null for a session this host doesn't run.
     const destination = await host?.captureAgentStartDestination(callerSessionId)

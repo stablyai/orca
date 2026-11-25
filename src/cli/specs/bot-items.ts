@@ -9,6 +9,8 @@ const ITEM_NOTES = [
 
 const WRITE_FLAGS = GLOBAL_FLAGS
 
+export const BOT_ITEM_ASK_BOOLEAN_FLAGS = ['multi'] as const
+
 export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['bot', 'item', 'add'],
@@ -41,7 +43,9 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     hidden: true,
     summary: "Change an item's title, description, done-means or status",
     usage:
-      'orca bot item set <id> [--title <text>] [--description <markdown>] [--done-means <text>] [--status planned|in-progress|needs-you|done|canceled] [--comment <text>] [--note <why>] [--reason <why>] [--json]',
+      'orca bot item set <id> [--title <text>] [--description <markdown>] [--done-means <text>] [--status planned|in-progress|waiting|needs-you|done|canceled] [--comment <text> [--file <path>]...] [--ask <question> [--option <label>[ | <detail>]]... [--recommended <n>] [--multi]]... [--note <why>] [--reason <why>] [--json]',
+    repeatableFlags: ['ask', 'option', 'recommended', 'file'],
+    booleanFlags: [...BOT_ITEM_ASK_BOOLEAN_FLAGS],
     allowedFlags: [
       ...WRITE_FLAGS,
       'id',
@@ -56,13 +60,20 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
       'reason',
       'reason-file',
       'comment',
-      'comment-file'
+      'comment-file',
+      'ask',
+      'option',
+      'recommended',
+      'multi',
+      'file'
     ],
     positionalArgs: ['id'],
     notes: [
       ...ITEM_NOTES,
-      'Needs you takes the question for your owner: --status needs-you --comment "...". Their answer comes as a comment and moves the item to In progress; if your question still stands, set needs-you again with only what\'s left.',
-      '--comment goes with any --status and is recorded with the move. --status done is `done`; --status canceled needs --reason, like `cancel`.',
+      'Needs you is one normal comment for your owner: --status needs-you --comment "<context>" --ask "<question>" --option "<choice>" --option "<choice>" [--recommended <n>], e.g. --status needs-you --comment "The reviewer is out until Monday." --ask "Merge without the review?" --option "Merge now" --option "Wait for Monday" --recommended 2. --comment is the context, --ask the question line under it (one line under 140 characters, ending in ?), and each --option a quick-reply button under that question ("<label> | <detail>" adds a hint). One decision per --ask; several --ask in one set are fine, each with its own options, and each waits for its own answer. --multi lets your owner pick several options of that question (on the phone, in one reply; on desktop, one at a time). A Tip after the write means it posted but may be hard to read. --status needs-you with only --comment, or nothing, is fine.',
+      'Your owner answers with a quick reply or in their own words, as a normal comment; it comes in your mail and moves the item to In progress. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.',
+      '--status waiting needs --note "<what it waits on>": one line, up to 200 characters, naming what will wake you (a wait, a reminder or auto-continue), e.g. --note "CI on #47193; a wait wakes me". Workers you start, reviewers included, are your own work: In progress, not Waiting; starting or linking one moves it back, and comments keep it Waiting. Waiting is only for what none of your workers is doing: CI with no worker on it, a deploy, a teammate\'s review or reply, a usage reset. Waiting on your owner is Needs you.',
+      '--comment goes with any --status and is recorded with the move, with any --file attached to it. --status done is `done`; --status canceled needs --reason, like `cancel`.',
       'Reopen your closed item with --status planned or in-progress (field changes on a closed item come only with a reopen); one your owner canceled, ask about on the item instead. --description "" clears it.'
     ]
   },
@@ -70,11 +81,13 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     path: ['bot', 'item', 'comment'],
     hidden: true,
     summary: 'Add what your owner would want to read later to an item',
-    usage: 'orca bot item comment <id> --text <text> [--json]',
-    allowedFlags: [...WRITE_FLAGS, 'id', 'text', 'text-file'],
+    usage: 'orca bot item comment <id> --text <text> [--file <path>]... [--json]',
+    allowedFlags: [...WRITE_FLAGS, 'id', 'text', 'text-file', 'file'],
+    repeatableFlags: ['file'],
     positionalArgs: ['id'],
     notes: [
       ...ITEM_NOTES,
+      '--file attaches a file to the comment (repeat it): screenshots show as images your owner can open, other files (logs, PDF, HTML) as files. Up to 20 images and 10 other files, 50 MB each; one unreadable file posts nothing.',
       "Allowed in any status, closed included. Put worker results here, not in chat. You can also comment on an item you made for another bot with --for: it goes to that item's chat as your request, carrying whom your turn is for."
     ]
   },
@@ -107,7 +120,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     variadicPositional: true,
     notes: [
       ...ITEM_NOTES,
-      '<ref> is dispatch:<ctx_id>, pr:<owner/repo#n> (or the PR URL), a URL or a file path. Workers started with `worker-start --item` link themselves.'
+      '<ref> is dispatch:<ctx_id>, automation:<id>, pr:<owner/repo#n> (or the PR URL), a URL or a file path. Workers started with `worker-start --item` link themselves. Items of other bots take your own workers, PRs, URLs and files too; their status stays with their bot.'
     ]
   },
   {
@@ -128,7 +141,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
       'cursor'
     ],
     notes: [
-      'Open items (Needs you, In progress, Planned) by default; --all adds closed ones; --status picks exact statuses and wins over --all.',
+      'Open items (Needs you, In progress, Waiting, Planned) by default; --all adds closed ones; --status picks exact statuses and wins over --all.',
       '--link <ref> lists only items linking that PR, URL or file; a PR URL and pr:<owner/repo#n> match.',
       '50 a page (at most 100 with --limit); pass the printed --cursor for the next page.'
     ]

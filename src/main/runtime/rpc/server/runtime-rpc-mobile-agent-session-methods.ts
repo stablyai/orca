@@ -17,6 +17,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.queuedMessageEditHold',
   'agentSession.queuedMessagesResume',
   'agentSession.close',
+  // Delete chat in an agent's Chats; phones gate on agent-session.delete.phone.v1.
+  'agentSession.delete',
   'agentSession.respondToApproval',
   'agentSession.respondToQuestion',
   'agentSession.setOption',
@@ -48,6 +50,9 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   // History's interrupted-chats banner and its Resume all; phones gate on agent-session.restart-resume.phone.v1.
   'agentSession.restartResumable',
   'agentSession.restartContinue',
+  // A paired window waits on the host's own launch continuation before offering the rest.
+  'agentSession.restartLaunchSettled',
+  'agentSession.restartResumableDismiss',
   // "Don't continue" on a usage-limit row the host will continue at its reset.
   'agentSession.cancelUsageLimitContinue',
   // Skip on a Codex async question card; phones offer it where the host advertises it.

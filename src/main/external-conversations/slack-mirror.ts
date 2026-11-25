@@ -169,10 +169,12 @@ export class SlackMirror extends SlackMirrorLinks {
       return false
     }
     const body = await this.deps.readMessage(sessionId, itemId)
-    if (!body) {
+    // Read again after the wait: the link may have changed meanwhile (a mute), and is written whole.
+    const current = this.linkOfSession(sessionId)
+    if (!body || !current) {
       return false
     }
-    this.record(linked, itemId, { state: 'posting', at: Date.now() })
+    this.record(current, itemId, { state: 'posting', at: Date.now() })
     await this.postOnce(sessionId, itemId, clientMessageId, body)
     return true
   }

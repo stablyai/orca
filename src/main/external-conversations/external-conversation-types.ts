@@ -48,11 +48,17 @@ export function replyTargetOf(
   // The running turn's opening message: only its own request names the answer a reply gives.
   opener?: AgentJournalRenderItem | null
 ): ReplyTarget {
-  const stamp = opener?.body.kind === 'message' ? opener.body.connectorDelivery : undefined
-  const answers =
-    stamp?.conversation.source === link.source && stamp.conversation.externalId === link.externalId
+  const body = opener?.body.kind === 'message' ? opener.body : undefined
+  // A continuation answers under the claim's first request for this conversation.
+  const stamp = [
+    ...(body?.connectorDelivery ? [body.connectorDelivery] : []),
+    ...(body?.connectorClaim?.origin ?? [])
+  ].find(
+    (entry) =>
+      entry.conversation.source === link.source && entry.conversation.externalId === link.externalId
+  )
   return {
-    ...(answers ? { answerDeliveryId: stamp.deliveryId } : {}),
+    ...(stamp ? { answerDeliveryId: stamp.deliveryId } : {}),
     key: { source: link.source, externalId: link.externalId },
     turnId,
     worktreeId: workspace.worktreeId,
@@ -79,7 +85,11 @@ export const CONNECTOR_REFUSALS = [
   'bot_not_found',
   'bot_paused',
   // A send whose linked chat was deleted (CHAT_GONE_REFUSAL), to a cloud that then starts anew.
-  'chat_gone'
+  'chat_gone',
+  // A resume whose chat's newest turn no longer failed (NOT_FAILED_REFUSAL).
+  'not_failed',
+  // A Slack thread's mute or unmute that could not be saved to disk.
+  'thread_mute_not_saved'
 ] as const
 export type ConnectorRefusal = (typeof CONNECTOR_REFUSALS)[number]
 
@@ -106,6 +116,8 @@ export type ConnectorMessage = {
   later?: ConnectorLaterText[]
   /** Admitted through the account's reply outbox, with the later deliveries it carries. */
   reply?: { account: string; carried?: string[] }
+  /** Resume on a failed turn's status: delivered only while the chat it reaches still awaits it. */
+  resume?: true
 }
 
 /** A later message as the turn takes it: its words as an older Orca reads them, and its asker. */

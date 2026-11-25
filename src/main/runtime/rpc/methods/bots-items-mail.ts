@@ -7,21 +7,20 @@ import {
   BOT_ITEM_MAIL_ID_PREFIX,
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
-import { runtimeBotChats } from '../../../bots/bot-chat-session'
+import { botMailSession } from '../../../bots/bot-mail-chat'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
 import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { botChatTakingMail } from './bots-chats'
 
 /** A message id from the first item event it carries. */
 export function botItemMailId(eventId: number): string {
   return `${BOT_ITEM_MAIL_ID_PREFIX}${botItemEventId(eventId)}`
 }
 
-/** Who a mailed change's note names: the owner, or the bot's chat that made it ('other-chat' once
- *  that chat is gone). */
+/** Who a mailed change's note names: the owner, the bot's chat that made it ('other-chat' once
+ *  that chat is gone), or another agent. */
 function noteBy(
   runtime: OrcaRuntimeService,
   bot: Bot,
@@ -33,6 +32,9 @@ function noteBy(
   if (actor?.kind !== 'bot') {
     return 'other-chat'
   }
+  if (actor.botId !== bot.id) {
+    return 'other-agent'
+  }
   const items = runtime.botItems
   const source = items.chatSource(bot, actor.chatId, (id) => items.chatRootOf(id), null)
   const chat = items.owningChat({ chatId: actor.chatId, source })
@@ -41,6 +43,17 @@ function noteBy(
   }
   const home = chat.kind === 'home' ? { home: true as const } : {}
   return { kind: 'chat', chatId: chat.id, title: chat.title, ...home }
+}
+
+/** The chat whose conversation's turn asked the question the owner's comment in this write answers. */
+function answerAskedIn(owed: BotItemMail): string | null {
+  for (const { event } of owed.changes) {
+    const asked = event.data.askedInConversation
+    if (event.kind === 'commented' && event.actor.kind === 'owner' && typeof asked === 'string') {
+      return asked
+    }
+  }
+  return null
 }
 
 /** Stores the event's mail unless it is there already; true once nothing is owed. */
@@ -59,10 +72,10 @@ export async function sendBotItemMail(
   if (!mail || !bot) {
     return true
   }
-  const chat = await botChatTakingMail(runtime, bot, owed.chatId)
-  const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
+  const sessionId = await botMailSession(runtime, bot, owed.chatId)
   const to = `orca_session_id:${sessionId}`
   const images = botItemMailImages(owed.changes)
+  const asker = answerAskedIn(owed)
   const payload = JSON.stringify({
     botItems: owed.changes.map(({ event, item }) => ({
       uid: item.uid,
@@ -71,9 +84,20 @@ export async function sendBotItemMail(
       kind: event.kind
     })),
     // Delivered as the chat's image blocks, as chat sends a pasted image.
-    ...(images.length > 0 ? { images } : {})
+    ...(images.length > 0 ? { images } : {}),
+    // The owner's answer to a question the item's chat asked while its thread's turn ran; the reader
+    // checks it is that chat (conversation-ask-answer.ts).
+    ...(asker ? { askedInConversation: asker } : {})
   })
-  db.insertMessage({ id, from: BOT_ITEM_MAIL_SENDER, to, type: 'status', ...mail, payload })
+  db.insertMessage({
+    id,
+    from: BOT_ITEM_MAIL_SENDER,
+    to,
+    type: 'status',
+    ...mail,
+    payload,
+    orcaAuthored: 'item-mail'
+  })
   runtime.notifyMessageArrived(to, 'status')
   // The chat shows the change itself, naming who made it; the mail row stays hidden there. A change
   // made in the chat the mail lands in (Home, when the item's chat takes no mail) has its own row there.

@@ -4,7 +4,7 @@
 /** The latest a snooze may reach, so a typo can't hide an item for years. */
 export const BOT_ITEM_SNOOZE_MAX_MS = 366 * 24 * 60 * 60_000
 
-export type BotItemSnoozePresetId = 'later' | 'tomorrow' | 'monday'
+export type BotItemSnoozePresetId = 'later' | 'tomorrow' | 'monday' | 'week'
 
 export type BotItemSnoozePreset = {
   id: BotItemSnoozePresetId
@@ -47,6 +47,61 @@ export function botItemSnoozePresets(now: number): BotItemSnoozePreset[] {
   ]
 }
 
+/** The desktop picker's presets: the menu's three, then the same time of morning a week out. On a
+ *  Monday both land on next Monday, so only In a week stays. */
+export function botItemSnoozePickerPresets(now: number): BotItemSnoozePreset[] {
+  const week = new Date(now)
+  week.setDate(week.getDate() + 7)
+  const inAWeek = at(week, MORNING_HOUR)
+  return [
+    ...botItemSnoozePresets(now).filter((preset) => preset.at !== inAWeek),
+    { id: 'week', at: inAWeek }
+  ]
+}
+
+export const BOT_ITEM_SNOOZE_SLOT_MINUTES = 15
+export const BOT_ITEM_SNOOZE_DEFAULT_MINUTES = MORNING_HOUR * 60
+
+/** `minutes` past local midnight of `day`'s date. */
+export function botItemSnoozeAt(day: Date, minutes: number): number {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes).getTime()
+}
+
+/** Quarter hours on `day` still ahead of `now` and within the cap; a DST gap's hour has none. */
+export function botItemSnoozeSlots(day: Date, now: number): number[] {
+  const slots: number[] = []
+  for (let minutes = 0; minutes < 24 * 60; minutes += BOT_ITEM_SNOOZE_SLOT_MINUTES) {
+    const until = botItemSnoozeAt(day, minutes)
+    const wall = new Date(until)
+    if (
+      until > now &&
+      until <= now + BOT_ITEM_SNOOZE_MAX_MS &&
+      wall.getHours() * 60 + wall.getMinutes() === minutes
+    ) {
+      slots.push(minutes)
+    }
+  }
+  return slots
+}
+
+/** `minutes` if that slot is still open on `day`, else the next open one; null when the day has none. */
+export function botItemSnoozeSlotOn(day: Date, minutes: number, now: number): number | null {
+  const slots = botItemSnoozeSlots(day, now)
+  return slots.find((slot) => slot >= minutes) ?? slots.at(-1) ?? null
+}
+
+/** The first and last days with an open slot, at local midnight. */
+export function botItemSnoozeDayRange(now: number): { first: Date; last: Date } {
+  const first = new Date(now)
+  first.setHours(0, 0, 0, 0)
+  if (botItemSnoozeSlots(first, now).length === 0) {
+    first.setDate(first.getDate() + 1)
+  }
+  const last = new Date(now + BOT_ITEM_SNOOZE_MAX_MS)
+  last.setHours(0, 0, 0, 0)
+  return { first, last }
+}
+
 /** How a wake time reads: "6:00 PM" today, "Thu 9:00 AM" within the week, else "Nov 30, 9:00 AM". */
 export function botItemSnoozeTimeFormat(until: number, now: number): Intl.DateTimeFormatOptions {
   const time = { hour: 'numeric', minute: '2-digit' } as const
@@ -73,5 +128,7 @@ export function botItemSnoozePresetName(preset: BotItemSnoozePreset, t: Translat
       return t('bots.items.snooze.tomorrow', 'Tomorrow')
     case 'monday':
       return t('bots.items.snooze.monday', 'Monday')
+    case 'week':
+      return t('bots.items.snooze.week', 'In a week')
   }
 }

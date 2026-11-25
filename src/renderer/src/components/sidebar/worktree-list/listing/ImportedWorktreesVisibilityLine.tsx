@@ -323,7 +323,7 @@ export default function ImportedWorktreesVisibilityLine({
                 >
                   {t(
                     'auto.components.sidebar.ImportedWorktreesVisibilityLine.b7a87dc32f',
-                    'Show in worktree list'
+                    'Show worktree'
                   )}
                 </Button>
               ) : null}

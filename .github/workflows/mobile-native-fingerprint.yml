@@ -1,0 +1,67 @@
+name: Mobile Native Fingerprint
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - 'mobile/**'
+      # Mobile's pnpm install links this local workspace package.
+      - 'src/packages/process-host/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - 'config/pnpmfile.cjs'
+      - 'config/patches/**'
+      - '.github/actions/setup-pnpm/**'
+      - '.github/workflows/mobile-native-fingerprint.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-native-fingerprint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  native-fingerprint:
+    name: Mobile native fingerprint
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: true
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      # Use the PR's tools for both commits so a change to the tools can't skew the comparison.
+      - name: Compare native fingerprint with the base
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/native-fingerprint"
+          mkdir -p "$tools"
+          cp scripts/native-client.mjs scripts/native-build-cache.cjs "$tools/"
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/head.json"
+          git checkout --quiet --detach HEAD^1
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/base.json"
+          node "$tools/native-client.mjs" compare "$tools/base.json" "$tools/head.json" \
+            --project . --summary "$GITHUB_STEP_SUMMARY"

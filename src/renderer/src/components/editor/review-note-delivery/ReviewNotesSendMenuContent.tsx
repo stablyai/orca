@@ -4,6 +4,8 @@ import {
   useAppStateViewActive
 } from '@/store/retained-views/app-state-view'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { toast } from 'sonner'
 import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
@@ -103,7 +105,7 @@ export function ReviewNotesSendMenuContent({
   const selectTargets = useMemo(() => {
     let inputs: unknown[] = []
     let previous: NotesSendAgentTarget[] = []
-    return (state: ReturnType<typeof store.getState>) => {
+    return (state: ReturnType<typeof store.getState>, statuses: RuntimeStatuses) => {
       const nextInputs = [
         state.tabsByWorktree[worktreeId],
         state.unifiedTabsByWorktree[worktreeId],
@@ -111,14 +113,27 @@ export function ReviewNotesSendMenuContent({
         selectTerminalLayoutsForWorktree(state, worktreeId),
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectRuntimePaneTitlesForWorktree(state, worktreeId),
-        selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId),
+        selectSendApprovalGuardEnvironmentIds(statuses),
         state.agentStatusEpoch
       ]
       if (shallow(inputs, nextInputs)) {
         return previous
       }
       inputs = nextInputs
-      const next = deriveNotesSendAgentTargets(state, worktreeId, chatNames)
+      // A narrow projection: only the fields target derivation reads, with the view's guard set.
+      const next = deriveNotesSendAgentTargets(
+        {
+          agentStatusByPaneKey: state.agentStatusByPaneKey,
+          tabsByWorktree: state.tabsByWorktree,
+          unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+          terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+          ptyIdsByTabId: state.ptyIdsByTabId,
+          runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+          sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(statuses)
+        },
+        worktreeId,
+        chatNames
+      )
       if (
         next.length !== previous.length ||
         next.some((target, i) => !shallow(target, previous[i]))
@@ -128,7 +143,7 @@ export function ReviewNotesSendMenuContent({
       return previous
     }
   }, [worktreeId, chatNames])
-  const sendTargets = useAppStateValue(selectTargets)
+  const sendTargets = useAppStateValueWithHostStatuses(selectTargets)
   const orderedSendTargets = useMemo(
     () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
     [agentRows, sendTargets]

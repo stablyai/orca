@@ -1,5 +1,7 @@
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { removeBootstrapFatalExitGuard } from './bootstrap-fatal-exit-guard'
+import { isNativePtyException } from '../../daemon/pty-subprocess/daemon-native-pty-exception'
+import { quitAfterFatalException } from './fatal-exception-quit'
 
 type FatalMainProcessErrorKind = 'main_uncaught_exception' | 'main_unhandled_rejection'
 
@@ -130,23 +132,35 @@ export function installStdioWriteErrorSink(
   }
 }
 
-export function installUncaughtPipeErrorGuard(): void {
-  const onUncaughtException = (error: unknown): void => {
+// A hostile error (e.g. a throwing getter) must still reach the fatal path, not escape it.
+function isBenignNativePtyFault(error: unknown): boolean {
+  try {
+    return isNativePtyException(error)
+  } catch {
+    return false
+  }
+}
+
+// Stays installed for good: Electron's default handler shows a modal that blocks main until someone clicks OK.
+export function installUncaughtExceptionQuitGuard(
+  quit: () => void = quitAfterFatalException
+): void {
+  let quitting = false
+  process.on('uncaughtException', (error: unknown): void => {
     const errorCode = readErrorProperty(error, 'code')
-    if (errorCode === 'EIO' || errorCode === 'EPIPE') {
+    // A local PTY that died under us is not a main-process fault (same rule as the daemon and orcad).
+    if (errorCode === 'EIO' || errorCode === 'EPIPE' || isBenignNativePtyFault(error)) {
       return
     }
-
-    // #9441: the next rethrow leaves no macOS crash report; persist evidence first.
+    // Faults during teardown (or while recording) are expected once main is broken; quit once.
+    if (quitting) {
+      return
+    }
+    quitting = true
+    // #9441: persist evidence before the process exits.
     recordFatalMainProcessError('main_uncaught_exception', error)
-    process.off('uncaughtException', onUncaughtException)
-    // Throwing inside the handler exits with status 7; rethrow next tick to retain the real stack.
-    setImmediate(() => {
-      throw error
-    })
-  }
-
-  process.on('uncaughtException', onUncaughtException)
+    quit()
+  })
   removeBootstrapFatalExitGuard()
 }
 

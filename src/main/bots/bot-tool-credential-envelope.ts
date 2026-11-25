@@ -29,10 +29,7 @@ export const CredentialsFile = z.object({
 export type Slot = { envelope: string; entry: Entry | null }
 export type Stored = Record<string, Slot>
 
-const canSeal = (): boolean =>
-  hasSecretStore() &&
-  getSecretStore().isEncryptionAvailable() &&
-  getSecretStore().describeSealing?.().kind !== 'none'
+const canSeal = (): boolean => hasSecretStore() && getSecretStore().isEncryptionAvailable()
 
 function seal(value: string): string {
   if (canSeal()) {

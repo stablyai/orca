@@ -14,11 +14,14 @@ export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection 
   }
 
   writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
   ): Promise<number> {
-    return this.dispatch({ command: 'write-complete', replacements }).then(
-      (response) => response.revision
-    )
+    return this.dispatch({
+      command: 'write-complete',
+      replacements,
+      ...(patches?.length ? { patches } : {})
+    }).then((response) => response.revision)
   }
 
   writeSerializedDomains(

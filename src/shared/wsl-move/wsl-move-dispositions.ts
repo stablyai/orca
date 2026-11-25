@@ -85,6 +85,10 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     item: 47,
     note: "Rebuilt from the host's next project list; it caches only that answer."
   },
+  pairedPortForwards: notApplicableDisposition(
+    62,
+    'Forwards to this computer from paired servers.'
+  ),
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
   deletedSshConfigAliases: notApplicableDisposition(62),
@@ -103,6 +107,8 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     62,
     "A bot's hidden project group is never offered for a move; the bot stays with its host."
   ),
+  botsNewerAgents: notApplicableDisposition(62, 'Bots on newer agents; same as bots.'),
+  botOrder: notApplicableDisposition(62, 'Bot order; same as bots.'),
   botsPermissionDefaultMigrated: notApplicableDisposition(
     62,
     'A one-time migration marker for bots.'
@@ -152,6 +158,8 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   terminalLayoutsByTabId: moveDisposition(23),
   localOnlyScrollbackByTabId: moveDisposition(25, { newManifestSection: true }),
   remoteSessionIdsByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayOwnerByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayAdoptionVersion: { disposition: 'drop-pty-binding', item: 36 },
   browserPagesByWorkspace: moveDisposition(29),
   markdownFrontmatterVisible: moveDisposition(28, {
     rewriteDesktopCopy: true,

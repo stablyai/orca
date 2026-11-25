@@ -12,8 +12,8 @@ import { useAppStore } from '@/store/index'
 import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
-import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session/context/agent-session-continuation'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
+import { buildAgentSessionContinuationPrompt } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
 import { ClaudeSwitcherMenu } from '@/components/status-bar/accounts/ClaudeSwitcherMenu'
 import { ProviderAccountChatButton } from '@/components/status-bar/accounts/ProviderAccountChatButton'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -111,7 +111,6 @@ export function NativeChatUsageLimitActionsProvider({
         <ClaudeSwitcherMenu
           key={executionHostIdForStructuredTarget(pane.target)}
           claude={null}
-          compact
           iconOnly
           chatAction={{
             target: pane.target,
@@ -162,7 +161,8 @@ export function NativeChatUsageLimitActionsProvider({
       sourceKind: 'chat' as const,
       sourceAgent: pane.agent,
       sourceTitle: chatTab?.customLabel?.trim() || conversationName || chatTab?.label,
-      sourceWorkingDirectory: directory.worktreePath,
+      // The folder the chat runs in, which its transcript's relative paths name.
+      sourceWorkingDirectory: directory.pathBase ?? directory.worktreePath,
       ...context
     }
     if (buildAgentSessionContinuationPrompt(source, 'focused')) {

@@ -16,7 +16,7 @@ function quotePowerShellMultilineLiteral(value: string): string {
 }
 
 /** Runtime PowerShell mode decides argv escaping: 5.1/pre-7.3 legacy modes drop embedded quotes, while newer modes escape them.
- * For cmd/naive quote counting, double quotes as process-host/windows-command-line.ts does; backslash-quote changes cmd parity
+ * For cmd/naive quote counting, double quotes; backslash-quote changes cmd parity
  * and could expose a later & as an operator. */
 export function getPowerShellEscapeNativeArgsFunction(): string {
   return `function Global:__OrcaEscapeNativeArgs([string]$Program, [object[]]$Arguments) {

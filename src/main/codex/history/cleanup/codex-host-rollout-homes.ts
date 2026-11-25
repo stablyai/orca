@@ -105,17 +105,28 @@ export async function listHostCodexRolloutHomeSources(
 }
 
 /**
- * Every host Codex home a rollout can have a name in, since history passes link it across all of
- * them: the user's, a custom history source, Orca's shared home and each account's. A WSL distro
- * keeps its own homes, and reading them can boot it.
+ * The host Codex homes Orca may delete rollouts from: the user's, Orca's shared home and each
+ * account's, plus the import folder as a root no deletion may reach. A WSL distro keeps its own
+ * homes, and reading them can boot it.
  */
 export async function listHostCodexRolloutHomes(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
-): Promise<string[]> {
-  const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
-  return uniqueHostHomes([
-    ...homes,
-    ...ownedAccountHomes(accounts),
-    ...configuredAdditionalCodexHomePaths()
-  ])
+): Promise<{ homes: string[]; protectedRoots: string[] }> {
+  const { accounts } = await listHostCodexRolloutHomeSources(settings)
+  const importFolder = resolveHostCodexSessionSourceHome(settings)
+  return {
+    // Only Orca's own homes: the import folder is the user's, even when it holds the same chats.
+    homes: uniqueHostHomes([
+      dirname(codexHomeSessionsDir()),
+      getSystemCodexHomePath(),
+      resolveOrcaManagedCodexHomePath(),
+      ...ownedAccountHomes(accounts),
+      ...configuredAdditionalCodexHomePaths()
+    ]),
+    // Kept even inside WSL: a host folder can link into it.
+    protectedRoots:
+      importFolder && (isAbsolute(importFolder) || parseWslUncPath(importFolder))
+        ? [importFolder]
+        : []
+  }
 }

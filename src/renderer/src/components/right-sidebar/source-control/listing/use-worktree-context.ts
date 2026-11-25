@@ -9,6 +9,7 @@ import { useMemo } from 'react'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
@@ -92,6 +93,13 @@ export function useSourceControlWorktreeContext() {
   )
   const activeGitStatusHead = useSourceControlState((s) =>
     activeWorktreeId ? (s.gitStatusHeadByWorktree?.[activeWorktreeId] ?? null) : null
+  )
+  const rebaseIndexObservation = useSourceControlState((s) =>
+    activeWorktreeId ? (s.gitRebaseIndexObservationByWorktree?.[activeWorktreeId] ?? null) : null
+  )
+  // Distinguishes an unborn HEAD (status read, no head) from status not read yet.
+  const gitStatusLoaded = useSourceControlState((s) =>
+    activeWorktreeId ? s.gitStatusByWorktree[activeWorktreeId] !== undefined : false
   )
   const repositoryHuge = useSourceControlState((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
@@ -214,9 +222,9 @@ export function useSourceControlWorktreeContext() {
       : (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
   // Quote for the workspace owner's OS, where agents run (#27971).
-  const activeSourceControlLaunchPlatform = useSourceControlState((state) =>
+  const activeSourceControlLaunchPlatform = useAppStateValueWithHostStatuses((state, statuses) =>
     activeWorktree && activeRepo
-      ? resolveRepoWorktreeLaunchPlatform(state, activeRepo, activeWorktree)
+      ? resolveRepoWorktreeLaunchPlatform(state, statuses, activeRepo, activeWorktree)
       : undefined
   )
   // Mounted hidden sidebars and collapsed/off-screen sections keep their view but poll nothing.
@@ -227,6 +235,8 @@ export function useSourceControlWorktreeContext() {
     scope,
     activeConnectionId,
     activeGitStatusHead,
+    rebaseIndexObservation,
+    gitStatusLoaded,
     activeGroupId,
     activePrCacheKey,
     activePrFromQueue,

@@ -83,6 +83,7 @@ export const browserPageSchema = z.object({
   // Both remote page identity fields must survive restore to reclaim a client-hosted page; older sessions may omit them.
   remoteBrowserPageId: z.string().nullable().optional(),
   remoteBrowserPageClientHosted: z.boolean().optional(),
+  remoteBrowserPagePlacedHere: z.boolean().optional(),
   // Preserve the viewport preset across restart while accepting older sessions.
   viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
   // Without docLocation, a workspace document’s blank URL restores as New Tab.

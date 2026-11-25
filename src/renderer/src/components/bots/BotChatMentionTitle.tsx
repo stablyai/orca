@@ -2,7 +2,7 @@ import { useCallback, type ReactNode } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { botChatIdLabel } from '../native-chat/native-chat-markdown-mentions'
+import { botChatIdLabel } from '../../../../shared/bots/bot-mention-context'
 import { useBotChatTree } from './use-bot-chat-tree'
 
 /** A sent chat pick's title as the bot's chat list on its host reads now, by id: a renamed chat shows

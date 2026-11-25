@@ -23,6 +23,26 @@ export type BotItemViewRead = {
   retry: () => void
 }
 
+/** Reads preceding pages until the waiting question and its quick replies can be rendered. */
+export function useWaitingQuestionPage(
+  questionId: string | undefined,
+  { events, eventsRead, hasEarlier, failed, loadEarlier }: BotItemViewRead
+): boolean {
+  const needsPage =
+    !failed &&
+    eventsRead &&
+    hasEarlier &&
+    questionId !== undefined &&
+    !events.some(({ id }) => id === questionId)
+  const earliest = events[0]?.id
+  useEffect(() => {
+    if (needsPage) {
+      loadEarlier()
+    }
+  }, [needsPage, earliest, loadEarlier])
+  return needsPage
+}
+
 type Loaded = {
   item: BotItem
   events: BotItemEvent[]
@@ -44,6 +64,15 @@ function keepShown(key: string, loaded: Loaded | null): void {
   if (shown.size > SHOWN_LIMIT && oldest !== undefined) {
     shown.delete(oldest)
   }
+}
+
+// Each open view's read of what changed, by item: a refusal that outlives the view it was sent from
+// (Back, then the item again) re-reads the view open now.
+const rereads = new Map<string, Set<() => void>>()
+
+/** Re-reads what changed on the item in each of its open views, as a host's change notice does. */
+export function rereadBotItemView({ hostId, id }: BotRef, uid: string): void {
+  rereads.get(`${hostId}\0${id}\0${uid}`)?.forEach((reread) => reread())
 }
 
 /** `listed`: the item's list row, shown until the first read of its Activity lands. */
@@ -131,9 +160,18 @@ export function useBotItemView(bot: BotRef, uid: string, listed?: BotItem): BotI
       botId: id,
       kinds: ['items', 'workers']
     })
+    const reread = (): void => void read()
+    const viewKey = `${hostId}\0${id}\0${uid}`
+    const views = rereads.get(viewKey) ?? new Set()
+    views.add(reread)
+    rereads.set(viewKey, views)
     return () => {
       live = false
       stop()
+      views.delete(reread)
+      if (views.size === 0 && rereads.get(viewKey) === views) {
+        rereads.delete(viewKey)
+      }
     }
   }, [hostId, id, uid, attempt])
 

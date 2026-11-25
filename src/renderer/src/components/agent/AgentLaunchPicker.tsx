@@ -39,7 +39,7 @@ import {
 } from './agent-launch-setup-state'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
-  agentLaunchPickerPlacement,
+  readAgentLaunchPickerPlacement,
   type AgentLaunchPickerPlacement
 } from './agent-launch-picker-placement'
 import {
@@ -69,6 +69,8 @@ export const AgentLaunchPicker = memo(
     entries: suppliedEntries,
     triggerLabel,
     triggerDetail,
+    defaultModelLabel,
+    inline,
     draftScope,
     worktreeId,
     value,
@@ -76,6 +78,7 @@ export const AgentLaunchPicker = memo(
     agent,
     disabled,
     setupDisabled,
+    selectAgentOnTab,
     portalContainer,
     emptyLabel,
     cli,
@@ -95,6 +98,9 @@ export const AgentLaunchPicker = memo(
     triggerLabel?: string
     /** Muted after triggerLabel, as the launch summary follows an agent's name. */
     triggerDetail?: string
+    /** Model already resolved by the owning settings page, for the trigger summary only. */
+    defaultModelLabel?: string
+    inline?: boolean
     draftScope?: object
     worktreeId?: string
     value?: AgentPickerDraft
@@ -103,6 +109,8 @@ export const AgentLaunchPicker = memo(
     disabled?: boolean
     /** Agents only: no models, effort or Open as. */
     setupDisabled?: boolean
+    /** Apply agent tabs directly and omit the launch surface footer. */
+    selectAgentOnTab?: boolean
     portalContainer?: HTMLElement | null
     emptyLabel?: string
     /** True when this launch is the terminal, so the closed field says "(CLI)". */
@@ -125,7 +133,9 @@ export const AgentLaunchPicker = memo(
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
       entry?: AgentPickerEntry,
-      surface?: AgentPickerDraft['surface']
+      surface?: AgentPickerDraft['surface'],
+      /** The user chose the draft's permission, even one it already showed. */
+      permissionPicked?: boolean
     ) => void
   }) {
     const t = useTranslate()
@@ -151,17 +161,17 @@ export const AgentLaunchPicker = memo(
           setInitialQuery('')
         } else if (trigger.current) {
           setPlacement(
-            agentLaunchPickerPlacement(
-              trigger.current.getBoundingClientRect(),
-              window.innerHeight,
-              AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING
+            readAgentLaunchPickerPlacement(
+              trigger.current,
+              AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING,
+              inline
             )
           )
         }
         setOpenState(next)
         onOpenChange?.(next)
       },
-      [onOpenChange]
+      [inline, onOpenChange]
     )
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const observedEntries = useAgentLaunchPickerInventory(
@@ -199,11 +209,11 @@ export const AgentLaunchPicker = memo(
       }
     }, [catalogAgent, onCatalogOpen])
     const pick = useCallback<typeof onPick>(
-      (picked, next, from, surface) => {
+      (picked, next, from, surface, permissionPicked) => {
         if (next && from) {
           rememberPickedAgentModel(from, next)
         }
-        onPick(picked, next, from, surface)
+        onPick(picked, next, from, surface, permissionPicked)
       },
       [onPick]
     )
@@ -219,17 +229,20 @@ export const AgentLaunchPicker = memo(
       entry && draft && !setupDisabled && triggerLabel === undefined
         ? JSON.stringify([languageRevision, draft])
         : null
-    const pickedModel = usePickedAgentModel(entry, draft?.choices.model)
+    const pickedModel = usePickedAgentModel(
+      entry?.agent,
+      entry?.rows[0]?.executionHostId,
+      draft?.choices.model
+    )
     const summary = useMemo(() => {
       if (!entry || !summaryKey) {
         return ''
       }
       const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
-      return agentLaunchSetupSummary(entry, parsed, pickedModel).join(' · ')
-    }, [entry, summaryKey, pickedModel])
-    // Only a dropdown with Open as names how the agent runs, as Open as does.
+      return agentLaunchSetupSummary(entry, parsed, pickedModel, defaultModelLabel).join(' · ')
+    }, [entry, summaryKey, pickedModel, defaultModelLabel])
     const surface =
-      entry && !setupDisabled && !entry.textGeneration
+      entry && !setupDisabled && !selectAgentOnTab && !entry.textGeneration
         ? cli
           ? 'terminal'
           : (draft?.surface ?? entry.defaultSurface)
@@ -265,16 +278,17 @@ export const AgentLaunchPicker = memo(
       }
     })
     return (
-      <div className="space-y-2">
-        <DropdownMenu open={open} onOpenChange={setOpen}>
+      <div className={inline ? 'min-w-0 max-w-full' : 'space-y-2'}>
+        <DropdownMenu open={open} onOpenChange={setOpen} modal={!inline}>
           <DropdownMenuTrigger asChild>
             <Button
               ref={trigger}
               type="button"
               data-agent-launch-picker-trigger="true"
-              aria-label={t('agentPicker.select', 'Select agent')}
+              aria-label={inline ? undefined : t('agentPicker.select', 'Select agent')}
               variant="outline"
-              className="w-full min-w-0"
+              size={inline ? 'xs' : 'default'}
+              className={inline ? 'min-w-0 max-w-full' : 'w-full min-w-0'}
               disabled={disabled || model.state !== 'settled'}
               onKeyDown={(event) => {
                 if (open) {
@@ -309,12 +323,15 @@ export const AgentLaunchPicker = memo(
                   <span className="text-muted-foreground"> · {summary}</span>
                 ) : null}
               </span>
-              <ChevronDown className="size-3.5 text-muted-foreground" />
+              <ChevronDown
+                className={inline ? 'size-3 opacity-60' : 'size-3.5 text-muted-foreground'}
+              />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             portalContainer={portalContainer}
-            align="start"
+            align={inline ? 'end' : 'start'}
+            collisionBoundary={placement?.boundary}
             sideOffset={AGENT_LAUNCH_PICKER_SIDE_OFFSET}
             collisionPadding={tabbed ? AGENT_LAUNCH_PICKER_COLLISION_PADDING : undefined}
             side={tabbed ? placement?.side : undefined}
@@ -322,7 +339,7 @@ export const AgentLaunchPicker = memo(
             style={
               tabbed && placement
                 ? {
-                    maxHeight: `min(${placement.maxHeight}px, var(--radix-dropdown-menu-content-available-height, ${placement.maxHeight}px))`
+                    maxHeight: `min(${inline ? '22rem' : `${placement.maxHeight}px`}, var(--radix-dropdown-menu-content-available-height, ${placement.maxHeight}px))`
                   }
                 : undefined
             }
@@ -337,7 +354,7 @@ export const AgentLaunchPicker = memo(
             className={
               tabbed
                 ? // Why 26rem: Codex's widest effort row plus Fast measures 404px; narrow windows cap it.
-                  'w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] flex flex-col overflow-hidden'
+                  `w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] flex flex-col ${inline ? '' : 'overflow-hidden'}`
                 : 'min-w-64'
             }
           >
@@ -349,6 +366,7 @@ export const AgentLaunchPicker = memo(
                 draftForEntry={draftForEntry}
                 draftScope={draftScope ?? ownDraftScope}
                 disabled={disabled}
+                selectAgentOnTab={selectAgentOnTab}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
                 defaultAgent={defaultAgent}

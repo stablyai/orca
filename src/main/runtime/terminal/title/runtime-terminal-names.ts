@@ -17,24 +17,13 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       // Keep manual names out of process-title evidence or they read as the shell reclaiming the pane (#20626).
-      pty.pty.manualTitle = title?.trim() || null
+      const customTitle = title?.trim() || null
+      pty.pty.manualTitle = customTitle
       const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
-      // Persist headless custom titles so restart cannot lose a rename.
       const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
       if (tabIdForTitle) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabIdForTitle, title)
-        // Publish manual titles: paired desktops prefer saved-session names over live titles (#29975).
-        const customTitle = title?.trim() || null
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, tabIdForTitle, {
-          customTitle,
-          // Reset must also drop a name saved while sleeping.
-          ...(customTitle === null
-            ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, tabIdForTitle)
-              }
-            : {})
-        })
+        this.publishUnrenderedTerminalTitle(pty.pty.worktreeId, tabIdForTitle, customTitle)
       }
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
@@ -43,9 +32,9 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
         }
       }
       const tabId = recordedTabId() ?? pty.record.tabId
-      // A notifier can exist before its pane graph; retain the rename on the known tab.
+      // A window without this pane cannot publish the rename for paired clients.
       if (this.notifier?.renameTerminal && tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
+        this.publishUnrenderedTerminalTitle(pty.pty.worktreeId, tabId, customTitle)
         this.notifier.renameTerminal(tabId, title)
       }
       return { handle, tabId, title }
@@ -54,6 +43,20 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
+  }
+
+  private publishUnrenderedTerminalTitle(
+    worktreeId: string,
+    tabId: string,
+    customTitle: string | null
+  ): void {
+    this.persistHeadlessTerminalTitle(worktreeId, tabId, customTitle)
+    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
+      customTitle,
+      ...(customTitle === null
+        ? { title: this.headlessTerminalFallbackTitle(worktreeId, tabId) }
+        : {})
+    })
   }
 
   /** Names one pane of a split; the tab's own name is untouched. */
@@ -66,7 +69,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       return mainTitle
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!this.getAvailableAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
+    if (!this.hasAuthoritativeWindow() || !this.notifier?.setPaneTitle) {
       throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
     }
     const normalizedTitle = title?.trim() || null

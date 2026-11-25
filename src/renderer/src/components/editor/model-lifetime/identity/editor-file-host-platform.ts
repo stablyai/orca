@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { resolveHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -40,6 +41,7 @@ export function resolveEditorFileHostAuthority(
 /** OS of the host that owns an open file; null while that host has not reported it. */
 export function resolveEditorFileHostPlatform(
   state: AppState,
+  statuses: RuntimeStatuses,
   file: EditorFileHostRef
 ): NodeJS.Platform | null {
   const authority = resolveEditorFileHostAuthority(state, file)
@@ -58,9 +60,9 @@ export function resolveEditorFileHostPlatform(
     return sshState?.remotePlatform ?? null
   }
   if (environmentId) {
-    return resolveServerPlatform(state, environmentId, file.filePath)
+    return resolveServerPlatform(state, statuses, environmentId, file.filePath)
   }
-  const local = resolveHostPlatform(state, {
+  const local = resolveHostPlatform(state, statuses, {
     host: { kind: 'local', id: 'local' },
     nestedSshTargetId: null,
     sshOwnerEnvironmentId: null,
@@ -72,10 +74,11 @@ export function resolveEditorFileHostPlatform(
 
 function resolveServerPlatform(
   state: AppState,
+  statuses: RuntimeStatuses,
   environmentId: string,
   filePath: string
 ): NodeJS.Platform | null {
-  const status = lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
+  const status = lastVerifiedRuntimeStatus(statuses.get(environmentId))
   const hostPlatform = status?.hostPlatform
   if (hostPlatform) {
     // Why: a WSL UNC path on a Windows server lives inside that distro.

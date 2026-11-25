@@ -1,83 +1,24 @@
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
-import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { withCodexTerminalServerIsolationEnv } from '../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
-import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
+import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
-import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
-import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/shell-startup/pi-process-owner-env'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { getStartupTerminalIngressIntent } from '../host-env/terminal-startup-color-query-replies'
-import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
-import {
-  mergePtyEnvDeletions,
-  removeCodexHomeDeletionRequests,
-  getInheritedAgentHookEnvKeysToDelete,
-  getInheritedAgentSessionStampEnvKeysToDelete
-} from '../host-env/pi-agent'
-import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from '../host-env/path'
+import { promoteAgentTeamsShimPath } from '../host-env/path'
 import { resolveConfiguredTerminalShellArgs } from '../host-env/configured-terminal-shell-args'
 import { ptySizes } from '../delivery/visibility-state'
-import {
-  canonicalAgentSessionStampEnvKey,
-  stripInheritedAgentSessionEnv
-} from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
+import { applyTerminalImageEnvironment } from './terminal-image-environment'
+import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
+import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
-
-/** Carries deletions to provider-owned environments, including persistent older daemons. */
-export function assemblePtySpawnEnvDeletions(input: {
-  env: Record<string, string> | undefined
-  callerEnvToDelete: string[] | undefined
-  /** Window only: an Agent Teams refresh drops TERM_PROGRAM; host callers pre-merge their own. */
-  agentTeamsEnvToDelete: readonly string[]
-  isDaemonHostSpawn: boolean
-  connectionId: string | null | undefined
-  skipCodexHomeEnv: boolean
-  stripInheritedOrcaCodexHome: boolean
-  codexResumeHomeSelected: boolean
-  settings: GlobalSettings | undefined
-}): { env: Record<string, string> | undefined; envToDelete: string[] } {
-  // Apply isolation at the common environment boundary used by every provider.
-  const isolated = withCodexTerminalServerIsolationEnv(input.env, input.settings)
-  const env = isolated ? { ...isolated } : undefined
-  if (env) {
-    stripInheritedAgentSessionEnv(env, { launchEnv: isolated })
-  }
-  let envToDelete =
-    mergePtyEnvDeletions(
-      input.callerEnvToDelete?.map((key) =>
-        canonicalAgentSessionStampEnvKey(key, process.platform)
-      ) ?? [],
-      // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
-      PI_PROCESS_OWNER_ENV_KEYS,
-      input.agentTeamsEnvToDelete,
-      // Disable legacy hooks on old hosts while preserving ORCA_REAL pointers needed by Windows shims.
-      input.isDaemonHostSpawn || input.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
-      input.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
-      // The daemon must judge its own inherited value; main may have a different config.
-      !input.connectionId && !input.isDaemonHostSpawn
-        ? getLegacyOpenCodeEnvKeysToDelete(env, getAppEnvironment().getPath('userData'))
-        : [],
-      // Local/relay providers also merge ambient env, so remove inherited session stamps on every path.
-      getInheritedAgentSessionStampEnvKeysToDelete(env),
-      input.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
-      // Persistent daemons must compare their own merged Codex home markers.
-      input.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
-    ) ?? []
-  if (input.codexResumeHomeSelected) {
-    envToDelete = removeCodexHomeDeletionRequests(envToDelete) ?? []
-  }
-  deleteRequestedEnvKeys(env, envToDelete)
-  return { env, envToDelete }
-}
 
 export type PtySpawnLaunchOptionsInput = {
   args: {
@@ -115,6 +56,7 @@ export type PtySpawnLaunchOptionsInput = {
   spawnIntent: PtySpawnOptions['spawnIntent']
   /** Host history is sampled before preparation; otherwise read it after OpenCode preparation. */
   historyIsolationEnabled?: boolean
+  headlessHost?: boolean
   getSettings?: () => GlobalSettings | undefined
   store: TrustInput['store']
   claudeAuth: TrustInput['claudeAuth']
@@ -124,6 +66,8 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   spawnOptions: PtySpawnOptions
   env: Record<string, string> | undefined
   launchCommand: string | undefined
+  /** What the host's MCP server list gave the pane; null when it was left as main leaves it. */
+  terminalMcp: TerminalMcpPaneLaunch | null
 }> {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
@@ -149,12 +93,27 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
       : {})
   })
-  const env = openCodeLaunch.env
-  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
+  const settings = input.getSettings?.()
+  const env = { ...openCodeLaunch.env }
+  const inlineImagesEnabled = applyTerminalImageEnvironment(
+    env,
+    input.envToDelete,
+    launchAgent,
+    settings?.terminalInlineImages,
+    input.headlessHost
+  )
+  const mcp = await withSpawnTerminalMcpServers(input, {
+    launchAgent,
+    command: openCodeLaunch.command,
+    env,
+    shell,
+    connectionId
+  })
+  const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
-    pluginDir && openCodeLaunch.command
-      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
-      : openCodeLaunch.command
+    pluginDir && mcp.command
+      ? withClaudeAgentViewPlugin(mcp.command, pluginDir, shell)
+      : mcp.command
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
@@ -165,9 +124,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       : {}),
     env,
     historyIsolationEnabled:
-      input.historyIsolationEnabled ??
-      input.getSettings?.()?.terminalScopeHistoryByWorktree ??
-      true,
+      input.historyIsolationEnabled ?? settings?.terminalScopeHistoryByWorktree ?? true,
     ...(input.isNewSession ? { isNewSession: true } : {}),
     envToDelete: input.envToDelete
   }
@@ -184,7 +141,10 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   })
   const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
   if (command !== undefined) {
-    spawnOptions.command = command
+    spawnOptions.command =
+      !connectionId && inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
+        ? withCodexStartupImageCommand(command, shell)
+        : command
   }
   if (args.commandDelivery !== undefined) {
     spawnOptions.commandDelivery = args.commandDelivery
@@ -251,7 +211,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
         : undefined
     }
   }
-  return { spawnOptions, env, launchCommand }
+  return { spawnOptions, env, launchCommand, terminalMcp: mcp.pane }
 }
 
 export type PtySpawnSizeSeed = {

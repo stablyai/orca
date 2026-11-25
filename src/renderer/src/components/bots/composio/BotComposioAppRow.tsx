@@ -12,10 +12,12 @@ import {
 } from '../../../../../shared/composio/composio-curated-apps'
 import { BotToolLogo } from '../apps/BotToolAppRow'
 import { BotConnectorDetails, BotConnectorRowFrame, type BotConnectorFix } from '../BotConnectorRow'
+import { BotConnectorSection } from '../bot-connector-people'
 import type { BotConnectorTitle } from '../bot-connector-titles'
 import type { ComposioProblem } from '../bot-connector-entries'
 import { botToolErrorMessage } from '../bot-tools-client'
 import { ComposioAppLogo } from './ComposioAppLogo'
+import { composioSlugLine } from '../../../../../shared/bots/bot-app-lines'
 import {
   connectComposioApp,
   disconnectComposioApp,
@@ -72,21 +74,23 @@ export function BotComposioProblemRow({
       actions={{}}
       defaultOpen={defaultOpen}
     >
-      <p className="text-xs leading-5 text-muted-foreground">
-        {problem === 'key'
-          ? t(
-              'bots.composio.keyRejectedRow',
-              'All of {{bot}}’s Composio apps are paused until the key is replaced. Your connections are kept at Composio.',
-              { bot: bot.name }
-            )
-          : t(
-              'bots.composio.signInsUnreadNote',
-              'Orca couldn’t ask Composio which apps {{bot}} uses.',
-              {
-                bot: bot.name
-              }
-            )}
-      </p>
+      <BotConnectorSection>
+        <p className="text-xs leading-5 text-muted-foreground">
+          {problem === 'key'
+            ? t(
+                'bots.composio.keyRejectedRow',
+                'All of {{bot}}’s Composio apps are paused until the key is replaced. Your connections are kept at Composio.',
+                { bot: bot.name }
+              )
+            : t(
+                'bots.composio.signInsUnreadNote',
+                'Orca couldn’t ask Composio which apps {{bot}} uses.',
+                {
+                  bot: bot.name
+                }
+              )}
+        </p>
+      </BotConnectorSection>
     </BotConnectorRowFrame>
   )
 }
@@ -109,7 +113,7 @@ export function BotComposioAppRow({
   const t = useTranslate()
   const confirm = useConfirmationDialog()
   const name = composioAppName(connection.app, connection.name)
-  const uses = composioAppLine(connection.app, [])
+  const uses = composioSlugLine(connection.app, composioAppLine(connection.app, []), t)
   const working = connection.status === 'active'
   const run = (action: () => Promise<unknown>): void =>
     void action().catch((error: unknown) => toast.error(botToolErrorMessage(error)))

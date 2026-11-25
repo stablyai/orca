@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { writeTomlConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
-import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import {
+  readRawTomlConfig as readRawConfig,
+  writeTomlConfigAtomically
+} from '../../configuration/toml/config-toml-atomic-write'
 import { normalizeCodexTrustProjectPath } from '../identity/codex-trust-identity'
 import { stripLeadingBom } from '../toml/config-toml-trust'
 import {
@@ -28,25 +29,6 @@ import { canonicalizeAgentTrustPath } from '../../../agent-launch/trust/agent-tr
 const PUBLISH_ATTEMPTS = 3
 
 type ConfigEdit = { raw: string | null; updated: string; record: CreatedTrustRecord | null }
-
-/** The file's raw bytes (BOM kept), or null when it is definitely absent. */
-function readRawConfig(configPath: string): string | null {
-  try {
-    return readFileSync(configPath, 'utf-8')
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return null
-    }
-    throw error
-  }
-}
-
-/** Publishes only while the file still holds exactly `raw`; checked after the backup, before the rename. */
-function publishIfUnchanged(configPath: string, raw: string | null, contents: string): boolean {
-  return writeTomlConfigAtomically(configPath, contents, {
-    stillCurrent: (writePath) => readRawConfig(writePath) === raw
-  })
-}
 
 function openLedger(ledgerPath: string): AgentTrustOwnershipLedger {
   return createAgentTrustOwnershipLedger(() => ledgerPath, normalizeCodexTrustProjectPath)
@@ -91,7 +73,7 @@ function publishEdit(
       return current.record
     }
     recordAhead(current.record)
-    if (publishIfUnchanged(configPath, current.raw, current.updated)) {
+    if (writeTomlConfigAtomically(configPath, current.updated, current.raw)) {
       return current.record
     }
     current = replan()
@@ -223,7 +205,7 @@ export function removeOrcaCreatedProjectTrust(
       return
     }
     const updated = removeProjectTrustContent(content, projectPath)
-    if (updated === content || publishIfUnchanged(configPath, raw, updated)) {
+    if (updated === content || writeTomlConfigAtomically(configPath, updated, raw)) {
       ledger.forget(configPath, projectPath)
       return
     }

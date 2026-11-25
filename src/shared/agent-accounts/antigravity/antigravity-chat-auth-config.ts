@@ -10,6 +10,18 @@ export const AntigravityChatAuthConfigSchema = z.discriminatedUnion('method', [
     method: z.literal('oauth-business'),
     gcpProject: z.string().trim().min(1).max(255),
     gcpLocation: z.string().trim().min(1).max(255)
+  }),
+  // A key saved in Settings, else GEMINI_API_KEY from the chat's launch environment.
+  z.strictObject({
+    method: z.literal('gemini-api-key'),
+    gcpProject: z.string().trim().max(255).optional(),
+    gcpLocation: z.string().trim().max(255).optional()
+  }),
+  // Google Agent Platform with the host's ADC; an empty project or location comes from gcloud.
+  z.strictObject({
+    method: z.literal('agent-platform'),
+    gcpProject: z.string().trim().max(255).optional(),
+    gcpLocation: z.string().trim().max(255).optional()
   })
 ])
 

@@ -192,7 +192,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
   }
 
   /** The pane's stored terminal; undefined while unbound, null once main no longer holds it. */
-  private storedPaneBinding({
+  protected storedPaneBinding({
     worktreeId,
     tabId,
     leafId

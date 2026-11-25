@@ -6,7 +6,7 @@ import type {
   WindowsFence
 } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import {
-  buildProcessTableIndex,
+  getProcessTableIndex,
   type ProcessTableIndex
 } from '../../../shared/process-observation/tables/process-table-index'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
@@ -49,14 +49,14 @@ export function resolveRemoteForegroundEvidenceFromRows(
     void fence
     return { ...metadata, verdict: 'unverifiable', reason: 'windows_ssh_foreground_unavailable' }
   }
-  const root = rows.find((row) => row.pid === request.rootPid)
+  const index = getProcessTableIndex(rows)
+  const root = index.byPid.get(request.rootPid)
   if (!root || root.pgid === undefined || root.tpgid === undefined) {
     return { ...metadata, verdict: 'unverifiable', reason: 'anchor_missing' }
   }
   if (!hasControllingTty(root.tty) || root.tpgid <= 0 || !root.startTime) {
     return { ...metadata, verdict: 'unverifiable', reason: 'fence_incomplete' }
   }
-  const index = buildProcessTableIndex(rows)
   const resolved = resolveForegroundProcesses(index, [request])[0]
   if (!resolved?.available) {
     return {

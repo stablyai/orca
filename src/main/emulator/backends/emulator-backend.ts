@@ -68,7 +68,11 @@ export type EmulatorBackend = {
   tap(deviceId: string, x: number, y: number): Promise<void>
   // Android ignores the iOS gesture URL and uses its own device control channel.
   gesture(deviceId: string, points: EmulatorGesturePoint[], wsUrl: string | null): Promise<void>
-  type(deviceId: string, text: string): Promise<void>
+  // iOS pastes text a key press cannot make, or all of it with `paste`, through the helper's socket.
+  type(deviceId: string, text: string, paste?: boolean): Promise<void>
+  /** Points the device's hardware keyboard at the host's layout; true when physical keys now match it. */
+  syncHardwareKeyboardLayout?(deviceId: string): Promise<boolean>
+  restoreHardwareKeyboardLayout?(deviceId: string): Promise<void>
   button(deviceId: string, name: string): Promise<void>
   rotate(deviceId: string, orientation: string): Promise<void>
   exec(deviceId: string, command: string): Promise<unknown>

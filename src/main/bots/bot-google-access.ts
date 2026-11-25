@@ -8,6 +8,7 @@ import {
   type GoogleBotConnectState
 } from '../../shared/google/google-bot-connect-state'
 import { getGoogleConnect } from '../google/google-connect'
+import { botGoogleAccess, botMayUseGoogleAccount } from '../../shared/google/google-bot-accounts'
 import { BOT_TOKEN_ENDED, botOfToken } from './bot-of-caller'
 
 /** Null when the bot may use Google; else the one sentence to act on. A non-bot caller is the owner. */
@@ -34,12 +35,17 @@ export function readGoogleRefusal(
 export const GOOGLE_OWNER_ONLY =
   'Only your owner can change Google on this computer; ask them in Orca.'
 
-/** This host's Google, read for one bot; a host without Google has no app. */
-export function hostGoogleBotState(bot: Pick<Bot, 'google'>): GoogleBotConnectState {
+/** This host's Google, read for one bot: only the accounts it may use. A host without Google has no app. */
+export async function hostGoogleBotState(
+  bot: Pick<Bot, 'google' | 'googleAccounts'>
+): Promise<GoogleBotConnectState> {
   const connect = getGoogleConnect()
+  const access = botGoogleAccess(bot)
   return googleBotConnectState({
     allowed: bot.google === true,
-    client: connect?.client() ?? null,
-    accounts: connect?.accounts() ?? []
+    client: (await connect?.client()) ?? null,
+    accounts: ((await connect?.accounts()) ?? []).filter((account) =>
+      botMayUseGoogleAccount(access, account.email)
+    )
   })
 }

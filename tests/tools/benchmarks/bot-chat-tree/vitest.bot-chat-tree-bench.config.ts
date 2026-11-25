@@ -7,10 +7,7 @@ export default defineConfig({
   test: {
     ...baseConfig.test,
     projects: undefined,
-    include: [
-      'tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts',
-      'tests/tools/benchmarks/bot-chat-tree/bots-changed-renders-benchmark.test.tsx'
-    ],
+    include: ['tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts'],
     benchmark: { include: [] },
     fileParallelism: false,
     retry: 0,

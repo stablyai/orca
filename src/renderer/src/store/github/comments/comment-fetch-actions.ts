@@ -22,8 +22,8 @@ import {
 export const createCommentFetchActions = (
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
-): Pick<GitHubSlice, 'fetchPRComments'> => ({
-  fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
+): Pick<GitHubSlice, 'fetchPRComments' | 'readPRComments'> => {
+  const readPRComments: GitHubSlice['readPRComments'] = async (repoPath, prNumber, options) => {
     const repo = findRepoForGitHubOwner(
       get(),
       options?.repoId,
@@ -45,7 +45,7 @@ export const createCommentFetchActions = (
     const cached = get().commentsCache[cacheKey]
     const force = Boolean(options?.force) || options?.userRefresh === true
     if (!force && isFresh(cached)) {
-      return cached.data ?? []
+      return cached.data ?? null
     }
 
     const inflightRequest = inflightCommentsRequests.get(cacheKey)
@@ -122,7 +122,7 @@ export const createCommentFetchActions = (
         return comments
       } catch (err) {
         console.error('Failed to fetch PR comments:', err)
-        return get().commentsCache[cacheKey]?.data ?? []
+        return get().commentsCache[cacheKey]?.data ?? null
       } finally {
         if (ownsInflightRequest(inflightCommentsRequests, cacheKey, requestId)) {
           inflightCommentsRequests.delete(cacheKey)
@@ -133,4 +133,8 @@ export const createCommentFetchActions = (
     inflightCommentsRequests.set(cacheKey, { promise: request, reply, requestId, postedComments })
     return request
   }
-})
+  return {
+    readPRComments,
+    fetchPRComments: async (...args) => (await readPRComments(...args)) ?? []
+  }
+}

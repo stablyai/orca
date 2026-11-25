@@ -6,6 +6,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 import {
   isResolvedWorkspaceFileDragExecutionHost,
   readWorkspaceFileDragPaths,
@@ -18,7 +19,7 @@ import { resolveInternalTerminalDropPane } from './terminal-drop-pane-resolution
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import type { TerminalDropWriteFailureReason } from './terminal-drop-write-failure'
 import { getTerminalInternalFileDropRejectionMessage } from './terminal-drop-internal-rejection-message'
-import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
+import { resolveAgentStagingWorktreePath } from '@/runtime/files/imports/agent-file-staging'
 import './terminal-native-file-drop-destination'
 import type { NativeTerminalFileDropArgs } from './terminal-native-file-drop-destination'
 
@@ -91,7 +92,7 @@ export async function handleInternalTerminalFileDrop({
     return { status: 'rejected', reason: 'source-host-mismatch' }
   }
   const dropTargetSnapshot = captureTerminalDropTarget(pane, transport)
-  const worktreePath = resolveTerminalDropWorktreePath(
+  const worktreePath = resolveAgentStagingWorktreePath(
     worktreeId,
     runtimeEnvironmentId ? undefined : cwd,
     host?.id,
@@ -127,6 +128,11 @@ export async function handleInternalTerminalFileDrop({
   showTerminalDropWriteFailure(writeResult.failureReason)
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(tabId, pane.leafId)
+    if (!runtimeEnvironmentId && connectionId === null && host?.kind === 'local') {
+      for (const path of paths.slice(0, writeResult.pathsWritten)) {
+        recordRecentTerminalImage(pane.terminal, path)
+      }
+    }
   }
   if (writeResult.targetCurrent) {
     pane.terminal.focus()

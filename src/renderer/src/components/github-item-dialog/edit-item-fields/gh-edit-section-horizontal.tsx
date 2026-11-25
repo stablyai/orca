@@ -176,12 +176,9 @@ export function GHEditSectionHorizontal({
             size="sm"
             onClick={() => onUse(item)}
             className="gap-2"
-            aria-label={t(
-              'auto.components.GitHubItemDialog.0ab4664a8b',
-              'Start workspace from issue'
-            )}
+            aria-label={t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace')}
           >
-            {t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace from issue')}
+            {t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace')}
             <ArrowRight className="size-4" />
           </Button>
         )}

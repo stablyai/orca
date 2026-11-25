@@ -1,4 +1,5 @@
 import { webviewRegistry } from '../webview-registry'
+import { findBrowserClientPageWebview } from '../client-pages/browser-client-page-renderer-installation'
 
 // Main brackets agent guest input; restore the user’s element afterward because guest/CDP focus would otherwise retain their keyboard.
 
@@ -83,7 +84,7 @@ export function beginAgentInputFocusGuard(
 }
 
 function guardUserFocus(browserPageId: string, token: string): void {
-  const webview = webviewRegistry.get(browserPageId)
+  const webview = webviewRegistry.get(browserPageId) ?? findBrowserClientPageWebview(browserPageId)
   if (!webview) {
     return
   }

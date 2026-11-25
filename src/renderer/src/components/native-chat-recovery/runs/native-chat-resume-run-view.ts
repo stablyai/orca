@@ -1,4 +1,5 @@
 import type { ResumeCandidate, ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
+import { isResumeRunPendingPhase } from './native-chat-resume-run'
 import type { ResumeRun, ResumeRunHostStatus } from './native-chat-resume-run'
 
 export type ResumeRunRowStatus =
@@ -83,7 +84,7 @@ export function resumeRunView(
       continue
     }
     inRunCount += 1
-    if (run.inFlight && (phase === undefined || phase === 'queued' || phase === 'starting')) {
+    if (run.inFlight && isResumeRunPendingPhase(phase)) {
       const hostPhase = hostStatus?.hostExecutionPhase
       statusBySession.set(sessionId, {
         kind: 'in-flight',

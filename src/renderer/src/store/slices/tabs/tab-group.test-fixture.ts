@@ -17,6 +17,19 @@ export function makeUnifiedTab(
   }
 }
 
+/** A structured chat tab: an agent-session tab whose agent marks it as a native chat. */
+export function makeStructuredChatTab(
+  overrides: Partial<Tab> & { id: string; worktreeId: string; entityId: string }
+): Tab {
+  return makeUnifiedTab({
+    groupId: 'g',
+    contentType: 'agent-session',
+    agentSessionAgent: 'codex',
+    label: 'Chat',
+    ...overrides
+  })
+}
+
 export function makeTabGroup(
   overrides: Partial<TabGroup> & { id: string; worktreeId: string }
 ): TabGroup {

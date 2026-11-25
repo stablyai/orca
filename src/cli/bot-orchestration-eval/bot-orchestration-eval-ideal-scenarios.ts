@@ -212,15 +212,14 @@ export const IDEAL_SCENARIOS: OrchestrationScenario[] = [
     turns: [{ message: WOKEN, mail: SITE_DONE }],
     state: NO_GITHUB_WORLD,
     checks: [
-      [noStart, replyCites(/812/, 'the PR'), promisesNoWatch, noInventedLinks(['acme/site#812'])]
+      [
+        noStart,
+        replyCites(/812/, 'the PR'),
+        promisesNoWatch,
+        noInventedLinks(['acme/site#812']),
+        offersConnector('github')
+      ]
     ]
-  },
-  {
-    id: 'ideal-09-connect-offer',
-    heldOut: true,
-    turns: [{ message: WOKEN, mail: SITE_DONE }],
-    state: NO_GITHUB_WORLD,
-    checks: [[replyCites(/812/, 'the PR'), promisesNoWatch, offersConnector('github')]]
   },
   {
     id: 'ideal-10-failed-start',

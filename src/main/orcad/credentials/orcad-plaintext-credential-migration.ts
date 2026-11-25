@@ -67,7 +67,7 @@ function listPlaintextCredentialTargets(): PlaintextCredentialTarget[] {
   ]
 }
 
-function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): boolean {
+async function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): Promise<boolean> {
   const original = readFileSync(target.path)
   // Restrict permissions even when sealing fails.
   hardenExistingSecureFile(target.path)
@@ -103,7 +103,7 @@ function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): bool
     throw new Error('sealed value did not read back')
   }
   // Preserve concurrent desktop saves to the shared credential directory.
-  const published = writeCredentialFileAtomic(target.path, sealed, unchanged)
+  const published = await writeCredentialFileAtomic(target.path, sealed, unchanged)
   if (published) {
     hardenExistingSecureFile(target.path)
   }
@@ -111,18 +111,18 @@ function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): bool
 }
 
 /** Never log credential contents or replace bytes when sealing fails. */
-export function migratePlaintextCredentials(
+export async function migratePlaintextCredentials(
   store: SecretStore,
   targets: readonly PlaintextCredentialTarget[] = listPlaintextCredentialTargets(),
   log: (message: string) => void = (message) => console.warn(message)
-): PlaintextCredentialMigrationResult {
+): Promise<PlaintextCredentialMigrationResult> {
   const result: PlaintextCredentialMigrationResult = { sealed: 0, failed: 0 }
   for (const target of targets) {
     if (!existsSync(target.path)) {
       continue
     }
     try {
-      if (sealTarget(store, target)) {
+      if (await sealTarget(store, target)) {
         result.sealed += 1
       }
     } catch (error) {

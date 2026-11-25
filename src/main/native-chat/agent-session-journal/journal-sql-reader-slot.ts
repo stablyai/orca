@@ -52,8 +52,9 @@ export class ReaderSlot {
   private closing?: Promise<void>
   private readonly credit: JournalReaderReplyCreditClaim | undefined
 
+  /** `unreleasedBytes`: relayed by a hosted reader, not yet released; in-process ones use credit. */
   admissionStats() {
-    return this.admission.stats()
+    return { ...this.admission.stats(), unreleasedBytes: this.worker.unreleasedBytes ?? 0 }
   }
 
   get pendingCount(): number {

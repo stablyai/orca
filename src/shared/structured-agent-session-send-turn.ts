@@ -4,6 +4,7 @@ import { agentJournalSubmissionKey } from './agent-session/journal/agent-session
 import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
 import { isQueuedAgentJournalSubmission } from './agent-session/requests/agent-session-queued-submission'
 import type {
+  AgentJournalAnsweredTurn,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
@@ -21,10 +22,11 @@ export type StructuredAgentSessionSendTurn =
   | { kind: 'pending' }
   /** The turn it opened, which no other send went into or could have. */
   | { kind: 'turn'; itemId: string; turn: AgentJournalTurnLifecycle }
-  /** Another send went, or may have gone, into the turn that answered it: their answers can't be told apart. */
-  | { kind: 'shared' }
-  /** The agent refused it before any turn: the request failed. */
-  | { kind: 'refused' }
+  /** Another send went, or may have gone, into the turn that answered it: their answers can't be told
+   *  apart. `turn` is that turn when its row is known. */
+  | { kind: 'shared'; turn?: { itemId: string; turn: AgentJournalTurnLifecycle } }
+  /** The agent refused it before any turn: the request failed, for `rejection` when the host said why. */
+  | { kind: 'refused'; rejection?: AgentJournalSubmission['rejection'] }
   /** It will never have a turn of its own: taken back, or its host stopped before the provider answered. */
   | { kind: 'none' }
 
@@ -56,17 +58,22 @@ export function structuredAgentSessionSendTurn(
   if (opened) {
     return soleInput(journal, submission, opened.index)
       ? { kind: 'turn', itemId: opened.itemId, turn: opened.turn }
-      : { kind: 'shared' }
+      : { kind: 'shared', turn: { itemId: opened.itemId, turn: opened.turn } }
   }
   switch (submission.dispatchState) {
     case 'rejected':
       if (classifyDispatchRejection(submission).verdict === 'failure') {
-        return { kind: 'refused' }
+        return { kind: 'refused', rejection: submission.rejection }
       }
       // A Stop takes a card's handoff back and the card waits again.
       return submission.queuedMessageId === clientMessageId ? { kind: 'unsent' } : { kind: 'none' }
-    case 'accepted':
+    case 'accepted': {
       // Answered, yet no ended turn after it names it: it went into a turn another send opened.
+      // The running turn the provider recorded it joined; the planned scope is never proof of it.
+      const joined = submission.answeredInTurn && answeredTurn(journal, submission.answeredInTurn)
+      if (joined) {
+        return { kind: 'shared', turn: joined }
+      }
       return planned?.kind === 'turn' ||
         journal.items.some((item, index) => {
           const turn = index > sent ? rootTurn(item) : null
@@ -74,6 +81,7 @@ export function structuredAgentSessionSendTurn(
         })
         ? { kind: 'shared' }
         : { kind: 'pending' }
+    }
     case 'unknown':
       // Recovered: its writer is gone, so no provider answer will come.
       return submission.recovered ? { kind: 'none' } : { kind: 'pending' }
@@ -155,6 +163,15 @@ function openedTurn(
     }
   }
   return null
+}
+
+function answeredTurn(
+  journal: Pick<AgentJournalSnapshot, 'items'>,
+  answered: AgentJournalAnsweredTurn
+): { itemId: string; turn: AgentJournalTurnLifecycle } | null {
+  const item = journal.items.find((entry) => entry.itemId === answered.turnItemId)
+  const turn = item ? rootTurn(item) : null
+  return turn ? { itemId: answered.turnItemId, turn } : null
 }
 
 function rootTurn(item: AgentJournalRenderItem): AgentJournalTurnLifecycle | null {

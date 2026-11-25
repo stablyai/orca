@@ -1,8 +1,8 @@
 import { useContext } from 'react'
+import { NativeChatInSubagentSheet } from '../../subagents/native-chat-subagent-sheet-context'
 import { cn } from '@/lib/class-names'
 import { quietBotAnswer } from '../../../../../../shared/bot-quiet-result'
-import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
+import { NativeChatBotAnswerContext } from './native-chat-bot-answer-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
@@ -22,6 +22,7 @@ import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAt
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useTranslate } from '@/i18n/use-translate'
+import { NativeChatGalleryMessageContext } from '../../media/images/gallery/native-chat-image-gallery-context'
 
 function messageIsStreaming(
   message: NativeChatMessage,
@@ -68,8 +69,9 @@ export function NativeChatAssistantMessageRow({
   const words = nativeChatAgentRowWords(message, t)
   const streaming = messageIsStreaming(message, activeTurnIsWorking, trailingRun)
   const inBotHome = useBotForWorkspace(useNativeChatVisualOwner()?.worktreeId ?? null) !== null
+  const inBotChat = useContext(NativeChatBotAnswerContext) || inBotHome
   const quiet = quietBotAnswer(words, {
-    botAnswer: inBotHome && message.role === 'assistant',
+    botAnswer: inBotChat && message.role === 'assistant',
     streaming,
     inAutomationTurn: props.inAutomationTurn === true,
     inActingTurn: props.inActingTurn === true
@@ -77,18 +79,14 @@ export function NativeChatAssistantMessageRow({
   const shownWords = withLegacyNativeChatIdeasAsList(quiet.words)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
+  // A subagent's sheet is read-only history: its rows offer no turn actions.
+  const inSheet = useContext(NativeChatInSubagentSheet)
   const showControls =
     !isSystem &&
+    !inSheet &&
     (endsResponse ?? (words.length > 0 && !continuesTurn)) &&
     (words.length > 0 || hasImages) &&
     activeTurnIsWorking !== true
-  // Fixed by the row's own kind, never by support or eligibility, so the row's actions never shift.
-  const holdsForkSlot =
-    useContext(NativeChatForkSlotContext) &&
-    message.role === 'assistant' &&
-    message.source === 'transcript' &&
-    !message.agentStart &&
-    isRootAgentJournalItem(message)
 
   return (
     <div
@@ -125,27 +123,26 @@ export function NativeChatAssistantMessageRow({
           {t('bots.chat.nothingToReport', 'Nothing to report')}
         </p>
       ) : null}
-      {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
+      {/* Tool runs rebuild and reorder their images as reads finish. */}
+      {toolRun ? (
+        <NativeChatGalleryMessageContext value={null}>
+          <NativeChatToolRun {...toolRun} />
+        </NativeChatGalleryMessageContext>
+      ) : null}
       {showControls ? (
         <NativeChatAgentControls
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          action={
-            fork ? (
-              <NativeChatForkAction itemId={message.id} fork={fork} />
-            ) : holdsForkSlot ? (
-              <span aria-hidden className="size-6 shrink-0" />
-            ) : null
-          }
+          action={fork ? <NativeChatForkAction itemId={message.id} fork={fork} /> : null}
           className={cn(
             'w-fit select-none',
             !latestResponse &&
               fork?.pendingItemId !== message.id &&
               'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
-            // They hang into the gap below only when nothing left-side starts there. Never in a
+            // They hang into the gap below only above the next turn's opening row. Never in a
             // section, which keeps them inside its border.
-            actionsHang && '-mb-5'
+            actionsHang && '-mb-1'
           )}
         />
       ) : null}

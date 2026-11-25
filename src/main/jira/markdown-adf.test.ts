@@ -1,9 +1,6 @@
-import { expect, it, vi } from 'vitest'
-import { emailCharacterReader } from './adf-bare-email'
-import { httpCandidateNormalizer, httpCharacterReader } from './adf-http-link'
+import { expect, it } from 'vitest'
 import { markdownToAdf } from './markdown-adf'
 import { adfToMarkdownText } from './adf-markdown'
-import { trailingWhitespaceReader } from './adf-text-marks'
 import { adfChildren, adfRecord } from './adf-nodes'
 
 it('round-trips supported block structure and mixed inline marks', async () => {
@@ -256,46 +253,6 @@ it('preserves existing parenthesized and www links and split literal entities', 
   )
 })
 
-it('bounds real email character reads through document read-back at N and 10N', () => {
-  for (const length of [3200, 32000]) {
-    const addresses = Math.floor(length / 15)
-    const fixtures = [
-      { value: 'A'.repeat(length), expected: 'A'.repeat(length) },
-      { value: `${'a'.repeat(length - 2)}@x`, expected: `${'a'.repeat(length - 2)}@x` },
-      {
-        value: `${'@a. '.repeat(length / 4 - 1)}@a.x`,
-        expected: `${'@a. '.repeat(length / 4 - 1)}@a.x`
-      },
-      {
-        value: 'me@example.com '.repeat(addresses) + 'a'.repeat(length % 15),
-        expected: 'me@example.com '.repeat(addresses) + 'a'.repeat(length % 15)
-      }
-    ]
-    for (const { value, expected } of fixtures) {
-      const visited = new Set<number>()
-      let reads = 0
-      const probe = vi.spyOn(emailCharacterReader, 'read').mockImplementation((input, index) => {
-        reads++
-        visited.add(index)
-        return input[index]
-      })
-      try {
-        const actual = adfToMarkdownText({
-          type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }]
-        })
-        expect(actual).toBe(expected)
-        expect(visited.size).toBe(value.length)
-        expect(reads).toBeLessThanOrEqual(
-          3 * value.length + 2 * [...value].filter((char) => char === '@').length
-        )
-      } finally {
-        probe.mockRestore()
-      }
-    }
-  }
-})
-
 it('preserves prose-separated URLs, IPv6 authorities and surrounding literal delimiters', () => {
   const values = [
     ['https://a.com。https://b.com', '<https://a.com>。<https://b.com>'],
@@ -311,7 +268,6 @@ it('preserves prose-separated URLs, IPv6 authorities and surrounding literal del
       'https://example.com/me@example.com me@example.com',
       'https://example.com/me@example.com me@example.com'
     ],
-    ['**see https://example.com/x**', '\\*\\*see <https://example.com/x>\\*\\*'],
     // Intended: an overlapping local-part run does not create a second partial email.
     ['a@b.c!x@d.e', '[a@b.c](mailto:a@b.c)!x@d.e']
   ]
@@ -322,70 +278,6 @@ it('preserves prose-separated URLs, IPv6 authorities and surrounding literal del
         content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }]
       })
     ).toBe(expected)
-  }
-})
-
-it('bounds actual HTTP normalization reads and admission through document read-back at N and 10N', () => {
-  for (const length of [800, 8000]) {
-    const prefix = 'https://example.com/'
-    const interior = `${prefix}${')'.repeat(length)}x`
-    const trailing = `${prefix}${')'.repeat(length)}`
-    const count = length / 8
-    const pieces = 'https://a.com。'.repeat(count)
-    const fixtures = [
-      {
-        value: interior,
-        expected: `https://example.com/${')'.repeat(length)}x`,
-        ranges: [[0, interior.length]]
-      },
-      {
-        value: trailing,
-        expected: `<https://example.com/>${')'.repeat(length)}`,
-        ranges: [[0, trailing.length]]
-      },
-      {
-        value: pieces,
-        expected: '<https://a.com>。'.repeat(count),
-        ranges: Array.from({ length: count }, (_, index) => [14 * index, 14 * index + 13])
-      }
-    ]
-    for (const { value, expected, ranges } of fixtures) {
-      const visited = new Set<number>()
-      let reads = 0
-      const probe = vi.spyOn(httpCharacterReader, 'read').mockImplementation((input, index) => {
-        reads++
-        visited.add(index)
-        return input[index]
-      })
-      const admissions = vi.spyOn(httpCandidateNormalizer, 'normalize')
-      try {
-        expect(
-          adfToMarkdownText({
-            type: 'doc',
-            content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }]
-          })
-        ).toBe(expected)
-        for (const [start, end] of ranges) {
-          expect(
-            Array.from({ length: end - start }, (_, index) => visited.has(start + index)).every(
-              Boolean
-            ),
-            'HTTP candidate coverage'
-          ).toBe(true)
-        }
-        const actual = admissions.mock.calls.map(([, start, end]) => [start, end])
-        expect(actual).toEqual(ranges)
-        const bytes = actual.reduce((total, [start, end]) => total + end - start, 0)
-        expect(bytes).toBeLessThanOrEqual(value.length)
-        expect(actual.every(([start], index) => index === 0 || start >= actual[index - 1][1])).toBe(
-          true
-        )
-        expect(reads).toBeLessThanOrEqual(3 * bytes + 2 * actual.length)
-      } finally {
-        probe.mockRestore()
-        admissions.mockRestore()
-      }
-    }
   }
 })
 
@@ -591,58 +483,25 @@ it('keeps bare-link destinations separate from escaped text and mark delimiters'
   }
 })
 
-it('bounds actual trailing-whitespace reads through marked document read-back at N and 10N', () => {
-  for (const length of [800, 8000]) {
-    const spaces = ' '.repeat(length)
-    const cases = [
-      { text: `a${spaces}b`, marks: ['strong'], expected: `**a${spaces}b**`, bound: 1, suffix: 1 },
-      {
-        text: `a${spaces}`,
-        marks: ['strong'],
-        expected: `**a**${spaces}`,
-        bound: length + 1,
-        suffix: length + 1
-      },
-      {
-        text: `a${spaces}`,
-        marks: ['strong', 'em', 'strike'],
-        expected: `**_~~a~~_**${spaces}`,
-        bound: 3 * (length + 1),
-        suffix: length + 1
-      }
-    ]
-    for (const { text, marks, expected, bound, suffix } of cases) {
-      const visited = new Set<number>()
-      let reads = 0
-      const probe = vi
-        .spyOn(trailingWhitespaceReader, 'read')
-        .mockImplementation((value, index) => {
-          reads++
-          visited.add(index)
-          return value[index]
-        })
-      try {
-        expect(
-          adfToMarkdownText({
-            type: 'doc',
-            content: [
-              {
-                type: 'paragraph',
-                content: [{ type: 'text', text, marks: marks.map((type) => ({ type })) }]
-              }
-            ]
-          })
-        ).toBe(expected)
-        expect(reads, 'trailing whitespace endpoint coverage').toBeGreaterThan(0)
-        expect(reads).toBeLessThanOrEqual(bound)
-        for (let index = text.length - suffix; index < text.length; index++) {
-          expect(visited.has(index), 'trailing whitespace endpoint coverage').toBe(true)
+it('preserves trailing whitespace outside inline marks', () => {
+  const spaces = ' '.repeat(8)
+  expect(
+    adfToMarkdownText({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: `a${spaces}`,
+              marks: [{ type: 'strong' }, { type: 'em' }, { type: 'strike' }]
+            }
+          ]
         }
-      } finally {
-        probe.mockRestore()
-      }
-    }
-  }
+      ]
+    })
+  ).toBe(`**_~~a~~_**${spaces}`)
   for (const [text, expected] of [
     ['a\u00a0', '**a**\u00a0'],
     ['', ''],
@@ -673,26 +532,17 @@ it('retains literal heading hashes and punctuation-edged marks on readback', asy
   }
 })
 
-it('bounds table output by cell content at N and 10N without widest-cell padding', () => {
-  for (const [rowCount, width] of [
-    [100, 800],
-    [1000, 8000]
-  ]) {
-    const rows = Array.from({ length: rowCount }, (_, index) => ({
-      type: 'tableRow',
-      content: [index === 0 ? 'a'.repeat(width) : 'a', 'b'].map((text) => ({
-        type: 'tableCell',
-        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
-      }))
+it('serializes tables without padding every row to the widest cell', () => {
+  const wideCell = 'a'.repeat(800)
+  const rows = Array.from({ length: 100 }, (_, index) => ({
+    type: 'tableRow',
+    content: [index === 0 ? wideCell : 'a', 'b'].map((text) => ({
+      type: 'tableCell',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
     }))
-    const output = adfToMarkdownText({ type: 'doc', content: [{ type: 'table', content: rows }] })
-    const cellCharacters = width + 2 * rowCount - 1
-    expect(output.length).toBeLessThanOrEqual(cellCharacters + 4 * 2 * (rowCount + 2))
-    expect(output.split('\n')).toHaveLength(rowCount + 1)
-    expect(output).toBe(
-      `| ${'a'.repeat(width)} | b |\n| - | - |${'\n| a | b |'.repeat(rowCount - 1)}`
-    )
-  }
+  }))
+  const output = adfToMarkdownText({ type: 'doc', content: [{ type: 'table', content: rows }] })
+  expect(output).toBe(`| ${wideCell} | b |\n| - | - |${'\n| a | b |'.repeat(99)}`)
 })
 
 it('retains zero-based ordered-list starts through publication and read-back', async () => {

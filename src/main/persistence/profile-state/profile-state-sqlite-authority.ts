@@ -16,22 +16,27 @@ import {
   openWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from './database/profile-state-database'
-import { writeProfileStateDomains } from './documents/profile-state-domain-writes'
+import {
+  writeProfileStateDomains,
+  type ProfileStateDomainTransaction
+} from './documents/profile-state-domain-writes'
 import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction
 } from './documents/profile-state-domain-write-validation'
-import {
-  parseProfileStateRoot,
-  ProfileStateRevisionConflictError
-} from './documents/profile-state-document-validation'
+import { ProfileStateRevisionConflictError } from './documents/profile-state-document-validation'
 import { assertProfileStateRevisionOnDisk } from './database/profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
 } from './recovery/profile-state-database-quarantine'
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
-import { buildCompleteDocumentReplacements } from './documents/profile-state-complete-replacements'
+import {
+  buildCompleteDocumentReplacements,
+  changedSessionPatches,
+  spliceProfileStateFragments,
+  splitProfileStatePayload
+} from './documents/profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
 import { ensureProfileStateAuthorityMarker } from './database/profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
@@ -176,23 +181,13 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeSerializedState(payload: Buffer): void {
     this.assertActive()
-    const serialized = payload.toString('utf8')
-    if (!Buffer.from(serialized, 'utf8').equals(payload)) {
-      throw new Error('Profile state payload is not valid UTF-8')
-    }
-    const parsed = parseProfileStateRoot(serialized)
-    this.writeCompleteSerializedDomains(
-      Object.entries(parsed).map(([domain, value]) => {
-        const payload = JSON.stringify(value)
-        if (payload === undefined) {
-          throw new Error(`Profile state domain payload is not serializable: ${domain}`)
-        }
-        return { domain, payload }
-      })
-    )
+    this.writeCompleteSerializedDomains(splitProfileStatePayload(payload))
   }
 
-  writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): void {
+  writeCompleteSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[],
+    { patches = [], patching }: Pick<ProfileStateDomainTransaction, 'patches' | 'patching'> = {}
+  ): void {
     this.assertActive()
     if (this.observedRevision === undefined) {
       this.readSerializedState()
@@ -203,19 +198,22 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
         replacements
       })
     }
+    const changed = changedSessionPatches(patches)
     const opened = this.openWritableDatabase()
     this.legacyDocuments.catchUp(this.writableDatabase?.db)
     const currentRevision = readProfileStateRevision(opened.db)
-    const complete = buildCompleteDocumentReplacements(opened.db, replacements)
-    if (currentRevision === 0 || complete.length === 0) {
+    const complete = buildCompleteDocumentReplacements(opened.db, replacements, patches)
+    if (patches.length > 0 && complete.length === 0 && changed.length === 0) {
+      // Only unchanged session domains: nothing to write, but still fence the revision.
+      return this.assertCurrentRevision()
+    }
+    // Patches need the stored copy, so they never take the empty-database import.
+    if (patches.length === 0 && (currentRevision === 0 || complete.length === 0)) {
       // Validate fragments independently so splicing cannot conceal malformed JSON.
       for (const replacement of replacements) {
         prepareProfileStateDomainMutation(replacement)
       }
-      const rawJson = `{${replacements
-        .filter(({ payload }) => payload !== null)
-        .map(({ domain, payload }) => `${JSON.stringify(domain)}:${payload}`)
-        .join(',')}}`
+      const rawJson = spliceProfileStateFragments(replacements)
       this.observedRevision = importProfileStateJson(opened.db, rawJson, {
         expectedRevision: this.observedRevision
       })
@@ -223,7 +221,9 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     }
     this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? currentRevision,
-      replacements: complete
+      replacements: complete,
+      patches: changed,
+      patching
     }).revision
     this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }

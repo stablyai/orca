@@ -32,10 +32,11 @@ import {
   parseZcodeSqliteSessionViaWorker
 } from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { parseClaudeSessionFile } from '../scanners/claude/session-scanner-primary-parsers'
-import { parseGeminiSessionFile } from '../scanners/gemini/session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from '../scanners/codex/session-scanner-codex-parser'
 import { parseCopilotSessionFile } from '../scanners/copilot/session-scanner-copilot-parser'
 import { parseCursorSessionFile } from '../scanners/cursor/session-scanner-cursor-parser'
+import { parseCursorAcpSessionFile } from '../scanners/cursor/session-scanner-cursor-acp-sessions'
+import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import { parseOpenCodeSessionFile } from '../scanners/opencode/session-scanner-opencode-parser'
 import type { SqliteReaderAgent } from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-protocol'
 import type { SessionFileCandidate } from '../session-scanner-types'
@@ -105,14 +106,14 @@ export async function parseAgentSessionFile(
         undefined,
         messages
       )
-    case 'gemini':
-      return parseGeminiSessionFile(candidate.file, platform, messages, signal)
     case 'antigravity':
       return parseAntigravitySessionFile(candidate.file, platform, messages)
     case 'copilot':
       return parseCopilotSessionFile(candidate.file, platform, messages)
     case 'cursor':
-      return parseCursorSessionFile(candidate.file, platform, messages)
+      return isCursorAcpSessionStorePath(candidate.file.path)
+        ? parseCursorAcpSessionFile(candidate.file, platform, signal)
+        : parseCursorSessionFile(candidate.file, platform, messages)
     case 'opencode': {
       // Synthetic db#id paths identify SQLite sessions; real paths retain the legacy JSON parser.
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)

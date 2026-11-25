@@ -39,11 +39,19 @@ export function googleBotAsk(
 ): GoogleBotAsk {
   const { from, headless, botName } = context
   if (state.allowed && state.host === 'connected') {
-    return {
-      kind: 'on',
-      message:
-        'Google is on for you and signed in; no card was shown. `orca bot connectors` shows each service.'
-    }
+    // An offer while on is the owner wanting another account: the Connected card adds one.
+    return from === 'offer' && !headless
+      ? {
+          kind: 'card',
+          message:
+            "Google is already on for you. Your owner now sees Google's Connected card in this chat, where they can add another Google account. `orca bot connectors` shows each account and which is the default; pass --account to use another."
+        }
+      : {
+          kind: 'on',
+          message: headless
+            ? 'Google is on for you and signed in; no card was shown. Your owner adds another Google account with `orca google connect` in a terminal on this server. `orca bot connectors` shows each account and which is the default.'
+            : 'Google is on for you and signed in; no card was shown. `orca bot connectors` shows each service.'
+        }
   }
   if (headless) {
     return { kind: 'server', message: serverLine(state, botName) }

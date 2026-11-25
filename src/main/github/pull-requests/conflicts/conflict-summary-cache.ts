@@ -114,10 +114,3 @@ function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: 
     map.delete(oldest.value)
   }
 }
-
-export function __resetPRConflictSummaryDerivationCachesForTests(): void {
-  baseOidCache.clear()
-  summaryCache.clear()
-  inFlightBaseOidResolves.clear()
-  inFlightSummaryDerivations.clear()
-}

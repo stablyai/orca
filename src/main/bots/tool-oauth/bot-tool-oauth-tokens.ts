@@ -215,7 +215,11 @@ export async function refreshBotToolAccessToken(
 
 /** The row's state, from the store alone; null when the tool isn't one Orca signs in to. */
 export function botToolSignInState(key: BotToolOAuthKey): BotToolSignInStatus | null {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
+  return botToolSignInStatusOf(readBotToolOAuth(key.folder, key.credentialId))
+}
+
+/** `botToolSignInState` for a sign-in already read. */
+export function botToolSignInStatusOf(entry: BotToolOAuthEntry | null): BotToolSignInStatus | null {
   if (!entry) {
     return null
   }

@@ -12,9 +12,7 @@ export function opensOnPairedDesktop(
     BrowserClientPageOpeningHost,
     'getBrowserHostLeaseRegistry' | 'getBrowserHostRequestRegistry'
   >,
-  params:
-    | { placement?: unknown; worktree?: string; url?: string; page?: string; split?: unknown }
-    | undefined,
+  params: { placement?: unknown; worktree?: string; url?: string; page?: string } | undefined,
   caller: { pairedDeviceId?: string; opensPageLink?: boolean } | undefined,
   hasOwnBrowser: boolean
 ): boolean {
@@ -22,18 +20,30 @@ export function opensOnPairedDesktop(
   if (params?.placement || caller?.pairedDeviceId || caller?.opensPageLink) {
     return false
   }
-  // Keep what this host's own browser can do better: unscoped tabs, local URLs, named pages it
-  // may already hold, and splits a desktop page cannot open as.
-  if (
-    hasOwnBrowser &&
-    (!params?.worktree || !isDesktopOpenableUrl(params.url) || params.page || params.split)
-  ) {
+  // Keep what this host's own browser can do better.
+  if (hasOwnBrowser && pairedDesktopTabMismatch(params) !== null) {
     return false
   }
   // With a browser to fall back on, only a desktop that can be asked is worth a request.
   return hasOwnBrowser
     ? host.getBrowserHostRequestRegistry().hasVolunteer()
     : canPlacePairedPage(host)
+}
+
+/** Why a paired desktop can't open this agent tab, or null when it can. A split opens plain there. */
+export function pairedDesktopTabMismatch(
+  params: { worktree?: string; url?: string; page?: string } | undefined
+): string | null {
+  if (!params?.worktree) {
+    return 'An Orca desktop opens agent tabs only inside a workspace; run tab create from one or pass --worktree.'
+  }
+  if (!isDesktopOpenableUrl(params.url)) {
+    return 'An Orca desktop opens only http(s) pages for this host.'
+  }
+  if (params.page) {
+    return "An Orca desktop can't open a tab under a page id this host picks."
+  }
+  return null
 }
 
 // Match what the desktop opens, so `localhost:3000` counts as the web URL it becomes there.

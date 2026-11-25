@@ -139,11 +139,3 @@ export function useAiVaultScanProgress(
     ? { ...shown, active: own === shown.progress && own.settledAt === null }
     : null
 }
-
-export function resetAiVaultScanProgressStoreForTests(): void {
-  progressByKey.clear()
-  requestedKeys.clear()
-  pendingLoads.clear()
-  subscribed = false
-  listeners.clear()
-}

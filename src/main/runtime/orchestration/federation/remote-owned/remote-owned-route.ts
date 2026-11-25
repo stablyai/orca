@@ -14,7 +14,8 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
   getRemoteDispatch,
-  getRemoteOwnedQuestion
+  getRemoteOwnedQuestion,
+  recordRemoteAskAnswered
 } from '../../db/remote-owned/remote-dispatch-records'
 import { adoptRemoteAttempt } from '../../db/remote-owned/remote-placements'
 import {
@@ -108,10 +109,12 @@ export async function routeRemoteOwnedCall(
       }
     }
   }
-  return {
-    handled: true,
-    result: await forwardToLink(runtime, subject, request.method, access, values, forward)
+  const result = await forwardToLink(runtime, subject, request.method, access, values, forward)
+  if (request.method === 'orchestration.reply' && subject.questionId) {
+    // The answer never runs this Orca's reply, so its question's ending is recorded here.
+    recordRemoteAskAnswered(db, subject.questionId)
   }
+  return { handled: true, result }
 }
 
 /** `--on <server>`: a start, a list, or a receipt lookup there; send and reply --on to anything else stay peer mail. */
@@ -123,8 +126,12 @@ async function routeServerCall(
   ctx: RpcContext,
   on: string
 ): Promise<Routed> {
-  // A chat named by its session ID is refused by the ordinary start before any server is asked.
-  if (!SERVER_CALLS.has(request.method) || isSessionAddress(values.terminal)) {
+  // A chat named by its session ID, or a bot item's start, is refused by the ordinary start before any server is asked.
+  if (
+    !SERVER_CALLS.has(request.method) ||
+    isSessionAddress(values.terminal) ||
+    stringField(values, 'origin') !== undefined
+  ) {
     return LOCAL
   }
   checkDeclaredOrchestrationAccess(access, values, ctx)
@@ -208,7 +215,7 @@ async function routeServerCall(
   }
 }
 
-type RemoteSubject = { link: RemoteRunLinkRow; dispatchId?: string }
+type RemoteSubject = { link: RemoteRunLinkRow; dispatchId?: string; questionId?: string }
 
 /** The worker or question a call names, when a paired server owns it. Tasks stay in this Orca's graph. */
 function remoteSubject(
@@ -229,7 +236,7 @@ function remoteSubject(
     const conversationId = record?.conversation_id ?? question?.conversation_id
     const link = conversationId ? getRemoteRunLink(db, conversationId) : undefined
     if (link) {
-      return { link, dispatchId: record?.dispatch_id }
+      return { link, dispatchId: record?.dispatch_id, questionId: question?.message_id }
     }
   }
   return undefined

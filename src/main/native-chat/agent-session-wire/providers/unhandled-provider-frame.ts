@@ -4,6 +4,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import {
   boundPayload,
+  CODEX_AUTO_REVIEW_DENIAL_FRAME_LIMITS,
   PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../../agent-session-journal/item-lifecycle/journal-payload-bounds'
@@ -165,10 +166,17 @@ export function unhandledProviderFrameJournalItem(
   ) {
     return null
   }
-  const serialized = serializeProviderPayload(payload)
-  const bounded = boundPayload(serialized, limits)
   // Lead with the provider sentence; raw opcodes are unreadable protocol noise.
   const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
+  const denial =
+    provider === 'codex' && method === 'item/autoApprovalReview/completed'
+      ? readCodexAutoReviewDenial(payload)
+      : null
+  const serialized = serializeProviderPayload(payload)
+  const bounded = boundPayload(
+    serialized,
+    denial?.event ? CODEX_AUTO_REVIEW_DENIAL_FRAME_LIMITS : limits
+  )
   const compaction =
     provider === 'codex' && (method === 'thread/compacted' || method === 'item:contextCompaction')
   const noticeTone =
@@ -208,10 +216,6 @@ export function unhandledProviderFrameJournalItem(
         : null
     message = typeof content === 'string' && content.trim() ? content.trim() : message
   }
-  const denial =
-    provider === 'codex' && method === 'item/autoApprovalReview/completed'
-      ? readCodexAutoReviewDenial(payload)
-      : null
   if (denial) {
     message = `Codex's automatic review denied: ${denial.summary}${denial.rationale ? `\n\n${denial.rationale}` : ''}`
   }

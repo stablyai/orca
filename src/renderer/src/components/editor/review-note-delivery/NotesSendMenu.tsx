@@ -121,7 +121,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   }, [defaultScopeId, enabledScopes])
   const hasDeliverableNotes = enabledScopes.length > 0
   // Notes only on their way to an agent are not sent yet.
-  const disabledTitle = !owner
+  const disabledReason = !owner
     ? undefined
     : scopes.some((scope) => scope.notes.length > 0)
       ? t('components.native-chat.question.sending', 'Sending…')
@@ -221,7 +221,6 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                 triggerClassName
               )}
               disabled={!hasDeliverableNotes}
-              title={hasDeliverableNotes ? enabledSendTooltip(t) : disabledTitle}
               aria-label={
                 triggerLabel
                   ? t(
@@ -231,6 +230,8 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                     )
                   : enabledSendTooltip(t)
               }
+              // A disabled button can't take focus, so its tooltip never reaches screen readers.
+              aria-description={hasDeliverableNotes ? undefined : disabledReason}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
@@ -251,9 +252,9 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        {hasDeliverableNotes || disabledTitle ? (
+        {hasDeliverableNotes || disabledReason ? (
           <TooltipContent side="bottom" sideOffset={6}>
-            {hasDeliverableNotes ? enabledSendTooltip(t) : disabledTitle}
+            {hasDeliverableNotes ? enabledSendTooltip(t) : disabledReason}
           </TooltipContent>
         ) : null}
       </Tooltip>

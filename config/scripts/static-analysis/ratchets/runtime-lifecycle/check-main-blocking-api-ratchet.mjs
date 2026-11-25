@@ -62,17 +62,17 @@ export function countBlockingApis(sources) {
     if (!isMainBlockingSource(file)) {
       continue
     }
+    const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
     for (const [category, collector] of collectors) {
-      const { count } = collector.collectUses(file, contents)
+      const { count } = collector.collectUses(file, contents, source)
       if (count) {
         counts.get(category).set(file, count)
       }
     }
-    const sql = countSqliteCalls(file, contents)
+    const sql = countSqliteCalls(file, contents, source)
     if (sql) {
       counts.get('sqlite').set(file, sql)
     }
-    const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
     let ipc = 0
     function visit(node) {
       if (
@@ -103,10 +103,8 @@ export function countBlockingApis(sources) {
   return counts
 }
 
-export async function main(root = process.cwd(), arg = undefined) {
-  const counts = countBlockingApis(
-    await readEventLoopSources(root, ['src/main', 'src/shared', 'src/preload'])
-  )
+export async function main(root = process.cwd(), arg = undefined, sources = undefined) {
+  const counts = countBlockingApis(sources ?? (await readEventLoopSources(root)))
   let status = 0
   for (const [category, current] of counts) {
     const result = runCountRatchet(

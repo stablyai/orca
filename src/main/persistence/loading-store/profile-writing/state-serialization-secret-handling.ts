@@ -9,6 +9,7 @@ import { collectFolderWorkspaceDiffComments } from '../../../workspaces/catalog/
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot,
+  type ProtectedSecretPlaintext,
   type ProtectedSecretRetentionUpdate
 } from '../../../credentials/protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../../applying-settings/terminal-settings-migrations'
@@ -28,7 +29,10 @@ import {
   WorkspaceSessionSaveBaseline,
   type WorkspaceSessionSaveCandidate
 } from './workspace-session-save-baseline'
-import { isWorkspaceSessionDomain } from '../../workspace-session-domains'
+import {
+  isWorkspaceSessionDomain,
+  WORKSPACE_SESSION_DOMAINS
+} from '../../workspace-session-domains'
 
 /** Domains whose saved form differs from state; whole saves keep this order after the durable spread. */
 const PROJECTED_SAVE_DOMAINS = [
@@ -116,9 +120,9 @@ export class StateSerializationSecretHandlingOperations {
     for (const domain of saved) {
       const value = this.projectDomainToSave(domain, encrypt)
       if (sessionSaves && isWorkspaceSessionDomain(domain)) {
-        const { patch, candidate } = this.sessionSaveBaseline.capture(domain, value)
+        const { patch, candidate } = this.sessionSaveBaseline.capture(domain, value, sessionSaves)
         sessionCandidates.push(candidate)
-        if (patch && sessionSaves === 'patch') {
+        if (patch) {
           if (patch.operations.length > 0) {
             patches.push(patch)
           }
@@ -136,11 +140,18 @@ export class StateSerializationSecretHandlingOperations {
     }
   }
 
-  buildStateToSave(serializeDomains = false): {
+  /** With sessionSaves, session domains are recorded as the writer's next copy; with 'patch', those
+   *  the writer already holds travel as changed entries and drop out of the payload and hash. */
+  buildStateToSave(
+    serializeDomains = false,
+    sessionSaves?: 'patch' | 'whole'
+  ): {
     domains?: readonly ProfileStateDomainReplacement[]
     payload: Buffer
     stateHash: string
     protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+    patches?: ProfileStateDomainPatch[]
+    sessionCandidates?: WorkspaceSessionSaveCandidate[]
   } {
     // Mint slot UUIDs after user data is captured; ciphertext searches could match user data and hide real changes.
     const secretSubs: SecretSentinelSubstitution[] = []
@@ -169,18 +180,33 @@ export class StateSerializationSecretHandlingOperations {
       serializeDomains &&
       !('toJSON' in stateToSave && typeof stateToSave.toJSON === 'function')
     ) {
-      const serialized = serializeCompleteProfileStateDomains(
-        stateToSave,
-        secretSubs,
-        protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
-      )
+      const patches: ProfileStateDomainPatch[] = []
+      const sessionCandidates: WorkspaceSessionSaveCandidate[] = []
+      let hashPrefix = protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
+      for (const domain of sessionSaves ? WORKSPACE_SESSION_DOMAINS : []) {
+        const { patch, candidate } = this.sessionSaveBaseline.capture(
+          domain,
+          stateToSave[domain],
+          sessionSaves ?? 'whole'
+        )
+        sessionCandidates.push(candidate)
+        if (patch) {
+          patches.push(patch)
+          delete stateToSave[domain]
+          // Keep a patched capture's hash distinct from a whole one; changed entries force a write.
+          hashPrefix += `patched:${domain}\0`
+        }
+      }
+      const serialized = serializeCompleteProfileStateDomains(stateToSave, secretSubs, hashPrefix)
       return {
         domains: serialized.domains,
         stateHash: serialized.stateHash,
         get payload() {
           return serialized.payload
         },
-        protectedSecretUpdates
+        protectedSecretUpdates,
+        patches,
+        sessionCandidates
       }
     }
     const serialized = JSON.stringify(stateToSave)
@@ -191,6 +217,45 @@ export class StateSerializationSecretHandlingOperations {
       protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
     )
     return { payload, stateHash, protectedSecretUpdates }
+  }
+
+  /** The protected values a save of these dirty domains writes; null or empty means a whole save. */
+  protectedPlaintexts(dirtyDomains: ReadonlySet<string> | null): ProtectedSecretPlaintext[] {
+    const { state, protectedSecrets } = this.runtime
+    // Mirrors buildStateDomainsToSave: pending encryption forces a whole save.
+    const saved =
+      dirtyDomains && dirtyDomains.size > 0 && !protectedSecrets.hasPendingEncryption()
+        ? withDependentSaveDomains(dirtyDomains)
+        : null
+    const writes = (domain: string): boolean => saved === null || saved.has(domain)
+    return [
+      ...(writes('settings')
+        ? [
+            {
+              slot: PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+              plaintext: state.settings.opencodeSessionCookie
+            },
+            {
+              slot: PROTECTED_SECRET_SLOT.httpProxyUrl,
+              plaintext: state.settings.httpProxyUrl ?? ''
+            }
+          ]
+        : []),
+      ...(writes('ui')
+        ? [
+            {
+              slot: PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+              plaintext: state.ui.browserKagiSessionLink ?? ''
+            }
+          ]
+        : []),
+      ...(writes('sshPtyConsumerRecoveries')
+        ? (state.sshPtyConsumerRecoveries ?? []).map((record) => ({
+            slot: sshPtyOwnerLeaseSecretSlot(record.targetId),
+            plaintext: record.ownerLease
+          }))
+        : [])
+    ]
   }
 
   /** The one saved form of each domain, shared by selective and whole saves. */

@@ -10,7 +10,12 @@ export type ProfileStateWriterInitialization = {
 
 export type ProfileStateWriterCommand =
   | { command: 'write-state'; payload: Uint8Array }
-  | { command: 'write-complete'; replacements: readonly ProfileStateDomainReplacement[] }
+  | {
+      command: 'write-complete'
+      replacements: readonly ProfileStateDomainReplacement[]
+      /** Patched domains are kept, not deleted as omitted; validated when applied. */
+      patches?: readonly ProfileStateDomainPatch[]
+    }
   | {
       command: 'write-domains'
       replacements: readonly ProfileStateDomainReplacement[]
@@ -87,7 +92,6 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
     case 'export-latest':
       return typeof value.targetPath === 'string' && value.targetPath.length > 0
     case 'write-complete':
-      return Array.isArray(value.replacements) && value.replacements.every(isReplacement)
     case 'write-domains':
       return (
         Array.isArray(value.replacements) &&

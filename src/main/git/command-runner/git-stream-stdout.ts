@@ -4,7 +4,7 @@ import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './process-capture/abort-error'
 import {
-  killAbandonedWorkerChildTree,
+  endAbandonedWorkerChild,
   killSpawnedCommandTree
 } from './process-capture/spawned-command-tree-kill'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
@@ -130,7 +130,8 @@ function streamInSpan(
             if (!child.pid) {
               reportTermination()
             } else if (isAbandonedWorkerChildError(error)) {
-              void killAbandonedWorkerChildTree(child).then(reportTermination)
+              // A streamed read holds only admission, which a lost worker returns.
+              endAbandonedWorkerChild(child, undefined, reportTermination, true)
             }
           })
         })

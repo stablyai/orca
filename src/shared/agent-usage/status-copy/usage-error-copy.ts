@@ -2,7 +2,9 @@ import type { ProviderRateLimits, UsageRateLimitMetadata } from '../rate-limits/
 import { getProviderDisplayName } from '../display/usage-provider-windows'
 import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up-copy'
 import { formatRateLimitUserFacingError } from './rate-limit-user-facing-error'
+import { isCodexUsageSignInRequired } from '../../agent-accounts/codex/codex-auth-errors'
 import type { UsageCopyTranslate } from './usage-copy-translate'
+import { isClaudeUsageWaitingForClaude, isCodexUsageWaitingForCodex } from './usage-waiting-for-cli'
 
 /** The fields the copy reads; strings stay open so a phone can pass a newer host's kind, which gets the generic copy. */
 export type UsageStatusCopySource = {
@@ -62,10 +64,7 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
-/** An idle login's access token lapsed, not the login: Claude refreshes it the next time it runs. */
-export function isClaudeUsageWaitingForClaude(p: UsageStatusCopySource): boolean {
-  return p.provider === 'claude' && p.usageMetadata?.failureKind === 'stale-token'
-}
+export { isClaudeUsageWaitingForClaude, isCodexUsageWaitingForCodex }
 
 export function getProviderUsageStatusLabel(
   p: UsageStatusCopySource,
@@ -84,6 +83,9 @@ export function getProviderUsageStatusLabel(
   }
   if (delegatedCliProvider === 'kimi') {
     return t('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
+  if (isCodexUsageWaitingForCodex(p)) {
+    return t('auto.components.status.bar.tooltip.codex.waiting.label', 'Updates when Codex runs')
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -120,6 +122,10 @@ export function getProviderUsageStatusLabel(
   }
   if (p.usageMetadata?.failureKind === 'network') {
     return t('auto.components.status.bar.tooltip.f8f0f9d8cc', 'Network issue')
+  }
+  // Why before the rate-limit check: Codex wraps a revoked login as "failed to fetch codex rate limits".
+  if (isCodexUsageSignInRequired(p)) {
+    return t('accounts.codex.usageSignInLabel', 'Signed out')
   }
   // MiniMax signals credential expiry in its payload, so generic refresh-failure copy is misleading.
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
@@ -167,6 +173,12 @@ export function getProviderUsageErrorMessage(
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
   }
+  if (isCodexUsageWaitingForCodex(p)) {
+    return t(
+      'auto.components.status.bar.tooltip.codex.waiting.message',
+      'Codex usage updates the next time Codex runs.'
+    )
+  }
   if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {
     return t(
       'auto.components.status.bar.tooltip.cursor.expired.message',
@@ -205,10 +217,7 @@ export function getProviderUsageErrorMessage(
           'Claude sign-in credentials could not be read.'
         )
       case 'missing-credentials':
-        return t(
-          'accounts.claude.usageSignInMessage',
-          'The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.'
-        )
+        return t('accounts.claude.usageSignInMessage', 'This account needs you to sign in again.')
       case 'server':
       case 'parse':
       case 'usage-unavailable':
@@ -223,6 +232,9 @@ export function getProviderUsageErrorMessage(
       case undefined:
         break
     }
+  }
+  if (isCodexUsageSignInRequired(p)) {
+    return getProviderUsageStatusLabel(p, t)
   }
   if (isUsageRateLimitError(p)) {
     return formatRateLimitUserFacingError(p.error, t) || p.error

@@ -1,14 +1,16 @@
-// One of Orca's asks in a bot's Needs you group, in an item row's anatomy: a glyph for its kind, its
-// title, what it asks. The row body opens where it was asked; hover or focus shows the same action
+// One of Orca's asks in a bot's Needs you group, in an item row's anatomy: a glyph for its kind and its
+// title on one line; what it asks in the hover card. The row body opens where it was asked; hover or focus shows the same action
 // named. Asks have no checkbox, age or status menu: answering happens where they were asked.
-import { createContext, memo, useContext } from 'react'
+import { createContext, memo, useContext, useId } from 'react'
 import { CircleAlert, CircleHelp, Shield, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
+import type { BotOnHost } from '@/lib/bot-hosts'
 import { openBotAutomation } from './bot-automation-open'
 import { BotItemNumberColumn } from './items/BotItemNumberColumn'
+import { BotRowHoverCard } from './BotPanelRow'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './items/bot-item-row-hover-actions'
 import { useNeedsYouRowCommit } from './use-needs-you-focus'
 import type { Bot } from '../../../../shared/bot-types'
@@ -74,31 +76,37 @@ export function NeedRow({
   const t = useTranslate()
   useNeedsYouRowCommit()
   const face = useContext(NeedRowBot)
-  const text = (
+  const descriptionId = useId()
+  // One line like every row; who asks and what sits in the hover card and the description.
+  const facts = (
     <>
-      <span className="block truncate text-[13px] leading-5 text-foreground">{title}</span>
-      <span className="flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
-        {host}
-        <span className="min-w-0 truncate">
-          {worker ? (
-            <>
-              <span className="text-foreground/85">
-                {t('bots.needs.worker', 'Worker: {{name}}', { name: worker })}
-              </span>
-              {' · '}
-            </>
-          ) : null}
-          {detail}
-          {code ? (
-            <>
-              {' '}
-              <code className="font-mono text-xs">{code}</code>
-            </>
-          ) : null}
-        </span>
-      </span>
+      {worker ? (
+        <>
+          <span className="text-foreground/85">
+            {t('bots.needs.worker', 'Worker: {{name}}', { name: worker })}
+          </span>
+          {detail ? ' · ' : null}
+        </>
+      ) : null}
+      {detail}
+      {code ? (
+        <>
+          {' '}
+          <code className="font-mono text-xs">{code}</code>
+        </>
+      ) : null}
     </>
   )
+  const card = (
+    <>
+      <p className="font-medium text-foreground">{title}</p>
+      <p className="mt-1 flex min-w-0 items-center gap-1 text-muted-foreground">
+        {host}
+        <span className="min-w-0">{facts}</span>
+      </p>
+    </>
+  )
+  const text = <span className="block truncate text-[13px] leading-5 text-foreground">{title}</span>
   const body =
     number === null ? (
       text
@@ -117,18 +125,24 @@ export function NeedRow({
         <NeedGlyph kind={kind} />
       </span>
       {face ? <BotItemRowFace bot={face} /> : null}
-      {action ? (
-        <button
-          type="button"
-          aria-label={action.named ? action.label : actionFor(t, action.label, title)}
-          className="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={action.onOpen}
-        >
-          {body}
-        </button>
-      ) : (
-        <span className="min-w-0 flex-1">{body}</span>
-      )}
+      <BotRowHoverCard card={card}>
+        {action ? (
+          <button
+            type="button"
+            aria-label={action.named ? action.label : actionFor(t, action.label, title)}
+            aria-describedby={descriptionId}
+            className="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={action.onOpen}
+          >
+            {body}
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1">{body}</span>
+        )}
+      </BotRowHoverCard>
+      <span id={descriptionId} hidden>
+        {facts}
+      </span>
       {action || skip ? (
         // The body is the row's tab stop and name; this shows its action, fading over the title.
         <span className={cn(BOT_ITEM_ROW_HOVER_ACTIONS, 'gap-0.5')}>
@@ -166,14 +180,17 @@ export function actionFor(t: Translate, action: string, title: string): string {
   return t('bots.needs.actionFor', '{{action}}: {{title}}', { action, title })
 }
 
+/** An automation a sign-in stopped, stamped with its bot's host: a group lists several hosts' runs. */
+export type StoppedForSignIn = BotAutomationRow & BotOnHost
+
 /** An automation a sign-in stopped: listed beside the connector needs as context, never counted. */
 export const StoppedForSignInRow = memo(function StoppedForSignInRow({
   row
 }: {
-  row: BotAutomationRow
+  row: StoppedForSignIn
 }): React.JSX.Element {
   const t = useTranslate()
-  const { automation, latestRunId } = row
+  const { automation, latestRunId, hostId } = row
   return (
     <NeedRow
       kind="stopped"
@@ -181,7 +198,7 @@ export const StoppedForSignInRow = memo(function StoppedForSignInRow({
       detail={t('bots.needs.runSignIn', 'Couldn’t run until you sign in.')}
       action={{
         label: t('bots.needs.openRun', 'Open run'),
-        onOpen: () => openBotAutomation(automation.id, latestRunId ?? null)
+        onOpen: () => openBotAutomation(hostId, automation.id, latestRunId ?? null)
       }}
     />
   )

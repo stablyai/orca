@@ -7,8 +7,7 @@ import { matchesRecentTabSwitcherChord } from '../../../../../shared/keybindings
 import { useAppStore } from '../../../store/index'
 import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
-  isEventTargetInsideFloatingWorkspacePanel,
-  isFloatingWorkspacePanelFocused
+  isFloatingWorkspaceKeyTarget
 } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   createFloatingWorkspaceBrowserTab,
@@ -55,8 +54,7 @@ export function handleTerminalWorkspaceKeyDown(
     return
   }
   const context = getKeybindingContext(event.target)
-  const floatingWorkspaceFocused =
-    isEventTargetInsideFloatingWorkspacePanel(event.target) || isFloatingWorkspacePanelFocused()
+  const floatingWorkspaceFocused = isFloatingWorkspaceKeyTarget(event.target)
   const matchShortcut = (actionId: KeybindingActionId): boolean =>
     keybindingMatchesAction(actionId, event, shortcutPlatform, keybindings, {
       context,
@@ -205,9 +203,7 @@ export function handleTerminalWorkspaceKeyDown(
     return
   }
   if (!event.repeat && matchShortcut('tab.close')) {
-    const floatingPanelOwnsEvent =
-      isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
-    if (previewOwnsClose || floatingPanelOwnsEvent) {
+    if (previewOwnsClose || floatingWorkspaceFocused) {
       return
     }
     if (dispatchWorkspaceTabCommand({ type: 'close', context })) {

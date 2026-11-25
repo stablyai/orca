@@ -16,6 +16,8 @@ export type ClaudeStatusLineWindow = {
 export type ClaudeStatusLineRateLimits = {
   /** CLAUDE_CONFIG_DIR of the reporting session; null for system-default sessions. */
   configDir: string | null
+  /** Reporting Claude session (payload session_id); null when the payload omits it. */
+  sessionId?: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
 }
@@ -49,33 +51,50 @@ function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
   }
 }
 
-/** Parse managed statusline form data; null means no usable rate-limit windows. */
-export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLimits | null {
-  if (typeof body !== 'object' || body === null) {
+export type ClaudeStatusLineForm = {
+  fields: object
+  payload: object
+}
+
+/** Parse the managed statusline form's JSON payload once for every reader of the post. */
+export function readClaudeStatusLineForm(body: unknown): ClaudeStatusLineForm | null {
+  if (typeof body !== 'object' || body === null || !('payload' in body)) {
     return null
   }
-  const fields = body as { payload?: unknown; configDir?: unknown }
-  if (typeof fields.payload !== 'string' || !fields.payload) {
+  if (typeof body.payload !== 'string' || !body.payload) {
     return null
   }
   let payload: unknown
   try {
-    payload = JSON.parse(fields.payload)
+    payload = JSON.parse(body.payload)
   } catch {
     return null
   }
-  if (typeof payload !== 'object' || payload === null) {
-    return null
-  }
-  const rateLimits = (payload as { rate_limits?: unknown }).rate_limits
+  return typeof payload === 'object' && payload !== null ? { fields: body, payload } : null
+}
+
+/** Null means no usable rate-limit windows. */
+export function readClaudeStatusLineRateLimits({
+  fields,
+  payload
+}: ClaudeStatusLineForm): ClaudeStatusLineRateLimits | null {
+  const rateLimits = 'rate_limits' in payload ? payload.rate_limits : undefined
   if (typeof rateLimits !== 'object' || rateLimits === null) {
     return null
   }
-  const fiveHour = parseWindow((rateLimits as { five_hour?: unknown }).five_hour)
-  const sevenDay = parseWindow((rateLimits as { seven_day?: unknown }).seven_day)
+  const fiveHour = parseWindow('five_hour' in rateLimits ? rateLimits.five_hour : undefined)
+  const sevenDay = parseWindow('seven_day' in rateLimits ? rateLimits.seven_day : undefined)
   if (!fiveHour && !sevenDay) {
     return null
   }
-  const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
-  return { configDir: configDir || null, fiveHour, sevenDay }
+  const configDir =
+    'configDir' in fields && typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
+  const sessionId =
+    'session_id' in payload && typeof payload.session_id === 'string' ? payload.session_id : ''
+  return {
+    configDir: configDir || null,
+    sessionId: sessionId || null,
+    fiveHour,
+    sevenDay
+  }
 }

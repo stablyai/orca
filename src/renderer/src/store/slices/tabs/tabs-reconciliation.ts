@@ -26,6 +26,15 @@ export type WorktreeTabModelReconciliation = {
   activeRenderableTabId: string | null
 }
 
+export function hasRecordIndependentRenderableTab(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string
+): boolean {
+  return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+    (tab) => TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord
+  )
+}
+
 /** Pure single-workspace patch; optional batch reuses map drafts/openFiles index without changing projected values. */
 export function projectWorktreeTabModelReconciliation(
   state: AppState,
@@ -115,8 +124,7 @@ export function projectWorktreeTabModelReconciliation(
   const liveTerminalIds = new Set(
     runtimeTerminalTabs.filter((tab) => !orphanTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
-  // Batch index avoids O(workspaces × openFiles) rescanning.
-  const liveEditorIds = batch?.liveEditorIds ?? new Set(state.openFiles.map((file) => file.id))
+  let liveEditorIds = batch?.liveEditorIds
   const liveBrowserIds = new Set(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
   )
@@ -129,7 +137,8 @@ export function projectWorktreeTabModelReconciliation(
       return liveBrowserIds.has(tab.entityId)
     }
     return (
-      TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord || liveEditorIds.has(tab.entityId)
+      TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord ||
+      (liveEditorIds ??= new Set(state.openFiles.map((file) => file.id))).has(tab.entityId)
     )
   }
 
@@ -139,8 +148,12 @@ export function projectWorktreeTabModelReconciliation(
     renderableTabs.length === reconciledUnifiedTabs.length ? reconciledUnifiedTabs : renderableTabs
   const validTabIds = new Set(validTabs.map((tab) => tab.id))
   const nextGroupsWithEmpty = reconciledGroups.map((group) => {
-    const slots = structuredLaunchSlotIds(worktreeId, group.id)
-    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId) || slots.has(tabId))
+    let slots: Set<string> | undefined
+    const tabOrder = group.tabOrder.filter(
+      (tabId) =>
+        validTabIds.has(tabId) ||
+        (slots ??= structuredLaunchSlotIds(worktreeId, group.id)).has(tabId)
+    )
     const realOrder = tabOrder.filter((id) => validTabIds.has(id))
     const activeTabId =
       group.activeTabId && validTabIds.has(group.activeTabId)

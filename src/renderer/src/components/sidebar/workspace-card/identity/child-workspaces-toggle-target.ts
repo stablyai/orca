@@ -2,6 +2,7 @@ import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktre
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getHoveredWorkspaceIdentity } from './hovered-workspace-identity'
@@ -78,7 +79,10 @@ export function resolveChildWorkspacesToggleGroupKey(
 }
 
 /** Uses mounted rows so temporary reveal and drag policies match the existing chip. */
-export function getRenderedLineageChipKeys(state: AppState): Set<string> {
+export function getRenderedLineageChipKeys(
+  state: AppState,
+  statuses: RuntimeStatuses
+): Set<string> {
   const publishedTargets = getPublishedVisibleWorktreeShortcutTargets()
   if (publishedTargets !== null) {
     return new Set(
@@ -88,10 +92,10 @@ export function getRenderedLineageChipKeys(state: AppState): Set<string> {
   const visibleWorktrees = computeVisibleWorktrees(
     selectWorktreesByRepo(state),
     [],
-    buildVisibleWorktreeOptionsFromState(state, getIndexedRepoMap(state.repos))
+    buildVisibleWorktreeOptionsFromState(state, statuses, getIndexedRepoMap(state.repos))
   )
   const keys = new Set<string>()
-  for (const row of computeRenderedSidebarRows(state, visibleWorktrees)) {
+  for (const row of computeRenderedSidebarRows(state, statuses, visibleWorktrees)) {
     if (row.type === 'item' && row.lineageGroupKey && row.lineageChildCount > 0) {
       keys.add(row.lineageGroupKey)
     }

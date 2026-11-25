@@ -57,6 +57,18 @@ export type OrcaAccountApprovalPrompt = {
   expiresAt: number
 }
 
+// Why a fixed list: a paired computer sends this link and the phone opens it, so the phone can't take
+// that computer's word for which site its Orca Cloud is.
+// Why a prefix and not `new URL().origin`: React Native's URL reads parts with regexes, not a real
+// parser. The computer always sends the normalized link, so its text starts with the origin and `/`.
+// Keep in step with PRODUCTION_API_BASE_URL in profile-cloud-auth-config.ts if the sign-in host moves.
+const ORCA_CLOUD_SIGN_IN_PAGE_PREFIXES: readonly string[] = ['https://login.onorca.dev/']
+
+/** Whether `url` is an https page of Orca Cloud's own sign-in site. */
+export function isOrcaCloudSignInPage(url: string): boolean {
+  return ORCA_CLOUD_SIGN_IN_PAGE_PREFIXES.some((prefix) => url.startsWith(prefix))
+}
+
 export type OrcaAccountSignInPrompt = OrcaAccountAuthorizeRequest | OrcaAccountApprovalPrompt
 
 export function isOrcaAccountApprovalPrompt(

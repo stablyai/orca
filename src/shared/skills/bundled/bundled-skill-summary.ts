@@ -36,7 +36,8 @@ const OP_PLAN_STATE: Readonly<Record<BundledSkillOpKind, BundledSkillPlanState>>
 }
 
 export const BUNDLED_SKILL_LEAVE_REASON_TEXT: Readonly<Record<BundledSkillLeaveReason, string>> = {
-  edited: 'Skill edited outside Orca',
+  // Why neutral: an older Orca release with extra files and a hand edit both land here.
+  edited: "This copy differs from Orca's",
   'other-build': 'Installed by another Orca version',
   other: 'A different skill uses this name',
   unwritable: "Orca can't write to this folder",
@@ -279,7 +280,7 @@ export type BundledSkillOutcomeSummary = {
   text: BundledSkillOutcomeText
   /** Printed as warnings; never part of the exit code. */
   leftAlone: BundledSkillLeftAlone[]
-  /** e.g. "Updated - 1 skipped: Skill edited outside Orca". */
+  /** e.g. "Updated - 1 skipped: This copy differs from Orca's". */
   line: string
 }
 

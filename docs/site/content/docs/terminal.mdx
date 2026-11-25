@@ -10,6 +10,8 @@ Terminals are just tabs — see [Tabs, panes & split layouts](/docs/model/tabs-p
 
 Agent terminal tabs show the agent identity plus live state: working, waiting for input, completed, or completed-but-unread. For Claude and Codex, tab titles can also show the **AI Vault conversation name** (custom title / thread name) when Orca can map the pane to that session — manual renames still win.
 
+Desktop Orca can keep inline images in up to two mounted hidden panes per window while their output stays continuous. A pane needs at least one placed image when you switch away to qualify. A Kitty image that is still decoding or has only been uploaded can be lost, and recovery after a delivery gap or a cold reopen can restore text without graphics.
+
 ## Resource Manager terminals
 
 The **Resources** view works in both the desktop app and the paired web client while its page is visible. The separate **PTYs** view manages local desktop terminals; a web client cannot end those terminals.
@@ -42,6 +44,10 @@ Turn the popover off under [Settings → Browser → Show terminal link actions]
 
 Right-click a terminal and choose **Copy Context** to copy a bounded transcript from that pane. Use it when you want to paste recent agent output into another tool without starting an Orca fork.
 
+## Pasted and dropped images
+
+When you paste or drop a local image into a terminal, Orca shows it in the pane header. Hover over an image chip to see its thumbnail and path, or click to open the file in Orca. Each mounted pane keeps its four most recent images. Scroll the chip strip horizontally to reach older images in a narrow pane. Turn the chips off in **Settings → Terminal → Pasted and dropped image previews**.
+
 ## Themes
 
 Terminal color themes are configurable under [Settings → Terminal](/docs/settings). Orca ships a library of popular themes and lets you customize any of them.
@@ -55,6 +61,23 @@ If you use Ghostty, Orca can import its theme, font, and cursor config on first 
 If you've collected themes in Warp, click **Import themes from Warp** in the terminal-theme picker under [Settings → Terminal](/docs/settings) to bring them in as Orca terminal themes. Orca scans Warp's theme directory for the current OS (`~/.warp/themes` on macOS, `$XDG_DATA_HOME/warp-terminal/themes` on Linux, `%APPDATA%\warp\Warp\data\themes` on Windows) and lets you pick which YAML themes to import. The button next to it, **Import from YAML**, takes the same picker and points it at any folder of Warp-format `.yaml`/`.yml` files — useful when you store themes outside the default location.
 
 Imported themes appear alongside Orca's built-ins in the theme dropdown.
+
+## Terminal capabilities for tools
+
+Orca desktop terminals render 24-bit color, OSC 8 hyperlinks, and inline raster images. The terminal's image renderer supports Kitty graphics, Sixel, and iTerm2 inline pictures when **Settings → Terminal → Inline Images** is enabled.
+
+| Signal                      | Meaning                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TERM_PROGRAM=Orca`         | Identity of the direct Orca terminal. Preserve it when launching tools.                                                                       |
+| `COLORTERM=truecolor`       | Programs can emit 24-bit color.                                                                                                               |
+| `FORCE_HYPERLINK=1`         | Orca can open OSC 8 hyperlinks. Tools that honor this environment variable can emit them.                                                     |
+| `ORCA_IMAGE_PROTOCOL=kitty` | Startup hint for newly opened terminals with inline images enabled and a supporting viewer. Kitty is the preferred encoder for raster images. |
+
+Prefer a Kitty graphics query for live image detection. Send the direct `a=q` query before a primary-device-attributes query, and wait for the graphics reply within a bounded deadline. Orca advertises Sixel in its primary device attributes when the renderer is ready. Terminal settings and the viewer can change after launch.
+
+A local CLI launch on a headless Orca host starts without the image hint. Attaching a desktop later enables rendering in that viewer according to its settings, but the running shell keeps its startup environment.
+
+In tmux, use the multiplexer’s capability information. `TERM_PROGRAM` inside a pane describes tmux, and environment variables inherited from an Orca client can outlive that attachment. For OSC 8, use a version of tmux with hyperlink support and set the `hyperlinks` terminal feature for any matching outer terminal type that supports it. `tmux display-message -p '#{client_termname} #{client_termfeatures}'` shows the attached client’s terminal type and features. Kitty graphics support inside tmux depends on the multiplexer and its attached viewer.
 
 ## macOS and Linux shell
 

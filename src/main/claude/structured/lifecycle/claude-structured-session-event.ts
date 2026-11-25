@@ -24,6 +24,8 @@ export type ClaudeStructuredSessionEvent =
       clientMessageId?: string
       /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
       startedSend?: ClaudeStartedSend
+      /** The user's new title from Claude's rename command, read when the frame arrived. */
+      renamedTo?: string
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }

@@ -77,6 +77,7 @@ export class JournalSqlReaderPool {
       total.receivedBytes += stats.receivedBytes
       total.consumedBytes += stats.consumedBytes
       total.creditWaitsExpired += stats.creditWaitsExpired
+      total.outstandingBytes += stats.unreleasedBytes
     }
     return total
   }
@@ -240,6 +241,15 @@ export class JournalSqlReaderPool {
       throw new Error('journal reader returned no import state')
     }
     return response.state
+  }
+
+  async conversionStorage(sessionId?: string, sizedAt?: string) {
+    const reader = await this.conversionReader()
+    const response = await reader.request({ kind: 'conversion-storage', sessionId, sizedAt })
+    if (response.type !== 'conversion-storage') {
+      throw new Error('journal reader returned no conversion storage')
+    }
+    return response.storage
   }
 
   async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {

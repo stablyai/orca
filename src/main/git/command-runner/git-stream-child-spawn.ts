@@ -33,18 +33,9 @@ export function spawnGitStreamChild(
     return { child, ownedGroupChild: child }
   }
   const spawnStartedAt = performance.now()
-  if (command.wslMode === 'direct-git') {
-    const child = spawn(command.binary, command.args, {
-      cwd: command.cwd,
-      env: untranslatedGitOutputEnv(spawnOptions.env),
-      stdio: spawnOptions.stdio,
-      windowsHide: true
-    })
-    recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
-    return { child, ownedGroupChild: null }
-  }
-  if (process.platform === 'win32' && !command.wsl && canSpawnOnWorkerThread()) {
+  if (process.platform === 'win32' && canSpawnOnWorkerThread()) {
     // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
+    // The resolved command is the one main would start: native Git, WSL's direct Git, or wsl.exe.
     const child = spawnProcessOnWorkerThread({
       program: command.binary,
       args: command.args,
@@ -52,6 +43,16 @@ export function spawnGitStreamChild(
       env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env)
     })
     child.stdin.end()
+    recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
+    return { child, ownedGroupChild: null }
+  }
+  if (command.wslMode === 'direct-git') {
+    const child = spawn(command.binary, command.args, {
+      cwd: command.cwd,
+      env: untranslatedGitOutputEnv(spawnOptions.env),
+      stdio: spawnOptions.stdio,
+      windowsHide: true
+    })
     recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
     return { child, ownedGroupChild: null }
   }

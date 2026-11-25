@@ -8,6 +8,8 @@ import { sendTerminalOscColorQueryReplies } from '../../emulation/terminal-capab
 import { isDropSentinelMeta } from '../../pty-transport/delivery/terminal-stream-position'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
+import { hasHiddenGraphicsOutputGap } from './hidden-graphics-delivery'
+import { salvageDiscardedDeliveryQueries } from './hidden-startup-renderer-query-write'
 import { registerE2eTerminalPtyDataInjection } from '../instrumentation/e2e-terminal-pty-harness'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
@@ -21,6 +23,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     if (streamGeneration !== session.transportStreamGeneration) {
       return
     }
+    const ptyId = session.transport.getPtyId()
     const arrivedData = data
     const arrivedMeta = meta
     const admitLiveStreamBytes = (
@@ -62,7 +65,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     if (data.length > 0 || meta?.droppedOutput === true) {
       session.hasReceivedPtyOutput = true
       recordAgentHibernationPaneOutput(session.cacheKey)
-      // Why: output is the agent-start signal that ends the relaxed no-evidence process-scan cadence (a starting agent always prints).
+      // Why: output is what arms a foreground read: an agent start always prints, and its exit redraws the prompt.
       session.agentCompletionCoordinator.observeOutputActivity()
     }
     session.observeStartupDraftPasteReadiness(data)
@@ -74,7 +77,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
         session.noteHiddenOutputRestoreFloodBackpressure()
       } else {
         // Why: main dropped buffered output at the pending cap, so the stream has a gap; repaint from the main-owned snapshot instead of writing on.
-        session.markHiddenOutputRestoreNeeded()
+        session.markHiddenOutputRestoreAfterGap(ptyId, streamGeneration)
         // Discarded sentinel bytes must not enter the PTY writer and consume pending restore; snapshot reset releases DEC 2026 when recovery arrives.
         if (data) {
           // The sentinel can carry query bytes carved from the bulk drop (extractDroppedPtyQueryBytes in main); replies must still flow.
@@ -123,7 +126,10 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       } else {
         // Why: capture in-flight BEFORE the mark — on a visible pane the mark starts the restore synchronously and must not flag itself.
         const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null
-        session.markHiddenOutputRestoreNeeded()
+        session.markHiddenOutputRestoreAfterGap(ptyId, streamGeneration)
+        if (!foreground && hasHiddenGraphicsOutputGap(session.transport, ptyId)) {
+          salvageDiscardedDeliveryQueries(session, ptyId, data, meta)
+        }
         if (restoreWasInFlight) {
           session.hiddenOutputRestoreFreshSnapshotNeeded = true
         }
@@ -157,7 +163,10 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       : session.getHiddenRendererDataAfterOrderedSeq(rendererData, rendererMeta)
     if (orderedRendererData === null) {
       // Why: renderer filtering can't map cleaned text back to raw seq offsets; rebuild from main instead of risking stale bytes.
-      session.markHiddenOutputRestoreNeeded()
+      session.markHiddenOutputRestoreAfterGap(ptyId, streamGeneration)
+      if (hasHiddenGraphicsOutputGap(session.transport, ptyId)) {
+        salvageDiscardedDeliveryQueries(session, ptyId, rendererData, rendererMeta)
+      }
       session.schedulePendingStartupCommandDelivery()
       return
     }
@@ -183,7 +192,14 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     const restoreAppliesToCurrentPty =
       session.hiddenOutputRestorePtyId !== null &&
       session.transport.getPtyId() === session.hiddenOutputRestorePtyId
-    if (session.shouldSkipHiddenRendererOutput(foreground, orderedRendererData)) {
+    if (!foreground && hasHiddenGraphicsOutputGap(session.transport, ptyId)) {
+      // A delivered query still belongs to the renderer, even as the producer switches to dropping.
+      salvageDiscardedDeliveryQueries(session, ptyId, orderedRendererData, rendererMeta)
+      if (session.hiddenOutputRestoreInFlight && restoreAppliesToCurrentPty) {
+        session.hiddenOutputRestoreNeeded = true
+        session.hiddenOutputRestoreFreshSnapshotNeeded = true
+      }
+    } else if (session.shouldSkipHiddenRendererOutput(foreground, orderedRendererData)) {
       session.skipHiddenRendererOutput(orderedRendererData)
     } else if (
       (session.hiddenOutputRestoreNeeded || session.hiddenOutputRestoreInFlight) &&

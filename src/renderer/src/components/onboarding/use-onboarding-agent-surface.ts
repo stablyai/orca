@@ -8,7 +8,11 @@ import {
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
-import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  agentLaunchRouteStoreFor,
+  type ProspectiveWorkspace
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   readChatProgram,
   resolveChatProgramContext
@@ -56,10 +60,11 @@ export function useChatAgentDetection() {
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Custom commands and downloaded runtimes can run Chat without a CLI on PATH.
-  const chatReady = useAppStore((state) => {
+  const chatReady = useAppStoreWithHostStatuses((appState, statuses) => {
+    const state = agentLaunchRouteStoreFor(appState, statuses)
     const context = resolveChatProgramContext(state, CHAT_HOST)
     return chatAgents
-      .filter((agent) => readChatProgram(state, agent, context, nativeDetected) === 'available')
+      .filter((agent) => readChatProgram(statuses, agent, context, nativeDetected) === 'available')
       .join(',')
   })
   // Chat never runs in WSL, so only native installs count; null while detection is pending.
