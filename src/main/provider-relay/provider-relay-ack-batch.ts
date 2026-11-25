@@ -55,11 +55,11 @@ export class ProviderRelayAckBatch {
     this.flushTimer = null
     const batch = this.queued
     this.queued = []
-    const [only] = batch
-    if (only && batch.length === 1) {
-      this.client
-        .request('relayAck', only.payload, RELAY_REQUEST_TIMEOUT_MS)
-        .then(only.resolve, only.reject)
+    // A daemon without `relayAcks` takes each on its own, still on the one shared tick.
+    if (batch.length === 1 || !this.client.getDaemonIdentity()?.providerRelayAcks) {
+      for (const { payload, resolve, reject } of batch) {
+        this.client.request('relayAck', payload, RELAY_REQUEST_TIMEOUT_MS).then(resolve, reject)
+      }
       return
     }
     const acks = batch.map(({ payload }) => payload)

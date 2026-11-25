@@ -162,6 +162,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
     spawnerExecPath?: unknown
     providerSpawn?: unknown
     providerRelay?: unknown
+    providerRelayAcks?: unknown
   }
   if (
     !Number.isSafeInteger(identity.pid) ||
@@ -177,6 +178,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   return {
     ...(identity.providerSpawn === true ? { providerSpawn: true as const } : {}),
     ...(identity.providerRelay === true ? { providerRelay: true as const } : {}),
+    ...(identity.providerRelayAcks === true ? { providerRelayAcks: true as const } : {}),
     pid: identity.pid as number,
     startedAtMs: identity.startedAtMs,
     launchNonce: identity.launchNonce,
