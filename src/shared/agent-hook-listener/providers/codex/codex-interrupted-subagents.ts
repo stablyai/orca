@@ -9,6 +9,31 @@ import { childTurnState } from './codex-turn-transcript'
 // Why: a follow-up's task_started lands just after the parent's interacted item, so a read between
 // them sees only the old interrupted turn; keep reading the hidden child this long to show it again.
 const RESUMED_TURN_GRACE_MS = 5_000
+const MAX_INTERRUPTED_SUBAGENTS = 64
+
+/** Metadata kept for an interrupted child; cursor state is discarded because resume rereads from 0. */
+export type InterruptedCodexSubagent = {
+  filePath?: string
+  description?: string
+  model?: string
+}
+
+export function rememberInterruptedCodexSubagent(
+  state: CodexSubagentTranscriptState,
+  id: string,
+  tracked: TrackedTranscriptSubagent
+): void {
+  state.interruptedSubagents.delete(id)
+  state.interruptedSubagents.set(id, {
+    filePath: tracked.filePath,
+    description: tracked.description,
+    model: tracked.model
+  })
+  const oldest = state.interruptedSubagents.keys().next()
+  if (state.interruptedSubagents.size > MAX_INTERRUPTED_SUBAGENTS && !oldest.done) {
+    state.interruptedSubagents.delete(oldest.value)
+  }
+}
 
 /** The child this session saw interrupted, as a fresh record a message at `startedAt` resumes. */
 export function takeInterruptedCodexSubagent(
@@ -25,13 +50,13 @@ export function takeInterruptedCodexSubagent(
   state.interruptedSubagents.delete(id)
   // Reread from the start: the interrupted turn's end may already sit behind the old cursor.
   return {
-    ...retired,
+    filePath: retired.filePath,
+    description: retired.description,
+    model: retired.model,
     offset: 0,
     carry: '',
     interrupted: true,
-    startedAt,
-    unresolvedSince: undefined,
-    hiddenSince: undefined
+    startedAt
   }
 }
 
@@ -59,7 +84,7 @@ export function keepCodexSubagentHidden(
   }
   if (now - tracked.hiddenSince >= RESUMED_TURN_GRACE_MS) {
     state.subagents.delete(id)
-    state.interruptedSubagents.set(id, tracked)
+    rememberInterruptedCodexSubagent(state, id, tracked)
   }
   return true
 }
