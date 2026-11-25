@@ -22,7 +22,7 @@ import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
 import { ownerOnly } from './bots-caller-gates'
 import { BOT_CREATE_METHOD } from './bots-create'
-import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
+import { BOT_AGENT_CHOICES_METHOD, hostOffersNewChatAgent } from './bots-agent-choices'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
@@ -293,11 +293,18 @@ export const BOT_METHODS = [
       if (!bot) {
         throw new Error('bot_not_found')
       }
+      const onAgent = botOnAgent(bot, params.agent)
       const share = botShareScopeOf(context)
       if (share) {
-        return { sessionId: await startBotShareSession(runtime, bot, share, params.newChatId) }
+        // A teammate picks from the agents the owner's + menu offers, and no other.
+        if (
+          onAgent.agent !== bot.agent &&
+          !(await hostOffersNewChatAgent(runtime, onAgent.agent))
+        ) {
+          throw new Error('agent_not_offered')
+        }
+        return { sessionId: await startBotShareSession(runtime, onAgent, share, params.newChatId) }
       }
-      const onAgent = botOnAgent(bot, params.agent)
       // Like a blank page: an empty chat already open is the new chat, not one more.
       const empty = await openEmptyBotChat(
         runtimeBotChatTreeHost(runtime),

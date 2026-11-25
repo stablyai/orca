@@ -1,4 +1,5 @@
-// A teammate's New chat on a shared bot: their own chat on the bot's agent, acting for them. An empty
+// A teammate's New chat on a shared bot: their own chat on the agent they picked (else the bot's),
+// acting for them. An empty
 // chat is reused only when it is already theirs, never the owner's or another teammate's.
 import type { Bot } from '../../../shared/bot-types'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'

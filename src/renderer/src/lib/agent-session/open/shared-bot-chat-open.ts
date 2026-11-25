@@ -16,7 +16,8 @@ export function openSharedBotChat(structuredSession: {
   if (!bot || !sharedBotHostOf(bot.hostId)) {
     return null
   }
-  if (activateAndRevealWorktree(workspaceId) === false) {
+  // The chat's tab below is the surface.
+  if (activateAndRevealWorktree(workspaceId, { providesInitialSurface: true }) === false) {
     return false
   }
   openStructuredAgentSessionProvisionalTab({

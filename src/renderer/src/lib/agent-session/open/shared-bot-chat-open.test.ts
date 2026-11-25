@@ -19,6 +19,7 @@ import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/sh
 import { buildWorkspaceSessionPayload } from '../../workspace/persistence/workspace-session'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { applyLocalStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 
 const SHARED: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -182,6 +183,54 @@ describe('a shared agent’s chats on this computer', () => {
     expect(tabs()).toEqual([
       expect.objectContaining({ entityId: 'chat-1', executionHostId: HOST, worktreeId: HOME_KEY })
     ])
+  })
+
+  it('keeps its chat tab at startup, when this computer lists the home before the shares are known', async () => {
+    useAppStore.setState({ runtimeEnvironmentCatalogSettled: true, runtimeEnvironments: [] })
+    await activateAiVaultStructuredSession({
+      structuredSession: { workspaceId: HOME_KEY, sessionId: 'chat-1' }
+    })
+    // As after a restart: the tab is restored, and main hasn't said yet which agents are shared.
+    stopCatalog()
+    stopCatalog = () => {}
+    useAppStore.setState(
+      applyLocalStructuredSessionTabSnapshots(useAppStore.getState(), [
+        {
+          worktree: HOME_KEY,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ])
+    )
+    expect(tabs().map((tab) => tab.entityId)).toEqual(['chat-1'])
+  })
+
+  it('keeps its chat tab when this computer next lists the home’s own tabs', async () => {
+    // The paired-server list has loaded and names no server: a shared agent's host is never on it.
+    useAppStore.setState({ runtimeEnvironmentCatalogSettled: true, runtimeEnvironments: [] })
+    await activateAiVaultStructuredSession({
+      structuredSession: { workspaceId: HOME_KEY, sessionId: 'chat-1' }
+    })
+    expect(tabs().map((tab) => tab.entityId)).toEqual(['chat-1'])
+    // This computer lists the home with no chat of its own, as it does once a tab there changes.
+    useAppStore.setState(
+      applyLocalStructuredSessionTabSnapshots(useAppStore.getState(), [
+        {
+          worktree: HOME_KEY,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ])
+    )
+    expect(tabs().map((tab) => tab.entityId)).toEqual(['chat-1'])
   })
 
   it('opens its home here from Home, reading only this computer’s workspaces and never its owner’s Home Chat', async () => {

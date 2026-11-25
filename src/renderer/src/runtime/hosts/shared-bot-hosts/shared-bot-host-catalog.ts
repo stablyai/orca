@@ -12,6 +12,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { setSharedBotHostLookup } from '../../../../../shared/bots/bot-home-host'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 const NO_HOSTS: readonly SharedBotHostView[] = []
 const NO_REQUESTS: readonly SharedBotRequestView[] = []
@@ -73,6 +74,15 @@ export function sharedBotHostFor(target: RuntimeClientTarget): SharedBotHostView
   return target.kind === 'environment'
     ? (views.find((view) => view.environmentId === target.environmentId) ?? null)
     : null
+}
+
+/** Whether `environmentId` may be a shared agent's host: one listed, or any before main has said which
+ *  are. A paired web window keeps no shares of its own. */
+export function maybeSharedBotHost(environmentId: string): boolean {
+  if (isPairedWebClientWindow()) {
+    return false
+  }
+  return !hydrated || sharedBotHostFor({ kind: 'environment', environmentId }) !== null
 }
 
 /** The shared agent's host a bot's host id names, or null for this computer's or a paired server's. */
