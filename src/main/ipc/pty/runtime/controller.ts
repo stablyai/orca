@@ -43,13 +43,16 @@ import {
 } from './provider-buffer-snapshot'
 import { supportsForegroundProcessEvidenceFromRuntimeController } from './foreground-process-evidence-capability'
 import {
+  listLocalProcessesForExitProofFromRuntimeController,
   listProcessesFromRuntimeController,
   listProcessesWithHostScopeFromRuntimeController
 } from './inventory-operations'
+import { observeInProcessWorkerExits } from './in-process-exit-observer'
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 
+  observeInProcessWorkerExits(runtime)
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {
       const paneKey = makePaneKey(args.tabId, args.leafId)
@@ -106,6 +109,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     hasPty: (ptyId) => hasPtyFromRuntimeController(deps, ptyId),
     getPtyAvailability: (ptyId) => getPtyAvailabilityFromRuntimeController(deps, ptyId),
     listProcesses: (hostId, opts) => listProcessesFromRuntimeController(deps, hostId, opts),
+    listLocalProcessesForExitProof: () => listLocalProcessesForExitProofFromRuntimeController(deps),
     listProcessesWithHostScope: (opts) =>
       listProcessesWithHostScopeFromRuntimeController(deps, opts),
     supportsForegroundProcessEvidence: (hostId) =>

@@ -133,6 +133,13 @@ function getBaselineFields(root: CodexRegistrationRoot): readonly string[] {
   return root === 'plugins' ? PLUGIN_BASELINE_FIELDS : []
 }
 
+/** The fields that name what a registration points at; a change makes it a different registration. */
+export function readCodexRegistrationIdentity(entry: CodexRegistrationEntry): string {
+  const identityFields =
+    entry.root === 'marketplaces' ? MARKETPLACE_IDENTITY_FIELDS : PLUGIN_IDENTITY_FIELDS
+  return JSON.stringify(identityFields.map((field) => readNormalizedField(entry, field)))
+}
+
 function hasMatchingRegistrationIdentity(
   runtimeEntry: CodexRegistrationEntry,
   systemEntry: CodexRegistrationEntry
@@ -235,8 +242,8 @@ function appendRegistrationBlock(content: string, block: string, usesCrlf: boole
   const eol = usesCrlf ? '\r\n' : '\n'
   const rendered = block
     .split('\n')
-    .map((line) => withCrLine(line.replace(/\r$/, ''), usesCrlf))
-    .join('\n')
+    .map((line) => line.replace(/\r$/, ''))
+    .join(eol)
   if (content.trim() === '') {
     return `${rendered}${eol}`
   }

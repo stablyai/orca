@@ -23,7 +23,7 @@ export function BotAppStepHeader({
       {onBack ? (
         <Button variant="ghost" size="xs" onClick={onBack}>
           <ChevronLeft className="size-3.5" />
-          {backLabel ?? t('bots.apps.allApps', 'All apps')}
+          {backLabel ?? t('bots.apps.back', 'Back')}
         </Button>
       ) : null}
       <span className="flex-1" />
@@ -62,13 +62,13 @@ export function BotAppStepHeading({
   )
 }
 
-/** The badge on a logo: a check once added, a cross when sign-in failed, a spinner while waiting.
- *  `sm` sits on the small (md) tile. */
+/** The badge on a logo: a check once added (green on a list row, where most rows have none), a cross
+ *  when sign-in failed, a spinner while waiting. `sm` sits on a list row's tile. */
 export function BotAppLogoBadge({
   kind,
   size = 'md'
 }: {
-  kind: 'done' | 'failed' | 'waiting'
+  kind: 'done' | 'added' | 'failed' | 'waiting'
   size?: 'sm' | 'md'
 }): React.JSX.Element {
   const sm = size === 'sm'
@@ -76,7 +76,9 @@ export function BotAppLogoBadge({
     <span
       className={cn(
         'absolute flex items-center justify-center rounded-full bg-popover',
-        sm ? '-right-1 -bottom-1 size-4.5' : '-right-1.5 -bottom-1.5 size-5'
+        sm
+          ? '-right-1 -bottom-1 size-4 ring-2 ring-dialog-surface'
+          : '-right-1.5 -bottom-1.5 size-5'
       )}
     >
       {kind === 'waiting' ? (
@@ -84,11 +86,12 @@ export function BotAppLogoBadge({
       ) : (
         <span
           className={cn(
-            'flex items-center justify-center rounded-full bg-foreground text-background',
-            sm ? 'size-3.5' : 'size-4'
+            'flex items-center justify-center rounded-full text-background',
+            kind === 'added' ? 'bg-status-success' : 'bg-foreground',
+            'size-4'
           )}
         >
-          {kind === 'done' ? (
+          {kind === 'done' || kind === 'added' ? (
             <Check className={sm ? 'size-2.25' : 'size-2.5'} strokeWidth={3} />
           ) : (
             <X className={sm ? 'size-2.25' : 'size-2.5'} strokeWidth={3} />

@@ -85,6 +85,10 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     item: 47,
     note: "Rebuilt from the host's next project list; it caches only that answer."
   },
+  pairedPortForwards: notApplicableDisposition(
+    62,
+    'Forwards to this computer from paired servers.'
+  ),
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
   deletedSshConfigAliases: notApplicableDisposition(62),

@@ -88,8 +88,9 @@ export function revealCreatedTerminal(args: {
     })()
   }
   rememberLaunchRecipe()
+  // Why: connected clients still show the published tab; only an explicit focus request goes unmet.
   return {
     surface: 'background',
-    warning: presentation !== 'background' ? createTerminalRevealWarning(handle) : undefined
+    warning: presentation === 'focused' ? createTerminalRevealWarning(handle) : undefined
   }
 }

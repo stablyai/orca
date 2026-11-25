@@ -18,6 +18,7 @@ import {
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
   useChatSettingsOwnPermissions,
@@ -42,6 +43,8 @@ import {
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from '../../../runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useMcpServersAvailable } from './use-mcp-servers-available'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
@@ -63,8 +66,10 @@ export function buildSettingsNavigationMetadata(
     typedChatPermissions = false,
     managedBrowserCreationEnabled = !isWebClient,
     mobileEmulatorCreationEnabled = !isWebClient,
+    showWorkspaceCardLayout = true,
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
+    mcpServersAvailable = false,
     repos,
     bots = [],
     projectGroups,
@@ -80,8 +85,10 @@ export function buildSettingsNavigationMetadata(
     typedChatPermissions?: boolean
     managedBrowserCreationEnabled?: boolean
     mobileEmulatorCreationEnabled?: boolean
+    showWorkspaceCardLayout?: boolean
     isDev?: boolean
     isLinearConnected?: boolean
+    mcpServersAvailable?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
     bots?: readonly Bot[]
@@ -117,8 +124,10 @@ export function buildSettingsNavigationMetadata(
     typedChatPermissions,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled,
+    showWorkspaceCardLayout,
     isDev,
     isLinearConnected,
+    mcpServersAvailable,
     repos,
     bots,
     projectGroups,
@@ -139,7 +148,10 @@ export function buildSettingsNavigationMetadata(
   ]
 }
 
-export function useSettingsNavigationMetadata(): SettingsNavSection[] {
+/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't. */
+export function useSettingsNavigationMetadata(
+  pickedHost?: RuntimeClientTarget
+): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
@@ -157,6 +169,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         policy['mobile-emulator'].state === 'enabled'
       ] as const
     }, shallow)
+  const showWorkspaceCardLayout = !useAppStore(selectDrawsNewWorktreeCards)
   const typedChatPermissions = useChatSettingsOwnPermissions()
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()
@@ -168,6 +181,10 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   )
   // Why: navigation is shared with the palette, which has no host picker.
   const runtimeTarget = defaultScopeHost(settings)
+  const mcpServersAvailable = useMcpServersAvailable(
+    isWebClient ? { kind: 'local' } : runtimeTarget,
+    isWebClient ? undefined : pickedHost
+  )
   const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
@@ -205,8 +222,10 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           typedChatPermissions,
           managedBrowserCreationEnabled,
           mobileEmulatorCreationEnabled,
+          showWorkspaceCardLayout,
           isDev: import.meta.env.DEV,
           isLinearConnected,
+          mcpServersAvailable,
           repos,
           bots,
           projectGroups,
@@ -229,7 +248,9 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       typedChatPermissions,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
+      showWorkspaceCardLayout,
       isLinearConnected,
+      mcpServersAvailable,
       repos,
       bots,
       projectGroups,
