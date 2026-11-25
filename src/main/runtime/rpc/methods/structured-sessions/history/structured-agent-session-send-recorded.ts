@@ -32,6 +32,7 @@ export const STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS = [
       ctx
     ): Promise<{
       recorded: boolean
+      confirmedAbsent?: true
       submission?: AgentSessionDeliveryFact
       ownedByQueue?: true
     }> => {
@@ -39,6 +40,7 @@ export const STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS = [
       const answer = await host.sendAnswer(params.sessionId, params.clientMessageId, true)
       return {
         recorded: sendRecorded(answer),
+        ...(answer.kind === 'absent' || answer.kind === 'refused' ? { confirmedAbsent: true } : {}),
         ...(answer.submission ? { submission: answer.submission } : {}),
         ...(answer.ownedByQueue ? { ownedByQueue: true } : {})
       }

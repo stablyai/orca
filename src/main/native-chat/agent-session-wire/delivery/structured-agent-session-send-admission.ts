@@ -22,6 +22,11 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { recordStructuredAgentSessionDeliveryFailure } from '../startup/structured-agent-session-start-failure-row'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
+import { instructionRecoveryOutcomeUnknown } from '../startup/structured-agent-session-instruction-recovery'
+import {
+  holdUnsettledStart,
+  retryUnsettledStarts
+} from './structured-agent-session-input-selection'
 
 export type StructuredSendAdmissionParams = {
   envelope: { clientOperationId: string }
@@ -78,6 +83,12 @@ export async function admitStructuredAgentSessionSend(
     : params.body.from
       ? AGENT_MESSAGE_SOURCE
       : undefined
+  const settlementFailed = (error: unknown) =>
+    ctx.logger.warn('recording an instruction recovery failure did not finish', {
+      scope: 'send-admission',
+      sessionId: ctx.sessionId,
+      error
+    })
   try {
     const id = params.envelope.clientOperationId
     const record = context.deps.store.getRecord(ctx.sessionId)
@@ -87,6 +98,9 @@ export async function admitStructuredAgentSessionSend(
       !context.startFlights.get(ctx.sessionId) &&
       Boolean((await ctx.journal.reads.input({ kind: 'first-queued' })).submission) &&
       !(await ctx.journal.reads.submission(id))
+    if (fromPerson && !queueOnly) {
+      await retryUnsettledStarts(ctx.journal, settlementFailed)
+    }
     const commit = await ctx.journal.write(
       {
         kind: 'send-admission',
@@ -148,24 +162,34 @@ export async function admitStructuredAgentSessionSend(
       'submission' in result.value &&
       isQueuedAgentJournalSubmission(result.value.submission)
     ) {
-      await recordStructuredAgentSessionDeliveryFailure(
-        ctx,
-        {
-          startKey: id,
-          cause: {
-            failure: agentSessionFailureFact('startFailed', {
-              instructionRecovery: 'pending',
-              neverReachedAgent: true
-            })
+      const settle = holdUnsettledStart(ctx.journal, id, async () => {
+        await recordStructuredAgentSessionDeliveryFailure(
+          ctx,
+          {
+            startKey: id,
+            cause: {
+              failure: agentSessionFailureFact('startFailed', {
+                instructionRecovery: 'pending',
+                neverReachedAgent: true
+              })
+            }
+          },
+          structuredAgentSessionFailureWordsContext(record),
+          id
+        )
+        return (await ctx.journal.reads.submission(id))?.dispatchState === 'rejected'
+      })
+      try {
+        if (await settle()) {
+          const submission = await ctx.journal.reads.submission(id)
+          if (submission) {
+            return { ok: true as const, value: { clientMessageId: id, submission } }
           }
-        },
-        structuredAgentSessionFailureWordsContext(record),
-        id
-      )
-      const submission = await ctx.journal.reads.submission(id)
-      if (submission) {
-        return { ok: true as const, value: { clientMessageId: id, submission } }
+        }
+      } catch (error) {
+        settlementFailed(error)
       }
+      return instructionRecoveryOutcomeUnknown()
     }
     return { ok: true as const, value: result.value }
   } catch (error) {

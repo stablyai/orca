@@ -1,6 +1,7 @@
 import {
   beginInstructionRecoveryDeadline,
   BotInstructionRecoveryDeadline,
+  instructionRecoveryOutcomeUnknown,
   settleInstructionRecoveryFailure
 } from './structured-agent-session-instruction-recovery'
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
@@ -126,8 +127,8 @@ export function registerStructuredAgentSessionStart(
   let recorded: Promise<void> = Promise.resolve()
   // Stop, close, quit, the deadline and the contract guard decide the start at once, even while
   // its attempt or the session's serialized work is still held; late attempt work fails the
-  // flight's commit check. The failure row is queued before callers wake, so their work follows
-  // it, but they never wait for it to be written.
+  // flight's commit check. Instruction recovery holds the send until the failure is durable
+  // and reports an unknown outcome if the deadline expires during that write.
   const outcome = Promise.race([
     attempting,
     stoppedStructuredAgentSessionStartSignal(acquire.signal)
@@ -139,29 +140,31 @@ export function registerStructuredAgentSessionStart(
           : stoppedStructuredAgentSessionStart(acquire.signal.reason)
       if (!settled.ok && !settled.aborted && (startedFor !== undefined || children.length > 0)) {
         const key = { generation: children.at(-1)?.generation, startedFor, attemptId }
-        const writing = context.serialize(sessionId, () =>
+        const write = () =>
           recordStructuredAgentSessionFlightFailure(context, sessionId, settled, key)
-        )
-        recorded = writing.catch((error: unknown) =>
+        if (settled.failure?.instructionRecovery) {
+          const settling = settleInstructionRecoveryFailure(
+            context,
+            sessionId,
+            startedFor,
+            children,
+            write,
+            settled.failure
+          )
+          recorded = settling.then(() => {})
+          return (
+            (await waitForPromiseWithSignal(settling, acquire.signal).catch(
+              instructionRecoveryOutcomeUnknown
+            )) ?? settled
+          )
+        }
+        recorded = context.serialize(sessionId, write).catch((error: unknown) =>
           context.deps.logger.warn('recording a failed start did not finish', {
             scope: 'agent-start',
             sessionId,
             error
           })
         )
-        if (settled.failure?.instructionRecovery) {
-          const unknown = await settleInstructionRecoveryFailure(
-            context,
-            sessionId,
-            startedFor,
-            children,
-            writing,
-            settled.failure
-          )
-          if (unknown) {
-            return unknown
-          }
-        }
       }
       return settled
     })

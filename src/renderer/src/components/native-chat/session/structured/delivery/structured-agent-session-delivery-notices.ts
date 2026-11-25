@@ -91,6 +91,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
     if (submission.dispatchState === 'pending' || retry?.dispatchState === 'pending') {
       notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
     } else if (
+      notices.get(id) !== STRUCTURED_AGENT_SESSION_DELIVERY_SENDING &&
       submission.dispatchState === 'rejected' &&
       (shown.has(id) ||
         submission.keptAsQueuedMessageId ||

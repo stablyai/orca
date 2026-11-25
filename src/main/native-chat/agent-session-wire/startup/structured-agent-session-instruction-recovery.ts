@@ -85,27 +85,37 @@ export async function settleInstructionRecoveryFailure(
   sessionId: string,
   startedFor: string | undefined,
   children: readonly StructuredAgentSessionProviderChildIdentity[],
-  writing: Promise<void>,
+  write: () => Promise<void>,
   failure: SubmissionRejectionFact
 ) {
   const journal = context.sessions.get(sessionId)?.journal
-  const release =
-    startedFor !== undefined && children.length === 0 && journal
-      ? holdUnsettledStart(journal, startedFor)
-      : undefined
   try {
-    await writing
-    if (
-      startedFor !== undefined &&
-      (await context.sessions.get(sessionId)?.journal.reads.submission(startedFor))
-        ?.dispatchState !== 'rejected'
-    ) {
-      return unknownTaskGate()
+    if (startedFor === undefined) {
+      await context.serialize(sessionId, write)
+      return null
     }
-    release?.()
-    return null
-  } catch {
-    return unknownTaskGate()
+    if (!journal) {
+      return instructionRecoveryOutcomeUnknown()
+    }
+    const settle = holdUnsettledStart(journal, startedFor, async () => {
+      if (context.sessions.get(sessionId)?.journal !== journal) {
+        return false
+      }
+      const task = await journal.reads.submission(startedFor)
+      if (task?.dispatchState !== 'pending' || task.handedOverAt !== undefined) {
+        return task?.dispatchState === 'rejected'
+      }
+      await write()
+      return (await journal.reads.submission(startedFor))?.dispatchState === 'rejected'
+    })
+    return (await context.serialize(sessionId, settle)) ? null : instructionRecoveryOutcomeUnknown()
+  } catch (error) {
+    context.deps.logger.warn('recording an instruction recovery failure did not finish', {
+      scope: 'agent-start',
+      sessionId,
+      error
+    })
+    return instructionRecoveryOutcomeUnknown()
   } finally {
     const stopping = context.serialize(sessionId, async () => {
       const session = context.sessions.get(sessionId)
@@ -138,7 +148,7 @@ export async function settleInstructionRecoveryFailure(
   }
 }
 
-function unknownTaskGate() {
+export function instructionRecoveryOutcomeUnknown() {
   return {
     ok: false as const,
     refusal: refuseUnclassified(

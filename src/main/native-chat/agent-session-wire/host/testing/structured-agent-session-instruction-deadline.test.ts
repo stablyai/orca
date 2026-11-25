@@ -259,21 +259,18 @@ it('keeps a failed task-gate commit uncertain and refuses B without replaying A'
     await eventually(() => expect(closeSession.mock.calls.length).toBeGreaterThan(0))
     expect(failed).toHaveBeenCalledTimes(1)
     expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
-    // Delivery claims A once more; startup refuses it before any provider open, and its closure
-    // meets the same failed writer, so A stays uncertain. Waiting for it keeps B's outcome fixed.
-    await eventually(() => expect(failed).toHaveBeenCalledTimes(2))
-    await eventually(() =>
-      expect(host.collaboratorsForTests().runtimeState.startFlights.get(SESSION)).toBeUndefined()
-    )
     expect(providerOpen.mock.calls.length).toBe(1)
-    expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
     failing.mockRestore()
-    const b = await host.send(CALLER, hostTestSendParams('explicit B'))
+    const b = await host.send(CALLER, { ...hostTestSendParams('explicit B'), userSend: true })
     expect(b).toMatchObject({
       ok: true,
       value: {
         submission: { dispatchState: 'rejected', rejection: { instructionRecovery: 'pending' } }
       }
+    })
+    expect(await submission(a)).toMatchObject({
+      dispatchState: 'rejected',
+      rejection: { instructionRecovery: 'timeout', neverReachedAgent: true }
     })
     await proveOpen()
     await host.flushStreamedEvents(SESSION)
@@ -319,7 +316,7 @@ it('bypasses A after a pre-child timeout and failed typed settlement', async () 
       ok: false,
       refusal: { code: 'agent_session_operation_unknown' }
     })
-    expect(failed).toHaveBeenCalledTimes(1)
+    await eventually(() => expect(failed).toHaveBeenCalledTimes(1))
     expect(await session.journal.reads.submission(a)).toMatchObject({ dispatchState: 'pending' })
     expect(dispatch).not.toHaveBeenCalled()
   } finally {
@@ -334,7 +331,10 @@ it('bypasses A after a pre-child timeout and failed typed settlement', async () 
     deliveredB = (await session.journal.queuedMessages.get(b))?.consumedAs ?? b
     expect((await session.journal.reads.submission(deliveredB))?.dispatchState).toBe('accepted')
   })
-  expect(await session.journal.reads.submission(a)).toMatchObject({ dispatchState: 'pending' })
+  expect(await session.journal.reads.submission(a)).toMatchObject({
+    dispatchState: 'rejected',
+    rejection: { instructionRecovery: 'timeout', neverReachedAgent: true }
+  })
   expect(dispatch.mock.calls.map(([call]) => call.clientMessageId)).toEqual([deliveredB])
 })
 
@@ -359,8 +359,13 @@ it.each(['released', 'failed'] as const)(
       const a = await ownerTask('A waits for a committed provider handle')
       await proveOpen()
       await entered.promise
+      const flight = host.collaboratorsForTests().runtimeState.startFlights.get(SESSION)!
       try {
         await vi.advanceTimersByTimeAsync(10_000)
+        expect(await flight.outcome).toMatchObject({
+          ok: false,
+          refusal: { code: 'agent_session_operation_unknown' }
+        })
         expect(dispatch).not.toHaveBeenCalled()
         expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
       } finally {

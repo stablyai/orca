@@ -1,8 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import {
-  registerSavedMobileNativeChatInFlightSends,
-  retireMobileNativeChatInFlightSends
-} from './delivery/mobile-native-chat-in-flight-sends'
+import * as inFlight from './delivery/mobile-native-chat-in-flight-sends'
 import { settleMobileInstructionRecovery } from './mobile-native-chat-recovery-delivery'
 import type { MobileNativeChatInFlightSend } from './drafts/mobile-native-chat-saved-drafts'
 
@@ -16,11 +13,15 @@ vi.mock('@react-native-async-storage/async-storage', async () => {
 it.each(['active', 'elsewhere'])(
   'visits %s recovery sends without copying growing groups',
   (sessionId) => {
+    let visits = 0
     const sends = Array.from({ length: 1000 }, (_, index): MobileNativeChatInFlightSend => ({
       id: `saved-${index}`,
       clientMessageId: `message-${index}`,
       sessionId,
-      kind: 'structured',
+      get kind() {
+        visits += 1
+        return 'structured'
+      },
       text: 'Task',
       normalizedText: 'Task',
       skills: [],
@@ -28,27 +29,22 @@ it.each(['active', 'elsewhere'])(
       files: [],
       baselineTailMessageId: null
     }))
-    const markers = new Set<unknown>(sends)
     const scope = `recovery-${sessionId}`
-    registerSavedMobileNativeChatInFlightSends(scope, sends)
-    const iterate = Array.prototype[Symbol.iterator]
-    let copied = 0
+    inFlight.registerSavedMobileNativeChatInFlightSends(scope, sends)
+    // Rebuilding every draft's growing send array made recovery quadratic.
+    const groupSends = vi.spyOn(inFlight, 'readMobileNativeChatInFlightSendsByScope')
     try {
-      Array.prototype[Symbol.iterator] = function (this: unknown[]) {
-        if (markers.has(this[0])) {
-          copied += this.length
-        }
-        return iterate.call(this)
-      }
       settleMobileInstructionRecovery(
         'active',
         [{ clientMessageId: 'message-0', dispatchState: 'pending', reason: null }],
-        () => {}
+        () => {},
+        []
       )
+      expect(visits).toBe(1000)
+      expect(groupSends).not.toHaveBeenCalled()
     } finally {
-      Array.prototype[Symbol.iterator] = iterate
-      retireMobileNativeChatInFlightSends(scope)
+      groupSends.mockRestore()
+      inFlight.retireMobileNativeChatInFlightSends(scope)
     }
-    expect(copied).toBeLessThanOrEqual(sends.length)
   }
 )

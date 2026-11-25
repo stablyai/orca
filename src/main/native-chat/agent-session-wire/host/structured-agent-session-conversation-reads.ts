@@ -201,11 +201,10 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
           return answer
         }
         const submission = await journal.reads.submission(messageId)
-        const queued =
-          (await journal.queuedMessages.get(messageId)) ||
-          submission?.queuedMessageId ||
-          submission?.keptAsQueuedMessageId ||
-          (!submission && (answer.kind === 'accepted' || answer.kind === 'withdrawn'))
+        const card = await journal.queuedMessages.get(
+          submission?.keptAsQueuedMessageId ?? submission?.queuedMessageId ?? messageId
+        )
+        const queued = card?.state === 'waiting' || card?.state === 'returned'
         return {
           ...answer,
           ...(submission

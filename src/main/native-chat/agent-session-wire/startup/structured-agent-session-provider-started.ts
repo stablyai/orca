@@ -119,7 +119,10 @@ function settleReady(
       }
       local.started = true
       if (
-        !(await recordStartedHandle(context, event)) ||
+        !(await recordStartedHandle(context, event, () => {
+          const liveChild = context.sessions.get(event.sessionId)?.child
+          return !!liveChild && sameProviderChild(liveChild, child) && !signal?.aborted
+        })) ||
         !(await applyRewindAtStart(context, event.sessionId, current, rewind))
       ) {
         return refusedStart(event.instructionPolicy !== undefined)

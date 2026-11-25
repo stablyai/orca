@@ -97,8 +97,13 @@ export function createBotTurnContext(
   }
   /** Orca's Tools and Rules, under the bot's current name, go first, where they outrank memory. */
   const withOrcaRules = (sessionId: string, entry: Given, held: Held, plan: TurnPlan | null) => {
+    const launch = launches.get(sessionId)
     const known = { ...entry.orcaRules, name: currentBotName(entry.botId) ?? entry.orcaRules.name }
-    return withBotRulesUpdate(known, held, plan, (orcaRules) => update(sessionId, { orcaRules }))
+    return withBotRulesUpdate(known, held, plan, (orcaRules) => {
+      if (launches.get(sessionId) === launch) {
+        update(sessionId, { orcaRules })
+      }
+    })
   }
   return {
     configureInstructions: instructions.configure,

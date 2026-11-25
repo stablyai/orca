@@ -247,7 +247,9 @@ export function settleRecordedMobileNativeChatInFlightSends(
     const saved = readMobileNativeChatInFlightSend(id)?.send
     const submission = saved?.clientMessageId ? byId.get(saved.clientMessageId) : undefined
     const verdict = submission?.dispatchState
-    const transferred = saved?.clientMessageId !== undefined && queued?.has(saved.clientMessageId)
+    const transferred =
+      saved?.clientMessageId !== undefined &&
+      (queued?.has(saved.clientMessageId) || mobileRecoveryQueueOwns(submission, queued))
     if (
       !saved?.clientMessageId ||
       transferred ||
@@ -262,6 +264,14 @@ export function settleRecordedMobileNativeChatInFlightSends(
       )
     }
   }
+}
+
+export function mobileRecoveryQueueOwns(
+  submission: AgentSessionDeliveryFact | undefined,
+  queued: ReadonlySet<string> | undefined
+): boolean {
+  const card = submission?.keptAsQueuedMessageId ?? submission?.queuedMessageId
+  return card !== undefined && queued?.has(card) === true
 }
 
 export function mobileNativeChatRecordedSendIds(

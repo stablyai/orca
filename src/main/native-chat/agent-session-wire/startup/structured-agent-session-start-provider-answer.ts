@@ -125,7 +125,8 @@ export async function recordStartedHandle(
       'store' | 'logger' | 'turnContext' | 'nameProviderConversation'
     >
   },
-  event: OpenedProvider
+  event: OpenedProvider,
+  isCurrent: () => boolean = () => true
 ): Promise<boolean> {
   const { store, logger } = context.deps
   const { link } = event
@@ -161,7 +162,11 @@ export async function recordStartedHandle(
           }
         : {})
     })
-    if (instructionContext) {
+    if (
+      instructionContext &&
+      isCurrent() &&
+      context.deps.turnContext?.instructionSnapshot?.(event.sessionId) === snapshot
+    ) {
       context.deps.turnContext?.instructionsAccepted?.(
         event.sessionId,
         instructionContext.digest,

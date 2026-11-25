@@ -37,9 +37,13 @@ it.each(['metadata', 'note'] as const)(
     }
     dispatch.mockImplementationOnce(async () => {
       if (failure === 'metadata') {
-        vi.spyOn(store, 'updateRecord').mockImplementationOnce(async () => {
-          failed.resolve()
-          throw new Error('metadata storage unavailable')
+        const update = store.updateRecord.bind(store)
+        vi.spyOn(store, 'updateRecord').mockImplementation(async (id, command, check) => {
+          if (command.kind === 'ran-options') {
+            failed.resolve()
+            throw new Error('metadata storage unavailable')
+          }
+          return update(id, command, check)
         })
       } else {
         const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal

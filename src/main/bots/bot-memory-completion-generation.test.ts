@@ -146,10 +146,10 @@ it('never publishes an old turn’s memory receipt through a replacement host ac
 
     await rig.host.close(SESSION, 'evict')
     const acquire = rig.host.deps.adapter.acquire.bind(rig.host.deps.adapter)
-    rig.host.deps.adapter.acquire = async (input) => {
-      bot.launched()
-      return { ...(await acquire(input)), acquisitionGeneration: 'generation-2' }
-    }
+    rig.host.deps.adapter.acquire = async (input) => ({
+      ...(await acquire(input)),
+      acquisitionGeneration: 'generation-2'
+    })
     rig.dispatch.mockImplementationOnce(async () => {
       bot.replaceTopic()
       return { state: 'admitted' }

@@ -144,9 +144,6 @@ export async function deliverBotRunResult(
   result: BotRunResult
 ): Promise<BotRunCompletion> {
   const { automation, bot, target, ended } = result
-  if ('instructionRecovery' in ended && ended.instructionRecovery) {
-    return automationInstructionRecoveryFailure(ended.instructionRecovery)
-  }
   // result_unavailable: never another turn's answer in its place.
   if ('unavailable' in ended && ended.unavailable === 'shared') {
     // Its prompt was handled in that turn; only its own result post is skipped.
@@ -167,6 +164,9 @@ export async function deliverBotRunResult(
       },
       result.sessionId
     )
+    if ('instructionRecovery' in ended && ended.instructionRecovery) {
+      return automationInstructionRecoveryFailure(ended.instructionRecovery)
+    }
     const error = COPY.failed(ended.outcome)
     await resultNote.leave(deps, result, 'couldNotFinish', ended.message.trim() || error)
     const why =

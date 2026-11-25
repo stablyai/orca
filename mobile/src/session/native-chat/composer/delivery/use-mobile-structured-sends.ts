@@ -3,7 +3,7 @@ import {
   confirmMobileRecordedRecovery
 } from '../mobile-native-chat-recovery-delivery'
 import type { MobileStructuredSendConfirmation } from './mobile-structured-send-recorded-read'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
@@ -72,9 +72,15 @@ export function useMobileStructuredSends(args: {
   >({})
   const mountedRef = useRef(false)
   const sendsBySessionRef = useRef(sendsBySession)
+  const queuedMessageIds = useMemo(
+    () => (queuedMessages ?? []).map((message) => message.messageId),
+    [queuedMessages]
+  )
+  const deliveryRef = useRef({ sessionKey, submissions, queuedMessageIds })
   useLayoutEffect(() => {
     sendsBySessionRef.current = sendsBySession
-  }, [sendsBySession])
+    deliveryRef.current = { sessionKey, submissions, queuedMessageIds }
+  }, [sendsBySession, sessionKey, submissions, queuedMessageIds])
   // Held sends by journal id; their deadlines pause while the host is out.
   const [holds] = useState(createUnconfirmedSendDeadlines<string>)
   // Expired holds whose host lookup is out: a row arriving meanwhile still settles them.
@@ -178,12 +184,13 @@ export function useMobileStructuredSends(args: {
         handBack,
         asking,
         forget,
-        submissions,
+        readDelivery: () =>
+          deliveryRef.current.sessionKey === sessionKey ? deliveryRef.current : null,
         sessionId,
         onSendError
       })
     },
-    [asking, forget, submissions, sessionId, onSendError]
+    [asking, forget, sessionId, sessionKey, onSendError]
   )
 
   const isHeld = useCallback(
@@ -221,8 +228,8 @@ export function useMobileStructuredSends(args: {
   )
 
   useEffect(() => {
-    settleMobileInstructionRecovery(sessionId, submissions, onSendError)
-  }, [onSendError, savedInFlightVersion, sessionId, submissions])
+    settleMobileInstructionRecovery(sessionId, submissions, onSendError, queuedMessageIds)
+  }, [onSendError, queuedMessageIds, savedInFlightVersion, sessionId, submissions])
 
   // Sends saved before the page last closed wait like live ones once their chat opens.
   useEffect(() => {
@@ -234,12 +241,7 @@ export function useMobileStructuredSends(args: {
     )) {
       const clientMessageId = send.clientMessageId ?? send.id
       if (recorded([clientMessageId]).has(clientMessageId)) {
-        settleRecordedMobileNativeChatInFlightSends(
-          [send.id],
-          submissions,
-          false,
-          (queuedMessages ?? []).map((message) => message.messageId)
-        )
+        settleRecordedMobileNativeChatInFlightSends([send.id], submissions, false, queuedMessageIds)
         continue
       }
       holds.hold(clientMessageId, () =>
@@ -267,7 +269,7 @@ export function useMobileStructuredSends(args: {
     savedInFlightVersion,
     sessionId,
     submissions,
-    queuedMessages
+    queuedMessageIds
   ])
 
   const sends = sendsBySession[sessionKey] ?? NO_SENDS
@@ -292,12 +294,12 @@ export function useMobileStructuredSends(args: {
       mobileNativeChatInFlightSendIds(settled),
       submissions,
       false,
-      (queuedMessages ?? []).map((message) => message.messageId)
+      queuedMessageIds
     )
     if (sends.some((send) => settled.has(send.clientMessageId))) {
       forget(settled)
     }
-  }, [asking, cursor, forget, holds, recorded, sends, submissions, queuedMessages])
+  }, [asking, cursor, forget, holds, recorded, sends, submissions, queuedMessageIds])
 
   useEffect(() => {
     mountedRef.current = true

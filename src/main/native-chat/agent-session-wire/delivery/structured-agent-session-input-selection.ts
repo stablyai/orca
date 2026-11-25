@@ -7,15 +7,38 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 import { isWithheldOpeningMessage } from '../acquisition/structured-agent-session-opening-withdrawal'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 
-const unresolvedStarts = new WeakMap<AgentSessionJournal, Set<string>>()
+type StartSettlement = () => Promise<boolean>
 
-/** A pre-child start failed before handover. Hold that exact send until its durable rejection. */
-export function holdUnsettledStart(journal: AgentSessionJournal, id: string): () => void {
-  const held = unresolvedStarts.get(journal) ?? new Set<string>()
-  held.add(id)
-  unresolvedStarts.set(journal, held)
-  return () => {
+const unresolvedStarts = new WeakMap<AgentSessionJournal, Map<string, StartSettlement>>()
+
+/** Hold the exact send until its rejection is durable; a later explicit send can retry the write. */
+export function holdUnsettledStart(
+  journal: AgentSessionJournal,
+  id: string,
+  recordRejection: StartSettlement
+): StartSettlement {
+  const held = unresolvedStarts.get(journal) ?? new Map<string, StartSettlement>()
+  const settle = async () => {
+    if (held.get(id) !== settle || !(await recordRejection()) || held.get(id) !== settle) {
+      return false
+    }
     held.delete(id)
+    return true
+  }
+  held.set(id, settle)
+  unresolvedStarts.set(journal, held)
+  return settle
+}
+
+export async function retryUnsettledStarts(
+  journal: AgentSessionJournal,
+  onError: (error: unknown) => void
+): Promise<void> {
+  const held = unresolvedStarts.get(journal)
+  if (held) {
+    for (const settle of held.values()) {
+      await settle().catch(onError)
+    }
   }
 }
 
@@ -25,7 +48,7 @@ export function hasUnsettledStart(journal: AgentSessionJournal, id: string): boo
 
 export function unsettledStartIds(journal: AgentSessionJournal): string[] | undefined {
   const held = unresolvedStarts.get(journal)
-  return held?.size ? [...held] : undefined
+  return held?.size ? [...held.keys()] : undefined
 }
 
 export async function selectedStructuredSubmission(

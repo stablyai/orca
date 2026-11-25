@@ -164,6 +164,7 @@ export async function writeLocalTextFileWithDiskPrecondition(
   const compareAndWrite = async (): Promise<FileWriteResult> => {
     const diskConflict = await checkLocalDiskWritePrecondition(filePath, precondition, content)
     if (diskConflict === 'identical') {
+      assertCanWrite?.()
       return FILE_WRITE_UNCHANGED
     }
     if (diskConflict) {

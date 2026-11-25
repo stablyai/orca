@@ -65,13 +65,13 @@ export function useMobileNativeChatSendError(args: {
     (next: string, details?: MobileNativeChatSendErrorDetails) => {
       // A refused or failed send buzzes (MobilePendingButton's rule), felt even when the banner is covered.
       triggerError()
-      if (details?.announceOnly) {
-        void announce(next)
-        return
-      }
       // Fall back to toast after leaving chat or changing tabs so late failures remain visible without misattribution.
       if (liveScopeRef.current !== scopeKey || !bannerMountedRef.current) {
         showToastRef.current(next, NATIVE_CHAT_SEND_ERROR_TOAST_MS)
+        return
+      }
+      if (details?.announceOnly) {
+        void announce(next)
         return
       }
       clearTimer()

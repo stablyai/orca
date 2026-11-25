@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
   closeMobileNativeChatTabDraft,
+  returnMobileNativeChatInFlightSend,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
 
@@ -25,8 +26,12 @@ import {
   readMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs
 } from './mobile-native-chat-draft-inputs'
-import { settleMobileInstructionRecovery } from '../mobile-native-chat-recovery-delivery'
+import {
+  confirmMobileRecordedRecovery,
+  settleMobileInstructionRecovery
+} from '../mobile-native-chat-recovery-delivery'
 import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
@@ -68,13 +73,15 @@ describe('mobile native-chat draft store', () => {
     submissions = emptySubmissions,
     cursor,
     connected = true,
-    confirmRecorded
+    confirmRecorded,
+    queuedMessages = null
   }: {
     tabId: string
     submissions?: readonly AgentJournalSubmission[]
     cursor?: AgentJournalCursor
     connected?: boolean
     confirmRecorded?: (id: string) => Promise<MobileStructuredSendRecord> | null
+    queuedMessages?: readonly AgentSessionQueuedMessage[] | null
   }): null {
     const drafts = useMobileNativeChatDrafts({
       hostId: 'host',
@@ -90,7 +97,7 @@ describe('mobile native-chat draft store', () => {
       sessionId: `session-${tabId}`,
       submissions,
       cursor,
-      queuedMessages: null,
+      queuedMessages,
       onSendError: sendError,
       connected,
       confirmRecorded
@@ -119,7 +126,7 @@ describe('mobile native-chat draft store', () => {
     })
   }
 
-  it.each(['rejected', 'accepted', 'unknown'] as const)(
+  it.each(['rejected', 'stale', 'accepted', 'unknown'] as const)(
     'settles a recorded pending task as %s without replaying or restoring accepted/unknown work',
     async (state) => {
       await mount('a')
@@ -140,23 +147,66 @@ describe('mobile native-chat draft store', () => {
         reason: null
       }
       const error = vi.fn()
-      act(() => settleMobileInstructionRecovery('session-a', [submission], error))
+      act(() => settleMobileInstructionRecovery('session-a', [submission], error, []))
       expect(currentState().composerText).toBe('')
       const settled = {
         ...submission,
-        dispatchState: state,
-        ...(state === 'rejected' ? { keptAsQueuedMessageId: 'retained-card' } : {}),
+        dispatchState: state === 'stale' ? ('rejected' as const) : state,
+        ...(state === 'rejected' || state === 'stale'
+          ? { keptAsQueuedMessageId: 'retained-card' }
+          : {}),
         rejection: instructionTimeout
       }
-      act(() => settleMobileInstructionRecovery('session-a', [settled], error))
-      act(() => settleMobileInstructionRecovery('session-a', [settled], error))
+      const cardIds = state === 'rejected' ? ['retained-card'] : []
+      act(() => settleMobileInstructionRecovery('session-a', [settled], error, cardIds))
+      act(() => settleMobileInstructionRecovery('session-a', [settled], error, cardIds))
       expect(currentState().composerText).toBe('')
-      expect(readMobileNativeChatInFlightSend(inFlightId) !== null).toBe(state === 'unknown')
+      expect(readMobileNativeChatInFlightSend(inFlightId) !== null).toBe(
+        state === 'unknown' || state === 'stale'
+      )
       expect(error.mock.calls).toEqual(
         state === 'rejected' ? [[expect.any(String), { announceOnly: true }]] : []
       )
     }
   )
+
+  it('keeps a saved send when newer journal evidence contradicts a negative lookup', async () => {
+    await mount('a')
+    act(() => currentState().setComposerText('retained task'))
+    const origin = sendOrigin('retained task')
+    act(() => currentState().clearDraftForSend(origin, 'retained task'))
+    const id = beginMobileNativeChatInFlightSend(origin, 'structured', 'retained task', {
+      clientMessageId: 'recovery-task'
+    })!
+    const reply = Promise.withResolvers<MobileStructuredSendRecord>()
+    let submissions: readonly AgentJournalSubmission[] = []
+    confirmMobileRecordedRecovery({
+      confirm: () => reply.promise,
+      clientMessageId: 'recovery-task',
+      inFlightIds: () => [id],
+      handBack: () => returnMobileNativeChatInFlightSend(id),
+      asking: new Set(),
+      forget: () => {},
+      readDelivery: () => ({ submissions, queuedMessageIds: [] }),
+      sessionId: 'session-a',
+      onSendError: sendError
+    })
+    submissions = [
+      {
+        clientMessageId: 'recovery-task',
+        fence: 1,
+        payloadFingerprint: 'task',
+        dispatchState: 'pending',
+        providerItemId: null,
+        submittedAt: 1,
+        resolvedAt: null,
+        reason: null
+      }
+    ]
+    await act(async () => reply.resolve({ recorded: false, confirmedAbsent: true }))
+    expect(currentState().composerText).toBe('')
+    expect(readMobileNativeChatInFlightSend(id)?.send.text).toBe('retained task')
+  })
 
   it.each([false, true])(
     'keeps a connected covering-page omission through reopen and late rejection, newer input: %s',
@@ -230,8 +280,27 @@ describe('mobile native-chat draft store', () => {
       }
       act(() => renderer!.update(createElement(Harness, { tabId: 'a', submissions: [rejected] })))
       expect(currentState().composerText).toBe(newer ? 'new draft' : '')
+      expect(readMobileNativeChatInFlightSend(id)?.send.files).toHaveLength(1)
+      const returned: AgentSessionQueuedMessage = {
+        messageId: 'paged-task',
+        position: 0,
+        state: 'returned',
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'retained paged task' }]
+        }
+      }
+      act(() =>
+        renderer!.update(
+          createElement(Harness, {
+            tabId: 'a',
+            submissions: [rejected],
+            queuedMessages: [returned]
+          })
+        )
+      )
       expect(readMobileNativeChatDraftInputs(origin.draftDestination.scope).files).toEqual([])
-      act(() => renderer!.update(createElement(Harness, { tabId: 'a', submissions: [rejected] })))
       expect(readMobileNativeChatInFlightSend(id)).toBeNull()
     }
   )
@@ -302,7 +371,8 @@ describe('mobile native-chat draft store', () => {
         }
         const confirmRecorded = vi.fn(async (): Promise<MobileStructuredSendRecord> => ({
           recorded: true,
-          ...(outcome === 'queued' ? { ownedByQueue: true } : { submission: fact })
+          ...(outcome === 'queued' || outcome === 'rejected' ? { ownedByQueue: true } : {}),
+          ...(outcome === 'queued' ? {} : { submission: fact })
         }))
         act(() =>
           renderer!.update(

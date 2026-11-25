@@ -11,6 +11,7 @@ import { AgentJournalSubmissionSchema } from '../../../../../../src/shared/agent
 
 const sendRecordSchema = z.object({
   recorded: z.boolean(),
+  confirmedAbsent: z.literal(true).optional(),
   submission: AgentJournalSubmissionSchema.pick({
     clientMessageId: true,
     dispatchState: true,
