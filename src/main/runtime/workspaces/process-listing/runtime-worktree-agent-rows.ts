@@ -30,6 +30,7 @@ import {
 } from '../../../../shared/agent-session/identity/orca-session-address'
 
 type OrchestrationDisplay = {
+  dispatchId?: string
   taskTitle?: string | null
   displayName?: string | null
   parentPaneKey?: string | null
@@ -116,6 +117,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       paneKey: source.paneKey,
       ...(address ? { address } : {}),
       ...(source.orcaSessionId ? { orcaSessionId: source.orcaSessionId } : {}),
+      ...(orchestration?.dispatchId ? { dispatchId: orchestration.dispatchId } : {}),
       parentPaneKey,
       state: source.state,
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
