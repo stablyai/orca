@@ -1,12 +1,11 @@
 import type { Readable } from 'node:stream'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
-import {
-  RELAY_CUT_KEY_MAX_CHARS,
-  RELAY_CUT_KEYS_MAX,
-  type ProviderRelayAttachResult,
-  type ProviderRelayDataEvent
+import type {
+  ProviderRelayAttachResult,
+  ProviderRelayDataEvent
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
+import { boundedCutKeys } from './relayed-provider-cut-keys'
 import { RelayedProviderKeptLines, relayHandOffWaitMs } from './relayed-provider-kept-lines'
 import type { RelayedProviderContinuation } from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
@@ -34,8 +33,9 @@ export type ProviderRelayAckFloor = {
   /** A forced ack (the daemon's file cap) released everything through `seq`: items it held that
    *  started there can't be kept whole any more, so they hold nothing from now on. */
   released?: (seq: number) => void
-  /** The items a cut now would split, as the continuation keys them; a reattach moves exactly those. */
-  cutKeys?: () => string[]
+  /** The items a cut now splits, as the continuation keys them; a reattach moves exactly those.
+   *  `through`: a release lets go of lines through it, splitting items open there too. */
+  cutKeys?: (through?: number) => string[]
 }
 
 export type ProviderRelayAckFlags = { cut?: true; held?: true; cutKeys?: string[] }
@@ -359,7 +359,10 @@ export class RelayedProviderOutput {
         this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
         const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
         // Named when the cut is taken, so a retried ack names the same items.
-        this.cutKeys = cut ? (this.cutKeys ?? boundedCutKeys(this.options.ackFloor)) : null
+        this.cutKeys = cut
+          ? (this.cutKeys ??
+            boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined))
+          : null
         const flags = {
           ...(cut ? { cut: true as const } : {}),
           ...(heldFrom !== null ? { held: true as const } : {}),
@@ -389,15 +392,4 @@ export class RelayedProviderOutput {
     })
     return this.acking
   }
-}
-
-/** The floor's cut keys, or none (the reattach guesses) when they are past what the daemon takes. */
-function boundedCutKeys(floor: ProviderRelayAckFloor | undefined): string[] | null {
-  const keys = floor?.cutKeys?.()
-  return keys &&
-    keys.length > 0 &&
-    keys.length <= RELAY_CUT_KEYS_MAX &&
-    keys.every((key) => key.length <= RELAY_CUT_KEY_MAX_CHARS)
-    ? keys
-    : null
 }
