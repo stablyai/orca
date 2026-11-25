@@ -70,16 +70,23 @@ export class ProviderRelayKeptState {
     return this.sendOnAttach ? [...this.kept.values()].sort((a, b) => a.seq - b.seq) : []
   }
 
-  /** Which kept seq answers to which name, and requests the agent still owes or answered after
+  /** Which kept seq answers to which name; taken with `records()`, they describe the same lines. */
+  lines(): ProviderRelayKeptLine[] {
+    return this.sendOnAttach
+      ? [...this.kept].map(([name, record]) => ({ seq: record.seq, name }))
+      : []
+  }
+
+  /** The kept lines an attach sent (by default, the current ones), and requests the agent still owes or answered after
    *  `afterSeq` (so the answer is in this replay), oldest first; empty ones are left out. A request
    *  whose every line is in the replay says so: a replayed turn then reads as the live one did. */
-  attachDetails(afterSeq: number): {
+  attachDetails(
+    afterSeq: number,
+    kept = this.lines()
+  ): {
     kept?: ProviderRelayKeptLine[]
     outstanding?: ProviderRelayOutstandingRequest[]
   } {
-    const kept = this.sendOnAttach
-      ? [...this.kept].map(([name, record]) => ({ seq: record.seq, name }))
-      : []
     const outstanding = [
       ...[...this.answered.values()]
         .filter((request) => request.seq > afterSeq)

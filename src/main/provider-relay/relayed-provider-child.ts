@@ -70,6 +70,8 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   outcomeLost?: boolean
   /** What the first attach reported: request id floor, cached initialize answer, stderr, exit. */
   attachResult: ProviderRelayAttachResult | null = null
+  /** The cursor this child last attached from. */
+  attachedFrom = 0
   private state: RelayState = 'attaching'
   /** An end that came while output was held; it runs once the output is released. */
   private parkedEnd: { exit: ProviderRelayExit; lost: boolean } | null = null
@@ -139,7 +141,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
 
   /** Attaches from `fromSeq`; the spool after it and unanswered requests then arrive as stdout. */
   async start(fromSeq: number): Promise<ProviderRelayAttachResult> {
-    this.output.restartAt(fromSeq)
+    this.output.restartAt((this.attachedFrom = fromSeq))
     this.unbind = this.options.channel.bind(this.relayId, {
       line: (event, seq, line) => this.output.line(event, seq, line),
       ackWanted: () => void this.output.settle(true),
