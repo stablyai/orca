@@ -124,12 +124,17 @@ describe('codex rows across a reattach', () => {
     const delta = (id: string) =>
       JSON.stringify({ method: 'item/agentMessage/delta', params: { threadId: 't', itemId: id } })
     const turnDone = JSON.stringify({ method: 'turn/completed', params: { threadId: 't' } })
-    const attach = async (openTurns: string[][]) => {
+    const attach = async (openTurns: string[][], truncatedThrough?: number) => {
       const relay = fakeProviderRelayChannel({
         // The release left the daemon's cursor at 10, so it reports no truncation.
         attach: async () => {
           relay.sink().line('relayData', 11, delta('a'))
-          return { ...EMPTY_RELAY_ATTACH, replayThroughSeq: 11, openWork: { turn: openTurns } }
+          return {
+            ...EMPTY_RELAY_ATTACH,
+            replayThroughSeq: 11,
+            openWork: { turn: openTurns },
+            ...(truncatedThrough ? { truncatedThrough } : {})
+          }
         }
       })
       const child = new RelayedProviderChild({
@@ -163,6 +168,8 @@ describe('codex rows across a reattach', () => {
     expect(await attach([['t']])).toEqual(['relay:r1:11:a', null, 'z'])
     // Nothing was running at the quit, so no item can be cut: lines pass as they are.
     expect(await attach([])).toEqual(['a', null, 'z'])
+    // A dropped kept span says the replay starts inside an item, whatever the open turns say.
+    expect(await attach([], 10)).toEqual(['relay:r1:11:a', null, 'relay:r1:13:z'])
   })
 
   it('a cap-cut replay never overwrites the saved row, and the item ends whole on it', async () => {
