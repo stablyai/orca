@@ -4,7 +4,13 @@ import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../../shared/re
 import { FOLDER_NOTE_MERGE_MAX_PARAMS_BYTES } from './folder-note-merge-call'
 import { clearRuntimeCompatibilityCache } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { clearRuntimeEnvironmentConnectionGenerations } from '../runtime-status/runtime-status-connection-generation'
-import { note, resetFolderNoteTestState, setupFolderNotes } from './folder-note-test-harness'
+import {
+  folderWorkspacesApi,
+  note,
+  resetFolderNoteTestState,
+  setupFolderNotes
+} from './folder-note-test-harness'
+import { protectedCopies } from './folder-note-protected-copy'
 
 let errSpy: ReturnType<typeof vi.spyOn>
 let warnSpy: ReturnType<typeof vi.spyOn>
@@ -120,5 +126,58 @@ describe('folder note recovery: where the host placed a replayed add', () => {
     expect(utf8JsonByteLength(receipt)).toBeLessThan(2048)
     expect(catalogBytes).toBeGreaterThan(3 * MiB)
     expect(catalogBytes).toBeLessThan(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES)
+  })
+})
+
+describe('folder note recovery: a delivered clear waiting on two edits', () => {
+  type Variant = 'peer moved X' | 'X still delivered' | 'no snapshot' | 'row replaced'
+  it.each([
+    ['peer moved X', true],
+    ['X still delivered', false],
+    ['no snapshot', false],
+    ['row replaced', false]
+  ] as [Variant, boolean][])('%s: the clear reports %s', async (variant, expected) => {
+    const { host, edit, clearDelivered, failOnce, startCatalogFetch } = setupFolderNotes('local', [
+      note('X', 'v1'),
+      note('Y', 'v1', 2)
+    ])
+    await failOnce()
+    await vi.waitFor(() => expect(host.effects.reads).toBe(1))
+    const gate = deferred()
+    host.mergeGate = gate.promise
+    host.nextMerges = ['refuse', 'ok']
+    if (variant === 'no snapshot') {
+      folderWorkspacesApi.mergeDiffComments.mockImplementation(async (request) => {
+        const receipt = await host.merge(request)
+        return { ...receipt, snapshot: undefined }
+      })
+    }
+    const editedX = edit('X', 'v2')
+    const editedY = edit('Y', 'v2')
+    // Both shown values changed already, so the clear sends nothing and waits on both edits.
+    let copiesAtResume = -1
+    const cleared = clearDelivered([note('X', 'v1'), note('Y', 'v1', 2)]).then((result) => {
+      copiesAtResume = protectedCopies.size
+      return result
+    })
+    if (variant !== 'X still delivered') {
+      host.peer((notes) => notes.map((n) => (n.id === 'X' ? { ...n, body: 'v3' } : n)))
+    }
+    if (variant === 'row replaced') {
+      await startCatalogFetch({ ...host.row, createdAt: 8 }).deliver()
+    }
+    gate.resolve()
+
+    expect(await cleared).toBe(expected)
+    if (variant !== 'row replaced') {
+      expect(await editedX).toBe(false)
+      expect(await editedY).toBe(true)
+      const merges = host.requests.filter((request) => request.mode === 'merge')
+      expect(merges.map((request) => request.diffComments.map((n) => n.id))).toEqual([['X'], ['Y']])
+    }
+    if (variant === 'peer moved X') {
+      // The copy was released cleanly before the waiting clear resumed.
+      expect(copiesAtResume).toBe(0)
+    }
   })
 })

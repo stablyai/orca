@@ -165,6 +165,7 @@ export function enterFolderNoteProtection(args: {
     readAttempts: 0,
     readInFlight: false,
     readToken: 0,
+    waiters: 0,
     actionSeq: 0,
     reportedNoSnapshot: false
   }

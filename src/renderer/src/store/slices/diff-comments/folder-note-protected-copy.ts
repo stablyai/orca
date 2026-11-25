@@ -62,6 +62,8 @@ export type ProtectedCopy = {
   reportedNoSnapshot: boolean
   // Ended because its row was replaced, removed or re-paired (not merely released at a quiet tail).
   retired?: boolean
+  // No-ops waiting on this copy's actions; they keep its evidence, even past a clean release.
+  waiters: number
 }
 
 // Why a bound: a host refusing every write must not grow an unbounded backlog of retained actions.
@@ -249,6 +251,10 @@ export function settle(
 
 /** At a quiet tail with nothing more to do: keep only what the next event needs. */
 export function releaseIdleState(copy: ProtectedCopy): void {
+  // A no-op still waiting judges by this evidence; it is released at the next quiet tail instead.
+  if (copy.waiters > 0) {
+    return
+  }
   copy.authoritative = undefined
   copy.baseFromHost = false
   copy.provisional = true

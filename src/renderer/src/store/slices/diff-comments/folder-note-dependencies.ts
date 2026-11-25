@@ -6,12 +6,7 @@ import {
   type FolderNoteAction,
   type FolderNoteScope
 } from './folder-note-actions'
-import {
-  acceptedNote,
-  isCurrentCopy,
-  protectedCopies,
-  type ProtectedCopy
-} from './folder-note-protected-copy'
+import { acceptedNote, protectedCopies, type ProtectedCopy } from './folder-note-protected-copy'
 
 /** Whether what the host is known to hold for `id` already gives the dependent what it asked for. */
 function holdsAnyway(
@@ -72,11 +67,17 @@ export async function awaitProtectedFolderNoteDependency(
   }
   const shown = new Map((copy.shown ?? []).map((note) => [note.id, note]))
   const borrowed = latestQueuedActionsTouching(copyKey, scope, { shown })
-  await Promise.all([...borrowed.values()].map((action) => action.outcome))
-  // A row replaced meanwhile is not the one the user acted on. A copy merely released keeps only
-  // what each earlier action's own verdict said.
+  // Why hold the copy: a clean release at a quiet tail can come before this resumes, and the
+  // evidence it gathered (a host list, a catalog sample, confirmations) still answers for this row.
+  copy.waiters += 1
+  try {
+    await Promise.all([...borrowed.values()].map((action) => action.outcome))
+  } finally {
+    copy.waiters -= 1
+  }
+  // A row replaced or re-paired meanwhile is not the one the user acted on.
   if (copy.retired) {
     return false
   }
-  return unmetDependencies(isCurrentCopy(copy) ? copy : null, borrowed, scope).length === 0
+  return unmetDependencies(copy, borrowed, scope).length === 0
 }

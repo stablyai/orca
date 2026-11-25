@@ -95,6 +95,37 @@ function consistentSnapshot(
     : undefined
 }
 
+/**
+ * Whether the claimed appends are ones this request could make: a read places nothing; an append is
+ * an id only in the requested after-list (never in its base: an edit stays in place), holding the
+ * requested version; and a full snapshot ends with exactly those notes, in request order.
+ */
+function placementPossible(
+  request: FolderDiffCommentMergeRequest,
+  verdict: FolderDiffCommentVerdict,
+  added: ReadonlySet<string>,
+  snapshot: readonly DiffComment[] | undefined
+): boolean {
+  if (added.size === 0) {
+    return true
+  }
+  if (request.mode === 'read') {
+    return false
+  }
+  const inBase = new Set(request.diffCommentsBase.map((note) => note.id))
+  const after = new Map(request.diffComments.map((note) => [note.id, note]))
+  const held = new Map(verdict.map((entry) => [entry.id, entry.version]))
+  const possible = [...added].every(
+    (id) => !inBase.has(id) && after.has(id) && held.get(id) === diffCommentVersion(after.get(id))
+  )
+  if (!possible || !snapshot) {
+    return possible
+  }
+  const appended = request.diffComments.filter((note) => added.has(note.id)).map((note) => note.id)
+  const tail = snapshot.slice(snapshot.length - appended.length).map((note) => note.id)
+  return appended.length <= snapshot.length && appended.every((id, index) => tail[index] === id)
+}
+
 /** The checked receipt, or null when the reply is not a valid answer to this exact request. */
 export function checkFolderNoteReceipt(
   reply: unknown,
@@ -123,13 +154,11 @@ export function checkFolderNoteReceipt(
   ) {
     return null
   }
-  // Placement names touched ids the host now holds, each once; a read places nothing.
   const added = new Set(receipt.added ?? [])
-  const held = new Map(receipt.verdict.map((entry) => [entry.id, entry.version]))
+  const snapshot = consistentSnapshot(receipt.snapshot, touched, receipt.verdict)
   if (
     added.size !== (receipt.added ?? []).length ||
-    (request.mode === 'read' && added.size > 0) ||
-    [...added].some((id) => !named.has(id) || held.get(id) === ABSENT_NOTE_VERSION)
+    !placementPossible(request, receipt.verdict, added, snapshot)
   ) {
     return null
   }
@@ -137,7 +166,7 @@ export function checkFolderNoteReceipt(
     verdict: receipt.verdict,
     added,
     // An inconsistent snapshot is dropped; the verdict alone still settles the action.
-    snapshot: consistentSnapshot(receipt.snapshot, touched, receipt.verdict)
+    snapshot
   }
 }
 
