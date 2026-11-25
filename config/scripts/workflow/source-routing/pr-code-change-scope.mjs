@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
+import { addsPackageImport, readPackagedSourceDiff } from './pr-added-package-imports.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsBoundaryPath,
@@ -49,6 +50,7 @@ const GLOBAL_FORCE_PREFIXES = [
   'config/scripts/pr-code-change-scope',
   'config/scripts/workflow/source-routing/pr-code-change-scope',
   'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
+  'config/scripts/workflow/source-routing/pr-added-package-imports',
   'config/scripts/pr-package-test-paths',
   'config/scripts/workflow/source-routing/pr-package-test-paths'
 ]
@@ -378,7 +380,10 @@ export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
   )
 }
 
-export function classifyPrJobs(changedFiles, { allowDaemonInitTestSupport = false } = {}) {
+export function classifyPrJobs(
+  changedFiles,
+  { allowDaemonInitTestSupport = false, addedPackageImport = false } = {}
+) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
   const forceAll = emptyDiff || changedFiles.some(isGlobalForcePath)
@@ -391,6 +396,7 @@ export function classifyPrJobs(changedFiles, { allowDaemonInitTestSupport = fals
       shouldRun &&
         (forceAll ||
           ALWAYS_ON_CODE_JOBS.has(job) ||
+          (addedPackageImport && ['package', 'package_windows'].includes(job)) ||
           jobDetector(job)(
             ['package', 'package_windows'].includes(job) ? bundleFiles : changedFiles
           ))
@@ -511,8 +517,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for await (const chunk of process.stdin) {
     input += chunk
   }
+  const diffBaseIndex = process.argv.indexOf('--diff-base')
+  const diffBase = diffBaseIndex === -1 ? null : process.argv[diffBaseIndex + 1]
   const classification = classifyPrJobs(input.split(/\r?\n/).filter(Boolean), {
-    allowDaemonInitTestSupport: process.argv.includes('--daemon-init-test-support')
+    allowDaemonInitTestSupport: process.argv.includes('--daemon-init-test-support'),
+    addedPackageImport:
+      diffBase !== null && addsPackageImport(readPackagedSourceDiff(diffBase), isTestFile)
   })
   for (const [name, value] of Object.entries(classification)) {
     process.stdout.write(`${name}=${value ? 'true' : 'false'}\n`)
