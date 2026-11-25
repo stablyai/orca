@@ -24,8 +24,6 @@ export function appendWithinUtf8ByteLimit(
   return truncateStreamPrefix(current, delta, maxBytes)
 }
 
-const HIGH_SURROGATE_AT_END = /[\uD800-\uDBFF]$/
-
 function truncateStreamPrefix(
   current: string[],
   delta: string,
@@ -65,9 +63,13 @@ function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): num
     if (end === buffer.length) {
       return end
     }
-    let piece = carry + (i < chunks.length ? chunks[i] : delta)
+    if (i === chunks.length) {
+      return end + buffer.write(carry + delta, end, buffer.length - end, 'utf8')
+    }
+    let piece = carry + chunks[i]
     carry = ''
-    if (i < chunks.length && HIGH_SURROGATE_AT_END.test(piece)) {
+    const last = piece.charCodeAt(piece.length - 1)
+    if (last >= 0xd800 && last <= 0xdbff) {
       carry = piece.slice(-1)
       piece = piece.slice(0, -1)
     }
