@@ -1349,6 +1349,26 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "mcpServers": {
+      "toast": {
+        "added": "已添加 {{name}}",
+        "addedMany": "已添加 {{count}} 个服务器",
+        "agentOff": "已为 {{agent}} 关闭 {{name}}",
+        "agentOn": "已为 {{agent}} 开启 {{name}}",
+        "allOff": "已对所有智能体关闭 {{name}}",
+        "allOn": "已对所有智能体开启 {{name}}",
+        "newSessions": "仅对新会话生效",
+        "removed": "已移除 {{name}}",
+        "repoOff": "已在 {{repo}} 中关闭 {{name}}",
+        "repoOn": "已在 {{repo}} 中开启 {{name}}",
+        "restart": "重启 {{count}} 个会话",
+        "saved": "已保存 {{name}}",
+        "sharedOff": "{{name}} 每个会话各运行一份",
+        "sharedOn": "{{name}} 共用一个进程",
+        "signedOut": "已退出 {{name}} 的登录",
+        "workspaces": "{{name}}：{{workspaces}}"
+      }
     }
   },
   "menu": {
