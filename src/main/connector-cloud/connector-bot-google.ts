@@ -15,6 +15,8 @@ export class ConnectorBotGoogle {
   private kept = new Set<string>()
   private readonly reads = new SerialRerun(() => this.read())
   private readonly listeners = new Set<() => void>()
+  // Bot writes waiting on a read to say their hello; a change their hello carries tells no listener.
+  private writesWaiting = 0
 
   constructor(private readonly deps: ConnectorBotGoogleDeps) {}
 
@@ -30,6 +32,17 @@ export class ConnectorBotGoogle {
   /** Reads them again; settles once the latest read is kept. */
   refresh(): Promise<void> {
     return this.reads.start()
+  }
+
+  /** A bot write's one hello, said once a read has kept what the write changed (a share, Google on). */
+  async botsWritten(hello: () => void): Promise<void> {
+    this.writesWaiting += 1
+    try {
+      await this.reads.start()
+    } finally {
+      this.writesWaiting -= 1
+      hello()
+    }
   }
 
   private async read(): Promise<void> {
@@ -48,7 +61,7 @@ export class ConnectorBotGoogle {
     )
     const changed = next.size !== this.kept.size || [...next].some((id) => !this.kept.has(id))
     this.kept = next
-    if (changed) {
+    if (changed && this.writesWaiting === 0) {
       for (const listener of this.listeners) {
         listener()
       }

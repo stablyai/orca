@@ -1,7 +1,5 @@
 import { ConnectorBotPurposes } from './connector-bot-purposes'
-import { ConnectorBotGoogle } from './connector-bot-google'
-import { getGoogleConnect } from '../google/google-connect'
-import { onGoogleAccountWritten } from '../google/google-credential-store'
+import type { ConnectorBotGoogle } from './connector-bot-google'
 import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
@@ -56,6 +54,7 @@ export type ConnectorCloudHost = {
     WebhookHostService,
     'receive' | 'notice' | 'helloAnswered' | 'pausing' | 'onConfirmed'
   >
+  google: ConnectorBotGoogle
 }
 
 /** The connector acts as this host's own signed-in Orca account; null without Orca Cloud auth config. */
@@ -66,7 +65,8 @@ export function createConnectorCloud({
   kind,
   isFenced,
   gitHubInstallations,
-  webhooks
+  webhooks,
+  google
 }: ConnectorCloudHost): ConnectorCloud | null {
   const auth = getOrcaCloudAuthConfig()
   if (!auth.configured) {
@@ -76,13 +76,6 @@ export function createConnectorCloud({
   const purposes = new ConnectorBotPurposes({ bots: () => store.getBots?.() ?? [] })
   // A share or a bot's edit is a bot write; a SOUL.md edit alone is read on the next one.
   runtime.onBotsWritten(() => void purposes.refresh())
-  const google = new ConnectorBotGoogle({
-    bots: () => store.getBots?.() ?? [],
-    accounts: () => getGoogleConnect()?.accounts() ?? null
-  })
-  // Turning Google on, choosing its accounts or sharing is a bot write; a sign-in or sign-out writes an account.
-  runtime.onBotsWritten(() => void google.refresh())
-  onGoogleAccountWritten(() => void google.refresh())
   const migratePlaces = botPlaceMigrationOnHello(
     {
       list: () => store.listAutomations(),
@@ -229,7 +222,8 @@ export function createConnectorCloud({
           connectorTriggers(store.listAutomations(), (hookId) => webhooks.pausing(hookId))
         ),
       onHelloInputsChanged: (listener) => {
-        runtime.onBotsWritten(listener)
+        // One hello per write, once Google's read has what it changed.
+        runtime.onBotsWritten(() => void google.botsWritten(listener))
         runtime.onBotShareHostKeyReady(listener)
         runtime.onClientEvent(
           (event) => {

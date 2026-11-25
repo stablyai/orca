@@ -45,4 +45,20 @@ describe('Google on a shared agent’s invite card', () => {
     // A card from an Orca before Google was listed still names its services.
     expect(agentCardServices({ services: ['github', 'slack'] })).toEqual(['github', 'slack'])
   })
+
+  it('says one hello per bot write, and that hello already lists Google', async () => {
+    let google = false
+    const cache = new ConnectorBotGoogle({
+      bots: () => [{ id: 'agent', shares: [SHARE], google }],
+      accounts: async () => [account('me@gmail.com', 'connected')]
+    })
+    // As the connector wires it: a read that changes the card and a bot write each say a hello.
+    const hellos: boolean[] = []
+    const hello = (): void => void hellos.push(cache.works('agent'))
+    cache.onChange(hello)
+    await cache.refresh()
+    google = true
+    await cache.botsWritten(hello)
+    expect(hellos).toEqual([true])
+  })
 })
