@@ -15,28 +15,6 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  providerSwitch: {
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    backgroundColor: colors.bgPanel
-  },
-  // At least the screen's width, so chips that fit stretch to fill it.
-  toolbar: {
-    flexGrow: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
-  filterSheetHeader: {
-    marginBottom: spacing.xs
-  },
-  filterFootnote: {
-    fontSize: 12,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm
-  },
   errorBanner: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
@@ -123,28 +101,10 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
   list: {
     paddingTop: spacing.xs
   },
-  repoSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
-    backgroundColor: colors.bgBase
-  },
   repoSectionDot: {
     width: 8,
     height: 8,
     borderRadius: radii.pill
-  },
-  repoSectionTitle: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
   },
   separator: {
     height: 1,

@@ -5093,8 +5093,7 @@
     },
     "pagination": {
       "pageUnreachable": "Страница {{page}} выходит за пределы результатов поиска GitHub.",
-      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub.",
-      "noMoreResults": "На странице {{page}} больше нет результатов."
+      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub."
     },
     "composerSource": {
       "baseFailed": "Не удалось определить базовую ветку.",
@@ -5117,23 +5116,10 @@
     "filterPickers": {
       "allTeams": "Все команды",
       "changeStatus": "Изменить статус",
-      "fieldHidden": "Скрыто на карточках",
-      "fieldShown": "Показано на карточках",
-      "fieldsSubtitle": "Выберите, какие поля проекта показывать на карточках элементов.",
-      "fieldsTitle": "Поля проекта",
-      "gitlabFilter": "Фильтр GitLab",
-      "gitlabView": "Представление GitLab",
-      "jiraFilter": "Фильтр Jira",
-      "jiraSite": "Сайт Jira",
-      "linearFilter": "Фильтр Linear",
       "linearIssue": "Задача Linear",
-      "linearWorkspace": "Рабочее пространство Linear",
       "loadingStates": "Загрузка статусов…",
-      "noFields": "В этом представлении нет дополнительных полей.",
       "noStates": "Нет доступных статусов",
       "switchWorkspaceFailed": "Не удалось сменить рабочее пространство",
-      "teamsSubtitle": "Выберите команды для отображения в разделе «Задачи».",
-      "teamsTitle": "Команды Linear",
       "teams_few": "{{count}} команды",
       "teams_many": "{{count}} команд",
       "teams_one": "{{count}} команда",
@@ -5279,9 +5265,6 @@
     "linearList": {
       "changeStatusFrom": "Изменить статус «{{status}}»"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Отображаемые поля"
-    },
     "listSurface": {
       "connectLinearButton": "Подключить Linear",
       "connectLinearMessage": "Просматривайте назначенные вам задачи Linear и начинайте работу над ними прямо в разделе «Задачи».",
@@ -5335,7 +5318,6 @@
       "projectMergeRequests": "MR проекта",
       "projectMergeRequestsDescription": "Запросы на слияние и задачи по репозиториям",
       "projects": "Проекты",
-      "pullRequests": "PR",
       "repository": "Репозиторий",
       "repositorySortDescription": "По репозиториям, внутри — сначала недавно обновлённые",
       "reviewRequestsDescription": "Запросы на проверку, назначенные вам",
@@ -5460,42 +5442,8 @@
       "reviewers": "Рецензенты",
       "viewFile": "Просмотреть"
     },
-    "providerControls": {
-      "myTodos": "Мои дела",
-      "projectMergeRequests": "MR проекта",
-      "reposLabel": "Репозитории: {{repos}}",
-      "filterCount": "Фильтр · {{count}}",
-      "filter": "Фильтр",
-      "filterLabel": "Фильтр и отображение"
-    },
-    "providerItemList": {
-      "intoBranch": "в {{base}}",
-      "nextPage": "Следующая страница",
-      "page": "Страница {{page}}",
-      "pageOfTotal": "Страница {{page}} из {{total}}",
-      "previousPage": "Предыдущая страница",
-      "selectPage": "Выбрать страницу, страница {{page}}",
-      "selectPageOfTotal": "Выбрать страницу, страница {{page}} из {{total}}",
-      "kindAndStatus": "{{kind}}, {{status}}"
-    },
     "providerPickers": {
-      "allRepositories": "Все репозитории",
-      "githubView": "Режим GitHub",
-      "issueSources": "Источники задач GitHub",
-      "issueSourcesDescription": "Выберите для каждого репозитория, где искать и создавать задачи: upstream или origin.",
-      "issues": "Задачи",
-      "noIssueSources": "Другие источники задач недоступны.",
-      "origin": "Исходный репозиторий",
-      "pageHint": "Перейдите на загруженную или доступную страницу результатов.",
-      "pageLoaded": "Загружена",
-      "pageNotLoaded": "Загрузит более ранние результаты",
-      "pageNumber": "Страница {{page}}",
-      "pages": "Страницы GitHub",
-      "pullRequests": "Пул-реквесты",
-      "queryingSource": "Запрос к {{source}}",
-      "repoDescription": "Выберите репозитории для поиска.",
-      "repos": "Репозитории",
-      "upstream": "Вышестоящий репозиторий"
+      "allRepositories": "Все репозитории"
     },
     "providerViewProjection": {
       "all": "Все",
@@ -5504,7 +5452,6 @@
       "allWorkspaces": "Все рабочие пространства",
       "chooseProject": "Выбрать проект",
       "default": "По умолчанию",
-      "defaultSubtitle": "{{subtitle}} · По умолчанию",
       "issues": "Задачи",
       "openState": "Открытые",
       "projects": "Проекты",
@@ -5522,15 +5469,7 @@
     "screenChrome": {
       "newGitHubIssue": "Новая задача GitHub",
       "newLinearIssue": "Новая задача Linear",
-      "refreshGitHub": "Обновить задачи GitHub",
-      "refreshGitLab": "Обновить задачи GitLab",
-      "refreshJira": "Обновить задачи Jira",
-      "refreshLinear": "Обновить Linear",
       "title": "Задачи"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Поиск в проекте…",
-      "providerPlaceholder": "Поиск задач {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Все",
@@ -5650,30 +5589,15 @@
       "createFailed": "Не удалось создать рабочее пространство"
     },
     "filterSheet": {
-      "sortBy": "Сортировать по",
       "issueSource": "Источник задач",
-      "issueSourceRow": "Upstream или origin",
       "view": "Вид",
-      "projectView": "Вид проекта",
-      "projectItems_one": "{{count}} элемент",
-      "projectItems_other": "{{count}} элемента",
-      "projectItems_few": "{{count}} элемента",
-      "projectItems_many": "{{count}} элементов",
-      "chooseView": "Выбрать",
       "showOnRows": "Показывать в строках",
-      "projectFields": "Поля проекта",
       "workspace": "Рабочее пространство",
-      "linearWorkspace": "Рабочее пространство Linear",
       "layout": "Макет",
       "groupBy": "Группировать по",
       "orderBy": "Упорядочить по",
-      "displayProperties": "Свойства отображения",
       "title": "Фильтр и отображение",
-      "done": "Готово",
-      "jqlReplacesPreset": "Ваш поиск JQL заменяет пресет «Показать». Очистите поиск, чтобы снова выбрать пресет."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Поиск JQL"
+      "done": "Готово"
     },
     "itemComments": {
       "noComments": "Комментариев пока нет",
@@ -6089,7 +6013,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Найдите задачи или введите JQL, например project = ABC",
         "jiraTextMatchesNotice": "Показаны текстовые совпадения. Jira не удалось выполнить этот поиск как JQL."
       },
       "editor": {

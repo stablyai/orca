@@ -1,12 +1,28 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { Plus } from 'lucide-react-native'
+import { Plus, SlidersHorizontal } from 'lucide-react-native'
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
 import { scopeGitHubTaskSearch } from '../../../../src/shared/work-items/task-github-search'
 import { translate } from '../../i18n/mobile-i18n'
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
+import { mobileTasksFilterCount } from './mobile-tasks-filter-selection'
+import { githubQueryFromSearchField, githubSearchFieldText } from './github-task-search-field'
 
-/** GitLab todos and unconnected sources have nothing to search. */
-export function mobileTasksSearchVisible(model: ConnectionPresentationModel): boolean {
+function searchPlaceholder(model: ConnectionPresentationModel): string {
+  if (model.isGithubProjectSearch) {
+    return translate('tasks.searchControl.viewPlaceholder', 'Search this view')
+  }
+  if (model.provider === 'github') {
+    return model.githubKind === 'prs'
+      ? translate('tasks.searchControl.pullRequestsPlaceholder', 'Search pull requests')
+      : translate('tasks.searchControl.issuesPlaceholder', 'Search issues')
+  }
+  return translate('tasks.searchControl.sourcePlaceholder', 'Search {{provider}}', {
+    provider: model.providerLabel
+  })
+}
+
+/** GitLab todos and unconnected sources have nothing to search; the bar stays for its filter button. */
+function mobileTasksSearchable(model: ConnectionPresentationModel): boolean {
   const { gitlabView, jiraConnection, linearConnected, provider } = model
   return !(
     (provider === 'gitlab' && gitlabView === 'todos') ||
@@ -15,7 +31,7 @@ export function mobileTasksSearchVisible(model: ConnectionPresentationModel): bo
   )
 }
 
-// Search sits at the bottom with New task beside it; the list pads by the height it covers.
+// Filter, search and New issue sit at the bottom; the list pads by the height it covers.
 export function renderMobileTasksSearchControl(
   model: ConnectionPresentationModel,
   onCoveredHeightChange: (height: number) => void
@@ -30,35 +46,44 @@ export function renderMobileTasksSearchControl(
     isGithubProjectSearch,
     persistTaskResumeState,
     provider,
-    providerLabel,
     query,
     setAppliedQuery,
     setGithubProjectSearch,
     setQuery,
     setShowCreateTask,
+    setShowFilterSheet,
     showHeaderCreateTask,
     taskUiReady
   } = model
-  if (!mobileTasksSearchVisible(model)) {
-    return null
-  }
+  const searchable = mobileTasksSearchable(model)
+  const presetQuery = getTaskPresetQuery(githubPreset)
   return (
     <BottomSearchBar
-      value={isGithubProjectSearch ? githubProjectSearch : query}
-      onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
-      placeholder={
+      // GitHub's preset query is the filter sheet's; the field holds only what was typed on top of it.
+      value={
         isGithubProjectSearch
-          ? translate('tasks.searchControl.projectPlaceholder', 'Search project view...')
-          : provider === 'jira'
-            ? translate(
-                'auto.components.TaskPage.99c2755218',
-                'Search issues or enter JQL, e.g. project = ABC'
-              )
-            : translate('tasks.searchControl.providerPlaceholder', 'Search {{provider}} tasks...', {
-                provider: providerLabel
-              })
+          ? githubProjectSearch
+          : provider === 'github'
+            ? githubSearchFieldText(query, presetQuery)
+            : query
       }
+      onChangeText={
+        isGithubProjectSearch
+          ? setGithubProjectSearch
+          : provider === 'github'
+            ? (text) => setQuery(githubQueryFromSearchField(text, presetQuery))
+            : setQuery
+      }
+      placeholder={searchPlaceholder(model)}
       bottomInset={insets.bottom}
+      leading={{
+        icon: SlidersHorizontal,
+        accessibilityLabel: translate('tasks.searchControl.filter', 'Filter'),
+        onPress: () => setShowFilterSheet(true),
+        disabled: !taskUiReady,
+        badge: mobileTasksFilterCount(model)
+      }}
+      leadingWithSearch
       onCoveredHeightChange={onCoveredHeightChange}
       // Preset text is not a search; Project’s explicit empty filter must not leave Clear visible forever.
       hasSearch={
@@ -66,10 +91,10 @@ export function renderMobileTasksSearchControl(
           ? githubProjectSearch.length > 0 ||
             (appliedGithubProjectSearch !== undefined && appliedGithubProjectSearch.length > 0)
           : provider === 'github'
-            ? query.trim() !== getTaskPresetQuery(githubPreset).trim()
+            ? query.trim() !== presetQuery.trim()
             : undefined
       }
-      editable={taskUiReady}
+      editable={taskUiReady && searchable}
       onSubmitEditing={() => {
         if (!taskUiReady) {
           return
@@ -99,8 +124,8 @@ export function renderMobileTasksSearchControl(
       }}
       onClear={() => clearMobileTasksSearch(model)}
       primary={
-        // Unconnected Linear has no bar; its page shows Connect instead.
-        showHeaderCreateTask
+        // Unconnected Linear's page shows Connect instead of a new issue.
+        showHeaderCreateTask && searchable
           ? {
               icon: Plus,
               accessibilityLabel:

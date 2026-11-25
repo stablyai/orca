@@ -3496,8 +3496,7 @@
     },
     "pagination": {
       "pageUnreachable": "第 {{page}} 頁超出 GitHub 搜尋可傳回的範圍。",
-      "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。",
-      "noMoreResults": "第 {{page}} 頁沒有更多結果。"
+      "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。"
     },
     "composerSource": {
       "baseFailed": "無法解析基礎分支。",
@@ -3518,23 +3517,10 @@
     "filterPickers": {
       "allTeams": "所有團隊",
       "changeStatus": "更改狀態",
-      "fieldHidden": "不顯示於卡片",
-      "fieldShown": "顯示於卡片",
-      "fieldsSubtitle": "選擇要在項目卡片上顯示的專案欄位。",
-      "fieldsTitle": "專案欄位",
-      "gitlabFilter": "GitLab 篩選",
-      "gitlabView": "GitLab 檢視",
-      "jiraFilter": "Jira 篩選",
-      "jiraSite": "Jira 網站",
-      "linearFilter": "Linear 篩選",
       "linearIssue": "Linear 議題",
-      "linearWorkspace": "Linear 工作區",
       "loadingStates": "正在載入狀態…",
-      "noFields": "此檢視沒有其他可顯示的欄位。",
       "noStates": "沒有可用的狀態",
       "switchWorkspaceFailed": "無法切換工作區",
-      "teamsSubtitle": "選擇要在「任務」中顯示的團隊。",
-      "teamsTitle": "Linear 團隊",
       "teams_one": "{{count}} 個團隊",
       "teams_other": "{{count}} 個團隊"
     },
@@ -3660,9 +3646,6 @@
     "linearList": {
       "changeStatusFrom": "變更狀態（目前為 {{status}}）"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "顯示屬性"
-    },
     "listSurface": {
       "connectLinearButton": "連線 Linear",
       "connectLinearMessage": "直接從「任務」瀏覽並開始處理指派給您的 Linear 議題。",
@@ -3716,7 +3699,6 @@
       "projectMergeRequests": "專案 MR",
       "projectMergeRequestsDescription": "依存放庫顯示合併請求與議題",
       "projects": "專案",
-      "pullRequests": "PR",
       "repository": "存放庫",
       "repositorySortDescription": "依存放庫分組，再依活動時間由新到舊排序",
       "reviewRequestsDescription": "指派給您的審查請求",
@@ -3835,37 +3817,8 @@
       "reviewers": "審查人",
       "viewFile": "檢視"
     },
-    "providerControls": {
-      "myTodos": "我的待辦事項",
-      "projectMergeRequests": "專案 MR"
-    },
-    "providerItemList": {
-      "intoBranch": "合併至 {{base}}",
-      "nextPage": "前往下一頁",
-      "page": "第 {{page}} 頁",
-      "pageOfTotal": "第 {{page}} 頁，共 {{total}} 頁",
-      "previousPage": "前往上一頁",
-      "selectPage": "選擇頁面，第 {{page}} 頁",
-      "selectPageOfTotal": "選擇頁面，第 {{page}} 頁，共 {{total}} 頁"
-    },
     "providerPickers": {
-      "allRepositories": "所有存放庫",
-      "githubView": "GitHub 檢視",
-      "issueSources": "GitHub 議題來源",
-      "issueSourcesDescription": "為各存放庫選擇查詢及建立工作的來源：upstream 或 origin。",
-      "issues": "議題",
-      "noIssueSources": "沒有其他可用的議題來源。",
-      "origin": "origin",
-      "pageHint": "跳至已載入或可載入的結果頁面。",
-      "pageLoaded": "已載入",
-      "pageNotLoaded": "載入較舊的結果",
-      "pageNumber": "第 {{page}} 頁",
-      "pages": "GitHub 結果頁",
-      "pullRequests": "PR",
-      "queryingSource": "正在查詢 {{source}}",
-      "repoDescription": "選擇要查詢的存放庫。",
-      "repos": "存放庫",
-      "upstream": "上游"
+      "allRepositories": "所有存放庫"
     },
     "providerViewProjection": {
       "all": "全部",
@@ -3874,7 +3827,6 @@
       "allWorkspaces": "所有工作區",
       "chooseProject": "選擇專案",
       "default": "預設",
-      "defaultSubtitle": "{{subtitle}} · 預設",
       "issues": "議題",
       "openState": "開放",
       "projects": "專案",
@@ -3890,15 +3842,7 @@
     "screenChrome": {
       "newGitHubIssue": "新增 GitHub 議題",
       "newLinearIssue": "新增 Linear 議題",
-      "refreshGitHub": "重新整理 GitHub 工作",
-      "refreshGitLab": "重新整理 GitLab 工作項",
-      "refreshJira": "重新整理 Jira 議題",
-      "refreshLinear": "重新整理 Linear",
       "title": "任務"
-    },
-    "searchControl": {
-      "projectPlaceholder": "在專案檢視中搜尋…",
-      "providerPlaceholder": "搜尋 {{provider}} 任務…"
     },
     "smartSourceModes": {
       "allStates": "全部",
@@ -4342,7 +4286,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "搜尋議題或輸入 JQL，例如 project = ABC",
         "jiraTextMatchesNotice": "正在顯示文字比對結果。Jira 無法將此搜尋作為 JQL 執行。"
       },
       "editor": {
@@ -4454,7 +4397,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",

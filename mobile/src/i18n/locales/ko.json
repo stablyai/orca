@@ -3677,8 +3677,7 @@
     },
     "pagination": {
       "pageUnreachable": "{{page}}페이지는 GitHub 검색에서 반환할 수 있는 범위를 벗어났습니다.",
-      "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다.",
-      "noMoreResults": "{{page}}페이지에 더 이상 결과가 없습니다."
+      "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다."
     },
     "composerSource": {
       "baseFailed": "기본 브랜치를 확인하지 못했습니다.",
@@ -3699,23 +3698,10 @@
     "filterPickers": {
       "allTeams": "모든 팀",
       "changeStatus": "상태 변경",
-      "fieldHidden": "카드에서 숨김",
-      "fieldShown": "카드에 표시됨",
-      "fieldsSubtitle": "항목 카드에 표시할 프로젝트 필드를 선택하세요.",
-      "fieldsTitle": "프로젝트 필드",
-      "gitlabFilter": "GitLab 필터",
-      "gitlabView": "GitLab 보기",
-      "jiraFilter": "Jira 필터",
-      "jiraSite": "Jira 사이트",
-      "linearFilter": "Linear 필터",
       "linearIssue": "Linear 이슈",
-      "linearWorkspace": "Linear 워크스페이스",
       "loadingStates": "상태 로드 중…",
-      "noFields": "이 보기에는 표시할 추가 필드가 없습니다.",
       "noStates": "사용 가능한 상태가 없습니다.",
       "switchWorkspaceFailed": "워크스페이스를 전환하지 못했습니다.",
-      "teamsSubtitle": "작업 화면에 표시할 팀을 선택하세요.",
-      "teamsTitle": "Linear 팀",
       "teams_one": "팀 {{count}}개",
       "teams_other": "팀 {{count}}개"
     },
@@ -3841,9 +3827,6 @@
     "linearList": {
       "changeStatusFrom": "상태 변경(현재: {{status}})"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "표시 속성"
-    },
     "listSurface": {
       "connectLinearButton": "Linear 연결",
       "connectLinearMessage": "작업 화면에서 할당받은 Linear 이슈를 바로 살펴보고 작업을 시작하세요.",
@@ -3897,7 +3880,6 @@
       "projectMergeRequests": "프로젝트 MR",
       "projectMergeRequestsDescription": "저장소별 MR 및 이슈",
       "projects": "프로젝트",
-      "pullRequests": "PR",
       "repository": "저장소",
       "repositorySortDescription": "저장소별로 그룹화한 후 최근 활동순 정렬",
       "reviewRequestsDescription": "나에게 할당된 리뷰 요청",
@@ -4016,37 +3998,8 @@
       "reviewers": "리뷰어",
       "viewFile": "보기"
     },
-    "providerControls": {
-      "myTodos": "내 할 일",
-      "projectMergeRequests": "프로젝트 MR"
-    },
-    "providerItemList": {
-      "intoBranch": "{{base}}(으)로",
-      "nextPage": "다음 페이지",
-      "page": "{{page}}페이지",
-      "pageOfTotal": "{{page}} / {{total}}페이지",
-      "previousPage": "이전 페이지",
-      "selectPage": "페이지 선택, {{page}}페이지",
-      "selectPageOfTotal": "페이지 선택, 전체 {{total}}페이지 중 {{page}}페이지"
-    },
     "providerPickers": {
-      "allRepositories": "모든 저장소",
-      "githubView": "GitHub 보기",
-      "issueSources": "GitHub 이슈 소스",
-      "issueSourcesDescription": "각 저장소에서 이슈 조회와 작업 생성에 사용할 소스를 upstream과 origin 중에서 선택하세요.",
-      "issues": "이슈",
-      "noIssueSources": "사용할 수 있는 다른 이슈 소스가 없습니다.",
-      "origin": "origin",
-      "pageHint": "로드되었거나 로드 가능한 결과 페이지로 이동하세요.",
-      "pageLoaded": "로드됨",
-      "pageNotLoaded": "이전 결과를 로드합니다.",
-      "pageNumber": "{{page}}페이지",
-      "pages": "GitHub 페이지",
-      "pullRequests": "PR",
-      "queryingSource": "조회 대상: {{source}}",
-      "repoDescription": "조회할 저장소를 선택하세요.",
-      "repos": "저장소",
-      "upstream": "업스트림"
+      "allRepositories": "모든 저장소"
     },
     "providerViewProjection": {
       "all": "모두",
@@ -4055,7 +4008,6 @@
       "allWorkspaces": "모든 워크스페이스",
       "chooseProject": "프로젝트 선택",
       "default": "기본",
-      "defaultSubtitle": "{{subtitle}} · 기본",
       "issues": "이슈",
       "openState": "열림",
       "projects": "프로젝트",
@@ -4071,15 +4023,7 @@
     "screenChrome": {
       "newGitHubIssue": "새 GitHub 이슈",
       "newLinearIssue": "새 Linear 이슈",
-      "refreshGitHub": "GitHub 작업 새로 고침",
-      "refreshGitLab": "GitLab 작업 항목 새로 고침",
-      "refreshJira": "Jira 이슈 새로 고침",
-      "refreshLinear": "Linear 새로고침",
       "title": "작업"
-    },
-    "searchControl": {
-      "projectPlaceholder": "프로젝트 보기 검색…",
-      "providerPlaceholder": "{{provider}} 작업 검색…"
     },
     "smartSourceModes": {
       "allStates": "모두",
@@ -4523,7 +4467,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "이슈 검색 또는 JQL 입력, 예: project = ABC",
         "jiraTextMatchesNotice": "텍스트 일치 결과를 표시합니다. Jira에서 이 검색을 JQL로 실행할 수 없습니다."
       },
       "editor": {
@@ -4635,7 +4578,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",

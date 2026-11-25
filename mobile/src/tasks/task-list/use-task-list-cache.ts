@@ -20,7 +20,6 @@ type TaskListView = Pick<
   | 'setError'
   | 'setItems'
   | 'setGithubPages'
-  | 'setGithubCurrentPage'
   | 'setGithubRepoSources'
   | 'setGithubSourceErrors'
   | 'setGithubSourceFallbacks'
@@ -72,7 +71,6 @@ export function useTaskListCache(view: TaskListView) {
         const { sources } = kept.github
         view.setGithubRepoSources((current) => ({ ...current, ...sources }))
         view.setGithubPages([kept.items])
-        view.setGithubCurrentPage(0)
         view.setGithubSourceErrors(kept.github.sourceErrors)
         view.setGithubSourceFallbacks(kept.github.sourceFallbacks)
         view.setGithubCountedTotalPages(kept.github.countedTotalPages)

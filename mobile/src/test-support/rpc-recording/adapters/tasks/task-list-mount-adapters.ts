@@ -189,7 +189,6 @@ export function taskListMountAdapters(
         clientRef: { current: context.client },
         connState: 'connected',
         fetchGitHubItemsPage: async () => ({ items: [], failedCount: 0 }),
-        githubCurrentPage: 0,
         githubPages: [[]],
         githubPaginationLoading: false,
         githubCountedTotalPages: null,

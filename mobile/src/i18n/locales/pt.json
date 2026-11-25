@@ -4112,23 +4112,10 @@
     "filterPickers": {
       "allTeams": "Todas as equipes",
       "changeStatus": "Alterar status",
-      "fieldHidden": "Oculto nos cartões",
-      "fieldShown": "Exibido nos cartões",
-      "fieldsSubtitle": "Selecione quais campos do projeto aparecem nos cartões dos itens.",
-      "fieldsTitle": "Campos do Projeto",
-      "gitlabFilter": "Filtro do GitLab",
-      "gitlabView": "Visualização do GitLab",
-      "jiraFilter": "Filtro do Jira",
-      "jiraSite": "Site do Jira",
-      "linearFilter": "Filtro do Linear",
       "linearIssue": "Issue do Linear",
-      "linearWorkspace": "Espaço de trabalho do Linear",
       "loadingStates": "Carregando estados…",
-      "noFields": "Esta visualização não tem campos extras para mostrar.",
       "noStates": "Nenhum estado disponível",
       "switchWorkspaceFailed": "Falha ao trocar de espaço de trabalho",
-      "teamsSubtitle": "Selecione quais equipes aparecem em Tarefas.",
-      "teamsTitle": "Equipes do Linear",
       "teams_many": "{{count}} equipes",
       "teams_one": "{{count}} equipe",
       "teams_other": "{{count}} equipes",
@@ -4271,9 +4258,6 @@
     "linearList": {
       "changeStatusFrom": "Alterar status de {{status}}"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriedades de exibição"
-    },
     "listSurface": {
       "connectLinearButton": "Conectar Linear",
       "connectLinearMessage": "Veja as issues do Linear atribuídas a você e comece a trabalhar nelas diretamente em Tarefas.",
@@ -4327,7 +4311,6 @@
       "projectMergeRequests": "MRs do projeto",
       "projectMergeRequestsDescription": "Merge requests e issues por repositório",
       "projects": "Projetos",
-      "pullRequests": "PRs",
       "repository": "Repositório",
       "repositorySortDescription": "Agrupar por repositório, depois pela atividade mais recente",
       "reviewRequestsDescription": "Solicitações de revisão atribuídas a você",
@@ -4449,42 +4432,8 @@
       "reviewers": "Revisores",
       "viewFile": "Ver"
     },
-    "providerControls": {
-      "myTodos": "Minhas pendências",
-      "projectMergeRequests": "MRs do projeto",
-      "reposLabel": "Repositórios: {{repos}}",
-      "filter": "Filtro",
-      "filterLabel": "Filtrar e exibir",
-      "filterCount": "Filtro · {{count}}"
-    },
-    "providerItemList": {
-      "intoBranch": "para {{base}}",
-      "nextPage": "Próxima página",
-      "page": "Página {{page}}",
-      "pageOfTotal": "Página {{page}} de {{total}}",
-      "previousPage": "Página anterior",
-      "selectPage": "Selecionar página, página {{page}}",
-      "selectPageOfTotal": "Selecionar página, página {{page}} de {{total}}",
-      "kindAndStatus": "{{kind}}, {{status}}"
-    },
     "providerPickers": {
-      "allRepositories": "Todos os repositórios",
-      "githubView": "Visualização do GitHub",
-      "issueSources": "Origens de issues do GitHub",
-      "issueSourcesDescription": "Escolha, para cada repositório, se deseja buscar e criar issues em upstream ou origin.",
-      "issues": "Issues",
-      "noIssueSources": "Nenhuma origem alternativa de issues disponível.",
-      "origin": "Origin",
-      "pageHint": "Ir para uma página de resultados carregada ou disponível.",
-      "pageLoaded": "Carregada",
-      "pageNotLoaded": "Carrega resultados mais antigos",
-      "pageNumber": "Página {{page}}",
-      "pages": "Páginas do GitHub",
-      "pullRequests": "Pull Requests",
-      "queryingSource": "Consultando {{source}}",
-      "repoDescription": "Escolha quais repositórios consultar.",
-      "repos": "Repositórios",
-      "upstream": "Upstream"
+      "allRepositories": "Todos os repositórios"
     },
     "providerViewProjection": {
       "all": "Todos",
@@ -4493,7 +4442,6 @@
       "allWorkspaces": "Todos os espaços de trabalho",
       "chooseProject": "Escolher projeto",
       "default": "Padrão",
-      "defaultSubtitle": "{{subtitle}} · Padrão",
       "issues": "Issues",
       "openState": "Em aberto",
       "projects": "Projetos",
@@ -4510,15 +4458,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nova issue do GitHub",
       "newLinearIssue": "Nova issue do Linear",
-      "refreshGitHub": "Atualizar trabalho do GitHub",
-      "refreshGitLab": "Atualizar itens de trabalho do GitLab",
-      "refreshJira": "Atualizar issues do Jira",
-      "refreshLinear": "Atualizar Linear",
       "title": "Tarefas"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Buscar na visualização do projeto…",
-      "providerPlaceholder": "Buscar tarefas do {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Todos",
@@ -4646,33 +4586,18 @@
     },
     "pagination": {
       "pageUnreachable": "A página {{page}} está além do que a pesquisa do GitHub pode retornar.",
-      "loadPageFailed": "A página {{page}} não pôde ser carregada do GitHub.",
-      "noMoreResults": "Não há mais resultados na página {{page}}."
+      "loadPageFailed": "A página {{page}} não pôde ser carregada do GitHub."
     },
     "filterSheet": {
-      "sortBy": "Ordenar por",
       "issueSource": "Origem da issue",
-      "issueSourceRow": "Upstream ou origem",
       "view": "Exibir",
-      "projectView": "Visualização do projeto",
-      "chooseView": "Escolher",
       "showOnRows": "Mostrar em linhas",
-      "projectFields": "Campos do projeto",
       "workspace": "Espaço de Trabalho",
-      "linearWorkspace": "Espaço de trabalho do Linear",
       "layout": "Disposição",
       "groupBy": "Agrupar por",
       "orderBy": "Ordenar por",
-      "displayProperties": "Propriedades de exibição",
       "title": "Filtrar e exibir",
-      "done": "Concluído",
-      "jqlReplacesPreset": "Sua pesquisa JQL substitui a predefinição Mostrar. Limpe a pesquisa para escolher uma novamente.",
-      "projectItems_one": "{{count}} item",
-      "projectItems_other": "{{count}} itens",
-      "projectItems_many": "{{count}} itens"
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Pesquisa JQL"
+      "done": "Concluído"
     },
     "itemComments": {
       "noComments": "Ainda não há comentários",
@@ -5028,7 +4953,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Buscar issues ou inserir JQL, ex.: project = ABC",
         "jiraTextMatchesNotice": "Mostrando correspondências de texto. O Jira não conseguiu executar esta busca como JQL."
       },
       "editor": {
@@ -5140,7 +5064,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

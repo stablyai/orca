@@ -4952,18 +4952,7 @@
       "createWorkspaceIn": "Create Workspace In"
     },
     "filterPickers": {
-      "fieldsTitle": "Project Fields",
-      "fieldsSubtitle": "Choose which Project fields appear on item cards.",
-      "noFields": "This view has no extra fields to show.",
-      "fieldShown": "Shown on cards",
-      "fieldHidden": "Hidden from cards",
-      "gitlabView": "GitLab View",
-      "gitlabFilter": "GitLab Filter",
-      "linearFilter": "Linear Filter",
-      "linearWorkspace": "Linear Workspace",
       "switchWorkspaceFailed": "Failed to switch workspace",
-      "teamsTitle": "Linear Teams",
-      "teamsSubtitle": "Choose which teams appear in Tasks.",
       "allTeams": "All teams",
       "teams_one": "{{count}} team",
       "teams_other": "{{count}} teams",
@@ -4971,8 +4960,6 @@
       "linearIssue": "Linear issue",
       "loadingStates": "Loading states...",
       "noStates": "No states available",
-      "jiraFilter": "Jira Filter",
-      "jiraSite": "Jira Site",
       "statesFailed": "Couldn't load states. Reopen to try again."
     },
     "githubProjectList": {
@@ -5096,9 +5083,6 @@
     "linearList": {
       "changeStatusFrom": "Change status from {{status}}"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Display Properties"
-    },
     "listSurface": {
       "updateDesktopTitle": "Update Orca on this host",
       "updateDesktopMessage": "This mobile Tasks view needs a newer Orca on this host.",
@@ -5141,7 +5125,6 @@
       "labels": "Labels",
       "issues": "Issues",
       "githubIssuesDescription": "GitHub issues",
-      "pullRequests": "PRs",
       "githubPullRequestsDescription": "GitHub pull requests",
       "projects": "Projects",
       "githubProjectsDescription": "GitHub Projects views",
@@ -5159,7 +5142,8 @@
       "myTodosDescription": "Pending GitLab todos",
       "updatedSortDescription": "Newest activity first",
       "repository": "Repository",
-      "repositorySortDescription": "Group by repository, then newest activity"
+      "repositorySortDescription": "Group by repository, then newest activity",
+      "pullRequestsKind": "Pull requests"
     },
     "projectComments": {
       "comments_one": "{{count}} comment",
@@ -5244,59 +5228,20 @@
       "binaryFile": "Binary file.",
       "fileUnavailable": "File contents unavailable."
     },
-    "providerControls": {
-      "projectMergeRequests": "Project MRs",
-      "myTodos": "My Todos",
-      "reposLabel": "Repositories: {{repos}}",
-      "filterCount": "Filter · {{count}}",
-      "filter": "Filter",
-      "filterLabel": "Filter and display"
-    },
-    "providerItemList": {
-      "previousPage": "Previous page",
-      "selectPage": "Select page, Page {{page}}",
-      "selectPageOfTotal": "Select page, Page {{page}} of {{total}}",
-      "page": "Page {{page}}",
-      "pageOfTotal": "Page {{page}} of {{total}}",
-      "nextPage": "Next page",
-      "intoBranch": "into {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}"
-    },
     "providerPickers": {
-      "repos": "Repositories",
-      "repoDescription": "Choose which repositories to query.",
       "allRepositories": "All repositories",
-      "issueSources": "GitHub Issue Sources",
-      "issueSourcesDescription": "Choose whether each repository queries and creates work from upstream or origin.",
-      "noIssueSources": "No alternate issue sources available.",
-      "queryingSource": "Querying {{source}}",
-      "upstream": "Upstream",
-      "origin": "Origin",
-      "githubView": "GitHub View",
-      "pullRequests": "Pull Requests",
-      "issues": "Issues",
-      "pages": "GitHub Pages",
-      "pageHint": "Jump to a loaded or available result page.",
-      "pageNumber": "Page {{page}}",
-      "pageLoaded": "Loaded",
-      "pageNotLoaded": "Loads older results"
+      "upstreamSource": "Upstream · {{slug}}",
+      "originSource": "Origin · {{slug}}"
     },
     "reviewerLinear": {
       "unassigned": "Unassigned",
       "issues": "Issues"
     },
     "screenChrome": {
-      "refreshGitHub": "Refresh GitHub work",
-      "refreshGitLab": "Refresh GitLab work items",
-      "refreshLinear": "Refresh Linear",
-      "refreshJira": "Refresh Jira issues",
       "title": "Tasks",
       "newGitHubIssue": "New GitHub issue",
-      "newLinearIssue": "New Linear issue"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Search project view...",
-      "providerPlaceholder": "Search {{provider}} tasks..."
+      "newLinearIssue": "New Linear issue",
+      "more": "More"
     },
     "workspaceCreateDrawer": {
       "title": "Create Workspace",
@@ -5386,7 +5331,6 @@
       "unsupportedLayout": "Unsupported layout on mobile"
     },
     "providerViewProjection": {
-      "defaultSubtitle": "{{subtitle}} · Default",
       "default": "Default",
       "openState": "Open",
       "allSites": "All sites",
@@ -5433,32 +5377,28 @@
     },
     "pagination": {
       "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
-      "loadPageFailed": "Page {{page}} could not be loaded from GitHub.",
-      "noMoreResults": "No more results on page {{page}}."
+      "loadPageFailed": "Page {{page}} could not be loaded from GitHub."
     },
     "filterSheet": {
-      "sortBy": "Sort by",
       "issueSource": "Issue source",
-      "issueSourceRow": "Upstream or origin",
       "view": "View",
-      "projectView": "Project view",
-      "projectItems_one": "{{count}} item",
-      "projectItems_other": "{{count}} items",
-      "chooseView": "Choose",
       "showOnRows": "Show on rows",
-      "projectFields": "Project fields",
       "workspace": "Workspace",
-      "linearWorkspace": "Linear workspace",
       "layout": "Layout",
       "groupBy": "Group by",
       "orderBy": "Order by",
-      "displayProperties": "Display properties",
       "title": "Filter & display",
       "done": "Done",
-      "jqlReplacesPreset": "Your JQL search replaces the Show preset. Clear the search to pick one again."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL search"
+      "repositories": "Repositories",
+      "sort": "Sort",
+      "project": "Project",
+      "fields": "Fields",
+      "teams": "Teams",
+      "site": "Site",
+      "backToFilter": "Back to Filter",
+      "which": "Which",
+      "show": "Show",
+      "whichAfterSearch": "Which (clear the search to change)"
     },
     "itemComments": {
       "noComments": "No comments yet",
@@ -5475,7 +5415,27 @@
     "runtimeHydration": {
       "loadFailed": "Failed to load Tasks settings"
     },
-    "rerunUnsuccessful": "Retry checks"
+    "rerunUnsuccessful": "Retry checks",
+    "searchControl": {
+      "viewPlaceholder": "Search this view",
+      "pullRequestsPlaceholder": "Search pull requests",
+      "issuesPlaceholder": "Search issues",
+      "sourcePlaceholder": "Search {{provider}}",
+      "filter": "Filter"
+    },
+    "row": {
+      "draft": "Draft",
+      "approved": "Approved"
+    },
+    "providerItemList": {
+      "results": "Results",
+      "assignedToYou": "Assigned to you",
+      "openPullRequests": "Open pull requests",
+      "yourPullRequests": "Your pull requests",
+      "needsYourReview": "Needs your review",
+      "openIssues": "Open issues",
+      "todos": "To-dos"
+    }
   },
   "terminal": {
     "webView": {
@@ -8263,7 +8223,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Search issues or enter JQL, e.g. project = ABC",
         "jiraTextMatchesNotice": "Showing text matches. Jira couldn't run this search as JQL."
       },
       "editor": {

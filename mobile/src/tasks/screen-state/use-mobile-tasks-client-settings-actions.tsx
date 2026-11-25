@@ -22,7 +22,6 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     githubProjectFieldVisibilityScope,
     hostId,
     setDefaultGitHubPreset,
-    setGithubCurrentPage,
     setGithubPages,
     setGithubProjectHiddenFieldIdsByView,
     setGithubProjectSettings,
@@ -87,7 +86,6 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   const resetGitHubItemsState = useCallback(() => {
     setGithubRepoSources({})
     setGithubPages([])
-    setGithubCurrentPage(0)
     setGithubCountedTotalPages(null)
     setGithubSourceErrors([])
     setGithubSourceFallbacks([])

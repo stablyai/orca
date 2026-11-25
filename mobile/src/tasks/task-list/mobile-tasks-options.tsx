@@ -242,7 +242,7 @@ export const GITHUB_KIND_OPTIONS = localizedTaskOptions<GitHubMode>([
   },
   {
     value: 'prs',
-    label: () => translate('tasks.options.pullRequests', 'PRs'),
+    label: () => translate('tasks.options.pullRequestsKind', 'Pull requests'),
     subtitle: () => translate('tasks.options.githubPullRequestsDescription', 'GitHub pull requests')
   },
   {

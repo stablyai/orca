@@ -1,38 +1,43 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { translate } from '../../i18n/mobile-i18n'
-import { View, ActivityIndicator, Text, FlatList, Pressable } from 'react-native'
-import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../theme/mobile-theme'
-import { ChevronLeft, ChevronRight, ExternalLink, GitBranch } from 'lucide-react-native'
+import { View, ActivityIndicator, FlatList } from 'react-native'
+import { colors, spacing, type MobileColorScheme } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 import { openExternalLink } from '../../platform/external-links/external-link'
-import {
-  getHostedReviewSignalTone,
-  getHostedReviewLabel,
-  getHostedChecksLabel,
-  getGitHubMergeChip,
-  getGitLabMergeChip
-} from '../hosted-review/mobile-hosted-check-status'
+import { SectionHeader } from '../../components/list/ListGroup'
 import { ignoreKeptRowPress, renderMobileTasksListState } from './mobile-tasks-list-state'
-import { styles, getPrSignalToneStyle } from '../mobile-tasks-legacy-styles'
-import { taskRepositoryMeta } from '../repositories/mobile-tasks-repository-presentation'
-import {
-  formatGitHubPRDelta,
-  hostedBranchSummary,
-  getGitHubReviewSummary
-} from '../hosted-review/mobile-tasks-hosted-review'
-import { formatUpdatedAt } from '../item-detail/mobile-tasks-item-mapping'
-import { taskKindLabel } from '../item-detail/mobile-tasks-item-comments'
-import type { TaskItem } from '../mobile-tasks-project-workspace-types'
-import { taskItemStateGlyph } from '../item-detail/mobile-tasks-item-state-glyph'
+import { MobileTaskRow, MobileTaskRowSeparator } from './mobile-task-row'
+import type { TaskListEntry } from '../mobile-tasks-project-workspace-types'
 
-// Where the item lives and how fresh it is; the glyph carries kind and state except for Jira and todos.
-function formatTaskRowMeta(item: TaskItem): string {
-  const lead =
-    item.provider === 'gitlabTodo'
-      ? `${item.status} · ${item.subtitle}`
-      : item.provider === 'jira'
-        ? `${item.subtitle} · ${item.status}`
-        : item.subtitle
-  return [lead, formatUpdatedAt(item.updatedAt)].filter(Boolean).join(' · ')
+// Names what the list holds, since the controls that chose it sit in the filter sheet.
+function listHeading(model: ConnectionPresentationModel): string {
+  if (model.hasSearch) {
+    return translate('tasks.providerItemList.results', 'Results')
+  }
+  if (model.provider === 'github') {
+    switch (model.githubPreset) {
+      case 'my-issues':
+        return translate('tasks.providerItemList.assignedToYou', 'Assigned to you')
+      case 'prs':
+        return translate('tasks.providerItemList.openPullRequests', 'Open pull requests')
+      case 'my-prs':
+        return translate('tasks.providerItemList.yourPullRequests', 'Your pull requests')
+      case 'review':
+        return translate('tasks.providerItemList.needsYourReview', 'Needs your review')
+      case 'issues':
+        return translate('tasks.providerItemList.openIssues', 'Open issues')
+    }
+  }
+  if (model.provider === 'jira') {
+    return model.jiraFilterLabel
+  }
+  return model.gitlabView === 'todos'
+    ? translate('tasks.providerItemList.todos', 'To-dos')
+    : model.gitlabFilterLabel
+}
+
+function isEdge(entry: TaskListEntry | undefined): boolean {
+  return entry === undefined || entry.type === 'section'
 }
 
 export function renderMobileTasksProviderItemList(
@@ -44,19 +49,15 @@ export function renderMobileTasksProviderItemList(
     displayedEntries,
     githubCanLoadUncountedNextPage,
     githubCanShowPagination,
-    githubCurrentPage,
-    githubLoadingTargetPage,
     githubMode,
+    githubPages,
     githubPaginationLoading,
-    githubCountedTotalPages,
     githubTotalPages,
     handleGitHubPageChange,
     insets,
     provider,
     refreshTasks,
     refreshing,
-    reposById,
-    setShowGitHubPagePicker,
     sortedItems,
     taskUiReady
   } = model
@@ -66,6 +67,12 @@ export function renderMobileTasksProviderItemList(
   if (listState) {
     return listState
   }
+  const canLoadMore =
+    provider === 'github' &&
+    githubMode === 'items' &&
+    githubCanShowPagination &&
+    (githubPages.length < githubTotalPages || githubCanLoadUncountedNextPage)
+  const sectioned = displayedEntries[0]?.type === 'section'
   return (
     <FlatList
       data={displayedEntries}
@@ -73,131 +80,44 @@ export function renderMobileTasksProviderItemList(
       keyExtractor={(entry) => entry.key}
       ItemSeparatorComponent={({ leadingItem, trailingItem }) =>
         leadingItem?.type === 'section' || trailingItem?.type === 'section' ? null : (
-          <View style={styles.taskRowSeparator} />
+          <MobileTaskRowSeparator />
         )
       }
-      contentContainerStyle={[
-        styles.list,
-        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
-      ]}
+      contentContainerStyle={{
+        paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight)
+      }}
+      ListHeaderComponent={
+        sectioned ? undefined : (
+          <View style={styles.heading}>
+            <SectionHeader title={listHeading(model)} first />
+          </View>
+        )
+      }
       refreshing={refreshing}
       onRefresh={refreshTasks}
+      onEndReached={canLoadMore ? () => void handleGitHubPageChange(githubPages.length) : undefined}
+      onEndReachedThreshold={0.5}
       ListFooterComponent={
-        provider === 'github' && githubMode === 'items' && githubCanShowPagination ? (
-          <View style={styles.paginationFooter}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={translate('tasks.providerItemList.previousPage', 'Previous page')}
-              accessibilityState={{
-                disabled: githubCurrentPage === 0 || githubPaginationLoading
-              }}
-              style={({ pressed }) => [
-                styles.paginationButton,
-                (githubCurrentPage === 0 || githubPaginationLoading) &&
-                  styles.paginationButtonDisabled,
-                pressed && pressedStyle
-              ]}
-              disabled={githubCurrentPage === 0 || githubPaginationLoading}
-              onPress={() => void handleGitHubPageChange(githubCurrentPage - 1)}
-            >
-              <ChevronLeft size={17} color={colors.textPrimary} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                githubCountedTotalPages === null
-                  ? translate('tasks.providerItemList.selectPage', 'Select page, Page {{page}}', {
-                      page: githubCurrentPage + 1
-                    })
-                  : translate(
-                      'tasks.providerItemList.selectPageOfTotal',
-                      'Select page, Page {{page}} of {{total}}',
-                      { page: githubCurrentPage + 1, total: githubTotalPages }
-                    )
-              }
-              accessibilityState={{ disabled: githubPaginationLoading }}
-              style={({ pressed }) => [styles.paginationLabelButton, pressed && pressedStyle]}
-              disabled={githubPaginationLoading}
-              onPress={() => {
-                if (!taskUiReady) {
-                  return
-                }
-                setShowGitHubPagePicker(true)
-              }}
-            >
-              <Text style={styles.paginationLabel}>
-                {githubCountedTotalPages === null
-                  ? translate('tasks.providerItemList.page', 'Page {{page}}', {
-                      page: githubCurrentPage + 1
-                    })
-                  : translate('tasks.providerItemList.pageOfTotal', 'Page {{page}} of {{total}}', {
-                      page: githubCurrentPage + 1,
-                      total: githubTotalPages
-                    })}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={translate('tasks.providerItemList.nextPage', 'Next page')}
-              accessibilityState={{
-                disabled:
-                  (!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||
-                  githubPaginationLoading
-              }}
-              style={({ pressed }) => [
-                styles.paginationButton,
-                ((!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||
-                  githubPaginationLoading) &&
-                  styles.paginationButtonDisabled,
-                pressed && pressedStyle
-              ]}
-              disabled={
-                (!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||
-                githubPaginationLoading
-              }
-              onPress={() => void handleGitHubPageChange(githubCurrentPage + 1)}
-            >
-              {githubLoadingTargetPage === githubCurrentPage + 1 ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
-              ) : (
-                <ChevronRight size={17} color={colors.textPrimary} />
-              )}
-            </Pressable>
+        githubPaginationLoading ? (
+          <View style={styles.footer}>
+            <ActivityIndicator size="small" color={colors.textMuted} />
           </View>
         ) : undefined
       }
-      renderItem={({ item: entry }) => {
+      renderItem={({ item: entry, index }) => {
         if (entry.type === 'section') {
           return (
-            <View style={styles.repoSectionHeader}>
-              <View style={[styles.repoSectionDot, { backgroundColor: entry.color }]} />
-              <Text style={styles.repoSectionTitle} numberOfLines={1}>
-                {entry.label}
-              </Text>
+            <View style={styles.heading}>
+              <SectionHeader title={entry.label} first={index === 0} />
             </View>
           )
         }
         const item = entry.item
-        const repo = taskRepositoryMeta(item, reposById)
-        const glyph = taskItemStateGlyph(item)
-        const opensExternally = item.provider === 'gitlabTodo'
-        const isGitHubPr = item.provider === 'github' && item.source.type === 'pr'
-        const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
-        const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
-        const branchSummary = hostedBranchSummary(item)
-        const mergeChip = isGitHubPr
-          ? getGitHubMergeChip(item.source)
-          : isGitLabMr
-            ? getGitLabMergeChip(item.source)
-            : null
         return (
-          <Pressable
-            style={({ pressed }) => [
-              styles.taskRow,
-              styles.taskRowCentered,
-              pressed && styles.taskRowPressed
-            ]}
-            accessibilityRole={opensExternally ? 'link' : 'button'}
+          <MobileTaskRow
+            item={item}
+            first={isEdge(displayedEntries[index - 1])}
+            last={isEdge(displayedEntries[index + 1])}
             onPress={() => {
               if (item.provider === 'gitlabTodo') {
                 void openExternalLink(item.source.targetUrl)
@@ -205,94 +125,14 @@ export function renderMobileTasksProviderItemList(
               }
               setActionItem(item)
             }}
-          >
-            <View style={styles.taskMain}>
-              <Text style={styles.taskTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <View style={styles.metaRow}>
-                <View style={[styles.repoDot, { backgroundColor: repo.color }]} />
-                <Text style={styles.taskRowMeta} numberOfLines={1}>
-                  {formatTaskRowMeta(item)}
-                </Text>
-              </View>
-              {branchSummary ? (
-                <View style={styles.branchMetaRow}>
-                  <GitBranch size={11} color={colors.textMuted} />
-                  <Text style={styles.branchMetaText} numberOfLines={1}>
-                    {branchSummary.head}
-                  </Text>
-                  <Text style={styles.branchMetaBase} numberOfLines={1}>
-                    {translate('tasks.providerItemList.intoBranch', 'into {{base}}', {
-                      base: branchSummary.base
-                    })}
-                  </Text>
-                </View>
-              ) : null}
-              {isGitHubPr || isGitLabMr ? (
-                <View style={styles.prSignalRow}>
-                  {isGitHubPr && githubPrDelta ? (
-                    <View style={styles.prSignalChip}>
-                      <Text style={styles.prSignalText} numberOfLines={1}>
-                        {githubPrDelta}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {isGitHubPr || isGitLabMr ? (
-                    <View
-                      style={[
-                        styles.prSignalChip,
-                        getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'review'))
-                      ]}
-                    >
-                      <Text style={styles.prSignalText} numberOfLines={1}>
-                        {isGitHubPr
-                          ? getGitHubReviewSummary(item.source)
-                          : getHostedReviewLabel(item.source)}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <View
-                    style={[
-                      styles.prSignalChip,
-                      getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'checks'))
-                    ]}
-                  >
-                    <Text style={styles.prSignalText} numberOfLines={1}>
-                      {getHostedChecksLabel(item.source)}
-                    </Text>
-                  </View>
-                  {mergeChip ? (
-                    <View style={[styles.prSignalChip, getPrSignalToneStyle(mergeChip.tone)]}>
-                      <Text style={styles.prSignalText} numberOfLines={1}>
-                        {mergeChip.label}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-            </View>
-            <View
-              style={styles.taskRowTrailing}
-              accessibilityLabel={translate(
-                'tasks.providerItemList.kindAndStatus',
-                '{{kind}}, {{status}}',
-                {
-                  kind: taskKindLabel(item),
-                  status: item.status
-                }
-              )}
-            >
-              <glyph.icon size={16} color={glyph.color} strokeWidth={2.2} />
-              {opensExternally ? (
-                <ExternalLink size={14} color={colors.textMuted} />
-              ) : (
-                <ChevronRight size={14} color={colors.textMuted} />
-              )}
-            </View>
-          </Pressable>
+          />
         )
       }}
     />
   )
 }
+
+const styles = themedStyleSheet(() => ({
+  heading: { marginHorizontal: spacing.lg },
+  footer: { paddingVertical: spacing.lg, alignItems: 'center' }
+}))

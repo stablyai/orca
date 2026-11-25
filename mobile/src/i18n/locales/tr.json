@@ -4821,8 +4821,7 @@
     },
     "pagination": {
       "pageUnreachable": "{{page}}. sayfa GitHub aramasının döndürebileceği aralığın dışında.",
-      "loadPageFailed": "{{page}}. sayfa GitHub’dan yüklenemedi.",
-      "noMoreResults": "{{page}}. sayfada başka sonuç yok."
+      "loadPageFailed": "{{page}}. sayfa GitHub’dan yüklenemedi."
     },
     "composerSource": {
       "baseFailed": "Temel branch çözümlenemedi.",
@@ -4843,23 +4842,10 @@
     "filterPickers": {
       "allTeams": "Tüm takımlar",
       "changeStatus": "Durumu Değiştir",
-      "fieldHidden": "Kartlarda gizli",
-      "fieldShown": "Kartlarda gösteriliyor",
-      "fieldsSubtitle": "Öğe kartlarında gösterilecek Proje alanlarını seçin.",
-      "fieldsTitle": "Proje Alanları",
-      "gitlabFilter": "GitLab Filtresi",
-      "gitlabView": "GitLab Görünümü",
-      "jiraFilter": "Jira Filtresi",
-      "jiraSite": "Jira Sitesi",
-      "linearFilter": "Linear Filtresi",
       "linearIssue": "Linear sorunu",
-      "linearWorkspace": "Linear Çalışma Alanı",
       "loadingStates": "Durumlar yükleniyor…",
-      "noFields": "Bu görünümde gösterilecek ek alan yok.",
       "noStates": "Kullanılabilir durum yok",
       "switchWorkspaceFailed": "Çalışma alanı değiştirilemedi",
-      "teamsSubtitle": "Görevler bölümünde hangi takımların görüneceğini seçin.",
-      "teamsTitle": "Linear Takımları",
       "teams_one": "{{count}} takım",
       "teams_other": "{{count}} takım",
       "statesFailed": "Durumlar yüklenemedi. Yeniden denemek için kapatıp açın."
@@ -4999,9 +4985,6 @@
     "linearList": {
       "changeStatusFrom": "Durumu değiştir (şu an: {{status}})"
     },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Gösterilecek Özellikler"
-    },
     "listSurface": {
       "connectLinearButton": "Linear'ı bağla",
       "connectLinearMessage": "Doğrudan Görevler bölümünden size atanan Linear sorunlarına göz atın ve üzerlerinde çalışmaya başlayın.",
@@ -5055,7 +5038,6 @@
       "projectMergeRequests": "Proje MR'ları",
       "projectMergeRequestsDescription": "Repository'ye göre merge request'ler ve sorunlar",
       "projects": "Projeler",
-      "pullRequests": "PR'lar",
       "repository": "Repository",
       "repositorySortDescription": "Repository'ye göre gruplama, en yeni etkinlik önce",
       "reviewRequestsDescription": "Size atanan inceleme istekleri",
@@ -5174,42 +5156,8 @@
       "reviewers": "İnceleyenler",
       "viewFile": "Görüntüle"
     },
-    "providerControls": {
-      "myTodos": "Yapılacaklarım",
-      "projectMergeRequests": "Proje MR'ları",
-      "reposLabel": "Repository'ler: {{repos}}",
-      "filterCount": "Filtrele · {{count}}",
-      "filter": "Filtrele",
-      "filterLabel": "Filtrele ve göster"
-    },
-    "providerItemList": {
-      "intoBranch": "{{base}} branch'ine",
-      "nextPage": "Sonraki sayfa",
-      "page": "Sayfa {{page}}",
-      "pageOfTotal": "Sayfa {{page}} / {{total}}",
-      "previousPage": "Önceki sayfa",
-      "selectPage": "Sayfa seç, sayfa {{page}}",
-      "selectPageOfTotal": "Sayfa seç, {{total}} sayfadan {{page}}. sayfa",
-      "kindAndStatus": "{{kind}}, {{status}}"
-    },
     "providerPickers": {
-      "allRepositories": "Tüm repository'ler",
-      "githubView": "GitHub Görünümü",
-      "issueSources": "GitHub Sorun Kaynakları",
-      "issueSourcesDescription": "Her repository'nin sorgulama ve iş oluşturma için upstream mi yoksa origin mi kullanacağını seçin.",
-      "issues": "Sorunlar",
-      "noIssueSources": "Alternatif sorun kaynağı yok.",
-      "origin": "Origin",
-      "pageHint": "Yüklenmiş veya kullanılabilir bir sonuç sayfasına geçin.",
-      "pageLoaded": "Yüklendi",
-      "pageNotLoaded": "Daha eski sonuçları yükler",
-      "pageNumber": "Sayfa {{page}}",
-      "pages": "GitHub Sayfaları",
-      "pullRequests": "Pull Request'ler",
-      "queryingSource": "{{source}} sorgulanıyor",
-      "repoDescription": "Sorgulanacak repository'leri seçin.",
-      "repos": "Repository'ler",
-      "upstream": "Upstream"
+      "allRepositories": "Tüm repository'ler"
     },
     "providerViewProjection": {
       "all": "Tümü",
@@ -5218,7 +5166,6 @@
       "allWorkspaces": "Tüm çalışma alanları",
       "chooseProject": "Proje seç",
       "default": "Varsayılan",
-      "defaultSubtitle": "{{subtitle}} · Varsayılan",
       "issues": "Sorunlar",
       "openState": "Açık",
       "projects": "Projeler",
@@ -5234,15 +5181,7 @@
     "screenChrome": {
       "newGitHubIssue": "Yeni GitHub sorunu",
       "newLinearIssue": "Yeni Linear sorunu",
-      "refreshGitHub": "GitHub işini yenile",
-      "refreshGitLab": "GitLab iş öğelerini yenile",
-      "refreshJira": "Jira sorunlarını yenile",
-      "refreshLinear": "Linear'ı yenile",
       "title": "Görevler"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Proje görünümünde ara…",
-      "providerPlaceholder": "{{provider}} görevlerinde ara…"
     },
     "smartSourceModes": {
       "allStates": "Tümü",
@@ -5360,28 +5299,15 @@
       "createFailed": "Çalışma alanı oluşturulamadı"
     },
     "filterSheet": {
-      "sortBy": "Sıralama ölçütü",
       "issueSource": "Sorun kaynağı",
-      "issueSourceRow": "Upstream veya origin",
       "view": "Görüntüle",
-      "projectView": "Proje görünümü",
-      "projectItems_one": "{{count}} öğe",
-      "projectItems_other": "{{count}} öğe",
-      "chooseView": "Seç",
       "showOnRows": "Satırlarda göster",
-      "projectFields": "Proje alanları",
       "workspace": "Çalışma alanı",
-      "linearWorkspace": "Linear çalışma alanı",
       "layout": "Düzen",
       "groupBy": "Gruplama ölçütü",
       "orderBy": "Sıralama ölçütü",
-      "displayProperties": "Görüntülenecek özellikler",
       "title": "Filtrele ve göster",
-      "done": "Tamam",
-      "jqlReplacesPreset": "JQL aramanız “Göster” bölümündeki hazır filtrenin yerini alır. Yeniden hazır filtre seçmek için aramayı temizleyin."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL araması"
+      "done": "Tamam"
     },
     "itemComments": {
       "noComments": "Henüz yorum yok",
@@ -5794,7 +5720,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Sorun arayın veya JQL girin; ör. project = ABC",
         "jiraTextMatchesNotice": "Metin eşleşmeleri gösteriliyor. Jira bu aramayı JQL olarak çalıştıramadı."
       },
       "editor": {
