@@ -20321,7 +20321,8 @@
         "linkActions": "Link-Aktionen"
       },
       "imageGallery": {
-        "loadFailed": "{{name}} konnte nicht geladen werden"
+        "loadFailed": "{{name}} konnte nicht geladen werden",
+        "annotateUnavailable": "Dieses Bild ist nicht mehr auf dem Bildschirm. Schließe die Vorschau und öffne sie erneut, um es zu kommentieren."
       },
       "goalControl": {
         "settingsRejected": "Codex konnte das ausgewählte Modell und den Denkaufwand nicht anwenden. Diese Zieländerung wurde nicht gesendet. Die Auswahl prüfen und erneut versuchen.",
@@ -20801,7 +20802,10 @@
         "undo": "Rückgängig",
         "zoom": "Zoom",
         "zoomIn": "Vergrößern",
-        "zoomOut": "Verkleinern"
+        "zoomOut": "Verkleinern",
+        "saveFailed": "Deine Notizen konnten nicht gespeichert werden. Sie sind noch da.",
+        "keptUnsaved": "Notizen behalten, aber sie konnten nicht gespeichert werden und gehen bei einem Neustart verloren.",
+        "imageChanged": "Dieses Bild ist nicht mehr im Nachrichtenfeld. Deine Notizen sind noch da."
       }
     },
     "tab": {

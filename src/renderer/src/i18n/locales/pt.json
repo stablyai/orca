@@ -21859,7 +21859,8 @@
         "linkActions": "Ações do link"
       },
       "imageGallery": {
-        "loadFailed": "Não foi possível carregar {{name}}"
+        "loadFailed": "Não foi possível carregar {{name}}",
+        "annotateUnavailable": "Esta imagem não está mais na tela. Feche a visualização e abra-a de novo para anotar."
       },
       "goalControl": {
         "settingsRejected": "O Codex não conseguiu aplicar o modelo e o esforço selecionados. Esta alteração de objetivo não foi enviada. Confira a seleção e tente novamente.",
@@ -22387,7 +22388,10 @@
         "undo": "Desfazer",
         "zoom": "Zoom",
         "zoomIn": "Aumentar zoom",
-        "zoomOut": "Diminuir zoom"
+        "zoomOut": "Diminuir zoom",
+        "saveFailed": "Não foi possível salvar suas notas. Elas continuam aqui.",
+        "keptUnsaved": "Notas mantidas, mas não foi possível salvá-las e elas serão perdidas ao reiniciar.",
+        "imageChanged": "Esta imagem saiu da caixa de mensagem. Suas notas continuam aqui."
       }
     },
     "tab": {

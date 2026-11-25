@@ -9,7 +9,10 @@ import {
   type NativeChatMediaNote
 } from './native-chat-media-notes'
 import { dismissNativeChatNotesNotice } from './native-chat-notes-notice'
-import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
 import { load as draftLoad } from '../../drafts/native-chat-composer-draft-memory'
 import {
   createNativeChatNotesStorage,
@@ -64,8 +67,8 @@ export function setNativeChatAttachmentNotes(
   scopeKey: string,
   attachmentId: string,
   value: NativeChatAttachmentNotes
-): void {
-  storage.update((entries) => {
+): boolean {
+  return storage.update((entries) => {
     const key = keyOf(scopeKey, attachmentId)
     entries.delete(key)
     entries.set(key, value)
@@ -116,9 +119,22 @@ export function clearNativeChatAttachmentNotesWhere(matches: (scopeKey: string) 
   })
 }
 
-/** Notes follow their draft when it moves to another scope (a launch draft becoming a session's). */
-export function moveNativeChatAttachmentNotes(from: string, to: string): void {
-  storage.update((entries) => moveNativeChatNotesEntries(entries, from, to))
+/** Notes follow their draft when it moves to another scope (a launch draft becoming a session's).
+ *  With `keepSource` they are copied: the source's go only when its draft is gone for good. */
+export function moveNativeChatAttachmentNotes(from: string, to: string, keepSource = false): void {
+  storage.update((entries) => moveNativeChatNotesEntries(entries, from, to, undefined, keepSource))
+}
+
+/** A command takes no notes and none of their images: the draft's marked images, with their notes,
+ *  stay in the message box for the next message while `clear` removes the rest. */
+export function clearNativeChatImagesKeepingNoted(scopeKey: string, clear: () => void): void {
+  const kept = readNativeChatComposerDraft(scopeKey).images.filter(
+    ({ id }) => readNativeChatAttachmentNotes(scopeKey, id) !== null
+  )
+  clear()
+  if (kept.length > 0) {
+    updateNativeChatComposerDraft(scopeKey, { images: kept }, 'immediate')
+  }
 }
 
 /** Notes for the images a draft holds, so chips can show their count. */

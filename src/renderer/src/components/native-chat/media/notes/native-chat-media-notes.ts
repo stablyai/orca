@@ -1,6 +1,8 @@
 // Notes on an image or a video frame: a numbered pin or box in coordinates relative to the media,
 // so zoom, pan and window size never move a mark.
 
+import { GENERATED_NOTE_IMAGE_MAX_EDGE } from '../../../../../../shared/native-chat/media-notes/generated-note-image'
+
 export type NativeChatNoteMark =
   | { kind: 'pin'; x: number; y: number }
   | { kind: 'box'; x: number; y: number; width: number; height: number }
@@ -15,8 +17,8 @@ export type NativeChatMediaNote = {
   time?: number
 }
 
-/** Outputs are drawn at most this long on their long edge. */
-export const NATIVE_CHAT_NOTE_IMAGE_MAX_EDGE = 2048
+/** Outputs are drawn at most this long on their long edge, the size agents read images at. */
+export const NATIVE_CHAT_NOTE_IMAGE_MAX_EDGE = GENERATED_NOTE_IMAGE_MAX_EDGE
 /** Characters one note may hold; the note editor stops taking text here. */
 export const NATIVE_CHAT_NOTE_TEXT_MAX = 2000
 /** Distinct video frames one message may carry. */

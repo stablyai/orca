@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { toast } from 'sonner'
 import { MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
@@ -170,13 +171,23 @@ export function NativeChatImageGalleryDialog({
     if (!annotate) {
       return
     }
+    // The image's row takes it first; only then does this viewer close, so the image is never left
+    // with no viewer at all.
+    if (!annotate()) {
+      toast(
+        t(
+          'components.native-chat.imageGallery.annotateUnavailable',
+          'This image is no longer on screen. Close the preview and open it again to annotate.'
+        )
+      )
+      return
+    }
     // The message's own viewer takes over: this one closes without handing focus back first.
     handingOff.current = true
     flushSync(() => {
       setMenuOpen(false)
       onClose('handoff')
     })
-    annotate()
   }
   const annotateLabel = t('components.native-chat.notes.annotate', 'Annotate')
 

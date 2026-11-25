@@ -3,6 +3,7 @@ import {
   type NativeChatMediaNote,
   type NativeChatNoteMark
 } from './native-chat-media-notes'
+import { GENERATED_NOTE_IMAGE_MAX_BYTES } from '../../../../../../shared/native-chat/media-notes/generated-note-image'
 
 // Drawn into the image the agent receives, so these are fixed colors rather than theme tokens.
 const MARK_BLUE = '#2f5bd3'
@@ -26,13 +27,37 @@ export function nativeChatNoteBadgePoint(
   return { x: inside(point.x, width), y: inside(point.y, height) }
 }
 
-/** Draws `source` with each note's numbered mark into a PNG no larger than the output limit. */
+/** Smaller steps tried when a marked image encodes over the byte budget. */
+const FIT_STEPS = 4
+const FIT_SCALE = 0.75
+
+/** Draws `source` with each note's numbered mark into a PNG within the edge and byte limits agents
+ *  accept; an image that encodes too large is drawn again smaller. */
 export async function drawNativeChatNotesImage(
   source: ImageBitmapSource,
   sourceSize: { width: number; height: number },
   notes: readonly NativeChatMediaNote[]
 ): Promise<Blob> {
-  const { width, height } = nativeChatNoteImageSize(sourceSize.width, sourceSize.height)
+  let { width, height } = nativeChatNoteImageSize(sourceSize.width, sourceSize.height)
+  for (let step = 0; ; step += 1) {
+    const blob = await drawNotesImageAt(source, width, height, notes)
+    if (blob.size <= GENERATED_NOTE_IMAGE_MAX_BYTES) {
+      return blob
+    }
+    if (step >= FIT_STEPS) {
+      throw new Error('The marked image is too large to send.')
+    }
+    width = Math.max(1, Math.round(width * FIT_SCALE))
+    height = Math.max(1, Math.round(height * FIT_SCALE))
+  }
+}
+
+async function drawNotesImageAt(
+  source: ImageBitmapSource,
+  width: number,
+  height: number,
+  notes: readonly NativeChatMediaNote[]
+): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height

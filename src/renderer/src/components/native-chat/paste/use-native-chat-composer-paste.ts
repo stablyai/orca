@@ -114,7 +114,9 @@ export function useNativeChatComposerPaste({
         setNotice,
         ...(png ? { png } : {})
       })
-      if (keepStoreUploadAfterUnmount(pendingId, saved)) {
+      // A drawn notes image is one piece with its notes: if its message box is gone, the image is
+      // dropped rather than kept without them, and the notes stay in their viewer.
+      if (keepStoreUploadAfterUnmount(pendingId, png ? { status: 'dropped' } : saved)) {
         return false
       }
       if (!canComplete() || saved.status !== 'saved') {

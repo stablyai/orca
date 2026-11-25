@@ -19072,7 +19072,8 @@
         "linkActions": "Acciones de enlace"
       },
       "imageGallery": {
-        "loadFailed": "No se pudo cargar {{name}}"
+        "loadFailed": "No se pudo cargar {{name}}",
+        "annotateUnavailable": "Esta imagen ya no está en pantalla. Cierra la vista previa y ábrela de nuevo para anotarla."
       },
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
@@ -20501,7 +20502,10 @@
         "undo": "Deshacer",
         "zoom": "Zoom",
         "zoomIn": "Acercar",
-        "zoomOut": "Alejar"
+        "zoomOut": "Alejar",
+        "saveFailed": "No se pudieron guardar tus notas. Siguen aquí.",
+        "keptUnsaved": "Notas conservadas, pero no se pudieron guardar y se perderán al reiniciar.",
+        "imageChanged": "Esta imagen ya no está en el cuadro de mensaje. Tus notas siguen aquí."
       }
     },
     "tab": {

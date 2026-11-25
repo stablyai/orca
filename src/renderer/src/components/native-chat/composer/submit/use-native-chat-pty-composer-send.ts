@@ -1,6 +1,8 @@
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import {
   clearNativeChatAttachmentNotes,
+  clearNativeChatImagesKeepingNoted,
+  readNativeChatAttachmentNotes,
   withNativeChatAttachmentNotes
 } from '../../media/notes/native-chat-attachment-notes'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
@@ -66,7 +68,7 @@ export function useNativeChatPtyComposerSend(args: {
   return useCallback(
     (retry) => {
       let text = retry?.text ?? args.draft
-      const imagePaths =
+      let imagePaths =
         retry?.imagePaths ??
         (retry ? [] : args.imageAttachments.map((attachment) => attachment.path))
       if ((text.trim() === '' && imagePaths.length === 0) || args.disabled) {
@@ -92,7 +94,13 @@ export function useNativeChatPtyComposerSend(args: {
         ? resolveNativeChatPastedText(args.draftScopeKey, text)
         : serializeNativeChatAgentReferences(text, submitted.document, submitted.pastedTextFiles)
       // A marked image's notes go with a message, once; never into a command's arguments, and a
-      // retry resends the text it already carried.
+      // retry resends the text it already carried. A command leaves marked images, with their
+      // notes, in the message box for the next message.
+      if (classification === 'command' && !retry) {
+        imagePaths = args.imageAttachments
+          .filter(({ id }) => !id || !readNativeChatAttachmentNotes(args.draftScopeKey, id))
+          .map(({ path }) => path)
+      }
       const notedIds =
         retry || classification === 'command'
           ? []
@@ -181,7 +189,11 @@ export function useNativeChatPtyComposerSend(args: {
         args.setDraft('')
         args.setCaret(0)
         args.clearSkillOrigin()
-        args.clearImageAttachments()
+        if (classification === 'command') {
+          clearNativeChatImagesKeepingNoted(args.draftScopeKey, args.clearImageAttachments)
+        } else {
+          args.clearImageAttachments()
+        }
         clearNativeChatAttachmentNotes(args.draftScopeKey, notedIds)
         args.setNotice(null)
         useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)

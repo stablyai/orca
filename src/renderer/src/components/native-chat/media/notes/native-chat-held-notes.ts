@@ -62,8 +62,8 @@ export function holdNativeChatNotes(
   scopeKey: string,
   mediaKey: string,
   notes: readonly NativeChatMediaNote[]
-): void {
-  storage.update((held) => {
+): boolean {
+  return storage.update((held) => {
     const key = keyOf(scopeKey, mediaKey)
     held.delete(key)
     held.set(key, { scopeKey, notes })
@@ -78,18 +78,18 @@ export function holdNativeChatNotes(
   })
 }
 
-/** The notes held for this media in this chat, removed from the hold as the viewer takes them back. */
-export function takeHeldNativeChatNotes(
+/** The notes held for this media in this chat. They stay held while a viewer edits them, so a
+ *  restart before the edit is handed off or held again still finds them. */
+export function readHeldNativeChatNotes(
   scopeKey: string,
   mediaKey: string
 ): readonly NativeChatMediaNote[] | null {
-  const key = keyOf(scopeKey, mediaKey)
-  let taken: readonly NativeChatMediaNote[] | null = null
-  storage.update((held) => {
-    taken = held.get(key)?.notes ?? null
-    return held.delete(key)
-  })
-  return taken
+  return storage.get(keyOf(scopeKey, mediaKey))?.notes ?? null
+}
+
+/** Ends the hold once its notes are handed to the message box or deliberately removed. */
+export function releaseHeldNativeChatNotes(scopeKey: string, mediaKey: string): void {
+  storage.update((held) => held.delete(keyOf(scopeKey, mediaKey)))
 }
 
 /** Drops held notes whose chat draft is deleted, such as a closed chat or a removed workspace. */
@@ -107,9 +107,9 @@ export function clearNativeChatHeldNotesWhere(matches: (scopeKey: string) => boo
 }
 
 /** Held notes follow their chat's draft when it moves to another scope. */
-export function moveNativeChatHeldNotes(from: string, to: string): void {
+export function moveNativeChatHeldNotes(from: string, to: string, keepSource = false): void {
   storage.update((held) =>
-    moveNativeChatNotesEntries(held, from, to, (entry) => ({ ...entry, scopeKey: to }))
+    moveNativeChatNotesEntries(held, from, to, (entry) => ({ ...entry, scopeKey: to }), keepSource)
   )
 }
 

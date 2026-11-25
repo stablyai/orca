@@ -300,6 +300,14 @@ export function NativeChatImageAttachments({
   const [viewing, setViewing] = useState<number | null>(null)
   // Opened from the chat's image set by Annotate: the viewer starts ready to place notes.
   const [annotateOnOpen, setAnnotateOnOpen] = useState(false)
+  // The image set can outlive this row (scrolled out of range): only a mounted row takes Annotate.
+  const mounted = useRef(false)
+  useLayoutEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   const images = blocks.filter((block) => block.type === 'image-ref')
   const group = useRef<HTMLDivElement>(null)
   const galleryMessageId = useContext(NativeChatGalleryMessageContext)
@@ -320,10 +328,12 @@ export function NativeChatImageAttachments({
           images: shown.map(({ image }) => image),
           annotate: (block) => {
             const at = images.indexOf(block)
-            if (at !== -1) {
-              setAnnotateOnOpen(true)
-              setViewing(at)
+            if (!mounted.current || at === -1) {
+              return false
             }
+            setAnnotateOnOpen(true)
+            setViewing(at)
+            return true
           }
         }
       : null

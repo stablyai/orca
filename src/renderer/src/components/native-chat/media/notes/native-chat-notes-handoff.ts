@@ -34,6 +34,20 @@ export function nativeChatNotesScopeKey(from: Element | null): string | undefine
   return composers ? [...composers].at(-1)?.dataset.nativeChatComposerScope : undefined
 }
 
+/** Storage refused the notes: they are only in this window's memory. */
+export class NativeChatNotesUnsavedError extends Error {
+  constructor() {
+    super('The notes could not be saved.')
+  }
+}
+
+/** What the notes replace left the draft while they were prepared. */
+export class NativeChatNotesSupersededError extends Error {
+  constructor() {
+    super('The image these notes replace is no longer in the draft.')
+  }
+}
+
 /** A drawable frame of the media and its natural size. */
 export type NativeChatNotesFrameSource = (
   time: number | undefined
@@ -86,14 +100,19 @@ export async function attachNativeChatNotes(args: {
       ) {
         throw new Error('The marked image could not be attached.')
       }
-      setNativeChatAttachmentNotes(composer.scopeKey, id, {
+      ids.push(id)
+      const saved = setNativeChatAttachmentNotes(composer.scopeKey, id, {
         mediaName: args.mediaName,
         source: args.source,
         kind: args.kind,
         notes: group,
         offset: args.offset
       })
-      ids.push(id)
+      // The image is saved with the draft; notes only in memory would leave it without them after a
+      // reload, so the pair goes back and the words stay in the viewer.
+      if (!saved) {
+        throw new NativeChatNotesUnsavedError()
+      }
     }
   } catch (error) {
     // Nothing half-attached: a failed batch takes back what it already added.

@@ -32,6 +32,14 @@ export function takeNativeChatNotedImage(scopeKey: string, id: string): () => vo
   }
 }
 
+/** A marked copy takes this chip's place, but only while the chip is still in the draft: one sent or
+ *  replaced meanwhile (in another viewer or window) vetoes the copy. */
+export function replaceNativeChatNotedImage(scopeKey: string, id: string): (() => void) | false {
+  return readNativeChatComposerDraft(scopeKey).images.some((entry) => entry.id === id)
+    ? takeNativeChatNotedImage(scopeKey, id)
+    : false
+}
+
 let cleanSequence = 0
 
 /** A marked image whose notes were all deleted goes back to the clean original it was made from. */

@@ -16,12 +16,15 @@ import {
   nativeChatNotesScopeKey,
   nativeChatNotesStillInDraft,
   watchNativeChatNotesLeaveDraft,
+  NativeChatNotesSupersededError,
+  NativeChatNotesUnsavedError,
   type NativeChatNotesComposer
 } from './native-chat-notes-handoff'
 import {
   holdNativeChatNotes,
   nativeChatNotesMediaKey,
-  takeHeldNativeChatNotes
+  readHeldNativeChatNotes,
+  releaseHeldNativeChatNotes
 } from './native-chat-held-notes'
 
 type Editor = ReturnType<typeof useNativeChatNotesEditor>
@@ -51,8 +54,9 @@ export function useNativeChatNotesDelivery({
   offset: number
   initialNotes: readonly NativeChatMediaNote[] | undefined
   /** The marked images now in the draft. A returned function undoes what the caller replaced
-   *  (a reopened chip goes back as it was); without one, Undo holds the notes with the media. */
-  onAttached: ((ids: string[]) => (() => void) | void) | undefined
+   *  (a reopened chip goes back as it was); without one, Undo holds the notes with the media.
+   *  False: what they replace is gone from the draft, so they are taken back out. */
+  onAttached: ((ids: string[]) => (() => void) | void | false) | undefined
   /** A reopened marked image whose notes were all deleted: the caller takes them out of the draft
    *  and returns what puts them back. */
   onCleared?: () => () => void
@@ -73,19 +77,36 @@ export function useNativeChatNotesDelivery({
   // The message box lives outside the viewer: looked up once the viewer and its image are on screen.
   const [composer, setComposer] = useState<NativeChatNotesComposer | null>(null)
   const restored = useRef(false)
+  // The chat whose held notes this viewer brought back: they stay held until handed off or removed.
+  const heldIn = useRef<string | null>(null)
   useLayoutEffect(() => {
     const found = nativeChatNotesComposer(opener.current)
     setComposer(found)
     // Notes held in this chat for this media come back once, when its chat is known.
     if (found && !restored.current && !initialNotes) {
       restored.current = true
-      const held = takeHeldNativeChatNotes(found.scopeKey, mediaKey)
+      const held = readHeldNativeChatNotes(found.scopeKey, mediaKey)
       if (held?.length) {
+        heldIn.current = found.scopeKey
         editor.restore(held)
         onRestored()
       }
     }
   }, [editor, initialNotes, loaded, mediaKey, onRestored, opener])
+  const showError = useCallback(
+    (message: string): void => {
+      editor.setStatus({ kind: 'error', message })
+      // The failure is shown where the notes are: back to annotating, the panel open, the error focused.
+      onRestored()
+      showPanel()
+      requestAnimationFrame(() => document.getElementById(NATIVE_CHAT_NOTES_ERROR_ID)?.focus())
+    },
+    [editor, onRestored, showPanel]
+  )
+  const unsavedMessage = t(
+    'components.native-chat.notes.saveFailed',
+    'Couldn’t save your notes. They’re still here.'
+  )
   // A message box that can't say (no notesBlocked) is treated as holding a command; null means admitted.
   const blocked = !composer
     ? 'unavailable'
@@ -122,7 +143,12 @@ export function useNativeChatNotesDelivery({
             : null
   // Until the image is read there is nothing to draw the marks on, so Send waits for it.
   const canSend =
-    notes.length > 0 && !editor.hasUnadded && admitted && !busy && Boolean(composer && loaded)
+    notes.length > 0 &&
+    !editor.hasUnadded &&
+    !editor.confirm &&
+    admitted &&
+    !busy &&
+    Boolean(composer && loaded)
 
   const handOff = useCallback(
     async (send: boolean): Promise<boolean> => {
@@ -145,10 +171,28 @@ export function useNativeChatNotesDelivery({
           frame: async () => ({ image: loaded.image, ...loaded.size })
         })
         const restore = onAttached?.(ids) ?? undefined
+        // The image these notes replace left the draft meanwhile (sent, or replaced from another
+        // viewer): adding the marked copy now would bring back what is already gone.
+        if (restore === false) {
+          detachNativeChatNotes(composer.scopeKey, ids)
+          throw new NativeChatNotesSupersededError()
+        }
         handed = true
+        if (heldIn.current) {
+          releaseHeldNativeChatNotes(heldIn.current, mediaKey)
+          heldIn.current = null
+        }
         if (send) {
           await afterComposerRender()
-          composer.handle.submit?.()
+          // Sent only if this box still takes these notes as a message, as when Send was pressed.
+          const now = nativeChatNotesComposer(opener.current)
+          if (
+            now?.scopeKey === composer.scopeKey &&
+            now.handle.notesBlocked?.() === null &&
+            nativeChatNotesStillInDraft(composer.scopeKey, ids)
+          ) {
+            now.handle.submit?.()
+          }
           await afterComposerRender()
         }
         // Sent, the images have left the draft; when the box held the send back, say where they are.
@@ -159,26 +203,33 @@ export function useNativeChatNotesDelivery({
             () => {
               if (restore) {
                 restore()
-              } else {
-                holdNativeChatNotes(composer.scopeKey, mediaKey, notes)
+              } else if (!holdNativeChatNotes(composer.scopeKey, mediaKey, notes)) {
+                showNativeChatNotesNotice(composer.scopeKey, {
+                  text: t(
+                    'components.native-chat.notes.keptUnsaved',
+                    'Notes kept, but they couldn’t be saved and won’t survive a restart.'
+                  )
+                })
               }
             },
             notes.length
           )
         }
       } catch (error) {
-        editor.setStatus({
-          kind: 'error',
-          message: t(
-            'components.native-chat.notes.prepareFailed',
-            'Couldn’t prepare the marked image. Your notes are still here.'
-          )
-        })
         console.error('[native-chat] notes hand-off failed', error)
-        // The failure is shown where the notes are: back to annotating, the panel open, the error focused.
-        onRestored()
-        showPanel()
-        requestAnimationFrame(() => document.getElementById(NATIVE_CHAT_NOTES_ERROR_ID)?.focus())
+        showError(
+          error instanceof NativeChatNotesUnsavedError
+            ? unsavedMessage
+            : error instanceof NativeChatNotesSupersededError
+              ? t(
+                  'components.native-chat.notes.imageChanged',
+                  'This image left the message box. Your notes are still here.'
+                )
+              : t(
+                  'components.native-chat.notes.prepareFailed',
+                  'Couldn’t prepare the marked image. Your notes are still here.'
+                )
+        )
       }
       busyRef.current = false
       setBusy(false)
@@ -193,11 +244,12 @@ export function useNativeChatNotesDelivery({
       notes,
       offset,
       onAttached,
-      onRestored,
-      showPanel,
+      opener,
+      showError,
       source,
       t,
-      title
+      title,
+      unsavedMessage
     ]
   )
 
@@ -223,19 +275,26 @@ export function useNativeChatNotesDelivery({
       onOpenChange(false)
       return
     }
-    if (notes.length > 0 && !initialNotes && !admitted && scopeKey) {
-      // A command waits in the message box: the notes stay with this chat and media for later.
-      holdNativeChatNotes(scopeKey, mediaKey, notes)
-      showNativeChatNotesNotice(scopeKey, {
-        text: t(
-          'components.native-chat.notes.keptWithImage',
-          'Notes kept with {{name}}. Your message box holds a command.',
-          { name: title }
-        )
-      })
-    } else if (notes.length > 0 && !initialNotes && !loaded && scopeKey) {
-      // Held notes came back before the image was read: with nothing to draw them on, they go back.
-      holdNativeChatNotes(scopeKey, mediaKey, notes)
+    if (notes.length > 0 && !initialNotes && (!admitted || !loaded) && scopeKey) {
+      // A command waits in the message box, or the image isn't read yet: the notes stay with this
+      // chat and media for later. Closing waits until storage has them.
+      if (!holdNativeChatNotes(scopeKey, mediaKey, notes)) {
+        showError(unsavedMessage)
+        return
+      }
+      if (!admitted) {
+        showNativeChatNotesNotice(scopeKey, {
+          text: t(
+            'components.native-chat.notes.keptWithImage',
+            'Notes kept with {{name}}. Your message box holds a command.',
+            { name: title }
+          )
+        })
+      }
+    } else if (notes.length === 0 && heldIn.current) {
+      // Every held note was removed: the hold ends with them.
+      releaseHeldNativeChatNotes(heldIn.current, mediaKey)
+      heldIn.current = null
     } else if (notes.length > 0 && loaded && !(await handOff(false))) {
       return
     }

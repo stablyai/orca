@@ -20615,7 +20615,8 @@
         "linkActions": "链接操作"
       },
       "imageGallery": {
-        "loadFailed": "无法加载 {{name}}"
+        "loadFailed": "无法加载 {{name}}",
+        "annotateUnavailable": "这张图片已不在屏幕上。请关闭预览后重新打开再添加标注。"
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {
@@ -21771,7 +21772,10 @@
         "undo": "撤销",
         "zoom": "缩放",
         "zoomIn": "放大",
-        "zoomOut": "缩小"
+        "zoomOut": "缩小",
+        "saveFailed": "无法保存你的备注。备注仍在这里。",
+        "keptUnsaved": "备注已保留，但无法保存，重启后会丢失。",
+        "imageChanged": "这张图片已不在消息框中。你的备注仍在这里。"
       }
     },
     "tab": {

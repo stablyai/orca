@@ -20482,7 +20482,8 @@
         "linkActions": "リンク操作"
       },
       "imageGallery": {
-        "loadFailed": "{{name}} を読み込めませんでした"
+        "loadFailed": "{{name}} を読み込めませんでした",
+        "annotateUnavailable": "この画像は画面に表示されていません。プレビューを閉じて開き直してから注釈を付けてください。"
       },
       "hostPermission": {
         "checkAgain": "再確認",
@@ -21025,7 +21026,10 @@
         "undo": "元に戻す",
         "zoom": "ズーム",
         "zoomIn": "拡大",
-        "zoomOut": "縮小"
+        "zoomOut": "縮小",
+        "saveFailed": "メモを保存できませんでした。メモはここに残っています。",
+        "keptUnsaved": "メモは保持されていますが、保存できなかったため再起動すると失われます。",
+        "imageChanged": "この画像はメッセージ欄から外れました。メモはここに残っています。"
       }
     },
     "tab": {

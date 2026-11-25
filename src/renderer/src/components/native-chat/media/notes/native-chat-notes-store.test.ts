@@ -7,6 +7,7 @@ import {
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 import { deleteNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-removal'
 import { moveNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-move'
+import { deferredRemovals } from '../../drafts/native-chat-composer-draft-memory'
 import { hydrateNativeChatComposerDrafts } from '../../drafts/native-chat-composer-draft-load'
 import {
   createMemoryNativeChatComposerDraftStorage,
@@ -23,7 +24,8 @@ import {
 import {
   holdNativeChatNotes,
   resetNativeChatHeldNotesForTests,
-  takeHeldNativeChatNotes
+  readHeldNativeChatNotes,
+  releaseHeldNativeChatNotes
 } from './native-chat-held-notes'
 import { restoreNativeChatCleanImage, takeNativeChatNotedImage } from './native-chat-chip-notes'
 import {
@@ -69,13 +71,17 @@ it('keeps held notes across a reload and drops them with their chat’s draft', 
   holdNativeChatNotes(SCOPE, '/tmp/dashboard.png', [note(1), note(2)])
   holdNativeChatNotes('agent-session:other', '/tmp/dashboard.png', [note(1)])
   resetNativeChatHeldNotesForTests()
-  expect(takeHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')?.map(({ id }) => id)).toEqual([
+  // Reading them back for a viewer keeps them held: a restart before they're handed off loses none.
+  expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')?.map(({ id }) => id)).toEqual([
     'n1',
     'n2'
   ])
-  expect(takeHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toBeNull()
+  resetNativeChatHeldNotesForTests()
+  expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toHaveLength(2)
+  releaseHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')
+  expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toBeNull()
   deleteNativeChatComposerDraft('agent-session:other')
-  expect(takeHeldNativeChatNotes('agent-session:other', '/tmp/dashboard.png')).toBeNull()
+  expect(readHeldNativeChatNotes('agent-session:other', '/tmp/dashboard.png')).toBeNull()
 })
 
 it('takes a marked image out with its notes and puts both back on Undo', () => {
@@ -144,6 +150,30 @@ it('a write keeps notes another window saved meanwhile', () => {
   expect(readNativeChatAttachmentNotes(SCOPE, 'img-2')).not.toBeNull()
 })
 
+it('a write storage refused is retried without undoing what another window saved or removed', () => {
+  setNativeChatAttachmentNotes(SCOPE, 'removed-elsewhere', record([note(1)]))
+  const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+    throw new Error('QuotaExceededError')
+  })
+  expect(setNativeChatAttachmentNotes(SCOPE, 'img-1', record([note(1)]))).toBe(false)
+  setItem.mockRestore()
+  // Meanwhile another window removes one entry and saves one of its own.
+  const stored: [string, unknown][] = JSON.parse(localStorage.getItem(ATTACHMENT_NOTES_KEY) ?? '[]')
+  localStorage.setItem(
+    ATTACHMENT_NOTES_KEY,
+    JSON.stringify([
+      ...stored.filter(([key]) => !key.endsWith('removed-elsewhere')),
+      ['agent-session:other\u0000img-9', record([note(1)])]
+    ])
+  )
+  expect(setNativeChatAttachmentNotes(SCOPE, 'img-2', record([note(1)]))).toBe(true)
+  resetNativeChatAttachmentNotesForTests()
+  expect(readNativeChatAttachmentNotes(SCOPE, 'img-1')).not.toBeNull()
+  expect(readNativeChatAttachmentNotes(SCOPE, 'img-2')).not.toBeNull()
+  expect(readNativeChatAttachmentNotes('agent-session:other', 'img-9')).not.toBeNull()
+  expect(readNativeChatAttachmentNotes(SCOPE, 'removed-elsewhere')).toBeNull()
+})
+
 it('notes on a draft’s images, and notes held for its chat, follow the draft to its new scope', () => {
   const launch = 'native-chat-launch:pane'
   appendToNativeChatComposerDraft(launch, {
@@ -155,8 +185,9 @@ it('notes on a draft’s images, and notes held for its chat, follow the draft t
   moveNativeChatComposerDraft(launch, SCOPE)
   expect(imageIds()).toEqual(['img-3'])
   expect(readNativeChatAttachmentNotes(SCOPE, 'img-3')?.notes).toHaveLength(1)
-  expect(takeHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toHaveLength(2)
-  expect(readNativeChatAttachmentNotes(launch, 'img-3')).toBeNull()
+  expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toHaveLength(2)
+  // The source keeps its copy exactly while its draft's removal waits for the destination's save.
+  expect(readNativeChatAttachmentNotes(launch, 'img-3') !== null).toBe(deferredRemovals.has(launch))
 })
 
 it('a batch that fails part-way takes back the images it already attached', async () => {

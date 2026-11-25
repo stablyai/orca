@@ -1,0 +1,29 @@
+import { inflateSync } from 'node:zlib'
+import { generatedNoteImageLayout } from '../../../shared/native-chat/media-notes/generated-note-image'
+
+/** Whether `bytes` is a whole notes PNG whose image data decodes to exactly its rows: complete
+ *  chunks (see `generatedNoteImageLayout`), then a zlib stream that is neither cut off nor longer
+ *  than the image, with a valid filter byte on every row. */
+export function isAdmissibleGeneratedNoteImage(bytes: unknown): bytes is Uint8Array {
+  const layout = generatedNoteImageLayout(bytes)
+  if (!layout) {
+    return false
+  }
+  let raw: Buffer
+  try {
+    // Bounded by the image's own size, so a small stream can't expand into a large allocation.
+    raw = inflateSync(Buffer.concat(layout.data), { maxOutputLength: layout.rawByteLength })
+  } catch {
+    return false
+  }
+  if (raw.length !== layout.rawByteLength) {
+    return false
+  }
+  const rowLength = layout.rawByteLength / layout.height
+  for (let row = 0; row < raw.length; row += rowLength) {
+    if (raw[row] > 4) {
+      return false
+    }
+  }
+  return true
+}

@@ -1,5 +1,6 @@
 // Persist whole memory records, journal unconfirmed changes on unload, and adopt other windows’ confirmed writes.
 
+import { releaseMovedNativeChatDraftSource } from './native-chat-moved-draft-release'
 import { basename } from '@/lib/path'
 import { isNativeChatKeptPastePath } from '../paste/native-chat-image-paste'
 import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
@@ -46,7 +47,7 @@ function completeDeferredRemovals(destinationScope: string, savedAt: number): vo
   let released = false
   for (const [sourceScope, pending] of deferredRemovals) {
     if (pending.destinationScope === destinationScope && savedAt >= pending.savedAt) {
-      deferredRemovals.delete(sourceScope)
+      releaseMovedNativeChatDraftSource(sourceScope)
       released = true
     }
   }

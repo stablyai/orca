@@ -22105,7 +22105,8 @@
         "loading": "Görsel yükleniyor…",
         "loadFailed": "{{name}} yüklenemedi",
         "closedImageChanged": "Bir görsel değiştiği için önizleme kapatıldı. Güncel görselleri görmek için bir küçük resim açın.",
-        "closedChatChanged": "Sohbet değiştiği için önizleme kapatıldı. Güncel görselleri görmek için bir küçük resim açın."
+        "closedChatChanged": "Sohbet değiştiği için önizleme kapatıldı. Güncel görselleri görmek için bir küçük resim açın.",
+        "annotateUnavailable": "Bu görsel artık ekranda değil. Not eklemek için önizlemeyi kapatıp yeniden aç."
       },
       "goalControl": {
         "settingsRejected": "Seçilen model ve akıl yürütme düzeyi Codex tarafından uygulanamadı. Bu hedef değişikliği gönderilmedi. Seçimi kontrol edin ve yeniden deneyin.",
@@ -23017,7 +23018,10 @@
         "undo": "Geri al",
         "zoom": "Yakınlaştırma",
         "zoomIn": "Yakınlaştır",
-        "zoomOut": "Uzaklaştır"
+        "zoomOut": "Uzaklaştır",
+        "saveFailed": "Notların kaydedilemedi. Hâlâ burada.",
+        "keptUnsaved": "Notlar tutuldu ama kaydedilemedi; yeniden başlatınca kaybolur.",
+        "imageChanged": "Bu görsel mesaj kutusundan çıktı. Notların hâlâ burada."
       }
     },
     "tab": {

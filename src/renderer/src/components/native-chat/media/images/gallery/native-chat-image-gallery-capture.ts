@@ -12,8 +12,9 @@ export type NativeChatGalleryEntry = {
   image: NativeChatGalleryImage
   /** The control that opens this image in the chat, for returning focus near it on close. */
   trigger: Element
-  /** Hands this image to its message's viewer with notes; absent for images notes can't be drawn on. */
-  annotate?: () => void
+  /** Hands this image to its message's viewer with notes; false when nothing on screen took it.
+   *  Absent for images notes can't be drawn on. */
+  annotate?: () => boolean
 }
 
 export type NativeChatGalleryCapture = { entries: NativeChatGalleryEntry[]; index: number }

@@ -8,6 +8,11 @@ import {
   setNativeChatComposerDraftStorageForTests
 } from '../../drafts/native-chat-composer-draft-storage'
 import { useNativeChatDraft } from '../../drafts/use-native-chat-draft'
+import {
+  appendToNativeChatComposerDraft,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
@@ -54,14 +59,25 @@ beforeEach(async () => {
 })
 afterEach(() => cleanup())
 
-it('a terminal command never carries a marked image’s notes, which stay for the next message (F2)', () => {
-  setNativeChatAttachmentNotes('pane:notes', 'img-1', NOTES)
+it('a terminal command leaves a marked image and its notes in the message box for the next message', () => {
+  const scope = 'pane:notes'
+  appendToNativeChatComposerDraft(scope, {
+    text: '/compact',
+    images: [
+      { id: 'img-1', path: '/tmp/marked.png' },
+      { id: 'img-2', path: '/tmp/plain.png' }
+    ]
+  })
+  setNativeChatAttachmentNotes(scope, 'img-1', NOTES)
   const { result } = renderHook(() =>
     useNativeChatPtyComposerSend({
       agent: 'codex',
       draft: '/compact',
-      draftScopeKey: 'pane:notes',
-      imageAttachments: [{ id: 'img-1', path: '/tmp/marked.png' }],
+      draftScopeKey: scope,
+      imageAttachments: [
+        { id: 'img-1', path: '/tmp/marked.png' },
+        { id: 'img-2', path: '/tmp/plain.png' }
+      ],
       disabled: false,
       isDispatchingSessionOption: false,
       launchDraftResolved: true,
@@ -74,20 +90,25 @@ it('a terminal command never carries a marked image’s notes, which stay for th
       setDraft: vi.fn(),
       setCaret: vi.fn(),
       clearSkillOrigin: vi.fn(),
-      clearImageAttachments: vi.fn(),
+      // As the message box does: every image leaves the draft.
+      clearImageAttachments: () =>
+        updateNativeChatComposerDraft(scope, { images: [] }, 'immediate'),
       setNotice: vi.fn()
     })
   )
   act(() => {
     result.current()
   })
+  // The command goes with its ordinary image only, and no notes text.
   expect(runtimeSend.sendWithImages).toHaveBeenCalledWith(
     'codex',
     'pty-1',
     '/compact',
-    ['/tmp/marked.png'],
+    ['/tmp/plain.png'],
     expect.anything()
   )
+  expect(readNativeChatComposerDraft(scope).images.map(({ id }) => id)).toEqual(['img-1'])
+  expect(readNativeChatAttachmentNotes(scope, 'img-1')?.notes).toHaveLength(1)
 })
 
 it('a structured send that is refused after going pending keeps the images’ notes (F4)', async () => {

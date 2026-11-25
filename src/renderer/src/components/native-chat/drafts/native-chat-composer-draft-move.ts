@@ -34,9 +34,11 @@ export function moveNativeChatComposerDraft(
   const source = readNativeChatComposerDraft(sourceScope)
   moveNativeChatStagedFiles(sourceScope, destinationScope)
   moveNativeChatPendingAttachments(sourceScope, destinationScope)
-  // Notes on the draft's marked images, and notes held for its chat, go where the draft goes.
-  moveNativeChatAttachmentNotes(sourceScope, destinationScope)
-  moveNativeChatHeldNotes(sourceScope, destinationScope)
+  // Notes on the draft's marked images, and notes held for its chat, go where the draft goes. The
+  // source keeps its copy until its draft's removal is final, so whichever draft a restart
+  // recovers still has its notes.
+  moveNativeChatAttachmentNotes(sourceScope, destinationScope, true)
+  moveNativeChatHeldNotes(sourceScope, destinationScope, true)
   for (const operation of nativeChatPastedTextOperations.values()) {
     if (operation.scopeKey === sourceScope) {
       operation.scopeKey = destinationScope

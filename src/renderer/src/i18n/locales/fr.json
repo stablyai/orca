@@ -19297,7 +19297,8 @@
         "linkActions": "Actions sur le lien"
       },
       "imageGallery": {
-        "loadFailed": "Impossible de charger {{name}}"
+        "loadFailed": "Impossible de charger {{name}}",
+        "annotateUnavailable": "Cette image n’est plus à l’écran. Fermez l’aperçu et rouvrez-le pour l’annoter."
       },
       "install": {
         "checking": "Vérification que {{agent}} est prêt sur cet hôte…",
@@ -20726,7 +20727,10 @@
         "undo": "Annuler",
         "zoom": "Zoom",
         "zoomIn": "Zoom avant",
-        "zoomOut": "Zoom arrière"
+        "zoomOut": "Zoom arrière",
+        "saveFailed": "Impossible d’enregistrer vos notes. Elles sont toujours là.",
+        "keptUnsaved": "Notes conservées, mais elles n’ont pas pu être enregistrées et seront perdues au redémarrage.",
+        "imageChanged": "Cette image n’est plus dans la zone de message. Vos notes sont toujours là."
       }
     },
     "tab": {

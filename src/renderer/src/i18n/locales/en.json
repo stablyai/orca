@@ -22114,7 +22114,8 @@
         "loading": "Loading image…",
         "loadFailed": "Couldn't load {{name}}",
         "closedImageChanged": "Preview closed because an image changed. Open a thumbnail to capture the current set.",
-        "closedChatChanged": "Preview closed because the chat changed. Open a thumbnail to capture the current set."
+        "closedChatChanged": "Preview closed because the chat changed. Open a thumbnail to capture the current set.",
+        "annotateUnavailable": "This image is no longer on screen. Close the preview and open it again to annotate."
       },
       "goalControl": {
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
@@ -23022,7 +23023,10 @@
         "undo": "Undo",
         "zoom": "Zoom",
         "zoomIn": "Zoom in",
-        "zoomOut": "Zoom out"
+        "zoomOut": "Zoom out",
+        "saveFailed": "Couldn’t save your notes. They’re still here.",
+        "keptUnsaved": "Notes kept, but they couldn’t be saved and won’t survive a restart.",
+        "imageChanged": "This image left the message box. Your notes are still here."
       }
     },
     "tab": {

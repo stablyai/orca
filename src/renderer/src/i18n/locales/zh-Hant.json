@@ -19912,7 +19912,8 @@
         "linkActions": "連結操作"
       },
       "imageGallery": {
-        "loadFailed": "無法載入 {{name}}"
+        "loadFailed": "無法載入 {{name}}",
+        "annotateUnavailable": "這張圖片已不在螢幕上。請關閉預覽後重新開啟再加上標註。"
       },
       "goalControl": {
         "settingsRejected": "Codex 無法套用所選的模型與推理強度。此次目標變更未送出。請檢查選項後再試一次。",
@@ -20384,7 +20385,10 @@
         "undo": "復原",
         "zoom": "縮放",
         "zoomIn": "放大",
-        "zoomOut": "縮小"
+        "zoomOut": "縮小",
+        "saveFailed": "無法儲存你的備註。備註仍在這裡。",
+        "keptUnsaved": "備註已保留，但無法儲存，重新啟動後會遺失。",
+        "imageChanged": "這張圖片已不在訊息框中。你的備註仍在這裡。"
       }
     },
     "tab": {

@@ -7,6 +7,7 @@ import { useLocalImageSrc } from '@/components/editor/document-images/useLocalIm
 import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
 import { useNativeChatAttachmentNotes } from '../../media/notes/native-chat-attachment-notes'
 import {
+  replaceNativeChatNotedImage,
   restoreNativeChatCleanImage,
   takeNativeChatNotedImage,
   useNativeChatNotesOriginal
@@ -336,7 +337,9 @@ function NativeChatImageThumbnail({
         replacesAttachmentId={attachment.id}
         // The marked image takes this chip's place; Undo puts this chip and its notes back.
         onAttached={
-          notesScopeKey ? () => takeNativeChatNotedImage(notesScopeKey, attachment.id) : undefined
+          notesScopeKey
+            ? () => replaceNativeChatNotedImage(notesScopeKey, attachment.id)
+            : undefined
         }
         onCleared={
           notes && notesScopeKey
