@@ -72,11 +72,13 @@ describe('DSH ACP launch spec', () => {
     const keptId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
     const onlyListingProject = join(tempDir, 'sessions', '--private-folder--')
     const sharedProject = join(tempDir, 'sessions', '--shared-folder--')
+    const unrelatedEmptyProject = join(tempDir, 'sessions', '--unrelated-empty--')
 
     await mkdir(join(onlyListingProject, listingId), { recursive: true })
     await writeFile(join(onlyListingProject, listingId, 'v4.jsonl'), '{}')
     await mkdir(join(sharedProject, keptId), { recursive: true })
     await writeFile(join(sharedProject, keptId, 'v4.jsonl'), '{}')
+    await mkdir(unrelatedEmptyProject, { recursive: true })
 
     await discardDshListingSession({
       sessionId: listingId,
@@ -87,6 +89,7 @@ describe('DSH ACP launch spec', () => {
 
     await expect(stat(onlyListingProject)).rejects.toThrow()
     await expect(stat(join(sharedProject, keptId, 'v4.jsonl'))).resolves.toBeDefined()
+    await expect(stat(unrelatedEmptyProject)).resolves.toBeDefined()
 
     // Non-UUID session IDs are ignored safely without touching directories.
     await discardDshListingSession({

@@ -21,9 +21,13 @@ export async function discardDshListingSession({
       .map(async (entry) => {
         const projectPath = join(sessionsRoot, entry.name)
         const sessionPath = join(projectPath, sessionId)
-        await rm(sessionPath, { recursive: true, force: true })
-        // Remove the temporary project folder if the listing session was its only entry.
-        await rmdir(projectPath).catch(() => {})
+        try {
+          await rm(sessionPath, { recursive: true })
+          // Remove the temporary project folder if the listing session was its only entry.
+          await rmdir(projectPath).catch(() => {})
+        } catch {
+          // Ignore projects that do not contain this listing session.
+        }
       })
   )
 }
