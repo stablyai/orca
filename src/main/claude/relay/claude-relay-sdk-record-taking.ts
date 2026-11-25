@@ -2,8 +2,15 @@ import { StringDecoder } from 'node:string_decoder'
 import type { ProviderRelayRecordTaking } from '../../provider-relay/relayed-provider-consumption'
 
 const UUID_KEY = '"uuid":"'
-/** An answer to this app's own request: the SDK takes it on read and never yields it. */
-const CONTROL_ANSWER = '{"type":"control_response"'
+/** Lines the SDK takes on read and never yields: answers to this app's requests, the agent's own
+ *  requests (answered through callbacks) and transport lines. Each counts once every line before it
+ *  does, so the last one before an exit never waits for a message that won't come. */
+const TAKEN_ON_READ = [
+  '{"type":"control_response"',
+  '{"type":"control_request"',
+  '{"type":"keep_alive"',
+  '{"type":"transcript_mirror"'
+]
 /** Marks a held line that counts as taken as soon as every line before it is. */
 const TAKEN_ON_REACH = ''
 
@@ -30,9 +37,9 @@ function lineUuid(line: string): string | null {
 
 /**
  * The SDK reads a relayed agent's lines as they come and queues their messages while Orca's reader
- * waits, so acks follow the messages Orca handled, matched by id. A control answer counts once
- * every line before it does, so an idle chat's answers can't pile up; another line the SDK keeps to
- * itself counts once a later message is handled.
+ * waits, so acks follow the messages Orca handled, matched by id. A line the SDK keeps to itself
+ * counts once every line before it does, so an idle chat's answers can't pile up; a line whose id
+ * can't be read counts once a later message is handled.
  */
 export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): {
   /** Each chunk the SDK reads, in the same tick. */
@@ -69,7 +76,7 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
         if (part.length === 0) {
           continue
         }
-        if (!part.startsWith(CONTROL_ANSWER)) {
+        if (!TAKEN_ON_READ.some((prefix) => part.startsWith(prefix))) {
           ids.push(lineUuid(part))
         } else {
           ids.push(TAKEN_ON_REACH)

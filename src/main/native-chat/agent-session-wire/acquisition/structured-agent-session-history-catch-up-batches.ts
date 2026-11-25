@@ -1,12 +1,16 @@
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   createHistoryCatchUpBatch,
+  HISTORY_CATCH_UP_MAX_OPERATIONS,
   type ExpectedHistoryItem,
   type HistoryCatchUpPlan
 } from './structured-agent-session-history-catch-up'
 
 type Batch = ReturnType<typeof createHistoryCatchUpBatch>
 type ItemMutation = Extract<JournalLifecycleIdentityMutationInput, { kind: 'item' }>
+
+/** What one import stages across all its commits: memory stays bounded, however long the run. */
+export const HISTORY_CATCH_UP_MAX_IMPORT_ROWS = 16 * HISTORY_CATCH_UP_MAX_OPERATIONS
 
 const tooLarge = (error: unknown): boolean =>
   error instanceof Error && error.message === 'too-large'
