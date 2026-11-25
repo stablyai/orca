@@ -1,4 +1,5 @@
 import type { AgentBackgroundWait } from '../../agent-status/lifecycle/agent-background-wait'
+import type { FleetWorkerOutcome } from './orchestration-fleet-outcome-resolution'
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import { createFleetStatusIndex, statusForFleetWorker } from './orchestration-fleet-status-index'
 import {
@@ -33,7 +34,7 @@ export type FleetDurableWorker = {
   pendingInput?: boolean
   pendingApproval?: boolean
   terminationReason?: 'operator_close' | 'signaled' | 'exited' | 'unknown' | null
-  outcome?: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
+  outcome?: FleetWorkerOutcome
   resource: {
     id: string
     ownerDispatchId: string
@@ -119,7 +120,7 @@ export type OrchestrationFleetWorker = {
      *  otherwise, and from older hosts. */
     backgroundWait?: AgentBackgroundWait
   }
-  outcome: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
+  outcome: FleetWorkerOutcome
   liveness: FleetLiveness
   evidence: {
     durable: true
