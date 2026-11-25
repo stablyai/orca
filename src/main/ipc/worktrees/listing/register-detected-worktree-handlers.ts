@@ -31,6 +31,12 @@ import { settleLocalDetectedListingWithin } from './settle-local-detected-listin
 
 export const DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS = 30_000
 
+function warnLocalListingUnsettled(repoId: string): void {
+  console.warn(
+    `[worktrees] local listDetected for ${repoId} did not settle in ${DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS} ms; continuing with the metadata fallback (#43572)`
+  )
+}
+
 export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): void {
   const { store, detectedWorktreeCancellations } = context
   setWslStoppedWorktreeRescanNotifier((repoId) =>
@@ -91,9 +97,21 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
                 }
               : undefined
           )
-          return abortedResult
-            ? await Promise.race([providerResult, abortedResult])
-            : await providerResult
+          if (abortedResult) {
+            return await Promise.race([providerResult, abortedResult])
+          }
+          // A local host-qualified listing needs the same deadline as the legacy local path.
+          return (
+            (await settleLocalDetectedListingWithin(
+              providerResult,
+              DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS,
+              () => warnLocalListingUnsettled(args.repoId)
+            )) ?? {
+              providerRequestId: args.providerRequestId,
+              executionHostId: args.executionHostId,
+              status: 'timed-out'
+            }
+          )
         } finally {
           if (timeout) {
             clearTimeout(timeout)
@@ -123,10 +141,7 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
             (!connectionId || (authority !== undefined && isCurrentSshProviderAuthority(authority)))
         ),
         DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS,
-        () =>
-          console.warn(
-            `[worktrees] local listDetected for ${repo.id} did not settle in ${DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS} ms; continuing with the metadata fallback (#43572)`
-          )
+        () => warnLocalListingUnsettled(repo.id)
       )
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         dropWorkspacesTheListingInvalidates(store, result)
