@@ -1,9 +1,7 @@
 import { expect, it } from 'vitest'
-import type { Translate } from '@/i18n/use-translate'
+import { translate as t } from '@/i18n/i18n'
 import { suggestedBotPurpose } from '../../../../shared/bots/hand-over-workspace'
 import { draftOf, identityTooLong } from './new-bot-draft'
-
-const t = ((_key: string, fallback: string) => fallback) as Translate
 
 it('refuses a blank draft whose purpose is over 1,000 characters', () => {
   expect(identityTooLong(undefined, { purpose: 'x'.repeat(1001) }, t)).toBe(true)
