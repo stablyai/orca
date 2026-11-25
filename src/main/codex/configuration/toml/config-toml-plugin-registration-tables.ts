@@ -80,6 +80,44 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
   return entries
 }
 
+/**
+ * Roots and registration keys a config defines other than through `[root.name]` headers. A root
+ * defined inline, by dotted keys or as `[[root]]` takes no appended table; a bare `[root]` blocks only
+ * the names it defines. A `[root.name]` table appended there could redefine a key.
+ */
+export function readCodexRegistrationRootsDefinedOutsideTables(config: string): Set<string> {
+  const roots = new Set<string>()
+  let table: string[] = []
+  let state = createTomlLineScanState()
+  for (const line of config.split('\n')) {
+    const structural = isTomlStructuralLine(state)
+    state = updateTomlLineScanState(state, line)
+    if (!structural) {
+      continue
+    }
+    const header = getTomlTableHeader(line)
+    if (header) {
+      const parsed = parseTomlTableHeaderPath(header)
+      table = parsed?.segments ?? []
+      const root = table[0]
+      if (parsed?.isArray && isCodexRegistrationRoot(root)) {
+        roots.add(root)
+      }
+      continue
+    }
+    const key = parseTomlKeyPath(line)
+    if (!key || line[key.end] !== '=') {
+      continue
+    }
+    const path = [...table, ...key.segments]
+    const root = path[0]
+    if (table.length < 2 && isCodexRegistrationRoot(root)) {
+      roots.add(table.length === 1 ? getCodexRegistrationKey(root, path[1]!) : root)
+    }
+  }
+  return roots
+}
+
 export function hasCodexRegistrationEntries(config: string): boolean {
   return readCodexRegistrationEntries(config).size > 0
 }

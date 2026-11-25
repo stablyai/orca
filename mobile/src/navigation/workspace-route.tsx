@@ -13,8 +13,6 @@ import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-se
 import { useWorkspaceServer } from '../worktree/execution-hosts/workspace-server'
 
 const NO_CAPABILITIES: readonly string[] = []
-const UNREACHABLE_SERVER_MESSAGE =
-  "Your phone can't reach this workspace's server through this desktop."
 
 // Route calls, pushes and feature gates through executionHost; absent means the paired desktop. Unreachable servers get an explicit refusal after desktop status settles.
 export function WorkspaceRoute({ children }: { children: ReactNode }) {
@@ -56,7 +54,7 @@ export function WorkspaceExecutionScope({
   })
   // Settled desktop status cannot become reachable by keeping this spinner open.
   if (state === 'connected' && desktopGates && !desktopGates.statusPending && routeHost === null) {
-    return <PageRouteUnavailableScreen hostId={hostId} message={UNREACHABLE_SERVER_MESSAGE} />
+    return <PageRouteUnavailableScreen hostId={hostId} reason="unreachable-server" />
   }
   const screens = (
     <WorkspaceExecutionHostContext.Provider value={executionHost}>

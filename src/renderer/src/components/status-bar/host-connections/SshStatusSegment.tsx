@@ -25,7 +25,7 @@ import {
   runtimePairingRepairRoute
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
-import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment-copy'
+import { moreSshHostsLabel } from './ssh-status-segment-copy'
 import { SshHostFindPopover } from './SshHostFindPopover'
 import { splitSshStatusMenuRows } from './ssh-status-menu-rows'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
@@ -210,18 +210,7 @@ export function SshStatusSegment(): React.JSX.Element | null {
           )}
         >
           <Server className="size-3" />
-          <span className="inline-grid text-2xs tabular-nums">
-            {/* Reserve both localized forms so count changes don't resize the bar. */}
-            <span aria-hidden className="invisible col-start-1 row-start-1">
-              {connectedHostCountLabel(1, t)}
-            </span>
-            <span aria-hidden className="invisible col-start-1 row-start-1">
-              {connectedHostCountLabel(Math.max(99, statuses.length), t)}
-            </span>
-            <span className="col-start-1 row-start-1">
-              {connectedHostCountLabel(connectedHostCount, t)}
-            </span>
-          </span>
+          <span className="text-2xs tabular-nums">{connectedHostCount}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

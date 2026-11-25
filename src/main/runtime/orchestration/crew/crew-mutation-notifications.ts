@@ -139,9 +139,10 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   }
   if (hasDomainMethod(prototype, 'settleWorkerTerminalRelease')) {
     const release = prototype.settleWorkerTerminalRelease
-    prototype.settleWorkerTerminalRelease = function (this: OrchestrationDb, resourceId) {
+    // Forward every argument: the owner fence is part of the settle, not of the notification.
+    prototype.settleWorkerTerminalRelease = function (this: OrchestrationDb, resourceId, owner) {
       const before = this.getWorkerTerminalResource(resourceId)?.release_state
-      const result = release.call(this, resourceId)
+      const result = release.call(this, resourceId, owner)
       if (before !== result.release_state) {
         this.crewChanges.notify(new Set(['topology']))
       }

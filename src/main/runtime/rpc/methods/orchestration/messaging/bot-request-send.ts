@@ -205,6 +205,7 @@ async function admitBotRequestMail(
     conversation: acting.conversation,
     ...(acting.triggeredBy ? { triggeredBy: acting.triggeredBy } : {}),
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),
+    ...(acting.turn.originPlace ? { originPlace: acting.turn.originPlace } : {}),
     ...asked,
     ...answersRequest(db, acting)
   }
