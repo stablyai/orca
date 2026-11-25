@@ -153,7 +153,7 @@ describe('the host list in an agent terminal', () => {
     })
   })
 
-  it('hands a plain claude --teammate-mode auto lead’s relay env to the team made before its spawn', async () => {
+  it('gives a team made before its lead’s spawn the lead’s relay env, only with the switch on and the team’s token', async () => {
     const hostFolder = await hostList()
     for (const enabled of [false, true]) {
       process.env.ORCA_MCP_SERVERS = enabled ? '1' : '0'
