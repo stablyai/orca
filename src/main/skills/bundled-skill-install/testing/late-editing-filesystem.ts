@@ -43,7 +43,7 @@ export function lateEditingFilesystem(
     },
     hashFile: async (path) => {
       count(path)
-      return nativeBundledSkillFilesystem.hashFile!(path)
+      return nativeBundledSkillFilesystem.hashFile?.(path) ?? null
     },
     listEntries: async (directory) => {
       count(directory)

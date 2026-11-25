@@ -60,3 +60,10 @@ const WRITING_KINDS: ReadonlySet<string> = new Set(['write', 'copy', 'link', 'up
 export function bundledSkillOpKindPublishes(kind: string): boolean {
   return WRITING_KINDS.has(kind)
 }
+
+/** Only an op that put new content at its path may say it updated the skill; a recheck did not. */
+export function bundledSkillOpPublished(op: BundledSkillOpOutcome): boolean {
+  return (
+    bundledSkillOpKindPublishes(op.kind) && (op.status === 'done' || op.contentApplied === true)
+  )
+}

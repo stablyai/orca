@@ -64,6 +64,8 @@ describe('cross-drive refusal put-back', () => {
       for (const later of [input, { ...input, installedOnly: true }]) {
         const next = await previewBundledSkillInstall(later)
         expect(next.skills[0].ops.some((op) => op.kind === 'restore')).toBe(false)
+        // No later plan lists the put-back copy, so "Orca won't remind you" stays true.
+        expect(JSON.stringify(next.skills[0])).not.toContain(former)
         await installBundledSkills(later, next.planDigest)
         expect(await snapshot(former)).toBe(edited)
         expect(await leftoverSiblings(former)).toEqual([])
@@ -95,7 +97,8 @@ describe('cross-drive refusal put-back', () => {
     expect(await readFile(join(former, 'SKILL.md'), 'utf8')).toBe('someone else\n')
   })
 
-  it('never renames onto an empty folder that took the place before the put-back', async () => {
+  // The check and the rename are separate steps, so a folder created between them is not covered.
+  it('does not rename onto an empty folder that took the place before the put-back check', async () => {
     const home = await makeSkillHome()
     const former = join(home.home, '.gemini', 'skills', NAME)
     await writeCopy(home.shared, OLD_TEXT)

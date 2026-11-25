@@ -264,7 +264,7 @@ describe('cross-drive backup refusal', () => {
         },
         hashFile: async (path) => {
           countRefusedTreeRead(path)
-          return nativeBundledSkillFilesystem.hashFile!(path)
+          return nativeBundledSkillFilesystem.hashFile?.(path) ?? null
         },
         readFile: async (path, maxBytes) => {
           countRefusedTreeRead(path)

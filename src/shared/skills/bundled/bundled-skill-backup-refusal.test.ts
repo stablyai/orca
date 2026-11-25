@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   bundledSkillOpBackupPaths,
+  bundledSkillOpPublished,
   bundledSkillOpRefusalNotice,
   bundledSkillRefusalNotices
 } from './bundled-skill-backup-refusal'
@@ -61,5 +62,20 @@ describe('bundled skill backup refusal notices', () => {
     ).toEqual(['/b/1', '/b/2'])
     expect(bundledSkillOpBackupPaths(op({ backupPath: '/b/1' }))).toEqual(['/b/1'])
     expect(bundledSkillOpBackupPaths(op({}))).toEqual([])
+  })
+
+  // Notices say "Orca updated the skill" only from this; a refused or rechecked op published nothing.
+  it('counts an op as published only when it put new content at its path', () => {
+    expect(
+      bundledSkillOpPublished(
+        op({ kind: 'replace', backupRefusal: { path: 'p', source: 'in-place' } })
+      )
+    ).toBe(false)
+    expect(bundledSkillOpPublished(op({ kind: 'keep', status: 'done', backupPath: '/b/1' }))).toBe(
+      false
+    )
+    expect(bundledSkillOpPublished(op({ kind: 'keep', currentConfirmed: true }))).toBe(false)
+    expect(bundledSkillOpPublished(op({ kind: 'update', status: 'done' }))).toBe(true)
+    expect(bundledSkillOpPublished(op({ kind: 'write', contentApplied: true }))).toBe(true)
   })
 })

@@ -1,4 +1,4 @@
-// Update dialog result rows when a cross-drive backup was refused (item 1126 states S1–S5).
+// Update dialog result rows when a cross-drive backup was refused.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type {
   BundledSkillOpOutcome,

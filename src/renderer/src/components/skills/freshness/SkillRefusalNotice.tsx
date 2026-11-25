@@ -25,6 +25,9 @@ export function SkillRefusalNotice({
       toast.success(t('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
     } catch {
       // The path stays on screen, so the user can select it or try again.
+      toast.error(
+        t('auto.components.skills.skillBackupRefusal.copyFailed', "Couldn't copy the path.")
+      )
     }
   }
   return (
@@ -42,6 +45,14 @@ export function SkillRefusalNotice({
           variant="ghost"
           size="xs"
           className="shrink-0"
+          // Several skills can each have a refused copy; name the one this button copies.
+          aria-label={t(
+            'auto.components.skills.skillBackupRefusal.copyPathFor',
+            'Copy path for {{value0}}',
+            {
+              value0: notice.skill
+            }
+          )}
           onClick={() => void copyPath()}
         >
           <Copy className="size-3" />

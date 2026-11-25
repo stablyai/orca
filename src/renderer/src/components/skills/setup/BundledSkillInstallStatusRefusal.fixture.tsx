@@ -1,4 +1,4 @@
-// Settings › Skills result line after a refused cross-drive backup (item 1126).
+// Settings › Skills result line after a refused cross-drive backup.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type {
   BundledSkillInstallResult,

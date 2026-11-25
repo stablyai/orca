@@ -10,7 +10,7 @@ import {
 } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import {
   bundledSkillOpBackupPaths,
-  bundledSkillOpKindPublishes
+  bundledSkillOpPublished
 } from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
@@ -83,10 +83,8 @@ export function reportPreservedEdits(result: BundledSkillInstallResult | null): 
           )
         )
       }
-      // Backups that finished still count beside a later refusal. Only an op that published new
-      // content may say it updated the skill; a kept copy that was only rechecked did not.
-      const published =
-        bundledSkillOpKindPublishes(op.kind) && (op.status === 'done' || op.contentApplied === true)
+      // Backups that finished still count beside a later refusal.
+      const published = bundledSkillOpPublished(op)
       for (const backupPath of bundledSkillOpBackupPaths(op)) {
         warnAboutEdits(
           translate(

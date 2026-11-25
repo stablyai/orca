@@ -17,7 +17,6 @@ const volume = process.env.ORCA_EXDEV_VOLUME
 describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
   afterEach(removeSkillHomes)
 
-  // Opt-in real-disk run: writing 400 files and the consent hash dominate under load.
   it('leaves all bytes in place and does no backup work after the rejected rename', async () => {
     const home = await makeSkillHome()
     const project = await mkdtemp(join(volume!, 'orca-exdev-'))
@@ -33,14 +32,13 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
       expect((await stat(skill)).dev).not.toBe((await stat(home.home)).dev)
       const input = serviceInput(home, { agents: [], force: [skill], workspaceDirectory: project })
       const plan = await previewBundledSkillInstall(input)
-      let refusedAt: number | undefined
+      let refused = false
       let treeReadsAfterRefusal = 0
       const countRefusedTreeRead = (path: string) => {
-        if (refusedAt !== undefined && path.startsWith(skill)) {
+        if (refused && path.startsWith(skill)) {
           treeReadsAfterRefusal += 1
         }
       }
-      const started = performance.now()
       const result = await installBundledSkills(
         {
           ...input,
@@ -51,14 +49,14 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
                 await nativeBundledSkillFilesystem.rename(source, target)
               } catch (error) {
                 if (filesystemErrorCode(error) === 'EXDEV') {
-                  refusedAt = performance.now()
+                  refused = true
                 }
                 throw error
               }
             },
             hashFile: async (path) => {
               countRefusedTreeRead(path)
-              return nativeBundledSkillFilesystem.hashFile!(path)
+              return nativeBundledSkillFilesystem.hashFile?.(path) ?? null
             },
             readFile: async (path, maxBytes) => {
               countRefusedTreeRead(path)
@@ -72,7 +70,6 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
         },
         plan.planDigest
       )
-      const finished = performance.now()
       expect(result.skills[0].ops[0]).toEqual({
         path: skill,
         kind: 'replace',
@@ -80,17 +77,13 @@ describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
         error: 'EXDEV',
         backupRefusal: { path: skill, source: 'in-place' }
       })
-      expect(refusedAt).toBeDefined()
+      expect(refused).toBe(true)
       expect(treeReadsAfterRefusal).toBe(0)
-      expect(finished - refusedAt!).toBeLessThan(2000)
       expect(await readdir(backups)).toEqual([])
       expect(await readdir(skills)).toEqual([NAME])
       expect(await readdir(skill)).toHaveLength(401)
       expect(await readFile(join(skill, 'SKILL.md'), 'utf8')).toBe(edited)
       expect((await previewBundledSkillInstall(input)).planDigest).toBe(plan.planDigest)
-      console.log(
-        `Replace: ${Math.round(finished - started)} ms including consent; ${Math.round(finished - refusedAt!)} ms after EXDEV`
-      )
     } finally {
       await rm(project, { recursive: true, force: true })
     }

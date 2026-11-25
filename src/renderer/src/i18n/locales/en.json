@@ -7157,7 +7157,9 @@
           "leftoverReason": "Can't back up the left-over copy: it's on another drive.",
           "movedAsideReason": "Couldn't back up the old copy: it's on another drive.",
           "keepIt": "Move it out of the skills folder to keep it.",
-          "noReminder": "Move it out of the skills folder. Orca won't remind you."
+          "noReminder": "Move it out of the skills folder. Orca won't remind you.",
+          "copyPathFor": "Copy path for {{value0}}",
+          "copyFailed": "Couldn't copy the path."
         }
       },
       "sidebar": {

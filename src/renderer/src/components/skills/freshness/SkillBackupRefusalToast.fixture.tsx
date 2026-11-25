@@ -1,4 +1,4 @@
-// Automatic-update toasts for a refused cross-drive backup (item 1126), backups and a lost reply.
+// Automatic-update toasts for a refused cross-drive backup, backups and a lost reply.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { defineFixture } from '../../../component-fixtures/component-fixture'

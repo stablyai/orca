@@ -38,9 +38,9 @@ function describeRefusal(notice: BundledSkillRefusalNotice, backupFolder: string
     case 'leftover':
       return `${notice.skill}: left-over copy kept at ${notice.path}. ${cannot} Move it out of the skills folder, then run again.`
     case 'moved-aside':
+      // What the op published, if anything, is its own line above.
       return [
-        notice.contentApplied ? `${notice.skill}: updated.` : `${notice.skill}:`,
-        `Old copy moved aside to ${notice.path}. ${cannot} Move it out of the skills folder to keep it.`,
+        `${notice.skill}: Old copy moved aside to ${notice.path}. ${cannot} Move it out of the skills folder to keep it.`,
         ...(notice.offeredAgain ? [] : ["Orca won't mention this copy again."])
       ].join(' ')
   }
