@@ -22,21 +22,31 @@ export function isRecentBrowserGuestInput(observedAt: number, now: number): bool
   return elapsed >= 0 && elapsed <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
 }
 
-/** Calls `listener` for each click in any of the page's frames, and each key press or tap in its main frame. */
+/** Shift+Cmd (Shift+Ctrl off macOS) on a click sends the link to the system browser, as elsewhere in Orca. */
+export function isSystemBrowserLinkChord(
+  modifiers: readonly string[],
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return (
+    modifiers.includes('shift') && modifiers.includes(platform === 'darwin' ? 'meta' : 'control')
+  )
+}
+
+/** Calls `listener` for each click in any of the page's frames, and each key press or tap in its main frame; clicks pass their modifiers. */
 export function onActivatingBrowserGuestInput(
   contents: WebContents,
-  listener: () => void
+  listener: (mouseModifiers: readonly string[] | null) => void
 ): () => void {
   // Why: input-event only sees the main frame's widget, so clicks in out-of-process (cross-site
   // or sandboxed) frames reach before-mouse-event alone.
   const onMouse = (_event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
     if (ACTIVATING_MOUSE_TYPES.has(mouse.type)) {
-      listener()
+      listener(mouse.modifiers ?? [])
     }
   }
   const onInput = (_event: Electron.Event, input: Electron.InputEvent): void => {
     if (ACTIVATING_OTHER_INPUT_TYPES.has(input.type)) {
-      listener()
+      listener(null)
     }
   }
   contents.on('before-mouse-event', onMouse)
@@ -81,6 +91,8 @@ export type ObservedBrowserGuestGesture = {
   byAgent: boolean
   /** Its sender works with this desktop's windows: the user, or an agent's command on a page shown here, not a paired viewer. */
   fromThisDesktop: boolean
+  /** The click held the system-browser chord (see isSystemBrowserLinkChord). */
+  systemBrowserChord: boolean
 }
 
 const domActivationsByGuest = new WeakMap<WebContents, number>()
@@ -112,11 +124,14 @@ export function trackBrowserGuestInputGesture(
   let lastGestureAt: number | null = null
   let lastGestureByAgent = false
   let lastGestureFromThisDesktop = false
+  let lastGestureSystemBrowserChord = false
   let lastGestureDomActivations = 0
   let unsubscribe: (() => void) | null = null
   try {
-    unsubscribe = onActivatingBrowserGuestInput(guest, () => {
+    unsubscribe = onActivatingBrowserGuestInput(guest, (mouseModifiers) => {
       lastGestureAt = now()
+      lastGestureSystemBrowserChord =
+        mouseModifiers !== null && isSystemBrowserLinkChord(mouseModifiers)
       lastGestureDomActivations = domActivationsByGuest.get(guest) ?? 0
       lastGestureByAgent = isAgentInjectingInput(guest)
       lastGestureFromThisDesktop =
@@ -135,7 +150,11 @@ export function trackBrowserGuestInputGesture(
         observedAt !== null &&
         isRecentBrowserGuestInput(observedAt, now()) &&
         lastGestureDomActivations === (domActivationsByGuest.get(guest) ?? 0)
-        ? { byAgent: lastGestureByAgent, fromThisDesktop: lastGestureFromThisDesktop }
+        ? {
+            byAgent: lastGestureByAgent,
+            fromThisDesktop: lastGestureFromThisDesktop,
+            systemBrowserChord: lastGestureSystemBrowserChord
+          }
         : null
     },
     dispose: () => {
