@@ -374,4 +374,25 @@ describe('relayed provider output', () => {
     await output.flush()
     expect(sent).toEqual(['2 keep undefined', '2 keep undefined cut []'])
   })
+
+  it("records a release the hand-off's last ack learned of before the hand-off stops acks", async () => {
+    const sent: string[] = []
+    let truncated = 0
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => true,
+      ackFloor: { observe: () => {}, floor: () => null, tookCut: () => false, cutKeys: () => [] },
+      ack: async (seq, _keepFrom, flags) => {
+        sent.push(`${seq}${flags?.cut ? ` cut ${JSON.stringify(flags.cutKeys)}` : ''}`)
+        return { ackedThrough: seq, truncatedThrough: truncated }
+      }
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, 'line-1')
+    // The spool let line 1 go on an append just before the quit.
+    truncated = 1
+    await output.flush()
+    output.stop()
+    expect(sent).toEqual(['1', '1 cut []'])
+  })
 })

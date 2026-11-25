@@ -220,6 +220,9 @@ export type AcpDialect = {
   /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
   elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
+  /** Requests `settleRequest` always answers alike, by method: a kept agent's daemon answers these
+   *  while no app is attached, so its work never waits on one. */
+  detachedReplies?: Readonly<Record<string, unknown>>
   /** A retry of a failed model call this update announces; null when the agent says retrying is over. */
   providerRetry?(update: SessionUpdate): AgentSessionProviderRetry | null | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined

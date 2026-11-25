@@ -412,6 +412,79 @@ describe('provider relay kept lines', () => {
     agent(pending, 2, configUpdate('x'.repeat(1024 * 1024 + 1)))
     expect(pending.kept.records()).toEqual([])
   })
+  it('answers a housekeeping request itself only while no app is attached, and never replays it', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const replies = { 'craft/drainMidTurnQueue': { messages: [], hasQueuedPrompt: false } }
+    pending.kept.configure({ answers: [], lines: [], outstanding: ['session/prompt'], replies })
+    const written: string[] = []
+    let attached = false
+    pending.toAgent = (line) => !attached && written.push(line) > 0
+    const drain = { id: 9, method: 'craft/drainMidTurnQueue', params: {} }
+    agent(pending, 1, drain)
+    expect(written.map((line) => JSON.parse(line))).toEqual([
+      { jsonrpc: '2.0', id: 9, result: replies['craft/drainMidTurnQueue'] }
+    ])
+    expect(pending.records()).toEqual([])
+    expect(pending.answered.replayed({ seq: 1, line: JSON.stringify(drain) }).line).toBe('')
+    // An attached app answers it as usual.
+    attached = true
+    agent(pending, 2, { ...drain, id: 10 })
+    expect(pending.records().map((record) => record.seq)).toEqual([2])
+  })
+
+  it('answers a held housekeeping request once the app lets go, unless its answer is being written', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const replies = { 'craft/drainMidTurnQueue': { messages: [], hasQueuedPrompt: false } }
+    pending.kept.configure({ answers: [], lines: [], outstanding: [], replies })
+    const written: string[] = []
+    let attached = true
+    pending.toAgent = (line) => !attached && written.push(line) > 0
+    // Both arrive while the app still holds the relay; the app is writing its answer to id 2.
+    agent(pending, 1, { id: 1, method: 'craft/drainMidTurnQueue', params: {} })
+    agent(pending, 2, { id: 2, method: 'craft/drainMidTurnQueue', params: {} })
+    const answering = pending.observeClientData(`${JSON.stringify({ id: 2, result: {} })}\n`)
+    attached = false
+    pending.answerHeld()
+    expect(written.map((line) => JSON.parse(line).id)).toEqual([1])
+    pending.releaseAnswered(answering)
+    expect(pending.records()).toEqual([])
+  })
+
+  it('never answers a request that asks the person, whatever the spec names', () => {
+    for (const method of [
+      'session/request_permission',
+      '_x.ai/exit_plan_mode',
+      'cursor/ask_question'
+    ]) {
+      const pending = new ProviderRelayPendingRequests()
+      pending.kept.configure({ answers: [], lines: [], outstanding: [], replies: { [method]: {} } })
+      const written: string[] = []
+      pending.toAgent = (line) => written.push(line) > 0
+      agent(pending, 1, { id: 3, method, params: {} })
+      expect(written).toEqual([])
+      expect(pending.records().map((record) => record.seq)).toEqual([1])
+    }
+  })
+
+  it("never keeps a tool's output that quotes a kept update kind in place of the real update", () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: [],
+      lines: [
+        '"sessionUpdate":"config_option_update"',
+        '"sessionUpdate":"available_commands_update"'
+      ],
+      outstanding: []
+    })
+    pending.kept.sendOnAttach = true
+    agent(pending, 1, configUpdate('a'))
+    const quoted = { sessionUpdate: 'config_option_update', configOptions: ['forged'] }
+    agent(pending, 2, {
+      method: 'session/update',
+      params: { update: { sessionUpdate: 'tool_call_update', rawOutput: quoted } }
+    })
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1])
+  })
   it('keeps an accepted request whose answer says nothing, at its answer', () => {
     const pending = new ProviderRelayPendingRequests()
     pending.kept.configure({

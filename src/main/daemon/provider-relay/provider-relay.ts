@@ -28,7 +28,8 @@ export class ProviderRelay {
   private readonly lines: ProviderRelayLineReader
   private readerBusy = false
   private exitStatus: ProviderRelayExit | null = null
-  private idleStopped = false
+  /** Set by the idle stop or the detached cap before it closes the agent; its exit says which. */
+  stoppedBy: 'idle' | 'cap' | null = null
   /** The client's own acks that gave up an open kept span (the daemon's ask at its file cap). */
   private readonly cut = new ProviderRelayCut()
   private stdoutEnded = false
@@ -51,6 +52,7 @@ export class ProviderRelay {
     this.idleStop = ProviderRelayIdleStop.forRelay(this, options, () => this.spool.unacked())
     const stdout = options.managed.child.stdout
     this.input = new ProviderRelayInput(options.managed.child.stdin)
+    this.pending.toAgent = (line) => this.attachment === null && this.input.writeLine(line)
     this.spool = new ProviderRelaySpool({
       path: options.spoolPath,
       deliver: (record) => this.deliver(record),
@@ -99,7 +101,8 @@ export class ProviderRelay {
         code: exit.code,
         signal: exit.signal,
         ...(this.failure ? { error: this.failure } : {}),
-        ...(this.idleStopped ? { idleStopped: true as const } : {})
+        ...(this.stoppedBy === 'idle' ? { idleStopped: true as const } : {}),
+        ...(this.stoppedBy === 'cap' ? { capStopped: true as const } : {})
       }
       this.pending.clear()
       this.idleStop.disarm()
@@ -138,7 +141,7 @@ export class ProviderRelay {
     )
   }
 
-  get idleStopPolicy(): Pick<ProviderRelayIdleStop, 'configure'> {
+  get idleStopPolicy(): Pick<ProviderRelayIdleStop, 'configure' | 'tracking' | 'unread'> {
     return this.idleStop
   }
 
@@ -156,12 +159,8 @@ export class ProviderRelay {
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
-    const attachment = new ProviderRelayAttachment(
-      clientId,
-      stream,
-      this.relayId,
-      () => void this.detach(clientId)
-    )
+    const gone = () => void this.detach(clientId)
+    const attachment = new ProviderRelayAttachment(clientId, stream, this.relayId, gone)
     this.attachment = attachment
     const { initializeResult } = this.pending
     const { records: kept, lines: keptLines } = this.pending.kept.snapshot()
@@ -236,11 +235,6 @@ export class ProviderRelay {
     this.cut.record(seq, keepFrom, options)
     const ackedThrough = this.spool.ack(seq, keepFrom, options.held === true)
     return { ackedThrough, truncatedThrough: this.spool.truncatedThrough }
-  }
-
-  stopIdle(): Promise<unknown> {
-    this.idleStopped = true
-    return this.close()
   }
 
   close(grace?: 'brief'): Promise<unknown> {
@@ -320,6 +314,7 @@ export class ProviderRelay {
   private release(): void {
     this.attachment?.release()
     this.attachment = null
+    this.pending.answerHeld()
   }
 
   private deliver(record: ProviderRelayRecord): void {

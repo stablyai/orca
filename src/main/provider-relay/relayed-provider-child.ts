@@ -92,6 +92,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.output = new RelayedProviderOutput({
       stdout: this.stdout,
       ack: (seq, keepFrom, flags) => options.channel.ack(options.relayId, seq, keepFrom, flags),
+      scheduleAck: (run) => options.channel.scheduleAck(run),
       ...(options.durable ? { durable: options.durable } : {}),
       ...(options.passWhileHeld ? { passWhileHeld: options.passWhileHeld } : {}),
       ...(options.ackFloor ? { ackFloor: options.ackFloor } : {})
@@ -152,8 +153,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       const { channel } = this.options
       const kept = this.output.kept.wanted(this.output.holding)
       const result = await channel.attach(this.relayId, fromSeq, this.options.policy(), kept)
-      const keptSeqs = kept ? (result.kept ?? []).map((line) => line.seq) : []
-      await this.output.awaitPreamble(result, PREAMBLE_WAIT_MS, keptSeqs)
+      await this.output.awaitPreamble(result, PREAMBLE_WAIT_MS, kept)
       this.attachResult = result
       const { continuation } = this.options
       if (continuation) {

@@ -97,14 +97,14 @@ export async function acquireAcpStructuredSession(input: {
   // Keep the last abort check and spawn synchronous when no temp directory is needed.
   const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
   let sharedTools: SharedToolProcessSession | null = null
-  const processLaunch = {
-    command: launch.command,
-    args: launch.args,
-    cwd: launch.cwd,
-    ...acpProcessEnvironment(launch)
-  }
+  const { command, args, cwd } = launch
+  const processLaunch = { command, args, cwd, ...acpProcessEnvironment(launch) }
   const relayed = await launchRelayedAcpAgent(input, launch, processLaunch)
   const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, acquire)
+  // Cancellation owns no connection yet: the relayed agent goes as a tracked one would.
+  if (relayed && input.abandoned()) {
+    await relayed.managed.close().catch(() => undefined)
+  }
   const fullAccess = launchPermission.permission === 'full-access'
   const connection = connect(processLaunch, {
     ...(relayed ? { relayed } : {}),

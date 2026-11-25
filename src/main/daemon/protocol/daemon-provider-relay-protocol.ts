@@ -64,18 +64,9 @@ export type ProviderRelayRequest =
    * `cutKeys` (with `cut`, opaque to the daemon) name the items the cut split; each cut ack replaces
    * them, and a later attach reports them next to `truncatedThrough`. Older daemons ignore them.
    */
-  | {
-      id: string
-      type: 'relayAck'
-      payload: {
-        relayId: string
-        seq: number
-        keepFrom?: number
-        cut?: true
-        held?: true
-        cutKeys?: string[]
-      }
-    }
+  | { id: string; type: 'relayAck'; payload: ProviderRelayAckPayload }
+  /** Several relays' acks in one request; `results` answers each in order, `{ error }` for a refused one. */
+  | { id: string; type: 'relayAcks'; payload: { acks: ProviderRelayAckPayload[] } }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
   | {
@@ -86,7 +77,28 @@ export type ProviderRelayRequest =
 
 export const PROVIDER_RELAY_REQUEST_TYPES: ReadonlySet<string> = new Set<
   ProviderRelayRequest['type']
->(['relaySpawn', 'relayAttach', 'relayWrite', 'relayAck', 'relayClose', 'relayList', 'relayDetach'])
+>([
+  'relaySpawn',
+  'relayAttach',
+  'relayWrite',
+  'relayAck',
+  'relayAcks',
+  'relayClose',
+  'relayList',
+  'relayDetach'
+])
+
+export type ProviderRelayAckPayload = {
+  relayId: string
+  seq: number
+  keepFrom?: number
+  cut?: true
+  held?: true
+  cutKeys?: string[]
+}
+
+/** More acks than this in one `relayAcks` is refused whole. */
+export const RELAY_ACKS_MAX = 1024
 
 export type ProviderRelaySpawnResult =
   | { relayId: string; pid: number }
@@ -144,6 +156,9 @@ export type ProviderRelayKeepSpec = {
   outstanding: string[]
   /** Client request `method`s whose latest accepted request is kept (its answer says nothing). */
   requests?: string[]
+  /** Agent request `method`s the daemon answers itself, with this result, while no app is attached:
+   *  housekeeping whose answer never depends on the app (an attached app answers as usual). */
+  replies?: Record<string, unknown>
 }
 
 /** A kept line's seq and the name it was kept under (`a:<method>`, `q:<method>` or `l:<marker>`). */
@@ -173,6 +188,8 @@ export type ProviderRelayExit = {
   error?: ProviderRelayFailure
   /** The daemon stopped the agent by the user's idle stop: its chat ended, nothing to replay into. */
   idleStopped?: true
+  /** Stopped after a day detached with output no app took (or its work unknown); its spool is kept. */
+  capStopped?: true
   /** The agent's last stderr, so the chat can say why it ended (absent from older daemons). */
   stderrTail?: string
 }

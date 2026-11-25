@@ -1,9 +1,6 @@
 import type { Readable } from 'node:stream'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
-import type {
-  ProviderRelayAttachResult,
-  ProviderRelayDataEvent
-} from '../daemon/protocol/daemon-provider-relay-protocol'
+import type * as RelayProtocol from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
 import { boundedCutKeys } from './relayed-provider-cut-keys'
 import { RelayedProviderKeptLines, relayHandOffWaitMs } from './relayed-provider-kept-lines'
@@ -12,6 +9,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
 const ACK_DELAY_MS = 1_000
+const seqOf = (value: unknown): number => (typeof value === 'number' ? value : 0)
 /**
  * A held replay is handed on in slices of about this much text, yielding between them: the
  * stream hands a slice to its reader in one run, so the slice bounds main's longest run.
@@ -56,6 +54,8 @@ type OutputOptions = {
    * journal can't save yet. The reply's `ackedThrough` says how far the daemon really released.
    */
   ack: (seq: number, keepFrom?: number, flags?: ProviderRelayAckFlags) => Promise<unknown>
+  /** A shared tick for the next ack (one timer per daemon connection); its own timer otherwise. */
+  scheduleAck?: (run: () => void) => () => void
 }
 
 /**
@@ -98,7 +98,7 @@ export class RelayedProviderOutput {
   })
   /** The hook the stream's record reader calls (`claim`, then `taken` per record). */
   readonly recordTaking = this.consumption.taking
-  private ackTimer: ReturnType<typeof setTimeout> | null = null
+  private cancelAck: (() => void) | null = null
   private acking: Promise<void> = Promise.resolve()
   private stopped = false
 
@@ -124,7 +124,7 @@ export class RelayedProviderOutput {
     return this.pushedSeq
   }
 
-  line(event: ProviderRelayDataEvent['event'], seq: number, line: string): void {
+  line(event: RelayProtocol.ProviderRelayDataEvent['event'], seq: number, line: string): void {
     if (this.stopped) {
       return
     }
@@ -154,14 +154,12 @@ export class RelayedProviderOutput {
   /**
    * The attach reply comes on the control socket and its preamble (the initialize answer, held
    * requests and kept lines) on the stream socket, and nothing orders the two: resolves once the preamble the
-   * reply names is here, or after `timeoutMs` (a stream that dropped reattaches anyway).
+   * reply names is here, or after `timeoutMs` (a stream that dropped reattaches anyway). `kept`:
+   * the attach asked for kept lines, so it waits for those it names too.
    */
-  awaitPreamble(
-    attach: Pick<ProviderRelayAttachResult, 'initializeResultSent' | 'pending'>,
-    timeoutMs: number,
-    keptSeqs: readonly number[] = []
-  ) {
+  awaitPreamble(attach: RelayProtocol.ProviderRelayAttachResult, timeoutMs: number, kept = false) {
     const { initializeResultSent: initialize, pending: pendingSeqs } = attach
+    const keptSeqs = kept ? (attach.kept ?? []).map((line) => line.seq) : []
     const here = (): boolean =>
       (!initialize || this.initializeLine !== null) &&
       pendingSeqs.every((seq) => this.deliveredPending.has(seq)) &&
@@ -233,7 +231,10 @@ export class RelayedProviderOutput {
     await this.allTaken(waitMs)
     this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
     this.clearAckTimer()
-    return this.ack(false)
+    await this.ack(false)
+    // A release that ack learned of is recorded now (lines since are saved first): acks stop next.
+    this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
+    return this.pendingCut ? this.ack(false) : undefined
   }
 
   /** Settles once the stream's reader took every line handed on, or after `waitMs` regardless. */
@@ -307,21 +308,19 @@ export class RelayedProviderOutput {
   }
 
   private scheduleAck(): void {
-    if (this.ackTimer || this.stopped) {
+    if (this.cancelAck || this.stopped) {
       return
     }
-    this.ackTimer = setTimeout(() => {
-      this.ackTimer = null
+    const run = () => {
+      this.cancelAck = null
       void this.ack()
-    }, ACK_DELAY_MS)
-    this.ackTimer.unref?.()
+    }
+    this.cancelAck = this.options.scheduleAck?.(run) ?? ownAckTimer(run)
   }
 
   private clearAckTimer(): void {
-    if (this.ackTimer) {
-      clearTimeout(this.ackTimer)
-      this.ackTimer = null
-    }
+    this.cancelAck?.()
+    this.cancelAck = null
   }
 
   private ack(force = false): Promise<void> {
@@ -380,14 +379,9 @@ export class RelayedProviderOutput {
           this.options.ackFloor?.released?.(target)
         }
         // The daemon let kept lines go at a cap: they are given up, as a cut it records.
-        const ackedThrough = jsonProperty(reply, 'ackedThrough')
-        const truncated = jsonProperty(reply, 'truncatedThrough')
-        const released = Math.max(
-          typeof ackedThrough === 'number' && keepFrom !== null && ackedThrough >= keepFrom
-            ? ackedThrough
-            : 0,
-          typeof truncated === 'number' ? truncated : 0
-        )
+        const acked = seqOf(jsonProperty(reply, 'ackedThrough'))
+        const truncated = seqOf(jsonProperty(reply, 'truncatedThrough'))
+        const released = Math.max(keepFrom !== null && acked >= keepFrom ? acked : 0, truncated)
         if (released > this.releasedThrough) {
           // keptFrom stays: the daemon still keeps, so the next ack without a floor must reach it.
           this.releasedThrough = released
@@ -402,4 +396,10 @@ export class RelayedProviderOutput {
     })
     return this.acking
   }
+}
+
+function ownAckTimer(run: () => void): () => void {
+  const timer = setTimeout(run, ACK_DELAY_MS)
+  timer.unref?.()
+  return () => clearTimeout(timer)
 }

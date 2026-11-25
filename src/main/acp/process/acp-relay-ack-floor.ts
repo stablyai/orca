@@ -109,9 +109,14 @@ type Item = { session?: string; child: boolean }
 /** The tag a continuation puts before a moved message's id (`relay:<relay>:<seq>:`). */
 const CONTINUED_ID = /^relay:[^:]*:\d+:/
 
-function moveSession(from: Map<string, Item>, to: Map<string, Item>, session?: string): void {
+function moveSession(
+  from: Map<string, Item>,
+  to: Map<string, Item>,
+  session?: string,
+  except?: string
+): void {
   for (const [id, item] of from) {
-    if (item.session === session) {
+    if (item.session === session && id !== except) {
       from.delete(id)
       to.set(id, item)
     }
@@ -148,6 +153,8 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private readonly pausedCuts = new Map<string, Item>()
   /** Sessions whose latest update was a call or plan. */
   private readonly pastBoundary = new Set<string | undefined>()
+  /** Per session, the message its latest chunk named: only a new one ends the others. */
+  private readonly current = new Map<string | undefined, string>()
 
   /** `running`: a prompt runs across this attach (a dropped stream), so its turn holds from here. */
   constructor(running: boolean) {
@@ -182,7 +189,12 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         this.givesIds = true
         // Another message started: earlier ones of its session are done. One resuming its id
         // after a call is cut again.
-        this.closeMessages(session, id)
+        if (this.current.get(session) !== id) {
+          this.closeMessages(session, id)
+          if (this.current.size < MAX_OPEN_ITEMS || this.current.has(session)) {
+            this.current.set(session, id)
+          }
+        }
         const paused = this.pausedCuts.get(id)
         if (paused) {
           this.pausedCuts.delete(id)
@@ -278,6 +290,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
       }
     }
     this.pastBoundary.clear()
+    this.current.clear()
     this.turnStart = null
     this.turnPending = false
     this.numbered = false
@@ -285,7 +298,16 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
 
   /** Ends a session's messages, all but `except`. */
   private closeMessages(session: string | undefined, except?: string): void {
-    for (const open of [this.messages, this.cutMessages, this.pausedCuts]) {
+    if (except === undefined) {
+      this.current.delete(session)
+    } else {
+      // Another message only pauses a cut one: OpenCode resumes a message's id after another's.
+      moveSession(this.cutMessages, this.pausedCuts, session, except)
+    }
+    for (const open of [this.messages, this.cutMessages, except ? null : this.pausedCuts]) {
+      if (!open) {
+        continue
+      }
       for (const [id, item] of open) {
         if (id !== except && item.session === session) {
           open.delete(id)

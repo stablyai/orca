@@ -16,7 +16,7 @@ type DaemonProviderRelayOptions = {
 /** The daemon's chat-agent host and the hello capability that tells an app it may use it. */
 export function createDaemonProviderRelays(options: DaemonProviderRelayOptions): {
   relays: ProviderRelayHost
-  identity: { providerRelay?: true; providerRelayKeep?: true }
+  identity: { providerRelay?: true; providerRelayKeep?: true; providerRelayAcks?: true }
 } {
   const relays = new ProviderRelayHost({
     runtimeDir: dirname(options.tokenPath),
@@ -29,6 +29,8 @@ export function createDaemonProviderRelays(options: DaemonProviderRelayOptions):
   const advertised = relays.supported && options.protocolVersion >= PROVIDER_RELAY_PROTOCOL_VERSION
   return {
     relays,
-    identity: advertised ? { providerRelay: true, providerRelayKeep: true } : {}
+    identity: advertised
+      ? { providerRelay: true, providerRelayKeep: true, providerRelayAcks: true }
+      : {}
   }
 }

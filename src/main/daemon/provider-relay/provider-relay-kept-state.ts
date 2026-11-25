@@ -60,6 +60,12 @@ export class ProviderRelayKeptState {
     this.markerPrefix = commonPrefix(this.spec?.lines ?? [])
   }
 
+  /** The fixed answer the spec gives an agent request, if any. */
+  reply(method: string): unknown {
+    const replies = this.spec?.replies
+    return replies && Object.hasOwn(replies, method) ? replies[method] : undefined
+  }
+
   /** An answer this state waits for may be on any line. */
   get awaiting(): boolean {
     return this.awaited.size > 0

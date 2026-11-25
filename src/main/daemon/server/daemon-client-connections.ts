@@ -38,6 +38,7 @@ type DaemonClientConnectionOptions = {
     providerSpawn?: true
     providerRelay?: true
     providerRelayKeep?: true
+    providerRelayAcks?: true
   }
   log: DaemonFileLog
   streamDataBatcher: DaemonStreamDataBatcher
@@ -176,6 +177,7 @@ export class DaemonClientConnections {
                 ...(identity.providerSpawn ? { providerSpawn: true } : {}),
                 ...(identity.providerRelay ? { providerRelay: true } : {}),
                 ...(identity.providerRelayKeep ? { providerRelayKeep: true } : {}),
+                ...(identity.providerRelayAcks ? { providerRelayAcks: true } : {}),
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,
                 launchNonce: identity.launchNonce,

@@ -34,6 +34,11 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
 
   /** The messages this attach's cut split, as the client named them; null: unnamed, so guessed. */
   private cutKeys: ReadonlySet<string> | null = null
+  /** What may still resume at this attach: the cut prompts' messages, and open children's. */
+  private resumable: { prompt: boolean; children: ReadonlySet<string> } = {
+    prompt: false,
+    children: new Set()
+  }
 
   /** Each attach's replay is read from its own first line. */
   reset(): void {
@@ -95,11 +100,26 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     )
     // OpenCode's subagents stream past their parent's prompt, until each reports its end.
     const children = this.childSessions ? (result.openWork?.subagent ?? []) : []
+    this.resumable = { prompt: cut.length > 0, children: new Set(children.map((key) => key[0])) }
     const open = [
       ...cut.map((request) => JSON.stringify(request.id)),
       ...children.map((key) => JSON.stringify(key))
     ]
     return open.length > 0 ? open : null
+  }
+
+  /** A named message resumes only inside a prompt still running, or a child session still open. */
+  awaits(key: string): boolean {
+    let session: unknown
+    try {
+      const parts: unknown = JSON.parse(key)
+      session = Array.isArray(parts) ? parts[0] : undefined
+    } catch {
+      // Keys are opaque to the daemon; one this app didn't write names no session.
+    }
+    return typeof session === 'string' && this.resumable.children.has(session)
+      ? true
+      : this.resumable.prompt
   }
 
   settles(line: string): string | null {

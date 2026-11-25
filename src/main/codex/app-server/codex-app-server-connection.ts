@@ -86,6 +86,7 @@ async function connectCodexAppServer(
   const dispatcher = createCodexAppServerRecordDispatcher({
     handlers,
     writeResponse,
+    previousAppRequestsThrough: requestFloor,
     onProtocolFailure: (error) => {
       handleUnexpectedEnd(error, true)
       void managed.close()

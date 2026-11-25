@@ -153,4 +153,18 @@ describe('ACP relay item continuation', () => {
     )
     expect(cut?.done).toBe(true)
   })
+
+  it("stops after the replay when a named message's prompt was answered, though a subagent runs on", () => {
+    const hook = new AcpRelayItemContinuation(true)
+    const named = {
+      ...attach(undefined, 10),
+      cutKeys: [JSON.stringify(['s', 'm1'])],
+      openWork: { subagent: [['child-1']] }
+    }
+    const cut = attachContinuation(hook, 'r1', 10, named)
+    for (let seq = 11; seq <= 16; seq += 1) {
+      cut?.lines(seq, chunk('m2', `b${seq}`), undefined)
+    }
+    expect(cut?.done).toBe(true)
+  })
 })

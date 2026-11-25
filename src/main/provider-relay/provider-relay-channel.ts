@@ -1,6 +1,7 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type { ProviderRelayAckFlags } from './relayed-provider-output'
+import { ProviderRelayAckBatch } from './provider-relay-ack-batch'
 import type {
   ProviderRelayAckWantedEvent,
   ProviderRelayAttachResult,
@@ -53,7 +54,11 @@ export class ProviderRelayChannel {
   /** The client forgets its daemon's identity on disconnect, before telling us; a reattach compares against this. */
   private lastDaemonPid: number | null = null
 
-  constructor(readonly client: DaemonClient) {}
+  private readonly acks: ProviderRelayAckBatch
+
+  constructor(readonly client: DaemonClient) {
+    this.acks = new ProviderRelayAckBatch(client)
+  }
 
   get daemonPid(): number | null {
     return this.rememberDaemon()
@@ -125,14 +130,24 @@ export class ProviderRelayChannel {
     return this.client.request('relayWrite', { relayId, data }, RELAY_REQUEST_TIMEOUT_MS)
   }
 
+  /** Batched with this connection's other acks due at the same time. */
   ack(
     relayId: string,
     seq: number,
     keepFrom?: number,
     flags: ProviderRelayAckFlags = {}
   ): Promise<unknown> {
-    const payload = { relayId, seq, ...(keepFrom === undefined ? {} : { keepFrom }), ...flags }
-    return this.client.request('relayAck', payload, RELAY_REQUEST_TIMEOUT_MS)
+    return this.acks.ack({
+      relayId,
+      seq,
+      ...(keepFrom === undefined ? {} : { keepFrom }),
+      ...flags
+    })
+  }
+
+  /** Runs `run` on this connection's shared ack tick; the returned function takes it back. */
+  scheduleAck(run: () => void): () => void {
+    return this.acks.schedule(run)
   }
 
   close(relayId: string, grace?: 'brief'): Promise<unknown> {

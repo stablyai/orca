@@ -23,6 +23,9 @@ const RETRY_AFTER_MS = 30_000
 /** Chats listed with a live or unread agent, with its spawn time; reattaching drops a chat from
  *  `listed`, not from here. */
 const keptThisRun = new Map<string, number>()
+/** Chats whose detached agent the daemon idle-stopped: it stops only work that had ended, so
+ *  nothing of theirs was cut and restart offers leave them alone. */
+const idleStoppedThisRun = new Set<string>()
 
 /** Chats whose detached agent the daemon idle-stopped: it stops only work that had ended, so
  *  nothing of theirs was cut and restart offers leave them alone. */
@@ -59,6 +62,9 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
       if (keptProviderRelayOutstanding(info)) {
         keptThisRun.set(info.chatKey, info.spawnedAtMs)
       } else if (info.exit?.idleStopped) {
+        idleStoppedThisRun.add(info.chatKey)
+      }
+      if (info.exit?.idleStopped) {
         idleStoppedThisRun.add(info.chatKey)
       }
       const token = info.pid !== null && info.exit === null ? await readSpawnToken(info.pid) : null

@@ -44,11 +44,16 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 
 // After each tool Qwen asks for prompts queued mid-turn; Orca queues follow-ups until the turn ends.
 // A finished background task asks to start the turn that reports it.
+const DETACHED_REPLIES = {
+  'craft/drainMidTurnQueue': { messages: [], hasQueuedPrompt: false },
+  '_qwencode/start_turn': { accepted: true }
+}
+
 function settleRequest(method: string): AcpRequestSettlement | undefined {
   return method === 'craft/drainMidTurnQueue'
-    ? { reply: { messages: [], hasQueuedPrompt: false } }
+    ? { reply: DETACHED_REPLIES[method] }
     : method === '_qwencode/start_turn'
-      ? { reply: { accepted: true } }
+      ? { reply: DETACHED_REPLIES[method] }
       : undefined
 }
 
@@ -57,6 +62,7 @@ export const QWEN_CODE_ACP_DIALECT: AcpDialect = {
   // Titles carry the call's input (`Shell: <command>`); `_meta.toolName` is the tool itself.
   toolName: (update) => toolMetaSchema.safeParse(update).data?._meta.toolName,
   settleRequest,
+  detachedReplies: DETACHED_REPLIES,
   request: qwenCodeQuestionRequest,
   reactiveWakeups: true,
   compactCommand: '/compress',
