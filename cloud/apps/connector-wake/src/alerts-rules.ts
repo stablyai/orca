@@ -5,6 +5,7 @@ import { thresholds as edgeThresholds, type AlertsEnv, type Counts, type Thresho
 export type { Counts }
 
 export type WakeAlertsEnv = AlertsEnv & {
+  // RECONNECT_SURGE_MIN (AlertsEnv) is reconnect-surge's floor on both late reconnects and drops.
   // no-socket-share fires above NO_SOCKET_PCT (5) percent of wakes, at >= NO_SOCKET_MIN (50) wakes.
   NO_SOCKET_PCT?: string
   NO_SOCKET_MIN?: string
@@ -23,6 +24,24 @@ const PROBE_EVERY_MIN = 5
 const ADMIN_FAILURES_MIN = 3
 const WAKE_ERRORS_MIN = 3
 const LOW_VOLUME_401_MIN = 5
+// reconnect-surge. A Durable Object retirement wave (Cloudflare moving objects, mostly in Asia)
+// closes sockets 1006 and every desktop is back within 5 s: on 2026-11-24 (15:30 and 21:20 UTC)
+// opens went 6x and drops 7x while reconnects stayed 1.6x the drops and those 30 s - 1 h late
+// stayed at 9-20 a window. That is not an outage. One is drops the desktops do not come back
+// from (fewer reconnects than RECOVERED_SHARE of them), drops with failing wakes, or sockets
+// that come back late, or sockets that stay open but stop answering (the desktop terminates after
+// two missed keepalives, ~50 s, redials within 1 s, and the new socket replaces the stuck one 4409).
+// Reconnects are judged in excess of the previous window, as drops are: steady-state reconnects
+// (after sleep, app restarts, graceful closes) run 3-8x the drops and would hide a regional loss.
+const RECOVERED_SHARE = 0.5
+// Gaps (ms) that count as late: past a fast reconnect, and short of a host that was simply away
+// (after a switch widening, returning hosts report gaps of hours).
+const LATE_RECONNECT_MS = 30_000
+const LATE_RECONNECT_MAX_MS = 3_600_000
+// Close codes that are no drop: 1000 normal, 1001 going away (the runtime or desktop leaving
+// cleanly), 1005 the desktop's own close without a code (it left wake: a switch narrowing, a quit),
+// 4409 replaced by its own newer socket.
+const GRACEFUL_CLOSES = ['1000', '1001', '1005', '4409']
 
 function positive(value: string | undefined, fallback: number): number {
   const parsed = Number(value)
@@ -49,7 +68,13 @@ export const COLUMNS = {
   wakes: "sumIf(_sample_interval * double1, blob1 = 'wake')",
   wake_no_socket: "sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'no_socket')",
   wake_error: "sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error')",
-  events: "sumIf(_sample_interval, blob1 != 'refuse')"
+  events: "sumIf(_sample_interval, blob1 != 'refuse')",
+  // Desktop-reported gap since its previous socket closed, one per reconnect (double1 = ms).
+  reconnects: "sumIf(_sample_interval, blob1 = 'reconnect_gap')",
+  reconnects_late: `sumIf(_sample_interval, blob1 = 'reconnect_gap' AND double1 > ${LATE_RECONNECT_MS} AND double1 <= ${LATE_RECONNECT_MAX_MS})`,
+  drops: `sumIf(_sample_interval, blob1 = 'socket_close' AND blob2 NOT IN (${GRACEFUL_CLOSES.map((code) => `'${code}'`).join(', ')}))`,
+  // An accepted socket that displaced an open one for its host (the older closes 4409).
+  replaced: "sumIf(_sample_interval, blob1 = 'socket_open' AND blob2 = 'replaced')"
 } as const
 
 // Counts per whole minute before atSec (0 = the last minute), so one query gives both windows.
@@ -77,6 +102,16 @@ const pct = (a: number, b: number) => (b > 0 ? (100 * a) / b : 0)
 const upgrades = (c: Counts) => c.socket_open + c.refuse_401 + c.refuse_country + c.keys_unavailable
 // Refusals other than the alerts' own probes.
 const refusals401 = (c: Counts, t: WakeThresholds) => Math.max(0, c.refuse_401 - t.probesPerWindow)
+// Never on an empty window, even with RECONNECT_SURGE_MIN set to 0.
+const surged = (now: number, before: number, t: WakeThresholds) => now > 0 && now >= Math.max(3 * before, t.surgeMin)
+const lateSurge = (c: Counts, t: WakeThresholds, prior: Counts) => surged(c.reconnects_late, prior.reconnects_late, t)
+// Fewer extra reconnects than RECOVERED_SHARE of the extra drops: drops nobody came back from.
+const unrecovered = (c: Counts, prior: Counts) =>
+  Math.max(0, c.reconnects - prior.reconnects) < RECOVERED_SHARE * (c.drops - prior.drops)
+const harmfulDrops = (c: Counts, t: WakeThresholds, prior: Counts) =>
+  surged(c.drops, prior.drops, t) && (unrecovered(c, prior) || c.wake_error >= WAKE_ERRORS_MIN)
+// A retirement wave closes sockets 1006 before the desktops redial, so it replaces none.
+const replaceSurge = (c: Counts, t: WakeThresholds, prior: Counts) => surged(c.replaced, prior.replaced, t)
 
 export const RULES: Rule[] = [
   {
@@ -92,10 +127,16 @@ export const RULES: Rule[] = [
     describe: (c, t) => `401 refusals ${refusals401(c, t)} in ${WINDOW_MIN} min at low volume (${upgrades(c)} upgrades)`
   },
   {
-    // Sockets dropped en masse (deploy, eviction, runtime restart): the desktops reconnect at once.
+    // Sockets dropped en masse (deploy, eviction, runtime restart) and the desktops did not come
+    // straight back: late reconnects surged, or drops surged and few extra reconnects followed or
+    // wakes failed; or sockets were stuck open and every desktop replaced its own (4409) at once.
+    // A drop wave every desktop is back from within seconds (an object retirement wave) is quiet.
     id: 'reconnect-surge',
-    breach: (c, t, prior) => prior !== undefined && c.socket_open >= Math.max(3 * prior.socket_open, t.surgeMin),
-    describe: (c) => `socket opens ${c.socket_open} in ${WINDOW_MIN} min, at least 3x the previous window`
+    breach: (c, t, prior) =>
+      prior !== undefined && (lateSurge(c, t, prior) || harmfulDrops(c, t, prior) || replaceSurge(c, t, prior)),
+    describe: (c) =>
+      `drops ${c.drops}, reconnects ${c.reconnects} (${c.reconnects_late} ${LATE_RECONNECT_MS / 1000} s - ` +
+      `${LATE_RECONNECT_MAX_MS / 3_600_000} h late), replaced sockets ${c.replaced}, failed wakes ${c.wake_error} in ${WINDOW_MIN} min`
   },
   {
     // The connector's publisher calls refused: its key, issuer or body is wrong.

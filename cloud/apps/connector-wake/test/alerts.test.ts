@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, type WakeAlertsEnv } from '../src/alerts'
 
-const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, wake_error: 0, events: 3000 }
+const healthy = { socket_open: 400, refuse_401: 3, refuse_country: 0, keys_unavailable: 0, admin_failures: 0, wakes: 1000, wake_no_socket: 10, wake_error: 0, events: 3000, reconnects: 380, reconnects_late: 5, drops: 60, replaced: 50 }
 type Row = typeof healthy
 const env: WakeAlertsEnv = {
   ACCOUNT_ID: 'acct',
@@ -107,7 +107,7 @@ describe('wake alerts', () => {
   })
 
   it('fires on a reconnect surge, admin failures, and silence after traffic', async () => {
-    expect((await run({ socket_open: 1300 })).fired[0]).toMatch(/^FIRING reconnect-surge/)
+    expect((await run({ drops: 600, reconnects: 200 })).fired[0]).toMatch(/^FIRING reconnect-surge/)
     expect((await run({ admin_failures: 3 })).fired[0]).toMatch(/^FIRING admin-failures/)
     const silent = { socket_open: 0, refuse_401: 3, wakes: 0, wake_no_socket: 0, events: 0 }
     expect((await run(silent)).fired).toEqual(['FIRING silent: no wake events in 15 min'])
@@ -255,5 +255,96 @@ describe('wake alerts', () => {
     const r = await run({}, {}, { env: { ALERTS_OFF: 'cloudflare-errors' } })
     expect(r.graphqlScript).toBeUndefined()
     warn.mockRestore()
+  })
+  // The production windows of 2026-11-24 the old rule (socket opens >= 3x) fired on: two Durable
+  // Object retirement waves, 1006 drops every desktop was back from within seconds.
+  const waves = {
+    '15:40 UTC': [
+      { socket_open: 869, reconnects: 802, reconnects_late: 20, drops: 445, replaced: 100, wake_error: 0 },
+      { socket_open: 242, reconnects: 192, reconnects_late: 8, drops: 66, replaced: 108, wake_error: 0 }
+    ],
+    '21:30 UTC': [
+      { socket_open: 679, reconnects: 464, reconnects_late: 9, drops: 279, replaced: 56, wake_error: 0 },
+      { socket_open: 173, reconnects: 151, reconnects_late: 6, drops: 34, replaced: 104, wake_error: 0 }
+    ]
+  }
+  const surge = (r: Run) => r.fired.filter((text) => text.includes('reconnect-surge'))
+  const prod = { env: { RECONNECT_SURGE_MIN: '50' } }
+
+  it('stays quiet on an object retirement wave: drops 7x, every desktop back within seconds', async () => {
+    for (const [now, before] of Object.values(waves)) {
+      expect(surge(await run(now, before, prod))).toEqual([])
+    }
+  })
+
+  it('still fires when the same drops are not followed by reconnects, or wakes fail', async () => {
+    for (const [now, before] of Object.values(waves)) {
+      // The Worker or objects broken: the desktops fell back to long-poll instead of reconnecting.
+      expect(surge(await run({ ...now, socket_open: 50, reconnects: 50 }, before, prod))).toEqual([
+        expect.stringMatching(/^FIRING reconnect-surge: drops \d+, reconnects 50 /)
+      ])
+      expect(surge(await run({ ...now, wake_error: 3 }, before, prod))).toHaveLength(1)
+    }
+    // Extra reconnects under half the extra drops (445 - 66 = 379) fire; half does not.
+    const [now, before] = waves['15:40 UTC']
+    expect(surge(await run({ ...now, reconnects: 192 + 189 }, before, prod))).toHaveLength(1)
+    expect(surge(await run({ ...now, reconnects: 192 + 190 }, before, prod))).toEqual([])
+  })
+
+  it('fires when sockets come back late (30 s - 1 h after their drop), whatever the drops', async () => {
+    const [now, before] = waves['21:30 UTC']
+    expect(surge(await run({ ...now, reconnects_late: 50 }, before, prod))).toHaveLength(1)
+    // 3x the previous window and at least RECONNECT_SURGE_MIN.
+    expect(surge(await run({ ...now, reconnects_late: 49 }, before, prod))).toEqual([])
+    expect(surge(await run({ ...now, reconnects_late: 60 }, { ...before, reconnects_late: 21 }, prod))).toEqual([])
+  })
+
+  it('counts neither graceful closes nor late gaps from hosts away for hours, in its SQL', async () => {
+    const { sql } = await run({})
+    expect(sql).toContain("blob1 = 'socket_close' AND blob2 NOT IN ('1000', '1001', '1005', '4409')) AS drops")
+    expect(sql).toContain("blob1 = 'reconnect_gap' AND double1 > 30000 AND double1 <= 3600000) AS reconnects_late")
+    expect(sql).toContain("sumIf(_sample_interval, blob1 = 'reconnect_gap') AS reconnects")
+    expect(sql).toContain("sumIf(_sample_interval, blob1 = 'socket_open' AND blob2 = 'replaced') AS replaced")
+  })
+
+  it('a widening or narrowing of the switch is quiet: new hosts connect, removed ones close 1005', async () => {
+    // 08:10 UTC: opens 64 vs 1 as the first hosts joined. 19:40 UTC: 1005 closes from the 500 -> 300
+    // per mille narrowing are not drops.
+    expect(surge(await run({ socket_open: 64, reconnects: 6, reconnects_late: 0, drops: 6, replaced: 0 }, { socket_open: 1, reconnects: 1, reconnects_late: 0, drops: 1, replaced: 0 }, prod))).toEqual([])
+    expect(surge(await run({ socket_open: 317, reconnects: 315, reconnects_late: 14, drops: 69, replaced: 211 }, { socket_open: 603, reconnects: 571, reconnects_late: 13, drops: 71, replaced: 493 }, prod))).toEqual([])
+  })
+  it('fires on a regional loss nobody reconnects from, even under the fleet`s steady reconnects', async () => {
+    // One region loses 200 sockets and none come back; everyone else reconnects as usual (3-8x the
+    // drops), so total reconnects stay at their baseline.
+    const baselines = [
+      waves['15:40 UTC'][1],
+      waves['21:30 UTC'][1],
+      // 19:40 UTC: reconnects 8x the drops.
+      { socket_open: 603, reconnects: 571, reconnects_late: 13, drops: 71, replaced: 104, wake_error: 0 }
+    ]
+    for (const before of baselines) {
+      expect(surge(await run({ ...before, drops: before.drops + 200 }, before, prod))).toEqual([
+        expect.stringMatching(/^FIRING reconnect-surge: drops \d+, reconnects \d+ /)
+      ])
+    }
+  })
+
+  it('fires on a stuck-but-open socket storm: terminated after missed keepalives, redialed at once, replaced 4409', async () => {
+    // Every desktop redials within 1 s of terminating its silent socket, so the gaps are fast and the
+    // old socket closes 4409 (not a drop): only the replacements surge.
+    const [, before] = waves['15:40 UTC']
+    const storm = { ...before, socket_open: before.socket_open + 600, reconnects: before.reconnects + 600, replaced: before.replaced + 600 }
+    expect(surge(await run(storm, before, prod))).toEqual([expect.stringMatching(/replaced sockets 708,/)])
+    // 2026-11-24 17:50 UTC: replacements 453 vs 132, redials within 1.5 s, 1006 closes flat.
+    expect(surge(await run(
+      { socket_open: 583, reconnects: 543, reconnects_late: 14, drops: 71, replaced: 453, wake_error: 0 },
+      { socket_open: 357, reconnects: 321, reconnects_late: 16, drops: 132, replaced: 132, wake_error: 0 },
+      prod
+    ))).toHaveLength(1)
+  })
+
+  it('never fires on an empty window, even with RECONNECT_SURGE_MIN 0', async () => {
+    const empty = { socket_open: 0, reconnects: 0, reconnects_late: 0, drops: 0, replaced: 0, wake_error: 0 }
+    expect(surge(await run(empty, empty, { env: { RECONNECT_SURGE_MIN: '0' } }))).toEqual([])
   })
 })
