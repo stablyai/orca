@@ -21,7 +21,7 @@ import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-work
 import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 
-export type AgentRowMenuRowRef = {
+type AgentRowMenuRowRef = {
   worktreeId: string
   /** The card's host; local and remote copies can share a workspace ID. */
   cardHostId: ExecutionHostId | undefined
@@ -29,7 +29,7 @@ export type AgentRowMenuRowRef = {
   tabId: string
 }
 
-/** What an agent row resolves to; the incarnation fields make a same-pane replacement a different target. */
+/** Renderer snapshot checked at selection; the host activation protocol carries no agent incarnation. */
 export type AgentRowMenuTarget = AgentRowMenuRowRef & {
   kind: 'terminal' | 'chat' | 'status'
   executionHostId: ExecutionHostId | null
@@ -41,8 +41,7 @@ export type AgentRowMenuTarget = AgentRowMenuRowRef & {
   providerSessionId: string | null
   /** A paired host's handle for a not-yet-mirrored terminal; a new handle is a new agent. */
   terminalHandle: string | null
-  /** The PTY the host check used (the leaf's, else the tab's first). Identity only: unlike
-   *  `ptyId`, it never counts as incarnation evidence, since on a split tab it can be another leaf's. */
+  /** Host-check PTY; a fallback can belong to another split leaf, so it cannot prove this agent lives. */
   hostPtyId: string | null
   singleLeaf: boolean
 }

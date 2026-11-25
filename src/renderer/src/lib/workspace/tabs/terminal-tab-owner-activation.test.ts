@@ -45,6 +45,6 @@ it('sends nothing for a named owner with no known pairing at the click', async (
   activateTerminalTabOnOwner('repo::/sample', 'tab-1', 'leaf-1', 'env-1')
   replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 8 }])
 
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await vi.dynamicImportSettled()
   expect(sent.filter((r) => r.method === 'session.tabs.activate')).toEqual([])
 })

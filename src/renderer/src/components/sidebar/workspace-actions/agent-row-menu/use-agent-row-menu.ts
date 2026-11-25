@@ -20,7 +20,7 @@ import {
 } from './agent-row-menu-target'
 
 /** How the root menu closed, which decides where focus goes afterwards. */
-export type AgentRowMenuCloseReason = 'agent-action' | 'restore' | 'outside' | 'other'
+type AgentRowMenuCloseReason = 'agent-action' | 'restore' | 'outside' | 'other'
 
 export type AgentRowMenuSession = {
   generation: number

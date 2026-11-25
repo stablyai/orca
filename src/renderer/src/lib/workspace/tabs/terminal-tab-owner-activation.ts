@@ -76,6 +76,7 @@ export function activateTerminalTabOnOwner(
   if (pairingRevision === undefined && ownerEnvironmentId !== undefined) {
     return
   }
+  // Activation carries pairing, tab and leaf only; a same-pairing host replacement is not fenced.
   void activateWebRuntimeSessionTab({
     worktreeId,
     tabId,
