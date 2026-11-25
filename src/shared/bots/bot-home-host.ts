@@ -16,6 +16,12 @@ export function setSharedBotHostLookup(lookup: (environmentId: string) => boolea
   }
 }
 
+/** Whether `environmentId` is the host of an agent shared with this account, which no paired-server
+ *  list names: its chats in this computer's tabs belong to it while the share lasts. */
+export function isSharedBotHostEnvironment(environmentId: string): boolean {
+  return isSharedBotHost(environmentId)
+}
+
 /** Every pairing of a bot with its home workspace or the tabs kept there asks this, never `hostId`. */
 export function botHomeHostId(bot: { hostId: ExecutionHostId }): ExecutionHostId {
   const parsed = parseExecutionHostId(bot.hostId)

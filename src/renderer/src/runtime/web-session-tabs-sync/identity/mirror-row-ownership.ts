@@ -1,5 +1,6 @@
 // Shared workspaces mirror multiple runtimes; each frame can retire only its own rows (#31983).
 
+import { isSharedBotHostEnvironment } from '../../../../../shared/bots/bot-home-host'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -23,6 +24,10 @@ export type MirrorRowOwnershipState = WebSessionTabsSyncState &
 function isLiveEnvironment(state: MirrorRowOwnershipState, environmentId: string): boolean {
   if (state.removedRuntimeEnvironmentIds?.has(environmentId)) {
     return false
+  }
+  // A shared agent's host is on no paired-server list, yet live while the share lasts.
+  if (isSharedBotHostEnvironment(environmentId)) {
+    return true
   }
   if (state.runtimeEnvironmentCatalogSettled !== true || !state.runtimeEnvironments) {
     return true
