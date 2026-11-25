@@ -14,6 +14,11 @@ import {
   getWorkspaceAttachmentUrlScope
 } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import {
+  parseGitHubIssueReference,
+  resolveGitHubIssueReference
+} from '../../../../../../shared/github/repositories/github-issue-reference'
+import { githubHostFromIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../../../shared/linear/links'
 import { parseJiraIssueUrl } from '../../../../../../shared/jira/jira-issue-url'
@@ -77,13 +82,13 @@ export function workspaceAttachmentLabel(item: WorkspaceAttachment): string {
 
 export function parseWorkspaceAttachmentInput(
   input: string,
-  kind: AttachmentInputKind
+  kind: AttachmentInputKind,
+  repo?: Repo
 ): WorkspaceAttachment | null {
   const value = input.trim()
   if (!value || isWorkItemLinkQueryTooLarge(value)) {
     return null
   }
-  const github = parseGitHubIssueOrPRLink(value)
   const gitlab = parseGitLabIssueOrMRLink(value)
   const jira = parseJiraIssueUrl(value)
   const linear = parseLinearIssueInput(value)
@@ -92,8 +97,13 @@ export function parseWorkspaceAttachmentInput(
     if (otherReview) {
       return otherReview
     }
-    if (github) {
-      return { provider: 'github', type: github.type, number: github.number, url: value }
+    const githubIssue = parseGitHubIssueReference(value)
+    if (githubIssue?.kind === 'url') {
+      return { provider: 'github', type: 'issue', number: githubIssue.number, url: githubIssue.url }
+    }
+    const githubPR = parseGitHubIssueOrPRLink(value)
+    if (githubPR?.type === 'pr') {
+      return { provider: 'github', type: 'pr', number: githubPR.number, url: value }
     }
     if (gitlab && Number.isSafeInteger(gitlab.number) && gitlab.number > 0) {
       return { provider: 'gitlab', type: gitlab.type, number: gitlab.number, url: value }
@@ -134,6 +144,19 @@ export function parseWorkspaceAttachmentInput(
   }
   if (kind === 'jira-issue') {
     return null
+  }
+  if (kind === 'github-issue') {
+    const reference = resolveGitHubIssueReference(parseGitHubIssueReference(value), {
+      host: githubHostFromIdentityKey(repo?.gitRemoteIdentity?.canonicalKey)
+    })
+    if (reference) {
+      return {
+        provider: 'github',
+        type: 'issue',
+        number: reference.number,
+        ...(reference.kind === 'url' ? { url: reference.url } : {})
+      }
+    }
   }
   const number = Number(value.replace(/^[#!]/, ''))
   if (!/^[#!]?\d+$/.test(value) || !Number.isSafeInteger(number) || number <= 0) {
@@ -253,7 +276,10 @@ export function isWorkspaceRepositoryAttachment(
     return false
   }
   try {
-    return normalizeGitRemoteUrl(getWorkspaceAttachmentUrlScope(item)) === remoteKey
+    const scope = normalizeGitRemoteUrl(getWorkspaceAttachmentUrlScope(item))
+    return item.provider === 'github' && item.type === 'issue'
+      ? scope?.toLowerCase() === remoteKey.toLowerCase()
+      : scope === remoteKey
   } catch {
     return false
   }

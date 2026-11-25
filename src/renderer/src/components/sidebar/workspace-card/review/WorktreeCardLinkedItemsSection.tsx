@@ -2,11 +2,9 @@ import React from 'react'
 import { GitPullRequest, Link2, ListTodo } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
-import {
-  workspaceAttachmentLabel,
-  workspaceAttachmentProviderLabel
-} from '../metadata/worktree-attachment-editing'
-import { getWorkspaceAttachmentSourceLabel } from './workspace-attachment-source-label'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { workspaceAttachmentProviderLabel } from '../metadata/worktree-attachment-editing'
+import { getWorkspaceAttachmentDisplayLabels } from './workspace-attachment-source-label'
 import { WorktreeCardDetailSection } from '../details/WorktreeCardDetailSection'
 import { DetailHeader } from '../metadata/WorktreeCardMetadataControls'
 import {
@@ -53,6 +51,7 @@ function getLinkedTaskState(
 
 export function WorktreeCardLinkedItemsSection({
   workspace,
+  repo,
   referenceDetails,
   review,
   issue,
@@ -65,6 +64,7 @@ export function WorktreeCardLinkedItemsSection({
   taskMenu
 }: {
   workspace?: Worktree
+  repo?: Repo
   referenceDetails?: WorkspaceReferenceDetailsMap
   review: WorktreeCardPrDisplay | null
   issue?: WorktreeCardIssueDisplay | null
@@ -129,8 +129,7 @@ export function WorktreeCardLinkedItemsSection({
               />
               <div className="divide-y divide-border">
                 {group.rows.map(({ item, key, url, detail, live, liveTask }) => {
-                  const label = workspaceAttachmentLabel(item)
-                  const source = getWorkspaceAttachmentSourceLabel(item)
+                  const { label, source } = getWorkspaceAttachmentDisplayLabels(item, repo ?? null)
                   return (
                     <div
                       key={key}

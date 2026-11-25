@@ -74,6 +74,7 @@ export function WorktreeCardMetaDetailsHover({
   return (
     <WorktreeCardDetailsHover
       workspace={worktree}
+      repo={repo}
       referenceDetails={card.referenceDetails}
       onManageLinks={affiliateListMode ? undefined : card.handleManageLinks}
       issue={metaIssue}
@@ -130,6 +131,7 @@ export function WorktreeCardIdentityHover({
   return (
     <WorktreeCardDetailsHover
       workspace={worktree}
+      repo={repo}
       referenceDetails={card.referenceDetails}
       onManageLinks={affiliateListMode ? undefined : card.handleManageLinks}
       issue={hoverIssue}

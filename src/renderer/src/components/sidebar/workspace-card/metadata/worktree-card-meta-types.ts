@@ -9,6 +9,7 @@ import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from '../review/workspace-reference-details'
 import type { Bot } from '../../../../../../shared/bot-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 export type WorktreeCardIssueDisplay =
   | IssueInfo
@@ -55,6 +56,7 @@ export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
 
 export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   workspace?: Worktree
+  repo?: Repo
   onManageLinks?: (event: React.MouseEvent) => void
   children: React.ReactElement
   branchName?: string
