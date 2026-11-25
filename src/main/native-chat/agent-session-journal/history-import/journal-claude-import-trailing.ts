@@ -1,8 +1,9 @@
+import { Row, type ClaudeImportRows } from './journal-claude-import-rows'
 import { setImmediate } from 'node:timers/promises'
-import { Flag, Key, Row, SLAB_ROWS, type Table } from './journal-claude-import-index-storage'
+import { Flag, Key, SLAB_ROWS, type Table } from './journal-claude-import-index-storage'
 
 export async function selectClaudeTrailingRows(
-  rows: Table,
+  rows: ClaudeImportRows,
   keys: Table,
   anchor: number,
   terminal: number,

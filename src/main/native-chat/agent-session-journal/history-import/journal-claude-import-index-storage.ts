@@ -117,8 +117,10 @@ export class Keys {
     }
     if (bytes.length > KEY_SLAB_BYTES) {
       this.budget.reserve(bytes.length)
-      const key = this.table.append(this.slabs.length, 0, bytes.length, hash)
-      this.slabs.push(bytes)
+      const slab = Buffer.allocUnsafeSlow(bytes.length)
+      bytes.copy(slab)
+      const key = this.table.append(this.slabs.length, 0, slab.length, hash)
+      this.slabs.push(slab)
       this.offset = bytes.length
       this.slots[slot] = key
       return key
@@ -152,20 +154,6 @@ export class Keys {
   }
 }
 
-export const enum Row {
-  Range,
-  Flags,
-  Uuid,
-  Parent,
-  Message,
-  Agent,
-  SourceAssistant,
-  Tool,
-  Previous,
-  Next,
-  Compact,
-  Width
-}
 export const enum Position {
   Offset,
   LegacyOffset,

@@ -1,10 +1,11 @@
+import { Row, type ClaudeImportRows } from './journal-claude-import-rows'
 import { setImmediate } from 'node:timers/promises'
-import { Flag, Key, Link, Row, SLAB_ROWS, type Table } from './journal-claude-import-index-storage'
+import { Flag, Key, Link, SLAB_ROWS, type Table } from './journal-claude-import-index-storage'
 import { selectClaudeTrailingRows } from './journal-claude-import-trailing'
 import { closeClaudeToolForks } from './journal-claude-import-tool-forks'
 
 export function selectClaudeImportRows(
-  rows: Table,
+  rows: ClaudeImportRows,
   keys: Table,
   links: Table,
   hasQueuedPrompts: boolean,
@@ -15,7 +16,7 @@ export function selectClaudeImportRows(
 
 class ClaudeImportSelection {
   constructor(
-    private readonly rows: Table,
+    private readonly rows: ClaudeImportRows,
     private readonly keys: Table,
     private readonly links: Table
   ) {}

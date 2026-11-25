@@ -21,6 +21,8 @@ import type {
 type Slots = { limit: number; active: number; waiting: (() => void)[] }
 // At most 384 MiB of charged index storage across the two worker slots.
 const importSlots: Slots = { limit: 2, active: 0, waiting: [] }
+// Reserve the verifier before starting work so completed preparation never waits with an import slot.
+const verifierSlots: Slots = { limit: 4, active: 0, waiting: [] }
 const pageSlots: Slots = { limit: 2, active: 0, waiting: [] }
 let reportedHostPause = false
 
@@ -74,9 +76,11 @@ export async function importClaudeTranscriptInWorker(
   const { signal, ...work } = input
   // Only a new request after a pause refusal can retry the host.
   const retryHost = reportedHostPause
-  const releaseWorker = await takeSlot(importSlots, signal)
+  const releaseVerifier = await takeSlot(verifierSlots, signal)
+  let releaseImport: (() => void) | undefined
   let worker: ReturnType<typeof spawnHeavyWorker>
   try {
+    releaseImport = await takeSlot(importSlots, signal)
     signal?.throwIfAborted()
     if (retryHost && reportedHostPause) {
       reportedHostPause = false
@@ -91,7 +95,8 @@ export async function importClaudeTranscriptInWorker(
       workerData: work
     })
   } catch (error) {
-    releaseWorker()
+    releaseImport?.()
+    releaseVerifier()
     if (error instanceof UtilityWorkerHostPausedError) {
       reportedHostPause = true
     }
@@ -158,7 +163,8 @@ export async function importClaudeTranscriptInWorker(
         worker.off('message', onMessage)
         worker.off('error', onError)
         worker.off('exit', onExit)
-        releaseWorker()
+        releaseImport?.()
+        releaseVerifier()
       }
     })())
   }
@@ -209,20 +215,18 @@ export async function importClaudeTranscriptInWorker(
         }
       }
     }
-    return {
-      count: header.count,
-      sourceEmpty: header.sourceEmpty,
-      async verify() {
-        check()
-        const result = await request({ kind: 'verify' })
-        check()
-        if (result.kind !== 'verified') {
-          failImport(result)
-        }
-        return result.version
-      },
-      close
+    const verify = async () => {
+      check()
+      const result = await request({ kind: 'verify' })
+      check()
+      if (result.kind !== 'verified') {
+        failImport(result)
+      }
+      return result.version
     }
+    await verify()
+    releaseImport()
+    return { count: header.count, sourceEmpty: header.sourceEmpty, verify, close }
   } catch (error) {
     await close()
     throw error

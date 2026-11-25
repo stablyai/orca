@@ -1,3 +1,4 @@
+import { ClaudeImportRows, Row } from './journal-claude-import-rows'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 import {
   Flag,
@@ -7,7 +8,6 @@ import {
   Link,
   Position,
   RangeData,
-  Row,
   Table
 } from './journal-claude-import-index-storage'
 import { selectClaudeImportRows } from './journal-claude-import-selection'
@@ -16,7 +16,7 @@ import type { ClaudeRange } from './journal-claude-import-source'
 export class ClaudeImportIndex {
   private readonly budget = new IndexBudget()
   private readonly ids = new Keys(this.budget)
-  private readonly rows = new Table(Row.Width, this.budget)
+  private readonly rows = new ClaudeImportRows(this.budget)
   private readonly positions = new Table(Position.Width, this.budget, Float64Array)
   private readonly rangeData = new Table(RangeData.Width, this.budget)
   private readonly keys = this.ids.table
@@ -27,14 +27,22 @@ export class ClaudeImportIndex {
   record(record: Record<string, unknown>, range: ClaudeRange): void {
     const { type, subtype } = record
     if (
-      (type !== 'user' &&
-        type !== 'assistant' &&
-        type !== 'system' &&
-        type !== 'attachment' &&
-        type !== 'progress') ||
-      record.isSidechain === true ||
-      record.teamName
+      type !== 'user' &&
+      type !== 'assistant' &&
+      type !== 'system' &&
+      type !== 'attachment' &&
+      type !== 'progress'
     ) {
+      return
+    }
+    const hidden = record.isSidechain === true || Boolean(record.teamName)
+    const progress = type === 'progress'
+    const uuid = this.ids.intern(record.uuid)
+    if (hidden || progress) {
+      if (uuid) {
+        const parent = this.parentKey(record, uuid)
+        this.register(uuid, this.rows.appendLink(uuid, parent, 0, progress))
+      }
       return
     }
     const attachment = asRecord(record.attachment)
@@ -51,7 +59,6 @@ export class ClaudeImportIndex {
         subtype === 'local_command' &&
         asRecord(record.commandRun)?.command === 'recap')
     this.hasQueuedPrompts ||= queuedPrompt
-    const uuid = this.ids.intern(record.uuid)
     // Skip non-addressable rows that can neither bridge a link nor produce an item.
     if (!uuid && !decode) {
       return
@@ -78,20 +85,11 @@ export class ClaudeImportIndex {
       (decode ? Flag.Decode : 0) |
       (turn ? Flag.Turn : 0) |
       (queuedPrompt ? Flag.QueuedPrompt : 0) |
-      (type !== 'progress' && !(type === 'attachment' && attachment?.type === 'fork_briefing')
-        ? Flag.Leaf
-        : 0) |
+      (!(type === 'attachment' && attachment?.type === 'fork_briefing') ? Flag.Leaf : 0) |
       (record.isMeta ? Flag.Meta : 0) |
       (result ? Flag.ToolResult : 0)
     // A boundary with a null physical parent ends the chain unless its preserved segment rejoins it.
-    const previous = this.previousUuid
-    const parent =
-      previous && record.parentUuid === previous.value
-        ? previous.key
-        : this.ids.intern(record.parentUuid)
-    if (uuid && typeof record.uuid === 'string' && record.uuid.length <= 64) {
-      this.previousUuid = { value: record.uuid, key: uuid }
-    }
+    const parent = this.parentKey(record, uuid)
     const compact =
       uuid && type === 'system' && subtype === 'compact_boundary' ? this.compact(record) : 0
     const position = decode
@@ -100,25 +98,39 @@ export class ClaudeImportIndex {
     if (position) {
       this.rangeData.append(range.length, range.digest)
     }
-    const row = this.rows.append(
-      position,
-      flags,
+    const row = this.rows.appendRecord(
       uuid,
       parent,
+      flags,
+      position,
       messageId,
       this.ids.intern(record.agentId),
       this.ids.intern(record.sourceToolAssistantUUID),
       tool,
-      0,
-      0,
       compact
     )
     if (uuid) {
-      if (!this.keys.get(uuid, Key.FirstRow)) {
-        this.keys.set(uuid, Key.FirstRow, row)
-      }
-      this.keys.set(uuid, Key.LatestRow, row)
+      this.register(uuid, row)
     }
+  }
+
+  private parentKey(record: Record<string, unknown>, uuid: number): number {
+    const previous = this.previousUuid
+    const parent =
+      previous && record.parentUuid === previous.value
+        ? previous.key
+        : this.ids.intern(record.parentUuid)
+    if (uuid && typeof record.uuid === 'string' && record.uuid.length <= 64) {
+      this.previousUuid = { value: record.uuid, key: uuid }
+    }
+    return parent
+  }
+
+  private register(uuid: number, row: number): void {
+    if (!this.keys.get(uuid, Key.FirstRow)) {
+      this.keys.set(uuid, Key.FirstRow, row)
+    }
+    this.keys.set(uuid, Key.LatestRow, row)
   }
 
   private compact(record: Record<string, unknown>): number {

@@ -93,7 +93,6 @@ export async function stageClaudeImport(
     if (worker.count > 0 && !token) {
       throw new ClaudeImportResourceError('Claude history import did not receive its pages.')
     }
-    await worker.verify()
     const prepared = worker
     let closing: Promise<void> | undefined
     const finish = () =>
