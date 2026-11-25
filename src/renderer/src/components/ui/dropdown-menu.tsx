@@ -71,6 +71,7 @@ function DropdownMenuTrigger({
 
 function DropdownMenuContent({
   className,
+  animateOnOpen = true,
   sideOffset = 4,
   portalContainer,
   style,
@@ -79,6 +80,8 @@ function DropdownMenuContent({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   portalContainer?: HTMLElement | null
+  /** A carried menu continues in place without replaying its entry animation. */
+  animateOnOpen?: boolean
   /** Row density for every row in this menu; a row's own `density` overrides it. */
   density?: MenuDensity
   /** `picker`: flush content whose own rows run edge to edge. */
@@ -100,8 +103,8 @@ function DropdownMenuContent({
               className={cn(
                 'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 MENU_SURFACE_CLASS,
-                dropdownMenuContentVariants({ variant }),
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+                dropdownMenuContentVariants({ variant, animateOnOpen }),
                 className
               )}
               // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
@@ -310,12 +313,16 @@ function DropdownMenuSubTrigger({
 }
 
 const dropdownMenuContentVariants = cva('', {
-  variants: { variant: { default: '', picker: 'p-0' } },
-  defaultVariants: { variant: 'default' }
+  variants: {
+    variant: { default: '', picker: 'p-0' },
+    animateOnOpen: { false: 'data-[state=open]:animate-none' }
+  },
+  defaultVariants: { variant: 'default', animateOnOpen: true }
 })
 
 function DropdownMenuSubContent({
   className,
+  animateOnOpen = true,
   portalContainer,
   style,
   alignOffset = -5,
@@ -325,6 +332,7 @@ function DropdownMenuSubContent({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent> & {
   portalContainer?: HTMLElement | null
+  animateOnOpen?: boolean
   /** Defaults to the parent menu's density. */
   density?: MenuDensity
   scrollable?: boolean
@@ -348,7 +356,7 @@ function DropdownMenuSubContent({
                 'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
                 MENU_SURFACE_CLASS,
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-                dropdownMenuContentVariants({ variant }),
+                dropdownMenuContentVariants({ variant, animateOnOpen }),
                 scrollable &&
                   'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 className

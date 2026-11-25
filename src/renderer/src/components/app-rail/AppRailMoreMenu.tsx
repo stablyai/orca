@@ -129,7 +129,8 @@ export function AppRailMoreMenu({
         side="right"
         align="start"
         sideOffset={8}
-        className={opening === 'carry' ? 'w-52 data-[state=open]:animate-none' : 'w-52'}
+        animateOnOpen={opening !== 'carry'}
+        className="w-52"
         onCloseAutoFocus={(event) => {
           if (yieldCloseFocusRef.current) {
             yieldCloseFocusRef.current = false
@@ -166,7 +167,7 @@ export function AppRailMoreMenu({
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
             scrollable
-            className={focusRow === null ? undefined : 'data-[state=open]:animate-none'}
+            animateOnOpen={focusRow === null}
             {...customizeHeldInPlace}
             onPointerMove={() => {
               holdChecklistRef.current = false
