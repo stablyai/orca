@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -45,6 +45,13 @@ export function useWorkerDockOwnerActions(
   const dialog = opened?.owner === owner ? opened : null
   // Each open owns one token; a read or Restore that settles after close or another open is dropped.
   const dialogToken = useRef(0)
+  // The mask above hides another owner's card at once; this closes it, so switching back can't reopen it.
+  useEffect(() => {
+    if (opened && opened.owner !== owner) {
+      dialogToken.current++
+      setDialog(null)
+    }
+  }, [opened, owner])
   const updateDialog = useCallback(
     (token: number, patch: Partial<WorkerDockResultDialogState>) =>
       setDialog((current) => (current?.token === token ? { ...current, ...patch } : current)),
