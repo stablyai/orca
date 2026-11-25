@@ -196,6 +196,7 @@ export const UiUpdateFields = z
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
+    _commandCodeStatusBarDefaultAdded: z.boolean().optional(),
     _museStatusBarDefaultAdded: z.boolean().optional(),
     _gitBlameStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
