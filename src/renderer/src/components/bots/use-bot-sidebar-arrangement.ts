@@ -57,7 +57,7 @@ export function useBotSidebarArrangement(entries: readonly Entry[]): Entry[] {
   const homes = useMemo(() => entries.map((entry) => entry.home), [entries])
   const homeWorkers = useBotHomeWorkers(homes)
   const ranked = arrangeBotSidebarEntries(
-    entries.map((entry, index) => ({ ...entry, index })),
+    entries.map((entry, index) => ({ ...entry, index, isPinned: entry.home.isPinned })),
     view,
     ({ index, ...entry }) => {
       const { own, workers, workerStatuses } = homeWorkers[index]!
@@ -70,10 +70,14 @@ export function useBotSidebarArrangement(entries: readonly Entry[]): Entry[] {
         )
       }
     }
-  ).map(({ id }) => id)
-  const shownIds = useOrderHeldWhileEngaged(ranked, view.sortBy, 'bots')
+  )
+  // Hold pinned and unpinned lists apart so a pin toggle moves its row at once while engaged.
+  const pinnedIds = ranked.filter((entry) => entry.isPinned).map(({ id }) => id)
+  const unpinnedIds = ranked.filter((entry) => !entry.isPinned).map(({ id }) => id)
+  const shownPinnedIds = useOrderHeldWhileEngaged(pinnedIds, view.sortBy, 'bots')
+  const shownUnpinnedIds = useOrderHeldWhileEngaged(unpinnedIds, view.sortBy, 'bots')
   return useMemo(() => {
     const byId = new Map(entries.map((entry) => [entry.id, entry]))
-    return shownIds.flatMap((id) => byId.get(id) ?? [])
-  }, [entries, shownIds])
+    return [...shownPinnedIds, ...shownUnpinnedIds].flatMap((id) => byId.get(id) ?? [])
+  }, [entries, shownPinnedIds, shownUnpinnedIds])
 }

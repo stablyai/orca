@@ -20,7 +20,7 @@ import {
 import { BotAvatar } from './BotAvatar'
 import { FOLD_TOGGLE_CLASS } from './BotChatRowControls'
 import { botRowLineAge, BotRowLineView } from './BotRowActivityLine'
-import { BotSidebarRow } from './BotSidebarRow'
+import { BotSidebarRow, type PinnedBotColumn } from './BotSidebarRow'
 import { revealBotHome } from './BotHoverNeedsYou'
 import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
 import { usageLimitStopTip } from './BotUsageLimitMark'
@@ -44,6 +44,7 @@ type BotRowProps = {
   onOpen: () => void
   /** The fold toggle for a bot with workspaces. */
   fold?: BotRowFold | null
+  pinnedColumn?: PinnedBotColumn
   /** The Bots section's reorder: this row is where a drag starts. */
   dragHandle?: boolean
 }
@@ -54,6 +55,7 @@ export function BotRow({
   isActive,
   onOpen,
   fold = null,
+  pinnedColumn,
   dragHandle = false
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
@@ -82,13 +84,20 @@ export function BotRow({
   const handleDelete = useDeleteBot(bot)
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
+      avatar={
+        <BotAvatar
+          bot={bot}
+          className={cn('rounded-md', pinnedColumn ? 'size-10.5 text-base' : 'size-8 text-sm')}
+        />
+      }
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}
       status={offline ? null : status}
       stopTip={!offline && limit ? usageLimitStopTip(t, limit.stop) : null}
       isUnread={isUnread}
+      isPinned={home.isPinned}
+      pinnedColumn={pinnedColumn}
       isActive={isActive}
       expanded={fold ? !fold.folded : undefined}
       dimmed={bot.paused || offline}
@@ -135,6 +144,7 @@ export function BotRow({
             botName={bot.name}
             fold={fold}
             working={!offline && status === 'working'}
+            compact={pinnedColumn !== undefined}
           />
         ) : null
       }
@@ -218,12 +228,14 @@ function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
 function BotRowFoldToggle({
   botName,
   fold,
-  working
+  working,
+  compact
 }: {
   botName: string
   fold: BotRowFold
   /** The bot itself is working: the row's working mark sits here, on the strip. */
   working: boolean
+  compact: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const statusId = useId()
@@ -243,12 +255,15 @@ function BotRowFoldToggle({
         FOLD_TOGGLE_CLASS,
         // Negative margins cancel the row's padding so the strip spans its full height and right
         // edge; the row's rounded overflow clips its corners.
-        '-mt-1.25 -mr-1.5 -mb-1.25 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
+        compact
+          ? 'h-6 min-w-6 justify-center gap-0.5 rounded px-0.5'
+          : '-mt-1.25 -mr-1.5 -mb-1.25 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
         'focus-visible:ring-2 focus-visible:ring-inset',
         // A narrow row keeps more width for the name and time where a pointer can hover: a compact
         // strip, still a 24px target, whose size never changes, so hover and focus never move the
         // row's text. Touch keeps the full strip.
-        'can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-6 can-hover:pointer-fine:@max-[15rem]/bot-row:px-1'
+        !compact &&
+          'can-hover:pointer-fine:@max-[15rem]/bot-row:min-w-6 can-hover:pointer-fine:@max-[15rem]/bot-row:px-1'
       )}
       aria-label={label}
       aria-describedby={mark === 'working' ? statusId : undefined}
@@ -277,7 +292,8 @@ function BotRowFoldToggle({
             'size-3.5 transition-transform',
             folded
               ? '-rotate-90'
-              : "can-hover:opacity-0 group-hover/bot-row:opacity-100 [[class~='group/bot-row']:has(:focus-visible)_&]:opacity-100"
+              : !compact &&
+                  "can-hover:opacity-0 group-hover/bot-row:opacity-100 [[class~='group/bot-row']:has(:focus-visible)_&]:opacity-100"
           )}
         />
       </span>

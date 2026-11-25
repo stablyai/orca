@@ -37,16 +37,25 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
   listRef,
   draggingId,
   revealId,
+  getEntryIds,
   renderEntry
 }: {
   entries: readonly Entry[]
   listRef: RefObject<HTMLDivElement | null>
   draggingId: string | null
   revealId: string | undefined
+  getEntryIds?: (entry: Entry) => readonly string[]
   renderEntry: (entry: Entry, index: number) => ReactNode
 }): React.JSX.Element {
   const [focusedId, setFocusedId] = useState<string | null>(null)
-  const indexById = useMemo(() => new Map(entries.map(({ id }, index) => [id, index])), [entries])
+  const indexById = useMemo(() => {
+    const indices = new Map<string, number>()
+    entries.forEach((entry, index) => {
+      indices.set(entry.id, index)
+      getEntryIds?.(entry).forEach((id) => indices.set(id, index))
+    })
+    return indices
+  }, [entries, getEntryIds])
   const rangeExtractor = useCallback(
     (range: Range) =>
       extractPinnedVirtualRange(

@@ -17,7 +17,7 @@ import { botRowLineAge, BotHoverLatestLine, BotRowLineView } from './BotRowActiv
 import type { BotRowLine } from './bot-row-activity-line'
 import { botGroupStatus } from '../../../../shared/bots/bot-group-status'
 import { botGroupRowLine } from '../../../../shared/bots/bot-sidebar-entries'
-import { BotSidebarRow } from './BotSidebarRow'
+import { BotSidebarRow, type PinnedBotColumn } from './BotSidebarRow'
 import { botErrorMessage } from './bot-presentation'
 import { botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
 import { BotGroupFaces } from './BotGroupFaces'
@@ -31,6 +31,7 @@ export function BotGroupRow({
   onOpen,
   onManageMembers,
   onDelete,
+  pinnedColumn,
   dragHandle = false
 }: {
   group: BotGroup
@@ -41,6 +42,7 @@ export function BotGroupRow({
   onOpen: () => void
   onManageMembers: () => void
   onDelete: () => void
+  pinnedColumn?: PinnedBotColumn
   dragHandle?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -60,8 +62,8 @@ export function BotGroupRow({
       avatar={
         <BotGroupFaces
           faces={botGroupFaces(members, (bot) => bot.id)}
-          className="size-8"
-          slot={32}
+          className={pinnedColumn ? 'size-10.5' : 'size-8'}
+          slot={pinnedColumn ? 42 : 32}
         />
       }
       name={group.name}
@@ -69,6 +71,8 @@ export function BotGroupRow({
       hostId={LOCAL_EXECUTION_HOST_ID}
       status={status}
       isUnread={home.isUnread}
+      isPinned={home.isPinned}
+      pinnedColumn={pinnedColumn}
       isActive={isActive}
       dragHandle={dragHandle}
       onOpen={() => {

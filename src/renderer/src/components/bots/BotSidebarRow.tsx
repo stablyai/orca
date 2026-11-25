@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Bell, BellOff, Pencil } from 'lucide-react'
+import { Bell, BellOff, Pencil, Pin, PinOff } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -23,6 +24,8 @@ import {
   useBotAvatarBadgeSleeping
 } from './bot-avatar-status-badge'
 
+export type PinnedBotColumn = 1 | 2
+
 /** One row of the Bots section, a bot's or a group's: picture, name and time, then its newest line. */
 export type BotSidebarRowProps = {
   /** The row's picture: a bot's avatar, or a group's member faces. */
@@ -36,9 +39,11 @@ export type BotSidebarRowProps = {
   /** Its chat, worker or run stopped on a usage limit while the row is quiet: the corner's tooltip. */
   stopTip?: string | null
   isUnread: boolean
+  isPinned?: boolean
+  pinnedColumn?: PinnedBotColumn
   isActive: boolean
   dimmed?: boolean
-  /** Its host is disconnected: Rename and Mark Read/Unread are off, as the caller's items are. */
+  /** 호스트 연결이 끊기면 이름 변경, 고정, 읽음 상태 변경을 비활성화한다. */
   actionsDisabled?: boolean
   /** The Bots section's reorder: this row is where a drag starts. */
   dragHandle?: boolean
@@ -55,7 +60,7 @@ export type BotSidebarRowProps = {
   trailing?: React.ReactNode
   /** What the hover card shows, rendered only while it is open. */
   hoverDetails: (keyboardFocus: boolean) => React.ReactNode
-  /** Rename and Mark Read/Unread lead the menu; these follow. */
+  /** Rename, Pin and Mark Read/Unread surround these items. */
   menuItems: React.ReactNode
   menuFooter: React.ReactNode
 }
@@ -68,6 +73,8 @@ export function BotSidebarRow({
   status,
   stopTip = null,
   isUnread,
+  isPinned = false,
+  pinnedColumn,
   isActive,
   expanded,
   dimmed = false,
@@ -84,10 +91,20 @@ export function BotSidebarRow({
 }: BotSidebarRowProps): React.JSX.Element {
   const t = useTranslate()
   const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const [renameRequested, setRenameRequested] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
   const [keyboardFocus, setKeyboardFocus] = useState(false)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
+  const togglePin = (): void => {
+    void updateWorktreeMeta(workspaceId, { isPinned: !isPinned }, { executionHostId: hostId }).then(
+      (result) => {
+        if (!result.ok) {
+          toast.error(result.error)
+        }
+      }
+    )
+  }
   // Working shows once, at the row's end, where every working row shows it.
   const badgeStatus = status === 'working' ? null : status
   const badge = {
@@ -100,6 +117,7 @@ export function BotSidebarRow({
       <ContextMenuTrigger asChild>
         <div
           data-worktree-card-surface="true"
+          data-bot-pinned-tile={pinnedColumn === undefined ? undefined : ''}
           data-worktree-card-active={isActive ? 'primary' : undefined}
           aria-expanded={expanded}
           data-project-group-header-drag-handle={dragHandle ? '' : undefined}
@@ -107,7 +125,15 @@ export function BotSidebarRow({
             WORKTREE_CARD_SURFACE_CLASS_NAME,
             // A two-line workspace card's padding, so bots sit as tight as Projects' rows.
             // A size container: the fold strip slims down in a narrow sidebar.
-            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.25 pl-1.25',
+            'group/bot-row @container/bot-row flex min-w-0',
+            pinnedColumn === undefined
+              ? 'items-center pt-1.25 pb-1.25 pl-1.25'
+              : 'row-start-1 ml-0 min-h-20 flex-col items-start gap-1 p-2',
+            pinnedColumn === 1 && 'col-start-1',
+            pinnedColumn === 2 && 'col-start-2',
+            pinnedColumn !== undefined &&
+              !isActive &&
+              'border-worktree-sidebar-border bg-worktree-sidebar-accent/25',
             !isActive && 'worktree-sidebar-card-hover',
             dimmed && 'opacity-60'
           )}
@@ -126,7 +152,7 @@ export function BotSidebarRow({
           }}
         >
           {/* Exceptions sit on the picture's corner, the same in both card styles. */}
-          <span className="relative mr-2 shrink-0">
+          <span className={cn('relative shrink-0', pinnedColumn === undefined && 'mr-2')}>
             <span className="flex" style={botAvatarBadgeCutout(badge)}>
               {avatar}
             </span>
@@ -146,12 +172,18 @@ export function BotSidebarRow({
                 onBlur={() => setKeyboardFocus(false)}
               >
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
-                  <div className="flex min-w-0 items-center gap-1.5">
+                  <div
+                    className={cn(
+                      'flex min-w-0 items-center gap-1.5',
+                      pinnedColumn && '[&>[data-worktree-title-inline-rename=""]]:line-clamp-2'
+                    )}
+                  >
                     <WorktreeTitleInlineRename
                       displayName={name}
                       showUnreadEmphasis={isUnread}
                       dimReadTitle
-                      className="text-[13px] leading-5"
+                      className={cn('text-[13px]', pinnedColumn ? 'leading-4' : 'leading-5')}
+                      wrapTitle={pinnedColumn !== undefined}
                       editingClassName="flex-1"
                       onRename={onRename}
                       // The hover card already shows the full name.
@@ -159,7 +191,19 @@ export function BotSidebarRow({
                       beginEditing={renameRequested}
                       onBeginEditingConsumed={() => setRenameRequested(false)}
                     />
-                    {age ? (
+                    {isPinned ? (
+                      <span
+                        role="img"
+                        aria-label={t('bots.row.pinned', 'Pinned')}
+                        className={cn(
+                          'flex shrink-0 items-center text-muted-foreground',
+                          pinnedColumn !== undefined && 'absolute top-2 right-2'
+                        )}
+                      >
+                        <Pin className="size-3" aria-hidden="true" />
+                      </span>
+                    ) : null}
+                    {age && pinnedColumn === undefined ? (
                       <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}
                       </span>
@@ -167,7 +211,13 @@ export function BotSidebarRow({
                   </div>
                   {line}
                 </div>
-                {trailing ?? (status === 'working' ? <BotRowWorkingMark /> : null)}
+                {pinnedColumn === undefined ? (
+                  (trailing ?? (status === 'working' ? <BotRowWorkingMark /> : null))
+                ) : (
+                  <div className="absolute top-6 right-1">
+                    {trailing ?? (status === 'working' ? <BotRowWorkingMark compact /> : null)}
+                  </div>
+                )}
               </div>
             }
           >
@@ -189,6 +239,10 @@ export function BotSidebarRow({
           <Pencil className="size-3.5" />
           {t('bots.row.rename', 'Rename')}
         </ContextMenuItem>
+        <ContextMenuItem disabled={actionsDisabled} onSelect={togglePin}>
+          {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          {isPinned ? t('bots.row.unpin', 'Unpin') : t('bots.row.pin', 'Pin')}
+        </ContextMenuItem>
         {menuItems}
         <ContextMenuItem disabled={actionsDisabled} onSelect={toggleUnread}>
           {isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
@@ -200,7 +254,7 @@ export function BotSidebarRow({
   )
 }
 
-function BotRowWorkingMark(): React.JSX.Element {
+function BotRowWorkingMark({ compact = false }: { compact?: boolean }): React.JSX.Element {
   const label = getWorktreeStatusLabel('working')
   return (
     // A chevron-wide slot follows it, so it lines up with the marks on fold rows' strips; a narrow
@@ -208,10 +262,13 @@ function BotRowWorkingMark(): React.JSX.Element {
     <span
       role="img"
       aria-label={label}
-      className="flex shrink-0 items-center gap-0.5 can-hover:pointer-fine:@max-[15rem]/bot-row:-mr-0.5"
+      className={cn(
+        'flex shrink-0 items-center gap-0.5',
+        compact ? 'size-6 justify-center' : 'can-hover:pointer-fine:@max-[15rem]/bot-row:-mr-0.5'
+      )}
     >
       <StatusIndicator status="working" showTooltip={false} aria-hidden />
-      <span className="size-4" />
+      {compact ? null : <span className="size-4" />}
     </span>
   )
 }

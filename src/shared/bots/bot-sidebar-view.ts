@@ -45,9 +45,12 @@ export function countActiveBotSidebarFilters(view: BotSidebarView): number {
   return Number(view.hidePausedBots) + Number(view.hideSleepingWorkers)
 }
 
-type ArrangedEntry =
+type ArrangedEntry = (
   | { kind: 'bot'; bot: { name: string; paused: boolean; createdAt?: unknown } }
   | { kind: 'group'; group: { name: string; createdAt?: unknown } }
+) & {
+  isPinned?: boolean
+}
 
 export type BotSidebarEntryActivity = {
   /** It or one of its workers waits on the owner. */
@@ -62,7 +65,7 @@ export function botSidebarEntryRecency(entry: ArrangedEntry, activityAt: number)
   return typeof createdAt === 'number' && createdAt > activityAt ? createdAt : activityAt
 }
 
-/** The Bots section's rows as the options list them; entries come in saved (Manual) order, which breaks ties. */
+/** The Bots section's rows as the options list them; pinned rows lead, and saved (Manual) order breaks ties. */
 export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
   entries: readonly E[],
   view: BotSidebarView,
@@ -74,7 +77,11 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
     : [...entries]
   if (view.sortBy === 'manual') {
     return shown
+      .filter((entry) => entry.isPinned === true)
+      .concat(shown.filter((entry) => entry.isPinned !== true))
   }
+  const byPinned = (left: E, right: E): number =>
+    Number(right.isPinned === true) - Number(left.isPinned === true)
   const name = (entry: E): string => (entry.kind === 'bot' ? entry.bot.name : entry.group.name)
   if (view.sortBy === 'name') {
     const collator = new Intl.Collator(undefined, { sensitivity: 'base' })
@@ -82,7 +89,9 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
       .map((entry, index) => ({ entry, index }))
       .sort(
         (left, right) =>
-          collator.compare(name(left.entry), name(right.entry)) || left.index - right.index
+          byPinned(left.entry, right.entry) ||
+          collator.compare(name(left.entry), name(right.entry)) ||
+          left.index - right.index
       )
       .map(({ entry }) => entry)
   }
@@ -93,6 +102,7 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
   return ranked
     .sort(
       (left, right) =>
+        byPinned(left.entry, right.entry) ||
         (view.sortBy === 'smart' ? Number(right.needsYou) - Number(left.needsYou) : 0) ||
         right.activityAt - left.activityAt ||
         left.index - right.index
