@@ -22,6 +22,7 @@ import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
 import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItemWalk } from './items/use-bot-item-walk'
+import { useBotItemBackFocus } from './items/use-bot-item-back-focus'
 import { useBotGroupItems } from './use-bot-group-items'
 import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
@@ -81,6 +82,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     ...(filter.needsYou ? [t('bots.items.filter.needsYou', 'Needs you only')] : [])
   ].join(' · ')
   const openBot = walk.uid ? merged.botOfUid(walk.uid) : null
+  useBotItemBackFocus(openBot !== null, scroll)
   // An item no member read holds once every read has landed (a Closed page's, reopened after the
   // panel remounted): back to the list rather than a list under a stale open item.
   const { uid: openUid, close: closeItem } = walk

@@ -41,6 +41,7 @@ import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItems } from './items/use-bot-items'
 import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-mark'
 import { useBotItemWalk } from './items/use-bot-item-walk'
+import { useBotItemBackFocus } from './items/use-bot-item-back-focus'
 import { useBotItemsShownList } from './items/use-bot-items-shown-list'
 import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
@@ -139,6 +140,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
   const gutterResize = useRightSidebarGutterResize(scroll)
+  useBotItemBackFocus(walk.uid !== null, scroll)
   const automationRows = useMemo(
     () => botAutomationCardRows(bot, activity, clock),
     [bot, activity, clock]
