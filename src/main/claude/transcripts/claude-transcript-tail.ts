@@ -102,10 +102,7 @@ export function mainChain(rows: Record<string, unknown>[], leafUuid: string): Cl
       row.parent_tool_use_id == null
     ) {
       byUuid.set(row.uuid, row)
-      if (
-        isClaudeConversationEntry(row) ||
-        (row.type === 'system' && row.subtype === 'compact_boundary')
-      ) {
+      if (isClaudeConversationEntry(row)) {
         newest = row
       }
     }
