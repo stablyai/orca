@@ -2,7 +2,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   resolveQualifiedFolderWorkspaceResult,
-  type QualifiedFolderHostState
+  type QualifiedFolderHostState,
+  type QualifiedFolderWorkspaceSelection
 } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   folderIdOfSelector,
@@ -59,6 +60,21 @@ export function resolveKeyedFolderWorkspace(
   selector: string,
   requiredHostId?: ExecutionHostId
 ): FolderWorkspace | null {
+  const selected = resolveKeyedFolderWorkspaceSelection(catalog, selector, requiredHostId)
+  return selected
+    ? {
+        ...selected.workspace,
+        executionHostId: selected.hostId,
+        connectionId: selected.connectionId
+      }
+    : null
+}
+
+export function resolveKeyedFolderWorkspaceSelection(
+  catalog: FolderCatalog,
+  selector: string,
+  requiredHostId?: ExecutionHostId
+): QualifiedFolderWorkspaceSelection | null {
   const folderId = folderIdOfSelector(selector)
   if (folderId === undefined) {
     return null
@@ -71,8 +87,7 @@ export function resolveKeyedFolderWorkspace(
   if (result.kind !== 'selected') {
     throw new Error(result.kind === 'missing' ? WORKSPACE_SELECTOR_NOT_FOUND : 'selector_ambiguous')
   }
-  const { workspace, hostId, connectionId } = result.value
-  return { ...workspace, executionHostId: hostId, connectionId }
+  return result.value
 }
 
 /** path: and name: name folder workspaces too; branch:, issue: and identity: stay repo-backed. */

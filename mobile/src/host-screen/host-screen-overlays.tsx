@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { openExternalLink } from '../platform/external-links/external-link'
-import { Pressable, Text, View } from 'react-native'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { useWorkspaceServer } from '../worktree/execution-hosts/workspace-server'
 import { ActionSheetContent } from '../components/sheets/ActionSheetModal'
@@ -12,13 +11,15 @@ import { NewWorktreeModalController } from '../new-workspace/creation/modal/NewW
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options/workspace-options-sheet'
 import { HostNewBotSheet } from './host-new-bot-sheet'
 import { WorkspaceDetailsSheet } from './workspace-actions/workspace-details-sheet'
 import { WorkspaceRenameSheet } from './workspace-actions/workspace-rename-sheet'
 import { WorkspaceStatusSheet } from './workspace-actions/workspace-status-sheet'
+import { WorkspaceDeleteConfirmSheet } from './workspace-actions/workspace-delete-confirm-sheet'
 import { useWorkspaceRowMenuActions } from './workspace-actions/use-workspace-row-menu-actions'
+import { useWorkspaceHandToBot } from './workspace-actions/use-workspace-hand-to-bot'
+import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -40,12 +41,18 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
   // Tied to the menu's row, so a menu closed elsewhere never reopens on the rename sheet.
   const [renameTarget, setRenameTarget] = useState<Worktree | null>(null)
   const [statusTarget, setStatusTarget] = useState<Worktree | null>(null)
+  const handToBot = useWorkspaceHandToBot({
+    controller,
+    closeMenuThen: (then) => menuFollowUp.closeThen(then)
+  })
   const closeActionSheet = () => {
     setRenameTarget(null)
     setStatusTarget(null)
+    handToBot.reset()
     state.setConfirmDelete(null)
     state.setActionTarget(null)
   }
+  const menuFollowUp = useBottomDrawerFollowUp(closeActionSheet)
   // A server row's screens are offered by what that server supports, not the desktop.
   const actionServer = useWorkspaceServer({
     client,
@@ -58,78 +65,42 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     row: actionTarget,
     server: actionServer,
     onRename: setRenameTarget,
-    onMoveToStatus: setStatusTarget
+    onMoveToStatus: setStatusTarget,
+    onHandToBot: handToBot.open
   })
 
   return (
     <>
       <WorkspaceOptionsSheet controller={controller} />
       <HostNewBotSheet controller={controller} />
+      {handToBot.newBotSheet}
 
       {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
       <BottomDrawerModalHost>
-        <BottomDrawer visible={actionTarget != null} onClose={closeActionSheet}>
+        <BottomDrawer
+          visible={actionTarget != null}
+          dismissible={!handToBot.busy}
+          {...menuFollowUp.drawerProps}
+        >
           {state.confirmDelete ? (
-            <View>
-              <View style={styles.confirmContent}>
-                <Text style={styles.confirmTitle}>{t('common.delete', 'Delete')}</Text>
-                <Text style={styles.confirmMessage}>
-                  {t(
-                    'hostScreen.hostScreenOverlays.deleteConfirmMessage',
-                    'Delete "{{name}}" ({{branch}})?',
-                    {
-                      name: state.confirmDelete.displayName || state.confirmDelete.repo,
-                      branch: state.confirmDelete.branch
-                    }
-                  )}
-                </Text>
-                {state.confirmDelete.recipeEnvironment ? (
-                  <Text style={styles.confirmMessage}>
-                    {state.confirmDelete.recipeEnvironment.destroys === false
-                      ? t(
-                          'hostScreen.hostScreenOverlays.deleteKeepsEnvironment',
-                          'The environment "{{environment}}" that Orca created for it keeps running: its recipe has no destroy step.',
-                          { environment: state.confirmDelete.recipeEnvironment.name }
-                        )
-                      : t(
-                          'hostScreen.hostScreenOverlays.deleteDestroysEnvironment',
-                          'This also destroys the environment "{{environment}}" that Orca created for it, with any uncommitted work and running terminals on it.',
-                          { environment: state.confirmDelete.recipeEnvironment.name }
-                        )}
-                  </Text>
-                ) : null}
-              </View>
-              <View style={styles.confirmButtons}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.confirmBtn,
-                    styles.confirmBtnCancel,
-                    pressed && styles.confirmBtnPressed
-                  ]}
-                  onPress={() => state.setConfirmDelete(null)}
-                >
-                  <Text style={styles.confirmBtnCancelText}>{t('common.cancel', 'Cancel')}</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.confirmBtn,
-                    styles.confirmBtnDestructive,
-                    pressed && styles.confirmBtnPressed
-                  ]}
-                  onPress={() => {
-                    if (state.confirmDelete) {
-                      void actions.handleDeleteWorktree(state.confirmDelete)
-                    }
-                    state.setConfirmDelete(null)
-                    state.setActionTarget(null)
-                  }}
-                >
-                  <Text style={styles.confirmBtnDestructiveText}>
-                    {t('common.delete', 'Delete')}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
+            <WorkspaceDeleteConfirmSheet
+              row={state.confirmDelete}
+              hostId={hostId ?? ''}
+              rowClient={
+                actionServer.routeHost === undefined
+                  ? client
+                  : (actionServer.server?.client ?? null)
+              }
+              routeHost={actionServer.routeHost ?? undefined}
+              onCancel={() => state.setConfirmDelete(null)}
+              onDelete={() => {
+                if (state.confirmDelete) {
+                  void actions.handleDeleteWorktree(state.confirmDelete)
+                }
+                state.setConfirmDelete(null)
+                state.setActionTarget(null)
+              }}
+            />
           ) : actionTarget && renameTarget === actionTarget ? (
             <WorkspaceRenameSheet
               hostId={hostId ?? ''}
@@ -146,6 +117,8 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               onPick={actions.setWorktreeStatus}
               onClose={closeActionSheet}
             />
+          ) : actionTarget && handToBot.target === actionTarget ? (
+            handToBot.sheet(actionTarget, closeActionSheet)
           ) : (
             <ActionSheetContent actions={rowMenuActions}>
               {actionTarget ? (
@@ -181,6 +154,18 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           destructive
           onConfirm={actions.deleteDespiteArchiveHookFailure}
           onCancel={actions.dismissArchiveHookFailure}
+        />
+
+        <ConfirmModal
+          visible={actions.deleteFailure != null}
+          title={t('hostScreen.hostScreenOverlays.deleteFailed', 'Failed to delete "{{name}}"', {
+            name: actions.deleteFailure?.item.displayName || actions.deleteFailure?.item.repo
+          })}
+          message={actions.deleteFailure?.message}
+          confirmLabel={t('common.ok', 'OK')}
+          cancelLabel={null}
+          onConfirm={actions.dismissDeleteFailure}
+          onCancel={actions.dismissDeleteFailure}
         />
       </BottomDrawerModalHost>
 

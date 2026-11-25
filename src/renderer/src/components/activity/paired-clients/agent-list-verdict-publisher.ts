@@ -8,32 +8,58 @@ import { isClearableActivityThread } from '../thread-list/activity-clear-complet
 import { classifyChildAgents } from '../threads/activity-thread-child-agent'
 import { activityThreadStatusId } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import type { AllAgentPaneThreadsStoreData } from '../threads/use-agent-pane-thread-store-data'
 import { useAllAgentPaneThreads } from '../threads/use-agent-pane-threads'
 
 const PUBLISH_INTERVAL_MS = 250
 
-/** The Agents list's verdict for every pane the window knows; a pane with no thread is unlisted. */
-function buildAgentListVerdicts(
-  threads: readonly AgentPaneThread[],
-  knownPaneKeys: readonly string[]
-): Record<string, AgentListVerdict> {
-  const { parentPaneKeyByChild, hidden } = classifyChildAgents(threads)
-  const verdicts: Record<string, AgentListVerdict> = {}
-  for (const paneKey of knownPaneKeys) {
-    verdicts[paneKey] = { listed: false }
-  }
-  for (const thread of threads) {
-    const childOf = parentPaneKeyByChild.get(thread.paneKey)
-    verdicts[thread.paneKey] = {
+type ListedVerdict = AgentListVerdict & { listed: true }
+
+// Threads keep their identity across unrelated writes, so only a changed thread rebuilds its verdict.
+const threadVerdicts = new WeakMap<AgentPaneThread, ListedVerdict>()
+
+function threadVerdict(thread: AgentPaneThread): ListedVerdict {
+  let verdict = threadVerdicts.get(thread)
+  if (!verdict) {
+    verdict = {
       listed: true,
       status: activityThreadStatusId(thread),
       unread: thread.unread,
       clearable: isClearableActivityThread(thread),
       sortAt: thread.latestTimestamp,
-      title: thread.paneTitle,
-      ...(childOf ? { childOf } : {}),
-      ...(hidden.has(thread.paneKey) ? { foldedChild: true as const } : {})
+      title: thread.paneTitle
     }
+    threadVerdicts.set(thread, verdict)
+  }
+  return verdict
+}
+
+/** The Agents list's verdict for every pane the window knows; a pane with no thread is unlisted. */
+function buildAgentListVerdicts(
+  threads: readonly AgentPaneThread[],
+  statuses: AllAgentPaneThreadsStoreData['agentStatusByPaneKey'],
+  acknowledgedAt: Readonly<Record<string, number>>
+): Record<string, AgentListVerdict> {
+  const { parentPaneKeyByChild, hidden } = classifyChildAgents(threads)
+  const verdicts: Record<string, AgentListVerdict> = {}
+  for (const [paneKey, entry] of statuses.entries()) {
+    // Read as the desktop's bot chat rows read it, so a closed chat's row on the phone agrees.
+    verdicts[paneKey] =
+      entry.state === 'done' && (acknowledgedAt[paneKey] ?? 0) < entry.stateStartedAt
+        ? { listed: false, unread: true }
+        : { listed: false }
+  }
+  for (const thread of threads) {
+    const childOf = parentPaneKeyByChild.get(thread.paneKey)
+    const verdict = threadVerdict(thread)
+    verdicts[thread.paneKey] =
+      childOf || hidden.has(thread.paneKey)
+        ? {
+            ...verdict,
+            ...(childOf ? { childOf } : {}),
+            ...(hidden.has(thread.paneKey) ? { foldedChild: true as const } : {})
+          }
+        : verdict
   }
   return verdicts
 }
@@ -98,8 +124,13 @@ export default function AgentListVerdictPublisher(): null {
     }
   }, [])
   const verdicts = useMemo(
-    () => buildAgentListVerdicts(allThreads, Array.from(storeData.agentStatusByPaneKey.keys())),
-    [allThreads, storeData.agentStatusByPaneKey]
+    () =>
+      buildAgentListVerdicts(
+        allThreads,
+        storeData.agentStatusByPaneKey,
+        storeData.acknowledgedAgentsByPaneKey
+      ),
+    [allThreads, storeData.agentStatusByPaneKey, storeData.acknowledgedAgentsByPaneKey]
   )
   useEffect(() => {
     // Unhydrated read stamps would mark every agent unread.

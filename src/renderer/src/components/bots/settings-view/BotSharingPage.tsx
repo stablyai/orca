@@ -4,8 +4,7 @@ import { useState } from 'react'
 import { Copy, ExternalLink, Link2, Loader2, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
 import { useOrcaCloudSignedOut } from '../orca-cloud-signed-out'
@@ -15,9 +14,7 @@ import { useBotShareLink, type LinkRead } from '../sharing/use-bot-share-link'
 import type { BotSettingsPage } from './bot-settings-place'
 import { SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
 
-const SHORT_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-
-/** The bot's sharing as a row: whether it is shared, opening Settings › Sharing. */
+/** The bot's sharing as a row: On or Off, opening Settings › Sharing. */
 export function BotSharingGroup({
   bot,
   open
@@ -26,24 +23,20 @@ export function BotSharingGroup({
   open: (page: BotSettingsPage) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const { read } = useBotShareLink(bot.id, undefined, useOrcaCloudSignedOut())
   const link = read.kind === 'read' ? read.link : undefined
-  const updated = link?.updatedAt ? new Date(link.updatedAt) : null
-  const detail =
+  const value =
     link === null
-      ? t('bots.share.notShared', 'Not shared')
-      : updated && !Number.isNaN(updated.getTime())
-        ? t('bots.share.sharedUpdated', 'Shared · updated {{date}}', {
-            date: uiDateTimeFormat(SHORT_DATE, intlLocale).format(updated)
-          })
-        : undefined
+      ? t('bots.settingsPage.off', 'Off')
+      : link
+        ? t('bots.settingsView.sharingOn', 'On')
+        : null
   return (
     <SettingsInsetGroup>
       <SettingsInsetRow
         icon={link ? <Link2 /> : <Share2 />}
         title={t('bots.settingsView.sharing', 'Sharing')}
-        detail={detail}
+        value={value}
         page="sharing"
         onOpen={() => open('sharing')}
       />

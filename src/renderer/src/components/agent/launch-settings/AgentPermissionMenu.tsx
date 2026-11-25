@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// What a permission choice does: a language pack must never misstate it.
 import { useTranslate } from '../../../i18n/use-translate'
 import { cn } from '../../../lib/class-names'
 import { ChevronDown } from 'lucide-react'

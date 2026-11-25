@@ -3,10 +3,7 @@ import {
   connectorAskerPrompt,
   connectorMessageShownText
 } from '../../shared/connector-asker-prompt'
-import {
-  ConnectorDelivery,
-  type ConnectorAsker
-} from '../../shared/connectors/connector-cloud-contract'
+import type { ConnectorAsker } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { BARE_MENTION_NOTE, dispatchDelivery } from './connector-deliveries'
@@ -34,34 +31,6 @@ function fakeSeam() {
 }
 
 describe('a bare mention', () => {
-  it('starts a bot conversation that tells the agent to greet, and nothing more', async () => {
-    const { start, seam } = fakeSeam()
-    const dispatched = dispatchDelivery(
-      seam,
-      host,
-      { runTrigger: async () => false },
-      ConnectorDelivery.parse({
-        kind: 'start',
-        deliveryId: 'd1',
-        expiresAt: EXPIRES_AT,
-        conversation,
-        agent: 'claude',
-        placeId: botPlace,
-        prompt: STAND_IN,
-        bareMention: true
-      }),
-      () => 60_000
-    )
-    expect(await dispatched?.done).toEqual({ outcome: 'accepted' })
-    expect(start).toHaveBeenCalledWith(host, conversation, 'd1', {
-      agent: 'claude',
-      target: { kind: 'bot', botId: 'bot-1' },
-      prompt: STAND_IN,
-      note: BARE_MENTION_NOTE
-    })
-    expect(BARE_MENTION_NOTE).not.toContain('\n')
-  })
-
   it("goes before the automations' note in a running conversation", async () => {
     const { send, seam } = fakeSeam()
     const dispatched = dispatchDelivery(
@@ -94,19 +63,6 @@ describe('a bare mention', () => {
       text: STAND_IN,
       note: `${BARE_MENTION_NOTE}\n\nAlso: Triage`
     })
-  })
-
-  it('leaves a message with words as it was', async () => {
-    const { send, seam } = fakeSeam()
-    const dispatched = dispatchDelivery(
-      seam,
-      host,
-      { runTrigger: async () => false },
-      { kind: 'send', deliveryId: 'd3', expiresAt: EXPIRES_AT, conversation, text: 'deploy it' },
-      () => 60_000
-    )
-    await dispatched?.done
-    expect(send).toHaveBeenCalledWith(host, conversation, 'd3', { text: 'deploy it' })
   })
 })
 

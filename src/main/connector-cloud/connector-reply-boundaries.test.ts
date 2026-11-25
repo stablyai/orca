@@ -21,6 +21,7 @@ import {
   settle
 } from './connector-poll-client.test-fixture'
 import { drainReplyId, type ConnectorReplyJournal } from './connector-reply-outbox'
+import { CONNECTOR_REHELLO_SPREAD_MS } from './connector-poll-control'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { postConnectorOutboxReply } from './connector-replies'
 import { ConnectorAccountTransport } from './connector-transport'
@@ -148,7 +149,8 @@ describe('a reply in transit across the kill switch and back', () => {
     h.fake.features = ['replies.outbox']
     h.fake.forgetHello()
     h.poll([])
-    await settle(2_000)
+    // The 409 asks for a hello after a random spread (0.5 of it here).
+    await settle(CONNECTOR_REHELLO_SPREAD_MS)
     admitAndAnswer(journal.db, 'd2', 'Second answer.')
     void next.events.drainReplies()
     await settle(100)
@@ -322,7 +324,7 @@ describe('a Cloud rollback with persisted new-source conversations', () => {
       h.fake.eventSources = undefined
       h.fake.forgetHello()
       h.poll([])
-      await settle(200)
+      await settle(CONNECTOR_REHELLO_SPREAD_MS + 200)
       expect(replyEvents()).toEqual([
         {
           kind: 'reply',

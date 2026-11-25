@@ -6,9 +6,12 @@ import { cloudSupportsConnectorSource } from '../../shared/connector-cloud-featu
 import {
   CONNECTOR_CLIENT_LIMITS,
   cloudConversation,
-  type ConnectorEvent
+  type ConnectorEvent,
+  type ConnectorFailure
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
+  JournalConnectorReplyCut,
+  JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
   JournalConnectorReplyOutcome,
@@ -21,6 +24,17 @@ export type ConnectorReplyJournal = {
   read(sessionId?: string): Promise<JournalConnectorReplyRow[]>
   fillOutcomes(fills: readonly JournalConnectorReplyFill[]): Promise<boolean>
   sent(keys: readonly JournalConnectorReplyKey[]): Promise<void>
+}
+
+/** The rows' cut and claim writes (Phase 1): what restart and usage-limit recovery change. */
+export type ConnectorReplyCutJournal = ConnectorReplyJournal & {
+  cut(rows: JournalConnectorReplyCutRows): Promise<boolean>
+  recut(
+    claimMessageId: string,
+    cut: JournalConnectorReplyCut,
+    failure?: ConnectorFailure
+  ): Promise<boolean>
+  releaseClaim(claimMessageId: string): Promise<boolean>
 }
 
 export type ConnectorReplyEvent = Extract<ConnectorEvent, { kind: 'reply' }>
@@ -89,7 +103,7 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
     if (!first || !conversation) {
       continue
     }
-    const { answerDeliveryId, outcome, prose, failure, links } = first.fill
+    const { answerDeliveryId, outcome, prose, failure, links, tookMs } = first.fill
     // Each event names the answer's own delivery among its ids.
     const others = group.map((row) => row.deliveryId).filter((id) => id !== answerDeliveryId)
     const room = CONNECTOR_CLIENT_LIMITS.maxReplyDeliveryIds - 1
@@ -102,7 +116,8 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
         outcome,
         ...(outcome === 'answered' && prose ? { prose } : {}),
         ...(failure ? { failure } : {}),
-        ...(links?.length ? { links } : {})
+        ...(links?.length ? { links } : {}),
+        ...(outcome === 'answered' && tookMs ? { tookMs } : {})
       })
     }
   }

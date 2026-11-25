@@ -161,7 +161,9 @@ export async function observeSkillPackage(
   executablePaths?: ReadonlySet<string>,
   signal?: AbortSignal,
   platform: NodeJS.Platform = process.platform,
-  inferShebangExecutables = false
+  inferShebangExecutables = false,
+  /** A folder this answers true for is left out unread: none of its files count against the limits. */
+  skipDirectory?: (absolutePath: string) => Promise<boolean>
 ): Promise<ObservedSkillPackage> {
   const files: SkillBundleFileIdentity[] = []
   const caseFoldedPaths = new Map<string, string>()
@@ -226,6 +228,9 @@ export async function observeSkillPackage(
         throw new Error('skill-package-link')
       }
       if (fileStat.isDirectory()) {
+        if (await skipDirectory?.(absolutePath)) {
+          continue
+        }
         if (depth >= limits.maximumDepth) {
           throw new Error('skill-package-depth-limit')
         }

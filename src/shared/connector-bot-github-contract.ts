@@ -3,8 +3,8 @@
 // own link and default, and a link token is single use.
 import * as z from 'zod'
 
-/** How people ask a bot on GitHub: "@orca-ide ranger …" in an issue or pull request comment. */
-export const GITHUB_BOT_MENTION = '@orca-ide'
+/** How people ask a bot on GitHub: "@orca-bots ranger …" in an issue or pull request comment. */
+export const GITHUB_BOT_MENTION = '@orca-bots'
 
 // Exactly the cloud's (connector-contract), so both sides accept the same ids and logins.
 /** GitHub's numeric ids (users, installations), as strings. */

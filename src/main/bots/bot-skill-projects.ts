@@ -26,7 +26,7 @@ const SKILL_FOLDERS = ['.agents', '.claude'] as const
 const MAX_SKILL_FILE_BYTES = 256 * 1024
 
 /** An admitted skill, with the real folder its link in Orca's folder points to. */
-type ScannedSkill = LinkedProjectSkill & { folder: string }
+export type ScannedSkill = LinkedProjectSkill & { folder: string }
 
 type ScannedProject = { skillsDir: string; skills: ScannedSkill[] }
 
@@ -48,7 +48,7 @@ async function readCapped(path: string): Promise<string | null> {
 
 /** A skill folder (team setup scripts link them in) holding a real SKILL.md that declares its name
  *  and description. A SKILL.md that is itself a link could be any file, so it never counts. */
-async function admittedSkill(skillFile: string): Promise<ScannedSkill | null> {
+export async function admittedSkill(skillFile: string): Promise<ScannedSkill | null> {
   const entry = await lstat(skillFile).catch(() => null)
   if (!entry?.isFile()) {
     return null
@@ -68,7 +68,7 @@ async function admittedSkill(skillFile: string): Promise<ScannedSkill | null> {
   }
 }
 
-async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
+export async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
   const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'))
   const admitted = await Promise.all(files.map(admittedSkill))
   const byFolder = new Map<string, ScannedSkill>()

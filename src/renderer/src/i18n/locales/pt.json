@@ -3745,13 +3745,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Working set somado (WS): páginas residentes na RAM agora. Páginas compartilhadas podem aparecer em mais de um processo, e a memória que o Windows paginou para o disco não é contada aqui.",
-                "privateBytesDescription": "Bytes privados somados: memória que esses processos comprometeram, contada esteja ela residente ou paginada para o disco. É isso que o host cobra contra seu limite de comprometimento, então continua subindo enquanto o working set acima diminui sob paginação.",
-                "footprintDescription": "Pegada de memória somada, o mesmo valor que o Monitor de Atividade mostra: a memória de cada processo, incluindo memória gráfica. Páginas compartilhadas entre processos não são contadas duas vezes.",
-                "rssDescription": "Tamanho do conjunto residente somado (RSS). Páginas compartilhadas ou com alias podem aparecer em mais de um processo.",
                 "memColumn": "Mem.",
-                "memorySummary": "Σ Memória",
-                "privateSummary": "Σ Privada"
+                "memorySummary": "Σ Memória"
               }
             },
             "manager": {
@@ -9064,6 +9059,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "Chaves do macOS (cursor-agent)",
+            "keyring": "Chaveiro do Linux (cursor-agent)",
             "cli": "Arquivo de autenticação da CLI do Cursor",
             "desktop": "Cursor IDE"
           },
@@ -17595,6 +17591,7 @@
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",
+            "chatInstallRequired": "Instalação necessária",
             "chatNotOverSsh": "Chat indisponível via SSH",
             "chatNotInWsl": "Chat indisponível no WSL",
             "chatNotInSubfolder": "Chat indisponível em subpasta",
@@ -17732,8 +17729,6 @@
             "27d863542c": "Anotações do navegador",
             "e48569ac6d": "Não foi possível alcançar este site.",
             "bbe8f15e83": "Este painel é renderizado a partir do servidor de runtime ativo.",
-            "8b7e6d1f5a": "As anotações do navegador só estão disponíveis em abas de navegador locais.",
-            "deb5293610": "Anotações do navegador indisponíveis em runtime remoto",
             "90d021f2ad": "Adicionar",
             "0cb3bd6221": "Intenção da anotação",
             "532bac48c5": "Descreva o que o agente deve alterar aqui...",
@@ -18535,10 +18530,6 @@
           "hideOtherClients": "Ocultar agentes de outros clientes"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Caminho copiado para a área de transferência",
-          "copyPathFailed": "Falha ao copiar o caminho",
-          "workspace": "Espaço de Trabalho",
-          "copyPath": "Copiar caminho",
           "jumpToWorkspace": "Ir para o espaço de trabalho"
         },
         "ActivityThreadRow": {
@@ -18641,7 +18632,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "A colagem é muito grande para a entrada de teclado do emulador.",
-            "unsupportedPasteText": "A colagem do teclado do emulador só suporta texto de teclado americano (US).",
             "pasteTargetUnavailable": "A colagem do teclado do emulador falhou porque o dispositivo não está pronto."
           }
         }
@@ -20380,7 +20370,6 @@
         "stoppedRestart_many": "{{count}} chats parados ao fechar o Orca.",
         "stoppedRestart_other": "{{count}} chats parados ao fechar o Orca.",
         "promptsNotResent": "Retomar não reenviará seus prompts.",
-        "promptsNotSent": "Seus prompts não foram reenviados.",
         "resume": "Retomar",
         "details": "Detalhes",
         "close": "Fechar",
@@ -20668,6 +20657,7 @@
         "optionUpdateFailed": "Não foi possível atualizar a opção",
         "optionValue": {
           "none": "Nenhum",
+          "off": "Desativado",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Baixo",
@@ -21052,7 +21042,8 @@
       "install": {
         "checking": "Verificando se {{agent}} está pronto neste host…",
         "cliInstall": "Instalar",
-        "cliRecheck": "Verificar novamente"
+        "cliRecheck": "Verificar novamente",
+        "openAgentSettings": "Abrir configurações"
       },
       "reasoning": "Raciocínio",
       "failureWords": {
@@ -21086,6 +21077,7 @@
         "claudeAccountFolderMissing": "A pasta da conta do Claude selecionada não foi encontrada. Entre nela novamente ou escolha outra conta.",
         "claudeAccountSetupFailed": "Não foi possível configurar a conta do Claude selecionada. Tente novamente ou escolha outra conta.",
         "agentCommandNotRunnable": "O Comando do {{agent}} em Configurações → Agentes deve começar com um programa que o Orca consiga encontrar. Variáveis, pipes e outras sintaxes de shell não são compatíveis; use a configuração Ambiente para variáveis. Altere ou redefina o comando.",
+        "agentCommandFailed": "O Comando do {{agent}} em Configurações → Agentes não iniciou o {{agent}}: {{detail}}. Altere ou redefina o comando.",
         "runtimeNotInstalled": "{{agent}} não está instalado no computador que executa este chat. Instale-o pelo chat em uma versão atual do Orca.",
         "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
         "launchPreparationFailed": "O Orca não conseguiu preparar a inicialização de {{agent}} no computador que executa este chat.",
@@ -21603,7 +21595,6 @@
         "copyFailed": "Falha ao copiar",
         "copyIdentity": "Copiar {{value0}}",
         "detachedCommit": "Commit {{head}} (não é uma branch)",
-        "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
@@ -21685,6 +21676,60 @@
       },
       "automationSaved": {
         "openFullPage": "Abrir página"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Não iniciado",
+          "connected": "Conectado",
+          "disabled": "Desativado",
+          "failed": "Falhou",
+          "failedReason": "Falhou: {{error}}",
+          "needsAuth": "Login necessário",
+          "needsAuthAfterSend": "Login necessário. Envie uma mensagem para entrar aqui.",
+          "pending": "Conectando…",
+          "tools_many": "{{count}} ferramentas",
+          "tools_one": "{{count}} ferramenta",
+          "tools_other": "{{count}} ferramentas"
+        },
+        "signIn": {
+          "external": "Conclua na página que foi aberta",
+          "waiting": "Aguardando login…",
+          "waitingBrowser": "Aguardando seu navegador…",
+          "action": "Entrar",
+          "remote": "Após entrar, o navegador chega a uma página que não carrega. Copie o endereço dessa página e cole aqui.",
+          "done": "Concluído",
+          "finish": "Concluir",
+          "openAgain": "Abrir novamente",
+          "addressLabel": "Endereço da página de login",
+          "unfinished": "O login ainda não foi concluído. Conclua-o na página aberta e pressione “Concluído”."
+        },
+        "title": "Servidores MCP",
+        "close": "Fechar",
+        "loading": "Carregando…",
+        "notRunning": "Conectam ao enviar sua próxima mensagem",
+        "unsupported": "Atualize o Orca no host deste chat para gerenciá-los aqui",
+        "readFailed": "Erro ao carregar",
+        "retry": "Recarregar",
+        "empty": "Nenhum configurado para este chat",
+        "cancel": "Cancelar",
+        "reconnect": "Reconectar",
+        "toggle": "Usar {{name}}",
+        "actionFailed": "Não foi possível realizar a ação. Tente novamente.",
+        "summary": {
+          "connected": "Conectados: {{count}}",
+          "needsAuth_one": "{{count}} precisa de login",
+          "needsAuth_other": "{{count}} precisam de login",
+          "failed": "Com falha: {{count}}",
+          "signingIn": "entrando em {{name}}",
+          "needsAuth_many": "{{count}} precisam de login"
+        },
+        "source": {
+          "project": "Projeto",
+          "local": "Local",
+          "user": "Usuário",
+          "plugin": "Plugin",
+          "session": "Sessão"
+        }
       }
     },
     "tab": {
@@ -21987,7 +22032,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Quaisquer alterações sem commit ou não rastreadas nos espaços de trabalho Git serão excluídas permanentemente.",
           "unavailable": "Não foi possível verificar as alterações",
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",
@@ -22011,7 +22055,6 @@
           "line_other": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}",
           "line_many": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}"
         },
-        "ignoredFilesLost": "Os arquivos ignorados serão perdidos: {{names}}",
         "ignoredFilesUnchecked": "Não foi possível verificar completamente os arquivos ignorados"
       }
     },
@@ -22402,7 +22445,6 @@
       "cancelFailed": "Não foi possível cancelar a instalação. Tente novamente.",
       "install": "Instalar {{agent}}",
       "installManaged": "Instalar a cópia do Orca",
-      "installed": "Instalado",
       "notInstalled": "Não instalado.",
       "progress": "Download do {{agent}}",
       "readFailed": "Não foi possível verificar o {{agent}} neste host. Tentando novamente.",
@@ -23026,7 +23068,6 @@
         "withIgnored": "{{what}} e os arquivos ignorados serão perdidos",
         "ignoredOnly": "Os arquivos ignorados serão perdidos"
       },
-      "showChanges": "Mostrar alterações",
       "unsavedSuffix": "(não salvo)",
       "onHost": "Em {{host}}",
       "forceDeletingEllipsis": "Forçando exclusão…",
@@ -23564,8 +23605,7 @@
     "openToObserve": "Abra Recursos para observar as sessões de terminal.",
     "killAllLocal": "Encerrar todas as sessões locais",
     "ptys": "PTYs",
-    "restartLocal": "Reiniciar daemon local",
-    "metricDetails": "Detalhes das métricas"
+    "restartLocal": "Reiniciar daemon local"
   },
   "browserTab": {
     "agentDriving": "Um agente está usando esta página",
@@ -23684,7 +23724,9 @@
       "128cce6e6d": "Definir Título…",
       "e9da9f872a": "Enviar Notas de Revisão ao Agente",
       "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
-      "d286d1ab85": "Limpar Título do Painel"
+      "d286d1ab85": "Limpar Título do Painel",
+      "botItemPrevious": "Item anterior",
+      "botItemNext": "Próximo item"
     },
     "group": {
       "global": "Global",
@@ -23881,6 +23923,9 @@
     "linkedMessageMissing": "Não foi possível encontrar essa mensagem.",
     "math": {
       "scrollDisplayEquation": "Rolar equação em bloco"
+    },
+    "messageTime": {
+      "yesterday": "Ontem {{time}}"
     }
   },
   "runtime": {
@@ -24773,7 +24818,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, mostrar tudo",
       "searchEverything": "Buscar em tudo por \"{{text}}\"",
-      "searchBotsFor": "Buscar bots por \"{{text}}\"",
       "noMatch": "Nenhum bot corresponde a \"{{text}}\"",
       "noBotsYet": "Ainda não há bots",
       "filtersPaused": "Os filtros se aplicam a worktrees, não a bots",
@@ -24790,7 +24834,7 @@
       "browse": "Ver modelos"
     },
     "new": {
-      "fromTemplate": "Usar modelo"
+      "fromTemplate": "Modelo"
     },
     "googleSetup": {
       "otherAccount": "Trocar de conta"
@@ -24799,6 +24843,73 @@
       "paste": {
         "remoteSignIn": "Login remoto"
       }
+    },
+    "row": {
+      "runsOn": "Em execução em {{host}}",
+      "disconnected": "Desconectado",
+      "hostDisconnected": "{{host}} desconectado",
+      "idle": "Inativo",
+      "paused": "Pausado",
+      "reading": "Lendo sua mensagem",
+      "replying": "Respondendo",
+      "replyingIn": "Respondendo em {{place}}",
+      "replyingOn": "Respondendo a {{place}}",
+      "waitingCount": "Eventos pendentes: {{count}}",
+      "waitingFor": "Aguardando {{label}}",
+      "waitingForUntil": "Aguardando {{label}} · até {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} de {{total}}",
+        "navigation": "Item {{index}} de {{total}}",
+        "loadingNext": "Carregando o próximo item",
+        "shown": "Item {{index}} de {{total}}: {{title}}",
+        "firstItem": "Primeiro item",
+        "lastItem": "Último item",
+        "previous": "Item anterior",
+        "next": "Próximo item"
+      }
+    },
+    "hover": {
+      "asksQuestion": "Aguardando sua resposta",
+      "wantsApproval": "Solicita sua aprovação",
+      "signIn": "Login necessário",
+      "access": "Solicitou acesso",
+      "review": "Revisar",
+      "openHome": "Abrir Home de {{name}}",
+      "needsYouHeading_one": "{{count}} assunto para você",
+      "needsYouHeading_many": "{{count}} assuntos para você",
+      "needsYouHeading_other": "{{count}} assuntos para você",
+      "moreAsks_one": "Mais {{count}} solicitação",
+      "moreAsks_many": "Mais {{count}} solicitações",
+      "moreAsks_other": "Mais {{count}} solicitações",
+      "itemsNeedYou_one": "{{count}} item que marcou para você",
+      "itemsNeedYou_many": "{{count}} itens que marcou para você",
+      "itemsNeedYou_other": "{{count}} itens que marcou para você"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Novo chat"
+    },
+    "needs": {
+      "chat": "Seu chat com {{name}}"
+    },
+    "panel": {
+      "needYou_many": "{{count}} precisam de você",
+      "needYou_one": "{{count}} precisa de você",
+      "needYou_other": "{{count}} precisam de você",
+      "working": "{{count}} trabalhando",
+      "working_many": "{{count}} trabalhando",
+      "working_one": "{{count}} trabalhando",
+      "working_other": "{{count}} trabalhando"
+    },
+    "usageLimit": {
+      "continuesAt": "Continua às {{time}}",
+      "continuesShort": "Continua {{time}}",
+      "continuesTip": "Continua automaticamente às {{time}}",
+      "hitLimit": "Limite atingido · reinicia às {{time}}",
+      "hitShort": "Limite atingido",
+      "hitTip": "{{agent}} atingiu o limite de uso · reinicia às {{time}}"
     }
   },
   "speechModelUpdate": {
@@ -24897,5 +25008,8 @@
     "dontSend": "Não enviar",
     "sending": "Enviando…",
     "sendReport": "Enviar relatório"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Este computador"
   }
 }

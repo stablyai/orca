@@ -145,6 +145,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'approval_refused',
   'stale_delivery',
   'invalid_argument',
+  'incompatible_runtime',
   // Preserve archive-hook failure so callers can retry, waive or skip it (#19334).
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   // Paired-only method refusal must match the mobile transport allowlist's forbidden code.

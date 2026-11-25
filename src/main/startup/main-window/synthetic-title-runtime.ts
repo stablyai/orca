@@ -56,7 +56,7 @@ function sendSyntheticTitle(
     return
   }
   // Feed the tracker before checking for windows; fabricated bytes must never enter emulator/tails/transcripts/stats.
-  state.runtime?.ingestSyntheticTitleFrame(ptyId, data)
+  state.core.runtime?.ingestSyntheticTitleFrame(ptyId, data)
   const window = state.mainWindow
   if (!deliverToWindow || !window || window.isDestroyed()) {
     return
@@ -191,7 +191,7 @@ export function driveSyntheticTitleFromHook(
 // as at rest for the whole next turn, to tui-idle, mailbox delivery and the tab alike.
 function retractSyntheticRestTitle(paneKey: string, profile: SyntheticAgentTitleProfile): void {
   const ptyId = getPtyIdForPaneKey(paneKey)
-  const title = ptyId ? state.runtime?.getTrackedPtyTitle(ptyId) : null
+  const title = ptyId ? state.core.runtime?.getTrackedPtyTitle(ptyId) : null
   if (
     !ptyId ||
     !title ||

@@ -92,4 +92,19 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     await immediate
     expect(settled).toBe(true)
   })
+
+  it('returns a rejected promise instead of throwing synchronously when Windows graceful kill is refused', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const session = createPlainShellSession({
+      signalTerminationRoot: vi.fn(() => {
+        throw new Error('EPERM')
+      })
+    })
+    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+
+    const result = teardown.killSession('s1', session, false)
+
+    await expect(result).rejects.toThrow('EPERM')
+    expect(session.scheduleForceDisposeFallback).not.toHaveBeenCalled()
+  })
 })

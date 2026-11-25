@@ -64,9 +64,7 @@ export function useBotSettingsComputers(): BotSettingsComputer[] {
             local: false,
             state:
               index >= listed.length ||
-              !botHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY, {
-                runtimeStatusByEnvironmentId
-              })
+              !botHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY, runtimeStatusByEnvironmentId)
                 ? 'update-needed'
                 : readBotHostState(hostId) === 'offline'
                   ? 'offline'

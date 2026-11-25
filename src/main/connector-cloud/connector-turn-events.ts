@@ -22,6 +22,7 @@ import {
 } from './connector-snapshot-trace'
 import { ConnectorPromptPublications } from './connector-prompt-publications'
 import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
+import { slackReplyBody } from './connector-slack-text'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
@@ -253,7 +254,10 @@ export class ConnectorTurnEvents {
     return {
       client: flush && {
         // As the events path sends it: within the older cap for a cloud without answers.long.
-        post: (reply) => post({ ...reply, text: answerTextFor(reply.text, this.cloudFeatures) }),
+        post: (reply) => {
+          const shown = slackReplyBody(reply)
+          return post({ ...shown, text: answerTextFor(shown.text, this.cloudFeatures) })
+        },
         hostName,
         push: (events) => {
           this.outbox.push(...events)
@@ -307,6 +311,13 @@ export class ConnectorTurnEvents {
       return
     }
     const wire = toConnectorEvent(event, this.cloudFeatures)
+    if (event.kind === 'turn-ended' && event.turnId === null) {
+      // Its start predates the watch, so the cloud can't place it and nothing posts.
+      console.info('[connector] turn end without its start left out', {
+        hadReply: Boolean(event.lastAssistantMessage),
+        stopReason: event.stopReason
+      })
+    }
     if (wire) {
       this.publications.bind(event, wire)
       this.outbox.push(wire)

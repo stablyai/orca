@@ -3765,6 +3765,7 @@
             "e518f544b1": "감지된 agents가 없습니다.",
             "8dea9b5cdf": "활성화된 agents가 없습니다.",
             "chatNotInstalled": "설치되지 않음",
+            "chatInstallRequired": "설치 필요",
             "startChat": "{{value0}} 채팅 시작",
             "chatNotOverSsh": "SSH에서는 채팅을 사용할 수 없음",
             "chatNotOnHost": "이 호스트에서는 채팅을 사용할 수 없음",
@@ -4358,13 +4359,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "합산된 워킹 세트(WS): 지금 RAM에 상주 중인 페이지입니다. 공유 페이지가 둘 이상의 프로세스에 나타날 수 있으며, Windows가 페이지 아웃한 메모리는 여기에 포함되지 않습니다.",
-                "privateBytesDescription": "합산된 프라이빗 바이트: 이 프로세스들이 커밋한 메모리로, 상주 여부와 관계없이 계산됩니다. 호스트가 커밋 한도에 반영하는 값이므로, 페이징으로 위의 워킹 세트가 줄어드는 동안에도 계속 늘어납니다.",
-                "footprintDescription": "합산된 메모리 사용 공간으로, 활성 상태 보기에 표시되는 값과 같습니다. 그래픽 메모리를 포함해 각 프로세스가 소유한 메모리이며, 프로세스 간에 공유되는 페이지는 중복으로 계산되지 않습니다.",
-                "rssDescription": "합산된 레지던트 세트 크기(RSS). 공유 또는 별칭된 페이지가 둘 이상의 프로세스에 나타날 수 있습니다.",
                 "memColumn": "메모리",
-                "memorySummary": "Σ 메모리",
-                "privateSummary": "Σ 프라이빗"
+                "memorySummary": "Σ 메모리"
               }
             },
             "manager": {
@@ -11919,7 +11915,8 @@
           "source": {
             "cli": "Cursor CLI 인증 파일",
             "desktop": "Cursor IDE",
-            "keychain": "macOS 키체인(cursor-agent)"
+            "keychain": "macOS 키체인(cursor-agent)",
+            "keyring": "Linux 키링(cursor-agent)"
           },
           "staleUsage": "마지막으로 확인된 사용량 — 최신 새로고침이 실패했습니다: {{reason}}",
           "subtitle": "이 컴퓨터에 이미 있는 로그인에서 Cursor 플랜 사용량을 보여줍니다. Orca는 읽기만 하며 Cursor 로그인을 변경하지 않습니다.",
@@ -15362,7 +15359,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "붙여넣을 내용이 에뮬레이터 키보드 입력에 비해 너무 큽니다.",
-            "unsupportedPasteText": "에뮬레이터 키보드 붙여넣기는 US 키보드 텍스트만 지원합니다.",
             "pasteTargetUnavailable": "기기가 준비되지 않아 에뮬레이터 키보드 붙여넣기에 실패했습니다."
           }
         }
@@ -16622,8 +16618,6 @@
             "27d863542c": "브라우저 주석",
             "e48569ac6d": "이 사이트에 접속할 수 없습니다.",
             "bbe8f15e83": "이 분할창은 활성 런타임 서버에서 렌더링됩니다.",
-            "8b7e6d1f5a": "브라우저 주석은 로컬 브라우저 탭에서만 사용할 수 있습니다.",
-            "deb5293610": "원격 런타임에서는 브라우저 주석을 사용할 수 없습니다.",
             "90d021f2ad": "추가",
             "0cb3bd6221": "주석 의도",
             "532bac48c5": "여기에서 agent가 무엇을 변경해야 하는지 설명하세요...",
@@ -17435,10 +17429,6 @@
           "standaloneTerminal": "독립형 터미널"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "경로가 클립보드에 복사되었습니다.",
-          "copyPathFailed": "경로를 복사하지 못했습니다.",
-          "workspace": "워크스페이스",
-          "copyPath": "경로 복사",
           "jumpToWorkspace": "워크스페이스로 이동"
         },
         "ActivityThreadContextMenu": {
@@ -18219,7 +18209,6 @@
         "stoppedUpdate_other": "Orca 업데이트로 채팅 {{count}}개가 중지되었습니다.",
         "stoppedRestart_other": "Orca 종료로 채팅 {{count}}개가 중지되었습니다.",
         "promptsNotResent": "재개해도 프롬프트는 다시 전송되지 않습니다.",
-        "promptsNotSent": "프롬프트는 다시 전송되지 않았습니다.",
         "resume": "재개",
         "details": "세부 정보",
         "close": "닫기",
@@ -18434,7 +18423,8 @@
       "install": {
         "checking": "이 호스트에서 {{agent}}이(가) 준비되었는지 확인하는 중…",
         "cliInstall": "설치",
-        "cliRecheck": "다시 확인"
+        "cliRecheck": "다시 확인",
+        "openAgentSettings": "설정 열기"
       },
       "reasoning": "추론",
       "contextMenu": {
@@ -18475,6 +18465,7 @@
         "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
         "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "설정 → 에이전트에서 {{agent}}의 명령은 Orca가 찾을 수 있는 프로그램으로 시작해야 합니다. 변수, 파이프 및 기타 셸 구문은 지원되지 않습니다. 변수는 환경 설정을 사용하세요. 명령을 변경하거나 초기화하세요.",
+        "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}를 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
         "runtimeNotInstalled": "{{agent}}이(가) 이 채팅을 실행하는 컴퓨터에 설치되어 있지 않습니다. 최신 버전의 Orca에서 채팅을 통해 설치하세요.",
         "fullAccessAsRoot": "{{agent}}은(는) root로 실행되는 동안 전체 액세스를 사용하지 않습니다. 이 채팅을 실행하는 컴퓨터의 설정 → 에이전트에서 {{agent}}에 다른 권한을 선택한 다음 새 채팅을 시작하세요.",
         "launchPreparationFailed": "Orca가 이 채팅을 실행하는 컴퓨터에서 {{agent}} 시작을 준비하지 못했습니다.",
@@ -18699,6 +18690,7 @@
         "optionUpdateFailed": "옵션을 업데이트하지 못했습니다",
         "optionValue": {
           "none": "없음",
+          "off": "꺼짐",
           "fast": "빠름",
           "minimal": "최소",
           "low": "낮음",
@@ -19400,7 +19392,6 @@
         "copyFailed": "복사하지 못했습니다",
         "copyIdentity": "{{value0}} 복사",
         "detachedCommit": "커밋 {{head}} (브랜치 아님)",
-        "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
         "worktree": "작업 트리"
@@ -19439,6 +19430,56 @@
       "splitDown": "아래로 분할",
       "automationSaved": {
         "openFullPage": "페이지 열기"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "시작하지 않음",
+          "connected": "연결됨",
+          "disabled": "비활성화됨",
+          "failed": "실패",
+          "failedReason": "실패: {{error}}",
+          "needsAuth": "로그인 필요",
+          "needsAuthAfterSend": "로그인이 필요합니다. 메시지를 보내면 여기서 로그인할 수 있습니다.",
+          "pending": "연결 중…",
+          "tools_other": "도구 {{count}}개"
+        },
+        "signIn": {
+          "external": "열린 페이지에서 완료하세요",
+          "waiting": "로그인을 기다리는 중…",
+          "waitingBrowser": "브라우저를 기다리는 중…",
+          "action": "로그인",
+          "remote": "로그인 후 브라우저가 불러올 수 없는 페이지로 이동합니다. 해당 페이지의 주소를 복사해 여기에 붙여넣으세요.",
+          "done": "완료",
+          "finish": "완료",
+          "openAgain": "다시 열기",
+          "addressLabel": "로그인 페이지 주소",
+          "unfinished": "로그인이 아직 완료되지 않았습니다. 열린 페이지에서 완료한 다음 “완료”를 누르세요."
+        },
+        "title": "MCP 서버",
+        "close": "닫기",
+        "loading": "불러오는 중…",
+        "notRunning": "다음 메시지를 보내면 연결됩니다",
+        "unsupported": "여기서 관리하려면 이 채팅 호스트의 Orca를 업데이트하세요",
+        "readFailed": "불러오지 못함",
+        "retry": "다시 시도",
+        "empty": "이 채팅에 설정된 서버 없음",
+        "cancel": "취소",
+        "reconnect": "다시 연결",
+        "toggle": "{{name}} 사용",
+        "actionFailed": "작업을 수행하지 못했습니다. 다시 시도하세요.",
+        "summary": {
+          "connected": "연결됨: {{count}}",
+          "needsAuth_other": "로그인 필요: {{count}}",
+          "failed": "실패: {{count}}",
+          "signingIn": "{{name}}에 로그인하는 중"
+        },
+        "source": {
+          "project": "프로젝트",
+          "local": "로컬",
+          "user": "사용자",
+          "plugin": "플러그인",
+          "session": "세션"
+        }
       }
     },
     "tab": {
@@ -19710,7 +19751,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 워크스페이스의 커밋되지 않은 변경 사항이나 추적되지 않은 변경 사항은 영구적으로 삭제됩니다.",
           "unavailable": "변경 사항을 확인할 수 없습니다",
           "checking": "변경 사항 확인 중…",
           "checkingDetails": "확인 중…",
@@ -19730,7 +19770,6 @@
           "line_one": "파일 {{count}}개의 저장하지 않은 편집 내용이 삭제됩니다: {{files}}",
           "line_other": "파일 {{count}}개의 저장하지 않은 편집 내용이 삭제됩니다: {{files}}"
         },
-        "ignoredFilesLost": "무시된 파일이 사라집니다: {{names}}",
         "ignoredFilesUnchecked": "무시된 파일을 모두 확인하지 못했습니다"
       }
     },
@@ -20121,7 +20160,6 @@
       "cancelFailed": "설치를 취소하지 못했습니다. 다시 시도하세요.",
       "install": "{{agent}} 설치",
       "installManaged": "Orca 사본 설치",
-      "installed": "설치됨",
       "notInstalled": "설치되지 않았습니다.",
       "progress": "{{agent}} 다운로드",
       "readFailed": "이 호스트에서 {{agent}}을(를) 확인할 수 없습니다. 다시 시도하는 중입니다.",
@@ -21797,7 +21835,6 @@
         "withIgnored": "{{what}} 및 무시된 파일이 사라집니다",
         "ignoredOnly": "무시된 파일이 사라집니다"
       },
-      "showChanges": "변경 사항 보기",
       "unsavedSuffix": "(저장 안 됨)",
       "onHost": "{{host}}에 있음",
       "forceDeletingEllipsis": "강제 삭제 중…",
@@ -22262,8 +22299,7 @@
     "refresh": "새로 고침",
     "restartLocal": "로컬 데몬 다시 시작",
     "killAllLocal": "모든 로컬 세션 종료",
-    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다.",
-    "metricDetails": "지표 세부 정보"
+    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다."
   },
   "workspaceSpace": {
     "table": {
@@ -22440,7 +22476,9 @@
       "128cce6e6d": "제목 설정…",
       "e9da9f872a": "리뷰 노트를 에이전트에 보내기",
       "1524825c2c": "워크스페이스 보드 전환",
-      "d286d1ab85": "창 제목 지우기"
+      "d286d1ab85": "창 제목 지우기",
+      "botItemPrevious": "이전 항목",
+      "botItemNext": "다음 항목"
     },
     "group": {
       "global": "글로벌",
@@ -22634,6 +22672,9 @@
     "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다.",
     "math": {
       "scrollDisplayEquation": "수식 블록 스크롤"
+    },
+    "messageTime": {
+      "yesterday": "어제 {{time}}"
     }
   },
   "runtime": {
@@ -23515,7 +23556,6 @@
       "chip": "봇",
       "chipLabel": "봇, 모두 표시",
       "searchEverything": "전체에서 \"{{text}}\" 검색",
-      "searchBotsFor": "\"{{text}}\"(으)로 봇 검색",
       "noMatch": "\"{{text}}\"와(과) 일치하는 봇이 없습니다",
       "noBotsYet": "아직 봇이 없습니다",
       "filtersPaused": "필터는 봇이 아닌 워크스페이스에 적용됩니다",
@@ -23530,7 +23570,7 @@
       "browse": "템플릿 둘러보기"
     },
     "new": {
-      "fromTemplate": "템플릿 사용"
+      "fromTemplate": "템플릿"
     },
     "googleSetup": {
       "otherAccount": "계정 전환"
@@ -23539,6 +23579,63 @@
       "paste": {
         "remoteSignIn": "원격 로그인"
       }
+    },
+    "row": {
+      "runsOn": "{{host}}에서 실행 중",
+      "disconnected": "연결 끊김",
+      "hostDisconnected": "{{host}} 연결 끊김",
+      "idle": "유휴 상태",
+      "paused": "일시 중지됨",
+      "reading": "메시지를 읽는 중",
+      "replying": "답변 중",
+      "replyingIn": "{{place}}에서 답변 중",
+      "replyingOn": "{{place}}에 답변 중",
+      "waitingCount": "대기 중인 이벤트: {{count}}개",
+      "waitingFor": "{{label}} 대기 중",
+      "waitingForUntil": "{{label}} 대기 중 · {{time}}까지"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{total}}개 중 {{index}}번째",
+        "navigation": "항목 {{index}} / {{total}}",
+        "loadingNext": "다음 항목을 불러오는 중",
+        "shown": "항목 {{index}} / {{total}}: {{title}}",
+        "firstItem": "첫 항목",
+        "lastItem": "마지막 항목",
+        "previous": "이전 항목",
+        "next": "다음 항목"
+      }
+    },
+    "hover": {
+      "asksQuestion": "답변을 기다리는 중",
+      "wantsApproval": "승인을 요청하는 중",
+      "signIn": "로그인이 필요합니다",
+      "access": "접근 권한을 요청했습니다",
+      "review": "검토",
+      "openHome": "{{name}}의 Home 열기",
+      "needsYouHeading_other": "{{count}}건에 대응이 필요합니다",
+      "moreAsks_other": "요청 {{count}}건 더 있음",
+      "itemsNeedYou_other": "사용자님을 위해 표시한 항목 {{count}}개"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "새 채팅"
+    },
+    "needs": {
+      "chat": "{{name}} 채팅"
+    },
+    "panel": {
+      "needYou_other": "대응 필요 {{count}}건",
+      "working": "{{count}}개 작업 중",
+      "working_other": "{{count}}개 작업 중"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}}에 계속",
+      "continuesShort": "{{time}}에 계속",
+      "continuesTip": "{{time}}에 자동으로 계속",
+      "hitLimit": "한도 도달 · {{time}}에 초기화",
+      "hitShort": "한도 도달",
+      "hitTip": "{{agent}} 사용 한도 도달 · {{time}}에 초기화"
     }
   },
   "speechModelUpdate": {
@@ -23572,5 +23669,8 @@
     "dontSend": "보내지 않음",
     "sending": "전송 중…",
     "sendReport": "보고서 보내기"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "이 컴퓨터"
   }
 }

@@ -10,6 +10,12 @@ one. Placement is not inherited:
 ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <placement> --agent <agent>
 ```
 
+An attempt that ran on a paired server may be retried on that server, or here
+once it is settled, and nowhere else. Choose between the two with "Which
+machine" in `references/placement-and-remote.md`, which also covers a machine
+the user named earlier. A retry or a fresh start here carries
+`--environment local`; one on a server carries `--on <server>` instead.
+
 `--retry-of` names the newest failed attempt. Retry only after the cause
 changes; the same start against an unchanged failure (an unreachable host)
 fails the same way, so report it instead.

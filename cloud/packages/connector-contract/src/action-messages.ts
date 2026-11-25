@@ -21,7 +21,13 @@ export const CONNECTOR_ACTION_VERBS = [
   'edit',
   'delete',
   'attach',
-  'set'
+  'set',
+  // Slack's own surfaces: pin or unpin a message, make a canvas or a list in a channel, and see or
+  // cancel the posts a bot scheduled there. Sent only to a cloud listing `slack.tools`.
+  'pin',
+  'canvas',
+  'list',
+  'scheduled'
 ] as const
 export type ConnectorActionVerb = (typeof CONNECTOR_ACTION_VERBS)[number]
 
@@ -216,6 +222,13 @@ export const ConnectorActionArgsSchema = z
     join: z.literal(true).optional(),
     // A post's idempotency key, minted once by the CLI: a retry with it never posts twice.
     postId: z.string().min(1).max(128).optional(),
+    // post: when to post it (epoch seconds), for the source to send then by itself. Sent only to a
+    // cloud listing `post.schedule`.
+    postAt: z.number().int().positive().optional(),
+    // list: its items, one line each, top to bottom.
+    items: z.array(z.string().trim().min(1).max(500)).min(1).max(50).optional(),
+    // scheduled: the id of one scheduled post to cancel; without it, they are listed.
+    cancel: z.string().min(1).max(64).optional(),
     // attach: the file, posted with text as its comment (a machine before `files.direct`).
     file: ConnectorAttachedFileSchema.optional(),
     // reply and attach, with stage: a file the machine uploads itself. The answer's `upload.url` takes

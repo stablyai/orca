@@ -11,14 +11,14 @@ export function getBundledWebClientRoot(): string | undefined {
 }
 
 export async function printServeReady(options: ServeOptions): Promise<void> {
-  const runtime = state.runtime
-  const runtimeRpc = state.runtimeRpc
+  const runtime = state.core.runtime
+  const runtimeRpc = state.core.runtimeRpc
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
   }
   // Validate project root before pairing publication can persist a pending device.
   const output = servePublishMode(options)
-  await state.serveReadinessPublisher.publish(
+  await state.core.serveReadinessPublisher.publish(
     {
       runtimeId: runtime.getRuntimeId(),
       ...(await buildServePairingReadiness(options, runtimeRpc)),

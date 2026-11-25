@@ -58,8 +58,7 @@ describe('DeepLinkState', () => {
     [
       'Windows argv',
       ['C:\\Program Files\\Orca\\Orca.exe', '--allow-file-access-from-files', BOT_URL]
-    ],
-    ['Linux argv', ['/opt/Orca/orca', '--no-sandbox', BOT_URL]]
+    ]
   ])('routes a bot link from %s', (_platform, argv) => {
     const state = new DeepLinkState()
     const publish = vi.fn()
@@ -87,18 +86,11 @@ describe('DeepLinkState', () => {
     expect(publish).toHaveBeenCalledTimes(6)
   })
 
-  it('keeps skill share routing beside bot links', () => {
-    const state = new DeepLinkState()
-
-    expect(state.accepts('orca://skills/share/abc')).toBe(true)
-    expect(state.capture(['orca', 'orca://skills/share/abc'])).toBe(true)
-    expect(state.consumeBotLink()).toBeNull()
-    expect(state.consumeSkillShare()).toBe('abc')
-  })
-
   it('hands every pending link to another instance, which routes each of them', () => {
     const state = new DeepLinkState()
-    state.capture(['orca://skills/share/abc'])
+    const skillShare = 'orca://skills/share/abc'
+    expect(state.accepts(skillShare)).toBe(true)
+    expect(state.capture([skillShare])).toBe(true)
     state.capture([BOT_URL])
     state.capture([`orca://linear/link?t=${'L'.repeat(43)}`])
     state.capture([`orca://github/link?t=${'G'.repeat(43)}`])

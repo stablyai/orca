@@ -4312,6 +4312,7 @@
             "e518f544b1": "Agent が検出されませんでした",
             "8dea9b5cdf": "有効な Agent がありません",
             "chatNotInstalled": "未インストール",
+            "chatInstallRequired": "インストールが必要",
             "startChat": "{{value0}} とチャットを開始する",
             "chatNotOverSsh": "SSH 接続ではチャットを利用できません",
             "chatNotInWsl": "WSL ではチャットを利用できません",
@@ -4919,13 +4920,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "合計ワーキングセット(WS): 現在 RAM に常駐しているページです。共有ページが複数のプロセスに表示されることがあり、Windows がページアウトしたメモリはここには含まれません。",
-                "privateBytesDescription": "合計プライベートバイト: これらのプロセスがコミットしたメモリで、常駐中かページアウト済みかを問わず計上されます。ホストがコミット制限に対して計上する値であるため、ページングによって上のワーキングセットが縮小しても増え続けます。",
-                "footprintDescription": "合計メモリフットプリント。アクティビティモニタに表示される値と同じで、各プロセスが所有するメモリ(グラフィックスメモリを含む)です。プロセス間で共有されるページは二重に計上されません。",
-                "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。",
                 "memColumn": "メモリ",
-                "memorySummary": "Σ メモリ",
-                "privateSummary": "Σ プライベート"
+                "memorySummary": "Σ メモリ"
               }
             },
             "manager": {
@@ -12604,7 +12600,8 @@
           "source": {
             "cli": "Cursor CLI 認証ファイル",
             "desktop": "Cursor IDE",
-            "keychain": "macOS キーチェーン（cursor-agent）"
+            "keychain": "macOS キーチェーン（cursor-agent）",
+            "keyring": "Linux キーリング（cursor-agent）"
           },
           "staleUsage": "最後に確認できた使用状況 — 最新の更新に失敗しました: {{reason}}",
           "subtitle": "このコンピュータに既にある Cursor のサインインから、Cursor プラン使用状況を表示します。Orca は読み取るだけで、Cursor のログインを変更することはありません。",
@@ -16203,7 +16200,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "貼り付ける内容が大きすぎて、エミュレータのキーボード入力では扱えません。",
-            "unsupportedPasteText": "エミュレータのキーボード貼り付けは、US キーボードの文字にのみ対応しています。",
             "pasteTargetUnavailable": "デバイスの準備ができていないため、エミュレータへのキーボード貼り付けに失敗しました。"
           }
         }
@@ -17493,8 +17489,6 @@
             "27d863542c": "ブラウザの注釈",
             "e48569ac6d": "このサイトにアクセスできませんでした。",
             "bbe8f15e83": "このペインは、アクティブなランタイムサーバーからレンダリングされます。",
-            "8b7e6d1f5a": "ブラウザの注釈は、ローカルブラウザのタブでのみ使用できます。",
-            "deb5293610": "ブラウザの注釈はリモートランタイムでは使用できません",
             "90d021f2ad": "追加",
             "0cb3bd6221": "注釈の意図",
             "532bac48c5": "Agent がここで何を変更する必要があるかを説明してください…",
@@ -18310,10 +18304,6 @@
           "standaloneTerminal": "スタンドアロンターミナル"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "パスがクリップボードにコピーされました",
-          "copyPathFailed": "パスのコピーに失敗しました",
-          "workspace": "ワークスペース",
-          "copyPath": "パスをコピーする",
           "jumpToWorkspace": "ワークスペースにジャンプ"
         },
         "ActivityThreadContextMenu": {
@@ -19157,7 +19147,6 @@
         "stoppedUpdate_other": "アップデートで {{count}} 件のチャットが停止しました。",
         "stoppedRestart_other": "Orca の終了で {{count}} 件のチャットが停止しました。",
         "promptsNotResent": "再開してもプロンプトは再送信されません。",
-        "promptsNotSent": "プロンプトは再送信されていません。",
         "resume": "再開",
         "details": "詳細",
         "close": "閉じる",
@@ -19453,6 +19442,7 @@
         "checking": "このホストで {{agent}} の準備ができているか確認しています…",
         "cliInstall": "インストール",
         "cliRecheck": "再確認",
+        "openAgentSettings": "設定を開く",
         "cliRecheckFailed": "このホストにインストールされている Agent を確認できませんでした。もう一度お試しください。"
       },
       "reasoning": "推論",
@@ -19502,6 +19492,7 @@
         "claudeAccountFolderMissing": "選択した Claude アカウントのフォルダーが見つかりません。もう一度サインインするか、別のアカウントを選択してください。",
         "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
         "agentCommandNotRunnable": "設定 → Agent にある {{agent}} の「コマンド」は、Orca が見つけられるプログラムで始める必要があります。変数、パイプなどのシェル構文には対応していません。変数には「環境」設定を使用してください。コマンドを変更するかリセットしてください。",
+        "agentCommandFailed": "設定 → Agent にある {{agent}} の「コマンド」で {{agent}} を起動できませんでした: {{detail}}。コマンドを変更するかリセットしてください。",
         "runtimeNotInstalled": "{{agent}} はこのチャットを実行しているコンピューターにインストールされていません。最新バージョンの Orca でチャットからインストールしてください。",
         "fullAccessAsRoot": "{{agent}} は root として実行されている間はフルアクセスを使用しません。このチャットを実行しているコンピューターの [設定 → Agent] で {{agent}} に別の権限を選択してから、新しいチャットを開始してください。",
         "launchPreparationFailed": "Orca は、このチャットを実行しているコンピューターで {{agent}} の起動を準備できませんでした。",
@@ -19729,6 +19720,7 @@
         "optionUpdateFailed": "オプションを更新できませんでした",
         "optionValue": {
           "none": "なし",
+          "off": "オフ",
           "ultracode": "Ultracode",
           "fast": "高速",
           "minimal": "最小",
@@ -20501,7 +20493,6 @@
         "copyFailed": "コピーできませんでした",
         "copyIdentity": "{{value0}} をコピー",
         "detachedCommit": "コミット {{head}}（ブランチではありません）",
-        "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
@@ -20582,6 +20573,56 @@
       },
       "automationSaved": {
         "openFullPage": "ページを開く"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "未開始",
+          "connected": "接続済み",
+          "disabled": "無効",
+          "failed": "失敗",
+          "failedReason": "失敗：{{error}}",
+          "needsAuth": "サインインが必要",
+          "needsAuthAfterSend": "サインインが必要です。メッセージを送信すると、ここでサインインできます。",
+          "pending": "接続中…",
+          "tools_other": "{{count}} 個のツール"
+        },
+        "signIn": {
+          "external": "開いたページで完了してください",
+          "waiting": "サインイン待ち…",
+          "waitingBrowser": "ブラウザー待ち…",
+          "action": "サインイン",
+          "remote": "サインイン後、ブラウザーは読み込めないページに移動します。そのページのアドレスをコピーし、ここに貼り付けてください。",
+          "done": "完了",
+          "finish": "完了",
+          "openAgain": "もう一度開く",
+          "addressLabel": "サインインページのアドレス",
+          "unfinished": "サインインはまだ完了していません。開いたページで完了させてから「完了」を押してください。"
+        },
+        "title": "MCP サーバー",
+        "close": "閉じる",
+        "loading": "読み込み中…",
+        "notRunning": "次のメッセージ送信時に接続",
+        "unsupported": "ここで管理するには、このチャットのホストの Orca を更新",
+        "readFailed": "読み込みに失敗",
+        "retry": "再試行",
+        "empty": "このチャットには未設定",
+        "cancel": "キャンセル",
+        "reconnect": "再接続",
+        "toggle": "{{name}} を使用",
+        "actionFailed": "操作できませんでした。もう一度お試しください。",
+        "summary": {
+          "connected": "接続済み: {{count}}",
+          "needsAuth_other": "{{count}} 件サインインが必要",
+          "failed": "失敗: {{count}}",
+          "signingIn": "{{name}} にサインイン中"
+        },
+        "source": {
+          "project": "プロジェクト",
+          "local": "ローカル",
+          "user": "ユーザー",
+          "plugin": "プラグイン",
+          "session": "セッション"
+        }
       }
     },
     "tab": {
@@ -20869,7 +20910,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git ワークスペース内のコミットされていない変更または未追跡の変更は完全に削除されます。",
           "unavailable": "変更を確認できませんでした",
           "checking": "変更を確認中…",
           "checkingDetails": "確認中…",
@@ -21282,6 +21322,33 @@
         "confirmCheckHomeFolder": "このホームフォルダーを共有する他のマシンで Orca は実行されていません",
         "details": "詳細",
         "clearing": "解除中…"
+      },
+      "workspaceCleanup": {
+        "keep": {
+          "folderWorkspaceSibling": "このワークスペースの別のリポジトリが使用中",
+          "activeWorkspace": "現在開いています",
+          "agentRunning": "Agent が実行中",
+          "archiveScript": "アーカイブスクリプトあり",
+          "archiveUnavailable": "アーカイブを利用できません",
+          "gitUnknown": "Git の状態を読み取れませんでした",
+          "ignoredFiles": "無視されたファイル",
+          "noRuleMatched": "一致するルールなし",
+          "notRemovable": "メインワークスペースまたはフォルダープロジェクト",
+          "pinned": "ピン留め済み",
+          "projectOff": "このプロジェクトのクリーンアップはオフ",
+          "recentlyActive": "過去 1 時間以内に使用",
+          "removing": "削除処理中",
+          "rulesOff": "有効なルールなし",
+          "terminalRunning": "ターミナルでプロセスが実行中",
+          "terminalUnknown": "ターミナルの状態が不明",
+          "uncommittedChanges": "未コミットの変更",
+          "unpushedCommits": "未プッシュのコミット",
+          "unsavedEditorChanges": "エディターの未保存の変更",
+          "waiting": "待機中"
+        },
+        "activity": {
+          "kept": "保持 · {{count}}"
+        }
       }
     },
     "agentChildRow": {
@@ -21373,7 +21440,6 @@
       "cancelFailed": "インストールをキャンセルできませんでした。もう一度お試しください。",
       "install": "{{agent}} をインストール",
       "installManaged": "Orca のコピーをインストール",
-      "installed": "インストール済み",
       "notInstalled": "インストールされていません。",
       "progress": "{{agent}} のダウンロード",
       "readFailed": "このホストの {{agent}} を確認できませんでした。再試行しています。",
@@ -23274,7 +23340,6 @@
         "withIgnored": "{{what}}と無視されたファイルが失われます",
         "ignoredOnly": "無視されたファイルが失われます"
       },
-      "showChanges": "変更を表示",
       "unsavedSuffix": "（未保存）",
       "onHost": "{{host}} 上",
       "forceDeletingEllipsis": "強制削除中…",
@@ -23770,8 +23835,7 @@
     "refresh": "更新",
     "restartLocal": "ローカルデーモンを再起動",
     "killAllLocal": "すべてのローカルセッションを終了",
-    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。",
-    "metricDetails": "メトリクスの詳細"
+    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。"
   },
   "workspaceSpace": {
     "table": {
@@ -23950,7 +24014,9 @@
       "128cce6e6d": "タイトルを設定…",
       "e9da9f872a": "レビューノートを Agent に送信",
       "1524825c2c": "ワークスペースボードの切り替え",
-      "d286d1ab85": "ペインのタイトルをクリア"
+      "d286d1ab85": "ペインのタイトルをクリア",
+      "botItemPrevious": "前の項目",
+      "botItemNext": "次の項目"
     },
     "group": {
       "global": "グローバル",
@@ -24187,6 +24253,9 @@
     "linkedMessageMissing": "そのメッセージが見つかりませんでした。",
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"
+    },
+    "messageTime": {
+      "yesterday": "昨日 {{time}}"
     }
   },
   "runtime": {
@@ -25119,7 +25188,6 @@
       "chip": "ボット",
       "chipLabel": "ボット、すべて表示に戻す",
       "searchEverything": "「{{text}}」をすべての項目から検索",
-      "searchBotsFor": "「{{text}}」でボットを検索",
       "noMatch": "「{{text}}」に一致するボットはありません",
       "noBotsYet": "ボットはまだありません",
       "filtersPaused": "フィルターはワークスペースに適用され、ボットには適用されません",
@@ -25134,7 +25202,7 @@
       "browse": "テンプレートを見る"
     },
     "new": {
-      "fromTemplate": "テンプレートを使用する"
+      "fromTemplate": "テンプレート"
     },
     "googleSetup": {
       "otherAccount": "アカウントを切り替え"
@@ -25143,6 +25211,63 @@
       "paste": {
         "remoteSignIn": "リモートサインイン"
       }
+    },
+    "row": {
+      "runsOn": "{{host}} で実行中",
+      "disconnected": "切断済み",
+      "hostDisconnected": "{{host}} は切断されています",
+      "idle": "アイドル",
+      "paused": "一時停止中",
+      "reading": "メッセージを読んでいます",
+      "replying": "返信中",
+      "replyingIn": "{{place}} で返信中",
+      "replyingOn": "{{place}} に返信中",
+      "waitingCount": "待機中のイベント：{{count}} 件",
+      "waitingFor": "{{label}} を待機中",
+      "waitingForUntil": "{{label}} を待機中 · {{time}} まで"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{total}} 件中 {{index}} 件目",
+        "navigation": "項目 {{index}} / {{total}}",
+        "loadingNext": "次の項目を読み込み中",
+        "shown": "項目 {{index}} / {{total}}：{{title}}",
+        "firstItem": "最初の項目",
+        "lastItem": "最後の項目",
+        "previous": "前の項目",
+        "next": "次の項目"
+      }
+    },
+    "hover": {
+      "asksQuestion": "回答を待っています",
+      "wantsApproval": "承認を求めています",
+      "signIn": "サインインが必要です",
+      "access": "アクセスをリクエストしました",
+      "review": "確認",
+      "openHome": "{{name}} の Home を開く",
+      "needsYouHeading_other": "{{count}} 件の対応が必要です",
+      "moreAsks_other": "ほか {{count}} 件のリクエスト",
+      "itemsNeedYou_other": "あなた向けにマークした項目 {{count}} 件"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "新しいチャット"
+    },
+    "needs": {
+      "chat": "{{name}} とのチャット"
+    },
+    "panel": {
+      "needYou_other": "要対応 {{count}} 件",
+      "working": "{{count}} 件が作業中",
+      "working_other": "{{count}} 件が作業中"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}} に再開",
+      "continuesShort": "{{time}} に再開",
+      "continuesTip": "{{time}} に自動的に再開",
+      "hitLimit": "上限に到達 · {{time}} にリセット",
+      "hitShort": "上限に到達",
+      "hitTip": "{{agent}} の利用上限に到達 · {{time}} にリセット"
     }
   },
   "speechModelUpdate": {
@@ -25200,5 +25325,8 @@
     "dontSend": "送信しない",
     "sending": "送信中…",
     "sendReport": "レポートを送信"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "このコンピューター"
   }
 }

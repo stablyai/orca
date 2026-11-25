@@ -111,7 +111,6 @@ export function NativeChatUsageLimitActionsProvider({
         <ClaudeSwitcherMenu
           key={executionHostIdForStructuredTarget(pane.target)}
           claude={null}
-          compact
           iconOnly
           chatAction={{
             target: pane.target,

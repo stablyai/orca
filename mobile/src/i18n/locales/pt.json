@@ -745,6 +745,57 @@
     "selectionQuote": {
       "action": "Citar",
       "hint": "Adiciona o texto selecionado à mensagem como citação"
+    },
+    "messageTime": {
+      "yesterday": "Ontem {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "Não iniciado",
+        "connected": "Conectado",
+        "failed": "Falhou",
+        "failedReason": "Falhou: {{error}}",
+        "finishOnPage": "Conclua na página que foi aberta",
+        "needsAuth": "Login necessário",
+        "needsAuthAfterSend": "Login necessário. Envie uma mensagem para entrar aqui.",
+        "off": "Desativado",
+        "pending": "Conectando…",
+        "tools_many": "{{count}} ferramentas",
+        "tools_one": "{{count}} ferramenta",
+        "tools_other": "{{count}} ferramentas",
+        "waitingForSignIn": "Aguardando login…"
+      },
+      "source": {
+        "project": "Projeto",
+        "local": "Local",
+        "user": "Usuário",
+        "plugin": "Plugin",
+        "session": "Sessão"
+      },
+      "title": "Servidores MCP",
+      "notRunning": "Os servidores MCP se conectam quando você envia sua próxima mensagem.",
+      "unsupported": "Atualize o Orca no host deste chat para gerenciar os servidores MCP aqui.",
+      "readFailed": "Não foi possível carregar os servidores MCP.",
+      "retry": "Tentar novamente",
+      "empty": "Não há servidores MCP configurados para este chat.",
+      "signIn": "Entrar",
+      "reconnect": "Reconectar",
+      "toggleLabel": "Usar {{name}}",
+      "actionFailed": "Não foi possível realizar a ação. Tente novamente.",
+      "openAgain": "Abrir novamente",
+      "pastePlaceholder": "Cole o endereço",
+      "pasteLabel": "Endereço da página de login",
+      "finish": "Concluir",
+      "signInUnfinished": "O login ainda não foi concluído. Conclua-o na página aberta e toque em “Concluído”.",
+      "summary": {
+        "signingIn": "entrando em {{name}}",
+        "connected": "Conectados: {{count}}",
+        "needsAuth_one": "{{count}} precisa de login",
+        "needsAuth_other": "{{count}} precisam de login",
+        "failed": "Com falha: {{count}}",
+        "needsAuth_many": "{{count}} precisam de login"
+      },
+      "pasteHint": "Quando o navegador chegar a uma página que não carrega, copie o endereço e cole aqui."
     }
   },
   "common": {
@@ -2421,6 +2472,9 @@
       "sendFailed": "Falha ao enviar comando de retomada"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Esta conversa de {{agent}} está aberta em um chat. Atualize o Histórico de sessões para abri-la.",
+      "ownershipUnknown": "O Orca não conseguiu confirmar quem é o proprietário desta conversa de {{agent}}. Atualize o Histórico de sessões e tente novamente.",
+      "preparationRefused": "O Orca não conseguiu preparar esta conversa do {{agent}}. Inicie um novo chat para continuar.",
       "prepareFailed": "Não foi possível preparar esta sessão legada do Codex. Tente retomar novamente."
     },
     "backgroundTask": {
@@ -2556,6 +2610,7 @@
     "failure": {
       "accountSwitchInProgress": "A configuração de {{agent}} está sendo alterada neste host. Tente novamente quando terminar.",
       "agentCommandNotRunnable": "O Comando de {{agent}} em Configurações → Agentes deve ser o caminho ou nome de um programa que o Orca possa encontrar, sem argumentos nem variáveis. Altere-o ou redefina-o.",
+      "agentCommandFailed": "O Comando do {{agent}} em Configurações → Agentes não iniciou o {{agent}}: {{detail}}. Altere ou redefina o comando.",
       "agentCommandNotSignedIn": "Entre na conta de {{agent}} com `{{loginCommand}}` no computador que executa este chat.",
       "agentNotSignedIn": "Entre na conta de {{agent}}.",
       "agentStarting": "O agente ainda está iniciando.",

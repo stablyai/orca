@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events'
 import { MessageChannel, type MessagePort } from 'node:worker_threads'
 import { afterEach, expect, it } from 'vitest'
 import { BackendPortRpc, type BackendPort } from './backend-port-rpc'
@@ -74,4 +75,18 @@ it('disconnects when a peer acknowledges a still-running request', async () => {
   channel.port2.postMessage({ ack: '1' })
   await disconnected.promise
   pending.resolve(null)
+})
+it('releases a shared cancel signal from every call it settles', async () => {
+  const { client, server } = pair(async (method, params) =>
+    method === 'hang' ? new Promise(() => {}) : params
+  )
+  const shared = new AbortController()
+  for (let i = 0; i < 40; i++) {
+    await expect(client.call('echo', i, shared.signal)).resolves.toBe(i)
+  }
+  const stuck = client.call('hang', undefined, shared.signal)
+  const rejected = expect(stuck).rejects.toThrow()
+  server.close()
+  await rejected
+  expect(getEventListeners(shared.signal, 'abort')).toHaveLength(0)
 })

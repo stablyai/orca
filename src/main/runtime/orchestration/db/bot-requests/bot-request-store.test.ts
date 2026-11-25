@@ -25,7 +25,7 @@ describe('admitBotRequest', () => {
       message: { from: 'orca_session_id:a', to: `orca_session_id:${toBotId}`, subject: 'task' }
     })
 
-  it('stores the mail and its record together', () => {
+  it('stores the mail and request together and suppresses duplicate open sends', () => {
     db = new OrchestrationDb(':memory:')
     const sent = admit('docs')
     expect(sent.kind).toBe('sent')
@@ -38,20 +38,17 @@ describe('admitBotRequest', () => {
       purpose: 'handoff',
       depth: 1
     })
-  })
 
-  it('returns the same send while it is open instead of sending it again', () => {
-    db = new OrchestrationDb(':memory:')
-    const first = admit('docs')
-    const again = admit('docs')
-    const firstId = first.kind === 'sent' ? first.message.id : ''
-    expect(again).toEqual({ kind: 'duplicate', messageId: firstId })
+    const key = { sendKey: 'docs:handoff:task', purpose: 'handoff' as const }
+    expect(db.botRequestBlocked(key)?.kind).toBe('duplicate')
+    expect(db.botRequestBlocked({ ...key, sendKey: 'other-send' })).toBeNull()
+    expect(admit('docs')).toEqual({ kind: 'duplicate', messageId: id })
     expect(db.getAllMessagesForHandle('orca_session_id:docs')).toHaveLength(1)
     // Any other send to the same bot in the same chain is new mail.
     expect(admit('docs', 'question').kind).toBe('sent')
     expect(admit('docs', 'handoff', 'root', 'docs:handoff:another task').kind).toBe('sent')
     // Once the first has ended, sending it again is new mail too.
-    db.recordBotRequestOutcome(firstId, 'answered')
+    db.recordBotRequestOutcome(id, 'answered')
     expect(admit('docs').kind).toBe('sent')
   })
 
@@ -116,15 +113,6 @@ describe('bot request outcomes', () => {
     db.recordBotRequestOutcome(settled.kind === 'sent' ? settled.message.id : '', 'dropped')
     expect(db.listUnreadBotRequests('docs').map(({ message }) => message.id)).toEqual([unread])
     expect(db.listUnreadBotRequests('docs-2')).toEqual([])
-  })
-
-  it('says why a request would be refused before anything is made for it', () => {
-    db = new OrchestrationDb(':memory:')
-    admitTo('docs')
-    const key = { sendKey: 'docs-send', purpose: 'handoff' as const }
-    expect(db.botRequestBlocked(key)?.kind).toBe('duplicate')
-    const other = { ...key, sendKey: 'other-send' }
-    expect(db.botRequestBlocked(other)).toBeNull()
   })
 })
 

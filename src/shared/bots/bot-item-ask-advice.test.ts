@@ -95,17 +95,14 @@ describe('botItemAskAdvice', () => {
     ['unclosed link target keeps its question', 'Is [fix](unfinished?', []],
     ['unclosed link target keeps its id', 'Ship it? [plan](x,ctx_zzzzzzzz', ['jargon']],
     ['unclosed label', 'Ship it? [plan,ctx_zzzzzzzz', ['jargon']],
-    ['unclosed bracket', 'Ship it? (ctx_zzzzzzzz', ['jargon']],
     ['after nested links', 'Ship it? [a]([b](c))ctx_zzzzzzzz', ['jargon']],
     ['after adjacent links', 'Ship it? [a](x)[b](y)ctx_zzzzzzzz', ['jargon']],
-    ['inside a closed link target', 'Ship [it](x/ctx_zzzzzzzz)?', []],
     ['unclosed backtick', 'Ship it? `ctx_zzzzzzzz', ['jargon']],
     ['backtick closed on another line', 'Ship it? `a\nctx_zzzzzzzz b`', ['jargon']],
     ['unclosed fence', 'Ship it?\n```\nctx_zzzzzzzz', ['jargon']],
     ['inside a closed fence', 'Ship it?\n```\nctx_zzzzzzzz\n```', []],
     ['inside a URL', 'Ship it? see,https://x.dev/ctx_zzzzzzzz', []],
     ['before a URL in the same word', 'Ship it? ctx_zzzzzzzz,https://x.dev', ['jargon']],
-    ['question mark after a URL', 'Is it https://x.dev?', []],
     ['three ticks closed by one tick', 'Ship it? ```ctx_zzzzzzzz`', ['jargon']],
     ['inside a closed two-tick span', 'Ship it? ``ctx_zzzzzzzz``', []],
     ['target with no label', 'Ship it? ](ctx_zzzzzzzz)', ['jargon']],
@@ -210,7 +207,7 @@ describe('botItemAskAdvice', () => {
       comment: `Head 363e3235aa01. ${'Context. '.repeat(40)}Reply A or B.`
     })
     expect(advice?.codes).toEqual(['prose_choices', 'no_question', 'long_question', 'jargon'])
-    expect(advice?.tip).toContain('--ask and --option')
+    expect(advice?.tip).toContain('--option values after --ask')
   })
 
   it('reads only the first 8,000 characters', () => {

@@ -89,6 +89,24 @@ describe('a new bot whose kickoff ended silent', () => {
     expect(kickoffNeedsRetry(CHAT, refused, true)).toBe(true)
   })
 
+  it('is sent again on Try again when the owner wrote while its agent could not start', async () => {
+    const refusedKickoff = submission(kickoff.payloadFingerprint, 'rejected')
+    // The owner's "hello" was refused by the same failed start: it never reached the agent.
+    const notSent = { ...submission('owner', 'rejected'), clientMessageId: 'hello' }
+    const fingerprints = async () => [
+      { clientMessageId: refusedKickoff.clientMessageId, fingerprint: kickoff.payloadFingerprint },
+      { clientMessageId: 'hello', fingerprint: 'owner' }
+    ]
+    const snapshot = async () => ({ submissions: [refusedKickoff, notSent], items: [] })
+    const send = vi.fn(async () => {})
+    const bot = { id: 'b1', name: 'Scout', firstRun: true as const, chatSessionId: CHAT }
+
+    expect(await retryBotKickoff(bot, { fingerprints, snapshot, send }, true)).toBe(true)
+    expect(send).toHaveBeenCalledOnce()
+    // Unasked, Orca still leaves a chat the owner wrote in alone.
+    expect(await retryBotKickoff(bot, { fingerprints, snapshot, send })).toBe(false)
+  })
+
   it('refuses Try again while the last kickoff is still on its way', () => {
     const first = [turn('interrupted')]
     // Sent but not taken yet, or taken with its turn not open yet.

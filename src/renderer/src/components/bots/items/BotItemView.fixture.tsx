@@ -193,3 +193,209 @@ export const shortPaneLongAnswer = defineFixture({
     </div>
   )
 })
+
+const ASK = {
+  context: [
+    'Drafts for the launch post are ready, fact-checked against the last two weeks of releases.',
+    '',
+    '- **A: smoother day with your agents.** Leads with the worktree palette and the new item view; ends on "3 cleared".',
+    '- **B: tiny friction.** Five small fixes in a row, one line each, no clip.',
+    '- **C: juggling multiple agents.** The orchestration demo, with the side-by-side terminals.',
+    '- The video is re-cut without the end card, 28 s.',
+    '',
+    'All three fit in one post with the clip. The 9 AM slot is held for tomorrow.'
+  ].join('\n'),
+  questions: [
+    {
+      prompt: 'Which draft goes out with the video tomorrow at 9 AM?',
+      options: [
+        { label: 'A: smoother day with your agents' },
+        { label: 'B: tiny friction' },
+        { label: 'C: juggling multiple agents' },
+        { label: 'None, redraft' }
+      ],
+      recommended: 0
+    }
+  ]
+}
+const asking = makeTestBotItem(283, {
+  title: 'Launch post: pick the draft',
+  owner: { botId: fixtureCos.id, name: 'Launch helper' },
+  status: 'needs_you',
+  question: {
+    eventId: 'e51',
+    text: 'readable copy',
+    gist: 'Drafts for the launch post are ready.',
+    decisions: [
+      {
+        question: ASK.questions[0].prompt,
+        replies: ASK.questions[0].options.map((option, index) => ({
+          label: option.label,
+          recommended: index === 0
+        }))
+      }
+    ]
+  }
+})
+const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' }
+const askingView = {
+  ...snoozedView,
+  item: asking,
+  events: [
+    { id: 'e50', kind: 'made' as const, actor: asker, data: {}, at: Date.now() - 3 * 3_600_000 },
+    {
+      id: 'e51',
+      kind: 'commented' as const,
+      actor: asker,
+      data: { text: 'readable copy', ask: ASK },
+      at: Date.now() - 20 * 60_000
+    },
+    {
+      id: 'e52',
+      kind: 'status' as const,
+      actor: asker,
+      data: { from: 'working', to: 'needs_you' },
+      at: Date.now() - 20 * 60_000
+    }
+  ]
+}
+
+// The agent's question waiting on the owner: its body folded, the Needs you footer and quick replies,
+// and the one comment box naming it.
+export const waitingQuestion = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[680px] flex-col bg-sidebar">
+      <BotItemBody bot={{ ...fixtureCos, name: 'Launch helper' }} item={asking} view={askingView} />
+    </div>
+  )
+})
+
+const answered = makeTestBotItem(283, {
+  title: 'Launch post: pick the draft',
+  owner: { botId: fixtureCos.id, name: 'Launch helper' },
+  status: 'working'
+})
+const answeredView = {
+  ...askingView,
+  item: answered,
+  events: [
+    ...askingView.events,
+    {
+      id: 'e53',
+      kind: 'commented' as const,
+      actor: { kind: 'owner' as const },
+      data: { text: 'A: smoother day with your agents', answers: 'e51' },
+      at: Date.now() - 5 * 60_000
+    },
+    {
+      id: 'e54',
+      kind: 'status' as const,
+      actor: { kind: 'owner' as const },
+      data: { from: 'needs_you', to: 'working', cause: 'answer' },
+      at: Date.now() - 5 * 60_000
+    }
+  ]
+}
+
+// After a quick reply: the line reads "Question → answer", muted, and the reply has no card of its own.
+export const answeredQuestion = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[680px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Launch helper' }}
+        item={answered}
+        view={answeredView}
+      />
+    </div>
+  )
+})
+
+const SEVERAL = {
+  context: [
+    'Round 2 is open in your browser. It shows four places for the chat switcher, each switching in one click.',
+    '',
+    '- **P1, top strip (recommended):** a row of chats across the top of the workspace, each with its status dot. The selected chat’s own tabs sit underneath.',
+    '- **P2, right panel:** a Chats tab in the right panel. The runner-up, but it only works when the panel is open on that tab.',
+    '- **P3, left sidebar:** the chat rows under the agent.',
+    '- **P4, chat rail:** a narrow vertical strip on the left edge of the workspace.'
+  ].join('\n'),
+  questions: [
+    {
+      prompt: 'Where should the chat switcher live?',
+      options: [
+        { label: 'P1 top strip' },
+        { label: 'P2 right panel' },
+        { label: 'P3 left sidebar' },
+        { label: 'P4 chat rail' }
+      ],
+      recommended: 0
+    },
+    {
+      prompt: 'With the top strip, does the left sidebar still list each agent’s chats?',
+      options: [{ label: 'No, one row per agent' }, { label: 'Keep them as a second way in' }],
+      recommended: 0
+    },
+    {
+      prompt: 'Can you close a chat from its pill (× on hover, like a tab)?',
+      options: [{ label: 'Yes, × on hover' }, { label: 'Only from the chat’s menu' }],
+      recommended: 0
+    },
+    {
+      prompt: 'Shortcut to switch chats?',
+      options: [{ label: '⇧⌘1–9' }, { label: '^1–9 (today’s tab keys)' }],
+      recommended: 0
+    }
+  ]
+}
+const severalItem = makeTestBotItem(231, {
+  title: 'Per-chat layouts: where the chat switcher lives',
+  owner: { botId: fixtureCos.id, name: 'Layouts helper' },
+  status: 'needs_you',
+  question: { eventId: 'e61', text: 'readable copy', gist: 'Round 2 is open in your browser.' }
+})
+const severalView = {
+  ...askingView,
+  item: severalItem,
+  events: [
+    { id: 'e60', kind: 'made' as const, actor: asker, data: {}, at: Date.now() - 3 * 3_600_000 },
+    {
+      id: 'e61',
+      kind: 'commented' as const,
+      actor: asker,
+      data: { text: 'readable copy', ask: SEVERAL },
+      at: Date.now() - 20 * 60_000
+    },
+    {
+      id: 'e62',
+      kind: 'status' as const,
+      actor: asker,
+      data: { from: 'working', to: 'needs_you' },
+      at: Date.now() - 20 * 60_000
+    }
+  ]
+}
+
+// An ask of four questions, two answered: one line at a time, the answers held above until the last.
+export const severalQuestions = defineFixture({
+  width: 900,
+  render: () => (
+    <div className="flex h-[640px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Layouts helper' }}
+        item={severalItem}
+        view={severalView}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    for (const label of ['P1 top strip', 'No, one row per agent']) {
+      const chip = [...frame.querySelectorAll('button')].find((button) =>
+        button.textContent?.startsWith(label)
+      )
+      chip?.click()
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+})

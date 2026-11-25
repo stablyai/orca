@@ -35,7 +35,7 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'browser_extension_used',
   'browser_extensions_banner_assigned',
   'app_starred_orca',
-  'codex_history_cleanup_sweep',
+  'codex_history_move_status',
   'daemon_adopted',
   'daemon_async_io_health',
   'daemon_audit_eligibility',
@@ -127,7 +127,12 @@ export function registerTelemetryHandlers(store: Store): void {
     if (!storeRef) {
       return
     }
-    if (!consumeConsentMutationToken()) {
+    // Why no-op: a repeat opt-out must not re-emit telemetry_opted_out or rewrite settings.
+    if (!optedIn && storeRef.getSettings().telemetry?.optedIn === false) {
+      return
+    }
+    // Why opt-in only: a rate limit must never silently keep telemetry on after the user turns it off (#45214).
+    if (optedIn && !consumeConsentMutationToken()) {
       return
     }
     // Read provenance before consent mutation changes the pending-notice state.

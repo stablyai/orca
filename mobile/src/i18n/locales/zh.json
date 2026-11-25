@@ -745,7 +745,8 @@
         "waitingForSignIn": "正在等待登录…",
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
-        "off": "已关闭"
+        "off": "已关闭",
+        "notStarted": "尚未启动"
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",
@@ -783,6 +784,9 @@
     "selectionQuote": {
       "action": "引用",
       "hint": "将所选文本作为引用添加到消息中"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "common": {
@@ -2444,6 +2448,9 @@
       "sendFailed": "发送恢复命令失败"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "此 {{agent}} 会话已在聊天中打开，请刷新会话历史以打开它",
+      "ownershipUnknown": "Orca 无法确认此 {{agent}} 会话的归属，请刷新会话历史并重试",
+      "preparationRefused": "Orca 无法准备此 {{agent}} 对话。请开启新聊天继续",
       "prepareFailed": "无法准备此旧版 Codex 会话。请重试恢复"
     },
     "backgroundTask": {
@@ -2564,6 +2571,7 @@
     "failure": {
       "accountSwitchInProgress": "正在此主机上更改 {{agent}} 的设置。请在完成后重试",
       "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置",
+      "agentCommandFailed": "设置 → 智能体中{{agent}}的“命令”未能启动 {{agent}}：{{detail}}。请修改或重置命令。",
       "agentCommandNotSignedIn": "请在运行此聊天的电脑上使用 `{{loginCommand}}` 登录 {{agent}}",
       "agentNotSignedIn": "请登录 {{agent}}",
       "agentStarting": "智能体仍在启动",

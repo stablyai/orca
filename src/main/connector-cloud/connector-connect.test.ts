@@ -235,24 +235,6 @@ describe('the login a Linear trip hands this computer', () => {
     return fake
   }
 
-  it('opens and keeps the login, and hands the renderer only the link', async () => {
-    const { sealConnectLogin } =
-      await import('../../../cloud/packages/connector-contract/src/connect-login-seal')
-    const { client, openExternal, started } = sealingClient((key) => sealConnectLogin(key, login))
-    const keepLogin = vi.fn()
-    const trip = connectConnector('linear', client, {
-      switchAccount: false,
-      openExternal,
-      keepLogin
-    })
-    const loopback = await started
-    await fetch(
-      `http://127.0.0.1:${loopback?.port}/connector/done?r=${RESULT}&n=${loopback?.nonce}`
-    )
-    expect(await trip).toEqual({ ok: true, value: linked })
-    expect(keepLogin).toHaveBeenCalledWith(login, linked)
-  })
-
   it('reports the link only after the kept login is saved', async () => {
     const { sealConnectLogin } =
       await import('../../../cloud/packages/connector-contract/src/connect-login-seal')

@@ -10,7 +10,9 @@ import { isSenderOwnRejection } from './chat-worker-error-words'
 import { readChatRequestError } from './chat-request-error-read'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
-import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
+import { observeWorker } from './worker-presence-report'
+import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
+import { redactFailure } from './worker-turn-stop-wording'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
@@ -34,11 +36,21 @@ export function chatWorkerDispatches(sessionId: string, db: OrchestrationDb): Ch
   return found
 }
 
+/** The id builds before the presence table gave a failed request's report. */
 function escalationId(dispatchId: string, request: StructuredAgentSessionRequestFailure): string {
   return `msg_chaterr_${createHash('sha256')
     .update(JSON.stringify([dispatchId, request.sessionId, request.kind, request.id]))
     .digest('hex')
     .slice(0, 24)}`
+}
+
+const REQUEST_FENCE = 'request:'
+
+/** Its worker began another turn, or rested after one, since the failure: other failed requests'
+ *  reports aside, that is the newer news. */
+function movedOnSince(db: OrchestrationDb, dispatchId: string, seen: number | undefined): boolean {
+  const now = readWorkerPresence(db, dispatchId)
+  return now !== null && now.generation !== seen && !now.fence?.startsWith(REQUEST_FENCE)
 }
 
 /** Capture authority synchronously; notification bookkeeping never rejects a committed write. */
@@ -52,49 +64,55 @@ export async function escalateChatWorkerError(
     if (!db || targets.length === 0) {
       return
     }
+    // What the worker did next is the newer fact: a retry it started meanwhile is not stopped.
+    const seen = new Map(
+      targets.map(({ dispatch }) => [dispatch.id, readWorkerPresence(db, dispatch.id)?.generation])
+    )
     const error = await readChatRequestError(request)
     if (!error || isSenderOwnRejection(error)) {
       return
     }
-    const { text, detail, kind } = error
+    const { kind } = error
+    const text = redactFailure(error.text)
+    const detail = error.detail && redactFailure(error.detail)
     for (const { dispatch, from } of targets) {
-      // The journal read awaited: the Dispatch may have settled.
+      // The journal read awaited: the Dispatch may have settled, or the worker moved on.
       const current = db.getDispatchContextById(dispatch.id)
       if (
         (current?.status !== 'pending' && current?.status !== 'dispatched') ||
-        current.assignee_handle !== dispatch.assignee_handle
+        current.assignee_handle !== dispatch.assignee_handle ||
+        movedOnSince(db, dispatch.id, seen.get(dispatch.id))
       ) {
         continue
       }
-      escalateWorkerFailure(
+      observeWorker(
         db,
-        dispatch,
+        { kind: 'local', dispatch },
         {
-          id: escalationId(dispatch.id, request),
-          from,
-          describe: (task) => ({
-            subject: `Agent hit an error: ${text.length > 120 ? `${text.slice(0, 119)}…` : text}`,
-            body: [
-              `Worker ${from} hit an error while running task ${task}.`,
-              `Error: ${text}`,
-              ...(detail ? [`Details from the agent: ${detail}`] : []),
-              'The task is still assigned to this chat, which keeps its history.'
-            ].join('\n')
-          }),
-          payload: {
-            taskId: dispatch.task_id,
-            dispatchId: dispatch.id,
-            handle: from,
-            sessionId: request.sessionId,
-            agent: request.agent,
-            turnOutcome: request.outcome,
-            requestId: request.id,
-            ...(kind ? { failureKind: kind } : {}),
-            error: text,
-            ...(detail ? { detail } : {})
+          presence: 'at-rest',
+          fence: `${REQUEST_FENCE}${request.sessionId}:${request.kind}:${request.id}`,
+          legacyStopKey: `request:${request.kind}:${request.id}`,
+          legacyReportId: escalationId(dispatch.id, request),
+          rest: {
+            from,
+            reason: 'errored',
+            lastOutput: undefined,
+            requestError: {
+              text,
+              ...(detail ? { detail } : {}),
+              facts: {
+                sessionId: request.sessionId,
+                agent: request.agent,
+                turnOutcome: request.outcome,
+                requestId: request.id,
+                ...(kind ? { failureKind: kind } : {}),
+                error: text,
+                ...(detail ? { detail } : {})
+              }
+            }
           }
         },
-        deps.notify
+        deps
       )
     }
   } catch (error) {

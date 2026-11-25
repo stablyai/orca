@@ -38,6 +38,8 @@ function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | u
 export type ScrcpyKeyboard = {
   sendKey: (name: string, shift: boolean) => void
   sendText: (text: string) => Promise<boolean>
+  /** One clipboard paste on the device, newlines kept as text. */
+  pasteText: (text: string) => Promise<boolean>
 }
 
 export type EmulatorControlStream = {
@@ -260,6 +262,10 @@ export function useEmulatorControlStream(
             sendText: (text) =>
               window.api.emulator
                 .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, text })
+                .catch(() => false),
+            pasteText: (text) =>
+              window.api.emulator
+                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, text, paste: true })
                 .catch(() => false)
           }
         : null,

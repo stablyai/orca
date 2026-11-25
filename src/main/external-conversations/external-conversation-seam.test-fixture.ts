@@ -14,7 +14,10 @@ import { fakeLinkStore } from './external-conversation.test-fixture'
 export function harness(
   records = fakeLinkStore(),
   db = new OrchestrationDb(':memory:'),
-  extra: Pick<ExternalConversationSeamDeps, 'nameChannel' | 'promptsAudience' | 'replyFill'> = {}
+  extra: Pick<
+    ExternalConversationSeamDeps,
+    'nameChannel' | 'promptsAudience' | 'askerImages' | 'replyFill'
+  > = {}
 ) {
   const removed = new Set<(worktreeId: string) => void>()
   const hookRows = new Map<string, AgentStatusIpcPayload>()

@@ -12,7 +12,10 @@ import {
 import { ConnectorTurnEvents } from './connector-turn-events'
 
 const h = pollClientHarness()
-const turn = (source: 'feishu' | 'lark' | 'slack', turnId: number): ConversationEvent => ({
+const turn = (
+  source: 'feishu' | 'lark' | 'slack',
+  turnId: number
+): Extract<ConversationEvent, { kind: 'turn-ended' }> => ({
   kind: 'turn-ended',
   conversation: { source, externalId: 'app:tenant:chat:root' },
   worktreeId: 'workspace',
@@ -23,7 +26,7 @@ const turn = (source: 'feishu' | 'lark' | 'slack', turnId: number): Conversation
   lastAssistantMessage: 'Finished work.',
   origin: 'delivery'
 })
-const ended = () => h.fake.events.filter((event) => isRecord(event) && event.kind === 'turn-ended')
+const ended = () => h.fake.events.filter(isRecord).filter((event) => event.kind === 'turn-ended')
 
 // Real durable event file and client; fake Cloud with the older deployment's source restriction.
 describe('new-source turn ends across capability negotiation', () => {
@@ -53,57 +56,96 @@ describe('new-source turn ends across capability negotiation', () => {
     }
   })
 
-  it('retains old and newly observed Lark turn ends while an older Cloud still receives Slack', async () => {
-    h.fake.features = ['lark.mentions', 'replies.outbox']
-    h.fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
-    const first = h.startClient()
-    await settle()
-    first.emit(turn('lark', 21))
-    await settle()
-    await ConnectorTurnEvents.settled()
-    first.client.stop()
-
-    h.fake.features = []
-    h.fake.eventSources = ['slack', 'linear', 'github', 'discord', 'webhook']
-    h.fake.forced.delete(CONNECTOR_PATHS.events)
-    const oldCloud = h.startClient()
-    await settle()
-    oldCloud.emit(turn('slack', 22))
-    oldCloud.emit(turn('lark', 23))
-    await settle(100)
-    expect(ended()).toMatchObject([{ conversation: { source: 'slack' }, turnId: 22 }])
-    await ConnectorTurnEvents.settled()
-    const stored = JSON.parse(
-      readFileSync(join(h.userDataPath, 'connector-turn-outbox.json'), 'utf8')
-    )
-    expect(stored.turnEnds).toMatchObject([
-      { conversation: { source: 'lark', externalId: 'app:tenant:chat:root' }, turnId: 21 },
-      { conversation: { source: 'lark', externalId: 'app:tenant:chat:root' }, turnId: 23 }
-    ])
-    oldCloud.client.stop()
-
-    h.fake.features = ['lark.mentions', 'replies.outbox']
-    h.fake.eventSources = undefined
-    const upgraded = h.startClient()
-    try {
-      await settle(100)
-      expect(ended()).toMatchObject([
-        { conversation: { source: 'slack' }, turnId: 22 },
-        {
-          conversation: { source: 'lark', externalId: 'app:tenant:chat:root' },
-          turnId: 21,
-          lastAssistantMessage: 'Finished work.'
-        },
-        {
-          conversation: { source: 'lark', externalId: 'app:tenant:chat:root' },
-          turnId: 23,
-          lastAssistantMessage: 'Finished work.'
-        }
-      ])
-      await ConnectorTurnEvents.settled()
-      expect(existsSync(join(h.userDataPath, 'connector-turn-outbox.json'))).toBe(false)
-    } finally {
-      upgraded.client.stop()
+  it.each([
+    {
+      source: 'feishu',
+      recordedPaused: false,
+      receivingPaused: true,
+      expectedResumes: [true, true]
+    },
+    {
+      source: 'lark',
+      recordedPaused: true,
+      receivingPaused: false,
+      expectedResumes: [undefined, undefined]
     }
-  })
+  ] as const)(
+    'replays held $source pause status for the receiving Cloud while Slack continues',
+    async ({ source, recordedPaused, receivingPaused, expectedResumes }) => {
+      const pausedTurn = (turnId: number): ConversationEvent => ({
+        ...turn(source, turnId),
+        stopReason: 'failure',
+        lastAssistantMessage: undefined,
+        stateOnly: true,
+        resumes: true,
+        failure: { category: 'usage_limit', usageLimit: { resetsAt: SERVER_NOW + 60_000 } }
+      })
+      h.fake.features = [
+        `${source}.mentions`,
+        'replies.outbox',
+        ...(recordedPaused ? ['replies.paused'] : [])
+      ]
+      h.fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
+      const first = h.startClient()
+      await settle()
+      first.emit(pausedTurn(21))
+      await settle()
+      await ConnectorTurnEvents.settled()
+      first.client.stop()
+
+      h.fake.features = []
+      h.fake.eventSources = ['slack', 'linear', 'github', 'discord', 'webhook']
+      h.fake.forced.delete(CONNECTOR_PATHS.events)
+      const oldCloud = h.startClient()
+      await settle()
+      oldCloud.emit(turn('slack', 22))
+      oldCloud.emit(pausedTurn(23))
+      await settle(100)
+      expect(ended()).toMatchObject([{ conversation: { source: 'slack' }, turnId: 22 }])
+      await ConnectorTurnEvents.settled()
+      const stored = JSON.parse(
+        readFileSync(join(h.userDataPath, 'connector-turn-outbox.json'), 'utf8')
+      )
+      expect(stored.turnEnds).toMatchObject([
+        { conversation: { source, externalId: 'app:tenant:chat:root' }, turnId: 21 },
+        { conversation: { source, externalId: 'app:tenant:chat:root' }, turnId: 23 }
+      ])
+      oldCloud.client.stop()
+
+      h.fake.features = [
+        `${source}.mentions`,
+        'replies.outbox',
+        ...(receivingPaused ? ['replies.paused'] : [])
+      ]
+      h.fake.eventSources = undefined
+      const upgraded = h.startClient()
+      try {
+        await settle(100)
+        expect(ended()).toMatchObject([
+          { conversation: { source: 'slack' }, turnId: 22 },
+          {
+            conversation: { source, externalId: 'app:tenant:chat:root' },
+            turnId: 21,
+            stateOnly: true,
+            failure: { category: 'usage_limit', usageLimit: { resetsAt: 1800000060000 } }
+          },
+          {
+            conversation: { source, externalId: 'app:tenant:chat:root' },
+            turnId: 23,
+            stateOnly: true,
+            failure: { category: 'usage_limit', usageLimit: { resetsAt: 1800000060000 } }
+          }
+        ])
+        expect(
+          ended()
+            .slice(1)
+            .map((event) => event.resumes)
+        ).toEqual(expectedResumes)
+        await ConnectorTurnEvents.settled()
+        expect(existsSync(join(h.userDataPath, 'connector-turn-outbox.json'))).toBe(false)
+      } finally {
+        upgraded.client.stop()
+      }
+    }
+  )
 })

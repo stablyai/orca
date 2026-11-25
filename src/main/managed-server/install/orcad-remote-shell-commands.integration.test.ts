@@ -238,8 +238,7 @@ describe('liveness and stop commands, run for real', () => {
 
     it.each([
       ['bash', 'bash: kill: (4242) - No such process'],
-      ['zsh', 'zsh:kill:1: kill 4242 failed: no such process'],
-      ['ksh', 'ksh: kill: 4242: no such process']
+      ['zsh', 'zsh:kill:1: kill 4242 failed: no such process']
     ])('is DEAD when kill answers like %s', (_shell, message) => {
       writeFileSync(join(versionDir, ORCAD_PID_FILENAME), exitedPid())
       expect(

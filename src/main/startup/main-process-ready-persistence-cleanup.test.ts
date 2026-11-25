@@ -1,4 +1,5 @@
 import { Store } from '../persistence/loading-store/store'
+import { DesktopCore } from '../core-desktop/desktop-core'
 import {
   closeTestStores,
   createSqliteTestStore,
@@ -17,7 +18,7 @@ import type { ServeDesktopActivationGate } from './serve-launch/serve-desktop-ac
 
 const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   state: {
-    profileShutdownCheckpoint: null as Promise<void> | null,
+    core: initialCore(),
     store: {
       flushPendingOrThrowAsync: vi.fn(async () => {}),
       flushFinalOrThrowAsync: vi.fn(async () => {}),
@@ -32,6 +33,10 @@ const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   i18n: vi.fn(async () => {}),
   launch: vi.fn(async () => {})
 }))
+
+function initialCore(): DesktopCore | null {
+  return null
+}
 
 function initialAdmission(): { release(): void } | undefined {
   return undefined
@@ -73,7 +78,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   state.profileStateAdmission = { release: vi.fn() }
   state.desktopActivationGate = null
-  state.profileShutdownCheckpoint = null
+  state.core = new DesktopCore()
 })
 
 it('persists successful removal metadata after the early startup checkpoint before releasing its profile', async () => {

@@ -136,37 +136,6 @@ const COMMENT = defineMethod({
     const { botItems } = context.runtime
     const store = botItems.store()
     const item = await resolveItem(store, params.item)
-    if (
-      params.answering !== undefined &&
-      params.answers !== undefined &&
-      params.answerId !== undefined
-    ) {
-      // An answer to the open question: its own write, which also moves the item to In progress.
-      // The write commits first; its mail is owed in the same transaction, so a failed send here is
-      // retried by the owed-mail sweep and never by answering again.
-      const question = parseBotItemEventId(params.answering)
-      if (question === null) {
-        throw new BotItemError('invalid_argument', 'Name the question by its event.')
-      }
-      const outcome = await store.ownerAnswer(
-        item.uid,
-        question,
-        params.answers,
-        params.answerId,
-        actor
-      )
-      if (!outcome.unchanged) {
-        botItems.changed([item.ownerBotId])
-        // As with a comment: the answer is stored and its mail owed, so the reply never waits on it.
-        void botItems
-          .sendOwedMail()
-          .catch((error: unknown) => console.warn('[bots] items: mailing an answer failed', error))
-      }
-      return {
-        eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId),
-        answered: true
-      }
-    }
     const bot = context.runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
     if (params.images?.length || params.text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)) {
       // The attachment store and its claims come up with the structured chat host.
@@ -174,7 +143,7 @@ const COMMENT = defineMethod({
     }
     // Admitted and claimed for the item's chat before the event: a failed write leaves only a claim
     // that chat already prunes, and a retry re-claims the same uploads.
-    const images = await admitBotItemCommentAttachments(
+    const { images } = await admitBotItemCommentAttachments(
       {
         store: getAgentSessionAttachmentStore(),
         // This host's own window: a dropped on-disk image is copied in; a paired client sends store paths.
@@ -191,7 +160,9 @@ const COMMENT = defineMethod({
       actor,
       images,
       undefined,
-      params.requestId
+      params.requestId,
+      params.questionId === undefined ? undefined : (parseBotItemEventId(params.questionId) ?? -1),
+      params.plain === true
     )
     botItems.changed([item.ownerBotId])
     // The comment is stored and its mail owed: the reply never waits on the chat taking it.

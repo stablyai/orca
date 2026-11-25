@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
+import type { ConnectorCloudStatus } from '../../../src/shared/bots/connector-cloud-status'
 import type { PhoneBot } from './host-bots-operations'
 
 // Every screen reads a host's bots from here, so the list, a link and a bot's sheet show one answer.
@@ -10,6 +11,8 @@ type HostBotsEntry = {
   statusByBotId: ReadonlyMap<string, BotRowStatus>
   /** Each bot's Needs you items that aren't stale, by bot id; empty from an older host. */
   needsYou: Readonly<Record<string, number>>
+  /** This host's Orca Cloud link. A list that omits it clears a status kept from an older read. */
+  connectorStatus?: ConnectorCloudStatus
 }
 
 const entries = new Map<string, HostBotsEntry>()
@@ -26,13 +29,15 @@ function subscribe(listener: () => void): () => void {
 
 export function publishHostBots(
   key: string,
-  read: Pick<HostBotsEntry, 'bots' | 'hideBotCreated'> & Partial<Pick<HostBotsEntry, 'needsYou'>>
+  read: Pick<HostBotsEntry, 'bots' | 'hideBotCreated'> &
+    Partial<Pick<HostBotsEntry, 'needsYou' | 'connectorStatus'>>
 ): void {
-  const { bots, hideBotCreated, needsYou = {} } = read
+  const { bots, hideBotCreated, needsYou = {}, connectorStatus } = read
   entries.set(key, {
     bots,
     hideBotCreated,
     needsYou,
+    connectorStatus,
     statusByBotId: entries.get(key)?.statusByBotId ?? new Map()
   })
   notify()

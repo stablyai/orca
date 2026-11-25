@@ -1,6 +1,7 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   CHECK_COLOR,
   CHECK_ICON
@@ -36,6 +37,7 @@ export function CheckRow({
   return (
     <div key={key} className="min-w-0">
       <button
+        ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
         type="button"
         onClick={() => onToggle(check)}
         aria-expanded={expanded}
@@ -51,7 +53,11 @@ export function CheckRow({
           )}
         />
         <Icon
-          className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
+          className={cn(
+            'size-3.5 shrink-0',
+            color,
+            conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
+          )}
         />
         <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel}</span>

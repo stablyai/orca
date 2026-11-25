@@ -3835,6 +3835,7 @@
             "e518f544b1": "No se detectaron agentes",
             "8dea9b5cdf": "No hay agentes habilitados",
             "chatNotInstalled": "No instalado",
+            "chatInstallRequired": "Requiere instalación",
             "startChat": "Iniciar un chat con {{value0}}",
             "chatNotInSubfolder": "Chat no disponible en subcarpetas",
             "chatNotOverSsh": "Chat no disponible por SSH",
@@ -4457,13 +4458,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Suma del conjunto de trabajo (WS): las páginas residentes en RAM en este momento. Las páginas compartidas pueden aparecer en más de un proceso, y la memoria que Windows ha paginado a disco no se cuenta aquí.",
-                "privateBytesDescription": "Suma de bytes privados: la memoria que estos procesos han confirmado, contada tanto si está residente como si está paginada a disco. Es lo que el host imputa a su límite de confirmación, así que sigue subiendo mientras el conjunto de trabajo de arriba se reduce por la paginación.",
-                "footprintDescription": "Suma de la huella de memoria, la misma cifra que muestra el Monitor de Actividad: la memoria propia de cada proceso, incluida la memoria gráfica. Las páginas compartidas entre procesos no se cuentan dos veces.",
-                "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso.",
                 "memColumn": "Mem.",
-                "memorySummary": "Σ Memoria",
-                "privateSummary": "Σ Privada"
+                "memorySummary": "Σ Memoria"
               }
             },
             "manager": {
@@ -11940,7 +11936,8 @@
           "source": {
             "cli": "Archivo de autenticación de Cursor CLI",
             "desktop": "IDE de Cursor",
-            "keychain": "Llavero de macOS (cursor-agent)"
+            "keychain": "Llavero de macOS (cursor-agent)",
+            "keyring": "Llavero de Linux (cursor-agent)"
           },
           "staleUsage": "Último uso conocido — falló la actualización más reciente: {{reason}}",
           "subtitle": "Muestra tu uso del plan de Cursor a partir del inicio de sesión que ya está en este equipo. Orca solo lo lee — nunca modifica tu inicio de sesión de Cursor.",
@@ -15735,7 +15732,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "El texto pegado es demasiado grande para la entrada de teclado del emulador.",
-            "unsupportedPasteText": "Pegar en el teclado del emulador solo admite texto de teclado de EE. UU.",
             "pasteTargetUnavailable": "No se pudo pegar en el teclado del emulador porque el dispositivo no está listo."
           }
         }
@@ -17048,8 +17044,6 @@
             "27d863542c": "Anotaciones del navegador",
             "e48569ac6d": "No se pudo acceder a este sitio.",
             "bbe8f15e83": "Este panel se representa desde el servidor de ejecución activo.",
-            "8b7e6d1f5a": "Las anotaciones del navegador solo están disponibles en las pestañas del navegador local.",
-            "deb5293610": "Anotaciones del navegador no disponibles en runtime remoto",
             "90d021f2ad": "Agregar",
             "0cb3bd6221": "Intención de anotación",
             "532bac48c5": "Describe aquí lo que el agente debería cambiar...",
@@ -17864,10 +17858,6 @@
           "unreadCount_many": "{{count}} sin leer"
         },
         "ActivityThreadHoverCard": {
-          "workspace": "Espacio de trabajo",
-          "pathCopied": "Ruta copiada al portapapeles",
-          "copyPathFailed": "No se pudo copiar la ruta",
-          "copyPath": "Copiar ruta",
           "jumpToWorkspace": "Ir al espacio de trabajo"
         },
         "clearCompleted": {
@@ -18694,7 +18684,6 @@
         "stoppedRestart_many": "{{count}} chats detenidos al cerrar Orca.",
         "stoppedRestart_other": "{{count}} chats detenidos al cerrar Orca.",
         "promptsNotResent": "Al reanudar, no se reenviarán tus prompts.",
-        "promptsNotSent": "Tus prompts no se reenviaron.",
         "resume": "Reanudar",
         "details": "Detalles",
         "close": "Cerrar",
@@ -18856,7 +18845,8 @@
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",
-        "cliRecheck": "Verificar de nuevo"
+        "cliRecheck": "Verificar de nuevo",
+        "openAgentSettings": "Abrir ajustes"
       },
       "reasoning": "Razonamiento",
       "contextMenu": {
@@ -18897,6 +18887,7 @@
         "claudeAccountFolderMissing": "Falta la carpeta de la cuenta de Claude seleccionada. Vuelva a iniciar sesión en ella o elija otra cuenta.",
         "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "El Comando de {{agent}} en Ajustes → Agentes debe empezar con un programa que Orca pueda encontrar. No se admiten variables, tuberías ni otra sintaxis de shell; usa el ajuste Entorno para las variables. Cámbialo o restablécelo.",
+        "agentCommandFailed": "El Comando de {{agent}} en Ajustes → Agentes no inició {{agent}}: {{detail}}. Cámbialo o restablécelo.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
         "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
         "launchPreparationFailed": "Orca no pudo preparar el inicio de {{agent}} en el equipo que ejecuta este chat.",
@@ -19126,6 +19117,7 @@
         "optionUpdateFailed": "No se pudo actualizar la opción",
         "optionValue": {
           "none": "Ninguno",
+          "off": "Desactivado",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Bajo",
@@ -19913,7 +19905,6 @@
         "copyFailed": "No se pudo copiar",
         "copyIdentity": "Copiar {{value0}}",
         "detachedCommit": "Commit {{head}} (no es una rama)",
-        "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
@@ -19953,6 +19944,60 @@
       "splitDown": "Dividir hacia abajo",
       "automationSaved": {
         "openFullPage": "Abrir página"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Sin iniciar",
+          "connected": "Conectado",
+          "disabled": "Desactivado",
+          "failed": "Error",
+          "failedReason": "Error: {{error}}",
+          "needsAuth": "Sesión requerida",
+          "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
+          "pending": "Conectando…",
+          "tools_many": "{{count}} herramientas",
+          "tools_one": "{{count}} herramienta",
+          "tools_other": "{{count}} herramientas"
+        },
+        "signIn": {
+          "external": "Completa el proceso en la página que se abrió",
+          "waiting": "Esperando el inicio de sesión…",
+          "waitingBrowser": "Esperando tu navegador…",
+          "action": "Iniciar sesión",
+          "remote": "Después de iniciar sesión, el navegador llega a una página que no se carga. Copia la dirección de esa página y pégala aquí.",
+          "done": "Listo",
+          "finish": "Finalizar",
+          "openAgain": "Volver a abrir",
+          "addressLabel": "Dirección de la página de inicio de sesión",
+          "unfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego pulsa «Listo»."
+        },
+        "title": "Servidores MCP",
+        "close": "Cerrar",
+        "loading": "Cargando…",
+        "notRunning": "Se conectan al enviar tu próximo mensaje",
+        "unsupported": "Actualiza Orca en el host de este chat para administrarlos aquí",
+        "readFailed": "No se pudo cargar",
+        "retry": "Reintentar",
+        "empty": "No hay ninguno configurado para este chat",
+        "cancel": "Cancelar",
+        "reconnect": "Reconectar",
+        "toggle": "Usar {{name}}",
+        "actionFailed": "No se pudo realizar la acción. Inténtalo de nuevo.",
+        "summary": {
+          "connected": "Conectados: {{count}}",
+          "needsAuth_one": "{{count}} requiere iniciar sesión",
+          "needsAuth_other": "{{count}} requieren iniciar sesión",
+          "failed": "Fallidos: {{count}}",
+          "signingIn": "iniciando sesión en {{name}}",
+          "needsAuth_many": "{{count}} requieren iniciar sesión"
+        },
+        "source": {
+          "project": "Proyecto",
+          "local": "Local",
+          "user": "Usuario",
+          "plugin": "Plugin",
+          "session": "Sesión"
+        }
       }
     },
     "tab": {
@@ -20238,7 +20283,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Los cambios sin confirmar o sin seguimiento en los espacios de trabajo de Git se eliminarán de forma permanente.",
           "unavailable": "No se pudieron comprobar los cambios",
           "checking": "Comprobando si hay cambios…",
           "checkingDetails": "Comprobando…",
@@ -20262,7 +20306,6 @@
           "line_other": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}",
           "line_many": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}"
         },
-        "ignoredFilesLost": "Se perderán los archivos ignorados: {{names}}",
         "ignoredFilesUnchecked": "No se pudieron comprobar todos los archivos ignorados"
       }
     },
@@ -20709,7 +20752,6 @@
       "cancelFailed": "No se pudo cancelar la instalación. Inténtalo de nuevo.",
       "install": "Instalar {{agent}}",
       "installManaged": "Instalar la copia de Orca",
-      "installed": "Instalado",
       "notInstalled": "No instalado.",
       "progress": "Descarga de {{agent}}",
       "readFailed": "No se pudo comprobar {{agent}} en este host. Reintentando.",
@@ -22433,8 +22475,7 @@
     "refresh": "Actualizar",
     "restartLocal": "Reiniciar daemon local",
     "killAllLocal": "Finalizar todas las sesiones locales",
-    "killFailed": "No se pudo finalizar el terminal. Se conservan las sesiones observadas por última vez.",
-    "metricDetails": "Detalles de las métricas"
+    "killFailed": "No se pudo finalizar el terminal. Se conservan las sesiones observadas por última vez."
   },
   "csv": {
     "detectingDelimiter": "Detectando delimitador…",
@@ -22524,7 +22565,6 @@
         "withIgnored": "Se perderán {{what}} y los archivos ignorados",
         "ignoredOnly": "Se perderán los archivos ignorados"
       },
-      "showChanges": "Mostrar cambios",
       "unsavedSuffix": "(sin guardar)",
       "onHost": "En {{host}}",
       "forceDeletingEllipsis": "Forzando la eliminación…",
@@ -23128,7 +23168,9 @@
       "128cce6e6d": "Establecer título…",
       "e9da9f872a": "Enviar notas de revisión al agente",
       "1524825c2c": "Alternar tablero de espacios de trabajo",
-      "d286d1ab85": "Borrar título del panel"
+      "d286d1ab85": "Borrar título del panel",
+      "botItemPrevious": "Elemento anterior",
+      "botItemNext": "Elemento siguiente"
     },
     "group": {
       "global": "Global",
@@ -23325,6 +23367,9 @@
     "linkedMessageMissing": "No se pudo encontrar ese mensaje.",
     "math": {
       "scrollDisplayEquation": "Desplazar ecuación en bloque"
+    },
+    "messageTime": {
+      "yesterday": "Ayer {{time}}"
     }
   },
   "runtime": {
@@ -24214,7 +24259,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, mostrar todo",
       "searchEverything": "Buscar en todo «{{text}}»",
-      "searchBotsFor": "Buscar bots con «{{text}}»",
       "noMatch": "Ningún bot coincide con «{{text}}»",
       "noBotsYet": "Aún no hay bots",
       "filtersPaused": "Los filtros se aplican a espacios de trabajo, no a bots",
@@ -24231,7 +24275,7 @@
       "browse": "Explorar plantillas"
     },
     "new": {
-      "fromTemplate": "Usar plantilla"
+      "fromTemplate": "Plantilla"
     },
     "googleSetup": {
       "otherAccount": "Cambiar de cuenta"
@@ -24240,6 +24284,73 @@
       "paste": {
         "remoteSignIn": "Inicio de sesión remoto"
       }
+    },
+    "row": {
+      "runsOn": "Se ejecuta en {{host}}",
+      "disconnected": "Desconectado",
+      "hostDisconnected": "{{host}} desconectado",
+      "idle": "Inactivo",
+      "paused": "En pausa",
+      "reading": "Leyendo tu mensaje",
+      "replying": "Respondiendo",
+      "replyingIn": "Respondiendo en {{place}}",
+      "replyingOn": "Respondiendo a {{place}}",
+      "waitingCount": "Eventos pendientes: {{count}}",
+      "waitingFor": "Esperando {{label}}",
+      "waitingForUntil": "Esperando {{label}} · hasta {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} de {{total}}",
+        "navigation": "Elemento {{index}} de {{total}}",
+        "loadingNext": "Cargando el siguiente elemento",
+        "shown": "Elemento {{index}} de {{total}}: {{title}}",
+        "firstItem": "Primer elemento",
+        "lastItem": "Último elemento",
+        "previous": "Elemento anterior",
+        "next": "Elemento siguiente"
+      }
+    },
+    "hover": {
+      "asksQuestion": "Espera tu respuesta",
+      "wantsApproval": "Solicita tu aprobación",
+      "signIn": "Necesita que inicies sesión",
+      "access": "Ha solicitado acceso",
+      "review": "Revisar",
+      "openHome": "Abrir Home de {{name}}",
+      "needsYouHeading_one": "{{count}} asunto te necesita",
+      "needsYouHeading_many": "{{count}} asuntos te necesitan",
+      "needsYouHeading_other": "{{count}} asuntos te necesitan",
+      "moreAsks_one": "+{{count}} solicitud más",
+      "moreAsks_many": "+{{count}} solicitudes más",
+      "moreAsks_other": "+{{count}} solicitudes más",
+      "itemsNeedYou_one": "{{count}} elemento que marcó para ti",
+      "itemsNeedYou_many": "{{count}} elementos que marcó para ti",
+      "itemsNeedYou_other": "{{count}} elementos que marcó para ti"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Nuevo chat"
+    },
+    "needs": {
+      "chat": "Tu chat con {{name}}"
+    },
+    "panel": {
+      "needYou_many": "{{count}} te necesitan",
+      "needYou_one": "{{count}} te necesita",
+      "needYou_other": "{{count}} te necesitan",
+      "working": "{{count}} trabajando",
+      "working_many": "{{count}} trabajando",
+      "working_one": "{{count}} trabajando",
+      "working_other": "{{count}} trabajando"
+    },
+    "usageLimit": {
+      "continuesAt": "Continúa a las {{time}}",
+      "continuesShort": "Continúa {{time}}",
+      "continuesTip": "Continúa automáticamente a las {{time}}",
+      "hitLimit": "Límite alcanzado · se restablece a las {{time}}",
+      "hitShort": "Límite alcanzado",
+      "hitTip": "{{agent}} alcanzó su límite de uso · se restablece a las {{time}}"
     }
   },
   "speechModelUpdate": {
@@ -24282,5 +24393,8 @@
     "dontSend": "No enviar",
     "sending": "Enviando…",
     "sendReport": "Enviar informe"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Este equipo"
   }
 }

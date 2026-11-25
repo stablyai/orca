@@ -18,6 +18,7 @@ import { connectorReviewText } from '../../shared/connector-review-text'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
 import { connectorRetryDelayMs } from './connector-outbox'
+import { slackBotPostBody, slackReplyBody } from './connector-slack-text'
 
 const REPLY_ATTEMPTS = 3
 // A longer Retry-After fails the reply rather than holding the agent's command.
@@ -35,8 +36,9 @@ export type ConnectorReplyBody = {
   answerDeliveryId?: string
 }
 
-/** For a cloud that takes no review. */
-export function foldConnectorReview(body: ConnectorReplyBody): ConnectorReplyBody {
+/** For a cloud that takes no review; Slack's notes are scrubbed before they join the text. */
+export function foldConnectorReview(written: ConnectorReplyBody): ConnectorReplyBody {
+  const body = slackReplyBody(written)
   const { review, ...rest } = body
   return review ? { ...rest, text: connectorReviewText(body.text, review) } : body
 }
@@ -82,7 +84,11 @@ export function postConnectorReply(
   const sent = features?.has('review') ? body : foldConnectorReview(body)
   return postWithRetries(
     transport,
-    { path: CONNECTOR_PATHS.replies, body: { v: 1, ...sent }, schema: ConnectorReplyResponse },
+    {
+      path: CONNECTOR_PATHS.replies,
+      body: { v: 1, ...slackReplyBody(sent) },
+      schema: ConnectorReplyResponse
+    },
     signal,
     random
   )
@@ -108,10 +114,11 @@ export type ConnectorBotPostBody =
 export async function postConnectorBotMessage(
   transport: ConnectorTransport,
   botId: string,
-  body: ConnectorBotPostBody,
+  written: ConnectorBotPostBody,
   signal: AbortSignal,
   random: () => number = Math.random
 ): Promise<ConnectorResult<ConnectorBotPostAnswer>> {
+  const body = slackBotPostBody(written)
   if ('ref' in body) {
     // The actions route's post, queued once per postId as the bot's other posts are.
     const { postId, ref, text, turnFor } = body

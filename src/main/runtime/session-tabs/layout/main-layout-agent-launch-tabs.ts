@@ -100,7 +100,7 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>,
     shownByMain: NonNullable<AgentLaunchTabPublishRequest['shownByMain']>
   ): void {
-    if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
+    if (!this.notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
       return
     }
     // Window display is advisory; launch never waits or fails on it.

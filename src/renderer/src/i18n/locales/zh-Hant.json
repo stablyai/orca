@@ -4255,6 +4255,7 @@
             "terminalListNeedsServerUpdate": "更新此伺服器上的 Orca，以列出終端機代理程式",
             "terminalListFailed": "無法列出此工作區的終端機代理程式",
             "chatNotInstalled": "未安裝",
+            "chatInstallRequired": "需要安裝",
             "chatNotOverSsh": "SSH 連線不支援聊天",
             "chatNotInWsl": "WSL 不支援聊天",
             "chatNotInSubfolder": "子資料夾不支援聊天",
@@ -4850,13 +4851,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "工作集 (WS) 的總和：目前駐留在 RAM 中的頁面。共用頁面可能會出現在多個行程中，Windows 已換出的記憶體不計入其中。",
-                "privateBytesDescription": "私有位元組總和：這些行程已提交的記憶體，無論目前駐留在記憶體中或已換出都會計入。主機會將其計入提交上限，因此當上方的工作集因分頁而縮小時，此數值仍會持續增加。",
-                "footprintDescription": "記憶體佔用總和，與 Activity Monitor 顯示的數值相同：各行程擁有的記憶體，包括圖形記憶體。行程間共用的記憶體分頁不會重複計算。",
-                "rssDescription": "駐留集大小 (RSS) 的總和。共用頁或別名對映頁可能會出現在多個行程中。",
                 "memColumn": "記憶體",
-                "memorySummary": "Σ 記憶體",
-                "privateSummary": "Σ 私有"
+                "memorySummary": "Σ 記憶體"
               }
             },
             "manager": {
@@ -12333,6 +12329,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS 鑰匙圈（cursor-agent）",
+            "keyring": "Linux 鑰匙圈（cursor-agent）",
             "cli": "Cursor CLI 認證檔案",
             "desktop": "Cursor IDE"
           },
@@ -15831,7 +15828,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模擬器鍵盤輸入的貼上內容過大。",
-            "unsupportedPasteText": "模擬器鍵盤貼上僅支援美式鍵盤文字。",
             "pasteTargetUnavailable": "模擬器鍵盤貼上失敗，因為裝置尚未就緒。"
           }
         }
@@ -17090,8 +17086,6 @@
             "27d863542c": "瀏覽器註解",
             "e48569ac6d": "無法存取該網站。",
             "bbe8f15e83": "此窗格由使用中的執行環境伺服器呈現。",
-            "8b7e6d1f5a": "瀏覽器註解僅在本機瀏覽器分頁中可用。",
-            "deb5293610": "瀏覽器註解在遠端執行環境中無法使用",
             "90d021f2ad": "新增",
             "0cb3bd6221": "註解意圖",
             "532bac48c5": "描述代理程式應該在這裡改變什麼...",
@@ -17900,10 +17894,6 @@
           "hideOtherClients": "隱藏其他用戶端的代理程式"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "路徑已複製到剪貼簿",
-          "copyPathFailed": "無法複製路徑",
-          "workspace": "工作區",
-          "copyPath": "複製路徑",
           "jumpToWorkspace": "跳至工作區"
         },
         "ActivityThreadRow": {
@@ -18666,7 +18656,6 @@
         "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
         "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
         "promptsNotResent": "恢復不會重新傳送你的提示。",
-        "promptsNotSent": "你的提示沒有被重新傳送。",
         "resume": "恢復",
         "details": "詳情",
         "close": "關閉",
@@ -18892,7 +18881,8 @@
       "install": {
         "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
         "cliInstall": "安裝",
-        "cliRecheck": "再次檢查"
+        "cliRecheck": "再次檢查",
+        "openAgentSettings": "開啟設定"
       },
       "reasoning": "推理",
       "failureWords": {
@@ -18926,6 +18916,7 @@
         "claudeAccountFolderMissing": "所選 Claude 帳戶的資料夾不存在。請重新登入該帳戶或選擇其他帳戶。",
         "claudeAccountSetupFailed": "無法設定所選 Claude 帳戶。請重試或選擇其他帳戶。",
         "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
+        "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
         "runtimeNotInstalled": "執行此聊天的電腦上未安裝 {{agent}}。請在新版 Orca 中從聊天裡安裝。",
         "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
         "launchPreparationFailed": "Orca 無法在執行此聊天的電腦上準備啟動 {{agent}}。",
@@ -19229,6 +19220,7 @@
         "optionUpdateFailed": "無法更新選項",
         "optionValue": {
           "none": "無",
+          "off": "關閉",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -19831,7 +19823,6 @@
         "copyFailed": "複製失敗",
         "copyIdentity": "複製 {{value0}}",
         "detachedCommit": "提交 {{head}}（非分支）",
-        "folder": "資料夾",
         "mainCheckout": "主要工作副本",
         "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
@@ -19873,6 +19864,56 @@
       },
       "usageLimitActions": {
         "handOff": "交接給代理程式"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "尚未啟動",
+          "connected": "已連線",
+          "disabled": "已停用",
+          "failed": "失敗",
+          "failedReason": "失敗：{{error}}",
+          "needsAuth": "需要登入",
+          "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
+          "pending": "正在連線…",
+          "tools_other": "{{count}} 個工具"
+        },
+        "signIn": {
+          "external": "請在開啟的頁面完成",
+          "waiting": "正在等待登入…",
+          "waitingBrowser": "正在等待瀏覽器…",
+          "action": "登入",
+          "remote": "登入後，瀏覽器會前往無法載入的頁面。請複製該頁面的網址並貼到這裡。",
+          "done": "完成",
+          "finish": "完成",
+          "openAgain": "再次開啟",
+          "addressLabel": "登入頁面網址",
+          "unfinished": "登入尚未完成。請先在開啟的頁面上完成登入，再按下「完成」。"
+        },
+        "title": "MCP 伺服器",
+        "close": "關閉",
+        "loading": "載入中…",
+        "notRunning": "傳送下一則訊息時連線",
+        "unsupported": "更新此聊天主機上的 Orca，即可在這裡管理",
+        "readFailed": "無法載入",
+        "retry": "重試",
+        "empty": "此聊天尚未設定",
+        "cancel": "取消",
+        "reconnect": "重新連線",
+        "toggle": "使用 {{name}}",
+        "actionFailed": "無法執行此操作。請再試一次。",
+        "summary": {
+          "connected": "已連線：{{count}}",
+          "needsAuth_other": "{{count}} 個需要登入",
+          "failed": "失敗：{{count}}",
+          "signingIn": "正在登入 {{name}}"
+        },
+        "source": {
+          "project": "專案",
+          "local": "本機",
+          "user": "使用者",
+          "plugin": "外掛",
+          "session": "工作階段"
+        }
       }
     },
     "tab": {
@@ -20144,7 +20185,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 工作區中任何未提交或未追蹤的變更都將被永久刪除。",
           "unavailable": "無法檢查變更",
           "checking": "正在檢查變更…",
           "checkingDetails": "檢查…",
@@ -20164,7 +20204,6 @@
           "line_one": "{{count}} 個檔案中未儲存的編輯內容將被捨棄：{{files}}",
           "line_other": "{{count}} 個檔案中未儲存的編輯內容將被捨棄：{{files}}"
         },
-        "ignoredFilesLost": "Git 忽略的檔案將會遺失：{{names}}",
         "ignoredFilesUnchecked": "無法完整檢查 Git 忽略的檔案"
       }
     },
@@ -20538,7 +20577,6 @@
       "cancelFailed": "無法取消安裝。請再試一次。",
       "install": "安裝 {{agent}}",
       "installManaged": "安裝 Orca 提供的副本",
-      "installed": "已安裝",
       "notInstalled": "尚未安裝。",
       "progress": "{{agent}} 下載",
       "readFailed": "無法檢查此主機上的 {{agent}}。正在重試。",
@@ -21726,7 +21764,6 @@
         "withIgnored": "{{what}}及 Git 忽略的檔案將會遺失",
         "ignoredOnly": "Git 忽略的檔案將會遺失"
       },
-      "showChanges": "顯示變更",
       "unsavedSuffix": "（未儲存）",
       "onHost": "位於 {{host}}",
       "forceDeletingEllipsis": "正在強制刪除…",
@@ -22239,8 +22276,7 @@
     "refresh": "重新整理",
     "restartLocal": "重新啟動本機常駐程式",
     "killAllLocal": "結束所有本機工作階段",
-    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。",
-    "metricDetails": "指標詳細資訊"
+    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。"
   },
   "browserExtensions": {
     "permission": {
@@ -22298,6 +22334,9 @@
     "linkedMessageMissing": "找不到該訊息。",
     "math": {
       "scrollDisplayEquation": "捲動獨立公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -22412,7 +22451,9 @@
       "128cce6e6d": "設定標題…",
       "e9da9f872a": "將審查註記傳送給代理程式",
       "1524825c2c": "顯示或隱藏工作區看板",
-      "d286d1ab85": "清除窗格標題"
+      "d286d1ab85": "清除窗格標題",
+      "botItemPrevious": "上一個項目",
+      "botItemNext": "下一個項目"
     },
     "group": {
       "global": "全域",
@@ -23315,7 +23356,6 @@
       "chip": "機器人",
       "chipLabel": "機器人，顯示全部",
       "searchEverything": "在全部內容中搜尋「{{text}}」",
-      "searchBotsFor": "在機器人中搜尋「{{text}}」",
       "noMatch": "沒有符合「{{text}}」的機器人",
       "noBotsYet": "還沒有機器人",
       "filtersPaused": "篩選僅適用於工作區，不適用於機器人",
@@ -23330,12 +23370,69 @@
       "browse": "瀏覽範本"
     },
     "new": {
-      "fromTemplate": "使用範本"
+      "fromTemplate": "範本"
     },
     "apps": {
       "paste": {
         "remoteSignIn": "遠端登入"
       }
+    },
+    "row": {
+      "runsOn": "在 {{host}} 上執行",
+      "disconnected": "已中斷連線",
+      "hostDisconnected": "{{host}} 已中斷連線",
+      "idle": "閒置",
+      "paused": "已暫停",
+      "reading": "正在閱讀你的訊息",
+      "replying": "正在回覆",
+      "replyingIn": "正在 {{place}} 中回覆",
+      "replyingOn": "正在 {{place}} 上回覆",
+      "waitingCount": "等待中的事件：{{count}}",
+      "waitingFor": "正在等待 {{label}}",
+      "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "第 {{index}} 個，共 {{total}} 個",
+        "navigation": "項目 {{index}} / {{total}}",
+        "loadingNext": "正在載入下一個項目",
+        "shown": "項目 {{index}} / {{total}}：{{title}}",
+        "firstItem": "第一個項目",
+        "lastItem": "最後一個項目",
+        "previous": "上一個項目",
+        "next": "下一個項目"
+      }
+    },
+    "hover": {
+      "asksQuestion": "正在等待你的回答",
+      "wantsApproval": "需要你的核准",
+      "signIn": "需要你登入",
+      "access": "已要求存取權限",
+      "review": "檢視",
+      "openHome": "開啟 {{name}} 的 Home",
+      "needsYouHeading_other": "{{count}} 件事需要你處理",
+      "moreAsks_other": "另有 {{count}} 個請求",
+      "itemsNeedYou_other": "為你標記的 {{count}} 個項目"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "新對話"
+    },
+    "needs": {
+      "chat": "你與 {{name}} 的對話"
+    },
+    "panel": {
+      "needYou_other": "{{count}} 項需要你處理",
+      "working": "{{count}} 項工作進行中",
+      "working_other": "{{count}} 項工作進行中"
+    },
+    "usageLimit": {
+      "continuesAt": "將於 {{time}} 繼續",
+      "continuesShort": "{{time}} 繼續",
+      "continuesTip": "將於 {{time}} 自動繼續",
+      "hitLimit": "已達上限 · {{time}} 重設",
+      "hitShort": "已達上限",
+      "hitTip": "{{agent}} 已達使用上限 · {{time}} 重設"
     }
   },
   "agentPicker": {
@@ -23484,5 +23581,8 @@
     "dontSend": "不要傳送",
     "sending": "正在傳送…",
     "sendReport": "傳送報告"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "這台電腦"
   }
 }

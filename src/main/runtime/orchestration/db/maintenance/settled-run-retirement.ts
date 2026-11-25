@@ -27,6 +27,7 @@ const RUN_CHILD_DELETES: readonly { table: string; where: string; pageRows?: num
   { table: 'federated_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'worker_terminal_resources', where: `owner_dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'worker_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})` },
+  { table: 'worker_presence', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'message_dispatch_provenance', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'message_dispatch_provenance', where: `message_id IN (${MESSAGE_IDS})` },
   { table: 'structured_mail_sends', where: `message_id IN (${MESSAGE_IDS})` },

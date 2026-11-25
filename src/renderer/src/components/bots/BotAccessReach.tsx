@@ -43,6 +43,7 @@ import { setBotGoogle, useBotGoogleReach } from './google/google-connect-client'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { NewBotDialog } from './NewBotDialog'
 import { useBotAccessPlace } from './use-bot-access-place'
+import { useBotConnectorPaged } from './bot-connector-page'
 
 const copy = (t: Translate, id: BotAccessCopyId, values: Record<string, unknown> = {}): string =>
   t(`bots.access.${id}`, BOT_ACCESS_COPY[id], values)
@@ -74,14 +75,15 @@ export function BotAccessSummary({
   others: readonly string[]
 }): React.JSX.Element {
   const t = useTranslate()
-  const place = useBotAccessPlace(bot.hostId)
-  const { who, control } = botAccessSummary(others)
+  const { who } = botAccessSummary(others)
   return (
     <div className="mb-2 space-y-0.5">
       <p className="text-sm font-medium">{copy(t, who.id, { ...who.values, name: bot.name })}</p>
-      <p className="text-xs leading-5 text-muted-foreground">
-        {copy(t, control.id, { ...control.values, name: bot.name, ...place })}
-      </p>
+      <BotAccessControlLine
+        bot={bot}
+        others={others}
+        className="text-xs leading-5 text-muted-foreground"
+      />
     </div>
   )
 }
@@ -98,6 +100,29 @@ export function BotAccessControlLine({
 }): React.JSX.Element {
   const t = useTranslate()
   const place = useBotAccessPlace(bot.hostId)
+  const brief = useBotConnectorPaged()
+  if (brief) {
+    const conditional = others.length === 0
+    if (place.local) {
+      return (
+        <p className={className}>{copy(t, conditional ? 'controlBriefIfAdded' : 'controlBrief')}</p>
+      )
+    }
+    const id = conditional ? 'controlBriefIfAddedOnHost' : 'controlBriefOnHost'
+    const computerSlot = '{computer}'
+    const [before, after] = copy(t, id, { computer: computerSlot }).split(computerSlot)
+    return (
+      <p className={className}>
+        <span className="inline-flex max-w-full align-bottom">
+          <span className="shrink-0 whitespace-pre">{before}</span>
+          <bdi className="min-w-0 truncate" title={place.computer}>
+            {place.computer}
+          </bdi>
+          <span className="shrink-0 whitespace-pre">{after}</span>
+        </span>
+      </p>
+    )
+  }
   const { control } = botAccessSummary(others)
   return (
     <p className={className}>

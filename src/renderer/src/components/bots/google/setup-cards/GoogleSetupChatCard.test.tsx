@@ -150,9 +150,9 @@ describe('a Google setup card in the chat', () => {
     expect(screen.queryByRole('button', { name: 'Change' })).toBeNull()
   })
 
-  it('says Dismiss through the card', async () => {
+  it('says Not now through the card', async () => {
     show('path')
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }))
     await waitFor(() =>
       expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'path', [
         'not-now'

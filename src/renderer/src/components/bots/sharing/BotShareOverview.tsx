@@ -18,6 +18,7 @@ import { cn } from '@/lib/class-names'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
 import { botShareCheckSummary } from './bot-share-flags'
 import {
+  allMemory,
   pickedOf,
   type BotShareContext,
   type BotShareList,
@@ -37,7 +38,7 @@ export function pageTitle(page: BotSharePage, t: ReturnType<typeof useTranslate>
     skills: t('bots.share.skills', 'Skills'),
     automations: t('bots.share.automations', 'Automations'),
     tools: t('bots.share.tools', 'Tools'),
-    memory: t('bots.share.includeMemory', 'Include memory'),
+    memory: t('bots.share.memory', 'Memory'),
     note: t('bots.share.setupNote', 'Setup note'),
     check: t('bots.share.safetyCheck', 'Safety check'),
     notIncluded: t('bots.share.notIncluded', 'Not included')
@@ -230,7 +231,8 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
               disabled={available.memory.length === 0}
               aria-label={t('bots.share.includeMemory', 'Include memory')}
               onCheckedChange={(on) => {
-                ctx.select({ memory: on ? [] : undefined })
+                // On sends every file; the list that opens is for leaving some out.
+                ctx.select({ memory: on ? allMemory(available.memory) : undefined })
                 if (on) {
                   ctx.open({ kind: 'list', list: 'memory' })
                 }

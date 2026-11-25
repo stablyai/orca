@@ -198,52 +198,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('checkpoints before keep-history shutdown so sleep can cold restore latest output', async () => {
-      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
-      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
-      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
-
-      try {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-        const { id } = await historyAdapter.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '/home/user',
-          sessionId: 'sleep-checkpoint'
-        })
-        const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
-
-        lastSubprocess._simulateData('latest before sleep\r\n')
-        await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
-
-        expect(checkpointSpy).toHaveBeenCalledWith(
-          id,
-          expect.objectContaining({ snapshotAnsi: expect.stringContaining('latest before sleep') }),
-          { pendingOutputSeq: expect.any(Number) }
-        )
-        expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
-
-        const restored = await historyAdapter.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '/home/user',
-          sessionId: id
-        })
-        expect(restored.coldRestore?.scrollback).toContain('latest before sleep')
-        historyAdapter.ackColdRestore(id)
-
-        const remountAfterAck = await historyAdapter.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '/home/user',
-          sessionId: id
-        })
-        expect(remountAfterAck.coldRestore).toBeUndefined()
-      } finally {
-        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
-      }
-    })
-
     it('cold restores the second sleep/wake cycle with post-wake output', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
@@ -276,7 +230,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
         expect(firstWake.coldRestore?.scrollback).toContain('first cycle content')
         historyAdapter.ackColdRestore(id)
-        expect(historyAdapter.hasPty(id)).toBe(true)
+        const remountAfterAck = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId: id })
+        expect(remountAfterAck.coldRestore).toBeUndefined()
 
         lastSubprocess._simulateData('second cycle content\r\n')
         await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })

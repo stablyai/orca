@@ -230,7 +230,7 @@ describe('BotGitHubSetupDialog', () => {
     expect(screen.getByText('2 repositories in acme')).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Turn on Ranger' })).toBeNull()
     // The mention to type is set as code.
-    for (const mention of screen.getAllByText('@orca-ide ranger …')) {
+    for (const mention of screen.getAllByText('@orca-bots ranger …')) {
       expect(mention.tagName).toBe('CODE')
     }
   })

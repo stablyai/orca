@@ -1,3 +1,4 @@
+import type { JournalRestartCut } from './journal-sql-restart-cut'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalItemBody,
@@ -114,6 +115,8 @@ export type AgentSessionJournalReads = {
   continuationContext(): Promise<JournalContinuationContext>
   /** Bytes written, or null once the item is gone or revised (nothing written). */
   continuationSpill(spill: JournalContinuationSpill): Promise<number | null>
+  /** The newest turn and its rows a restart settled, for the offer a crash leaves. */
+  restartCut(): Promise<JournalRestartCut>
   /** The newest presented root user prompt, excluding commands, as restart offers preview it. */
   latestPrompt(): Promise<string>
   restartProgress(cursor: AgentJournalCursor): Promise<JournalRestartProgress>

@@ -359,3 +359,113 @@ it("names this Orca's own mail about a server's Dispatch by its task and agent",
   }).senders[0]
   expect(sender).toMatchObject({ name: 'Verify on Windows', agent: 'claude' })
 })
+
+it("names a worker's mail by its task and agent once its terminal tab is gone", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Fix the login page' })
+  const started = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: started.dispatch.id,
+    handle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
+    processIncarnation: 'p:1',
+    worktreeId: WORKTREE,
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  db.markWorkerDispatchReady(started.dispatch.id)
+  const status = db.insertMessage({
+    from: 'term_worker',
+    to: `run:${run.id}`,
+    subject: 'halfway',
+    runId: run.id,
+    senderDispatchId: started.dispatch.id
+  })
+  db.completeDispatch(started.dispatch.id)
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
+    batch: [status]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Fix the login page', agent: 'codex' })
+  expect(sender).not.toHaveProperty('host')
+  const next = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: db.createTask({ runId: run.id, spec: 'Add a logout button' }).id,
+    startOptions: { agent: 'claude' }
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: next.dispatch.id,
+    handle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
+    processIncarnation: 'p:2',
+    worktreeId: WORKTREE,
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  db.markWorkerDispatchReady(next.dispatch.id)
+  const crewName = names().captureCrewInputs()(
+    { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+    { dispatchId: started.dispatch.id, taskTitle: 'Fix the login page' },
+    null
+  )
+  expect(crewName).toBe('Fix the login page')
+})
+
+it("names a legacy paired server's relayed mail by its task, agent and server", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Port the build' })
+  const started = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: task.id,
+    startOptions: { agent: 'codex' },
+    federation: {
+      environmentId: 'environment-win',
+      environmentName: 'winbox',
+      peerFingerprint: 'peer-win',
+      protocolVersion: 3
+    }
+  })
+  const { message } = db.importFederatedRelayItem({
+    dispatchId: started.dispatch.id,
+    sequence: 1,
+    message: {
+      id: 'msg_relayed_status',
+      runId: run.id,
+      from: 'term_on_server',
+      to: `run:${run.id}`,
+      subject: 'halfway',
+      body: '',
+      type: 'status',
+      priority: 'normal'
+    },
+    lifecycle: { kind: 'none' }
+  })
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
+    batch: [message]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Port the build', agent: 'codex', host: 'winbox' })
+})

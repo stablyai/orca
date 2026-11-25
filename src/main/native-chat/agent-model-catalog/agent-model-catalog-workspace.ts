@@ -18,7 +18,7 @@ export type AgentModelCatalogRecord = Pick<
 
 export type AgentModelCatalogWorkspaceDeps = {
   store: AgentModelCatalogStore
-  /** Project-scoped catalogs require a folder and cannot be prewarmed. */
+  /** Project-scoped catalogs list per folder and are never prewarmed. */
   listsInChatFolder?: ReadonlySet<string>
   recordWorkspacePath?: (record: AgentModelCatalogRecord) => Promise<string | null>
   /** Account-home config is already covered by discovery; only workspace layers can override it. */
