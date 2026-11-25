@@ -3576,6 +3576,11 @@
       "permissionOverridesKept_one": "{{count}} agent still uses their own permission setting:",
       "permissionOverridesKept_other": "{{count}} agents still use their own permission setting:"
     },
+    "appearance": {
+      "language": {
+        "thai": "ไทย"
+      }
+    },
     "bots": {
       "connectorRequests": "{{count}} requests",
       "connectorRequests_one": "{{count}} request",
