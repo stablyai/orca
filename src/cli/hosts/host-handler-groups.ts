@@ -4,6 +4,11 @@ import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 // them, and recipe VMs.
 export const HOST_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'ssh-host-add',
+    keys: ['host add'],
+    load: async () => (await import('./ssh-host-add.js')).SSH_HOST_ADD_HANDLERS
+  },
+  {
     name: 'environment',
     keys: [
       'host name',

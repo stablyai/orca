@@ -69,6 +69,17 @@ The result includes this machine, its registered [SSH targets](/docs/ssh), and p
 
 `--host` also takes the bare name shown in the `name` column, on either axis — `--host trader-local` reaches the same machine as `--host ssh:ssh-1783599077486-fyasux`. Names resolve only when they are unique: a name held by two SSH targets, by two paired servers, or by one of each is refused, and the error hands back the id form for each candidate — `--host ssh:<target-id>` for an SSH target and `--host runtime:<environment-id>` for a paired server. Use those to settle it, since `--environment <server-name>` cannot separate two servers sharing a name.
 
+Register a new SSH target from a script or agent:
+
+```bash
+orca host add --name build-box --hostname 192.0.2.10 --user ubuntu --json
+orca host add --name build-box --hostname build.example.com --user dev --port 2222 --identity-file /home/dev/.ssh/id_ed25519 --environment office --json
+```
+
+`host add` saves a manual target through the same runtime operation as Settings. The port defaults to 22; `--jump-host` and `--proxy-command` are also supported. It returns `host.id` and `host.selector` (`--host ssh:<id>`). Each invocation creates a new target. Registration does not connect or accept host keys; connect in Settings to complete host-key or credential prompts. Passwords and key passphrases are not accepted or stored by this command.
+
+With `--environment` or `--pairing-code`, registration happens on that runtime: key paths and proxy commands refer to that machine. Older runtimes refuse the command; headless runtimes without an SSH stack report management as unavailable. `host list` and `host rm` remain local commands, so run them on the machine where you registered the target.
+
 Remove a saved SSH target with the id `orca host list` prints:
 
 ```bash
