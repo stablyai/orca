@@ -37,6 +37,8 @@ export type ProviderRelayAckFloor = {
   /** The items a cut now splits, as the continuation keys them; a reattach moves exactly those.
    *  `through`: a release lets go of lines through it, splitting items open there too. */
   cutKeys?: (through?: number) => string[]
+  /** Given once a way to ask for an ack, for a floor that drops without a new line. */
+  wake?: (ack: () => void) => void
 }
 
 export type ProviderRelayAckFlags = { cut?: true; held?: true; cutKeys?: string[] }
@@ -106,6 +108,7 @@ export class RelayedProviderOutput {
 
   constructor(private readonly options: OutputOptions) {
     this.held = options.passWhileHeld ? [] : null
+    options.ackFloor?.wake?.(() => this.scheduleAck())
   }
 
   /** Where the next attach starts: lines held but never handed on come again. */
