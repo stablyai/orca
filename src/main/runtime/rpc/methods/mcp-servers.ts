@@ -253,7 +253,7 @@ export const MCP_SERVER_METHODS = [
     params: McpServerDiscover,
     handler: (_params, context) =>
       onHost(context, async () => ({
-        servers: await listAgentMcpServers(await agentMcpImportHost(context.runtime))
+        servers: await listAgentMcpServers(agentMcpImportHost(context.runtime))
       }))
   }),
   defineMethod({

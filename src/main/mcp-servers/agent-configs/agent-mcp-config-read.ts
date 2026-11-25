@@ -30,10 +30,12 @@ export type AgentMcpConfigSource = AgentMcpConfigLocation & {
 
 export type AgentMcpConfigServer = AgentMcpConfigEntry & { source: AgentMcpConfigSource }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** A copy of the object's own keys only, so nothing reads through its prototype. */
 function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : null
+  return isRecord(value) ? Object.fromEntries(Object.entries(value)) : null
 }
 
 /** The file's parsed top level, or null when it doesn't parse as its format. */
@@ -59,12 +61,12 @@ export function parseAgentMcpConfigText(
 
 export function valueAtKeyPath(root: unknown, path: readonly string[]): unknown {
   let value = root
+  // Why no copy per step: Claude's projects map holds one entry per folder it ever opened.
   for (const segment of path) {
-    const parent = record(value)
-    if (!parent || !Object.hasOwn(parent, segment)) {
+    if (!isRecord(value) || !Object.hasOwn(value, segment)) {
       return undefined
     }
-    value = parent[segment]
+    value = value[segment]
   }
   return value
 }

@@ -149,16 +149,26 @@ const sameEntries = (a: readonly HostEntry[], b: readonly HostEntry[]): boolean 
 /** Stands for "nothing to write", so the file and its revision stay as they are. */
 class Unchanged extends Error {}
 
+/** What a sync of `plugins` into `folder` depends on: equal versions sync to the same entries. */
+export const pluginMcpServersVersion = (
+  plugins: PluginMcpServers,
+  folder = mcpHostListFolder()
+): string => JSON.stringify([folder, plugins.declared, [...plugins.held].sort()])
+
+/** `settled`: the list matches `plugins` and every address is sorted, so the same plugins need no
+ *  sync again. False when aborted or when an address couldn't be reached and waits for a retry. */
+export type PluginMcpServerSyncResult = { wrote: boolean; settled: boolean }
+
 /**
  * Makes the host's plugin entries match `plugins`: adds new ones, replaces a changed definition
  * (keeping the entry's id, name and switches), leaves held plugins' entries alone and removes the
- * rest; nothing once `signal` aborts before the write. True when it wrote.
+ * rest; nothing once `signal` aborts before the write.
  */
 export async function syncPluginMcpServers(
   plugins: PluginMcpServers,
   { signal }: { signal?: AbortSignal } = {},
   folder = mcpHostListFolder()
-): Promise<boolean> {
+): Promise<PluginMcpServerSyncResult> {
   const { entries } = await readHostEntries(folder)
   const byKey = new Map(
     entries.flatMap((entry) => {
@@ -176,6 +186,7 @@ export async function syncPluginMcpServers(
   )
   // Filled by the change below and read by the write after it: the sign-ins its entries name.
   const credentials = new Map<string, BotToolNewCredential>()
+  let settled = false
   try {
     await changeHostEntries(
       folder,
@@ -186,6 +197,10 @@ export async function syncPluginMcpServers(
         }
         credentials.clear()
         const next = nextEntries(current, plugins, sorted, credentials)
+        settled = next.every((entry) => {
+          const mark = pluginMarkOf(entry.extras)
+          return !mark?.unsorted || plugins.held.has(mark.key)
+        })
         if (sameEntries(current, next)) {
           throw new Unchanged()
         }
@@ -195,9 +210,9 @@ export async function syncPluginMcpServers(
     )
   } catch (error) {
     if (error instanceof Unchanged) {
-      return false
+      return { wrote: false, settled }
     }
     throw error
   }
-  return true
+  return { wrote: true, settled }
 }
