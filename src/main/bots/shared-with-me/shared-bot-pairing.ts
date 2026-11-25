@@ -93,3 +93,21 @@ export function sendsHeld(
 ): boolean {
   return sendsHeldTo(sharedBotHostKey(entry), entry.held, link, chat, heldStates)
 }
+
+// New shares and invites resolve within this; pairing and held messages are read sooner.
+const IDLE_POLL_MS = 10 * 60 * 1000
+const BUSY_POLL_MS = 30 * 1000
+
+/** How long until the next read of the share list: soon while one is pairing, has a held message or
+ *  its host is away, so each settles without a click. */
+export function sharedBotsPollMs<E extends { resume?: unknown }>(
+  entries: readonly E[],
+  state: (entry: E) => { link: string; waiting: boolean }
+): number {
+  return entries.some((entry) => {
+    const { link, waiting } = state(entry)
+    return !entry.resume || link !== 'live' || waiting
+  })
+    ? BUSY_POLL_MS
+    : IDLE_POLL_MS
+}

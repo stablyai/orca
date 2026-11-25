@@ -64,6 +64,16 @@ export class CloudSharesSupport {
     this.value = sharesSupported(answer, this.value)
     return answer
   }
+
+  /** The account's shares an answer gives: its list; none once refused as signed out with no account
+   *  signed in; null (keep what is kept) for anything else, a fenced or quitting connector's same
+   *  refusal while the account stays, or any error or no answer. */
+  sharesIn(answer: Awaited<ReturnType<SharedBotsCloud['mine']>> | null) {
+    if (answer?.ok) {
+      return answer.value.shares
+    }
+    return answer?.error === 'signed_out' && this.account() === null ? [] : null
+  }
 }
 
 /** A shares answer says the cloud takes shares; a 404 (an older cloud), a sign-out or no cloud says it

@@ -1,14 +1,9 @@
 // The agents shared with this Orca account: found on Orca Cloud, paired over Orca Relay, and reached by
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
 import type { SharedBotHostFailures } from './shared-bot-host-failures'
-import {
-  SHARED_BOT_HOST_ERRORS,
-  sharedBotHostView,
-  type SharedBotHostsState
-} from '../../../shared/bots/shared-bot-hosts'
+import { sharedBotHostView, type SharedBotHostsState } from '../../../shared/bots/shared-bot-hosts'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { relayStreamError } from '../../../shared/remote-runtime/relay/client/relay-rpc-streams'
 import { sharedBotHostLink, type SharedBotHostLink } from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
@@ -16,23 +11,19 @@ import {
   type SharedBotHostEntry
 } from './shared-bot-host-store'
 import { applySharedBotMine, sharedBotRequests, usableHere } from './shared-bot-mine-apply'
+import { namesSharedBotNewChat, SharedBotHeldSends } from './shared-bot-held-sends'
 import {
-  namesSharedBotNewChat,
-  SharedBotHeldSends,
   sharedBotAnswer,
-  sharedBotFailure as failure,
   sharedBotOffline,
+  sharedBotStreamAnswer,
   sharedBotUnshared
-} from './shared-bot-held-sends'
-import { nextPairingStep, type MineShare } from './shared-bot-pairing'
+} from './shared-bot-host-answers'
+import { nextPairingStep, sharedBotsPollMs, type MineShare } from './shared-bot-pairing'
 import { SerialRerun } from '../../../shared/concurrency/serial-rerun'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 
-// New shares and invites resolve within this; pairing and held messages are read sooner.
-const IDLE_POLL_MS = 10 * 60 * 1000
-const BUSY_POLL_MS = 30 * 1000
 // How long a call on a dropped link waits for the share list to say whether it was a revoke.
 const SHARES_LIST_WAIT_MS = 5000
 
@@ -60,6 +51,7 @@ export class SharedBotHosts {
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
   private loaded: Promise<void> | null = null
+  private stopped = false
   private readonly sharing = new CloudSharesSupport(() => this.deps.account())
   /** This computer's phones' keys to the shared agents. */
   readonly phones: SharedBotPhoneGrants
@@ -94,10 +86,14 @@ export class SharedBotHosts {
   }
 
   start(): void {
+    this.stopped = false
     void this.refresh()
   }
 
+  /** Nothing reads or applies the cloud's list after this, a read already out included: quitting
+   *  must never change the kept shares. */
   stop(): void {
+    this.stopped = true
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
@@ -159,9 +155,15 @@ export class SharedBotHosts {
       this.timer = null
     }
     const read = this.held.beginRead()
-    const answer = await this.sharing.read(this.deps.cloud(), () => this.publish())
-    // Signed out: the account's shares, keys and links go with it.
-    const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
+    const answer = this.stopped
+      ? null
+      : await this.sharing.read(this.deps.cloud(), () => this.publish())
+    if (this.stopped) {
+      applied()
+      return
+    }
+    // Signed out: the account's shares, keys and links go with it. Any other failure keeps them.
+    const shares = this.sharing.sharesIn(answer)
     const gone = shares ? this.applyMine(shares, read) : []
     applied()
     await this.deps.homes.settle(gone, this.store)
@@ -169,17 +171,14 @@ export class SharedBotHosts {
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
     }
     this.publish()
-    // Pairing, a held message, or a host away: read again soon, so each settles without a click.
-    const busy = this.store
-      .list()
-      .some(
-        (entry) =>
-          !entry.resume ||
-          this.linkFor(entry).current() !== 'live' ||
-          entry.held.some((held) => this.held.isWaiting(held))
-      )
-    this.timer = setTimeout(() => void this.refresh(), busy ? BUSY_POLL_MS : IDLE_POLL_MS)
-    this.timer.unref?.()
+    if (!this.stopped) {
+      const waitMs = sharedBotsPollMs(this.store.list(), (entry) => ({
+        link: this.linkFor(entry).current(),
+        waiting: entry.held.some((held) => this.held.isWaiting(held))
+      }))
+      this.timer = setTimeout(() => void this.refresh(), waitMs)
+      this.timer.unref?.()
+    }
   }
 
   async call(
@@ -234,14 +233,9 @@ export class SharedBotHosts {
       return () => {}
     }
     const { entry } = reached
-    return this.linkFor(entry).subscribe(method, params, (result) => {
-      const error = relayStreamError(result)
-      onResponse(
-        error === null
-          ? { id: method, ok: true, result, _meta: { runtimeId: entry.environmentId } }
-          : failure(method, SHARED_BOT_HOST_ERRORS.offline, error)
-      )
-    })
+    return this.linkFor(entry).subscribe(method, params, (result) =>
+      onResponse(sharedBotStreamAnswer(entry, method, result))
+    )
   }
 
   /** Sends a held message the host refused again; false when it isn't one, or wasn't held. */
