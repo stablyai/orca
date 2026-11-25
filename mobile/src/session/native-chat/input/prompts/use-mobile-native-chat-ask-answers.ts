@@ -1,16 +1,17 @@
 // The answer card's picks and typed words per question, seeded from a saved draft when its owner keeps
 // one (an item's card, so closing the item doesn't lose them), and reported back as they change.
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { AgentJournalFreeTextInput } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AskPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 
 /** One question's unsent picks (Other… is -1) and typed words. */
 export type MobileNativeChatAskDraft = { picks: readonly number[]; other: string }
 
-/** Unsent answers kept by question key outside the card: `saved` seeds it, `onChange` follows edits. */
+/** Unsent answers kept by question key outside the card: `saved` seeds it, and `onChange` gets every
+ *  shown question's answer after each edit, so the kept copy is always the whole card. */
 export type MobileNativeChatAskDrafts = {
   saved?: Readonly<Record<string, MobileNativeChatAskDraft>>
-  onChange: (key: string, draft: MobileNativeChatAskDraft) => void
+  onChange: (questions: Record<string, MobileNativeChatAskDraft>) => void
 }
 
 export function useMobileNativeChatAskAnswers(
@@ -34,16 +35,26 @@ export function useMobileNativeChatAskAnswers(
   const [otherText, setOtherText] = useState<string[]>(() =>
     prompt.questions.map((_, qi) => seed(qi).other)
   )
-  const save = (qi: number, picks: readonly number[], other: string): void => {
+  // Each question's latest answer by key, as the edits set it, so a save never reads an older render's.
+  const latest = useRef<Record<string, MobileNativeChatAskDraft>>({ ...drafts?.saved })
+  const save = (qi: number, change: Partial<MobileNativeChatAskDraft>): void => {
     const key = questionKeys?.[qi]
-    if (key !== undefined) {
-      drafts?.onChange(key, { picks, other })
+    if (!drafts || !questionKeys || key === undefined) {
+      return
     }
+    const shown = (at: number): MobileNativeChatAskDraft => ({
+      picks: selections[at] ?? [],
+      other: otherText[at] ?? ''
+    })
+    latest.current[key] = { ...shown(qi), ...latest.current[key], ...change }
+    drafts.onChange(
+      Object.fromEntries(questionKeys.map((k, at) => [k, latest.current[k] ?? shown(at)]))
+    )
   }
   /** Sets every question's picks after one question's change. */
   const setPicks = (qi: number, next: number[][]): void => {
     setSelections(next)
-    save(qi, next[qi] ?? [], otherText[qi] ?? '')
+    save(qi, { picks: next[qi] ?? [] })
   }
   const setOther = (qi: number, value: string): void => {
     setOtherText((prev) => {
@@ -51,7 +62,7 @@ export function useMobileNativeChatAskAnswers(
       next[qi] = value
       return next
     })
-    save(qi, selections[qi] ?? [], value)
+    save(qi, { other: value })
   }
   return { selections, setSelections, setPicks, otherText, setOtherText, setOther, seed }
 }

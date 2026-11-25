@@ -30,7 +30,10 @@ import {
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
-import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import {
+  isBotItemSentComment,
+  type BotItemSentAnswers
+} from '../../../../src/shared/bots/use-bot-item-question-steps'
 import {
   mobileBotItemCommentWords,
   type MobileBotItemAttachmentSource
@@ -349,9 +352,9 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {pending.shown.map(({ event, failed, mayHaveArrived }) =>
-        // Answers posted as one comment show on their lines already.
-        !failed && event.data.text === sent?.text ? null : (
+      {pending.shown.map(({ event, failed, mayHaveArrived, intent }) =>
+        // Answers posted as one comment show on their lines already: that comment, not one with its words.
+        isBotItemSentComment({ failed, intent }, sent) ? null : (
           <MobileBotItemCommentCard
             key={event.id}
             item={item}

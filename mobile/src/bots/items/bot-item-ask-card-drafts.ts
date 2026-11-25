@@ -1,38 +1,41 @@
 import type { MobileNativeChatAskDraft } from '../../session/native-chat/input/prompts/use-mobile-native-chat-ask-answers'
 
-// Each item ask's unsent answer card, for this app session: leaving the item and opening it again
-// shows the picks and typed words as they were. A send clears it; the pending reply holds them then.
-const drafts = new Map<string, Record<string, MobileNativeChatAskDraft>>()
+// Each item's unsent answer card, for this app session: leaving the item and opening it again shows
+// the picks and typed words as they were. One per item, for the ask it answers: a newer ask's card
+// takes its place, and it goes once the host's read shows no ask open (answered or closed).
+const drafts = new Map<
+  string,
+  { askId: string; questions: Readonly<Record<string, MobileNativeChatAskDraft>> }
+>()
 
-/** One ask on one item; `itemKey` names the item on its host. */
-export function botItemAskCardDraftKey(itemKey: string, askId: string): string {
-  return `${itemKey}\0${askId}`
-}
-
+/** The card's answers for `askId` on the item `itemKey` names on its host. */
 export function readBotItemAskCardDraft(
-  key: string
+  itemKey: string,
+  askId: string
 ): Readonly<Record<string, MobileNativeChatAskDraft>> | undefined {
-  return drafts.get(key)
+  const draft = drafts.get(itemKey)
+  return draft?.askId === askId ? draft.questions : undefined
 }
 
+/** Keeps the whole card as it stands, so a line left untouched since a failed Send stays too. */
 export function saveBotItemAskCardDraft(
-  key: string,
-  questionKey: string,
-  draft: MobileNativeChatAskDraft
+  itemKey: string,
+  askId: string,
+  questions: Readonly<Record<string, MobileNativeChatAskDraft>>
 ): void {
-  const questions = { ...drafts.get(key) }
-  if (draft.picks.length === 0 && !draft.other) {
-    delete questions[questionKey]
+  const kept = Object.fromEntries(
+    Object.entries(questions).filter(([, { picks, other }]) => picks.length > 0 || other)
+  )
+  if (Object.keys(kept).length > 0) {
+    drafts.set(itemKey, { askId, questions: kept })
   } else {
-    questions[questionKey] = draft
-  }
-  if (Object.keys(questions).length > 0) {
-    drafts.set(key, questions)
-  } else {
-    drafts.delete(key)
+    drafts.delete(itemKey)
   }
 }
 
-export function clearBotItemAskCardDraft(key: string): void {
-  drafts.delete(key)
+/** Drops the item's card unless it answers `openAskId`, the ask the host's read has open. */
+export function retireBotItemAskCardDraft(itemKey: string, openAskId: string | null): void {
+  if (drafts.get(itemKey)?.askId !== openAskId) {
+    drafts.delete(itemKey)
+  }
 }

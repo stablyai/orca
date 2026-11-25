@@ -18,9 +18,8 @@ import { MobileNativeChatAsk } from '../../session/native-chat/input/prompts/Mob
 import type { MobileNativeChatCollapsedPrompt } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import {
-  botItemAskCardDraftKey,
-  clearBotItemAskCardDraft,
   readBotItemAskCardDraft,
+  retireBotItemAskCardDraft,
   saveBotItemAskCardDraft
 } from './bot-item-ask-card-drafts'
 
@@ -143,12 +142,18 @@ export function useMobileBotItemAskSlot({
       Keyboard.dismiss()
     }
   }, [askShown])
+  useEffect(() => {
+    // The host's read decides: a card kept for an ask it no longer has open (answered, replaced,
+    // closed) goes; the open ask's stays across Back, offline, Not now and a failed Send.
+    if (loaded) {
+      retireBotItemAskCardDraft(itemKey, key)
+    }
+  }, [loaded, itemKey, key])
   const fold = (): void => setFolded(key)
   if (!ask) {
     return { card: null, askOpen, askShown, strip: null, fold }
   }
   const first = ask.shape.decisions[ask.open[0]!]!
-  const draftKey = botItemAskCardDraftKey(itemKey, ask.askId)
   return {
     askOpen,
     askShown,
@@ -165,8 +170,8 @@ export function useMobileBotItemAskSlot({
         prompt={askPrompt(ask)}
         questionKeys={ask.open.map(String)}
         drafts={{
-          saved: readBotItemAskCardDraft(draftKey),
-          onChange: (question, draft) => saveBotItemAskCardDraft(draftKey, question, draft)
+          saved: readBotItemAskCardDraft(itemKey, ask.askId),
+          onChange: (questions) => saveBotItemAskCardDraft(itemKey, ask.askId, questions)
         }}
         answerPending={!online}
         onAnswer={async (selections) => {
@@ -175,8 +180,6 @@ export function useMobileBotItemAskSlot({
             return false
           }
           send(text, { askId: ask.askId, skipped })
-          // The pending reply holds the words now; a refused one goes back to the comment box.
-          clearBotItemAskCardDraft(draftKey)
           return true
         }}
         onCancel={async () => {
