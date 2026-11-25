@@ -28,7 +28,7 @@ export function accountHoldVerdict({
   cut,
   movedCut,
   awaitingRoom,
-  spentHolds,
+  relaunched,
   scope,
   hold,
   now,
@@ -37,7 +37,7 @@ export function accountHoldVerdict({
   cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset
   movedCut: boolean
   awaitingRoom: boolean
-  spentHolds: boolean
+  relaunched: boolean
   scope: UsageLimitAccountScope | undefined
   hold: UsageLimitAccountHold
   now: number
@@ -65,7 +65,7 @@ export function accountHoldVerdict({
   // itself is older than its turn. It cannot make an expired task eligible again.
   if (
     reading &&
-    spentHolds &&
+    (movedCut || relaunched) &&
     spentUntil !== undefined &&
     now - cut.resetsAt <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
   ) {
@@ -109,7 +109,8 @@ export function accountHoldVerdict({
     rateLimitShowsRoom(reading)
       ? reading.updatedAt
       : roomAt(account?.key, reading)
-  if (awaitingRoom && room !== undefined) {
+  // Room read since a relaunch outranks any earlier spending, as it does for a resetless cut.
+  if (relaunched && room !== undefined) {
     hold.unknownReset = false
   }
   const heldTo = Math.max(

@@ -219,7 +219,7 @@ export class UsageLimitAccountHolds {
       cut,
       movedCut,
       awaitingRoom,
-      spentHolds: movedCut || relaunchedCut,
+      relaunched: relaunchedCut,
       scope,
       hold,
       now,
