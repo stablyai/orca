@@ -304,6 +304,12 @@ export default function TaskProjectSourceCombobox({
                       { project: group.repo.displayName }
                     )}
                     onClick={() => selectOnlyProject(group)}
+                    onKeyDown={(event) => {
+                      // cmdk prevents native button activation on Enter.
+                      if (event.key === 'Enter') {
+                        event.stopPropagation()
+                      }
+                    }}
                     onMouseDown={(event) => event.preventDefault()}
                     className="shrink-0 px-2 text-xs text-muted-foreground can-hover:opacity-0 hover:text-foreground group-hover/source-row:opacity-100 focus-visible:opacity-100"
                   >
