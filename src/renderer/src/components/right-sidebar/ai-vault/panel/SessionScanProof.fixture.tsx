@@ -1,6 +1,7 @@
 import '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { useState } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
+import { ConfirmationDialogProvider } from '../../../dismiss/confirmation/confirmation-dialog'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
@@ -120,13 +121,15 @@ function panelFixture(host: ExecutionHostId, populated: boolean, step: Step = 'w
       }
     },
     render: () => (
-      <div className="h-[520px] @container/ai-vault border border-sidebar-border bg-sidebar">
-        <AiVaultPanel
-          workspace={{ worktreeId: folderWorkspaceKey(workspace.id), executionHostId: host }}
-          initialQuery="garden"
-          initialAgents={['codex']}
-        />
-      </div>
+      <ConfirmationDialogProvider>
+        <div className="h-[520px] @container/ai-vault border border-sidebar-border bg-sidebar">
+          <AiVaultPanel
+            workspace={{ worktreeId: folderWorkspaceKey(workspace.id), executionHostId: host }}
+            initialQuery="garden"
+            initialAgents={['codex']}
+          />
+        </div>
+      </ConfirmationDialogProvider>
     ),
     interact: async (frame) => {
       await until(() => requests.length === 1)
