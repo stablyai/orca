@@ -4,6 +4,7 @@ import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-o
 import { boundRunWorkerNext } from '../../../../orchestration/db/runs/worker-run-binding'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
+import { exposeRunCoordinator } from './run-coordinator-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
@@ -173,7 +174,11 @@ export const ORCHESTRATION_RUN_METHODS = [
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
       const removedWork = readRunRemovedWork(db.db, run.id, params)
-      return removedWork ? { run: exposeRun(run), removedWork } : { run: exposeRun(run) }
+      return {
+        run: exposeRun(run),
+        coordinator: exposeRunCoordinator(run, runtime.getRuntimeId()),
+        ...(removedWork ? { removedWork } : {})
+      }
     }
   })
 ]

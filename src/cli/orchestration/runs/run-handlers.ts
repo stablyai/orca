@@ -128,6 +128,12 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
         legacy: number
         created_at: string
       }
+      coordinator: {
+        run_id: string
+        actor: string | null
+        consumer_generation: number
+        runtime_id: string
+      }
       removedWork?: RunRemovedWork
     }>('orchestration.runShow', {
       id: getRequiredStringFlag(flags, 'id'),
@@ -136,7 +142,11 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
-        fields: (r) => ({ ...runFields(r.run), removedWork: r.removedWork }),
+        fields: (r) => ({
+          ...runFields(r.run),
+          coordinator: r.coordinator,
+          removedWork: r.removedWork
+        }),
         text: (_, r) =>
           removed
             ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
@@ -148,7 +158,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       removed
         ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
         : `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
-          `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}` +
+          `consumer generation ${r.run.consumer_generation}; runtime ${r.coordinator.runtime_id}; created ${r.run.created_at}` +
+          `\ncoordinator ${r.coordinator.actor ?? 'unknown'} (run ${r.coordinator.run_id}, generation ${r.coordinator.consumer_generation})` +
           `${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
     )
   }
