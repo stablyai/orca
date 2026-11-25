@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 
@@ -105,6 +106,12 @@ export class AcpKeptSession {
   /** The earlier app's prompt is still owed, or answered in the held replay. */
   get owesPrompt(): boolean {
     return this.kept.earlierPromptId !== null
+  }
+
+  /** Names this replay's start: the daemon's cut, the same at every attach until acks pass it
+   *  (without one, this attach's own). */
+  get replayKey(): string {
+    return `${this.child.relayId}:${this.child.attachResult?.truncatedThrough ?? randomUUID()}`
   }
 
   /** The replay holds that prompt's every line, so its messages are numbered as the live run did. */
