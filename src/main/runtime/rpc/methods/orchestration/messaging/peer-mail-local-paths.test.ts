@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { LOCAL_PATH_SCAN_MAX, localPathWarning } from './peer-mail-local-paths'
+import { LOCAL_PATH_LINE_MAX, LOCAL_PATH_SCAN_MAX, localPathWarning } from './peer-mail-local-paths'
 
 describe('local paths in mail to another computer', () => {
   let dir: string
@@ -87,5 +87,41 @@ describe('local paths in mail to another computer', () => {
     expect(await named(3)).toContain(`names ${a}, ${b}, and ${c} on this computer`)
     expect(await named(5)).toContain(`names ${a}, ${b}, ${c}, and 2 more on this computer`)
     expect(await named(1)).toContain('or attach it to a bot item with --file.')
+  })
+
+  describe('a path that a cap cuts', () => {
+    /** The disk has only `exists`; every other path is missing. */
+    const onlyFile = (exists: string) => async (path: string) => {
+      if (path !== exists) {
+        throw new Error('ENOENT')
+      }
+    }
+    const warned = async (body: string, exists: string) =>
+      (await localPathWarning(body, 'bot:Docs', 'm4', onlyFile(exists)))?.message ?? null
+
+    it('at the end of the scanned region, is read to where the body ends it', async () => {
+      const path = '/tmp/orca-c2-report'
+      const earlier = '/tmp/orca-c2-earlier'
+      // The path ends exactly at the region's end.
+      const lead = `${'x'.repeat(LOCAL_PATH_SCAN_MAX - path.length - 1)} `
+      expect(await warned(`${lead}${path}-archive`, path)).toBeNull()
+      expect(await warned(`${lead}${path}`, path)).toContain(`names ${path} on`)
+      expect(await warned(`${lead}${path} and more`, path)).toContain(`names ${path} on`)
+      expect(await warned(`${lead}${path}\nnext`, path)).toContain(`names ${path} on`)
+      // A complete path before it still counts.
+      const both = `${earlier} ${lead.slice(earlier.length + 1)}${path}-archive`
+      expect(both.indexOf(`${path}-archive`)).toBe(lead.length)
+      expect(await warned(both, earlier)).toContain(`names ${earlier} on`)
+    })
+
+    it('at the line cap, is never read as the shorter path the cap leaves', async () => {
+      // A real multi-folder path exactly as long as the line cap.
+      const path = `/tmp${'/a'.repeat((LOCAL_PATH_LINE_MAX - 4) / 2)}`
+      expect(path).toHaveLength(LOCAL_PATH_LINE_MAX)
+      expect(await warned(`${path}-archive`, path)).toBeNull()
+      expect(await warned(path, path)).toContain(`names ${path} on`)
+      expect(await warned(`${path} x`, path)).toContain(`names ${path} on`)
+      expect(await warned(`${path}\nnext`, path)).toContain(`names ${path} on`)
+    })
   })
 })

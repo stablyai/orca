@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -379,6 +379,37 @@ describe('agent mail between paired Orca servers', () => {
       mutation(a, 'orchestration.reply', { id: back!.id, body: 'Thanks.', from: 'term_a' })
     ).resolves.toMatchObject({ ok: true })
     expect(mailFor(b, 'term_b').map((message) => message.body)).toEqual(['Thanks.'])
+  })
+
+  it('warns when the body names a file only this computer has, and sends the body whole', async () => {
+    const brief = join(dir, 'brief.md')
+    writeFileSync(brief, '# brief')
+    // Past the region the scan reads, so only delivery carries it.
+    const body = `Review ${brief} before main.\n${'y'.repeat(70_000)}\nSENTINEL-END`
+
+    const sent = await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'The brief',
+      body
+    })
+    expect(sent).toMatchObject({
+      ok: true,
+      result: {
+        server: 'devB',
+        warnings: [
+          {
+            code: 'local_paths_unreadable',
+            recipient: 'term_b',
+            message: expect.stringContaining(
+              `names ${brief} on this computer, which devB can't open`
+            )
+          }
+        ]
+      }
+    })
+    expect(mailFor(b, 'term_b').map((message) => message.body)).toEqual([body])
   })
 
   it("reports the server's delivery hold, as a local send does", async () => {

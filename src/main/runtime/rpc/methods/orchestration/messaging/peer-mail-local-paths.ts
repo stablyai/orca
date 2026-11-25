@@ -13,7 +13,8 @@ const MATCHES_MAX = 200
 // A folder name can hold spaces ("Application Support"): each path is also tried this many words on.
 const EXTRA_WORDS_MAX = 4
 const NAMED_MAX = 3
-const LINE_MAX = 1024
+/** How far past a path's start its line is read. */
+export const LOCAL_PATH_LINE_MAX = 1024
 /** Only this much of a body is searched for paths: the scan is advice, and a long body (a pasted log)
  *  must cost the send no more than a short one. The body itself is sent whole. */
 export const LOCAL_PATH_SCAN_MAX = 64 * 1024
@@ -31,23 +32,33 @@ function localRoots(): string[] {
 }
 
 /** Each path start's readings, shortest first: through the first space, then each word after it. */
-function candidates(whole: string): string[][] {
-  const body = whole.slice(0, LOCAL_PATH_SCAN_MAX)
+function candidates(body: string): string[][] {
+  // Paths start only in the scanned region, but each one's line is read on past it, so a path the
+  // region's end cuts still ends where the body ends it.
+  const region = body.slice(0, LOCAL_PATH_SCAN_MAX)
   const home = homedir()
   const roots = localRoots()
   const starts: string[][] = []
   let matches = 0
-  for (const match of body.matchAll(PATH_START)) {
+  for (const match of region.matchAll(PATH_START)) {
     if (++matches > MATCHES_MAX) {
       break
     }
     const from = match.index + match[0].length - match[1].length
-    // Only the rest of this line, read at most LINE_MAX on: a body has many path-like starts.
-    const rest = body.slice(from, from + LINE_MAX)
-    const end = rest.indexOf('\n')
+    // The rest of this line, read one past LOCAL_PATH_LINE_MAX: that one tells a line ending there
+    // from one running on.
+    const rest = body.slice(from, from + LOCAL_PATH_LINE_MAX + 1)
+    const newline = rest.indexOf('\n')
+    const atEnd = from + rest.length === body.length && rest.length <= LOCAL_PATH_LINE_MAX
+    const ended = newline !== -1 || atEnd || /[ \t\r]/.test(rest.charAt(LOCAL_PATH_LINE_MAX))
     // A CRLF body's line ends in "\r", which no file name does.
-    const line = (end === -1 ? rest : rest.slice(0, end)).replace(/\r$/, '')
-    const words = line.split(/[ \t]+/).slice(0, EXTRA_WORDS_MAX + 1)
+    const line = (
+      newline !== -1 ? rest.slice(0, newline) : rest.slice(0, LOCAL_PATH_LINE_MAX)
+    ).replace(/\r$/, '')
+    const all = line.split(/[ \t]+/)
+    // A line the cap cut may have cut its last word, so no reading ends on that word: it could name a
+    // shorter file than the body does ("/tmp/report" of "/tmp/report-archive").
+    const words = all.slice(0, Math.min(EXTRA_WORDS_MAX + 1, ended ? all.length : all.length - 1))
     const readings = words
       .map((_, count) =>
         words
