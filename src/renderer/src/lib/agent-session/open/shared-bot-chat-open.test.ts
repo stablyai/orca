@@ -14,8 +14,7 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { publishBots, readHostBots, setBotHostListing } from '../../bot-catalog-snapshot'
-import { startBotSession } from '../../bot-catalog'
-import { openBotHome, openBotHomeTab } from '../../bot-home-open'
+import { openBotHome, openBotHomeTab, startBotSession } from '../../bot-catalog'
 import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/shared-bot-new-chat-swap'
 import { buildWorkspaceSessionPayload } from '../../workspace/persistence/workspace-session'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
@@ -210,7 +209,7 @@ describe('a shared agent’s chats on this computer', () => {
     expect(tabs().map((tab) => tab.entityId)).toEqual(['chat-1'])
   })
 
-  it('opens its home here from Home on this account’s own chat, reading only this computer’s workspaces and never its owner’s Home Chat', async () => {
+  it('opens its home here from Home, reading only this computer’s workspaces and never its owner’s Home Chat', async () => {
     call.mockClear()
     const fetchFolderWorkspaces = vi.fn(async () => {})
     useAppStore.setState({ fetchFolderWorkspaces })
@@ -218,19 +217,11 @@ describe('a shared agent’s chats on this computer', () => {
     expect(await openBotHomeTab(bot)).toBe(true)
     expect(useAppStore.getState().activeWorktreeId).toBe(HOME_KEY)
     expect(fetchFolderWorkspaces).toHaveBeenCalledWith({ runtimeEnvironmentId: null })
-    // The owner's Home Chat is theirs: the share refuses it here. With no chat of this account's
-    // yet, a new one opens, and never a terminal in the home's folder.
+    // The owner's Home Chat is theirs: the share refuses it here, and no tab of it opens.
     const asked = call.mock.calls.map(([request]) => request.method)
     expect(asked).not.toContain('folderWorkspaces.list')
     expect(asked).not.toContain('bots.chat.open')
-    expect(asked).toContain('bots.session.start')
-    expect(tabs()).toEqual([
-      expect.objectContaining({
-        contentType: 'agent-session',
-        entityId: 'shared-new-1',
-        worktreeId: HOME_KEY
-      })
-    ])
+    expect(tabs()).toEqual([])
   })
 
   it('opens a new chat started while the owner’s computer is away, and moves it to the chat the host starts once back', async () => {

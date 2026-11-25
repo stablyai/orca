@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
-import { openBotHomeTab } from '@/lib/bot-home-open'
+import { openBotHomeTab } from '@/lib/bot-catalog'
 import {
   readBotHostState,
   readBotItemsNeedingOwner,

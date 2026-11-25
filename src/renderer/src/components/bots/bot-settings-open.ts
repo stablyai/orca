@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
-import { readBots } from '@/lib/bot-catalog'
-import { openBotHome } from '@/lib/bot-home-open'
+import { openBotHome, readBots } from '@/lib/bot-catalog'
 import { botConnectorRowKey, openBotConnectorPage } from './bot-connector-page'
 import type { Bot } from '../../../../shared/bot-types'
 import {

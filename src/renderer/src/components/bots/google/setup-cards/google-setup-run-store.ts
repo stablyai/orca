@@ -1,7 +1,7 @@
 // Each bot's Google setup run as its setup cards read it. One read per bot however many cards it has
 // in the chat; the host's bots-changed notice (sent on every run change) has it read again.
 import { useEffect, useSyncExternalStore } from 'react'
-import { openBotHomeTab } from '@/lib/bot-home-open'
+import { openBotHomeTab } from '@/lib/bot-catalog'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import {

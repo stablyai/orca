@@ -1,7 +1,7 @@
 // A bot's Composio apps as its cards, Add connector and Tools read them: the key's state and the bot's
 // sign-ins, read once per bot however many show them, and again on the host's bots-changed notice.
 import { useEffect, useSyncExternalStore } from 'react'
-import { openBotHomeTab } from '@/lib/bot-home-open'
+import { openBotHomeTab } from '@/lib/bot-catalog'
 import { openBotSettings } from '../bot-settings-open'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { botHostTarget, botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'

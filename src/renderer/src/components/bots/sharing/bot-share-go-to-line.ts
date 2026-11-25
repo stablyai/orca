@@ -1,5 +1,5 @@
 // *Go to line*: the flagged file of a bot's home, opened in its home workspace at that line.
-import { openBotHome } from '@/lib/bot-home-open'
+import { openBotHome } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
 import { openLinkedFileInEditor } from '@/components/terminal-pane/links/files/terminal-file-link-editor-open'
 import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-workspace-record-index'

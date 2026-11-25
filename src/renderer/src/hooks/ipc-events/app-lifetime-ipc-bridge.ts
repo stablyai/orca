@@ -8,7 +8,6 @@ import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window
 import { installBotHostListing } from '@/lib/bot-host-listing'
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/shared-bot-new-chat-swap'
-import { installAgentHomeChatSurface } from '@/lib/bot-home-open'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
@@ -88,8 +87,6 @@ export function installAppLifetimeIpcEvents(): () => void {
   if (!isPairedWebClientWindow()) {
     unsubs.push(installSharedBotHostCatalog(), installSharedBotNewChatSwap())
   }
-  // Every window: an agent's home opens on its chat, never on a seeded shell.
-  unsubs.push(installAgentHomeChatSurface())
   unsubs.push(installBotHostListing(useAppStore, isPairedWebClientWindow()))
   const stopSessionWorkerNotices = window.api.runtime.onOrchestrationSessionWorkersChanged?.(
     ({ sessionId }) => noteOrchestrationSessionWorkersChanged(null, sessionId)

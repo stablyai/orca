@@ -1,4 +1,3 @@
-import { openAgentHomeChatInsteadOfShell } from './agent-home-initial-surface'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -195,15 +194,6 @@ export function ensureWorktreeHasInitialTerminal(
     shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone) &&
     // Requested default tabs are explicit content; only the bare default yields to a waiting split chooser.
     (Boolean(defaultTabs?.tabs.length) || !hasSplitLandingGroup(useAppStore.getState(), worktreeId))
-  // An agent's home opens on its chat, never on a shell in its folder.
-  if (
-    shouldAutoCreate &&
-    !hasExplicitLaunchWork &&
-    !defaultTabs?.tabs.length &&
-    openAgentHomeChatInsteadOfShell(worktreeId)
-  ) {
-    return null
-  }
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined

@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { openBotHomeTab } from '@/lib/bot-home-open'
+import { openBotHomeTab } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import type { Bot } from '../../../../shared/bot-types'
