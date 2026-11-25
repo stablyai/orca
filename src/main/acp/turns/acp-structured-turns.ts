@@ -25,6 +25,8 @@ type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: numb
 
 export class AcpStructuredTurns {
   private active: Send | null = null
+  /** The earlier app's prompt this kept agent still runs: a send waits for it, never cancels it. */
+  private adopted: Send | null = null
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
   private readonly steers: Send[] = []
@@ -219,7 +221,7 @@ export class AcpStructuredTurns {
       const opened = lane.translator.openPrompt(clientMessageId, at, ...opening)
       lane.apply(opened.events)
       this.unsettled.add(clientMessageId)
-      this.active = { clientMessageId, prompt: [], requestedAt: at }
+      this.active = this.adopted = { clientMessageId, prompt: [], requestedAt: at }
       this.run(this.active, opened.promptId, answered())
     }
   }
@@ -323,7 +325,8 @@ export class AcpStructuredTurns {
   /** Steering waits indefinitely for cancellation; Stop can still end the child. */
   private cancelForSteer(): void {
     const send = this.active
-    if (!send) {
+    // An earlier app's prompt runs to its end; Stop still cancels it.
+    if (!send || send === this.adopted) {
       return
     }
     this.deps.withdrawRequests()

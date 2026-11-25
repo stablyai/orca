@@ -3,7 +3,11 @@ import { ACP_PROMPT_TURN_PREFIX, acpTurnEndEvents } from '../../timeline/acp-pro
 import { structuredAgentSessionCommandTurn } from '../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { isStructuredAgentSessionCommandTurnId } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
+import {
+  ACP_OPTION_WRITE_TIMEOUT_MS,
+  type AcpStructuredSessionAdapterDeps
+} from '../acp-structured-session-adapter-deps'
+import { applyAcpLivePermissionMode } from '../../options/acp-live-permission-mode'
 import { carryKeptAcpBackgroundWork } from './acp-kept-background-work'
 import { assertAcpStartingSession, type AcpStructuredChild } from '../children/acp-structured-child'
 
@@ -56,7 +60,10 @@ async function savedCommandRun(
 export async function carryOnKeptAcpAgent<Opened>(
   opened: Opened,
   child: AcpStructuredChild,
-  deps: Pick<AcpStructuredSessionAdapterDeps, 'keptWork' | 'spec'>,
+  deps: Pick<
+    AcpStructuredSessionAdapterDeps,
+    'keptWork' | 'spec' | 'optionWriteTimeoutMs' | 'logger'
+  >,
   signal: AbortSignal
 ): Promise<Opened> {
   const { kept } = child.connection
@@ -69,6 +76,19 @@ export async function carryOnKeptAcpAgent<Opened>(
   assertAcpStartingSession(child, () => signal.aborted)
   // Before any turn opens here: these calls belong to turns that already ended.
   await carryKeptAcpBackgroundWork(child, deps.spec.agent)
+  // The agent runs the mode it had when the last app let go; the chat's own, picked since, is
+  // written live as a pick on a running chat is, without holding the reattach.
+  if (child.spec.permissionModeConfig && child.permission !== 'own' && !kept.agentExited) {
+    const timeoutMs = deps.optionWriteTimeoutMs ?? ACP_OPTION_WRITE_TIMEOUT_MS
+    void applyAcpLivePermissionMode(child, child.permission, { timeoutMs }).catch(
+      (error: unknown) =>
+        deps.logger?.warn('writing the chat\u2019s mode to a kept agent failed', {
+          scope: 'kept-permission',
+          sessionId: child.sessionId,
+          error
+        })
+    )
+  }
   const command =
     turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
       ? await savedCommandRun(child, turnId)

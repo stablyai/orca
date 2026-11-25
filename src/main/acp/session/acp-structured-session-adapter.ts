@@ -25,6 +25,7 @@ import {
 import { readAcpLiveOptions } from '../options/acp-live-options'
 import {
   acpPermissionWritesSettled,
+  acpKeptModeTakesLive,
   acpRunningPermission,
   applyAcpLivePermissionMode
 } from '../options/acp-live-permission-mode'
@@ -190,9 +191,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     SessionAdapter['permissionModeRequiresAcquisition']
   > = (sessionId, mode) => {
     const session = this.children.sessions.get(sessionId)
-    return childState.isAcpReadySession(session)
-      ? acpRunningPermission(session) !== mode
-      : undefined
+    if (!childState.isAcpReadySession(session)) {
+      return undefined
+    }
+    return !acpKeptModeTakesLive(session, mode) && acpRunningPermission(session) !== mode
   }
 
   runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {

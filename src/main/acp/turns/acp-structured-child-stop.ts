@@ -76,6 +76,10 @@ export async function probeAcpChildStops(
   dialect: AcpDialect,
   initialized: InitializeResponse
 ): Promise<AcpChildStops> {
+  // A write to a kept agent that already ended would close the connection its output arrives on.
+  if (connection.kept?.agentExited) {
+    return { subagents: false, backgroundTasks: false }
+  }
   const [subagents, backgroundTasks] = await Promise.all([
     dialect.childSessionStop?.supported(initialized) === true ||
       probeAcpSubagentStop(connection, dialect),
