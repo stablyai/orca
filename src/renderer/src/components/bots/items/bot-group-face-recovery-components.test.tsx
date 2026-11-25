@@ -64,6 +64,11 @@ function hostIs(entry: RuntimeEnvironmentStatus): void {
 const flush = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
 
 // Seeded bot and group, no real data.
+/** A paired server's bot or group as the listing stamps it with that server's id (bot-catalog-snapshot.ts). */
+function onHost<T extends { hostId: string }>(stored: T, hostId: ExecutionHostId): T {
+  return { ...stored, hostId }
+}
+
 const storedBot: Bot = {
   id: 'seeded-bot',
   name: 'Seeded bot',
@@ -83,8 +88,7 @@ const storedBot: Bot = {
   createdAt: 1,
   updatedAt: 1
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing stamps a paired server's id the same way (bot-catalog-snapshot.ts).
-const bot = { ...storedBot, hostId: HOST } as Bot
+const bot = onHost(storedBot, HOST)
 const storedGroup: BotGroup = {
   id: 'seeded-group',
   name: 'Seeded group',
@@ -96,8 +100,7 @@ const storedGroup: BotGroup = {
   replyMode: { kind: 'mentions' },
   members: [{ botId: storedBot.id, sessionId: 'room' }]
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a paired server's group is stamped with its id like its bots.
-const group = { ...storedGroup, hostId: HOST } as BotGroup
+const group = onHost(storedGroup, HOST)
 
 /** The Items panel's provider wiring (BotGroupItemsPanel): one face-picture store around its rows. */
 function PanelRow({ member }: { member: Bot }): React.JSX.Element {
