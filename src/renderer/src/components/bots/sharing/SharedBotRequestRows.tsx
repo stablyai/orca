@@ -4,13 +4,13 @@
 import { useState } from 'react'
 import { Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { WORKTREE_CARD_SURFACE_CLASS_NAME } from '@/components/sidebar/workspace-card/surface/worktree-card-surface'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useSharedBotRequests } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { SharedBotRequestView } from '../../../../../shared/bots/shared-bot-hosts'
 import { aroundOwner } from '../../../../../shared/bots/shared-bot-owner-name'
 import { BotOwnerAvatar } from '../bot-connector-people'
+import { BOT_SIDEBAR_ROW_CLASS_NAME, BotSidebarRowPicture } from '../BotSidebarRow'
 import { BotShareMark } from './BotShareMark'
 import { SharedBotInviteDialog, SharedBotRequestAvatar } from './SharedBotInviteDialog'
 
@@ -41,8 +41,8 @@ export function SharedBotRequestRow({
         data-worktree-card-surface="true"
         data-worktree-card-active={open ? 'primary' : undefined}
         className={cn(
-          WORKTREE_CARD_SURFACE_CLASS_NAME,
-          'flex items-center pt-1.25 pb-1.25 pl-1.25 focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+          BOT_SIDEBAR_ROW_CLASS_NAME,
+          'focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
           !open && 'worktree-sidebar-card-hover'
         )}
         onClick={() => setOpen(true)}
@@ -56,14 +56,18 @@ export function SharedBotRequestRow({
           }
         }}
       >
-        <span className="relative mr-2 shrink-0">
-          <span className="flex opacity-60" style={INVITE_MARK_CUTOUT}>
+        <BotSidebarRowPicture
+          picture={
             <SharedBotRequestAvatar request={request} className="size-8 rounded-md text-sm" />
-          </span>
-          <span className="absolute right-[3px] bottom-[3px] flex size-0 items-center justify-center">
-            <Mail className="size-3 shrink-0 text-foreground" aria-hidden />
-          </span>
-        </span>
+          }
+          pictureClassName="opacity-60"
+          pictureStyle={INVITE_MARK_CUTOUT}
+          mark={
+            <span className="absolute right-[3px] bottom-[3px] flex size-0 items-center justify-center">
+              <Mail className="size-3 shrink-0 text-foreground" aria-hidden />
+            </span>
+          }
+        />
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <div className="flex min-w-0 items-center gap-1">
             <span className="flex min-w-0 items-center gap-1.5 opacity-60">
@@ -109,12 +113,20 @@ export function SharedBotRequestRow({
 
 /** Every request, newest first as the cloud lists them; nothing when there are none. */
 export function SharedBotRequestRows(): React.JSX.Element | null {
-  const requests = useSharedBotRequests()
+  return <SharedBotRequestList requests={useSharedBotRequests()} />
+}
+
+/** No inset of its own: the Bots list's padding places these rows exactly where its agents' sit. */
+export function SharedBotRequestList({
+  requests
+}: {
+  requests: readonly SharedBotRequestView[]
+}): React.JSX.Element | null {
   if (requests.length === 0) {
     return null
   }
   return (
-    <div className="flex flex-col gap-px pl-1">
+    <div className="flex flex-col gap-px">
       {requests.map((request) => (
         <SharedBotRequestRow key={request.shareId} request={request} />
       ))}
