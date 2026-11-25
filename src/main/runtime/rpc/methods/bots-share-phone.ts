@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/bots/bot-share-phone'
 import { sharedHostPhoneGrants } from '../../../ipc/runtime-environments/requests/runtime-environment-shared-hosts'
 import { defineMethod, type RpcContext } from '../core'
+import { SHARE_SELF } from '../../../../shared/bots/bot-share-rpc-methods'
 
 /** The calling teammate computer's share device: refused to a phone's own key and to anyone else. */
 function shareComputer(context: RpcContext): string {
@@ -51,6 +52,7 @@ export const BOT_SHARE_PHONE_METHODS = [
     name: BOT_SHARE_PROVISION_PHONE_METHOD,
     // Reached only through the share allowlist; never granted to a paired client.
     permission: 'pairing-admin',
+    share: SHARE_SELF,
     params: BotShareProvisionPhoneParams,
     handler: async (params, context) => {
       const devices = context.runtime.botShareDevices
@@ -63,6 +65,7 @@ export const BOT_SHARE_PHONE_METHODS = [
   defineMethod({
     name: BOT_SHARE_REVOKE_PHONE_METHOD,
     permission: 'pairing-admin',
+    share: SHARE_SELF,
     params: BotShareRevokePhoneParams,
     handler: async ({ deviceId }, context) => {
       const revoked =
@@ -76,6 +79,7 @@ export const BOT_SHARE_PHONE_METHODS = [
   defineMethod({
     name: SHARED_BOTS_PHONE_LIST_METHOD,
     permission: 'pairing-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_params, context) => {
       ownPhone(context)
@@ -85,6 +89,7 @@ export const BOT_SHARE_PHONE_METHODS = [
   defineMethod({
     name: SHARED_BOTS_PHONE_PROVISION_METHOD,
     permission: 'pairing-admin',
+    share: 'not-shared',
     params: SharedBotsPhoneProvisionParams,
     handler: async (params, context) =>
       await (await grants()).provisionPhone(ownPhone(context), params)

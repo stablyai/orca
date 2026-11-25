@@ -432,6 +432,8 @@ describe('the share guard', () => {
         'bots.list',
         'bots.roster',
         'bots.session.start',
+        'botShare.provisionPhone',
+        'botShare.revokePhone',
         'pairing.getEndpoints',
         'pairing.provisionRelay',
         'status.get'
