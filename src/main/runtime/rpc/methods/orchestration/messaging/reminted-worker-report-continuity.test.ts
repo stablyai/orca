@@ -506,7 +506,8 @@ describe('restart-reissued worker handle across finished and federated Dispatche
       const { dispatchId } = await setupAnsweredLocalWorker()
       const lookup = db.getActiveDispatchForIdentity.bind(db)
       vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
-        if (paneKey) {
+        // Only check's own lookup by the stale handle; earlier lookups name the current handle.
+        if (handle === STALE_HANDLE && paneKey) {
           paneIncarnation = REPLACEMENT
         }
         return lookup(handle, paneKey)

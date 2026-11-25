@@ -27,9 +27,9 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     activeDispatch,
     remoteAttachment
   } = args
-  // A restart-reissued handle supplies its recovered process; otherwise the handle's live one, re-read at each fence.
-  const callerProcessIncarnation = () =>
-    args.processIncarnation ? args.processIncarnation() : runtime.getTerminalProcessIncarnation(handle)
+  // A restart-reissued caller is pinned to its recovered process at every fence, local or federated.
+  const holdsDispatch = (current: Parameters<typeof callerHoldsDispatchPane>[0]) =>
+    callerHoldsDispatchPane(current, paneKey) && (args.recoveredLocalProcessCurrent?.() ?? true)
   const workerMailbox = activeDispatch
     ? {
         dispatchId: activeDispatch.id,
@@ -60,11 +60,8 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
       if (current?.id === activeDispatch.id) {
-        // Re-attachment during awaits can retain the id while changing the pane, or replace the process.
-        if (
-          callerHoldsDispatchPane(current, paneKey) &&
-          (args.recoveredLocalProcessCurrent?.() ?? true)
-        ) {
+        // Re-attachment during awaits can retain the id while changing the pane, or the process.
+        if (holdsDispatch(current)) {
           return
         }
         throw dispatchFenced()
@@ -76,7 +73,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
         db.isRemoteAttachmentProcessCurrent({
           dispatchId: current.dispatch_id,
           paneKey,
-          processIncarnation: callerProcessIncarnation()
+          processIncarnation: args.processIncarnation()
         })
       ) {
         return
@@ -209,11 +206,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
       }
       if (activeDispatch) {
         const current = db.getActiveDispatchForIdentity(handle, paneKey)
-        if (
-          current?.id !== activeDispatch.id ||
-          !callerHoldsDispatchPane(current, paneKey) ||
-          !(args.recoveredLocalProcessCurrent?.() ?? true)
-        ) {
+        if (current?.id !== activeDispatch.id || !holdsDispatch(current)) {
           throw dispatchFenced()
         }
       } else if (
@@ -222,7 +215,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
         !db.isRemoteAttachmentProcessCurrent({
           dispatchId: workerMailbox.dispatchId,
           paneKey,
-          processIncarnation: callerProcessIncarnation()
+          processIncarnation: args.processIncarnation()
         })
       ) {
         throw dispatchFenced()

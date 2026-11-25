@@ -101,6 +101,7 @@ export async function checkRunPendingMail(args: {
       signal,
       activeDispatch: residual,
       remoteAttachment: undefined,
+      processIncarnation: () => runtime.getTerminalProcessIncarnation(handle),
       wakeTypes: params.wait ? typeFilter : undefined,
       // Accept the original owner's ack without creating a batch ahead of Run replay.
       deferDelivery: () => db.hasOutstandingMailboxDelivery(address),

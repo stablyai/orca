@@ -26,7 +26,7 @@ export type WorkerMailboxCheckInput = {
   activeDispatch: ActiveDispatch | undefined
   remoteAttachment: RemoteAttachment | undefined
   /** The caller's process, re-read at each fence; a restart-reissued handle supplies its recovered one. */
-  processIncarnation?: () => string | null
+  processIncarnation: () => string | null
   /** A restart-reissued caller recovered to this local Dispatch: still its exact recorded process. */
   recoveredLocalProcessCurrent?: () => boolean
   wakeTypes?: MessageType[]
