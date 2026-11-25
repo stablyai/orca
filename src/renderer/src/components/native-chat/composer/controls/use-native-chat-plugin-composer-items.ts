@@ -190,7 +190,7 @@ export function useNativeChatPluginComposerItems(
       return invokeComposerItemCommand(item, commandId, chat)
         .then(async () => {
           const current = resolver.current
-          if (current?.chat === chat && current.items === items) {
+          if (current && current.items === items && shallow(current.chat, chat)) {
             await current.resolve(item)
           }
         })
