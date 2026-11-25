@@ -38,6 +38,7 @@ type MobileImageFileHandle = {
 type MobileImageFile = {
   readonly size: number
   open(): MobileImageFileHandle
+  delete?(): void
 }
 
 export type MobileImageFileFactory = (uri: string) => MobileImageFile
@@ -118,6 +119,14 @@ async function* pickFromLibrary(
   }
 }
 
+function deleteCacheCopy(createFile: MobileImageFileFactory, uri: string): void {
+  try {
+    createFile(uri).delete?.()
+  } catch (error) {
+    console.warn('[mobile-files] a picked cache copy could not be deleted', { uri }, error)
+  }
+}
+
 async function* pickFromFiles(
   multiple: boolean,
   launch: typeof DocumentPicker.getDocumentAsync = DocumentPicker.getDocumentAsync,
@@ -135,7 +144,10 @@ async function* pickFromFiles(
     if (!asset.uri) {
       continue
     }
-    const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
+    // The picker copied this file into cache; it is ours to remove once read or refused.
+    const base64 = await readUriAsBase64(asset.uri, asset.size, createFile).finally(() =>
+      deleteCacheCopy(createFile, asset.uri)
+    )
     if (base64) {
       const fileName = isPickedImageMime(asset.mimeType)
         ? undefined

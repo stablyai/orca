@@ -53,6 +53,7 @@
     "expo-notifications": "^58.1.7",
     "expo-router": "^58.0.29",
     "expo-secure-store": "^58.0.2",
+    "expo-sharing": "^58.0.23",
     "expo-splash-screen": "^58.0.12",
     "expo-status-bar": "^58.0.4",
     "expo-task-manager": "~58.0.13",

@@ -66,6 +66,14 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
         ...(multiple ? { selectionLimit: limit, orderedSelection: true } : {}),
         ...agentReadableLibraryImageOptions()
       }),
+    launchGallery: ({ multiple, limit }) =>
+      ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        base64: false,
+        allowsMultipleSelection: multiple,
+        ...(multiple ? { selectionLimit: limit, orderedSelection: true } : {}),
+        ...agentReadableLibraryImageOptions()
+      }),
     // DocumentPicker has no selection cap; enforce remaining room again before staging and minting.
     launchFiles: ({ multiple }) =>
       DocumentPicker.getDocumentAsync({ type: '*/*', multiple, copyToCacheDirectory: true }),

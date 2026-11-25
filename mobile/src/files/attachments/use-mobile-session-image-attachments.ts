@@ -1,3 +1,7 @@
+import { useCallback } from 'react'
+import { translate } from '../../i18n/mobile-i18n'
+import { useMediaPicker } from '../../platform/media-picking/media-picker'
+import { ImageLibraryPermissionError } from '../../platform/media-picking/media-picker-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileImageSource } from '../../platform/media-picking/media-picker-contract'
@@ -74,12 +78,13 @@ export function useMobileSessionImageAttachments({
   onSuccess,
   onError
 }: Args): {
-  attachImage: (source: MobileImageSource) => Promise<void>
+  attachImage: (source: MobileImageSource | 'gallery') => Promise<void>
   isAttaching: boolean
+  cancelAttach: () => void
   nativeChatImages: MobileNativeChatImageAttachments
   nativeChatFiles: MobileNativeChatFileAttachments
 } {
-  const { attachImage, isAttaching } = useMobileImageAttachment({
+  const { attachImage, isAttaching, cancelAttach } = useMobileImageAttachment({
     client,
     agent,
     activeHandle,
@@ -120,5 +125,34 @@ export function useMobileSessionImageAttachments({
     onAttachSuccess: onSuccess,
     onError
   })
-  return { attachImage, isAttaching, nativeChatImages, nativeChatFiles }
+  const picker = useMediaPicker()
+  const { attachImage: attachNativeChatImage, attachStreamedFiles } = nativeChatImages
+  const { attachPickedFiles } = nativeChatFiles
+  const attachGallery = useCallback(async (): Promise<void> => {
+    try {
+      const { images, videos } = await picker.pickGallery()
+      if (videos.length > 0) {
+        // A structured chat keeps videos as chat files; a terminal-backed chat sends their paths.
+        void (attachPickedFiles ?? attachStreamedFiles)(videos)
+      }
+      if (images.length > 0) {
+        await attachNativeChatImage({ prepared: images })
+      }
+    } catch (error) {
+      showToast(
+        error instanceof ImageLibraryPermissionError
+          ? translate('chat.useImageUpload.permissionDenied', 'Photo permission denied')
+          : error instanceof Error
+            ? error.message
+            : String(error)
+      )
+    }
+  }, [attachNativeChatImage, attachPickedFiles, attachStreamedFiles, picker, showToast])
+  return {
+    attachImage,
+    isAttaching,
+    cancelAttach,
+    nativeChatImages: { ...nativeChatImages, attachGallery },
+    nativeChatFiles
+  }
 }

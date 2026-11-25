@@ -1,4 +1,6 @@
 import { agentImagePasteWrites } from '../../../../../../src/shared/native-chat/input/composer/agent-image-paste'
+import { mobileAttachmentFileKind } from '../../../../files/attachments/mobile-attachment-file-kind'
+import { separateImagePasteFromFollowingText } from '../../../../../../src/shared/terminal/input/image-paste-following-text'
 import { agentImagePastePath } from '../../../../../../src/shared/native-chat/input/composer/agent-image-paste-path'
 import { buildNativeChatImagePasteBytes } from '../../../../../../src/shared/native-chat/input/composer/native-chat-paste-bytes'
 import {
@@ -26,6 +28,19 @@ type PasteImagesArgs = {
   // A seeded launch draft supplies a lower bound for the pre-paste clear.
   readonly seededText?: string
   readonly onWriteStarted?: () => void
+}
+
+// Only images become chips; a file's path stays text and must not run into the next one.
+export function framedAttachmentPastes(
+  agent: string | null | undefined,
+  paths: readonly string[]
+): string[] {
+  return paths.map((path) => {
+    const framed = buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
+    return mobileAttachmentFileKind(path) === 'image'
+      ? framed
+      : separateImagePasteFromFollowingText(framed, true)
+  })
 }
 
 // Paste paths without Enter and stop on rejection so callers cannot submit partial image input.
@@ -57,11 +72,7 @@ export async function pasteMobileNativeChatImagePaths({
   }
   for (const text of [
     inputClear,
-    ...agentImagePasteWrites(
-      agent,
-      imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
-      followedByText
-    )
+    ...agentImagePasteWrites(agent, framedAttachmentPastes(agent, imagePaths), followedByText)
   ]) {
     const remainingMs = deadline - Date.now()
     // Do not start a write the remaining sequence budget cannot fund.

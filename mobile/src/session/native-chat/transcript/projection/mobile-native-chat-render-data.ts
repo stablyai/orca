@@ -5,6 +5,8 @@ import type { NativeChatEmptyStateCopy } from '../../../../../../src/shared/nati
 import { isRootAgentJournalItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-noise'
 import { nativeChatStreamingMessage } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
+import { nativeChatUploadedFilePaths } from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
+import { normalizeImageTranscriptMessages } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import { isWordlessProviderFrameMessage } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import {
   foldToolMessages,
@@ -15,6 +17,7 @@ import { foldSubagentItems } from '../../../../../../src/shared/native-chat/tran
 import { prepareNativeChatMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-preparation'
 import {
   isImageRefBlock,
+  isTextBlock,
   type NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
@@ -132,9 +135,14 @@ export function finishMobileNativeChatMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
   // Plan frames must not consume another call's result.
-  return projectNativeChatTaskListFrames(stripNoiseMessages(messages)).filter(
-    (message) => !isWordlessProviderFrameMessage(message)
-  )
+  // A photo's source row folds into its prompt, as on desktop, so the image and its caption stay one message.
+  return projectNativeChatTaskListFrames(
+    stripNoiseMessages(normalizeImageTranscriptMessages(messages))
+  ).filter((message) => !isWordlessProviderFrameMessage(message))
+}
+
+function rowText(message: NativeChatMessage): string {
+  return message.blocks.map((block) => (isTextBlock(block) ? block.text : '')).join('')
 }
 
 export function buildMobileNativeChatTransientData({
@@ -162,8 +170,12 @@ export function buildMobileNativeChatTransientData({
       previewIndex += 1
       return url ? { ...block, url } : block
     })
+    // A file the row's own text already names is drawn from that text; its local preview would repeat it.
+    const named = new Set(nativeChatUploadedFilePaths(rowText(message)))
     while (previewIndex < previews.length) {
-      blocks.push({ type: 'image-ref', url: previews[previewIndex] })
+      if (!named.has(previews[previewIndex]!)) {
+        blocks.push({ type: 'image-ref', url: previews[previewIndex] })
+      }
       previewIndex += 1
     }
     return { ...message, blocks }

@@ -1,8 +1,10 @@
 import {
   mobileNativeChatDraftDestination,
+  readMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs,
   type MobileNativeChatDraftDestination
 } from '../drafts/mobile-native-chat-draft-inputs'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { translate } from '../../../../i18n/mobile-i18n'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../../src/shared/clipboard/clipboard-image'
@@ -11,15 +13,18 @@ import type { ConnectionState } from '../../../../transport/connection/connectio
 import { useMediaPicker } from '../../../../platform/media-picking/media-picker'
 import {
   ImageLibraryPermissionError,
-  type MobileImageSource
+  MobileFileTooLargeError,
+  MobileUploadCancelledError,
+  type PickedMobileFile
 } from '../../../../platform/media-picking/media-picker-contract'
+import { uploadMobileTerminalFile } from '../../../../files/attachments/mobile-terminal-file-upload'
 import {
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
 import {
   readMobilePastedImages,
-  type MobilePastedImages
+  type MobileNativeChatImageSource
 } from './mobile-native-chat-composer-paste'
 import { useClipboardReader } from '../../../../platform/clipboard/clipboard'
 import { fitMobileAgentImage } from '../../../../files/attachments/mobile-agent-image-fit'
@@ -43,7 +48,12 @@ export function useMobileNativeChatImageUpload(args: {
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
-  attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
+  attachImage: (source: MobileNativeChatImageSource) => Promise<void>
+  /** Files of any type and size for a terminal-backed chat; they ride the next send as paths. */
+  attachStreamedFiles: (
+    files: AsyncIterable<PickedMobileFile> | readonly PickedMobileFile[]
+  ) => Promise<void>
+  attachFiles: () => Promise<void>
   isAttaching: boolean
 } {
   const {
@@ -68,7 +78,7 @@ export function useMobileNativeChatImageUpload(args: {
   }, [connState])
 
   const attachImage = useCallback(
-    async (source: MobileImageSource | MobilePastedImages): Promise<void> => {
+    async (source: MobileNativeChatImageSource): Promise<void> => {
       const scope = scopeKey
       if (
         !client ||
@@ -94,7 +104,9 @@ export function useMobileNativeChatImageUpload(args: {
           pickImages: (from) =>
             typeof from === 'string'
               ? picker.pickImages(from)
-              : readMobilePastedImages(from, clipboard),
+              : 'prepared' in from
+                ? from.prepared
+                : readMobilePastedImages(from, clipboard),
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true
@@ -164,5 +176,125 @@ export function useMobileNativeChatImageUpload(args: {
     ]
   )
 
-  return { attachImage, isAttaching }
+  const attachStreamedFiles = useCallback(
+    async (
+      source: AsyncIterable<PickedMobileFile> | readonly PickedMobileFile[]
+    ): Promise<void> => {
+      const staged = Array.isArray(source) ? [...source] : []
+      const scope = scopeKey
+      if (
+        !client ||
+        !scope ||
+        connState !== 'connected' ||
+        (!activeHandleRef.current && !structuredNativeChat)
+      ) {
+        staged.forEach((file) => file.dispose?.())
+        return
+      }
+      const destination = mobileNativeChatDraftDestination(scope)
+      updateMobileNativeChatDraftInputs(destination, (inputs) => ({
+        ...inputs,
+        pending: (inputs.pending ?? 0) + 1
+      }))
+      const uploaded: UploadedNativeChatImage[] = []
+      let failure: unknown = null
+      let started = false
+      try {
+        const connectionId = await getActiveWorktreeConnectionId()
+        for await (const file of source) {
+          if (!destination.active) {
+            file.dispose?.()
+            break
+          }
+          if (!started) {
+            started = true
+            attachingCount.current += 1
+            setIsAttaching(true)
+          }
+          const uploadId = createUuidV4()
+          // A removed chip must stay removed, so progress only updates a chip that is still there.
+          const setUpload = (sentBytes: number | null, add = false): void =>
+            updateMobileNativeChatDraftInputs(destination, (inputs) => {
+              const { [uploadId]: current, ...rest } = inputs.uploads ?? {}
+              if (sentBytes === null || (!add && current === undefined)) {
+                return { ...inputs, uploads: rest }
+              }
+              const upload = { name: file.name, mime: file.mime, byteLength: file.byteLength }
+              return { ...inputs, uploads: { ...rest, [uploadId]: { ...upload, sentBytes } } }
+            })
+          setUpload(0, true)
+          try {
+            const path = await uploadMobileTerminalFile(client, file, {
+              connectionId,
+              onProgress: (sentBytes) => setUpload(sentBytes),
+              shouldCancel: () =>
+                !destination.active ||
+                readMobileNativeChatDraftInputs(destination.scope).uploads?.[uploadId] === undefined
+            })
+            // The clipboard route cannot stop mid-transfer, so a chip removed meanwhile must not reappear.
+            if (
+              readMobileNativeChatDraftInputs(destination.scope).uploads?.[uploadId] !== undefined
+            ) {
+              uploaded.push({ path, previewUri: path })
+            }
+          } catch (error) {
+            // A removed chip skips just that file; any other failure stops the batch.
+            if (!(error instanceof MobileUploadCancelledError)) {
+              throw error
+            }
+          } finally {
+            setUpload(null)
+            file.dispose?.()
+          }
+        }
+      } catch (error) {
+        failure = error
+      } finally {
+        staged.forEach((file) => file.dispose?.())
+        if (started) {
+          attachingCount.current -= 1
+          if (attachingCount.current === 0) {
+            setIsAttaching(false)
+          }
+        }
+      }
+      if (uploaded.length > 0) {
+        onImagesUploaded(destination, uploaded)
+        onAttachSuccess?.()
+      }
+      updateMobileNativeChatDraftInputs(destination, (inputs) => ({
+        ...inputs,
+        pending: Math.max(0, (inputs.pending ?? 0) - 1)
+      }))
+      if (failure !== null && destination.active) {
+        onError?.()
+        showToast(
+          failure instanceof MobileFileTooLargeError
+            ? failure.message
+            : connStateRef.current !== 'connected'
+              ? translate('chat.useImageUpload.disconnected', 'Attach failed (disconnected)')
+              : translate('chat.useImageUpload.attachFailed', 'Attach failed'),
+          1500
+        )
+      }
+    },
+    [
+      activeHandleRef,
+      client,
+      connState,
+      getActiveWorktreeConnectionId,
+      onAttachSuccess,
+      onError,
+      onImagesUploaded,
+      scopeKey,
+      showToast,
+      structuredNativeChat
+    ]
+  )
+  const attachFiles = useCallback(
+    () => attachStreamedFiles(picker.pickFiles()),
+    [attachStreamedFiles, picker]
+  )
+
+  return { attachImage, attachStreamedFiles, attachFiles, isAttaching }
 }

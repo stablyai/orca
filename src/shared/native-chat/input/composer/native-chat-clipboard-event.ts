@@ -1,5 +1,5 @@
 // Structural DataTransfer shapes so desktop and the phone's page read paste events with one rule.
-type ClipboardFileLike = { readonly name: string }
+type ClipboardFileLike = { readonly name: string; readonly type?: string }
 
 type ClipboardDataLike<F extends ClipboardFileLike> = {
   readonly items: ArrayLike<{ readonly type: string; getAsFile: () => F | null }>
@@ -20,6 +20,22 @@ export function clipboardEventImageFile<F extends ClipboardFileLike>(
   }
   const item = Array.from(data.items).find((candidate) => candidate.type.startsWith('image/'))
   return item?.getAsFile() ?? null
+}
+
+/** Pasted files that are not images (images attach as image chips); WebKit lists a copied file in `files` and sometimes also in `items`. */
+export function clipboardEventNonImageFiles<F extends ClipboardFileLike>(
+  event: ClipboardEventDataLike<F>
+): F[] {
+  const data = event.clipboardData
+  if (!data) {
+    return []
+  }
+  const fromItems = Array.from(data.items)
+    .filter((item) => !item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is NonNullable<typeof file> => file !== null)
+  const candidates = fromItems.length > 0 ? fromItems : Array.from(data.files)
+  return candidates.filter((file) => !file.type?.startsWith('image/'))
 }
 
 function lastPathSegment(path: string): string {

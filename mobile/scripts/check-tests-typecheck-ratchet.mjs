@@ -14,7 +14,12 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
 // Tests outside the RN program. Checked transfers are the roots of tsconfig.test.node.json and must pass
 // that strict program; the rest are legacy runtime-only allowances whose bodies nothing typechecks.
-export const TESTS_OUTSIDE_PROGRAM = new Map([])
+export const TESTS_OUTSIDE_PROGRAM = new Map([
+  [
+    'src/files/attachments/mobile-file-upload-end-to-end.test.ts',
+    'Runs the host attachment store, whose Node timers do not typecheck in the RN program.'
+  ]
+])
 
 // Normalize tsc’s host separators to POSIX baseline paths or Windows reports every entry stale and added.
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')

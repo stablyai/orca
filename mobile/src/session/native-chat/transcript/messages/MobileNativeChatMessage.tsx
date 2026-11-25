@@ -266,7 +266,7 @@ function MobileNativeChatMessageImpl({
         block={block}
         fontScale={fontScale}
       />
-    ) : isSystem ? null : isUser && structuredActivityUi && Chat.isTextBlock(block) ? (
+    ) : isSystem ? null : isUser && Chat.isTextBlock(block) ? (
       <View key={textKey}>
         <Prose
           block={block}

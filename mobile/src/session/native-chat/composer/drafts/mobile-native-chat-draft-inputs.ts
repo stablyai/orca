@@ -2,7 +2,10 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import { pickedSkillsInText } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { PendingNativeChatImage } from '../attachments/mobile-native-chat-image-attachment'
+import type {
+  NativeChatImageUpload,
+  PendingNativeChatImage
+} from '../attachments/mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from '../attachments/mobile-native-chat-file-attachment'
 import { saveMobileNativeChatDraft } from './mobile-native-chat-draft-persistence'
 import type {
@@ -15,6 +18,8 @@ export type MobileNativeChatDraftInputs = {
   files: readonly PendingNativeChatFile[]
   skills: readonly AgentJournalSkillRef[]
   pending?: number
+  /** Files streaming to the host, by chip id; never persisted. */
+  uploads?: Readonly<Record<string, NativeChatImageUpload>>
 }
 const empty: MobileNativeChatDraftInputs = { images: [], files: [], skills: [] }
 const drafts = new Map<string, MobileNativeChatDraftInputs>()

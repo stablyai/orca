@@ -70,6 +70,7 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     draftKey: string | null
     onComposerTextChange: (text: string) => void
     onAttachImage?: () => void
+    onAttachFiles?: () => void
     onPasteImages?: (paste: MobilePastedImages) => void
     attachments?: PendingNativeChatImage[]
     onRemoveAttachment?: (id: string) => void

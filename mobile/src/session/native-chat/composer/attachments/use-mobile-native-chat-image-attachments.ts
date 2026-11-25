@@ -7,12 +7,13 @@ import {
   mobileNativeChatDraftDestination,
   type MobileNativeChatDraftDestination
 } from '../drafts/mobile-native-chat-draft-inputs'
+import {
+  removeNativeChatStripAttachment,
+  useNativeChatStripAttachments
+} from './mobile-native-chat-upload-strip'
 import { useCallback, useMemo } from 'react'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../../../transport/connection/connection-state'
-import type { MobileImageSource } from '../../../../platform/media-picking/media-picker-contract'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
 import {
   MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS,
   pasteMobileNativeChatImagePaths
@@ -86,16 +87,8 @@ type Args = {
   readonly sleep?: (ms: number) => Promise<void>
 }
 
-export type MobileNativeChatImageAttachments = {
-  /** Pending chips for the active scope (tab) only. */
-  readonly attachments: PendingNativeChatImage[]
-  readonly isAttaching: boolean
-  readonly attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
-  readonly removeAttachment: (id: string) => void
-  /** Ride any pending images along with `text`, then submit; clears the sent
-   *  chips (and only those) once the send is accepted. */
-  readonly sendNativeChat: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
-}
+export type { MobileNativeChatImageAttachments } from './mobile-native-chat-image-attachments-contract'
+import type { MobileNativeChatImageAttachments } from './mobile-native-chat-image-attachments-contract'
 
 const NO_FILES: readonly PendingNativeChatFile[] = []
 
@@ -125,19 +118,21 @@ export function useMobileNativeChatImageAttachments({
   const images = useMobileNativeChatDraftInputs(scopeKey, 'images')
   const pending = useMobileNativeChatDraftInputs(scopeKey, 'pending')
   const attachments = useMemo(() => [...images], [images])
+  const stripAttachments = useNativeChatStripAttachments(scopeKey, images)
 
-  const { attachImage, isAttaching } = useMobileNativeChatImageUpload({
-    client,
-    activeHandleRef,
-    getActiveWorktreeConnectionId,
-    connState,
-    scopeKey,
-    structuredNativeChat,
-    showToast,
-    onImagesUploaded: addMobileNativeChatDraftImages,
-    onAttachSuccess,
-    onError
-  })
+  const { attachImage, attachStreamedFiles, attachFiles, isAttaching } =
+    useMobileNativeChatImageUpload({
+      client,
+      activeHandleRef,
+      getActiveWorktreeConnectionId,
+      connState,
+      scopeKey,
+      structuredNativeChat,
+      showToast,
+      onImagesUploaded: addMobileNativeChatDraftImages,
+      onAttachSuccess,
+      onError
+    })
 
   const removeAttachment = useCallback(
     (id: string): void => {
@@ -145,7 +140,7 @@ export function useMobileNativeChatImageAttachments({
       if (!scope) {
         return
       }
-      removeMobileNativeChatDraftImages(scope, [id])
+      removeNativeChatStripAttachment(scope, id)
     },
     [scopeKey]
   )
@@ -330,9 +325,11 @@ export function useMobileNativeChatImageAttachments({
   )
 
   return {
-    attachments,
+    attachments: stripAttachments,
     isAttaching: isAttaching || (pending ?? 0) > 0,
     attachImage,
+    attachStreamedFiles,
+    attachFiles,
     removeAttachment,
     sendNativeChat
   }

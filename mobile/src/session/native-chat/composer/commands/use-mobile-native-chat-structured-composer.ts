@@ -26,7 +26,13 @@ export function useMobileNativeChatStructuredComposer(args: {
   const { accountUsage, onCommandNotice } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
-  const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
+  const {
+    files: pendingFiles,
+    attachFiles,
+    attachPastedText,
+    attachPastedFiles,
+    removeFiles
+  } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const offersMcpPanel = mcpPanel !== null
   const catalog = useMemo(
@@ -50,6 +56,10 @@ export function useMobileNativeChatStructuredComposer(args: {
               acceptsFiles && attachPastedText
                 ? (text: string) => void attachPastedText(text)
                 : undefined,
+            onPasteFiles:
+              acceptsFiles && attachPastedFiles
+                ? (pasted: readonly File[]) => void attachPastedFiles(pasted)
+                : undefined,
             files: pendingFiles,
             onRemoveFile: (id: string) => removeFiles([id]),
             threadGoal,
@@ -66,6 +76,7 @@ export function useMobileNativeChatStructuredComposer(args: {
       acceptsFiles,
       attachFiles,
       attachPastedText,
+      attachPastedFiles,
       catalog,
       pendingFiles,
       refresh,

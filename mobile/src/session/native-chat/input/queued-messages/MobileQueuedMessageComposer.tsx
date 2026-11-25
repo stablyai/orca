@@ -118,6 +118,9 @@ export function MobileQueuedMessageComposer({
                 onAttachPastedText: context.structured.onAttachPastedText
                   ? (files.attachPastedText ?? undefined)
                   : undefined,
+                onPasteFiles: context.structured.onPasteFiles
+                  ? (files.attachPastedFiles ?? undefined)
+                  : undefined,
                 onRemoveFile: (id) => files.removeFiles([id])
               }
             : null
@@ -139,6 +142,13 @@ export function MobileQueuedMessageComposer({
           editor.imagesCapable
             ? () => {
                 void images.attachImage('library')
+              }
+            : undefined
+        }
+        onAttachFiles={
+          editor.imagesCapable
+            ? () => {
+                void images.attachFiles()
               }
             : undefined
         }

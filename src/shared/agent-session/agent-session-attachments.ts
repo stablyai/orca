@@ -7,6 +7,9 @@ export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
 
 export const AGENT_SESSION_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
 
+// Streamed to disk chunk by chunk, so it can exceed the ceiling for files an agent reads into memory.
+export const AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES = 500 * 1024 * 1024
+
 // Agents shrink images before their APIs see them, so these bound host memory, not API limits.
 export const AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT = 20
 export const AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES = 64 * 1024 * 1024

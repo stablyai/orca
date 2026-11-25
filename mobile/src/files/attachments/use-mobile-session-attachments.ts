@@ -85,7 +85,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   const structuredNativeChat = activeSessionTab?.type === 'agent-session'
   const nativeChatSessionId = resolveMobileNativeChatSessionId(activeSessionTab)
   // Terminal attachments paste immediately; native chat defers composer chips until submit.
-  const { attachImage, isAttaching, nativeChatImages, nativeChatFiles } =
+  const { attachImage, isAttaching, cancelAttach, nativeChatImages, nativeChatFiles } =
     useMobileSessionImageAttachments({
       client,
       agent,
@@ -164,6 +164,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,
     isAttaching,
+    cancelAttach,
     nativeChatImages,
     nativeChatStructuredComposer
   }

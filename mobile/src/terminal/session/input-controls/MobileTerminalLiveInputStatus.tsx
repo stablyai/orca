@@ -1,9 +1,11 @@
 import { useContext, type RefObject } from 'react'
-import { Text, View, type HostInstance } from 'react-native'
+import { Pressable, Text, View, type HostInstance } from 'react-native'
+import { X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { themedStyleSheet } from '../../../theme/themed-styles'
+import { COMPOSER_CONTROL_HIT_SLOP } from '../../../components/composer-input/composer-input-styles'
 import { TailClippedText } from '../../../components/list/TailClippedText'
 import {
   mobileDictationStatusTitle,
@@ -22,6 +24,7 @@ type MobileTerminalLiveInputStatusProps = {
   readonly cancelRef: RefObject<HostInstance | null>
   readonly dictationMode: string | undefined
   readonly isAttaching: boolean
+  readonly onCancelAttach: () => void
   // Words heard so far that will be typed into this terminal.
   readonly heard: string
 }
@@ -32,6 +35,7 @@ export function MobileTerminalLiveInputStatus({
   cancelRef,
   dictationMode,
   isAttaching,
+  onCancelAttach,
   heard
 }: MobileTerminalLiveInputStatusProps) {
   useMobileColorScheme()
@@ -50,15 +54,26 @@ export function MobileTerminalLiveInputStatus({
   }
   if (!dictationTitle) {
     return isAttaching ? (
-      <View style={styles.status} pointerEvents="none">
-        <Text style={styles.title} numberOfLines={1}>
-          {t('session.terminalLiveInputStatus.uploadingImageTitle', 'Uploading image')}
-        </Text>
-        <View style={styles.detailLine}>
-          <TailClippedText style={styles.detail}>
-            {t('session.terminalLiveInputStatus.uploadingImage', 'Uploading image to host')}
-          </TailClippedText>
+      <View style={styles.status} pointerEvents="box-none">
+        <View style={styles.uploadText} pointerEvents="none">
+          <Text style={styles.title} numberOfLines={1}>
+            {t('session.terminalLiveInputStatus.uploadingImageTitle', 'Uploading image')}
+          </Text>
+          <View style={styles.detailLine}>
+            <TailClippedText style={styles.detail}>
+              {t('session.terminalLiveInputStatus.uploadingImage', 'Uploading image to host')}
+            </TailClippedText>
+          </View>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('session.terminalLiveInputStatus.cancelUpload', 'Cancel upload')}
+          style={({ pressed }) => [styles.cancelUpload, pressed && styles.cancelPressed]}
+          hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+          onPress={onCancelAttach}
+        >
+          <X pointerEvents="none" size={16} color={colors.textPrimary} strokeWidth={2.4} />
+        </Pressable>
       </View>
     ) : null
   }
@@ -123,6 +138,22 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
+  },
+  uploadText: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  cancelUpload: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  cancelPressed: {
+    opacity: 0.6
   },
   title: {
     color: colors.textPrimary,

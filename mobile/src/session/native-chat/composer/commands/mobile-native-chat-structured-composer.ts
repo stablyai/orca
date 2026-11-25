@@ -11,6 +11,8 @@ export type MobileNativeChatStructuredComposer = {
   onAttachFiles?: () => void
   /** Set when the host keeps phone files, so a long paste becomes a "Pasted text" file. */
   onAttachPastedText?: (text: string) => void
+  /** Set when the host keeps phone files, so files pasted into the field upload as chips. */
+  onPasteFiles?: (files: readonly File[]) => void
   // An uploading attachment must hold Send.
   files: readonly PendingNativeChatFile[]
   onRemoveFile: (id: string) => void

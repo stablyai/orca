@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { BridgeMediaItem } from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
 import {
   readStagedMediaItem,
+  streamStagedMediaBase64,
   releaseAllStagedMedia,
   releaseStagedMedia
 } from '../../mobile-web-shell/bridge/native-capabilities/staged-media-bytes'
@@ -11,8 +12,10 @@ import {
   type NativeVerbs
 } from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import {
+  MOBILE_STREAMED_FILE_MAX_BYTES,
   MobileFileTooLargeError,
   type MediaPicker,
+  type MobileGalleryPick,
   type MobileImageSource,
   type PickedMobileFile,
   type PickedMobileImage
@@ -74,29 +77,92 @@ async function pickFileItems(verbs: NativeVerbs): Promise<readonly BridgeMediaIt
     return await verbs.pickMedia('files', true)
   } catch (error) {
     throw error instanceof NativeVerbError && error.reason === 'native_media_too_large'
-      ? new MobileFileTooLargeError(null)
+      ? new MobileFileTooLargeError(null, MOBILE_STREAMED_FILE_MAX_BYTES)
       : error
   }
 }
 
+// Chunks are read lazily and the handle stays live until the upload settles; unread handles are released when iteration ends.
 async function* readPickedFiles(
   verbs: NativeVerbs,
   items: readonly BridgeMediaItem[]
 ): AsyncGenerator<PickedMobileFile> {
-  const unread = [...items]
+  const unreleased = new Map(items.map((item) => [item.handle, item]))
+  const release = async (handle: string): Promise<void> => {
+    if (unreleased.delete(handle)) {
+      await releaseStagedMedia(verbs, handle)
+    }
+  }
   try {
     let index = 0
-    while (unread.length > 0) {
-      const item = unread[0]!
+    for (const item of items) {
       index += 1
       const name = await pickedFileName(verbs, item, index)
-      const base64 = await readStagedMediaItem(verbs, item)
-      unread.shift()
-      await releaseStagedMedia(verbs, item.handle)
-      yield { name, mime: item.mime, byteLength: item.byteLength, base64 }
+      yield {
+        name,
+        mime: item.mime,
+        byteLength: item.byteLength,
+        chunks: () => streamStagedMediaBase64(verbs, item),
+        dispose: () => void release(item.handle)
+      }
+      await release(item.handle)
     }
   } finally {
-    await releaseAllStagedMedia(verbs, unread)
+    await releaseAllStagedMedia(verbs, [...unreleased.values()])
+  }
+}
+
+// The shell's refusal names the ceiling it enforced: an image stages whole under a smaller one than a streamed video.
+const STAGING_CEILING_RE = /over the (\d+) this shell stages/
+
+function refuseTooLarge(error: unknown): unknown {
+  if (!(error instanceof NativeVerbError) || error.reason !== 'native_media_too_large') {
+    return error
+  }
+  const ceiling = Number(STAGING_CEILING_RE.exec(error.message)?.[1])
+  return new MobileFileTooLargeError(
+    null,
+    Number.isFinite(ceiling) && ceiling > 0 ? ceiling : MOBILE_STREAMED_FILE_MAX_BYTES
+  )
+}
+
+// A gallery selection holds its video handles until each upload ends, so every handle is released by its file's dispose or by a failure here.
+async function pickGallerySelection(verbs: NativeVerbs): Promise<MobileGalleryPick> {
+  const items = await verbs.pickMedia('gallery', true).catch((error: unknown) => {
+    throw refuseTooLarge(error)
+  })
+  const isVideo = (item: BridgeMediaItem): boolean => item.mime.startsWith('video/')
+  const videoItems = items.filter(isVideo)
+  const unreleased = new Map(videoItems.map((item) => [item.handle, item]))
+  try {
+    const images: PickedMobileImage[] = []
+    for await (const image of readPicked(
+      verbs,
+      items.filter((item) => !isVideo(item)),
+      'library'
+    )) {
+      images.push(image)
+    }
+    const videos: PickedMobileFile[] = []
+    let index = 0
+    for (const item of videoItems) {
+      index += 1
+      videos.push({
+        name: await pickedFileName(verbs, item, index),
+        mime: item.mime,
+        byteLength: item.byteLength,
+        chunks: () => streamStagedMediaBase64(verbs, item),
+        dispose: () => {
+          if (unreleased.delete(item.handle)) {
+            void releaseStagedMedia(verbs, item.handle)
+          }
+        }
+      })
+    }
+    return { images, videos }
+  } catch (error) {
+    await releaseAllStagedMedia(verbs, [...unreleased.values()])
+    throw error
   }
 }
 
@@ -116,6 +182,7 @@ export function useMediaPicker(): MediaPicker {
           yield* readPicked(verbs, await verbs.pickMedia(source, true), source)
         }
       }),
+      pickGallery: () => pickGallerySelection(verbs),
       pickFiles: () => ({
         [Symbol.asyncIterator]: async function* () {
           yield* readPickedFiles(verbs, await pickFileItems(verbs))
