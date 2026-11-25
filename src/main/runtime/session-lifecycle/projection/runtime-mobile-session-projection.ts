@@ -307,7 +307,7 @@ export function projectRuntimeMobileSessionTabs(
         ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
         : {}),
       // The renderer sends them only for the launch process; they hold until someone types into it.
-      ...(tab.appliedSessionOptions && terminalPty && !host.hasUserInput(terminalPty.ptyId)
+      ...(tab.appliedSessionOptions && terminalPty && host.isUntypedFreshSpawn(terminalPty)
         ? { appliedSessionOptions: tab.appliedSessionOptions }
         : {}),
       isActive: tab.isActive,

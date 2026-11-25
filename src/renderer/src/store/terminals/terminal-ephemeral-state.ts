@@ -2,6 +2,7 @@ import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-
 import { recordTerminalInputActivity } from '@/lib/terminal/input/terminal-input-activity-coalescing'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
+import { isTerminalTabPresent } from './retirement/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
@@ -145,6 +146,9 @@ export function createTerminalEphemeralActions(
       })
     },
     setNativeChatAppliedSessionOptions: (tabId, value) => {
+      if (!isTerminalTabPresent(get(), tabId)) {
+        return
+      }
       set((s) => {
         const ptyId = value.ptyId ?? s.ptyIdsByTabId[tabId]?.[0]
         return {
