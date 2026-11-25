@@ -169,7 +169,7 @@ export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry 
   return botToolCredentialsReader(folder).oauth(id)
 }
 
-export type BotToolCredentialsReader = {
+type BotToolCredentialsReader = {
   credential: (id: string) => BotToolCredential | null
   oauth: (id: string) => BotToolOAuthEntry | null
 }
