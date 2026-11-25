@@ -17,6 +17,7 @@ const protocol = 'qwenwork.desktop.v1'
 const maxResponseBytes = 1024 * 1024
 
 class DesktopControlError extends Error {}
+class DesktopSignInRequired extends DesktopControlError {}
 
 function readPrivateFile(path, limit) {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
@@ -44,8 +45,16 @@ function readEndpoint(profile) {
       throw new DesktopControlError('Invalid QwenWork desktop control directory.')
     }
   }
-  requirePrivateDirectory(control)
-  const endpoint = JSON.parse(readPrivateFile(join(control, 'endpoint.json'), 4096))
+  let endpoint
+  try {
+    requirePrivateDirectory(control)
+    endpoint = JSON.parse(readPrivateFile(join(control, 'endpoint.json'), 4096))
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw new DesktopControlError('Start QwenWork desktop with local control enabled.')
+    }
+    throw error
+  }
   const { port, instance_id: instanceId } = endpoint
   if (
     endpoint.protocol !== protocol ||
@@ -139,7 +148,7 @@ function openDesktopConnection(profile) {
       typeof data.user?.user_id !== 'string' ||
       !data.user.user_id
     ) {
-      throw new DesktopControlError('Sign in to QwenWork desktop before opening its Orca chat.')
+      throw new DesktopSignInRequired('Sign in to QwenWork desktop before opening its Orca chat.')
     }
     if (
       data.protocol !== protocol ||
@@ -336,7 +345,8 @@ function serve(profile) {
             error instanceof DesktopControlError
               ? error.message
               : 'QwenWork desktop control is unavailable.'
-          send({ id, error: { code: error?.code === -32601 ? -32601 : -32000, message } })
+          const code = error instanceof DesktopSignInRequired ? -32000 : (error?.code ?? -32603)
+          send({ id, error: { code: typeof code === 'number' ? code : -32603, message } })
         }
       }
     )

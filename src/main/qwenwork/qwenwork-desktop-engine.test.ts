@@ -37,7 +37,7 @@ it('launches the executable with its own ACP entry and ignores incomplete deskto
   expect(await findQwenWorkDesktopEngine(env, 'win32')).toEqual({ command, prefixArgs: [entry] })
 })
 
-it('uses the Mac desktop bridge only when the desktop control service has an endpoint', async () => {
+it('finds the Mac desktop bridge before the local control service starts', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'qwenwork-mac-install-')))
   folders.push(root)
   const installation = join(root, 'QwenWorkCN.app')
@@ -49,11 +49,6 @@ it('uses the Mac desktop bridge only when the desktop control service has an end
     ORCA_QWENWORK_INSTALL_DIR: installation,
     ORCA_QWENWORK_DESKTOP_PROFILE: profile
   }
-  expect(await findQwenWorkDesktopEngine(env, 'darwin')).toBeNull()
-
-  const endpoint = join(profile, 'cli-control', 'endpoint.json')
-  await mkdir(dirname(endpoint), { recursive: true })
-  await writeFile(endpoint, '{}')
   const program = await findQwenWorkDesktopEngine(env, 'darwin')
   expect(program?.command).toBe(command)
   expect(program?.prefixArgs).toEqual([expect.stringMatching(/desktop-acp\.cjs$/), profile])

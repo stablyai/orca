@@ -13,10 +13,7 @@ export function defaultQwenWorkMacProfile(home: string): string {
 
 async function findQwenWorkMacProgram(env: Readonly<Record<string, string>>) {
   const profile = env[QWENWORK_DESKTOP_PROFILE] ?? defaultQwenWorkMacProfile(homedir())
-  if (
-    !isAbsolute(profile) ||
-    !(await stat(join(profile, 'cli-control', 'endpoint.json')).catch(() => null))?.isFile()
-  ) {
+  if (!isAbsolute(profile)) {
     return null
   }
   const name = 'desktop-acp.cjs'

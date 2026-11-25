@@ -15,9 +15,7 @@ export const QWENWORK_LAUNCH_SPEC: AcpLaunchSpec = {
     const program = await findQwenWorkDesktopEngine(env)
     if (!program) {
       throw new AgentSessionPreSpawnError(
-        process.platform === 'darwin'
-          ? 'Start QwenWork desktop with local control enabled before opening its Orca chat.'
-          : 'No compatible QwenWork desktop engine was found on this host.',
+        'No compatible QwenWork desktop engine was found on this host.',
         { reason: 'runtimeNotInstalled' }
       )
     }
