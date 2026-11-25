@@ -5,7 +5,7 @@ import type { Bot } from '../../../shared/bot-types'
 import type { BotRequestAsker } from '../../../shared/bots/bot-acts-for'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
 import { BotChatTreeReadSchema } from '../../../shared/bots/bot-chat-tree-schema'
-import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
+import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import { withBotChatPeople } from './bot-share-chats'
 
 const SHARES: NonNullable<Bot['shares']> = [
@@ -45,11 +45,12 @@ const RECORDS: Record<string, BotRequestAsker[]> = {
   stranger: [orcaPerson('acc-gone')]
 }
 
+// The real database, so the one batched read is the query that runs.
 function sources() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only this DB method.
-  const db = {
-    getBotConversationActsFor: (id: string) => (RECORDS[id] ? { actsFor: RECORDS[id] } : undefined)
-  } as unknown as OrchestrationDb
+  const db = new OrchestrationDb(':memory:')
+  for (const [id, actsFor] of Object.entries(RECORDS)) {
+    db.recordBotConversationActsFor(id, { actsFor })
+  }
   return {
     getOrchestrationDb: () => db,
     listAutomationRuns: () => [],

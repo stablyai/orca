@@ -12,6 +12,7 @@ import { createChatOrcaSessionIdResolver } from '../../runtime/orchestration/add
 import { botOfSession } from '../bot-session-tabs'
 import {
   readBotConversationActsFor,
+  readBotConversationActsForMany,
   type BotConversationActsForSources
 } from '../bot-conversation-acts-for'
 
@@ -104,13 +105,14 @@ export function withBotChatPeople<T extends { chats: BotChatTreeChat[] }>(
   if (people.length === 0) {
     return read
   }
+  const records = readBotConversationActsForMany(
+    sources,
+    read.chats.map((chat) => chat.chatId)
+  )
   return {
     ...read,
     chats: read.chats.map((chat) => {
-      const person = botChatPersonOf(
-        readBotConversationActsFor(sources, chat.chatId)?.actsFor,
-        people
-      )
+      const person = botChatPersonOf(records.get(chat.chatId)?.actsFor, people)
       return person ? { ...chat, person } : chat
     })
   }

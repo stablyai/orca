@@ -21,13 +21,33 @@ export function readBotConversationActsFor(
   root: string
 ): BotConversationActsFor | undefined {
   const recorded = sources.getOrchestrationDb().getBotConversationActsFor(root)
+  return recorded && withoutLegacyRunUnknown(sources, root, recorded)
+}
+
+/** `readBotConversationActsFor` for many roots in one database read; one without a record is absent. */
+export function readBotConversationActsForMany(
+  sources: BotConversationActsForSources,
+  roots: readonly string[]
+): Map<string, BotConversationActsFor> {
+  const recorded = sources.getOrchestrationDb().listBotConversationActsFor(roots)
+  for (const [root, record] of recorded) {
+    recorded.set(root, withoutLegacyRunUnknown(sources, root, record))
+  }
+  return recorded
+}
+
+function withoutLegacyRunUnknown(
+  sources: BotConversationActsForSources,
+  root: string,
+  recorded: BotConversationActsFor
+): BotConversationActsFor {
   // An old event run's row: its triggered_by names no event kind, and it holds the causer beside its creator.
   const legacyEventRun =
-    recorded?.triggeredBy !== undefined &&
+    recorded.triggeredBy !== undefined &&
     !recorded.triggeredBy.event &&
     recorded.actsFor.some(isUnknown) &&
     !recorded.actsFor.every(isUnknown)
-  if (!recorded || !legacyEventRun) {
+  if (!legacyEventRun) {
     return recorded
   }
   // The unknown goes while the run's automation still exists: it acts for the owner.
