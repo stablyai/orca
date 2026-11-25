@@ -347,12 +347,22 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
       await flow('carry: toggle in place, navigate to Artifacts, then resize', async () => {
         await setup(true)
         const rootMenu = page.locator('[data-slot="dropdown-menu-content"]')
-        const openedTop = (await rootMenu.boundingBox()).y
+        // Measure the positioned wrapper. The menu inside it is still running its opening transform.
+        const menuTop = () =>
+          rootMenu.evaluate(
+            (menu) =>
+              menu.closest('[data-radix-popper-content-wrapper]').getBoundingClientRect().top
+          )
+        const openedTop = await menuTop()
         await pressSpaceOn('Automations')
         await page.locator('[data-app-rail-item="automations"]').waitFor()
         assert.equal(await railItems(), 'workspaces,tasks,automations,customize,account')
         await paint(page)
-        assert.equal((await rootMenu.boundingBox()).y, openedTop, 'the open menu held its position')
+        const toggledTop = await menuTop()
+        assert.ok(
+          Math.abs(toggledTop - openedTop) <= 1,
+          `the open menu held its position (${openedTop}px → ${toggledTop}px)`
+        )
         await page.keyboard.press('ArrowDown')
         await page
           .getByRole('menuitemcheckbox', { name: 'Artifacts', exact: true })
