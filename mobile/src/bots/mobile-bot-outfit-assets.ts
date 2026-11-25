@@ -25,15 +25,17 @@ export function mobileBotOutfitReplacesPicture(outfit: BotAvatarOutfit): boolean
   return outfit === 'reviewer'
 }
 
-/** The outfit's sheet and the column and row of `id`'s render on it. */
+/** The outfit sheet and its position in avatar widths and heights. */
 export function mobileBotOutfitAsset(
   outfit: BotAvatarOutfit,
   id: BotMascotId
-): { sheet: ImageSourcePropType; column: number; row: number } {
+): { sheet: ImageSourcePropType; left: number; top: number } {
   const index = BOT_MASCOT_IDS.indexOf(id)
+  // Coral is in the first column, so shifting its hard hat right exposes only empty space.
+  const offset = id === 'G1' && outfit === 'hard-hat' ? 16 / 128 : 0
   return {
     sheet: OUTFIT_SHEETS[outfit](),
-    column: index % OUTFIT_SHEET_COLUMNS,
-    row: Math.floor(index / OUTFIT_SHEET_COLUMNS)
+    left: offset - (index % OUTFIT_SHEET_COLUMNS),
+    top: -Math.floor(index / OUTFIT_SHEET_COLUMNS)
   }
 }

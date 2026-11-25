@@ -6,7 +6,7 @@ import { parseBotAvatar } from '../bot-avatar'
 import type { Bot } from '../bot-types'
 import { DEFAULT_BOT_AVATAR_COLOR } from './bot-avatar-color'
 
-// Bumped when the mascots' or outfits' art changes, so each icon is drawn again from the new art.
+// An unchanged look keeps its version so only updated artwork is drawn again.
 const SLACK_ICON_ART_VERSION = 'v1'
 
 // As BotAvatarColorSchema and BotStoredOutfitSchema take them.
@@ -28,7 +28,8 @@ export function botSlackIconLook(bot: LookedBot): string | null {
   const outfit =
     typeof bot.avatarOutfit === 'string' && OUTFIT.test(bot.avatarOutfit) ? bot.avatarOutfit : null
   const tile = color && color !== DEFAULT_BOT_AVATAR_COLOR ? color.slice(1) : null
-  return [SLACK_ICON_ART_VERSION, parsed.id, tile ?? 'plain', outfit ?? 'none'].join('-')
+  const artVersion = parsed.id === 'G1' && outfit === 'hard-hat' ? 'v2' : SLACK_ICON_ART_VERSION
+  return [artVersion, parsed.id, tile ?? 'plain', outfit ?? 'none'].join('-')
 }
 
 export function botSlackIconFile(look: string): string {
