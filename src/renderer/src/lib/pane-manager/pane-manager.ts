@@ -272,6 +272,12 @@ export class PaneManager {
     presentPaneViewports(this.panes.values())
   }
 
+  forEachInternalPane(visit: (pane: ManagedPaneInternal) => void): void {
+    for (const pane of this.panes.values()) {
+      visit(pane)
+    }
+  }
+
   setAtlasRecoveryVisible(visible: boolean): void {
     this.atlasRecoveryVisible = visible
     notePaneManagerVisibility(this)

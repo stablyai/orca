@@ -33,6 +33,7 @@ import {
   trackTerminalWebglAtlasPane,
   untrackTerminalWebglAtlasPane
 } from './terminal-webgl-atlas-memory-rebuild'
+import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -310,5 +311,8 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       webglAddon?.dispose()
     } catch {}
     pane.webglAddon = null
+    return
   }
+  // Outside the try: a new renderer uploads the whole shared atlas, and a failed check must not latch DOM.
+  verifyPaneWebglAtlasIntegrity(pane, 'attach')
 }

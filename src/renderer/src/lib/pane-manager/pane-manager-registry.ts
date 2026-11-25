@@ -1,6 +1,6 @@
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { registerRendererMemoryProfileContributor } from '../../diagnostics/memory/renderer-memory-profile'
-import type { PaneRenderingDiagnostics } from './pane-manager-types'
+import type { ManagedPaneInternal, PaneRenderingDiagnostics } from './pane-manager-types'
 
 type RegisteredPaneManager = {
   resetWebglTextureAtlases(): void
@@ -13,6 +13,7 @@ type RegisteredPaneManager = {
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
   containsElement?: (element: Element) => boolean
+  forEachInternalPane?: (visit: (pane: ManagedPaneInternal) => void) => void
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -118,6 +119,24 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
       reattach?.()
     } catch {
       // A manager disposed mid-rebuild must not block its siblings.
+    }
+  }
+}
+
+/** Presents matching panes of on-screen managers only; hidden owners repaint on their own next frame. */
+export function presentVisiblePanesWhere(
+  matches: (pane: ManagedPaneInternal) => boolean,
+  present: (pane: ManagedPaneInternal) => void
+): void {
+  for (const manager of visibleManagers) {
+    try {
+      manager.forEachInternalPane?.((pane) => {
+        if (matches(pane)) {
+          present(pane)
+        }
+      })
+    } catch {
+      // One manager's teardown must not block the rest.
     }
   }
 }

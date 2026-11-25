@@ -62,7 +62,7 @@ const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_e
 // Coalesce the scarce ring while preserving every bounded-rate event in durable spans.
 const PER_EVENT_TRACED_COALESCED_BREADCRUMB_NAMES = new Set([REPLAY_GUARD_WEDGED_BREADCRUMB])
 
-function rendererBreadcrumbCoalesceKey(
+export function rendererBreadcrumbCoalesceKey(
   name: string,
   data: CrashReportBreadcrumbData | undefined
 ): string | undefined {
@@ -84,6 +84,9 @@ function rendererBreadcrumbCoalesceKey(
   // Preserve distinct GPU failures and atlas-reset triggers while coalescing each storm.
   if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {
     const kind = String(data?.kind ?? '')
+    if (kind === 'webgl-atlas-poisoned') {
+      return `${name}:${kind}:${String(data?.reason ?? '')}:${String(data?.outcome ?? '')}`
+    }
     const reason = kind === 'webgl-atlas-reset' ? data?.reason : undefined
     return reason ? `${name}:${kind}:${String(reason)}` : `${name}:${kind}`
   }
