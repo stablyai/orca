@@ -41,6 +41,8 @@ import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
+import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../methods/structured-sessions/catalog/structured-agent-session-options-read'
+import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from '../methods/structured-sessions/conversation/structured-agent-session-prompt-response'
 import { BOT_METHODS } from '../methods/bots'
 import { STATUS_METHODS } from '../methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
@@ -261,6 +263,13 @@ beforeEach(() => {
         handler: ran
       }),
       ...BOT_METHODS.filter((method) => method.name === 'bots.roster'),
+      // Their real share decisions: every call below is refused before its handler.
+      ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS.filter((method) =>
+        MODEL_PICKER_METHODS.has(method.name)
+      ),
+      ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS.filter((method) =>
+        MODEL_PICKER_METHODS.has(method.name)
+      ),
       ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
       ...STATUS_METHODS
     ]
@@ -273,6 +282,12 @@ afterEach(() => {
   db.close()
   rmSync(directory, { recursive: true, force: true })
 })
+
+const MODEL_PICKER_METHODS = new Set([
+  'agentSession.modelCatalog',
+  'agentSession.options',
+  'agentSession.setOption'
+])
 
 async function call(method: string, params: unknown) {
   return await dispatcher.dispatch(
@@ -349,6 +364,29 @@ describe('the share guard', () => {
     ]) {
       expect(errorCode(await history(refused))).toBe('not_found')
       expect(errorCode(await approve(refused))).toBe('not_found')
+    }
+  })
+
+  it('reads and sets the model only on the teammate’s own chat, never the host’s catalog without one', async () => {
+    expect(errorCode(await call('agentSession.modelCatalog', { agent: 'claude' }))).toBe(
+      'not_found'
+    )
+    for (const refused of [ids.ownersChat, ids.bobsChat]) {
+      expect(
+        errorCode(await call('agentSession.modelCatalog', { agent: 'claude', sessionId: refused }))
+      ).toBe('not_found')
+      expect(errorCode(await call('agentSession.options', { sessionId: refused }))).toBe(
+        'not_found'
+      )
+      expect(
+        errorCode(
+          await call('agentSession.setOption', {
+            envelope: envelope(refused),
+            key: 'model',
+            value: 'opus'
+          })
+        )
+      ).toBe('not_found')
     }
   })
 
@@ -528,6 +566,8 @@ describe('the share guard', () => {
         'agentSession.currentRequests',
         'agentSession.history',
         'agentSession.item',
+        'agentSession.modelCatalog',
+        'agentSession.options',
         'agentSession.queuedMessageDelete',
         'agentSession.queuedMessageEditHold',
         'agentSession.queuedMessageMove',
@@ -538,6 +578,7 @@ describe('the share guard', () => {
         'agentSession.respondToApproval',
         'agentSession.respondToQuestion',
         'agentSession.send',
+        'agentSession.setOption',
         'agentSession.subscribe',
         'agentSession.subscribeStatus',
         'agentSession.unsubscribe',
