@@ -1,3 +1,4 @@
+import { fileExplorerOwnerReadOnly } from '../tree/file-explorer-types'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -64,8 +65,13 @@ export function useFileExplorerImport({
     shownRef.current = { worktreeId, displayRootPath }
   }, [worktreeId, displayRootPath])
   const resolveDropDir = (event: DragEvent): string | null => {
-    // Hidden/search files views have no worktreePath.
-    if (!worktreeId || !worktreePath || !displayRootPath) {
+    // Hidden/search files views have no worktreePath; a read-only folder takes no files.
+    if (
+      !worktreeId ||
+      !worktreePath ||
+      !displayRootPath ||
+      fileExplorerOwnerReadOnly(operationOwner)
+    ) {
       return null
     }
     const dir = readDropDir(rootRef.current, event.target) ?? displayRootPath

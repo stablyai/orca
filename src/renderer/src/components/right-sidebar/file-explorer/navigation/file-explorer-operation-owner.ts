@@ -27,6 +27,10 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/workspace/ownership/worktree-operation-generation'
+import {
+  sharedBotHomeOnHost,
+  useSharedBotHomeRoutesRevision
+} from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
 
@@ -65,6 +69,19 @@ export function getFileExplorerOperationOwnerFromState(
   if (!worktreeId) {
     return { kind: 'local' }
   }
+  // This computer's home of an agent shared with it shows that agent's folder on its host, never the
+  // folder kept here; until the host has listed it, there is nothing to show.
+  const shared = sharedBotHomeOnHost(worktreeId)
+  if (shared) {
+    return shared.hostWorktreeId
+      ? {
+          kind: 'runtime',
+          environmentId: shared.environmentId,
+          executionHostId: toRuntimeExecutionHostId(shared.environmentId),
+          readOnly: true
+        }
+      : { kind: 'unresolved' }
+  }
   const match = resolveOwner(state, { workspaceId: worktreeId, ...(hostId ? { hostId } : {}) })
   if (match.kind === 'ambiguous') {
     return { kind: 'unresolved' }
@@ -94,9 +111,11 @@ export function useFileListOperationOwner(worktreeId: string | null): FileExplor
     }))
   )
   const hostId = useAppStore((s) => getSelectedFolderTwinHostId(s, worktreeId))
+  const sharedHomes = useSharedBotHomeRoutesRevision()
   return useMemo(
     () => getFileExplorerOperationOwnerFromState(state, worktreeId, hostId),
-    [hostId, state, worktreeId]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- sharedHomes: the shared homes' routes, read outside the store.
+    [hostId, state, worktreeId, sharedHomes]
   )
 }
 

@@ -6,8 +6,19 @@ import type { DirEntryCursor } from '../../../../../../shared/file-listing/file-
 export type FileExplorerOperationOwner =
   | { kind: 'local' }
   | { kind: 'ssh'; connectionId: string }
-  | { kind: 'runtime'; environmentId: string; executionHostId: ExecutionHostId }
+  | {
+      kind: 'runtime'
+      environmentId: string
+      executionHostId: ExecutionHostId
+      /** An agent's folder shared with this account: read here, changed only by its owner. */
+      readOnly?: true
+    }
   | { kind: 'unresolved' }
+
+/** Whether files under `owner` are only read here: no new, rename, move, delete or save. */
+export function fileExplorerOwnerReadOnly(owner: FileExplorerOperationOwner | undefined): boolean {
+  return owner?.kind === 'runtime' && owner.readOnly === true
+}
 
 export type TreeNode = {
   name: string
