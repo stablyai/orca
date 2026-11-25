@@ -14,13 +14,26 @@ const PLUGIN_MANIFEST = {
   license: 'MIT'
 }
 
-// Serialized so a quick on/off toggle can't leave the plugin behind after removal.
-let tail: Promise<void> = Promise.resolve()
+// One write at a time, and only the latest request waits: a quick on/off toggle lands in order and a burst costs one pass.
+let running = false
+let pending: { label: string; run: () => Promise<void> } | null = null
 
 function enqueue(label: string, run: () => Promise<void>): void {
-  tail = tail.then(run).catch((error: unknown) => {
-    console.warn(`[agent-hooks] Claude hook plugin ${label} failed`, error)
-  })
+  pending = { label, run }
+  if (running) {
+    return
+  }
+  running = true
+  void (async () => {
+    while (pending) {
+      const next: { label: string; run: () => Promise<void> } = pending
+      pending = null
+      await next.run().catch((error: unknown) => {
+        console.warn(`[agent-hooks] Claude hook plugin ${next.label} failed`, error)
+      })
+    }
+    running = false
+  })()
 }
 
 /** Fixed path, so a pane's env stays valid while the hook set changes underneath it. */
@@ -37,10 +50,9 @@ export function publishClaudeHookPlugin(
     return
   }
   const root = getClaudeHookPluginDir(getAppEnvironment().getPath('userData'))
-  const hooks = { hooks: buildHooks() ?? {} }
   enqueue('publish', async () => {
     await writeHooksJsonAsync(join(root, '.claude-plugin', 'plugin.json'), PLUGIN_MANIFEST)
-    await writeHooksJsonAsync(join(root, 'hooks', 'hooks.json'), hooks)
+    await writeHooksJsonAsync(join(root, 'hooks', 'hooks.json'), { hooks: buildHooks() ?? {} })
   })
 }
 

@@ -1,4 +1,4 @@
-import { applyClaudeAgentViewEnv } from './claude-agent-view'
+import { applyClaudeAgentViewEnv, stripInheritedClaudePluginDir } from './claude-agent-view'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -119,6 +119,7 @@ export function buildPtyHostEnv(
   }
 
   // Remove inherited hook coordinates before injecting the owning pane's receiver.
+  stripInheritedClaudePluginDir(baseEnv, CLAUDE_HOOK_PLUGIN_DIR_ENV)
   for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
     delete baseEnv[key]
   }

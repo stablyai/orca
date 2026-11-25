@@ -17,11 +17,12 @@ if ! typeset -f claude >/dev/null 2>&1 && [[ -n "\${__orca_claude_binary:-}" && 
   function __orca_claude_hook_plugin {
     local __orca_plugin="\${${CLAUDE_HOOK_PLUGIN_DIR_ENV}:-}" __orca_sep=':'
     __orca_claude_plugins=
-    [ -n "$1" ] && [ "$1" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] && [ -n "$__orca_plugin" ] && [ -f "$__orca_plugin/hooks/hooks.json" ] || return 0
-    ! grep -qsE '${CLAUDE_MANAGED_HOOK_COMMAND_PATTERN}' "$1/settings.json" || return 0
+    [ -n "$1" ] && [ "$1" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] && [ -n "$__orca_plugin" ] || return 0
     # Why: a Windows path means a Windows Claude, which splits this list on semicolons.
     case "$__orca_plugin" in [A-Za-z]:*) __orca_sep=';' ;; esac
     case "$__orca_sep\${CLAUDE_CODE_PLUGIN_DIRS:-}$__orca_sep" in *"$__orca_sep$__orca_plugin$__orca_sep"*) return 0 ;; esac
+    [ -f "$__orca_plugin/hooks/hooks.json" ] || return 0
+    ! grep -qsE '${CLAUDE_MANAGED_HOOK_COMMAND_PATTERN}' "$1/settings.json" || return 0
     __orca_claude_plugins="\${CLAUDE_CODE_PLUGIN_DIRS:+$CLAUDE_CODE_PLUGIN_DIRS$__orca_sep}$__orca_plugin"
   }
   function claude {
@@ -71,11 +72,12 @@ if test "$__orca_claude_type" = file; and begin; test -n "$ORCA_CLAUDE_PROFILE_P
   # Why: a config folder Orca never hooked gets Orca's hooks from its plugin; one already carrying them would post twice.
   function __orca_claude_hook_plugin
     set -l plugin "$${CLAUDE_HOOK_PLUGIN_DIR_ENV}"
-    test -n "$argv[1]"; and test "$argv[1]" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"; and test -n "$plugin"; and test -f "$plugin/hooks/hooks.json"; or return 0
-    test -f "$argv[1]/settings.json"; and string match -qr -- '${CLAUDE_MANAGED_HOOK_COMMAND_PATTERN}' < "$argv[1]/settings.json"; and return 0
+    test -n "$argv[1]"; and test "$argv[1]" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"; and test -n "$plugin"; or return 0
     set -l sep ':'
     string match -qr '^[A-Za-z]:' -- "$plugin"; and set sep ';'
     contains -- "$plugin" (string split -- $sep "$CLAUDE_CODE_PLUGIN_DIRS"); and return 0
+    test -f "$plugin/hooks/hooks.json"; or return 0
+    test -f "$argv[1]/settings.json"; and string match -qr -- '${CLAUDE_MANAGED_HOOK_COMMAND_PATTERN}' < "$argv[1]/settings.json"; and return 0
     if test -n "$CLAUDE_CODE_PLUGIN_DIRS"; echo "$CLAUDE_CODE_PLUGIN_DIRS$sep$plugin"; else; echo "$plugin"; end
   end
   function claude
@@ -155,12 +157,12 @@ function Global:claude {
         # Why: a config folder Orca never hooked gets Orca's hooks from its plugin; one already carrying them would post twice.
         $orcaPlugin = $env:${CLAUDE_HOOK_PLUGIN_DIR_ENV}
         $orcaConfig = $env:CLAUDE_CONFIG_DIR
-        if ($orcaPlugin -and $orcaConfig -and $orcaConfig -ne $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR -and
+        $sep = [IO.Path]::PathSeparator
+        $plugins = @("$env:CLAUDE_CODE_PLUGIN_DIRS".Split($sep) | Where-Object { $_ })
+        if ($orcaPlugin -and $orcaConfig -and $orcaConfig -ne $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR -and $plugins -notcontains $orcaPlugin -and
             (Test-Path -LiteralPath (Join-Path $orcaPlugin 'hooks/hooks.json') -PathType Leaf) -and
             -not (Select-String -Quiet -Pattern '${CLAUDE_MANAGED_HOOK_COMMAND_PATTERN}' -LiteralPath (Join-Path $orcaConfig 'settings.json') -ErrorAction SilentlyContinue)) {
-            $sep = [IO.Path]::PathSeparator
-            $plugins = @("$env:CLAUDE_CODE_PLUGIN_DIRS".Split($sep) | Where-Object { $_ })
-            if ($plugins -notcontains $orcaPlugin) { $env:CLAUDE_CODE_PLUGIN_DIRS = (@($plugins) + $orcaPlugin) -join $sep }
+            $env:CLAUDE_CODE_PLUGIN_DIRS = (@($plugins) + $orcaPlugin) -join $sep
         }
         $binary = Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1
         $claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)

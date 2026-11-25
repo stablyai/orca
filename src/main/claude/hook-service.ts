@@ -196,12 +196,17 @@ export class ClaudeHookService {
     }
     const configPath = getConfigPath(this.options.settings, options.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return this.unparsableSettings(configPath)
+    }
+
     const plan = this.managedHookPlan(options)
     const exePath = this.usesWindowsEntry ? installWindowsClaudeHookExecutable(scriptPath) : null
     const execForm = claudeAcceptsExecFormHooks(options.claudeVersion)
-    const applyPlan = (config: HooksConfig): HooksConfig =>
+    const applyPlan = (target: HooksConfig): HooksConfig =>
       applyManagedHooks(
-        config,
+        target,
         (eventName) =>
           getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
         getManagedScriptFileName(this.options.settings),
@@ -217,11 +222,6 @@ export class ClaudeHookService {
     if (options.configDir === undefined) {
       publishClaudeHookPlugin(this.options.agent, () => applyPlan({}).hooks)
     }
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return this.unparsableSettings(configPath)
-    }
-
     let nextConfig = applyPlan(config)
     // Profiles inherit statusLine from the default-home settings copy.
     if (options.configDir === undefined && plan.statusLine === 'install') {
