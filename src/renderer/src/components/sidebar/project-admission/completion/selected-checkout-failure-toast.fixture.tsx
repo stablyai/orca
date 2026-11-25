@@ -8,7 +8,6 @@ import {
   type SelectedCheckoutFailure
 } from './selected-checkout-failure-toast'
 
-const REPO_ID = 'fixture-repo'
 const LIVE_TOAST = '[data-sonner-toast]:not([data-removed="true"])'
 
 function ToastStage(): React.JSX.Element {
@@ -40,17 +39,17 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
 }
 
 /** Raises the add's own toast first, as the add flow does, then the handoff failure. */
-function failureAfterAdd(failure: SelectedCheckoutFailure) {
+function failureAfterAdd(repoId: string, failure: SelectedCheckoutFailure) {
   return defineFixture({
     width: 600,
     render: () => <ToastStage />,
     interact: async () => {
       toast.info('Project already added', {
-        id: projectAddToastId(REPO_ID),
+        id: projectAddToastId(repoId),
         description: 'primary'
       })
       await waitFor(() => document.querySelector(LIVE_TOAST) !== null, 'the add toast')
-      showSelectedCheckoutFailure(REPO_ID, failure)
+      showSelectedCheckoutFailure(repoId, failure)
       await waitFor(
         () => document.querySelector(LIVE_TOAST)?.getAttribute('data-type') === 'error',
         'the failure toast'
@@ -59,16 +58,20 @@ function failureAfterAdd(failure: SelectedCheckoutFailure) {
       if (document.querySelectorAll(LIVE_TOAST).length !== 1) {
         throw new Error('The failure must replace the add toast, not stack under it')
       }
+      const hasRetry = document.querySelector(`${LIVE_TOAST} [data-button]`) !== null
+      if (hasRetry !== 'retry' in failure) {
+        throw new Error(`Retry must show only when the failure can be retried (${failure.kind})`)
+      }
     }
   })
 }
 
 const retry = () => undefined
 
-export const refreshFailed = failureAfterAdd({
+export const refreshFailed = failureAfterAdd('refresh-failed', {
   kind: 'refresh_failed',
   hostLabel: 'build-server',
   retry
 })
-export const checkoutMissing = failureAfterAdd({ kind: 'missing', retry })
-export const ownerUnavailable = failureAfterAdd({ kind: 'owner_unavailable' })
+export const checkoutMissing = failureAfterAdd('missing', { kind: 'missing', retry })
+export const ownerUnavailable = failureAfterAdd('owner-unavailable', { kind: 'owner_unavailable' })

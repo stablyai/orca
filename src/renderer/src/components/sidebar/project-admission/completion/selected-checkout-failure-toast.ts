@@ -43,9 +43,11 @@ export function showSelectedCheckoutFailure(
     {
       id: projectAddToastId(repoId),
       description: describe(failure),
-      ...('retry' in failure
-        ? { action: { label: translate('common.retry', 'Retry'), onClick: failure.retry } }
-        : {})
+      // Explicit even when absent: replacing a toast by id keeps its old action otherwise.
+      action:
+        'retry' in failure
+          ? { label: translate('common.retry', 'Retry'), onClick: failure.retry }
+          : undefined
     }
   )
 }
