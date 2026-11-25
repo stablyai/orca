@@ -306,7 +306,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
         : {}),
-      // Options change only through input, so the launch values hold until someone types.
+      // The renderer sends them only for the launch process; they hold until someone types into it.
       ...(tab.appliedSessionOptions && terminalPty && !host.hasUserInput(terminalPty.ptyId)
         ? { appliedSessionOptions: tab.appliedSessionOptions }
         : {}),

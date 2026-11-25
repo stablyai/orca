@@ -125,7 +125,7 @@ export function buildMobileTerminalSurfaceTabs(
       ...(inputs.terminalTheme ? { terminalTheme: inputs.terminalTheme } : {}),
       statusSuppressionTitle: agentStatusTitle,
       ...(launchAgent ? { launchAgent } : {}),
-      ...(appliedSessionOptions && appliedSessionOptions.agent === launchAgent
+      ...(appliedSessionOptions?.agent === launchAgent && appliedSessionOptions.ptyId === ptyId
         ? { appliedSessionOptions: appliedSessionOptions.values }
         : {}),
       ...(publishedLaunchDraft

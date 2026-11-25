@@ -180,7 +180,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           }
           if (leafId && ptyId) {
             if (!splitFromLeafId && launchAgent && sessionOptions) {
-              publishAgentTabAppliedSessionOptions(tab.id, launchAgent, sessionOptions)
+              publishAgentTabAppliedSessionOptions(tab.id, launchAgent, sessionOptions, ptyId)
             }
             const launchPaneKey = tryMakePaneKey(tab.id, leafId)
             if (launchConfig) {

@@ -10,11 +10,14 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 export function publishAgentTabAppliedSessionOptions(
   tabId: string,
   agent: TuiAgent,
-  rawValues: Record<string, SessionOptionValue> | null | undefined
+  rawValues: Record<string, SessionOptionValue> | null | undefined,
+  ptyId?: string
 ): void {
   const values = rawValues ? decodeNativeChatAppliedSessionOptions(agent, rawValues) : null
   if (values && Object.keys(values).length > 0) {
-    useAppStore.getState().setNativeChatAppliedSessionOptions(tabId, { agent, values })
+    useAppStore
+      .getState()
+      .setNativeChatAppliedSessionOptions(tabId, { agent, values, ...(ptyId ? { ptyId } : {}) })
   }
 }
 

@@ -145,12 +145,15 @@ export function createTerminalEphemeralActions(
       })
     },
     setNativeChatAppliedSessionOptions: (tabId, value) => {
-      set((s) => ({
-        nativeChatAppliedSessionOptionsByTabId: replaceRecordEntries(
-          s.nativeChatAppliedSessionOptionsByTabId,
-          [[tabId, value]]
-        )
-      }))
+      set((s) => {
+        const ptyId = value.ptyId ?? s.ptyIdsByTabId[tabId]?.[0]
+        return {
+          nativeChatAppliedSessionOptionsByTabId: replaceRecordEntries(
+            s.nativeChatAppliedSessionOptionsByTabId,
+            [[tabId, ptyId ? { ...value, ptyId } : value]]
+          )
+        }
+      })
     },
     recordTerminalInput: (paneKey, timestamp = Date.now()) => {
       if (!paneKey || !Number.isFinite(timestamp)) {
