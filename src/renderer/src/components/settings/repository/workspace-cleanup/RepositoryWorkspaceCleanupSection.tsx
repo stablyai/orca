@@ -5,7 +5,7 @@ import {
   withEveryRuleOff,
   type RepoWorkspaceCleanupPolicy
 } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
@@ -36,6 +36,7 @@ export function RepositoryWorkspaceCleanupSection({
   forceVisible: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -57,7 +58,7 @@ export function RepositoryWorkspaceCleanupSection({
   const globalRules = hostRules.rules
   const policy = repo.workspaceCleanupPolicy
   const choice: PolicyChoice = policy?.mode ?? 'global'
-  const globalSummary = formatWorkspaceCleanupRuleSummary(globalRules, t)
+  const globalSummary = formatWorkspaceCleanupRuleSummary(globalRules, t, intlLocale)
 
   const save = (workspaceCleanupPolicy: RepoWorkspaceCleanupPolicy | null): void => {
     setSaving(true)

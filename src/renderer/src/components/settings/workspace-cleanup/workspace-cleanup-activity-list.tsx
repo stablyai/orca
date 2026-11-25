@@ -123,6 +123,27 @@ function ActivityRun({
         )
       : null
   ].filter((part): part is string => part !== null)
+  // Why: narrow conjunctions keep English "a, b" and give CJK its own comma.
+  const resultParts = new Intl.ListFormat(intlLocale, {
+    type: 'conjunction',
+    style: 'narrow'
+  }).formatToParts([
+    ...(summary.length > 0
+      ? summary
+      : [t('components.settings.workspaceCleanup.activity.nothingRemoved', 'Nothing to clean')]),
+    t('components.settings.workspaceCleanup.activity.keptCount', '{{count}} kept', {
+      count: run.counts.kept
+    }),
+    ...(run.counts.failed > 0
+      ? [
+          t('components.settings.workspaceCleanup.activity.failedCount', '{{count}} failed', {
+            count: run.counts.failed
+          })
+        ]
+      : [])
+  ])
+  const failedPartIndex =
+    run.counts.failed > 0 ? resultParts.findLastIndex((part) => part.type === 'element') : -1
   const when = uiDateTimeFormat({
     month: 'short',
     day: 'numeric',
@@ -154,35 +175,15 @@ function ActivityRun({
               {t('components.settings.workspaceCleanup.activity.unfinished', "Couldn't finish")}
             </span>
           ) : (
-            <>
-              {summary.length === 0
-                ? t(
-                    'components.settings.workspaceCleanup.activity.nothingRemoved',
-                    'Nothing to clean'
-                  )
-                : // Why: narrow conjunctions keep English "a, b" and give CJK its own comma.
-                  new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(
-                    summary
-                  )}
-              {', '}
-              {t('components.settings.workspaceCleanup.activity.keptCount', '{{count}} kept', {
-                count: run.counts.kept
-              })}
-              {run.counts.failed > 0 ? (
-                <>
-                  {', '}
-                  <span className="text-destructive">
-                    {t(
-                      'components.settings.workspaceCleanup.activity.failedCount',
-                      '{{count}} failed',
-                      {
-                        count: run.counts.failed
-                      }
-                    )}
-                  </span>
-                </>
-              ) : null}
-            </>
+            resultParts.map((part, index) =>
+              index === failedPartIndex ? (
+                <span key={index} className="text-destructive">
+                  {part.value}
+                </span>
+              ) : (
+                part.value
+              )
+            )
           )}
         </span>
       </button>

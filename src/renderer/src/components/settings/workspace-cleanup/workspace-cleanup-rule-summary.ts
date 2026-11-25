@@ -7,7 +7,8 @@ import {
 /** The rules that are on, in a few words each, for a one-line description. */
 export function formatWorkspaceCleanupRuleSummary(
   rules: WorkspaceCleanupRules,
-  t: Translate
+  t: Translate,
+  intlLocale: string
 ): string {
   const parts: string[] = []
   if (rules.merged.enabled) {
@@ -37,6 +38,6 @@ export function formatWorkspaceCleanupRuleSummary(
     )
   }
   return parts.length > 0
-    ? parts.join(', ')
+    ? new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(parts)
     : t('components.settings.workspaceCleanup.summary.off', 'Off')
 }
