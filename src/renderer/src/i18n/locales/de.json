@@ -25230,7 +25230,9 @@
         "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
-        "skipped": "Übersprungen"
+        "skipped": "Übersprungen",
+        "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Bilder aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige.",
+        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige."
       },
       "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden"
     },

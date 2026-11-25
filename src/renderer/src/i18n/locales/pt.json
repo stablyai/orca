@@ -26271,7 +26271,9 @@
         "notSentYet": "ainda não enviado",
         "replaced": "O agente fez uma nova pergunta. Leia e responda.",
         "replacedByNewer": "Substituída por uma pergunta mais recente",
-        "skipped": "Ignoradas"
+        "skipped": "Ignoradas",
+        "heldImagesLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} imagens. Envie primeiro as respostas guardadas até agora ou remova algumas.",
+        "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Envie primeiro as respostas guardadas até agora ou remova algumas."
       },
       "chat": {
         "moreItems": "+{{count}} a mais"
