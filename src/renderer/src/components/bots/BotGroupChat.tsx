@@ -155,7 +155,8 @@ export function BotGroupChat({
                     role: 'user',
                     blocks: botGroupOwnerMessageBlocks(message),
                     timestamp: message.createdAt,
-                    source: 'transcript'
+                    source: 'transcript',
+                    ...(message.automationRun ? { automationRun: message.automationRun } : {})
                   }
                 ]
               ]
@@ -275,6 +276,7 @@ export function BotGroupChat({
           <NativeChatTranscriptViewport
             scrollRef={follow.scrollRef}
             scrollerProps={follow.scrollerProps}
+            toolRunScroll={follow.toolRunScroll}
             forwardedGesture={follow.forwardedGesture}
             showJump={follow.showJump}
             onJump={follow.jumpToLatest}

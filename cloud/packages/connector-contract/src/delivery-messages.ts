@@ -4,6 +4,8 @@ import { CONNECTOR_LIMITS } from './connector-limits.js'
 import {
   ConnectorActsForSchema,
   ConnectorConversationSchema,
+  ConnectorInboxConversationSchema,
+  ConnectorShareConversationSchema,
   PlaceIdSchema
 } from './connector-wire-scalars.js'
 import { ConnectorEarlierOwnSchema } from './earlier-own-messages.js'
@@ -16,10 +18,22 @@ import {
 import { hookIdOfActor, hookIdOfRule } from './webhook-names.js'
 import { WEBHOOK_NOTICE_CONDITIONS, WebhookHookIdSchema } from './webhook-messages.js'
 import { PrEventSchema } from './pr-event-messages.js'
+import {
+  ShareAcceptFields,
+  ShareResolvedFields,
+  ShareSendFields,
+  ViaAccountSchema
+} from './share-messages.js'
 
 // Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
 // answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
-export const ConnectorPollRequestSchema = z.object({ v: z.literal(1), helloRev: SequenceSchema })
+// holdMs: sent only by a machine on the wake channel; the cloud clamps it to 0..CONNECTOR_WAKE_MAX_HOLD_MS
+// and, without it, holds as before.
+export const ConnectorPollRequestSchema = z.object({
+  v: z.literal(1),
+  helloRev: SequenceSchema,
+  holdMs: z.number().int().optional()
+})
 
 const DeliveryBase = {
   deliveryId: OpaqueIdSchema,
@@ -27,6 +41,15 @@ const DeliveryBase = {
   expiresAt: EpochMsSchema,
   conversation: ConnectorConversationSchema
 }
+
+// A share's deliveries: one ordered queue per share, its conversation named by the share's id.
+const ShareDelivery = {
+  ...DeliveryBase,
+  conversation: ConnectorShareConversationSchema
+}
+// A share delivery's queue is its own share's, so its order holds.
+const isOnItsShare = (delivery: { shareId: string; conversation: { externalId: string } }) =>
+  delivery.conversation.externalId === delivery.shareId
 
 // Where a bot was asked: a Slack conversation by channel id; a GitHub issue or pull request as
 // owner/repo#number; a Linear issue by its key. A kind this cloud can't tell apart is 'channel'.
@@ -91,9 +114,13 @@ export const ConnectorAskerSchema = z.object({
       name: z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
     })
     .optional(),
+  // Another Slack app the owner put on Who can ask wrote it, not a person: userId is its bot user,
+  // and no one's permission comes with it. An older machine drops it and reads a member's request.
+  app: z.literal(true).optional(),
   // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
   // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
-  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
+  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional(),
+  viaAccount: ViaAccountSchema
 })
 
 // A hook's call comes only in a webhook conversation, from the hook its rule names; no other event
@@ -133,6 +160,11 @@ export const ConnectorThreadOwnerSchema = z.object({
 // A send whose chat is deleted on the machine: the cloud releases the thread and starts a new chat.
 export const CHAT_GONE_REFUSAL = 'chat_gone'
 
+// A resume whose chat's newest turn no longer failed (resumed, answered or replaced since).
+export const NOT_FAILED_REFUSAL = 'not_failed'
+// What a resume's send says, as the app's own Continue does.
+export const CONNECTOR_RESUME_TEXT = 'Continue where you left off.'
+
 // A mention of the bot with no words of its own. Its prompt or text (and the asker's text) is
 // BARE_MENTION_TEXT. With asker.earlierOwn the machine tells the agent those messages are the request;
 // without it, to greet and offer help.
@@ -164,7 +196,14 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     asker: ConnectorAskerSchema.optional(),
     automations: TurnAutomations,
     bareMention: BareMention,
-    askedAt: AskedAt
+    // The reply @mentioned the bot, so a thread its machine muted takes it again. An older machine
+    // ignores it.
+    mentioned: z.literal(true).optional(),
+    askedAt: AskedAt,
+    // Resume pressed on the failed turn `turnId` (its turn-started `at`): the machine continues the
+    // chat only while its newest turn is still failed, else refuses NOT_FAILED_REFUSAL. Sent only
+    // to a machine that lists resume.
+    resume: z.object({ turnId: EpochMsSchema }).optional()
   }),
   // An option pressed, or (only to a machine that lists answer.text) the owner's reply to a prompt
   // shown byReply: exactly one of optionId and text.
@@ -215,7 +254,17 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     ...DeliveryBase,
     kind: z.literal('pr_event'),
     event: PrEventSchema
-  })
+  }),
+  // Sent only to a machine that lists bots.shares, on the share's conversation (share-messages.ts).
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_resolved'), ...ShareResolvedFields })
+    .refine(isOnItsShare),
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_accept'), ...ShareAcceptFields })
+    .refine(isOnItsShare),
+  z
+    .object({ ...ShareDelivery, kind: z.literal('share_send'), ...ShareSendFields })
+    .refine(isOnItsShare)
 ])
 
 const absent = z.never().optional()
@@ -233,7 +282,7 @@ export const ConnectorPollResponseSchema = z.object({
   holdMs: z.number().int().nonnegative().lt(CONNECTOR_LIMITS.pollTimeoutMs),
   // First poll after a hello only: deliveries received but never done, including by an earlier process.
   unsettled: z
-    .array(z.object({ deliveryId: OpaqueIdSchema, conversation: ConnectorConversationSchema }))
+    .array(z.object({ deliveryId: OpaqueIdSchema, conversation: ConnectorInboxConversationSchema }))
     .optional(),
   deliveries: z.array(ConnectorDeliverySchema).max(CONNECTOR_LIMITS.maxDeliveriesPerPoll),
   control: PollControlSchema.optional()

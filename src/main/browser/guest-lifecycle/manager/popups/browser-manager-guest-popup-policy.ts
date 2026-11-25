@@ -27,12 +27,28 @@ import {
   allowNativeBrowserPopup,
   isNativeBrowserPopupRequest
 } from '../../popups/presentation/browser-popup-native-window'
+import type {
+  PopupOwnerContext,
+  ServerPagePopupPresentation
+} from '../../popups/browser-popup-ownership'
+import { browserPopupPageId } from '../../popups/browser-popup-page-id'
+import { watchBrowserPopupSiteFrameRemoval } from '../navigation/browser-guest-frame-user-agent-demand'
 import { isBrowserRouteGuestPopup } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { requestBrowserExternalAppLaunch } from '../../prompts/browser-external-app-launch'
+import { installBrowserJavaScriptDialogs } from '../../prompts/browser-javascript-dialogs'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
+  private serverPagePopupPresenter: ((popup: ServerPagePopupPresentation) => void) | null = null
+
+  setServerPagePopupPresenter(
+    presenter: ((popup: ServerPagePopupPresentation) => void) | null
+  ): void {
+    this.serverPagePopupPresenter = presenter
+  }
+
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
     const gesture = trackBrowserGuestInputGesture(guest, {
+      isAgentCommandShownHere: (guestId) => this.isAgentCommandShownHere(guestId),
       onActivatingInput: (byAgent) => {
         this.creditPageInput(guest.id)
         if (!byAgent) {
@@ -43,7 +59,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Popups inherit ownership without replacing the primary guest registration.
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
-        this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
+        this.attachPopupGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
         this.inheritAgentLead(guest.id, window.webContents.id)
       }
     }
@@ -60,6 +76,9 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const browserTabId = this.resolvePopupOwnerContext(guest.id)?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
 
+      // A server page's popup reaches its viewers as a tab, never the server's own screen.
+      // Hidden, not offscreen: Electron never sizes or paints an offscreen window.open child (electron/electron#55565).
+      const shownToViewers = this.isListedAsServerPage(guest.id)
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
       if (browserTabId && canOpenAsChild) {
@@ -72,7 +91,9 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         if (isNativeBrowserPopupRequest({ disposition, features, frameName })) {
           return allowNativeBrowserPopup({
             opener: guest,
-            options: SAFE_POPUP_WINDOW_OPTIONS,
+            options: shownToViewers
+              ? { ...SAFE_POPUP_WINDOW_OPTIONS, show: false }
+              : SAFE_POPUP_WINDOW_OPTIONS,
             background: disposition === 'background-tab',
             showWhenAppActive,
             canPresent: () => Boolean(this.resolvePopupOwnerContext(guest.id)),
@@ -90,6 +111,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             openAsTabWithoutOpener(options) ??
             this.createPopupChildWindowWithOriginBar(guest, url, {
               ...options,
+              ...(shownToViewers ? { show: false } : {}),
               showWhenAppActive,
               // Bind link-created contents to the opener's session.
               webPreferences: { ...options.webPreferences, session: guest.session }
@@ -194,6 +216,66 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     })
   }
 
+  // A popup window's iframes run no guest preload, so removed site iframes are checked for here.
+  private attachPopupGuestPolicies(
+    contents: Electron.WebContents,
+    owner: PopupOwnerContext | null
+  ): void {
+    const fresh = !this.policyAttachedGuestIds.has(contents.id)
+    this.attachGuestPolicies(contents, owner)
+    if (fresh) {
+      watchBrowserPopupSiteFrameRemoval(contents)
+      if (owner && this.isListedAsServerPage(contents.id)) {
+        this.publishServerPagePopup(contents, owner)
+      }
+    }
+  }
+
+  /** An agent's command drives the guest's page on this desktop; a Server page is shown to its viewers instead. */
+  isAgentCommandShownHere(guestWebContentsId: number): boolean {
+    return (
+      !this.isListedAsServerPage(guestWebContentsId) &&
+      this.isAgentCommandRunning(guestWebContentsId)
+    )
+  }
+
+  isListedAsServerPage(guestWebContentsId: number): boolean {
+    const rootGuestId =
+      this.popupOwnerContextByGuestId.get(guestWebContentsId)?.rootGuestWebContentsId ??
+      guestWebContentsId
+    return this.offscreenGuestIds.has(rootGuestId)
+  }
+
+  protected notifyWorktreeBrowserGuestStateChanged(worktreeId: string): void {
+    // Isolate listener exceptions from Electron event dispatch.
+    try {
+      this.browserGuestStateChangedListener?.(worktreeId)
+    } catch (error) {
+      console.error('[browser-manager] browserGuestStateChanged listener failed', error)
+    }
+  }
+
+  // A server page's popup is listed as a tab; the paired client whose click opened it moves to it.
+  private publishServerPagePopup(contents: Electron.WebContents, owner: PopupOwnerContext): void {
+    const worktreeId = this.worktreeIdByTabId.get(owner.browserTabId)
+    if (!worktreeId) {
+      return
+    }
+    // Hidden on the server, so its viewers and agents answer its dialogs, as for the page itself.
+    installBrowserJavaScriptDialogs(contents, () => null)
+    // The opener may already be unregistered when its close takes the popup down.
+    contents.once('destroyed', () => this.notifyWorktreeBrowserGuestStateChanged(worktreeId))
+    this.notifyWorktreeBrowserGuestStateChanged(worktreeId)
+    const pairedDeviceId = this.pageInputCredit.consume(owner.browserTabId)
+    if (pairedDeviceId) {
+      this.serverPagePopupPresenter?.({
+        worktreeId,
+        browserPageId: browserPopupPageId(contents.id),
+        pairedDeviceId
+      })
+    }
+  }
+
   protected createPopupChildWindowWithOriginBar(
     openerGuest: Electron.WebContents,
     targetUrl: string,
@@ -207,7 +289,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       if (!owner) {
         return false
       }
-      this.attachGuestPolicies(contents, owner)
+      this.attachPopupGuestPolicies(contents, owner)
       this.inheritAgentLead(openerGuest.id, contents.id)
       return true
     })

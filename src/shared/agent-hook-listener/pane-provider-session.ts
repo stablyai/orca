@@ -9,6 +9,11 @@ import {
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { AgentHookEventPayload } from './listener-event'
+import {
+  isDroidWorkerSession,
+  openDroidRootTurn,
+  rememberDroidWorkerSession
+} from './providers/droid/droid-worker-sessions'
 import { isGrokSubagentEvent } from './providers/grok/grok-tool-fields'
 import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes/hermes-events'
 import { readString } from './tool-input-preview'
@@ -77,9 +82,18 @@ function readPaneProviderSession(
   if (source === 'droid') {
     const previous = state.lastStatusByPaneKey.get(paneKey)
     const owner = previous?.payload.agentType === 'droid' ? previous.providerSession : undefined
-    if (owner?.id !== providerSession.id && isDroidSubSession(hookPayload)) {
+    if (
+      owner?.id !== providerSession.id &&
+      (isDroidWorkerSession(state, paneKey, providerSession.id) || isDroidSubSession(hookPayload))
+    ) {
       // Sub-droids inherit the pane, so a worker's hook keeps the orchestrator's session.
+      if (owner) {
+        rememberDroidWorkerSession(state, paneKey, providerSession.id)
+      }
       return owner ?? null
+    }
+    if (eventName === 'UserPromptSubmit') {
+      openDroidRootTurn(state, paneKey)
     }
   }
   if (source === 'antigravity') {

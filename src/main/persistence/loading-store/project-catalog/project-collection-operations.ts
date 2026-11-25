@@ -123,6 +123,10 @@ export class ProjectCollectionOperations {
     return getProjectHostOperations(this).setResolvedRepoGitUsername(target, username)
   }
 
+  getProjectGroup(id: string): ProjectGroup | undefined {
+    return getProjectGroupOperations(this).getProjectGroup(id)
+  }
+
   getProjectGroups(): ProjectGroup[] {
     return getProjectGroupOperations(this).getProjectGroups()
   }
@@ -138,6 +142,12 @@ export class ProjectCollectionOperations {
     updates: Parameters<ProjectGroupPersistenceOperations['updateProjectGroup']>[1]
   ): ProjectGroup | null {
     return getProjectGroupOperations(this).updateProjectGroup(groupId, updates)
+  }
+
+  setProjectGroupParents(
+    moves: Parameters<ProjectGroupPersistenceOperations['setProjectGroupParents']>[0]
+  ): ProjectGroup[] {
+    return getProjectGroupOperations(this).setProjectGroupParents(moves)
   }
 
   deleteProjectGroup(groupId: string): boolean {

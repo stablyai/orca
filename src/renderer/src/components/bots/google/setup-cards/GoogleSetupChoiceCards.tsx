@@ -15,7 +15,8 @@ import {
 import type { GoogleServiceChoice } from '../../../../../../shared/google/google-scopes'
 import {
   googleSetupAnsweredServices,
-  googleSetupChoiceChangeable
+  googleSetupChoiceChangeable,
+  googleSetupChoiceLocked
 } from '../../../../../../shared/google/google-setup-card-view'
 import { importGoogleApp } from '../google-connect-client'
 import { GoogleServicePicker } from '../GoogleServicePicker'
@@ -66,7 +67,7 @@ export function GoogleSetupPathCard({
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'path')
   const answered = run.answers.path?.values[0]
   const chosen = GOOGLE_SETUP_MODES.find((mode) => mode === answered)
-  const locked = answered !== undefined && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
   const file = useGoogleClientFile(async (text) => {
     await importGoogleApp(botTarget(bot), text)
     await answer(['import'])
@@ -136,7 +137,7 @@ export function GoogleSetupPathCard({
           </p>
         ) : null}
       </GoogleSetupCardFrame>
-      {locked ? (
+      {locked && answered !== undefined ? (
         <GoogleSetupReceipt
           text={receipt()}
           onChange={googleSetupChoiceChangeable(run) ? reopen : undefined}
@@ -158,7 +159,7 @@ export function GoogleSetupAccountCard({
   const t = useTranslate()
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'account')
   const answered = run.answers.account?.values[0]
-  const locked = answered !== undefined && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
   return (
     <div>
       <GoogleSetupCardFrame heading={t('bots.googleSetup.progress.heading', 'Setting up Google')}>
@@ -216,7 +217,7 @@ export function GoogleSetupServicesCard({
   const t = useTranslate()
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'services')
   const answered = googleSetupAnsweredServices(run)
-  const locked = answered !== null && !reopened
+  const locked = googleSetupChoiceLocked(run, answered !== null, reopened)
   const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
   const shown = locked && answered ? answered : picked
   return (

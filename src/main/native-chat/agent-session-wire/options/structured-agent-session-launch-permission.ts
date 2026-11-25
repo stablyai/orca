@@ -2,11 +2,11 @@ import type { StructuredAgentSessionAttachContext } from '../acquisition/structu
 import type { StructuredAgentSessionAttachLock } from '../acquisition/structured-agent-session-attach-lock'
 import { continuingStructuredAgentSessionCompilerPermission } from '../delivery/structured-agent-session-handing-over'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
-  savedChatPermissionMode,
-  type AgentChatPermissionChoice
-} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 
 /** null for unregistered agents or agents without permission modes. */

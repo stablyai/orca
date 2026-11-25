@@ -10,8 +10,24 @@ export type PageMermaid = {
 // Keep outside tests excluded from shipped app typecheck. Both browser render checks prove artifact behavior beyond static package compatibility.
 const _packageSatisfiesPageMermaid: (engine: Mermaid) => PageMermaid = (engine) => engine
 
-// Defer one pre-bundled artifact: package import emits 103 already-downloaded scripts against 256-asset cap, saving no transfer. No diagram means no engine evaluation.
+// Set by a shell that left the engine out of its download: it fetches the engine from the desktop on request.
+let fetchEngine: (() => Promise<void>) | null = null
+let engineFetched: Promise<void> | null = null
+
+export function publishPageMermaidFetch(fetch: () => Promise<void>): void {
+  fetchEngine = fetch
+}
+
+// Defer one pre-bundled artifact: package import emits 103 scripts against the 256-asset cap. No diagram means no engine evaluation.
 export async function loadPageMermaid(): Promise<PageMermaid> {
+  if (fetchEngine !== null) {
+    // One fetch for every diagram on the page; a failed one is tried again by the next diagram.
+    engineFetched ??= fetchEngine().catch((error: unknown) => {
+      engineFetched = null
+      throw error
+    })
+    await engineFetched
+  }
   const engine = await import('./mermaid-page-engine.generated')
   return engine.default
 }

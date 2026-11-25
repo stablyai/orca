@@ -1,6 +1,6 @@
 // A bot's items as the panel's Items tab shows them: every open one, closed ones a page at a time, read
 // again with the route's other reads (botsChanged, reconnect, foreground). A failed re-read keeps the
-// last good read up. Some chats' items, while the filter shows them, come from their own read.
+// last good read up. A group can request only its rooms’ items.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotItemsListRead } from '../../../../src/shared/bots/bot-item-schema'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
@@ -16,13 +16,22 @@ export type PhoneBotItems = {
    *  `read` the last good one, or null if none landed. */
   error: string | null
   retry: () => void
+  /** The notice generation of the last successful read, null while stale or retrying. */
+  currentReads: number | null
   /** Reads the next Closed page, and says what it held and whether more follow; null when there is none. */
   loadMoreClosed: (() => Promise<{ items: BotItem[]; more: boolean }>) | null
   /** The host has no Closed page past the ones read; false while they are read again. */
   closedEnded: boolean
 }
 
-type Shown = { key: string; read: BotItemsListRead; error: string | null }
+type Shown = {
+  key: string
+  read: BotItemsListRead
+  error: string | null
+  reads: number
+  attempt: number
+  client: RpcClient
+}
 type Pages = {
   key: string
   /** The list read these pages continue. */
@@ -64,7 +73,7 @@ export function usePhoneBotItems({
         return
       }
       if (answer.kind === 'read') {
-        setShown({ key, read: answer.value, error: null })
+        setShown({ key, read: answer.value, error: null, reads, attempt, client })
         setFailedFirst(null)
       } else {
         const error = answer.message ?? ''
@@ -128,6 +137,13 @@ export function usePhoneBotItems({
     items: ownPages?.items ?? [],
     error: shown?.key === key ? shown.error : failedFirst?.key === key ? failedFirst.error : null,
     retry: () => setAttempt((value) => value + 1),
+    currentReads:
+      shown?.key === key &&
+      shown.client === client &&
+      shown.error === null &&
+      shown.attempt === attempt
+        ? shown.reads
+        : null,
     loadMoreClosed: cursor ? loadMoreClosed : null,
     closedEnded: read !== null && cursor === null && (depth === 0 || upToDate)
   }
@@ -144,7 +160,11 @@ async function readClosedPages(
   const items: BotItem[] = []
   let next = cursor
   for (let page = 0; page < depth && next; page++) {
-    const answer = await readBotItems(client, botId, { closedCursor: next, chatIds })
+    const answer = await readBotItems(client, botId, {
+      closedCursor: next,
+      closedOnly: true,
+      chatIds
+    })
     if (answer.kind !== 'read') {
       return null
     }

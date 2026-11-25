@@ -230,10 +230,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         : undefined,
     [chatLeafId, managerRef]
   )
-  const readNativeChatTerminalScreen = useCallback(
-    (): string | null => findNativeChatPane()?.serializeAddon.serialize({ scrollback: 0 }) ?? null,
-    [findNativeChatPane]
-  )
   const readNativeChatTerminalDraft = useCallback((): string | null => {
     const pane = findNativeChatPane()
     return pane ? readTerminalComposerDraft(pane.terminal) : null
@@ -267,7 +263,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     handleToggleNativeChat,
     applyNativeChatLeafRoute,
     switchNativeChatToTerminal,
-    readNativeChatTerminalScreen,
     readNativeChatTerminalDraft
   }
 }

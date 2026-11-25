@@ -86,6 +86,7 @@ function BotConnectorFoldRow(props: BotConnectorRowFrameProps): React.JSX.Elemen
           <BotConnectorMenu
             name={typeof name === 'string' ? name : botConnectorTitleText(name)}
             actions={actions}
+            popover={props.menuPopover}
           />
         ) : null}
         {/* Passes clicks to the stretched name button, so it folds the row too. */}
@@ -143,6 +144,7 @@ export function BotConnectorRow(props: {
   people: BotWhoCanAskService
   defaultOpen?: boolean
   add?: BotConnectorActions['add']
+  addAccount?: BotConnectorActions['addAccount']
   /** The connector's own page, in the row's menu. */
   link?: BotConnectorActions['link']
   update?: BotConnectorActions['update']
@@ -176,7 +178,7 @@ export function BotConnectorRow(props: {
           </span>
         ) : null
       }
-      actions={{ add, link, update: props.update, remove }}
+      actions={{ add, addAccount: props.addAccount, link, update: props.update, remove }}
       narrowSpans={props.body !== undefined}
     >
       {props.body ?? (

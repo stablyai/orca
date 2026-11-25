@@ -1,14 +1,13 @@
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
 import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
-import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
-import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
 import { createPageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { PageInitiatedTabBudget } from '../popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
+import { browserPagePromptStreamTarget } from '../prompts/browser-page-prompt-viewers'
 import type { ActiveDownload } from './downloads/browser-active-download'
 import type { CdpUserAgentOverrideState } from './navigation/browser-user-agent-override-state'
 import type { PendingMainFrameNavigation } from './navigation/browser-main-frame-navigation'
@@ -123,6 +122,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     browserTabId: string | null,
     payload: BrowserDownloadFinishedEvent
   ): void
+  protected abstract stopOversizedRemoteDownload(download: ActiveDownload): boolean
   protected abstract settleClientHostedDownload(
     download: ActiveDownload,
     status: BrowserDownloadFinishedEvent['status'],
@@ -181,6 +181,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Offscreen pages have no renderer to hold their icon for session-tab rows.
   protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
+  // A viewer's mute outlives the page's guest, as a desktop tab re-mutes each new guest.
+  protected readonly mutedOffscreenPageIds = new Set<string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   // Title and spinner churn on offscreen pages publishes at most about once a second.
   protected readonly offscreenGuestStateNotices = createKeyedTrailingEdgeCoalescer(
@@ -228,12 +230,9 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.siteDisplayController = controller
   }
 
-  /** Runtime zoom for hosted pages, which have no renderer IPC of their own. */
-  zoomGuestPage(
-    guestId: number,
-    direction: BrowserPageZoomDirection
-  ): BrowserPageSiteDisplay | null {
-    return this.siteDisplayController?.zoomPage(guestId, direction) ?? null
+  /** Site zoom and color scheme for hosted pages, which have no renderer IPC of their own. */
+  getSiteDisplayController(): BrowserSiteDisplayController | null {
+    return this.siteDisplayController
   }
 
   installCertificateRequestGuard(session: Electron.Session): void {
@@ -300,7 +299,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       !this.popupOwnerContextByGuestId.has(guest.id) &&
       !this.offscreenGuestIds.has(guest.id) &&
       guest.getType() === 'webview'
-    return awaitingRegistration ? 'awaiting-registration' : null
+    return awaitingRegistration ? 'awaiting-registration' : browserPagePromptStreamTarget(guest.id)
   }
 
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {

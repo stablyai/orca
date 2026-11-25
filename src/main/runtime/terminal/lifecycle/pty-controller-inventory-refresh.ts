@@ -28,7 +28,7 @@ import { retireOrchestrationAuthorityAbsentFromInventory } from '../../orchestra
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
-import { awaitReattachedTerminalPaint } from '../input/terminal-command-paint'
+import { awaitReattachedTerminalPaint } from '../input/terminal-command-paint-record'
 
 export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithPtyControllerInventoryListing {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(

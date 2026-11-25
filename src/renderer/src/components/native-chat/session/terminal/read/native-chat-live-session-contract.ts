@@ -30,6 +30,8 @@ export type NativeChatLiveSession = NativeChatSession & {
   loadingEarlier: boolean
   /** Reset paging failures when source/snapshot replacement starts a new generation. */
   olderHistoryGeneration: number
+  /** Changes when the owning terminal transcript is rebound or replaced. */
+  transcriptIdentity?: string
   /** Resolve after page publication; concurrent calls share the in-flight read. */
   loadEarlier: () => Promise<NativeChatOlderPageResult>
   /** A parked view keeps shared history until it returns or unmounts. */

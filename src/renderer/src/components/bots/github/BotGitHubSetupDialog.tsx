@@ -4,14 +4,10 @@ import { toast } from 'sonner'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { refreshBotGitHub, useBotGitHub, useGitHubAwait } from '@/lib/bot-github-state'
 import {
-  type BotGitHubView,
-  refreshBotGitHub,
-  useBotGitHub,
-  useGitHubAwait
-} from '@/lib/bot-github-state'
-import {
+  addGitHubAccount,
   closeGitHubInstall,
   followGitHubInstall,
   type GitHubInstallRecord,
@@ -21,15 +17,14 @@ import {
 } from '@/lib/bot-github-install-record'
 import { readBots, updateBot } from '@/lib/bot-catalog'
 import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
-import {
-  cancelConnectorConnect,
-  type ConnectorConnectView,
-  useResumeAfterConnect
-} from '@/lib/connector-connect-state'
+import { cancelConnectorConnect, useResumeAfterConnect } from '@/lib/connector-connect-state'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
+import {
+  type ConnectorGitHubInstallation,
+  gitHubLinkedAccounts
+} from '../../../../../shared/connector-bot-github-contract'
 import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { botErrorMessage } from '../bot-presentation'
@@ -39,16 +34,13 @@ import {
   OrcaCloudSignInGate,
   orcaCloudSignInReason
 } from '../orca-cloud-sign-in'
-import {
-  ConnectWaiting,
-  ConnectorSetupHeader,
-  SignedInAs,
-  connectorSetupFor
-} from '../connector-connect-parts'
+import { ConnectWaiting, ConnectorSetupHeader, connectorSetupFor } from '../connector-connect-parts'
 import { useConfirmConnectorSignOut } from '../connector-sign-out-confirm'
-import { botGitHubErrorMessage, gitHubMention, gitHubPushesAs } from './bot-github-copy'
-import { ConnectorTryIt } from '../ConnectorTryIt'
+import { botGitHubErrorMessage, gitHubPushesAs } from './bot-github-copy'
+import { GitHubTryItPreview } from './GitHubTryItPreview'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
+import { GitHubSetupCorner, GitHubSignedInLine } from './github-setup-header'
+import { botGitHubSetupStep } from './github-setup-step'
 import {
   GitHubFinishInBrowser,
   GitHubInstalledRepositories,
@@ -57,56 +49,14 @@ import {
 
 /** Once linked and installed, the owner picks who may ask the bot on GitHub. */
 function LinkedPeople({ bot }: { bot: Bot }): React.JSX.Element {
-  return <BotWhoCanAskList bot={bot} service={useGitHubWhoCanAsk(bot.hostId, true)} />
-}
-
-/** Each step follows from the cloud's state and the connect trip. */
-export type BotGitHubSetupStep =
-  | { kind: 'checking' }
-  | { kind: 'failed'; code: string }
-  | { kind: 'connect'; error: string | null }
-  | { kind: 'waiting' }
-  /** Signed in, no installation yet: `requested` when an organization owner must approve it. */
-  | { kind: 'install'; login: string; installUrl: string; requested: boolean }
-  | {
-      kind: 'turn-on'
-      login: string
-      installations: ConnectorGitHubInstallation[]
-      installUrl: string
-    }
-  | {
-      kind: 'done'
-      login: string
-      installations: ConnectorGitHubInstallation[]
-      installUrl: string
-    }
-
-/** `on`: the bot is already turned on for GitHub, so setup ends once the account is linked and installed. */
-export function botGitHubSetupStep(
-  view: BotGitHubView,
-  connect: ConnectorConnectView,
-  on: boolean
-): BotGitHubSetupStep {
-  if (connect.status === 'waiting') {
-    return { kind: 'waiting' }
-  }
-  if (view.status === 'loading') {
-    return { kind: 'checking' }
-  }
-  if (view.status !== 'ready') {
-    return { kind: 'failed', code: view.status === 'off' ? 'github_off' : view.error }
-  }
-  const { account, installations, installUrl } = view.github
-  if (!account) {
-    return { kind: 'connect', error: connect.status === 'failed' ? connect.error : null }
-  }
-  if (installations.length === 0) {
-    const requested = connect.status === 'linked' && connect.link.install === 'requested'
-    return { kind: 'install', login: account.login, installUrl, requested }
-  }
-  return on
-    ? { kind: 'done', login: account.login, installations, installUrl }
-    : { kind: 'turn-on', login: account.login, installations, installUrl }
+  const t = useTranslate()
+  return (
+    <BotWhoCanAskList
+      bot={bot}
+      service={useGitHubWhoCanAsk(bot.hostId, true)}
+      compactCaption={t('bots.github.setup.whoCanAsk', 'Who can ask')}
+    />
+  )
 }
 
 const GITHUB = { id: 'github', Icon: GitHubIcon } as const
@@ -167,21 +117,38 @@ function BotGitHubSetupFlow({
     }
   }
 
-  const closeButton = (
-    <Button variant="ghost" onClick={onClose}>
-      {t('bots.github.setup.close', 'Close')}
+  const cancelButton = (
+    <Button variant="outline" onClick={onClose}>
+      {t('bots.github.setup.cancel', 'Cancel')}
     </Button>
   )
+  const intlLocale = useIntlLocale()
+  const logins = view.status === 'ready' ? gitHubLinkedAccounts(view.github) : []
+  // Only the login shown, on a cloud that links several; an older one unlinks its one link.
+  const userId = view.status === 'ready' && view.github.accounts ? logins[0]?.userId : undefined
   const signedIn = (login: string): React.JSX.Element => (
-    <SignedInAs
-      who={`@${login}`}
-      onNotYou={() =>
-        void (async () => {
-          const hostBots = readBots().filter((entry) => entry.hostId === bot.hostId)
-          if (await confirmSignOut(hostBots, { source: 'github', login })) {
-            await signIn.anotherAccount(() => botGitHubCalls(bot.hostId).unlink(), bot)
-          }
-        })()
+    <GitHubSignedInLine
+      who={
+        logins.length > 1
+          ? new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(
+              logins.map((entry) => `@${entry.login}`)
+            )
+          : `@${login}`
+      }
+      // Several linked logins are each the owner, so none is "not you".
+      onNotYou={
+        logins.length > 1
+          ? null
+          : () =>
+              void (async () => {
+                const hostBots = readBots().filter((entry) => entry.hostId === bot.hostId)
+                if (await confirmSignOut(hostBots, { source: 'github', login })) {
+                  await signIn.anotherAccount(
+                    () => botGitHubCalls(bot.hostId).unlink({ userId }),
+                    bot
+                  )
+                }
+              })()
       }
     />
   )
@@ -208,6 +175,8 @@ function BotGitHubSetupFlow({
         reason={orcaCloudSignInReason('github')}
         onCancel={onClose}
         onSignedIn={() => refreshBotGitHub(bot.hostId)}
+        // A trip to GitHub still followed keeps its Minimize; otherwise Cancel is the way out.
+        corner={record.waiting ? <GitHubSetupCorner minimize onEnd={onClose} /> : undefined}
       />
     )
   }
@@ -225,6 +194,20 @@ function BotGitHubSetupFlow({
       intro={connectorSetupFor(bot, hostName)}
       line={signedInStep ? signedIn(step.login) : undefined}
       done={step.kind === 'done'}
+      bare
+      corner={
+        <GitHubSetupCorner
+          minimize={
+            step.kind === 'connect' ||
+            step.kind === 'waiting' ||
+            step.kind === 'install' ||
+            // Still following a trip to GitHub (Orca's browser or the system one): × must not drop it.
+            record.waiting ||
+            awaiting
+          }
+          onEnd={onClose}
+        />
+      }
     />
   )
   const body = ((): React.JSX.Element => {
@@ -243,7 +226,13 @@ function BotGitHubSetupFlow({
               {botGitHubErrorMessage(step.code, hostName)}
             </p>
             <DialogFooter>
-              {closeButton}
+              {step.code === 'github_off' ? (
+                <Button variant="outline" onClick={onClose}>
+                  {t('bots.github.setup.close', 'Close')}
+                </Button>
+              ) : (
+                cancelButton
+              )}
               {step.code === BOT_SLACK_DESKTOP_ERRORS.signedOut ? (
                 <BotHostSignInButton bot={bot} onClose={onClose} />
               ) : step.code === 'github_off' ? null : (
@@ -277,8 +266,8 @@ function BotGitHubSetupFlow({
               </p>
             ) : null}
             <DialogFooter>
-              {closeButton}
-              <Button autoFocus onClick={() => void signIn.start({ bot })}>
+              {cancelButton}
+              <Button onClick={() => void signIn.start({ bot })}>
                 {t('bots.github.connect.button', 'Connect GitHub')}
                 <ExternalLink />
               </Button>
@@ -318,12 +307,12 @@ function BotGitHubSetupFlow({
               </p>
             ) : null}
             <DialogFooter>
-              {closeButton}
+              {cancelButton}
               <Button
                 variant={step.requested ? 'outline' : 'default'}
                 onClick={() => trip.open(step.installUrl, [])}
               >
-                {t('bots.github.setup.install', 'Install the Orca app')}
+                {t('bots.github.setup.installApp', 'Install app')}
                 <ExternalLink />
               </Button>
             </DialogFooter>
@@ -333,13 +322,13 @@ function BotGitHubSetupFlow({
         return (
           <div className="space-y-4">
             {installed(step)}
-            <div>
+            <section>
               <LinkedPeople bot={bot} />
-            </div>
+            </section>
             <DialogFooter>
-              {closeButton}
-              <Button autoFocus disabled={saving} onClick={() => void turnOn()}>
-                {t('bots.github.connect.turnOn', 'Turn on {{name}}', { name: bot.name })}
+              {cancelButton}
+              <Button disabled={saving} onClick={() => void turnOn()}>
+                {t('bots.github.setup.add', 'Add')}
               </Button>
             </DialogFooter>
           </div>
@@ -348,22 +337,23 @@ function BotGitHubSetupFlow({
         // Who can ask is edited later in the GitHub connector's settings (BotGitHubCard), not here.
         return (
           <div className="space-y-4">
-            <ConnectorTryIt
-              heading={t('bots.github.setup.tryIt', 'Try it on any issue or pull request')}
-              ways={[
-                {
-                  key: 'mention',
-                  shown: `${gitHubMention(bot)} …`,
-                  copy: gitHubMention(bot)
-                }
-              ]}
-              note={gitHubPushesAs(bot, hostName)}
-            />
+            <div className="space-y-2">
+              <GitHubTryItPreview bot={bot} login={step.login} userId={step.userId} />
+              <p className="text-xs text-muted-foreground">{gitHubPushesAs(bot, hostName)}</p>
+            </div>
             {installed(step)}
+            {step.error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {botGitHubErrorMessage(step.error, hostName)}
+              </p>
+            ) : null}
             <DialogFooter>
-              <Button autoFocus onClick={onClose}>
-                {t('bots.github.setup.finish', 'Done')}
-              </Button>
+              {step.error ? (
+                <Button variant="outline" onClick={() => addGitHubAccount(bot)}>
+                  {t('bots.github.setup.retry', 'Try again')}
+                </Button>
+              ) : null}
+              <Button onClick={onClose}>{t('bots.github.setup.finish', 'Done')}</Button>
             </DialogFooter>
           </div>
         )
@@ -390,27 +380,46 @@ export function BotGitHubSetupDialog({
   const open = record.surface === 'dialog'
   const title = record.wasOn
     ? t('bots.github.setup.titleOn', '{{name}} in GitHub', { name: bot.name })
-    : t('bots.github.setup.title', 'Add {{name}} to GitHub', { name: bot.name })
+    : t('bots.github.setup.addTitle', 'Add {{name}}', { name: bot.name })
   return (
-    // The corner button, Escape and a click outside minimize; Close, Done and the pill's ✕ end setup.
+    // Escape and a click outside minimize to the pill; Cancel, Done, the pill's ✕ and the corner × end setup.
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : minimizeGitHubInstall())}>
       {/* It ends on who signed in and who gets access: a trust decision. */}
-      <DialogContent surface="security" closeButtonVariant="minimize" className="sm:max-w-lg">
+      <DialogContent
+        surface="security"
+        size="form"
+        showCloseButton={false}
+        className="sm:max-w-[440px]"
+        // Focus lands on the dialog, not a button, so a mouse-opened dialog shows no focus ring.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          if (event.currentTarget instanceof HTMLElement) {
+            event.currentTarget.focus()
+          }
+        }}
+      >
         {open ? (
-          <OrcaCloudSignInGate
-            hostId={bot.hostId}
-            title={title}
-            reason={orcaCloudSignInReason('github')}
-            onCancel={closeGitHubInstall}
-            resume={() => refreshBotGitHub(bot.hostId)}
-          >
-            <BotGitHubSetupFlow
-              bot={bot}
-              record={record}
+          <div className="flex min-w-0 flex-col gap-4">
+            <OrcaCloudSignInGate
+              hostId={bot.hostId}
               title={title}
-              onClose={closeGitHubInstall}
-            />
-          </OrcaCloudSignInGate>
+              reason={orcaCloudSignInReason('github')}
+              onCancel={closeGitHubInstall}
+              resume={() => refreshBotGitHub(bot.hostId)}
+              corner={
+                record.waiting ? (
+                  <GitHubSetupCorner minimize onEnd={closeGitHubInstall} />
+                ) : undefined
+              }
+            >
+              <BotGitHubSetupFlow
+                bot={bot}
+                record={record}
+                title={title}
+                onClose={closeGitHubInstall}
+              />
+            </OrcaCloudSignInGate>
+          </div>
         ) : null}
       </DialogContent>
     </Dialog>

@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
+import { TRIGGER_REPEATS_NOTE } from './automation-trigger-hints'
 
 const AUTOMATION_TARGET_FLAGS = [
   'repo',
@@ -42,9 +43,10 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Orca automation',
     usage:
-      'orca automations create --name <name> (--trigger <preset|cron|rrule> | --on "<source>.<event> ..."...) --prompt <text> (--provider <agent> [--setup run|skip] [--repo <selector>|--workspace <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] | --bot <name> [--agent <agent> [--model <id>] [--effort <level>]] [--runs-in new|chat|chat:<id>] [--results-to chat|thread|none|channel:<channel>] [--once [--by <time>]]) [--precheck <command>] [--json]',
+      'orca automations create --name <name> (--trigger <preset|cron|rrule> | --on "<source>.<event> ..."... | --once --by <time> with --bot) --prompt <text> (--provider <agent> [--setup run|skip] [--repo <selector>|--workspace <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] | --bot <name> [--agent <agent> [--model <id>] [--effort <level>]] [--runs-in new|chat|chat:<id>] [--results-to chat|thread|none|channel:<channel>] [--once [--by <time>]] [--item <n>]) [--precheck <command>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
+      'item',
       'name',
       'prompt',
       'provider',
@@ -64,7 +66,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       ...AUTOMATION_STATE_FLAGS
     ],
     notes: [
-      "Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string. Times are the host's local time unless --timezone names a zone.",
+      '--trigger accepts a preset: hourly, daily, weekdays or weekly (--time HH:MM, default 09:00; --day 0-6 for weekly, default 1 = Monday), e.g. --trigger daily --time 08:30. Or a 5-field cron expression, e.g. --trigger "*/10 * * * *" (every 10 minutes) or "0 9 * * 1-5" (weekdays at 9:00). Or an RRULE: FREQ=HOURLY with BYMINUTE (FREQ=HOURLY;BYMINUTE=15), FREQ=DAILY with BYHOUR and BYMINUTE (FREQ=DAILY;BYHOUR=9;BYMINUTE=0), or FREQ=WEEKLY with BYDAY, BYHOUR and BYMINUTE (FREQ=WEEKLY;BYDAY=MO,WE;BYHOUR=9;BYMINUTE=0), with no RRULE: prefix, DTSTART, UNTIL or COUNT. Times are the host\'s local time unless --timezone names a zone.',
+      TRIGGER_REPEATS_NOTE,
       'When --repo is omitted, the CLI uses the enclosing Orca worktree when one can be resolved from cwd.',
       'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `orca project list`, and --host is only needed when the project is set up on more than one host.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
@@ -75,10 +78,11 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --precheck-timeout <seconds> to set the time limit (default 60 seconds). Skips appear in Orca run history and orca automations runs --id <automation-id> as skipped_precheck.',
       'Run now in Orca and orca automations run intentionally bypass the precheck so you can test or override the scheduled condition.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
-      "Use --bot <name> to run as a bot, in its folder with its agent; --provider and the project flags do not apply. --runs-in new (default) starts a new conversation each run, except that one a teammate asks for from their chat runs in that chat, so its results reach them there; chat continues the bot's Chat; chat:<id> (from `orca bot chats`) continues that chat, and a run fails if it was closed. --results-to says where the result goes: chat (the default), thread, none, channel:<channel> (a #name, link or id), or linear:<issue> (a bot on Linear; ENG-123 or a link); keep the default unless asked for another place. thread answers in the Slack thread, pull request or issue the event happened on, where the run can also post updates with `orca bot reply`; it is the default for an automation that only Slack, GitHub or Linear events start, and needs --runs-in new.",
+      "Use --bot <name> to run as a bot, in its folder with its agent; --provider and the project flags do not apply. --runs-in new (default) starts a new conversation each run, except that one made from a chat other than its Home Chat runs in that chat, so its results reach whoever asked there, and one made from a group room runs in that room as its owner's post; chat continues the bot's Chat; chat:<id> (from `orca bot chats`) continues that chat, and a run fails if it was closed. --results-to says where the result goes: chat (the default), thread, none, channel:<channel> (a #name, link or id), or linear:<issue> (a bot on Linear; ENG-123 or a link); keep the default unless asked for another place. thread answers in the Slack thread, pull request or issue the event happened on, where the run can also post updates with `orca bot reply`; it is the default for an automation that only Slack, GitHub or Linear events start, and needs --runs-in new.",
       'Use --on "<source>.<event> [in=<place>,<place>] [subject=<one>] [contains="<text>"] [from=<people>]" (repeatable, bots only) to start a run each time the event happens, whoever does it (from= narrows it to some people, by @name or id; on=mine keeps a slack.reaction to reactions on your own messages); it takes the place of --trigger, and both together are refused (make two automations for a schedule and events). `orca automations trigger-options` lists the events, and `orca bot connectors` the bot\'s workspaces and teams as refs for in=.',
       "Use --agent <agent> [--model <id>] [--effort <level>] (bots only, with --runs-in new) to run a bot's automation on another agent or model than the bot's own; it keeps the bot's folder, memory, connectors and results. Use it instead of a project automation when a bot's job needs another model. Without --agent, --model and --effort apply to the bot's current agent.",
-      "Use --once (bots only) for a wait: it runs a single time, on the first matching --on event, and is then deleted. Add --by <ISO time> to also run it at that time if no event came first; the run's prompt then says the deadline came. Without --by it runs only if the event happens, and ends unrun after 30 days. A wait runs in the chat that made it (or the bot's Chat if made elsewhere, or if that chat is closed when it fires) and reports there unless --runs-in or --results-to say otherwise; with --by and no --on it is a one-time reminder.",
+      'Use --item <n> (bots only) to link the automation to your item n, so the item shows what will wake you for it.',
+      "Use --once (bots only) for a wait: it runs a single time, on the first matching --on event, and is then deleted. Add --by <ISO time> to also run it at that time if no event came first; the run's prompt then says the deadline came. Without --by it runs only if the event happens, and ends unrun after 30 days. A wait runs in the chat that made it (or the bot's Chat if made elsewhere, or if that chat is closed when it fires) and reports there unless --runs-in says otherwise; one made answering a Slack thread answers in that thread. --results-to channel:<channel> or linear:<issue> adds a copy of the result there; none adds none and doesn't stop that thread answer; thread (with --runs-in new) answers in the event's thread, running in the chat that owns it when one is open. With --by and no --on it is a one-time reminder.",
       'Use --extra-agent-args="--model opus --effort high" to add arguments after the host\'s default agent Arguments on each fresh run. Only model, effort, and a few safe options are accepted (Antigravity, Claude, Codex, CodeBuddy, Cursor, Grok, OMP, Pi); extras cannot be combined with --reuse-session. On edit, --extra-agent-args= clears them.'
     ],
     examples: [
@@ -86,11 +90,42 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo',
       'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex',
       'orca automations create --name "Docs pass" --trigger daily --prompt "Tidy the docs" --provider claude --extra-agent-args="--model opus --effort high --add-dir docs"',
-      'orca automations create --name "Nora\'s reply in #orca" --bot ranger --once --by 2026-11-06T17:00:00-05:00 --prompt "Tell me what Nora said; if the deadline came first, remind me he hasn\'t replied" --on "slack.message subject=<thread link> from=@nora"',
+      'orca automations create --name "Nora\'s reply in #orca" --bot ranger --once --by <deadline, as YYYY-MM-DDTHH:MM:SS±HH:MM> --prompt "Tell me what Nora said; if the deadline came first, remind me he hasn\'t replied" --on "slack.message subject=<thread link> from=@nora"',
+      'orca automations create --name "Stretch break" --bot ranger --once --by <now plus 10 minutes, as YYYY-MM-DDTHH:MM:SS±HH:MM> --prompt "Remind me to stretch"',
       'orca automations create --name "Stall investigator" --bot ranger --trigger "*/30 * * * *" --agent codex --model gpt-6.1-terra --effort high --results-to channel:C0123ABCD --prompt "Investigate stalls"',
       'orca automations create --name "Deploy pings" --bot ranger --prompt "Answer the deploy question" --on "slack.mentioned in=C0123ABCD contains=deploy"'
     ],
     repeatableFlags: ['on']
+  },
+  {
+    path: ['automations', 'watch-pr'],
+    summary: 'Wait on a pull request until its next step is due',
+    usage:
+      'orca automations watch-pr <owner/repo#n> --bot <name> [--by <time> | --for <length>] [--prompt <text>] [--name <name>] [--agent <agent> [--model <id>] [--effort <level>]] [--runs-in new|chat|chat:<id>] [--results-to chat|thread|none|channel:<channel>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'pr',
+      'by',
+      'for',
+      'prompt',
+      'name',
+      'bot',
+      'agent',
+      'model',
+      'effort',
+      'runs-in',
+      'results-to'
+    ],
+    positionalArgs: ['pr'],
+    notes: [
+      "One --once wait (see `orca automations create --help`) on github.ci_finished (ci_passed and ci_failed where the bot's Orca Cloud doesn't send it yet), pr_conflicted, pr_merged, pr_closed, review, review_comment and comment for that pull request. It runs once, on the first of them, and is then deleted; to keep watching, run watch-pr again.",
+      'It also runs at its deadline if nothing came first: 2 hours after it is made, unless --by <ISO time> or --for <length> (45m, 2h, 1h30m, up to a year) says otherwise. That run is told the deadline came, and to read the pull request fresh before acting.',
+      'The name defaults to "PR <owner/repo#n>". Without --prompt, the run reads the pull request and says what it needs next.'
+    ],
+    examples: [
+      'orca automations watch-pr stablyai/orca#482 --bot ranger --prompt "Fix what fails, then say when it is ready to merge"',
+      'orca automations watch-pr https://github.com/stablyai/orca/pull/482 --bot ranger --for 45m'
+    ]
   },
   {
     path: ['automations', 'edit'],

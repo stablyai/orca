@@ -224,6 +224,7 @@ export function queuedMessageWithEdit(
     origin: _delivered,
     asker: _asker,
     connectorConversation: _conversation,
+    leaveEligible: _leaveEligible,
     memorySource: _run,
     triggeredBy: _trigger,
     ...withoutSkills

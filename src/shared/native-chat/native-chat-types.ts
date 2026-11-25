@@ -33,10 +33,11 @@ import type {
 } from '../agent-journal-orca-card-items'
 import type { AutomationRunMessage } from '../automations/automation-run-message'
 import type { WaitEnding } from '../automation-once'
+import type { BotAutomationFacts } from '../bots/bot-automation-rows'
 import type { AgentMessageSource } from '../agent-session/journal/agent-session-message-source'
 import type { ConnectorMessageAsker } from '../connector-message-asker'
 import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-typed-by'
-import type { BotItemNoteView } from '../bots/bot-item-note'
+import type { BotItemNoteItem, BotItemNoteView } from '../bots/bot-item-note'
 import type { BotContextNote } from '../bots/bot-context-note'
 import type { AutomationResultNote } from '../bots/bot-automation-result-note'
 
@@ -293,10 +294,14 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Projected creation fact, never a user turn or provider input. */
   agentStartDispatchId?: string
   agentStart?: true
+  /** Display-only: the items the chat's link line next to this start tied the worker to. */
+  agentStartItems?: readonly BotItemNoteItem[]
   /** Projected fact: this chat's agent created or edited an automation; drawn as its card. */
   automationSaved?: Omit<AgentJournalAutomationSavedItem, 'kind'>
   /** On a wait's creation row: how it ended, read from its run or ended card in this chat. */
   savedWaitEnded?: WaitEnding
+  /** With savedWaitEnded: the rules the wait had when it ended, which an edit may have changed. */
+  savedWaitEndedOn?: BotAutomationFacts['on']
   /** Projected fact: a wait this chat's bot kept has ended; drawn as its card. */
   waitEnded?: Omit<AgentJournalWaitEndedItem, 'kind'>
   /** Projected fact: a bot automation run no chat took; drawn as its Couldn't start row. */

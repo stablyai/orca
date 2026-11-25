@@ -1,6 +1,7 @@
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
 import {
   CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE,
+  CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE,
   CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE
 } from '../../../../shared/connector-cloud-features'
 import type { ConnectorActErrorCode } from '../../../../shared/connector-action-contract'
@@ -15,7 +16,9 @@ import { postConnectorAction } from '../../../connector-cloud/connector-actions'
 import { actionGoesToSlack, slackActionArgs } from '../../../connector-cloud/connector-slack-text'
 import { cloudConversation } from '../../../../shared/connectors/connector-cloud-contract'
 import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
-import { defineMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
+import type { z } from 'zod'
+import type { BotActingTurn } from '../../../bots/bot-request-asker'
 import { botTurnFor } from '../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import { noteBotRequestPost } from './orchestration/messaging/bot-request-outcome'
@@ -108,153 +111,168 @@ export function actFailure(
     : new ConnectorActError('connector_refused', `Orca Cloud refused it (${reason}).`)
 }
 
+/** `turn`: the chat's running turn when the caller already read it, so it is not read again. */
+export async function actAsBot(
+  { sessionId, verb, ref, args }: z.infer<typeof ConnectorAct>,
+  context: RpcContext,
+  turn?: BotActingTurn
+) {
+  const { runtime } = context
+  const bot = runtime.bots.enabled() ? botOfSession(runtime.bots, sessionId) : null
+  if (!bot) {
+    throw new ConnectorActError(
+      'not_a_bot_session',
+      "This isn't a bot's chat. Connector actions act as a bot: run them from a bot's chat or one of its automation runs."
+    )
+  }
+  if (runtime.lookAround.botOfTidyUp(sessionId)) {
+    throw new ConnectorActError('look_around_reads_only', REPLY_ONLY_REFUSAL)
+  }
+  if (runtime.lookAround.botOfLook(sessionId) && !lookAroundConnectorVerbAllowed(verb, args)) {
+    throw new ConnectorActError('look_around_reads_only', LOOK_AROUND_REFUSAL)
+  }
+  const cloud = runtime.getConnectorCloud()
+  const features = cloud?.cloudFeatures()
+  // Signed out, or a sign-in Orca Cloud refused after its hello (features stay cached): say so, and
+  // on a headless server how it signs in, before calling a cloud that would refuse it.
+  if (cloud && orcaCloudNeedsSignIn(cloud.status())) {
+    throw signedOutError({ server: orcaSignInServer(runtime), botName: bot.name })
+  }
+  if (!cloud || !features) {
+    throw new ConnectorActError(
+      'connector_not_connected',
+      "Orca isn't connected to Orca Cloud: sign in to Orca Cloud and connect a bot to Slack, Linear or GitHub, then try again."
+    )
+  }
+  if (!features.has('actions' satisfies ConnectorCloudFeature)) {
+    throw new ConnectorActError(
+      'cloud_lacks_actions',
+      "Orca Cloud doesn't take connector actions yet. Update Orca and try again later."
+    )
+  }
+  if (verb === 'places' && !features.has('places' satisfies ConnectorCloudFeature)) {
+    throw new ConnectorActError(
+      'cloud_lacks_places',
+      "Orca Cloud can't list the bot's workspaces yet. Update Orca, and find Slack channels with `orca slack find <name|link>`."
+    )
+  }
+  // A titled post is an issue; a canvas or a list is titled too, and needs only Slack's verbs.
+  if (verb === 'post' && args.title && !features.has('create' satisfies ConnectorCloudFeature)) {
+    throw new ConnectorActError(
+      'cloud_lacks_create',
+      "Orca Cloud can't make issues yet. Say what the issue should be instead, and try again after Orca Cloud updates."
+    )
+  }
+  if (verb === 'set' && !features.has('set' satisfies ConnectorCloudFeature)) {
+    throw new ConnectorActError(
+      'cloud_lacks_set',
+      "Orca Cloud can't change issues yet. Say what should change instead, and try again after Orca Cloud updates."
+    )
+  }
+  if (args.search && !features.has('find.search' satisfies ConnectorCloudFeature)) {
+    throw new ConnectorActError(
+      'cloud_lacks_search',
+      "Orca Cloud can't search yet. Find a channel by its name or link with `orca slack find`."
+    )
+  }
+  if (
+    (verb === 'pin' || verb === 'canvas' || verb === 'list' || verb === 'scheduled') &&
+    !features.has(CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE)
+  ) {
+    throw new ConnectorActError(
+      'cloud_lacks_slack_tools',
+      "Orca Cloud can't do that in Slack yet; nothing was changed. Try again after Orca Cloud updates."
+    )
+  }
+  if (args.postAt && !features.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+    throw new ConnectorActError(
+      'cloud_lacks_schedule',
+      "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
+    )
+  }
+  if ((args.stage || args.files) && !features.has('reply.files' satisfies ConnectorCloudFeature)) {
+    throw new ConnectorActError(
+      'cloud_lacks_reply_files',
+      "Orca Cloud can't post several files in one reply yet; each file goes as its own message."
+    )
+  }
+  // An older cloud refuses the field outright; this says what to do instead.
+  if (args.choices && !features.has(CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE)) {
+    throw new ConnectorActError(
+      'cloud_lacks_reply_choices',
+      "Orca Cloud can't put buttons on a reply yet; nothing was posted. List the options in --text and ask them to answer in words."
+    )
+  }
+  // A file's bytes go straight between the CLI and the source; an older cloud took them inline.
+  if (
+    (args.upload || args.stream || (verb === 'attach' && args.files)) &&
+    !features.has('files.direct' satisfies ConnectorCloudFeature)
+  ) {
+    throw new ConnectorActError(
+      'cloud_lacks_direct_files',
+      "Orca Cloud can't take files from this version of Orca yet; nothing was sent. Try again after Orca Cloud updates."
+    )
+  }
+  const signal = context.signal ?? new AbortController().signal
+  const target = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))
+  const conversation = target ? cloudConversation(target.key) : null
+  const place = verb === 'find' && args.search && !ref ? searchedWorkspace(target?.key) : ref
+  const actsFor = await botTurnFor(
+    runtime,
+    sessionId,
+    sessionCallerOf(context.orchestrationCaller)?.sessionId,
+    turn
+  )
+  // A post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.
+  // Any other verb says only owner: the cloud believes a host's other answer over its own record.
+  const turnFor =
+    verb === 'post' || verb === 'reply' || verb === 'attach' || actsFor === 'owner'
+      ? actsFor
+      : undefined
+  // Asked again here, after the awaits above: a post for later must never go to a cloud that
+  // has stopped saying it schedules.
+  if (args.postAt && !cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+    throw new ConnectorActError(
+      'cloud_lacks_schedule',
+      "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
+    )
+  }
+  const toSlack = actionGoesToSlack({ verb, ref, title: args.title, conversation })
+  const answer = await postConnectorAction(
+    cloud,
+    {
+      botId: bot.id,
+      verb,
+      ...(place ? { ref: place } : {}),
+      args: toSlack ? slackActionArgs(args) : args,
+      ...(conversation ? { conversation } : {}),
+      ...(conversation && target?.turnId != null ? { turnId: target.turnId } : {}),
+      ...(turnFor ? { turnFor } : {})
+    },
+    signal
+  )
+  if (!answer.ok) {
+    throw actFailure(verb, ref, answer, {
+      server: orcaSignInServer(runtime),
+      botName: bot.name
+    })
+  }
+  if (verb === 'post' && answer.value.ok) {
+    // Before the bot's next command, so a reply right after it knows the answer is already posted.
+    await noteBotRequestPost(runtime, sessionId, ref).catch((error: unknown) =>
+      console.warn('[bots] could not note a post for a bot request', error)
+    )
+  }
+  // A reply lands in the conversation that woke the run, which the bot names as Orca does.
+  return verb === 'reply' && answer.value.ok && target
+    ? { ...answer.value, result: { ...answer.value.result, place: target.place } }
+    : answer.value
+}
+
 // `orca slack ...`, `orca bot connectors` and `orca bot reply --react`: the calling chat names its bot; the cloud acts as it.
 export const CONNECTOR_ACT_METHOD = defineMethod({
   name: 'connector.act',
   permission: 'workspace',
   params: ConnectorAct,
-  handler: async ({ sessionId, verb, ref, args }, context) => {
-    const { runtime } = context
-    const bot = runtime.bots.enabled() ? botOfSession(runtime.bots, sessionId) : null
-    if (!bot) {
-      throw new ConnectorActError(
-        'not_a_bot_session',
-        "This isn't a bot's chat. Connector actions act as a bot: run them from a bot's chat or one of its automation runs."
-      )
-    }
-    if (runtime.lookAround.botOfTidyUp(sessionId)) {
-      throw new ConnectorActError('look_around_reads_only', REPLY_ONLY_REFUSAL)
-    }
-    if (runtime.lookAround.botOfLook(sessionId) && !lookAroundConnectorVerbAllowed(verb, args)) {
-      throw new ConnectorActError('look_around_reads_only', LOOK_AROUND_REFUSAL)
-    }
-    const cloud = runtime.getConnectorCloud()
-    const features = cloud?.cloudFeatures()
-    // Signed out, or a sign-in Orca Cloud refused after its hello (features stay cached): say so, and
-    // on a headless server how it signs in, before calling a cloud that would refuse it.
-    if (cloud && orcaCloudNeedsSignIn(cloud.status())) {
-      throw signedOutError({ server: orcaSignInServer(runtime), botName: bot.name })
-    }
-    if (!cloud || !features) {
-      throw new ConnectorActError(
-        'connector_not_connected',
-        "Orca isn't connected to Orca Cloud: sign in to Orca Cloud and connect a bot to Slack, Linear or GitHub, then try again."
-      )
-    }
-    if (!features.has('actions' satisfies ConnectorCloudFeature)) {
-      throw new ConnectorActError(
-        'cloud_lacks_actions',
-        "Orca Cloud doesn't take connector actions yet. Update Orca and try again later."
-      )
-    }
-    if (verb === 'places' && !features.has('places' satisfies ConnectorCloudFeature)) {
-      throw new ConnectorActError(
-        'cloud_lacks_places',
-        "Orca Cloud can't list the bot's workspaces yet. Update Orca, and find Slack channels with `orca slack find <name|link>`."
-      )
-    }
-    if (args.title && !features.has('create' satisfies ConnectorCloudFeature)) {
-      throw new ConnectorActError(
-        'cloud_lacks_create',
-        "Orca Cloud can't make issues yet. Say what the issue should be instead, and try again after Orca Cloud updates."
-      )
-    }
-    if (verb === 'set' && !features.has('set' satisfies ConnectorCloudFeature)) {
-      throw new ConnectorActError(
-        'cloud_lacks_set',
-        "Orca Cloud can't change issues yet. Say what should change instead, and try again after Orca Cloud updates."
-      )
-    }
-    if (args.search && !features.has('find.search' satisfies ConnectorCloudFeature)) {
-      throw new ConnectorActError(
-        'cloud_lacks_search',
-        "Orca Cloud can't search yet. Find a channel by its name or link with `orca slack find`."
-      )
-    }
-    if (
-      (verb === 'pin' || verb === 'canvas' || verb === 'list' || verb === 'scheduled') &&
-      !features.has(CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE)
-    ) {
-      throw new ConnectorActError(
-        'cloud_lacks_slack_tools',
-        "Orca Cloud can't do that in Slack yet; nothing was changed. Try again after Orca Cloud updates."
-      )
-    }
-    if (args.postAt && !features.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
-      throw new ConnectorActError(
-        'cloud_lacks_schedule',
-        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
-      )
-    }
-    if (
-      (args.stage || args.files) &&
-      !features.has('reply.files' satisfies ConnectorCloudFeature)
-    ) {
-      throw new ConnectorActError(
-        'cloud_lacks_reply_files',
-        "Orca Cloud can't post several files in one reply yet; each file goes as its own message."
-      )
-    }
-    // A file's bytes go straight between the CLI and the source; an older cloud took them inline.
-    if (
-      (args.upload || args.stream || (verb === 'attach' && args.files)) &&
-      !features.has('files.direct' satisfies ConnectorCloudFeature)
-    ) {
-      throw new ConnectorActError(
-        'cloud_lacks_direct_files',
-        "Orca Cloud can't take files from this version of Orca yet; nothing was sent. Try again after Orca Cloud updates."
-      )
-    }
-    const signal = context.signal ?? new AbortController().signal
-    const target = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))
-    const conversation = target ? cloudConversation(target.key) : null
-    const place = verb === 'find' && args.search && !ref ? searchedWorkspace(target?.key) : ref
-    // Only a post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.
-    const turnFor =
-      verb === 'post' || verb === 'reply' || verb === 'attach'
-        ? await botTurnFor(
-            runtime,
-            sessionId,
-            sessionCallerOf(context.orchestrationCaller)?.sessionId
-          )
-        : undefined
-    // Asked again here, after the awaits above: a post for later must never go to a cloud that
-    // has stopped saying it schedules.
-    if (args.postAt && !cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
-      throw new ConnectorActError(
-        'cloud_lacks_schedule',
-        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
-      )
-    }
-    const toSlack = actionGoesToSlack({ verb, ref, title: args.title, conversation })
-    const answer = await postConnectorAction(
-      cloud,
-      {
-        botId: bot.id,
-        verb,
-        ...(place ? { ref: place } : {}),
-        args: toSlack ? slackActionArgs(args) : args,
-        ...(conversation ? { conversation } : {}),
-        ...(conversation && target?.turnId != null ? { turnId: target.turnId } : {}),
-        ...(turnFor ? { turnFor } : {})
-      },
-      signal
-    )
-    if (!answer.ok) {
-      throw actFailure(verb, ref, answer, {
-        server: orcaSignInServer(runtime),
-        botName: bot.name
-      })
-    }
-    if (verb === 'post' && answer.value.ok) {
-      // Before the bot's next command, so a reply right after it knows the answer is already posted.
-      await noteBotRequestPost(runtime, sessionId, ref).catch((error: unknown) =>
-        console.warn('[bots] could not note a post for a bot request', error)
-      )
-    }
-    // A reply lands in the conversation that woke the run, which the bot names as Orca does.
-    return verb === 'reply' && answer.value.ok && target
-      ? { ...answer.value, result: { ...answer.value.result, place: target.place } }
-      : answer.value
-  }
+  handler: (params, context) => actAsBot(params, context)
 })

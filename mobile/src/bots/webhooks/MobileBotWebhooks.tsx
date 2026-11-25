@@ -1,8 +1,9 @@
-// Settings › Webhooks: the desktop's BotWebhooksCard as pages inside the bot's settings. Hooks are made and
-// their filters changed in chat; here the owner reads, copies, pauses, rotates, signs and deletes.
+// Settings › Connectors › Webhooks: the desktop's BotWebhooksCard as pages inside the bot's settings. Hooks are
+// made and their filters changed in chat; here the owner reads, copies, pauses, rotates, signs and deletes.
 import { useEffect, useState, type ReactNode } from 'react'
+import { Plus, Webhook } from 'lucide-react-native'
 import { webhookStatusFact } from '../../../../src/shared/bots/webhook-card-view'
-import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
+import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useNow } from '../../hooks/use-now'
@@ -11,14 +12,18 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
-import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
+import { SettingsSection } from '../../settings/settings-screen-frame'
 import { mobileWebhookStatus } from '../../session/native-chat/transcript/bot-cards/MobileBotWebhookCard'
+import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
-import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileBotWebhookDetail, WEBHOOK_WRITE } from './MobileBotWebhookDetail'
-import { MobileBotWebhookRotate, MobileBotWebhookSecret } from './MobileBotWebhookKeyPages'
+import { MobileBotWebhookDetail } from './MobileBotWebhookDetail'
+import {
+  MobileBotWebhookRotate,
+  MobileBotWebhookSecret,
+  useWaitingWebhookSecret
+} from './MobileBotWebhookKeyPages'
 import {
   webhookAgo,
   webhookErrorMessage,
@@ -33,6 +38,7 @@ import {
   webhookRotate,
   webhookSample,
   webhookSecretSet,
+  WEBHOOK_WRITE,
   type PhoneWebhook
 } from './mobile-webhook-operations'
 import { usePhoneWebhooks } from './use-phone-webhooks'
@@ -45,12 +51,9 @@ function lastCallLower(at: number | undefined, now: number, t: Translate): strin
 
 /** A hook's state alone, for a row whose caption already says when it was last called. */
 function hookState(hook: PhoneWebhook, t: Translate): string {
-  if (hook.state === 'live') {
-    return hook.lastCall
-      ? t('bots.webhooks.status.on', 'On')
-      : t('bots.webhooks.status.noCalls', 'No calls yet')
-  }
-  return mobileWebhookStatus(webhookStatusFact(hook), 0, t)
+  return hook.state === 'live'
+    ? t('bots.webhooks.status.on', 'On')
+    : mobileWebhookStatus(webhookStatusFact(hook), 0, t)
 }
 
 type SettingsContext = {
@@ -62,7 +65,7 @@ type SettingsContext = {
   onAskInChat?: ((draft: string) => void) | null
 }
 
-/** The Settings row (once the bot has a hook) and, while open, the page that replaces Settings. */
+/** The Connectors row (once the bot has a hook) and, while open, the page that replaces Connectors. */
 export function useMobileBotWebhookSettings(
   settings: SettingsContext,
   banner: ReactNode
@@ -104,6 +107,7 @@ export function useMobileBotWebhookSettings(
 
 /** The desktop's Webhooks row face: how many hooks, the last call, and one status. */
 function WebhooksRow(props: { hooks: readonly PhoneWebhook[]; onOpen: () => void }) {
+  useMobileColorScheme()
   const t = useMobileTranslation()
   const now = useNow(30_000)
   const { hooks } = props
@@ -118,15 +122,14 @@ function WebhooksRow(props: { hooks: readonly PhoneWebhook[]; onOpen: () => void
       ? t('bots.webhooks.status.receiving', 'Receiving')
       : t('bots.webhooks.status.noCalls', 'No calls yet')
   return (
-    <SettingsSection>
-      <ListRow
-        title={t('bots.webhooks.name', 'Webhooks')}
-        subtitle={`${count} · ${lastCallLower(lastAt, now, t)}`}
-        value={status}
-        navigates
-        onPress={props.onOpen}
-      />
-    </SettingsSection>
+    <ListRow
+      leading={<Webhook size={20} color={colors.textSecondary} />}
+      title={t('bots.webhooks.name', 'Webhooks')}
+      subtitle={`${count} · ${lastCallLower(lastAt, now, t)}`}
+      value={status}
+      navigates
+      onPress={props.onOpen}
+    />
   )
 }
 
@@ -160,21 +163,31 @@ function WebhooksPage(props: WebhooksPageProps) {
   // Like the desktop's 30 s fallback, for what botsChanged doesn't cover, such as a call the cloud holds.
   useEffect(changed, [changed, now])
   const [open, setOpen] = useState<{ hookId: string; step: HookStep } | null>(null)
-  const hook = open ? props.hooks.find((candidate) => candidate.hookId === open.hookId) : undefined
-  useBackClaim(() => {
-    if (open && hook) {
-      setOpen(open.step === 'detail' ? null : { hookId: open.hookId, step: 'detail' })
-    } else {
-      props.onBack()
-    }
-    return true
-  })
-  if (open && hook) {
+  // A made secret the owner left before it arrived shows until they're done with it.
+  const waiting = useWaitingWebhookSecret(props.hooks)
+  const shown = waiting ? { hookId: waiting, step: 'secret' as const } : open
+  const hook = shown
+    ? props.hooks.find((candidate) => candidate.hookId === shown.hookId)
+    : undefined
+  // The signing secret page claims Back itself, so it can hold a made secret.
+  useBackClaim(
+    shown?.step === 'secret' && hook
+      ? null
+      : () => {
+          if (open && hook) {
+            setOpen(open.step === 'detail' ? null : { hookId: open.hookId, step: 'detail' })
+          } else {
+            props.onBack()
+          }
+          return true
+        }
+  )
+  if (shown && hook) {
     return (
       <HookPages
         {...props}
         hook={hook}
-        step={open.step}
+        step={shown.step}
         // A reply landing after the owner moved to another hook leaves that hook's page alone.
         setStep={(step) =>
           setOpen((current) =>
@@ -188,40 +201,35 @@ function WebhooksPage(props: WebhooksPageProps) {
     <>
       <SheetHeader
         title={t('bots.webhooks.name', 'Webhooks')}
-        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        onBack={{
+          label: t('bots.connectors.back', 'Back to Connectors'),
+          onPress: props.onBack
+        }}
       />
       {props.banner}
-      <SettingsNote>
-        {t(
-          'bots.webhooks.howToCallShort',
-          'Any tool or script can POST to a hook’s URL. Each hook starts one automation.'
-        )}
-      </SettingsNote>
-      <SectionHeader
-        title={t('bots.webhooks.hooks', 'Hooks')}
-        trailing={
-          props.onAskInChat ? (
-            <MobileBotTextButton
-              label={t('bots.webhooks.addInChat', 'Add in chat')}
-              onPress={() =>
-                props.onAskInChat?.(t('bots.webhooks.setUpDraft', 'Set up a webhook that '))
-              }
-            />
-          ) : undefined
-        }
-      />
-      <ListGroup>
+      <SettingsSection first>
         {props.hooks.map((candidate) => (
           <ListRow
             key={candidate.hookId}
             title={candidate.automationName}
             subtitle={`${webhookResultsTo(candidate.resultsTo, t)} · ${lastCallLower(candidate.lastCall?.at, now, t)}`}
+            subtitleLines={1}
             value={hookState(candidate, t)}
             navigates
             onPress={() => setOpen({ hookId: candidate.hookId, step: 'detail' })}
           />
         ))}
-      </ListGroup>
+        {props.onAskInChat ? (
+          <ListRow
+            key="add"
+            title={t('bots.webhooks.addInChat', 'Add in chat')}
+            leading={<Plus size={18} color={colors.textMuted} />}
+            onPress={() =>
+              props.onAskInChat?.(t('bots.webhooks.setUpDraft', 'Set up a webhook that '))
+            }
+          />
+        ) : null}
+      </SettingsSection>
     </>
   )
 }

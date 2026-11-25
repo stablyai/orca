@@ -19,6 +19,7 @@ import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLa
 import { useAppStore } from '@/store'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { useTranslate } from '@/i18n/use-translate'
+import { toCodeClipboardText } from '@/lib/clipboard/clipboard-line-endings'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
 import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 
@@ -67,7 +68,7 @@ export function NativeChatContextMenuTargetItems({
         </DropdownMenuItem>
       ) : null}
       {codeText ? (
-        <DropdownMenuItem onSelect={() => copyText(codeText)}>
+        <DropdownMenuItem onSelect={() => copyText(toCodeClipboardText(codeText))}>
           <Copy />
           {t('components.native-chat.copyCode', 'Copy code')}
         </DropdownMenuItem>

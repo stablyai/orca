@@ -18,7 +18,3 @@ export function claimAiVaultForcedRescan(userRequested = false): boolean {
 export function aiVaultForcedRescanDelay(): number {
   return lastForcedRescanAt + FORCED_RESCAN_MIN_INTERVAL_MS - Date.now()
 }
-
-export function resetAiVaultForcedRescanBudgetForTest(): void {
-  lastForcedRescanAt = 0
-}

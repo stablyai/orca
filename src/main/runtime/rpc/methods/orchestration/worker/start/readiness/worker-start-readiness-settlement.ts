@@ -6,7 +6,12 @@ import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import type { RunRow, TaskRow } from '../../../../../../orchestration/db/orchestration-records'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+import {
+  agentStartCeilingText,
+  deliverWorkerDispatchPreamble
+} from './deliver-worker-dispatch-preamble'
+import { SUBMIT_WITHHELD_STAGE } from '../../../../../../orchestration/workers/turn-stops/unconfirmed-start-evidence'
+import { WORKER_AGENT_STARTING_STAGE } from '../../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 import { reportedWorkerOutcome } from '../worker-start-receipt'
 import { chatAssigneeSessionId } from '../../../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationWorkerLaunchReceipt } from '../launch/worker-launch-preferences'
@@ -110,6 +115,31 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   const queuedOnOwnWorker =
     turnStart.queued === true &&
     db.getWorkerTerminalResourceByOwner(args.dispatchId)?.ownership_state === 'owned'
+  if (turnStart.agentStarting && !alreadySettled) {
+    // Its agent has not attached yet: the host hands the held brief over when it does.
+    const worker = db.markWorkerStartUnknown(
+      args.dispatchId,
+      WORKER_AGENT_STARTING_STAGE,
+      turnStart.reason ?? describeUnobservedWorkerTurnStart(args.agent),
+      effects
+    )
+    return {
+      runId: run.id,
+      taskId: task.id,
+      dispatchId: args.dispatchId,
+      state: 'starting',
+      stage: worker.stage,
+      setup: args.setupReceipt,
+      launch: args.launchReceipt,
+      mode: args.mode,
+      timeoutMs: args.timeoutMs,
+      effects,
+      residualResources: [],
+      nextCommands: [`orca orchestration worker-show --dispatch ${args.dispatchId} --json`],
+      next: `Worker ${terminalHandle} (Dispatch ${args.dispatchId}) is live, but its agent hasn't finished starting. Orca holds the task and hands it over once the agent is up; the worker then runs it and reports as usual. If the start fails, or the agent isn't up within ${agentStartCeilingText()}, Orca sends you an error report. Sending the task again would run it twice once the agent is up.`,
+      ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
+    }
+  }
   if (turnStart.verdict === 'unobserved' && !queuedOnOwnWorker && !alreadySettled) {
     // Keep authority and terminal for recovery reports, but never claim ready for an unobserved turn.
     effects.push({
@@ -119,16 +149,23 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       state: 'turn_unobserved'
     })
     const reason = turnStart.reason ?? describeUnobservedWorkerTurnStart(args.agent)
+    const submit = deliveredPrompt?.submit
     const worker = db.markWorkerStartUnknown(
       args.dispatchId,
-      'turn_start_unobserved',
+      // Durable, so a report a restart sends still warns that Enter would answer the dialog.
+      submit && 'withheldFor' in submit ? SUBMIT_WITHHELD_STAGE : 'turn_start_unobserved',
       reason,
       effects
     )
     // The coordinator may end its turn on this receipt; a start that never begins must still reach it.
-    void runtime.reportUnconfirmedWorkerStart(args.dispatchId).catch((error: unknown) => {
-      console.warn('[orchestration] reporting an unconfirmed worker start failed', error)
-    })
+    void runtime
+      .reportUnconfirmedWorkerStart(args.dispatchId, {
+        readyAt: deliveryStartedAt,
+        prompt: deliveredPrompt
+      })
+      .catch((error: unknown) => {
+        console.warn('[orchestration] reporting an unconfirmed worker start failed', error)
+      })
     return {
       runId: run.id,
       taskId: task.id,

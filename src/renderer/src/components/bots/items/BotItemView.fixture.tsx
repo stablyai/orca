@@ -84,7 +84,7 @@ const numbered = makeTestBotItem(35, {
   description: 'Bots say "item 35"; show that number on every row and in the item view.'
 })
 
-// The item's number before its title and in the line under it.
+// The item's number before its title; status and links on the row under it.
 export const header = defineFixture({
   width: 360,
   render: () => (
@@ -312,90 +312,76 @@ export const answeredQuestion = defineFixture({
   )
 })
 
-const SEVERAL = {
-  context: [
-    'Round 2 is open in your browser. It shows four places for the chat switcher, each switching in one click.',
-    '',
-    '- **P1, top strip (recommended):** a row of chats across the top of the workspace, each with its status dot. The selected chat’s own tabs sit underneath.',
-    '- **P2, right panel:** a Chats tab in the right panel. The runner-up, but it only works when the panel is open on that tab.',
-    '- **P3, left sidebar:** the chat rows under the agent.',
-    '- **P4, chat rail:** a narrow vertical strip on the left edge of the workspace.'
-  ].join('\n'),
-  questions: [
-    {
-      prompt: 'Where should the chat switcher live?',
-      options: [
-        { label: 'P1 top strip' },
-        { label: 'P2 right panel' },
-        { label: 'P3 left sidebar' },
-        { label: 'P4 chat rail' }
-      ],
-      recommended: 0
-    },
-    {
-      prompt: 'With the top strip, does the left sidebar still list each agent’s chats?',
-      options: [{ label: 'No, one row per agent' }, { label: 'Keep them as a second way in' }],
-      recommended: 0
-    },
-    {
-      prompt: 'Can you close a chat from its pill (× on hover, like a tab)?',
-      options: [{ label: 'Yes, × on hover' }, { label: 'Only from the chat’s menu' }],
-      recommended: 0
-    },
-    {
-      prompt: 'Shortcut to switch chats?',
-      options: [{ label: '⇧⌘1–9' }, { label: '^1–9 (today’s tab keys)' }],
-      recommended: 0
-    }
-  ]
-}
-const severalItem = makeTestBotItem(231, {
-  title: 'Per-chat layouts: where the chat switcher lives',
-  owner: { botId: fixtureCos.id, name: 'Layouts helper' },
-  status: 'needs_you',
-  question: { eventId: 'e61', text: 'readable copy', gist: 'Round 2 is open in your browser.' }
+const waitSet = Date.now() - 50 * 60_000
+const waitingItem = makeTestBotItem(214, {
+  title: 'Polish the Items empty state',
+  owner: { botId: fixtureCos.id, name: 'Designer' },
+  status: 'waiting',
+  wait: { text: 'Claude usage resets Nov 26, 9:00 AM; it continues on its own then', at: waitSet }
 })
-const severalView = {
-  ...askingView,
-  item: severalItem,
+const waitingView = {
+  ...snoozedView,
+  item: waitingItem,
   events: [
-    { id: 'e60', kind: 'made' as const, actor: asker, data: {}, at: Date.now() - 3 * 3_600_000 },
+    { id: 'e60', kind: 'made' as const, actor: asker, data: {}, at: waitSet - 3 * 3_600_000 },
     {
       id: 'e61',
       kind: 'commented' as const,
       actor: asker,
-      data: { text: 'readable copy', ask: SEVERAL },
-      at: Date.now() - 20 * 60_000
+      data: {
+        text: 'The new copy and spacing are on the branch; the dark screenshots aren’t done yet.'
+      },
+      at: waitSet - 60_000
     },
     {
       id: 'e62',
       kind: 'status' as const,
       actor: asker,
-      data: { from: 'working', to: 'needs_you' },
-      at: Date.now() - 20 * 60_000
+      data: { from: 'working', to: 'waiting', note: waitingItem.wait!.text },
+      at: waitSet
     }
   ]
 }
 
-// An ask of four questions, two answered: one line at a time, the answers held above until the last.
-export const severalQuestions = defineFixture({
-  width: 900,
+// Waiting: its move shows last as the Waiting on card, with no tag or buttons.
+export const waitingOn = defineFixture({
+  width: 360,
   render: () => (
-    <div className="flex h-[640px] flex-col bg-sidebar">
+    <div className="flex h-[520px] flex-col bg-sidebar">
       <BotItemBody
-        bot={{ ...fixtureCos, name: 'Layouts helper' }}
-        item={severalItem}
-        view={severalView}
+        bot={{ ...fixtureCos, name: 'Designer' }}
+        item={waitingItem}
+        view={waitingView}
+      />
+    </div>
+  )
+})
+
+// Waiting… on a Waiting item edits what it waits on; its card shows though its move isn't loaded.
+export const waitingPick = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[520px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Designer' }}
+        item={waitingItem}
+        view={{ ...waitingView, events: waitingView.events.slice(0, 2) }}
       />
     </div>
   ),
   interact: async (frame) => {
-    for (const label of ['P1 top strip', 'No, one row per agent']) {
-      const chip = [...frame.querySelectorAll('button')].find((button) =>
-        button.textContent?.startsWith(label)
-      )
-      chip?.click()
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    }
+    frame.querySelector<HTMLButtonElement>('h2 + div button')?.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerType: 'mouse'
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    ;[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((entry) => entry.textContent?.includes('Waiting'))
+      ?.click()
+    await new Promise((resolve) => setTimeout(resolve, 200))
   }
 })
