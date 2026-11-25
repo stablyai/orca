@@ -419,7 +419,15 @@ describe('codex rows across a reattach', () => {
       },
       grand: { id: 'turn-g', status: 'inProgress', items: [] },
       // Finished while no app was attached.
-      done: { id: 'turn-d', status: 'completed', items: [], completedAt: 150 },
+      done: {
+        id: 'turn-d',
+        status: 'completed',
+        items: [
+          { type: 'agentMessage', id: 'd0', text: 'Running it.' },
+          { type: 'agentMessage', id: 'd1', text: 'CHILD-DONE' }
+        ],
+        completedAt: 150
+      },
       // Finished before the chat's latest turn began: retired then, and left so.
       old: { id: 'turn-o', status: 'completed', items: [], completedAt: 50 },
       // Running, but its metadata read fails: still followed by its turns.
@@ -497,7 +505,9 @@ describe('codex rows across a reattach', () => {
       expect.objectContaining({
         type: 'ended',
         handle: expect.objectContaining({ id: 'done', runId: 'turn-d' }),
-        outcome: 'succeeded'
+        outcome: 'succeeded',
+        // Its own last message, so the card shows no older one after it.
+        lastMessage: 'CHILD-DONE'
       })
     )
     // The replay re-sends the finished turn from its start: it must not reopen it.

@@ -4,7 +4,11 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { jsonObject } from '../../../../shared/json-stream/json-value-property'
-import { codexNonMessageIdentity, type CodexThreadItem } from '../items/codex-thread-item-identity'
+import {
+  codexNonMessageIdentity,
+  isCodexMessageItemType,
+  type CodexThreadItem
+} from '../items/codex-thread-item-identity'
 import type { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
 import { CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE } from '../items/codex-collab-agent-tool-call'
 
@@ -131,13 +135,19 @@ export function restateKeptCodexBackgroundWork(
     // A child that finished during the chat's latest turn (while no app was attached, say) is seen
     // working first, so its end settles its row and card as a live end does. One that finished
     // earlier was retired with the turn it ran in and is left so.
-    if (
-      status === 'inProgress' ||
-      (threadId !== tracker.primaryThreadId &&
-        endedLately(turns, completedAt, tracker.primaryThreadId))
-    ) {
+    const endedChild =
+      status !== 'inProgress' &&
+      threadId !== tracker.primaryThreadId &&
+      endedLately(turns, completedAt, tracker.primaryThreadId)
+    if (status === 'inProgress' || endedChild) {
       const started = { id: turnId, status: 'inProgress' }
       tracker.observe({ method: 'turn/started', threadId, params: { turn: started } })
+    }
+    // Its messages too, so its end carries its own last message, never the card's older one.
+    for (const item of endedChild ? items : []) {
+      if (isCodexMessageItemType(item.type)) {
+        tracker.observe({ method: 'item/completed', threadId, params: { turnId, item } })
+      }
     }
     for (const item of items) {
       if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
