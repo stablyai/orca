@@ -10,11 +10,7 @@ import {
   type McpServer,
   type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
-import {
-  botToolEntries,
-  readBotToolsSnapshot,
-  type BotToolsSnapshot
-} from '../bots/bot-tools-file'
+import { botToolEntries, readBotToolsSnapshot, type BotToolsSnapshot } from '../bots/bot-tools-file'
 import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { sharedIds, type McpLaunchServers } from './mcp-shared-process-servers'

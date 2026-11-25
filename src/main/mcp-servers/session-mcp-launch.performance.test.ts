@@ -1,6 +1,8 @@
 // Guards STA-18220: one host-list write advances the epoch for every running chat, and each chat's
 // next input compared by rereading the list and opening the whole credential store twice. However many
 // warm chats compare after one write, the list and the store are read once.
+import type * as Fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +16,7 @@ import { sessionLaunchToolsChanged, sessionMcpLaunchTools } from './session-mcp-
 
 const reads = vi.hoisted(() => ({ paths: [] as string[] }))
 vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>()
+  const actual = await importOriginal<typeof Fs>()
   return {
     ...actual,
     readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
@@ -24,7 +26,7 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const actual = await importOriginal<typeof FsPromises>()
   return {
     ...actual,
     readFile: (...args: Parameters<typeof actual.readFile>) => {
@@ -77,7 +79,10 @@ async function readsAfterOneWrite(chats: number): Promise<{ list: number; store:
         server: { name: `remote-${i}`, url, credential: id },
         extras: { id: `id-remote-${i}` }
       })),
-      { server: { name: 'local', command: 'npx', args: ['local-mcp'] }, extras: { id: 'id-local-1' } }
+      {
+        server: { name: 'local', command: 'npx', args: ['local-mcp'] },
+        extras: { id: 'id-local-1' }
+      }
     ],
     { credentials }
   )
