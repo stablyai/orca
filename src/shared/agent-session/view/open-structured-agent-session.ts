@@ -262,7 +262,7 @@ export async function openStructuredAgentSession(
           return { kind: 'superseded' }
         }
         if ('recheck' in reply) {
-          return recheckInventory(reply)
+          return await recheckInventory(reply)
         }
         if ('reason' in reply) {
           return { kind: 'failed', failure: failure(reply) }
