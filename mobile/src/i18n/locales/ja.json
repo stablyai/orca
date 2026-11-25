@@ -27,7 +27,6 @@
   "agentHistory": {
     "panel": {
       "all": "全て",
-      "emptyScope": "この範囲には過去の Agent セッションがありません。",
       "missingResumeId": "このセッションには再開用の ID がありません。",
       "noSearchResults": "検索に一致するセッションはありません。",
       "noSessions": "Agent セッションはありません",
@@ -54,7 +53,6 @@
       "untitledSession": "無題のセッション"
     },
     "sessionHistoryList": {
-      "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
       "resumeSession": "Agent セッションを再開",
@@ -4534,7 +4532,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

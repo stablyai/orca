@@ -27,7 +27,6 @@
   "agentHistory": {
     "panel": {
       "all": "Todo",
-      "emptyScope": "No hay sesiones anteriores de agentes en este ámbito.",
       "missingResumeId": "Esta sesión no tiene un identificador de reanudación.",
       "noSearchResults": "No hay sesiones que coincidan con tu búsqueda.",
       "noSessions": "No hay sesiones de agentes",
@@ -55,7 +54,6 @@
       "untitledSession": "Sesión sin título"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actual",
       "messages_many": "{{count}} mensajes",
       "messages_one": "{{count}} mensaje",
       "messages_other": "{{count}} mensajes",
@@ -4566,7 +4564,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

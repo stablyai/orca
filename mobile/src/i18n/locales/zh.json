@@ -31,7 +31,6 @@
   "agentHistory": {
     "panel": {
       "all": "全部",
-      "emptyScope": "此范围内暂无历史智能体会话",
       "hideDetails": "隐藏详情",
       "showDetails": "显示详情",
       "loading": "正在加载智能体会话…",
@@ -62,14 +61,10 @@
       "untitledSession": "无标题会话"
     },
     "sessionHistoryList": {
-      "currentWorktree": "当前工作树",
       "messages_one": "{{count}} 条消息",
       "messages_other": "{{count}} 条消息",
       "resumeSession": "恢复智能体会话",
-      "continueInCli": "在 CLI 中继续",
-      "hidePreview": "隐藏最近的消息",
-      "showPreview": "显示最近的消息",
-      "you": "你"
+      "continueInCli": "在 CLI 中继续"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "无法连接到主机",

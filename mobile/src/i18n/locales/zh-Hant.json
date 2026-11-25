@@ -27,7 +27,6 @@
   "agentHistory": {
     "panel": {
       "all": "全部",
-      "emptyScope": "此範圍內沒有過往的代理程式工作階段。",
       "missingResumeId": "此工作階段缺少恢復識別碼。",
       "noSearchResults": "沒有符合搜尋條件的工作階段。",
       "noSessions": "沒有代理程式工作階段",
@@ -54,7 +53,6 @@
       "untitledSession": "未命名的工作階段"
     },
     "sessionHistoryList": {
-      "currentWorktree": "目前工作樹",
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
       "resumeSession": "恢復代理程式工作階段",
@@ -4454,7 +4452,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",

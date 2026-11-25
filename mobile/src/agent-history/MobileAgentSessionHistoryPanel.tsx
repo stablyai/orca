@@ -31,6 +31,7 @@ import {
   AgentHistoryInterruptedNotice,
   AgentHistoryResumeNotice,
   AgentHistoryScanNotices,
+  agentHistoryInterruptedShown,
   AgentHistoryHandoffNotice
 } from './AgentHistoryNotices'
 import {
@@ -47,6 +48,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { AgentHistoryHandoffDrawer } from './AgentHistoryHandoffSheet'
 import { useAgentHistoryHandoff } from './use-agent-history-handoff'
+import { latestSessionConversationTurn } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
 import { useAgentHistorySessionResume } from './use-agent-history-session-resume'
 
 export type MobileAgentSessionHistoryPanelProps = {
@@ -163,7 +165,7 @@ function MobileAgentSessionHistoryPanelContent({
           title={
             pickingHandoff
               ? t('agentHistory.handoff.title', 'Hand off to agent')
-              : t('agentHistory.panel.title', 'Agent Session History')
+              : t('agentHistory.panel.title', 'Agent history')
           }
           subtitle={worktreeLabel}
           refreshing={showRefreshLine}
@@ -196,7 +198,7 @@ function MobileAgentSessionHistoryPanelContent({
       ) : screenState.kind === 'unsupported' ? (
         <MobileStateView
           icon={History}
-          title={t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
+          title={t('agentHistory.panel.unavailable', 'Agent history unavailable')}
           message={t(
             'agentHistory.panel.updateHost',
             'Update Orca on this host to browse agent session history.'
@@ -208,13 +210,23 @@ function MobileAgentSessionHistoryPanelContent({
         <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
-          <AgentHistoryInterruptedNotice offer={restartOffer} />
-          <AgentHistoryScanNotices sessions={sessions} issues={issues} />
+          {/* One notice at most: what just happened first, then what waits, then what the scan found. */}
           <AgentHistoryResumeNotice
             message={resumeMessage}
             onDismiss={() => setResumeMessage(null)}
           />
-          <AgentHistoryHandoffNotice notice={handoff.notice} onDismiss={handoff.dismissNotice} />
+          <AgentHistoryHandoffNotice
+            notice={resumeMessage ? null : handoff.notice}
+            onDismiss={handoff.dismissNotice}
+          />
+          {resumeMessage || handoff.notice ? null : (
+            <>
+              <AgentHistoryInterruptedNotice offer={restartOffer} />
+              {agentHistoryInterruptedShown(restartOffer) ? null : (
+                <AgentHistoryScanNotices sessions={sessions} issues={issues} />
+              )}
+            </>
+          )}
           {sections.length === 0 ? (
             query ? (
               <MobileNoMatchState
@@ -232,10 +244,6 @@ function MobileAgentSessionHistoryPanelContent({
               <MobileStateView
                 icon={History}
                 title={t('agentHistory.panel.noSessions', 'No agent sessions')}
-                message={t(
-                  'agentHistory.panel.emptyScope',
-                  'No past agent sessions in this scope.'
-                )}
                 bottomInset={searchBarHeight}
               />
             )
@@ -270,6 +278,10 @@ function MobileAgentSessionHistoryPanelContent({
       <ActionSheetModal
         visible={actionSession !== null}
         title={actionSession?.title}
+        // The last thing said, so a long-press shows where the session left off before resuming it.
+        {...(actionSession
+          ? { message: latestSessionConversationTurn(actionSession)?.text.trim() || undefined }
+          : {})}
         onClose={() => setActionSession(null)}
         actions={
           actionSession

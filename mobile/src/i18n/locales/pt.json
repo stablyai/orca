@@ -28,7 +28,6 @@
   "agentHistory": {
     "panel": {
       "all": "Todos",
-      "emptyScope": "Nenhuma sessão anterior de agente neste escopo.",
       "missingResumeId": "Esta sessão não tem um ID de retomada.",
       "noSearchResults": "Nenhuma sessão corresponde à sua busca.",
       "noSessions": "Nenhuma sessão de agente",
@@ -59,15 +58,11 @@
       "untitledSession": "Sessão sem título"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree atual",
       "messages_many": "{{count}} mensagens",
       "messages_one": "{{count}} mensagem",
       "messages_other": "{{count}} mensagens",
       "resumeSession": "Retomar sessão de agente",
-      "continueInCli": "Continuar na CLI",
-      "hidePreview": "Oculta as mensagens recentes.",
-      "showPreview": "Mostra as mensagens recentes.",
-      "you": "Você"
+      "continueInCli": "Continuar na CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Não foi possível acessar o host",
@@ -5140,7 +5135,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

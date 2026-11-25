@@ -27,7 +27,6 @@
   "agentHistory": {
     "panel": {
       "all": "모두",
-      "emptyScope": "이 범위에는 이전 에이전트 세션이 없습니다.",
       "missingResumeId": "이 세션에는 재개 ID가 없습니다.",
       "noSearchResults": "검색 조건에 맞는 세션이 없습니다.",
       "noSessions": "에이전트 세션 없음",
@@ -54,7 +53,6 @@
       "untitledSession": "제목 없는 세션"
     },
     "sessionHistoryList": {
-      "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
       "resumeSession": "에이전트 세션 재개",
@@ -4635,7 +4633,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
