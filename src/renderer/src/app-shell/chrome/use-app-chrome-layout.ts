@@ -1,3 +1,10 @@
+import {
+  resolveSidebarSlotChrome,
+  resolveSidebarSlotLayout,
+  type WindowEdge
+} from '@/lib/sidebar-slot-layout'
+import { shortcutPlatform } from './app-window-chrome'
+import { isPairedWebClientWindow } from './desktop-window-chrome'
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
@@ -77,20 +84,37 @@ export function useAppChromeLayout() {
   const showSidebar =
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
   // Tasks/Landing keep sidebar-width chrome when open; creation suppresses stacked chrome.
+  const sidebarSlots = resolveSidebarSlotLayout({
+    workspaceSidebarPosition: settings?.workspaceSidebarPosition,
+    platform: shortcutPlatform,
+    isWebClient: isPairedWebClientWindow()
+  })
+  const workspaceSidebarOnLeft = sidebarSlots.leftOccupant === 'workspace'
+  const activitySidebarEdge: WindowEdge = workspaceSidebarOnLeft ? 'right' : 'left'
+  const showRightSidebarControls = canShowRightSidebarForView(activeView)
+  const activitySidebarOpen = rightSidebarOpen && showRightSidebarControls
+  const leftOccupantOpen = workspaceSidebarOnLeft ? sidebarOpen : activitySidebarOpen
   const stackedSidebarOpen =
-    !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
+    !workspaceChromeActive && !creationLayoutActive && showSidebar && leftOccupantOpen
   // Creation retains sidebar chrome; workspaceChromeActive gates the workspace tabs.
   const leftTitlebarChromeLayout = resolveLeftTitlebarChromeLayout({
     workspaceChromeActive,
     stackedSidebarOpen,
     creationLayoutActive,
-    sidebarOpen
+    sidebarOpen: leftOccupantOpen
+  })
+  const { leftSlotOpen, trailingSlotOpen, leftColumnHeaderFloating } = resolveSidebarSlotChrome({
+    leftOccupant: sidebarSlots.leftOccupant,
+    workspaceSidebarOpen: sidebarOpen,
+    activitySidebarOpen,
+    leftTitlebarChromeMounted: leftTitlebarChromeLayout.shouldMount,
+    stackedSidebarOpen
   })
 
   // Fit terminals before paint in the width-change frame to avoid transient wrong sizes.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
-  }, [sidebarOpen, rightSidebarOpen])
+  }, [sidebarOpen, rightSidebarOpen, workspaceSidebarOnLeft])
 
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
@@ -138,7 +162,13 @@ export function useAppChromeLayout() {
     shouldMountTerminalWorkbench,
     showSidebar,
     // Keep the pending composer in the same viewport as the workspace it hands off to.
-    showRightSidebarControls: canShowRightSidebarForView(activeView),
+    showRightSidebarControls,
+    sidebarSlots,
+    workspaceSidebarOnLeft,
+    activitySidebarEdge,
+    leftSlotOpen,
+    trailingSlotOpen,
+    leftColumnHeaderFloating,
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
     // Whether the list shows (the saved state, except collapsed on a rail page).

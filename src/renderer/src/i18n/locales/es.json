@@ -7426,7 +7426,13 @@
           "d2b4ddbea0": "Mostrar botón de Orca Mobile",
           "657a7230a2": "Fuente IDE",
           "95a5581f66": "Minimizar a la bandeja al cerrar",
-          "e90c5d745a": "Ventana y barra lateral"
+          "e90c5d745a": "Ventana y barra lateral",
+          "workspaceSidebarPosition": {
+            "title": "Posición de la lista de espacios de trabajo",
+            "rowDescription": "Elige el borde para la lista de espacios de trabajo. El Explorador, los Agentes y el Control de código fuente se mueven al borde opuesto.",
+            "left": "Izquierda",
+            "right": "Derecha"
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -9554,7 +9560,17 @@
             "c29089716e": "Uso de Kimi",
             "96e32c1118": "Uso de MiniMax",
             "aff6e6afdf": "Fuente IDE",
-            "ba1f9d39a6": "Uso de Antigravity"
+            "ba1f9d39a6": "Uso de Antigravity",
+            "workspaceSidebarPosition": {
+              "title": "Posición de la lista de espacios de trabajo",
+              "description": "Elige el borde para la lista de espacios de trabajo. El Explorador, los Agentes y el Control de código fuente se mueven al borde opuesto.",
+              "position": "posición",
+              "swap": "intercambiar",
+              "left": "izquierda",
+              "right": "derecha",
+              "explorer": "explorador",
+              "layout": "diseño"
+            }
           }
         },
         "auto": {

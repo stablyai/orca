@@ -86,7 +86,12 @@ export function RightSidebarTopActivityBar({
   )
   return (
     <ContextMenu>
-      <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center overflow-hidden border-b border-border right-sidebar-header-inset right-sidebar-header-drag">
+      <div
+        className={cn(
+          'flex h-(--app-header-height) min-h-(--app-header-height) items-center overflow-hidden border-b border-border right-sidebar-header-drag',
+          hasDesktopWindowChrome && 'right-sidebar-header-inset'
+        )}
+      >
         {!hasDesktopWindowChrome && (
           <TooltipProvider>
             <ContextMenuTrigger

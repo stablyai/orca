@@ -15,7 +15,7 @@ import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/R
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
-import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
+import { TitlebarLeftControls, WorkspaceSidebarToggle } from './chrome/TitlebarLeftControls'
 import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
 import { useRailPageFocusRecovery } from './chrome/use-rail-page-focus-recovery'
 import { RightSidebarToggle } from './chrome/RightSidebarToggle'
@@ -91,6 +91,7 @@ function WorktreeSidebar({
       }
     >
       <Sidebar
+        edge={layout.workspaceSidebarOnLeft ? 'left' : 'right'}
         worktreeScrollOffsetRef={scrollRefs.scrollOffsetRef}
         worktreeScrollAnchorRef={scrollRefs.scrollAnchorRef}
       />
@@ -137,6 +138,45 @@ function HandToBotMount(): React.JSX.Element | null {
   ) : null
 }
 
+function TrailingWorkspaceSidebarSlot({
+  layout,
+  scrollRefs
+}: {
+  layout: AppChromeLayout
+  scrollRefs: WorktreeSidebarScrollRefs
+}): React.JSX.Element {
+  return (
+    <div
+      className={`${layout.listHiddenByRailPage ? 'hidden' : 'flex'} min-h-0 flex-col shrink-0${
+        layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'
+      }`}
+    >
+      <div
+        // Why: when collapsed the slot is 0-wide, so float the header at the right edge
+        // (mirror of the left header's top-left float) to keep the re-expand toggle reachable.
+        className={`titlebar-left justify-end${
+          layout.sidebarOpen
+            ? ''
+            : ' titlebar-left-floating absolute top-0 right-0 z-10 w-max border-l border-border'
+        }`}
+        style={{
+          width: layout.sidebarOpen ? '100%' : undefined,
+          // Why: on Windows/Linux the window-controls overlay owns this right corner; keep the toggle clear of it.
+          paddingRight:
+            layout.sidebarSlots.windowControlsEdge === 'right'
+              ? 'var(--window-controls-width)'
+              : undefined
+        }}
+      >
+        <WorkspaceSidebarToggle edge="right" />
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <WorktreeSidebar layout={layout} scrollRefs={scrollRefs} />
+      </div>
+    </div>
+  )
+}
+
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
   return (
@@ -175,6 +215,27 @@ export function AppWorkspaceShell(props: {
   const t = useTranslate()
   const { layout, floatingWorkspace } = props
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
+  const activitySidebar = layout.showRightSidebarControls ? (
+    <RecoverableRenderErrorBoundary
+      boundaryId="right-sidebar"
+      surface="right-sidebar"
+      resetKey={
+        layout.rightSidebarTab === 'explorer'
+          ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
+          : layout.rightSidebarTab
+      }
+      title={t('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
+      description={t(
+        'auto.App.8d1e160ed1',
+        'Retry the sidebar or switch tabs to reload this surface.'
+      )}
+    >
+      <RightSidebar
+        edge={layout.activitySidebarEdge}
+        windowControlsEdge={layout.sidebarSlots.windowControlsEdge}
+      />
+    </RecoverableRenderErrorBoundary>
+  ) : null
   const pageColumnRef = useRef<HTMLDivElement | null>(null)
   useRailPageFocusRecovery(pageColumnRef)
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
@@ -213,7 +274,9 @@ export function AppWorkspaceShell(props: {
                 // Why: a rail page lays the left segment out as Workspaces does for the saved state, so Back/Forward
                 // keep their x across the switch; untinted, because the list itself is not on screen.
                 style={
-                  layout.listHiddenByRailPage && layout.savedSidebarOpen
+                  layout.workspaceSidebarOnLeft &&
+                  layout.listHiddenByRailPage &&
+                  layout.savedSidebarOpen
                     ? {
                         width: APP_RAIL_WIDTH + layout.sidebarWidth,
                         alignSelf: 'stretch',
@@ -229,7 +292,16 @@ export function AppWorkspaceShell(props: {
           ) : null}
           <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
             <AppShellLeftColumn
-              layout={layout}
+              layout={
+                layout.workspaceSidebarOnLeft
+                  ? layout
+                  : {
+                      ...layout,
+                      sidebarOpen: layout.leftSlotOpen,
+                      listHiddenByRailPage: false,
+                      leftSidebarStyle: undefined
+                    }
+              }
               titlebarLeftControls={titlebarLeftControls}
               rail={
                 <AppRail
@@ -237,7 +309,13 @@ export function AppWorkspaceShell(props: {
                   style={layout.leftSidebarStyle}
                 />
               }
-              list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
+              list={
+                layout.workspaceSidebarOnLeft ? (
+                  <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
+                ) : (
+                  activitySidebar
+                )
+              }
             />
             <div
               className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden"
@@ -249,7 +327,7 @@ export function AppWorkspaceShell(props: {
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
-                {showsFloatingRightSidebarToggle(layout) && (
+                {layout.workspaceSidebarOnLeft && showsFloatingRightSidebarToggle(layout) && (
                   <div
                     className="absolute top-0 z-10 flex h-(--app-header-height) items-center"
                     style={
@@ -308,23 +386,10 @@ export function AppWorkspaceShell(props: {
           </div>
         </div>
         {/* Retain the shell for stable layout while heavy panels disconnect; tasks can unmount it. */}
-        {layout.showRightSidebarControls ? (
-          <RecoverableRenderErrorBoundary
-            boundaryId="right-sidebar"
-            surface="right-sidebar"
-            resetKey={
-              layout.rightSidebarTab === 'explorer'
-                ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
-                : layout.rightSidebarTab
-            }
-            title={t('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-            description={t(
-              'auto.App.8d1e160ed1',
-              'Retry the sidebar or switch tabs to reload this surface.'
-            )}
-          >
-            <RightSidebar />
-          </RecoverableRenderErrorBoundary>
+        {layout.workspaceSidebarOnLeft ? (
+          activitySidebar
+        ) : layout.showSidebar ? (
+          <TrailingWorkspaceSidebarSlot layout={layout} scrollRefs={sidebarScrollRefs} />
         ) : null}
       </div>
     </RecoverableRenderErrorBoundary>

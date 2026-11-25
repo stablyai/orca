@@ -1,3 +1,4 @@
+import { WorkspaceSidebarPositionSetting } from '../WorkspaceSidebarPositionSetting'
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -18,6 +19,7 @@ import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
+  getWorkspaceSidebarPositionEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { getStatusBarToggles } from './appearance-status-bar-search'
@@ -90,6 +92,7 @@ export function AppearanceWindowSidebarSection({
   const statusBarUsageFormatEntry = getStatusBarUsageFormatEntry()
   const statusBarUsageFormat = useAppStore((state) => state.statusBarUsageFormat)
   const setStatusBarUsageFormat = useAppStore((state) => state.setStatusBarUsageFormat)
+  const positionEntry = getWorkspaceSidebarPositionEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
@@ -140,6 +143,9 @@ export function AppearanceWindowSidebarSection({
           />
         </SearchableSetting>
       )}
+      <SearchableSetting {...positionEntry} forceVisible={forceVisiblePrimary}>
+        <WorkspaceSidebarPositionSetting settings={settings} updateSettings={updateSettings} />
+      </SearchableSetting>
       <SearchableSetting
         title={leftSidebarAppearanceEntry.title}
         description={leftSidebarAppearanceEntry.description}

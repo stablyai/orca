@@ -81,7 +81,9 @@ export default function TabGroupPanel({
   const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
-  const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
+  const workspaceOnRight = useAppStore((s) => s.settings?.workspaceSidebarPosition === 'right')
+  const reserveRightTitlebarSpace =
+    reserveClosedExplorerToggleSpace && !(workspaceOnRight ? sidebarOpen : rightSidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
   const bot = useBotForWorkspace(reserveClosedExplorerToggleSpace ? worktreeId : null)
@@ -293,7 +295,7 @@ export default function TabGroupPanel({
         >
           <div className="flex h-full items-stretch pr-1">
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-            {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+            {reserveCollapsedSidebarHeaderSpace ? (
               <div
                 className="shrink-0"
                 style={
@@ -346,13 +348,8 @@ export default function TabGroupPanel({
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveRightTitlebarSpace ? (
               <div
-                className="shrink-0"
-                style={
-                  {
-                    width: 'calc(40px + var(--window-controls-width, 0px))',
-                    WebkitAppRegion: 'no-drag'
-                  } as React.CSSProperties
-                }
+                className="shrink-0 [-webkit-app-region:no-drag]"
+                style={{ width: 'var(--collapsed-trailing-chrome-width)' }}
               />
             ) : null}
           </div>

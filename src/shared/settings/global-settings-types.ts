@@ -39,7 +39,8 @@ import type {
   OpenInApplication,
   SourceControlGroupOrder,
   SourceControlViewMode,
-  TaskViewPresetId
+  TaskViewPresetId,
+  WorkspaceSidebarPosition
 } from '../ui-chrome/ui-chrome-types'
 import type { WorktreeVisibilityDefaults } from '../repository/repo-types'
 
@@ -47,6 +48,7 @@ import type { WorktreeVisibilityDefaults } from '../repository/repo-types'
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
 export type GlobalSettings = GlobalSettingsBase & {
+  workspaceSidebarPosition: WorkspaceSidebarPosition
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults

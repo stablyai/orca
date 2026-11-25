@@ -11,6 +11,7 @@ import {
 export const RIGHT_SIDEBAR_GUTTER_TARGET_PX = 10
 
 type GutterResize = {
+  edge: 'left' | 'right'
   startResize: (event: React.MouseEvent) => void
   /** The sidebar's outer box; its left edge is the seam's outer edge. */
   containerRef: RefObject<HTMLElement | null>
@@ -82,8 +83,13 @@ export function useRightSidebarGutterResize<T extends HTMLElement>(
     if (event.target !== event.currentTarget) {
       return false
     }
-    const seam = gutter.containerRef.current?.getBoundingClientRect().left
-    return seam !== undefined && event.clientX < seam + RIGHT_SIDEBAR_GUTTER_TARGET_PX
+    const bounds = gutter.containerRef.current?.getBoundingClientRect()
+    if (!bounds) {
+      return false
+    }
+    const distance =
+      gutter.edge === 'left' ? bounds.right - event.clientX : event.clientX - bounds.left
+    return distance >= 0 && distance < RIGHT_SIDEBAR_GUTTER_TARGET_PX
   }
   const setHover = (element: T, on: boolean): void => {
     if ((hotRef.current === element) === on) {

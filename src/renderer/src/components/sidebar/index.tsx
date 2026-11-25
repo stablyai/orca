@@ -99,13 +99,15 @@ export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
   'pointer-events-none absolute -right-px top-0 z-20 h-full w-px bg-transparent transition-colors peer-hover:bg-ring/50 peer-active:bg-ring'
 
 type SidebarProps = {
+  edge?: 'left' | 'right'
   worktreeScrollOffsetRef: React.MutableRefObject<number>
   worktreeScrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
 }
 
 function Sidebar({
   worktreeScrollOffsetRef,
-  worktreeScrollAnchorRef
+  worktreeScrollAnchorRef,
+  edge = 'left'
 }: SidebarProps): React.JSX.Element {
   // Whether the list shows: collapsed on a rail page (rail on) while the saved choice stays.
   const sidebarOpen = useAppStore(selectWorkspaceListOpen)
@@ -202,7 +204,7 @@ function Sidebar({
     width: sidebarWidth,
     minWidth: MIN_WIDTH,
     maxWidth: MAX_WIDTH,
-    deltaSign: 1,
+    deltaSign: edge === 'left' ? 1 : -1,
     setWidth: setSidebarWidth,
     onDraftWidthChange: setSidebarLiveWidth
   })
@@ -371,7 +373,11 @@ function Sidebar({
               data-sidebar-resize-handle=""
               className={cn(
                 WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME,
-                drawerCoversSeam && WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME,
+                edge === 'right' && 'right-auto -left-[9px]',
+                drawerCoversSeam &&
+                  (edge === 'left'
+                    ? WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME
+                    : '-left-1.5 w-3'),
                 isResizing && 'bg-ring/10'
               )}
               onMouseDown={onResizeStart}
@@ -379,6 +385,7 @@ function Sidebar({
             <div
               className={cn(
                 WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME,
+                edge === 'right' && 'right-auto -left-px',
                 isResizing && 'bg-ring'
               )}
             />

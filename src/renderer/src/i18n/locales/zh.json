@@ -8144,7 +8144,13 @@
           "d2b4ddbea0": "显示 Orca 手机端按钮",
           "657a7230a2": "IDE字体",
           "95a5581f66": "关闭时最小化到托盘",
-          "e90c5d745a": "窗口和侧边栏"
+          "e90c5d745a": "窗口和侧边栏",
+          "workspaceSidebarPosition": {
+            "title": "工作区列表位置",
+            "rowDescription": "选择放置工作区列表的一侧。资源管理器、智能体和源代码控制会移到另一侧。",
+            "left": "左侧",
+            "right": "右侧"
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -10327,7 +10333,17 @@
             "museUsageDescription": "在状态栏中显示 Muse 订阅配额",
             "muse": "muse",
             "meta": "meta",
-            "e8d2710689": "Muse 使用情况"
+            "e8d2710689": "Muse 使用情况",
+            "workspaceSidebarPosition": {
+              "title": "工作区列表位置",
+              "description": "选择放置工作区列表的一侧。资源管理器、智能体和源代码控制会移到另一侧。",
+              "position": "位置",
+              "swap": "互换",
+              "left": "左侧",
+              "right": "右侧",
+              "explorer": "资源管理器",
+              "layout": "布局"
+            }
           }
         },
         "auto": {

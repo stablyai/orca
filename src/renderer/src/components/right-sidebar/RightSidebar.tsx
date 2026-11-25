@@ -55,15 +55,25 @@ import { useBotPanelMemory } from '../bots/use-bot-panel-memory'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
-function RightSidebarInner(): React.JSX.Element {
+function RightSidebarInner({
+  edge = 'right',
+  windowControlsEdge = 'right'
+}: {
+  edge?: 'left' | 'right'
+  windowControlsEdge?: 'left' | 'right' | null
+}): React.JSX.Element {
+  const onLeft = edge === 'left'
+  const reserveWindowControls = !onLeft && windowControlsEdge === 'right'
   const t = useTranslate()
   const contextPlugin = useActivityBarContextPlugin()
   useUiLanguageRevision()
   useBotPanelMemory()
-  const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
-    platform: getRendererAppPlatform(),
-    isWebClient: isPairedWebClientWindow()
-  })
+  const hasDesktopWindowChrome =
+    reserveWindowControls &&
+    shouldRenderDesktopWindowChrome({
+      platform: getRendererAppPlatform(),
+      isWebClient: isPairedWebClientWindow()
+    })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -179,7 +189,7 @@ function RightSidebarInner(): React.JSX.Element {
     width: renderedRightSidebarWidth,
     minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
     maxWidth,
-    deltaSign: -1,
+    deltaSign: onLeft ? 1 : -1,
     renderedExtraWidth: activityBarSideWidth,
     setWidth: setRightSidebarWidth
   })
@@ -194,11 +204,12 @@ function RightSidebarInner(): React.JSX.Element {
   const gutterResize = useMemo(
     () => ({
       startResize: (event: React.MouseEvent) => onResizeStartRef.current(event),
+      edge,
       containerRef,
       handleRef: resizeHandleRef,
       hoverOwnerRef: gutterHoverOwnerRef
     }),
-    [containerRef]
+    [containerRef, edge]
   )
 
   const panelContent = rightSidebarOpen ? (
@@ -258,15 +269,27 @@ function RightSidebarInner(): React.JSX.Element {
           className="sidebar-toggle mr-1"
           onClick={toggleRightSidebar}
           {...keepPaneFocusPressProps}
-          aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
+          aria-label={
+            onLeft
+              ? t('menu.toggleLeftSidebar', 'Toggle Left Sidebar')
+              : t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')
+          }
         >
-          <SidebarToggleIcon side="right" size={16} />
+          <SidebarToggleIcon side={edge} size={16} />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {t('auto.components.right.sidebar.index.9fffaf17c1', 'Toggle right sidebar ({{value0}})', {
-          value0: rightSidebarShortcut
-        })}
+        {onLeft
+          ? t('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
+              value0: rightSidebarShortcut
+            })
+          : t(
+              'auto.components.right.sidebar.index.9fffaf17c1',
+              'Toggle right sidebar ({{value0}})',
+              {
+                value0: rightSidebarShortcut
+              }
+            )}
       </TooltipContent>
     </Tooltip>
   ) : null
@@ -304,7 +327,8 @@ function RightSidebarInner(): React.JSX.Element {
       <div
         ref={containerRef}
         className={cn(
-          'relative flex-shrink-0 flex flex-row',
+          'relative flex-shrink-0 flex',
+          onLeft ? 'flex-row-reverse' : 'flex-row',
           // Allow the open resize handle to overflow; at width zero, clip mounted content and icons.
           rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
         )}
@@ -312,7 +336,9 @@ function RightSidebarInner(): React.JSX.Element {
         <div
           className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
           style={{
-            borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
+            [onLeft ? 'borderRight' : 'borderLeft']: rightSidebarOpen
+              ? '1px solid var(--sidebar-border)'
+              : 'none'
           }}
         >
           {activityBarPosition === 'top' ? (
@@ -332,7 +358,12 @@ function RightSidebarInner(): React.JSX.Element {
             />
           ) : (
             /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
-            <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center justify-between border-b border-border px-3 right-sidebar-header-side-inset right-sidebar-header-drag">
+            <div
+              className={cn(
+                'flex h-(--app-header-height) min-h-(--app-header-height) items-center justify-between border-b border-border px-3 right-sidebar-header-drag',
+                reserveWindowControls && 'right-sidebar-header-side-inset'
+              )}
+            >
               <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wider text-foreground">
                 {orderedItems.find((item) => item.id === effectiveTab)?.title ?? ''}
               </span>
@@ -347,7 +378,8 @@ function RightSidebarInner(): React.JSX.Element {
           <div
             ref={resizeHandleRef}
             className={cn(
-              'absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 data-[gutter-hover]:bg-ring/20 active:bg-ring/30 transition-colors z-10',
+              onLeft ? 'right-0' : 'left-0',
+              'absolute top-0 w-1 h-full cursor-col-resize hover:bg-ring/20 data-[gutter-hover]:bg-ring/20 active:bg-ring/30 transition-colors z-10',
               isResizing && 'bg-ring/30'
             )}
             onMouseDown={onResizeStart}
@@ -361,7 +393,13 @@ function RightSidebarInner(): React.JSX.Element {
               onContextMenu={contextPlugin.onContextMenu}
               onPointerDown={contextPlugin.onPointerDown}
             >
-              <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
+              <div
+                className={cn(
+                  'flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-border',
+                  onLeft ? 'border-r' : 'border-l',
+                  reserveWindowControls && 'side-activity-bar-windows-inset'
+                )}
+              >
                 <TooltipProvider>
                   <SortableContext
                     items={visibleItems.map((item) => item.id)}

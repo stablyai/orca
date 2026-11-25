@@ -1,3 +1,4 @@
+import { RightSidebarToggle } from './RightSidebarToggle'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { ArrowLeft, ArrowRight, MoreHorizontal } from 'lucide-react'
 import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
@@ -176,7 +177,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
             </ContextMenuContent>
           </ContextMenu>
         )}
-        {layout.showSidebar && (
+        {layout.showSidebar && layout.workspaceSidebarOnLeft && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -199,6 +200,9 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
               })}
             </TooltipContent>
           </Tooltip>
+        )}
+        {!layout.workspaceSidebarOnLeft && layout.showRightSidebarControls && (
+          <RightSidebarToggle edge="left" />
         )}
       </div>
       {/* Show shared workspace/page history wherever its shortcut is available. */}
@@ -244,5 +248,42 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         </div>
       )}
     </div>
+  )
+}
+
+export function WorkspaceSidebarToggle({ edge }: { edge: 'left' | 'right' }): React.JSX.Element {
+  const t = useTranslate()
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar)
+  const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          className="sidebar-toggle"
+          onClick={() => {
+            if (!showWorkspaceListThen(useAppStore)) {
+              toggleSidebar()
+            }
+          }}
+          {...keepPaneFocusPressProps}
+          aria-label={
+            edge === 'right'
+              ? t('auto.App.9e0b441a91', 'Toggle right sidebar')
+              : t('auto.App.e4b9e7dff7', 'Toggle sidebar')
+          }
+        >
+          <SidebarToggleIcon side={edge} size={16} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {edge === 'right'
+          ? t('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
+              value0: leftSidebarShortcutLabel
+            })
+          : t('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
+              value0: leftSidebarShortcutLabel
+            })}
+      </TooltipContent>
+    </Tooltip>
   )
 }

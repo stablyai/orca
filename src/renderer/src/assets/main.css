@@ -232,8 +232,8 @@
   inherits: false;
 }
 
-/* Why: only the workspace board sheet reads its right edge; don't restyle the board subtree on every resize. */
-@property --workspace-board-right-edge {
+/* Why: only the workspace board sheet reads the available width; don't restyle the board subtree on every resize. */
+@property --workspace-board-content-width {
   syntax: '*';
   inherits: false;
 }

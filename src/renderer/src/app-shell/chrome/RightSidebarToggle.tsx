@@ -7,7 +7,9 @@ import { useAppStore } from '../../store'
 import { useBotForWorkspace } from '../../components/bots/bot-workspace'
 import { useBotNeedsYouCount, useBotNow } from '../../components/bots/use-bot-now'
 
-export function RightSidebarToggle(): React.JSX.Element {
+export function RightSidebarToggle({
+  edge = 'right'
+}: { edge?: 'left' | 'right' } = {}): React.JSX.Element {
   const t = useTranslate()
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
@@ -30,9 +32,14 @@ export function RightSidebarToggle(): React.JSX.Element {
           className="sidebar-toggle relative mr-2"
           onClick={toggleRightSidebar}
           {...keepPaneFocusPressProps}
-          aria-label={needsYouLabel ?? t('auto.App.9e0b441a91', 'Toggle right sidebar')}
+          aria-label={
+            needsYouLabel ??
+            (edge === 'left'
+              ? t('menu.toggleLeftSidebar', 'Toggle Left Sidebar')
+              : t('auto.App.9e0b441a91', 'Toggle right sidebar'))
+          }
         >
-          <SidebarToggleIcon side="right" size={16} />
+          <SidebarToggleIcon side={edge} size={16} />
           {needsYouLabel ? (
             <span
               aria-hidden
@@ -45,9 +52,13 @@ export function RightSidebarToggle(): React.JSX.Element {
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
         {needsYouLabel ??
-          t('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
-            value0: rightSidebarShortcutLabel
-          })}
+          (edge === 'left'
+            ? t('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
+                value0: rightSidebarShortcutLabel
+              })
+            : t('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
+                value0: rightSidebarShortcutLabel
+              }))}
       </TooltipContent>
     </Tooltip>
   )

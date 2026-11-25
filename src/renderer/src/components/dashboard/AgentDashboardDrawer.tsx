@@ -19,7 +19,7 @@ import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
 import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
-import { resolveSidebarDrawerLeftEdge } from '@/components/sidebar/chrome/sidebar-drawer-left-edge'
+import { resolveSidebarDrawerInset } from '@/components/sidebar/chrome/sidebar-drawer-inset'
 import { selectAppRailWidth, selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
@@ -183,10 +183,13 @@ export function AgentDashboardDrawer({
   }, [close, open])
 
   const railWidth = useAppStore(selectAppRailWidth)
-  const { left: drawerLeft, leftCss: drawerLeftCss } = resolveSidebarDrawerLeftEdge({
+  const edge = useAppStore((s) =>
+    s.settings?.workspaceSidebarPosition === 'right' ? 'right' : 'left'
+  )
+  const { inset, insetCss } = resolveSidebarDrawerInset({
     sidebarOpen,
     sidebarWidth,
-    railWidth
+    railWidth: edge === 'left' ? railWidth : 0
   })
   // Reserve the same status-row space as App so the portal cannot cover its controls.
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
@@ -200,14 +203,15 @@ export function AgentDashboardDrawer({
       event.preventDefault()
       return
     }
-    const liveDrawerLeft =
-      boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')?.getBoundingClientRect()
-        .left ?? drawerLeft
+    const drawerEdge =
+      boardRef.current
+        ?.closest<HTMLElement>('[data-slot="sheet-content"]')
+        ?.getBoundingClientRect()[edge] ?? (edge === 'left' ? inset : window.innerWidth - inset)
     const pointerX =
       'clientX' in originalEvent && typeof originalEvent.clientX === 'number'
         ? originalEvent.clientX
         : null
-    if (pointerX !== null && pointerX < liveDrawerLeft) {
+    if (pointerX !== null && (edge === 'left' ? pointerX < drawerEdge : pointerX > drawerEdge)) {
       // Why: keep the workspace sidebar interactive while the companion board stays open.
       event.preventDefault()
     }
@@ -216,7 +220,8 @@ export function AgentDashboardDrawer({
   return (
     <Sheet open={open} onOpenChange={handleSheetOpenChange} modal={false}>
       <SheetContent
-        side="left"
+        side={edge}
+        data-workspace-drawer-edge={edge}
         showCloseButton={false}
         ref={trackSidebarLiveWidth}
         aria-describedby={undefined}
@@ -224,21 +229,19 @@ export function AgentDashboardDrawer({
         overlayStyle={{
           top: WORKSPACE_TOP_CHROME_HEIGHT,
           bottom: drawerBottom,
-          left: drawerLeftCss,
+          [edge]: insetCss,
           pointerEvents: 'none'
         }}
-        style={
-          {
-            ...leftSidebarStyle,
-            // Why: the board is a companion to the workspace sidebar, so it
-            // expands from the sidebar edge instead of covering the sidebar.
-            left: drawerLeftCss,
-            top: WORKSPACE_TOP_CHROME_HEIGHT,
-            bottom: drawerBottom,
-            height: 'auto',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
-          } as React.CSSProperties
-        }
+        style={{
+          ...leftSidebarStyle,
+          // Why: the board is a companion to the workspace sidebar, so it
+          // expands from the sidebar edge instead of covering the sidebar.
+          [edge]: insetCss,
+          top: WORKSPACE_TOP_CHROME_HEIGHT,
+          bottom: drawerBottom,
+          height: 'auto',
+          width: `min(calc(100vw - ${insetCss}), 1294px)`
+        }}
         data-agent-dashboard-sheet=""
         onOpenAutoFocus={(event) => {
           // Suppress default header focus, which reveals hover-style affordances without a pointer.

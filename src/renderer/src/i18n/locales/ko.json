@@ -8007,7 +8007,13 @@
           "d2b4ddbea0": "Orca 모바일 버튼 표시",
           "657a7230a2": "IDE 글꼴",
           "95a5581f66": "닫을 때 트레이로 최소화",
-          "e90c5d745a": "창 및 사이드바"
+          "e90c5d745a": "창 및 사이드바",
+          "workspaceSidebarPosition": {
+            "title": "워크스페이스 목록 위치",
+            "rowDescription": "워크스페이스 목록을 둘 가장자리를 고릅니다. 탐색기, 에이전트, 소스 제어는 반대쪽 가장자리로 이동합니다.",
+            "left": "왼쪽",
+            "right": "오른쪽"
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -10192,7 +10198,17 @@
             "96e32c1118": "MiniMax 사용량",
             "e8d2710689": "Muse 사용량",
             "aff6e6afdf": "IDE 글꼴",
-            "ba1f9d39a6": "Antigravity 사용량"
+            "ba1f9d39a6": "Antigravity 사용량",
+            "workspaceSidebarPosition": {
+              "title": "워크스페이스 목록 위치",
+              "description": "워크스페이스 목록을 둘 가장자리를 고릅니다. 탐색기, 에이전트, 소스 제어는 반대쪽 가장자리로 이동합니다.",
+              "position": "위치",
+              "swap": "맞바꾸기",
+              "left": "왼쪽",
+              "right": "오른쪽",
+              "explorer": "탐색기",
+              "layout": "레이아웃"
+            }
           }
         },
         "auto": {

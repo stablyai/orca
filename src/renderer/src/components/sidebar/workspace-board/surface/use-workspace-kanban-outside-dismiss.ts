@@ -63,7 +63,11 @@ export function useWorkspaceKanbanOutsideDismiss(params: {
         return
       }
       const rect = content.getBoundingClientRect()
-      if (event.clientX > rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+      const pastDrawer =
+        content.dataset.workspaceDrawerEdge === 'right'
+          ? event.clientX < rect.left
+          : event.clientX > rect.right
+      if (pastDrawer && event.clientY >= rect.top && event.clientY <= rect.bottom) {
         onOpenChange(false)
       }
     }

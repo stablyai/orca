@@ -1,3 +1,5 @@
+import { buildSidebarToggleMenuItems } from './sidebar-toggle-menu-items'
+import type { WorkspaceSidebarPosition } from '../../shared/ui-chrome/ui-chrome-types'
 import { BrowserWindow, Menu, app } from 'electron'
 import { formatKeybindingList } from '../../shared/keybindings/formatting'
 import { getEffectiveKeybindingsForAction } from '../../shared/keybindings/effective'
@@ -35,6 +37,7 @@ type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onZoomIn: () => void
   onZoomOut: () => void
   onZoomReset: () => void
+  getWorkspaceSidebarPosition?: () => WorkspaceSidebarPosition
   onToggleLeftSidebar: () => void
   onToggleRightSidebar: () => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
@@ -57,8 +60,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onZoomIn,
     onZoomOut,
     onZoomReset,
-    onToggleLeftSidebar,
-    onToggleRightSidebar,
     onToggleAppearance,
     getAppearanceState,
     getKeybindings
@@ -198,15 +199,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const appearanceSubmenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.appearance', 'Appearance'),
     submenu: [
-      {
-        // Display hints only: native accelerators bypass markdown bold handling and renderer-owned sidebar state.
-        label: `${translateMain('menu.toggleLeftSidebar', 'Toggle Left Sidebar')}\t${shortcutLabel('sidebar.left.toggle')}`,
-        click: () => onToggleLeftSidebar()
-      },
-      {
-        label: `${translateMain('menu.toggleRightSidebar', 'Toggle Right Sidebar')}\t${shortcutLabel('sidebar.right.toggle')}`,
-        click: () => onToggleRightSidebar()
-      },
+      ...buildSidebarToggleMenuItems(options, shortcutLabel),
       {
         label: translateMain('menu.showStatusBar', 'Show Status Bar'),
         type: 'checkbox',

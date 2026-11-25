@@ -56,7 +56,12 @@ function App(): React.JSX.Element {
     ? 'var(--workspace-tab-row-height)'
     : WINDOW_CONTROLS_HEIGHT
   const layoutStyle: React.CSSProperties & Record<`--${string}`, string> = {
-    '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
+    '--collapsed-sidebar-header-width': layout.leftColumnHeaderFloating
+      ? `${layout.collapsedSidebarHeaderWidth}px`
+      : '0px',
+    '--collapsed-trailing-chrome-width': layout.trailingSlotOpen
+      ? '0px'
+      : 'calc(40px + var(--window-controls-width, 0px))',
     ...(compactWorkspaceChrome && { '--app-header-height': windowControlsHeight })
   }
   const floatingWorkspace = useFloatingWorkspacePanel()

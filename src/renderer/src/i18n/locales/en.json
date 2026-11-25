@@ -9003,7 +9003,13 @@
           "d2b4ddbea0": "Show Orca Mobile button",
           "657a7230a2": "IDE font",
           "95a5581f66": "Minimize to tray on close",
-          "e90c5d745a": "Window & sidebar"
+          "e90c5d745a": "Window & sidebar",
+          "workspaceSidebarPosition": {
+            "title": "Workspace List Position",
+            "rowDescription": "Pick the edge for the workspace list. Explorer, Agents, and Source Control move to the opposite edge.",
+            "left": "Left",
+            "right": "Right"
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -11237,7 +11243,17 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "workspaceSidebarPosition": {
+              "title": "Workspace List Position",
+              "description": "Pick the edge for the workspace list. Explorer, Agents, and Source Control move to the opposite edge.",
+              "position": "position",
+              "swap": "swap",
+              "left": "left",
+              "right": "right",
+              "explorer": "explorer",
+              "layout": "layout"
+            }
           }
         },
         "auto": {

@@ -7751,7 +7751,13 @@
           "d2b4ddbea0": "Afficher le bouton Orca Mobile",
           "657a7230a2": "Police de l'IDE",
           "95a5581f66": "Réduire dans la zone de notification à la fermeture",
-          "e90c5d745a": "Fenêtre & barre latérale"
+          "e90c5d745a": "Fenêtre & barre latérale",
+          "workspaceSidebarPosition": {
+            "title": "Position de la liste des espaces de travail",
+            "rowDescription": "Choisissez le bord où placer la liste des espaces de travail. L'explorateur, les agents et le contrôle de code source passent sur le bord opposé.",
+            "left": "Gauche",
+            "right": "Droite"
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -9925,7 +9931,17 @@
             "c29089716e": "Utilisation Kimi",
             "96e32c1118": "Utilisation MiniMax",
             "aff6e6afdf": "Police de l'IDE",
-            "ba1f9d39a6": "Utilisation Antigravity"
+            "ba1f9d39a6": "Utilisation Antigravity",
+            "workspaceSidebarPosition": {
+              "title": "Position de la liste des espaces de travail",
+              "description": "Choisissez le bord où placer la liste des espaces de travail. L'explorateur, les agents et le contrôle de code source passent sur le bord opposé.",
+              "position": "position",
+              "swap": "inverser",
+              "left": "gauche",
+              "right": "droite",
+              "explorer": "explorateur",
+              "layout": "disposition"
+            }
           }
         },
         "auto": {
