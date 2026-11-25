@@ -25310,7 +25310,8 @@
       "titleRecycleBin": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
       "titleTrash": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
       "description": "이 작업은 되돌릴 수 없습니다."
-    }
+    },
+    "runInTerminal": "터미널에서 실행"
   },
   "sparsePreset": {
     "nameRequired": "이름을 입력하세요.",
@@ -25705,7 +25706,8 @@
       "gotIt": "확인",
       "body": "숨기려면 Claude Code에 /diff를 입력하세요. Claude는 이후 세션을 위해 해당 선택을 기억합니다.",
       "title": "Claude Code는 넓은 터미널에서 채팅 옆에 자체 diff 패널을 열 수 있습니다. 이 패널은 Orca가 아닌 Claude의 패널입니다."
-    }
+    },
+    "shellOverrideRequired": "이 Orca 서버는 지정한 셸에서 명령을 실행할 수 없습니다. 서버를 업데이트한 후 다시 시도하세요."
   },
   "fileSearch": {
     "failed": "검색에 실패했습니다. 다시 시도하세요.",

@@ -25830,7 +25830,8 @@
       "decline": "Não, obrigado",
       "failed": "Não foi possível ativar a sincronização de tema do Claude Code",
       "failedDescription": "Ative-a nas Configurações."
-    }
+    },
+    "shellOverrideRequired": "Este servidor do Orca não pode executar um comando no shell solicitado. Atualize o servidor e tente novamente."
   },
   "fileExplorer": {
     "root": {
@@ -25851,7 +25852,8 @@
       "titleRecycleBin": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
       "titleTrash": "Não foi possível mover '{{name}}' para a Lixeira. Excluir permanentemente?",
       "description": "Isso não pode ser desfeito."
-    }
+    },
+    "runInTerminal": "Executar no Terminal"
   },
   "sparsePreset": {
     "name": "Nome",

@@ -24557,7 +24557,8 @@
       "titleRecycleBin": "「{{name}}」をごみ箱に移動できませんでした。完全に削除しますか？",
       "titleTrash": "「{{name}}」をごみ箱に移動できませんでした。完全に削除しますか？",
       "description": "この操作は取り消せません。"
-    }
+    },
+    "runInTerminal": "ターミナルで実行"
   },
   "sparsePreset": {
     "nameRequired": "名前を入力してください。",
@@ -24948,7 +24949,8 @@
       "gotIt": "了解",
       "title": "Claude Code は、ワイドターミナルでチャットの横に独自の差分パネルを開くことができます。そのパネルは Claude のものであり、Orca のものではありません。",
       "body": "非表示にするには、Claude Code で /diff と入力してください。Claude はこの選択を今後のセッションでも記憶します。"
-    }
+    },
+    "shellOverrideRequired": "この Orca サーバーでは、指定されたシェルでコマンドを実行できません。サーバーを更新してから、もう一度お試しください。"
   },
   "fileSearch": {
     "failed": "検索失敗。もう一度お試しください",

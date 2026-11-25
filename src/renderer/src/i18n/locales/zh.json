@@ -24967,7 +24967,8 @@
       "titleRecycleBin": "无法将“{{name}}”移到回收站。是否永久删除？",
       "titleTrash": "无法将“{{name}}”移到废纸篓。是否永久删除？",
       "description": "此操作无法撤销"
-    }
+    },
+    "runInTerminal": "在终端中运行"
   },
   "sparsePreset": {
     "nameRequired": "请输入名称",
@@ -25359,7 +25360,8 @@
       "decline": "不用了",
       "failed": "无法开启 Claude Code 主题同步",
       "failedDescription": "请在设置中开启"
-    }
+    },
+    "shellOverrideRequired": "此 Orca 服务器无法在指定的 Shell 中运行命令。请更新服务器后重试。"
   },
   "fileSearch": {
     "failed": "搜索失败，再试一次",

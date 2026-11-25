@@ -24527,7 +24527,8 @@
       "titleRecycleBin": "No se pudo mover '{{name}}' a la Papelera de reciclaje. ¿Eliminarlo permanentemente?",
       "titleTrash": "No se pudo mover '{{name}}' a la Papelera. ¿Eliminarlo permanentemente?",
       "description": "Esto no se puede deshacer."
-    }
+    },
+    "runInTerminal": "Ejecutar en terminal"
   },
   "sparsePreset": {
     "nameRequired": "El nombre es obligatorio.",
@@ -25358,7 +25359,8 @@
       "gotIt": "Entendido",
       "body": "Para ocultarlo, escriba /diff en Claude Code. Claude recuerda esa elección para sesiones posteriores.",
       "title": "Claude Code puede abrir su propio panel de diferencias al lado del chat en terminales anchas. Ese panel es de Claude, no de Orca."
-    }
+    },
+    "shellOverrideRequired": "Este servidor de Orca no puede ejecutar un comando en la shell solicitada. Actualiza el servidor y vuelve a intentarlo."
   },
   "quickOpen": {
     "moreMatchesAvailable": "Puede haber más coincidencias disponibles. Refina tu búsqueda para acotar los resultados.",

@@ -1,5 +1,6 @@
 import { SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
+import { translate } from '@/i18n/i18n'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { CreateWebRuntimeSessionTerminalArgs } from './terminal-create-contracts'
@@ -21,8 +22,17 @@ export async function resolveCreateTerminalShellParams(
   ) {
     return { command: args.command, shell: args.shell }
   }
+  // An explicit command may be quoted for the requested shell, not the host default.
+  if (args.command !== undefined) {
+    throw new Error(
+      translate(
+        'terminal.shellOverrideRequired',
+        'This Orca server cannot run a command in the requested shell. Update the server and try again.'
+      )
+    )
+  }
   // Old hosts drop shell; typing the pick still starts it inside their default shell.
-  return { command: args.command ?? args.shell }
+  return { command: args.shell }
 }
 
 export async function buildPlainCreateTerminalParams(

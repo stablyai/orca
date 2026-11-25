@@ -25491,7 +25491,8 @@
       "decline": "Hayır, teşekkürler",
       "failed": "Claude Code tema eşitlemesi açılamadı",
       "failedDescription": "Bu özelliği Ayarlar’dan açın."
-    }
+    },
+    "shellOverrideRequired": "Bu Orca sunucusu, istenen kabukta komut çalıştıramıyor. Sunucuyu güncelleyip tekrar deneyin."
   },
   "fileExplorer": {
     "root": {
@@ -25512,7 +25513,8 @@
       "titleRecycleBin": "'{{name}}' geri dönüşüm kutusuna taşınamadı. Kalıcı olarak silinsin mi?",
       "titleTrash": "'{{name}}' çöp kutusuna taşınamadı. Kalıcı olarak silinsin mi?",
       "description": "Bu işlem geri alınamaz."
-    }
+    },
+    "runInTerminal": "Terminal'de Çalıştır"
   },
   "sparsePreset": {
     "name": "Ad",
