@@ -80,6 +80,8 @@ export function createAgentSessionDeltaCoalescer(
       dirty: boolean
       /** Appends since the text was last copied flat. */
       links: number
+      /** The text is a copy of its own, not a raw delta that may pin a larger string. */
+      owned: boolean
     }
   >()
   let totalRetainedBytes = 0
@@ -122,15 +124,17 @@ export function createAgentSessionDeltaCoalescer(
   // string, and every APPENDS_PER_COPY appends the text is copied flat, which bounds the chain.
   const joined = (stream: Stream): string => {
     const [head = '', ...added] = stream.chunks
-    if (added.length === 0) {
+    if (added.length === 0 && stream.owned) {
       return head
     }
     stream.links = (stream.links + 1) % APPENDS_PER_COPY
+    // The first read copies too: until then the text is the raw first delta.
     const text =
-      stream.links === 0
+      !stream.owned || stream.links === 0
         ? ownRetainedString(head + added.join(''))
         : head + ownRetainedString(added.join(''))
-    stream.chunks = [text]
+    stream.owned = true
+    stream.chunks = text ? [text] : []
     return text
   }
 
@@ -177,8 +181,8 @@ export function createAgentSessionDeltaCoalescer(
         }
         stream = {
           chunks: [],
-          // The first join copies too: until then the text is the raw first delta.
-          links: APPENDS_PER_COPY - 1,
+          links: 0,
+          owned: false,
           retainedBytes: 0,
           textLength: 0,
           observedBytes: 0,
