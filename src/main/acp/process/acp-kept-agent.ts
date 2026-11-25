@@ -215,7 +215,7 @@ export async function launchRelayedAcpAgent(
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let floor = Number.POSITIVE_INFINITY
   const turns = new AcpRelayTurns()
-  const continuation = new AcpRelayItemContinuation()
+  const continuation = new AcpRelayItemContinuation(Boolean(spec.dialect.childSessionStop))
   const relay: ProviderRelayLaunch = {
     chatKey: input.acquire.identity.sessionId,
     markers: {

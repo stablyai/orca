@@ -1,7 +1,13 @@
 import type { ProviderRelayAttachResult } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayItemContinuation } from '../../provider-relay/relayed-provider-continuation'
 import { jsonRpcAnswerId } from '../../provider-relay/relayed-json-rpc-lines'
-import { ACP_MESSAGE_CHUNKS, ACP_MESSAGE_ENDS, acpSessionUpdateFields } from './acp-relay-ack-floor'
+import {
+  ACP_MESSAGE_BOUNDARIES,
+  ACP_MESSAGE_CHUNKS,
+  ACP_MESSAGE_ENDS,
+  acpChildSessionEnded,
+  acpSessionUpdateFields
+} from './acp-relay-ack-floor'
 
 const PROMPT = 'session/prompt'
 
@@ -14,14 +20,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * ACP rows of streamed text are keyed by message id; a message has no start line, so the one a
- * cut replay starts inside is the first one it shows before a call, plan, user chunk or another
- * message, and only that one continues under `<tag>:<message id>`. Messages without ids are
+ * cut replay starts inside is, per session, the first one it shows before a call, plan, user chunk,
+ * subagent status or another message, and only that one continues under `<tag>:<message id>`. Messages without ids are
  * numbered within their turn, and a cut turn numbers them anew (`replayedWhole`).
  */
 export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
   private readonly seen = new Set<string>()
   /** Sessions past their first message or a boundary: their later messages start whole. */
   private readonly started = new Set<string | undefined>()
+
+  /** `childSessions`: the agent's subagents are child sessions (OpenCode) that report their end. */
+  constructor(private readonly childSessions = false) {}
 
   /** Each attach's replay is read from its own first line. */
   reset(): void {
@@ -35,7 +44,7 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     if (!update || !kind) {
       return null
     }
-    if (ACP_MESSAGE_ENDS.has(kind)) {
+    if (ACP_MESSAGE_ENDS.has(kind) || ACP_MESSAGE_BOUNDARIES.has(kind)) {
       this.started.add(update.sessionId)
       return null
     }
@@ -78,12 +87,19 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     const cut = (result.outstanding ?? []).filter(
       (request) => request.method === PROMPT && !request.replayedWhole
     )
-    return cut.length > 0 ? cut.map((request) => JSON.stringify(request.id)) : null
+    // OpenCode's subagents stream past their parent's prompt, until each reports its end.
+    const children = this.childSessions ? (result.openWork?.subagent ?? []) : []
+    const open = [
+      ...cut.map((request) => JSON.stringify(request.id)),
+      ...children.map((key) => JSON.stringify(key))
+    ]
+    return open.length > 0 ? open : null
   }
 
   settles(line: string): string | null {
     const id = jsonRpcAnswerId(line)
-    return id === null ? null : JSON.stringify(id)
+    const child = id === null ? acpChildSessionEnded(line) : null
+    return id !== null ? JSON.stringify(id) : child !== null ? JSON.stringify([child]) : null
   }
 
   /** The moved chunk itself opens the continuation for the floor. */

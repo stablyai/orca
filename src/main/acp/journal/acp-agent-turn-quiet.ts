@@ -35,7 +35,7 @@ export class AcpAgentTurnQuiet {
         this.timer = null
         this.lane.apply(this.lane.translator.endAgentTurn(at))
       },
-      calls === 'running' ? CALL_QUIET_MS : QUIET_MS
+      calls.length > 0 ? CALL_QUIET_MS : QUIET_MS
     )
   }
 

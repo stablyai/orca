@@ -88,4 +88,28 @@ describe('ACP relay item continuation', () => {
     // Each session's first message is its cut one; a later one of the child starts whole.
     expect(ids).toEqual(['relay:r1:11:k1', 'relay:r1:12:m1', 'k2'])
   })
+
+  it("keeps moving a subagent's cut message after its parent prompt is answered", () => {
+    const hook = new AcpRelayItemContinuation(true)
+    const child = (fields: Record<string, unknown>) =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'opencode/session/child_update',
+        params: { rootSessionId: 's', childSessionId: 'c', type: 'update', update: fields }
+      })
+    const text = { type: 'text', text: 'x' }
+    const tail = child({ sessionUpdate: 'agent_message_chunk', messageId: 'k1', content: text })
+    const result = {
+      ...attach([{ id: 7, method: 'session/prompt' }], 10),
+      openWork: { subagent: [['c']] }
+    }
+    const cut = attachContinuation(hook, 'r1', 10, result)
+    const replay = [tail, JSON.stringify({ jsonrpc: '2.0', id: 7, result: {} }), tail]
+    const ids = replay.map((line, at) => {
+      const [out = ''] = cut?.lines(11 + at, line, undefined) ?? [line]
+      return JSON.parse(out).params?.update?.messageId ?? 'answer'
+    })
+    expect(ids).toEqual(['relay:r1:11:k1', 'answer', 'relay:r1:11:k1'])
+    expect(cut?.done).toBe(false)
+  })
 })

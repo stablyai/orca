@@ -118,10 +118,12 @@ describe('ACP relay ack floor', () => {
     await output.settle(true)
     await send(chunk('c', 'm1'))
     expect(cuts).toEqual([2, 3])
-    // A call doesn't end it (it may go on under its id); the next message does.
+    // A plan or call pauses the cut (a replay past it starts whole); the message resuming its id
+    // re-arms it, and the next message ends it.
     await send(update('plan', { entries: [] }))
+    await send(chunk('c2', 'm1'))
     await send(chunk('d', 'm2'))
-    expect(cuts).toEqual([2, 3, 4])
+    expect(cuts).toEqual([2, 3, 5])
   })
 
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {
@@ -146,6 +148,24 @@ describe('ACP relay ack floor', () => {
     await send(child({ type: 'update', update }))
     expect(await send(child({ type: 'update', update }))).toEqual([])
     expect(await send(child({ type: 'status', status: 'completed' }))).toEqual([3])
+  })
+
+  it("keeps a subagent's message held past its parent prompt's answer", async () => {
+    const { send, prompt } = rig()
+    const answer = prompt()
+    const child = (params: Record<string, unknown>): string =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'opencode/session/child_update',
+        params: { rootSessionId: 's', childSessionId: 'c', ...params }
+      })
+    const text = { type: 'text', text: 'x' }
+    const update = { sessionUpdate: 'agent_message_chunk', messageId: 'k1', content: text }
+    await send(chunk('a', 'm1'), child({ type: 'update', update }))
+    answer.resolve()
+    // The root's turn ended, so its message goes; the child's still streams and still holds.
+    await vi.waitFor(async () => expect(await send(child({ type: 'update', update }))).toEqual([1]))
+    expect(await send(child({ type: 'status', status: 'completed' }))).toEqual([1, 4])
   })
 
   it('reads a long update from its ends without parsing its payload', async () => {

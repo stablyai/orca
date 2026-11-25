@@ -301,13 +301,8 @@ export class AcpToolTimeline {
     return events
   }
 
-  running(turn: string): boolean {
-    for (const snapshot of this.tools.values()) {
-      if (snapshot.turn === turn) {
-        return true
-      }
-    }
-    return false
+  runningIds(turn: string): string[] {
+    return [...this.tools].filter(([, snapshot]) => snapshot.turn === turn).map(([id]) => id)
   }
 
   turn(toolCallId: string): string | undefined {

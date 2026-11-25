@@ -15,8 +15,9 @@ import type {
 import { providerKey, turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineOpenItem } from './provider-timeline-state'
 
-/** A saved running call's input and output previews, escaped, that `keepsSavedCall` merges in. */
-const SAVED_CALL_BYTES = 4 * JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes
+/** A saved running call's input and output previews that `keepsSavedCall` merges in, at JSON's
+ *  worst escaping (6 bytes a character), plus its image paths. */
+const SAVED_CALL_BYTES = 12 * JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes + 64 * 1024
 
 export function decideItem(
   input: ProviderTimelineDecisionInput,
