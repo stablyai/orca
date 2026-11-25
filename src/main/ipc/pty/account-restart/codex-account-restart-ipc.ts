@@ -17,6 +17,7 @@ import {
   attributedCodexHome,
   transcriptIsUnderCodexHome
 } from './codex-account-restart-launch-route'
+import { transcriptHasNoOpenWriter } from './codex-transcript-writer-check'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { getPtyIpc } from '../pty-host-bindings'
 import { resolvePersistedStablePaneOwner } from '../pane/stable-owner'
@@ -37,6 +38,8 @@ export type CodexAccountRestartIpcDeps = PtyKillIpcDeps & {
   getSettings?: () => GlobalSettings | undefined
   /** Whether a ready window would receive an exit sent now; absent means yes. */
   isRendererLive?: () => boolean
+  /** Whether no process still holds the transcript open; absent means the platform check. */
+  transcriptHasNoOpenWriter?: (transcriptPath: string) => Promise<boolean>
 }
 
 // A stop can outlive the window that asked for it; every step reads the deps current at that moment.
@@ -219,7 +222,14 @@ async function killCodexRestartOccupant(
     // Deliver through the window registered now, not the one that asked for the stop.
     deliverRestartReceiptExit(current(), occupant)
     // The root ended either way; only positive descendant evidence lets another account read the transcript.
-    return outcome.writersExited === true ? 'ended' : 'ended-unproven'
+    if (outcome.writersExited !== true) {
+      return 'ended-unproven'
+    }
+    // The descendants the stop saw are gone; the transcript's own writer must be too, before any read.
+    const writerGone = await (current().transcriptHasNoOpenWriter ?? transcriptHasNoOpenWriter)(
+      occupant.provenance.transcriptPath
+    )
+    return writerGone ? 'ended' : 'ended-unproven'
   }
   if (outcome.outcome === 'refused' && outcome.reason === 'unsupported') {
     return 'service-outdated'

@@ -19,6 +19,7 @@ type HoistedState = {
   selectedAccount: string
   homeRoute: string
   transcriptPath: string
+  writerGone: boolean
   providerStartup: Promise<void> | undefined
 }
 
@@ -32,6 +33,7 @@ const h = vi.hoisted((): HoistedState => ({
   selectedAccount: 'new',
   homeRoute: 'account-home',
   transcriptPath: '/old/sessions/2026/11/01/rollout-thread-1.jsonl',
+  writerGone: true,
   providerStartup: undefined
 }))
 
@@ -164,7 +166,8 @@ function setup() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
     getSettings: () =>
       ({ codexManagedAccounts: [{ id: 'old', managedHomePath: '/old' }] }) as never,
-    isRendererLive: () => h.rendererLive
+    isRendererLive: () => h.rendererLive,
+    transcriptHasNoOpenWriter: async () => h.writerGone
   })
   const pane = nextPane()
   currentOwnerByPaneKey.set(`tab:${pane.leafId}`, {
@@ -212,6 +215,7 @@ describe('account restart exits arriving out of order', () => {
     h.selectedAccount = 'new'
     h.homeRoute = 'account-home'
     h.transcriptPath = '/old/sessions/2026/11/01/rollout-thread-1.jsonl'
+    h.writerGone = true
     h.providerStartup = undefined
   })
 
@@ -531,6 +535,18 @@ describe('account restart exits arriving out of order', () => {
       reason: 'resume-unavailable'
     })
     expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('keeps the old account when the transcript is still open after the stop', async () => {
+    // The stop proved its captured descendants gone, but a writer it did not see still has the file.
+    const t = setup()
+    h.writerGone = false
+    const result = t.request()
+    await t.stopDispatched()
+    t.release({ outcome: 'ended', writersExited: true })
+    await expect(result).resolves.toMatchObject({ outcome: 'unknown' })
+    // The stopped pane still resumes, pinned to the account it ran on.
+    expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
   })
 
   it('stops nothing when the child wrote its transcript outside the home main attributed', async () => {
