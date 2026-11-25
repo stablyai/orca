@@ -285,7 +285,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () => collectRenderedSidebarRowKeys(sectionRows),
     [sectionRows]
   )
-  const viewportRows = useProjectTreeRows(sectionRows, args.groupBy, effectiveCollapsedGroups)
+  const viewportRows = useProjectTreeRows(sectionRows, args, effectiveCollapsedGroups)
 
   const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
