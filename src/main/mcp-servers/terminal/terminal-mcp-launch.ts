@@ -13,6 +13,8 @@ import { thisAppOrcaCliLauncher } from '../../cli/launchers/this-app-orca-cli-la
 import { botToolRelay, type BotToolRelay } from '../../bots/tool-relay/bot-tool-relay'
 import { cmdShimArgument } from '../../bots/bot-tools-claude'
 import { agentOwnMcpServerNames } from '../agent-own-mcp-server-names'
+import { codexArgsMcpServerNames } from '../../codex/structured/launch/codex-structured-launch-args'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { mcpServerEntriesForLaunch, type McpLaunchEntry } from '../mcp-host-list-launch'
 import { mcpHostListFolder } from '../mcp-host-list-folder'
 import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
@@ -254,9 +256,13 @@ export async function withTerminalMcpServers(
     ...input.env,
     ...(input.codexHome ? { CODEX_HOME: input.codexHome } : {})
   }
-  const { tools, skipped } = offered.tools.beside(
-    input.cwd && !wsl ? await agentOwnMcpServerNames(adapter.agent, ownEnv, input.cwd) : []
-  )
+  // Codex also takes servers from `-c mcp_servers.*` on the user's own command line.
+  const parsed =
+    adapter.agent === 'codex' ? tokenizeStartupCommand(input.command!, input.shell) : null
+  const { tools, skipped } = offered.tools.beside([
+    ...(input.cwd && !wsl ? await agentOwnMcpServerNames(adapter.agent, ownEnv, input.cwd) : []),
+    ...(parsed?.ok ? codexArgsMcpServerNames(parsed.tokens) : [])
+  ])
   if (skipped.length > 0) {
     console.warn(
       `[mcp-servers] ${adapter.agent}'s own settings already have ${skipped.join(', ')}; this terminal uses those instead of Orca's`

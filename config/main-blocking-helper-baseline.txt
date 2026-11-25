@@ -239,6 +239,7 @@
 5 src/main/cli/launchers/linux-bare-orca-dispatcher.ts
 14 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
 1 src/main/cli/launchers/orca-cli-child-path.ts
+1 src/main/cli/launchers/this-app-orca-cli-launcher.ts # resolves this app's CLI launcher once per data folder per run (the Linux packaged shim check), for the MCP agent-file and terminal entries
 1 src/main/cli/wsl/wsl-cli-installer.ts
 1 src/main/cli/wsl/wsl-cli-registration-reconciliation.ts
 6 src/main/cli/wsl/wsl-cli-registration-registry.ts
