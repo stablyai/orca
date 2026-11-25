@@ -24,9 +24,9 @@
     "aboutScreen": {
       "title": "เกี่ยวกับ",
       "tagline": "IDE เอเจนต์โอเพ่นซอร์สสำหรับผู้สร้าง 100x",
-      "website": "เว็บไซต์ออร์ก้า",
+      "website": "เว็บไซต์Orca",
       "sourceCode": "ซอร์สโค้ด Orca",
-      "socialProfile": "ออร์ก้าบน X",
+      "socialProfile": "Orcaบน X",
       "openLinkFailed": "ไม่สามารถเปิดลิงก์ได้ ลองอีกครั้ง"
     },
     "appUpdateSettingsRows": {
@@ -241,7 +241,7 @@
     "settings": "การตั้งค่า",
     "delete": "ลบ",
     "unknown": "ไม่ทราบ",
-    "confirm": "Confirm",
+    "confirm": "ยืนยัน",
     "copy": "คัดลอก",
     "done": "เสร็จสิ้น",
     "close": "ปิด",
@@ -285,7 +285,7 @@
       "updateStepsServiceManager": "อัปเดตด้วยตัวจัดการแพ็คเกจหรือผู้จัดการบริการ",
       "updateStepsSourceCheckout": "อัปเดตจากการชำระเงินแหล่งที่มา",
       "updateStepsServer": "อัปเดต Orca บนเซิร์ฟเวอร์ จากนั้นรีสตาร์ท",
-      "orcaVersion": "เวอร์ชันออร์ก้า"
+      "orcaVersion": "เวอร์ชันOrca"
     }
   },
   "app": {
@@ -568,7 +568,7 @@
       "sameSubnet": "อีเทอร์เน็ตและ WiFi ต้องใช้เครือข่ายย่อยเดียวกัน",
       "reconnectWifi": "ลองเชื่อมต่อ WiFi บนอุปกรณ์ทั้งสองอีกครั้ง",
       "firewallTitle": "พอร์ตการบล็อกไฟร์วอลล์ {{port}}",
-      "linuxFirewall": "Linux: sudo ufw อนุญาต {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "macosFirewall": "macOS: การตั้งค่าระบบ → เครือข่าย → ไฟร์วอลล์ — อนุญาต Orca",
       "windowsFirewall": "Windows: Defender Firewall → อนุญาตแอป — เปิดใช้งาน Orca สำหรับเครือข่ายส่วนตัว",
       "restrictedNetwork": "เครือข่ายองค์กร/โรงเรียนอาจบล็อก P2P — ลองใช้ฮอตสปอตส่วนบุคคล",
@@ -997,9 +997,9 @@
       "thisComputer": "คอมพิวเตอร์เครื่องนี้",
       "waitingForDesktop": "ยังคงรอโฮสต์อยู่",
       "savingToDesktop": "บันทึกไปยังโฮสต์",
-      "backToOptions": "Back to Workspace options",
+      "backToOptions": "กลับไปที่ตัวเลือกพื้นที่ทำงาน",
       "workspaceOptions": "ตัวเลือกพื้นที่ทำงาน",
-      "syncedAcrossDevices": "Synced across your devices",
+      "syncedAcrossDevices": "ซิงค์ในทุกอุปกรณ์ของคุณ",
       "done": "เสร็จสิ้น",
       "reset": "รีเซ็ต"
     },
@@ -1016,25 +1016,25 @@
   },
   "webShell": {
     "shellStateScreen": {
-      "isolationUnavailable": "This device's WebView is too old to open the workspace safely.",
-      "isolationUnavailableAndroid": "Orca needs Android System WebView or Chrome 101 or newer. Update it from the Play Store, or pick a newer one in Developer options > WebView implementation.",
-      "webViewInUse": "This device has {{name}} {{version}}.",
-      "downloadFailed": "The latest app could not be downloaded from this host.",
-      "hostProfileUnreadable": "Could not read this host on your device. Try again.",
-      "statusUnreadable": "Could not read this host's status. Go back and reopen it.",
-      "renderProcessGone": "The workspace stopped responding.",
-      "documentLoadFailed": "The downloaded app could not be opened.",
+      "isolationUnavailable": "WebView ของอุปกรณ์นี้เก่าเกินไปที่จะเปิดพื้นที่ทำงานได้อย่างปลอดภัย",
+      "isolationUnavailableAndroid": "Orca จำเป็นต้องใช้ Android System WebView หรือ Chrome 101 ขึ้นไป อัปเดตจาก Play Store หรือเลือกเวอร์ชันที่ใหม่กว่าใน Developer options > WebView implementation",
+      "webViewInUse": "อุปกรณ์นี้มี {{name}} {{version}}",
+      "downloadFailed": "ไม่สามารถดาวน์โหลดแอปล่าสุดจากโฮสต์นี้ได้",
+      "hostProfileUnreadable": "ไม่สามารถอ่านข้อมูลโฮสต์นี้บนอุปกรณ์ของคุณได้ ลองอีกครั้ง",
+      "statusUnreadable": "ไม่สามารถอ่านสถานะของโฮสต์นี้ได้ ย้อนกลับแล้วเปิดใหม่อีกครั้ง",
+      "renderProcessGone": "พื้นที่ทำงานหยุดตอบสนอง",
+      "documentLoadFailed": "ไม่สามารถเปิดแอปที่ดาวน์โหลดได้",
       "tryAgain": "ลองอีกครั้ง",
-      "connectToDownload": "Connect to this host to download the latest app",
-      "openingWorkspace": "Opening workspace",
-      "checkingHost": "Checking host"
+      "connectToDownload": "เชื่อมต่อกับโฮสต์นี้เพื่อดาวน์โหลดแอปล่าสุด",
+      "openingWorkspace": "กำลังเปิดพื้นที่ทำงาน",
+      "checkingHost": "กำลังตรวจสอบโฮสต์"
     },
     "pageRouteUnavailable": {
-      "updateTitle": "อัปเดตออร์ก้า",
-      "updateMessage": "This screen needs a newer Orca on your phone or on {{host}}.",
-      "updateMessageNoHost": "This screen needs a newer Orca.",
-      "serverTitle": "Can’t reach this server",
-      "serverMessage": "Your phone can’t reach this workspace’s server through {{host}}."
+      "updateTitle": "อัปเดตOrca",
+      "updateMessage": "หน้าจอนี้จำเป็นต้องใช้ Orca เวอร์ชันที่ใหม่กว่าบนโทรศัพท์ของคุณหรือบน {{host}}",
+      "updateMessageNoHost": "หน้าจอนี้จำเป็นต้องใช้ Orca เวอร์ชันที่ใหม่กว่า",
+      "serverTitle": "ไม่สามารถเข้าถึงเซิร์ฟเวอร์นี้ได้",
+      "serverMessage": "โทรศัพท์ของคุณไม่สามารถเข้าถึงเซิร์ฟเวอร์ของพื้นที่ทำงานนี้ผ่าน {{host}} ได้"
     }
   },
   "navigation": {
@@ -1055,18 +1055,18 @@
   },
   "notifications": {
     "notificationDeliverySection": {
-      "onlyWhenAway": "Only when away from desktop",
-      "onlyWhenAwayHint": "After 3 minutes without keyboard or mouse activity, or when locked.",
+      "onlyWhenAway": "เฉพาะเมื่อไม่อยู่หน้าเดสก์ท็อป",
+      "onlyWhenAwayHint": "หลังจากไม่มีการใช้งานแป้นพิมพ์หรือเมาส์เป็นเวลา 3 นาที หรือเมื่อล็อกหน้าจอ",
       "sound": "เสียงแจ้งเตือน",
       "suppressWhileFocused": "ระงับขณะโฟกัส",
-      "suppressWhileFocusedHint": "Skip alerts for the workspace open on this phone.",
-      "footer": "Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.",
-      "onlyWhenAgentNeedsInput": "Only when an agent needs me",
-      "onlyWhenAgentNeedsInputHint": "Permission requests and questions. Skips finished agents."
+      "suppressWhileFocusedHint": "ข้ามการแจ้งเตือนสำหรับพื้นที่ทำงานที่เปิดอยู่บนโทรศัพท์นี้",
+      "footer": "ประเภทการแจ้งเตือนจะเป็นไปตามการตั้งค่าการแจ้งเตือนของแต่ละเดสก์ท็อปที่จับคู่ไว้ การแจ้งเตือนจะหยุดชั่วคราวหากไม่ได้ใช้แอปนี้เป็นเวลา 7 วัน ให้เปิดแอปและเชื่อมต่อใหม่เพื่อกลับมาใช้งานต่อ",
+      "onlyWhenAgentNeedsInput": "เฉพาะเมื่อAgentต้องการข้อมูลจากฉัน",
+      "onlyWhenAgentNeedsInputHint": "คำขอสิทธิ์และคำถาม ข้ามAgentที่ทำงานเสร็จแล้ว"
     },
     "desktopChannel": {
-      "silentName": "Orca silent notifications",
-      "name": "Desktop Notifications"
+      "silentName": "การแจ้งเตือนแบบเงียบของ Orca",
+      "name": "การแจ้งเตือนเดสก์ท็อป"
     }
   },
   "onboarding": {
@@ -1086,7 +1086,7 @@
       "skipNotifications": "ข้ามการแจ้งเตือนไปก่อน"
     },
     "notificationOnboardingPreview": {
-      "codexFinished": "โคเด็กซ์เสร็จแล้ว",
+      "codexFinished": "Codexเสร็จแล้ว",
       "testsPassing": "การทดสอบกำลังผ่านไป",
       "claudeNeedsInput": "โคลดต้องการข้อมูล",
       "waitingOnYou": "รอคุณอยู่",
@@ -1216,7 +1216,7 @@
       "useReset": "ใช้การรีเซ็ต"
     },
     "customKeyModal": {
-      "editing": "Editing",
+      "editing": "กำลังแก้ไข",
       "navigation": "การนำทาง",
       "function": "ฟังก์ชัน",
       "addShortcut": "เพิ่มทางลัด",
@@ -1351,7 +1351,7 @@
       "threadsWhenInSync_other": "ความคิดเห็น {{count}} GitHub จะแสดงที่นี่เมื่อสาขานี้ตรงกับPull Request"
     },
     "diffReviewFooter": {
-      "previousFile": "Previous file",
+      "previousFile": "ไฟล์ก่อนหน้า",
       "nextFile": "ไฟล์ถัดไป",
       "stageNext": "สเตจ · ไฟล์ถัดไป",
       "viewedNext": "ดูแล้ว · ไฟล์ถัดไป",
@@ -1366,10 +1366,10 @@
       "addedLineNumber": "เพิ่มบรรทัด {{number}}",
       "addedLine": "เพิ่มบรรทัด",
       "deletedLineNumber": "บรรทัดที่ถูกลบ {{number}}",
-      "deletedLine": "Deleted line",
-      "contextLineNumber": "Context line {{number}}",
+      "deletedLine": "บรรทัดที่ถูกลบ",
+      "contextLineNumber": "บรรทัดบริบท {{number}}",
       "contextLine": "บรรทัดบริบท",
-      "addNoteOnLine": "Add note on line {{number}}",
+      "addNoteOnLine": "เพิ่มบันทึกในบรรทัด {{number}}",
       "editNoteOnLine": "แก้ไขบันทึกในบรรทัด {{number}}"
     },
     "hostCard": {
@@ -1425,8 +1425,8 @@
       "copyFailed": "การคัดลอกล้มเหลว",
       "clipboardRejected": "The clipboard rejected the text.",
       "failed": "ล้มเหลว",
-      "copiedLoaded": "Copied loaded",
-      "copyLoaded": "Copy loaded",
+      "copiedLoaded": "คัดลอกที่โหลดแล้ว",
+      "copyLoaded": "คัดลอกที่โหลด",
       "couldNotCopy": "ไม่สามารถคัดลอกได้"
     },
     "workspaceNameInput": {
@@ -1489,7 +1489,7 @@
       "openAppStore": "เปิด App Store",
       "openGooglePlay": "เปิด Google Play",
       "openGitHubReleases": "เปิดรุ่น GitHub",
-      "getVersion": "รับออร์ก้า {{version}}",
+      "getVersion": "รับOrca {{version}}",
       "refreshRecoveryNote": "หากข้อความนี้ยังคงอยู่ ให้ลบโฮสต์นี้และจับคู่อีกครั้ง",
       "updateRecoveryNote": "อัปเดตแล้วหรือยัง? กลับไปที่โฮสต์และรีเฟรชการเชื่อมต่อ หากข้อความนี้ยังคงอยู่ ให้ลบโฮสต์นี้ออกแล้วจับคู่อีกครั้ง",
       "backToHosts": "กลับไปที่โฮสต์"
@@ -1755,7 +1755,7 @@
         "failed": "ไม่สามารถโหลดการใช้งาน Codex ได้ ลองอีกครั้ง",
         "codexVersion": "เวอร์ชัน Codex นี้ไม่ได้รายงานการใช้งาน อัปเดต Codex",
         "apiKeyAuth": "การใช้งาน Codex ไม่สามารถใช้งานได้กับคีย์ API ลงชื่อเข้าใช้ Codex ด้วยบัญชี ChatGPT เพื่อดูการใช้งาน",
-        "title": "การใช้โคเด็กซ์",
+        "title": "การใช้Codex",
         "loading": "กำลังโหลดการใช้งาน Codex…",
         "account": "บัญชีที่ใช้โดยการแชทนี้",
         "retry": "ลองอีกครั้ง"
@@ -1955,7 +1955,7 @@
       "stackBlocked": "#{{number}} ถูกบล็อค",
       "methodMerge": "สร้างการรวมคอมมิต",
       "methodSquash": "สควอชและผสาน",
-      "methodRebase": "รีบูตและรวม",
+      "methodRebase": "รีเบสและรวม",
       "mergeConfirmMessage": "การดำเนินการนี้จะรวม #{{number}} เข้ากับสาขาฐาน",
       "queueThrough_one": "เข้าคิวผ่าน #{{number}} · {{count}} PR",
       "queueThrough_other": "เข้าคิวจนถึง #{{number}} · {{count}} PRs",
@@ -2390,7 +2390,7 @@
       "discard": "ยกเลิก",
       "copyLoadedSource": "คัดลอกแหล่งที่มาของ Markdown ที่โหลด",
       "copySource": "คัดลอกแหล่งที่มาของมาร์กดาวน์",
-      "copyLoaded": "Copy loaded",
+      "copyLoaded": "คัดลอกที่โหลด",
       "copyPathLabel": "คัดลอกเส้นทางมาร์กดาวน์",
       "copyPath": "คัดลอกเส้นทาง",
       "loading": "กำลังโหลดเอกสาร..."
@@ -2507,7 +2507,7 @@
       "checksHint": "เปิดการตรวจสอบPull Request"
     },
     "routeScreen": {
-      "openingWorkspace": "Opening workspace"
+      "openingWorkspace": "กำลังเปิดพื้นที่ทำงาน"
     },
     "sheets": {
       "newTab": "แท็บใหม่",
@@ -2789,7 +2789,7 @@
       "connected": "เชื่อมต่อแล้ว",
       "disconnected": "ยกเลิกการเชื่อมต่อ",
       "reconnecting": "กำลังเชื่อมต่อใหม่",
-      "pairingInvalid": "Pairing invalid"
+      "pairingInvalid": "การจับคู่ไม่ถูกต้อง"
     },
     "useTerminalCreateActions": {
       "forkUnavailable": "เปิดแชท {{agentName}} บนโฮสต์ที่เชื่อมต่อและอัปเดตแล้วลองอีกครั้ง",
@@ -3113,7 +3113,7 @@
       "unconfirmed": "ไม่สามารถยืนยันได้ว่าสิ่งนี้ถูกส่งไปแล้วหรือไม่ มันไม่ได้มีความไม่พอใจ"
     },
     "writeNotice": {
-      "notDoneReadHistory": "This chat's history couldn't be loaded.",
+      "notDoneReadHistory": "ไม่สามารถโหลดประวัติการแชทนี้ได้",
       "notDoneSend": "ข้อความของคุณไม่ได้ถูกส่ง",
       "tryAgainComposerSend": "ส่งอีกครั้ง",
       "messageNotSaved": "ไม่สามารถบันทึกข้อความของคุณได้",
@@ -3128,15 +3128,15 @@
       "restartFailed": "Agentไม่สามารถรีสตาร์ทได้",
       "capacity": "Orca on the computer running this chat has hit a request limit. อัปเดต Orca ที่นั่น แล้วลองอีกครั้ง",
       "outcomeUnknown": "Orca ไม่สามารถยืนยันสิ่งที่เกิดขึ้นได้ ตรวจสอบการแชท",
-      "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
+      "sendOutcomeLost": "Orca ไม่สามารถยืนยันได้ว่าข้อความของคุณส่งถึงAgentแล้วหรือไม่ ตรวจสอบการแชทแล้วส่งใหม่อีกครั้งหากจำเป็น",
       "continuationSuperseded": "การแชทนี้ได้ดำเนินต่อไปแล้ว ตรวจสอบข้อความล่าสุดก่อนดำเนินการต่อ",
-      "questionChanged": "This question was already answered or has changed.",
-      "cancelNotSaved": "Couldn't cancel this question or approval.",
-      "historyUnreadable": "Orca couldn't read this chat's saved history.",
+      "questionChanged": "คำถามนี้ได้รับคำตอบแล้วหรือมีการเปลี่ยนแปลง",
+      "cancelNotSaved": "ไม่สามารถยกเลิกคำถามหรือการอนุมัตินี้ได้",
+      "historyUnreadable": "Orca ไม่สามารถอ่านประวัติการแชทที่บันทึกไว้ได้",
       "historyUnusable": "ไม่สามารถโหลดการแชทนี้ได้",
-      "historyUnavailable": "Orca couldn't open this chat's history right now.",
-      "diskFull": "The disk on the computer running this chat is full.",
-      "freeDiskSpace": "Free up space on that disk, then try again.",
+      "historyUnavailable": "Orca ไม่สามารถเปิดประวัติการแชทนี้ได้ในขณะนี้",
+      "diskFull": "ดิสก์บนคอมพิวเตอร์ที่รันแชทนี้เต็ม",
+      "freeDiskSpace": "เพิ่มพื้นที่ว่างบนดิสก์นั้น แล้วลองอีกครั้ง",
       "savedInOtherFolder": "การสนทนานี้ถูกบันทึกไว้ในโฟลเดอร์อื่น",
       "savedByNewerOrca": "การแชทได้รับการบันทึกโดย Orca รุ่นใหม่",
       "updateOrcaToKeepUsing": "อัปเดต Orca เพื่อใช้งานต่อไป",
@@ -3283,7 +3283,7 @@
       "answer": "ตอบ",
       "background": "พื้นหลัง",
       "cancel": "ยกเลิก",
-      "confirm": "Confirm",
+      "confirm": "ยืนยัน",
       "edit": "แก้ไข",
       "history": "ประวัติ",
       "keyLabel": "{{word}} ส่ง {{combo}}",
@@ -3536,7 +3536,7 @@
     "messageActionsSheet": {
       "copyMessage": "คัดลอกข้อความ",
       "copyFailed": "การคัดลอกล้มเหลว",
-      "clipboardRejected": "The clipboard rejected the text.",
+      "clipboardRejected": "คลิปบอร์ดปฏิเสธข้อความ",
       "selectText": "เลือกข้อความ",
       "rewind": "ย้อนกลับมาที่นี่"
     },
@@ -3579,7 +3579,7 @@
       "reading": "การอ่าน",
       "read": "อ่าน",
       "triedRead": "พยายามอ่าน",
-      "editing": "Editing",
+      "editing": "กำลังแก้ไข",
       "edited": "แก้ไขแล้ว",
       "triedEdit": "พยายามแก้ไข",
       "added": "เพิ่มแล้ว",
@@ -3645,7 +3645,7 @@
       "runningNamedPreview": "กำลังทำงาน {{toolName}} {{preview}}",
       "runningNamed": "กำลังทำงาน {{toolName}}",
       "result": "ผลลัพธ์",
-      "moreCalls": "+{{value0}} more",
+      "moreCalls": "+อีก {{value0}} รายการ",
       "failedCount": "{{value0}} ล้มเหลว",
       "failedCallsLabel": "การเรียกเครื่องมือล้มเหลว: {{value0}}",
       "interruptedCount": "{{value0}} ถูกขัดจังหวะ",
@@ -3778,7 +3778,7 @@
     "subagentGroup": {
       "stateCompleted": "เสร็จสิ้นแล้ว",
       "stateWorking": "ทำงานอยู่",
-      "stateIdle": "idle",
+      "stateIdle": "ว่าง",
       "stateFailed": "ล้มเหลว",
       "stateStopped": "หยุดแล้ว",
       "stateUnverifiable": "สถานะไม่พร้อมใช้งาน",
@@ -4052,7 +4052,7 @@
         },
         "notNow": "ไม่ใช่ตอนนี้",
         "progress": {
-          "heading": "Setting up Google",
+          "heading": "กำลังตั้งค่า Google",
           "done": "เสร็จสิ้น",
           "waiting": "กำลังรอคุณอยู่",
           "working": "ทำงานอยู่",
@@ -4079,30 +4079,30 @@
         },
         "movedDown": "เดินต่อไปด้านล่าง",
         "connected": {
-          "heading": "Google connected",
-          "canUse": "{{bot}} can use {{services}}."
+          "heading": "เชื่อมต่อ Google แล้ว",
+          "canUse": "{{bot}} สามารถใช้ {{services}} ได้"
         },
         "copied": "คัดลอกแล้ว ส่งให้ผู้ดูแลระบบ Google ของคุณ",
         "action": {
           "onComputer": "สำหรับ “{{action}}” ให้ใช้ Orca บนคอมพิวเตอร์ของคุณ",
-          "makeNewKey": "Make a new key",
-          "importKey": "Import a key file",
-          "allow": "Allow {{services}}",
+          "makeNewKey": "สร้างคีย์ใหม่",
+          "importKey": "นำเข้าไฟล์คีย์",
+          "allow": "อนุญาต {{services}}",
           "signInAgain": "ลงชื่อเข้าใช้อีกครั้ง",
-          "continueWithout": "Continue without them",
-          "keep": "Keep {{email}}",
-          "signInAs": "Sign in as {{email}}",
+          "continueWithout": "ดำเนินการต่อโดยไม่ใช้",
+          "keep": "เก็บ {{email}} ไว้",
+          "signInAs": "ลงชื่อเข้าใช้เป็น {{email}}",
           "turnOn": "เปิด",
           "copyForAdmin": "คัดลอกสำหรับผู้ดูแลระบบของคุณ",
           "checkAgain": "ตรวจสอบอีกครั้ง",
           "continue": "ดำเนินการต่อ",
-          "startOver": "Start over"
+          "startOver": "เริ่มต้นใหม่"
         },
         "otherAccount": "สลับบัญชี",
-        "letMe": "Let me do this one",
+        "letMe": "ให้ฉันทำขั้นตอนนี้เอง",
         "step": {
-          "headingCount": "Your turn · {{n}} of {{total}}",
-          "watching": "Watching the page",
+          "headingCount": "ถึงตาคุณแล้ว · {{n}} จาก {{total}}",
+          "watching": "กำลังเฝ้าดูหน้าเว็บ",
           "onComputer": "ทำสิ่งนี้ใน Google Cloud บนคอมพิวเตอร์ของคุณ",
           "account": "ลงชื่อเข้าใช้ Google",
           "project": "สร้างโครงการ",
@@ -4111,10 +4111,10 @@
           "links": "เพิ่มลิงก์ของแอปของคุณ",
           "publish": "เผยแพร่แอป",
           "client": "สร้างคีย์ของแอป",
-          "connect": "Connect and check"
+          "connect": "เชื่อมต่อและตรวจสอบ"
         },
         "done": "เสร็จสิ้น",
-        "takeOver": "Take over from here",
+        "takeOver": "รับช่วงต่อจากตรงนี้",
         "choice": {
           "gmail": "Gmail",
           "calendar": "ปฏิทิน",
@@ -4157,10 +4157,10 @@
           }
         },
         "blocker": {
-          "stoppedWhy": "Setup stopped: {{reason}}",
-          "stopped": "Setup stopped.",
-          "paused": "The setup paused at {{step}}. Everything so far is saved.",
-          "yourTurn": "Your turn: {{step}}.",
+          "stoppedWhy": "การตั้งค่าหยุดลง: {{reason}}",
+          "stopped": "การตั้งค่าหยุดลง",
+          "paused": "การตั้งค่าหยุดชั่วคราวที่ {{step}} ทุกอย่างที่ทำไปได้รับการบันทึกแล้ว",
+          "yourTurn": "ถึงตาคุณแล้ว: {{step}}",
           "noKey": "Orca ต้องการคีย์ของแอปก่อน",
           "keyGone": "คีย์ของแอปนี้ใช้งานไม่ได้อีกต่อไป: มันถูกลบออกจาก Google Cloud แล้ว",
           "keyOtherProject": "คีย์ที่บันทึกไว้มีไว้สำหรับโปรเจ็กต์ {{keyProject}} ไม่ใช่ {{project}}",
@@ -4171,7 +4171,7 @@
           "adminBlocked": "ผู้ดูแลระบบ Google ของบริษัทของคุณบล็อก {{services}}.",
           "checkFailed": "Orca ไม่สามารถตรวจสอบ {{services}} ได้"
         },
-        "ownerStep": "Step {{step}} of 3",
+        "ownerStep": "ขั้นตอนที่ {{step}} จาก 3",
         "adminRequest": "โปรดทำเครื่องหมายแอป Google นี้ว่าเชื่อถือได้ในคอนโซลผู้ดูแลระบบ (ความปลอดภัย › การควบคุม API › จัดการการเข้าถึงแอปของบุคคลที่สาม): {{clientId}}"
       },
       "importDone": {
@@ -4345,10 +4345,10 @@
       "stageFile": "ขั้นตอนอย่างน้อยหนึ่งไฟล์ที่จะคอมมิต",
       "enterMessage": "ป้อนข้อความยืนยันที่จะยืนยัน",
       "statusConflicts": "ข้อขัดแย้ง",
-      "statusNothingStaged": "Nothing staged",
-      "statusNeedsMessage": "Needs message",
-      "statusNotPublished": "Not published",
-      "statusNoBranch": "No branch"
+      "statusNothingStaged": "ไม่มีการ Stage ไฟล์",
+      "statusNeedsMessage": "ต้องระบุข้อความคอมมิต",
+      "statusNotPublished": "ยังไม่ได้เผยแพร่",
+      "statusNoBranch": "ไม่มีสาขา"
     },
     "createPrAction": {
       "createReview": "สร้าง {{titleLabel}}",
@@ -4413,9 +4413,9 @@
       "publishBranchFirstToSync": "เผยแพร่สาขาก่อนเพื่อซิงค์คอมมิต",
       "useForcePushToSync": "ใช้ Force Push — รีโมตมีเฉพาะสำเนาที่เก่ากว่าของคอมมิตในเครื่อง",
       "branchUpToDate": "สาขาเป็นข้อมูลล่าสุด",
-      "rebaseFromBase": "รีบูตจากฐาน",
-      "rebaseChooseRemoteBase": "เลือกสาขาฐานระยะไกลเพื่อรีบูต",
-      "rebaseDirtyHint": "ลองรีบูต; git อาจต้องมีการดำเนินการหรือซ่อนการเปลี่ยนแปลงในเครื่องก่อน",
+      "rebaseFromBase": "รีเบสจากฐาน",
+      "rebaseChooseRemoteBase": "เลือกสาขาฐานรีโมตเพื่อรีเบส",
+      "rebaseDirtyHint": "ลองรีเบส; Git อาจต้องมีการคอมมิตหรือ stash การเปลี่ยนแปลงในเครื่องก่อน",
       "fetch": "ดึงข้อมูล",
       "fetchTitle": "ดึงข้อมูลจากระยะไกลโดยไม่ต้องรวม",
       "linkedReviewBranchExists": "สาขาการตรวจสอบที่เชื่อมโยงมีอยู่แล้ว",
@@ -4424,16 +4424,16 @@
       "publishToOrigin": "เผยแพร่สาขานี้ไปยังต้นทาง",
       "nothingToPushTo": "ไม่มีอะไรที่จะผลักดันไปที่ {{upstreamName}}",
       "nothingToForcePushTo": "ไม่มีอะไรที่จะบังคับให้กดไปที่ {{upstreamName}}",
-      "rebaseFromNamedBase": "รีบูตจาก {{baseRef}}",
-      "rebaseWithLatestFrom": "รีบูตสาขาปัจจุบันด้วยคอมมิตล่าสุดจาก {{baseRef}}",
+      "rebaseFromNamedBase": "รีเบสจาก {{baseRef}}",
+      "rebaseWithLatestFrom": "รีเบสสาขาปัจจุบันด้วยคอมมิตล่าสุดจาก {{baseRef}}",
       "statusUpToDate": "อัปเดต",
-      "statusSetsUpstream": "Sets upstream",
-      "statusNotPublished": "Not published",
-      "statusNoBranch": "No branch",
-      "statusMayFail": "May fail",
-      "statusPublished": "Published",
+      "statusSetsUpstream": "ตั้งค่า Upstream",
+      "statusNotPublished": "ยังไม่ได้เผยแพร่",
+      "statusNoBranch": "ไม่มีสาขา",
+      "statusMayFail": "อาจล้มเหลว",
+      "statusPublished": "เผยแพร่แล้ว",
       "statusStashFirst": "เก็บไว้ก่อน",
-      "statusReplaces": "Replaces ↓{{behind}}"
+      "statusReplaces": "แทนที่ ↓{{behind}}"
     },
     "actions": {
       "createPr": "สร้างประชาสัมพันธ์",
@@ -4472,16 +4472,16 @@
       "fastForwardCount_other": "กรอไปข้างหน้า {{count}} คอมมิต",
       "syncCounts": "ดึง {{behind}} กด {{ahead}}",
       "remoteBranchFallback": "สาขาระยะไกล",
-      "titleForcePushOlderCopiesBranch": "Remote only has older copies of local commits. Force push this branch with lease to update {{upstreamName}}.",
-      "titleForcePushOlderCopiesCount_one": "Remote only has older copies of local commits. Force push {{count}} branch commit with lease to update {{upstreamName}}.",
-      "titleForcePushOlderCopiesCount_other": "Remote only has older copies of local commits. Force push {{count}} branch commits with lease to update {{upstreamName}}.",
-      "titleManualForcePushReplaceRemote_one": "Force push {{count}} local commit with lease to update {{upstreamName}} and replace remote-only commits.",
-      "titleManualForcePushReplaceRemote_other": "Force push {{count}} local commits with lease to update {{upstreamName}} and replace remote-only commits.",
-      "titleManualForcePush_one": "Force push {{count}} local commit with lease to update {{upstreamName}}.",
-      "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
-      "titleUnpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed.",
-      "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
-      "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+      "titleForcePushOlderCopiesBranch": "Remote มีเฉพาะสำเนาที่เก่ากว่าของคอมมิตในเครื่อง Force push สาขานี้ด้วย lease เพื่ออัปเดต {{upstreamName}}",
+      "titleForcePushOlderCopiesCount_one": "Remote มีเฉพาะสำเนาที่เก่ากว่าของคอมมิตในเครื่อง Force push {{count}} คอมมิตของสาขาด้วย lease เพื่ออัปเดต {{upstreamName}}",
+      "titleForcePushOlderCopiesCount_other": "Remote มีเฉพาะสำเนาที่เก่ากว่าของคอมมิตในเครื่อง Force push {{count}} คอมมิตของสาขาด้วย lease เพื่ออัปเดต {{upstreamName}}",
+      "titleManualForcePushReplaceRemote_one": "Force push {{count}} คอมมิตในเครื่องด้วย lease เพื่ออัปเดต {{upstreamName}} และแทนที่คอมมิตที่มีอยู่บนรีโมตเท่านั้น",
+      "titleManualForcePushReplaceRemote_other": "Force push {{count}} คอมมิตในเครื่องด้วย lease เพื่ออัปเดต {{upstreamName}} และแทนที่คอมมิตที่มีอยู่บนรีโมตเท่านั้น",
+      "titleManualForcePush_one": "Force push {{count}} คอมมิตในเครื่องด้วย lease เพื่ออัปเดต {{upstreamName}}",
+      "titleManualForcePush_other": "Force push {{count}} คอมมิตในเครื่องด้วย lease เพื่ออัปเดต {{upstreamName}}",
+      "titleUnpublishedForcePushBranch": "Force push สาขานี้ด้วย lease และตั้งค่า Upstream หากจำเป็น",
+      "titleUnpublishedForcePushCount_one": "Force push {{count}} คอมมิตของสาขาด้วย lease และตั้งค่า Upstream หากจำเป็น",
+      "titleUnpublishedForcePushCount_other": "Force push {{count}} คอมมิตของสาขาด้วย lease และตั้งค่า Upstream หากจำเป็น"
     },
     "primaryAction": {
       "forcePushFromDesktop": "บังคับให้พุชสาขาของPull Requestนี้จากเดสก์ท็อป",
@@ -4669,7 +4669,7 @@
       "pullRequest": "ดึงคำขอ"
     },
     "screenState": {
-      "noBranch": "No branch"
+      "noBranch": "ไม่มีสาขา"
     },
     "useMobileCommitFailureRecovery": {
       "launchFailed": "ไม่สามารถเปิดใช้Agentได้"
@@ -4686,7 +4686,7 @@
       "branchUnavailable": "สถานะสาขาไม่พร้อมใช้งาน"
     },
     "actionSheetRunners": {
-      "noBaseBranch": "ไม่มีสาขาฐานที่จะรีบูต"
+      "noBaseBranch": "ไม่มีสาขาฐานที่จะรีเบส"
     },
     "commitRunners": {
       "commitFailed": "การคอมมิตล้มเหลว",
@@ -4704,9 +4704,9 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode ส่งคืนเหตุการณ์ JSON ที่ไม่ถูกต้อง",
-      "antigravityInvalidEvents": "การต้านแรงโน้มถ่วงส่งคืนเหตุการณ์ JSON ที่ไม่ถูกต้อง",
-      "antigravityInvalidResult": "แรงต้านแรงโน้มถ่วงส่งคืนผลลัพธ์ที่ไม่ถูกต้อง",
-      "antigravityNoFinalResult": "การต้านแรงโน้มถ่วงไม่ได้ให้ผลลัพธ์สุดท้าย",
+      "antigravityInvalidEvents": "Antigravityส่งคืนเหตุการณ์ JSON ที่ไม่ถูกต้อง",
+      "antigravityInvalidResult": "Antigravityส่งคืนผลลัพธ์ที่ไม่ถูกต้อง",
+      "antigravityNoFinalResult": "Antigravityไม่ได้ให้ผลลัพธ์สุดท้าย",
       "kimiUnreadableOutput": "Kimi ส่งคืนเอาต์พุต Orca ไม่สามารถอ่านได้ ลองอีกครั้ง",
       "kimiSessionOccupied": "Kimi ไม่สามารถใช้เซสชันนี้ได้เนื่องจากมีการใช้งานอยู่ในไคลเอนต์อื่น หยุดเซสชันตรงนั้นหรือออกจากไคลเอ็นต์นั้น แล้วลองอีกครั้ง",
       "kimiInterrupted": "Kimi ถูกขัดจังหวะก่อนที่จะสร้างข้อความเสร็จ ลองอีกครั้ง",
@@ -4848,15 +4848,15 @@
     },
     "changesHeader": {
       "merging": "การรวม",
-      "rebasing": "การรีบูต",
+      "rebasing": "กำลังรีเบส",
       "cherryPicking": "เก็บเชอร์รี่",
-      "notPublished": "Not published",
+      "notPublished": "ยังไม่ได้เผยแพร่",
       "notPushed": "{{count}} ไม่ได้ถูกผลัก",
       "behind": "{{count}} ข้างหลัง",
       "upToDate": "อัปเดต",
       "switchBranch": "เปลี่ยนสาขาจาก {{branch}}",
       "mergeInProgress": "อยู่ระหว่างการรวม",
-      "rebaseInProgress": "กำลังดำเนินการรีบูต",
+      "rebaseInProgress": "กำลังดำเนินการรีเบส",
       "cherryPickInProgress": "กำลังเก็บเชอร์รี่",
       "filesNeedDecision_one": "{{count}} ไฟล์ต้องได้รับการตัดสินใจก่อนจึงจะเสร็จสิ้นได้",
       "filesNeedDecision_other": "{{count}} ไฟล์ต้องได้รับการตัดสินใจก่อนจึงจะเสร็จสิ้นได้",
@@ -5311,7 +5311,7 @@
       "detectingAgents": "กำลังตรวจจับAgent...",
       "advanced": "ขั้นสูง",
       "startFrom": "เริ่มจาก",
-      "defaultBranch": "Default branch",
+      "defaultBranch": "สาขาเริ่มต้น",
       "addRepository": "เพิ่มพื้นที่เก็บข้อมูล Git ก่อนที่จะสร้างพื้นที่ทำงานเชิงเส้น",
       "repositoryNotFound": "ไม่พบพื้นที่เก็บข้อมูล",
       "connectRepository": "เชื่อมต่อพื้นที่เก็บข้อมูล",
@@ -5321,7 +5321,7 @@
       "baseBranchTitle": "เริ่มจาก",
       "baseBranchSubtitle": "เลือกสาขาหรือผู้อ้างอิงที่มีอยู่",
       "searchBranches": "ค้นหาสาขา",
-      "defaultBranch": "Default branch",
+      "defaultBranch": "สาขาเริ่มต้น",
       "defaultBranchSubtitle": "ใช้ฐานที่กำหนดค่าของที่เก็บนี้",
       "noBranches": "ไม่มีสาขาที่ตรงกัน",
       "branchName": "ชื่อสาขา: {{name}}",
@@ -5428,10 +5428,10 @@
     "hostedMerge": {
       "confirmGitHubMerge": "รวม PR #{{number}}?",
       "confirmGitHubSquash": "สควอชและรวม PR #{{number}}?",
-      "confirmGitHubRebase": "รีบูตและรวม PR #{{number}}?",
+      "confirmGitHubRebase": "รีเบสและรวม PR #{{number}}?",
       "confirmGitLabMerge": "Pull Requestรวม #{{number}}?",
       "confirmGitLabSquash": "สควอชและรวมPull Request #{{number}}?",
-      "confirmGitLabRebase": "รีบูตและรวมPull Request #{{number}}?"
+      "confirmGitLabRebase": "รีเบสและรวม Merge Request #{{number}}?"
     },
     "pagination": {
       "pageUnreachable": "เพจ {{page}} อยู่นอกเหนือสิ่งที่การค้นหา GitHub สามารถส่งคืนได้",
@@ -5522,7 +5522,7 @@
   },
   "bots": {
     "link": {
-      "updateOrca": "อัปเดตออร์ก้า",
+      "updateOrca": "อัปเดตOrca",
       "openRequestFailed": "ไม่สามารถเปิดคำขอได้",
       "botNotFound": "ไม่พบบอต",
       "openOn": "เปิด {{name}} เปิด",
@@ -5603,7 +5603,7 @@
       "signedOut": "ออกจากระบบ Orca",
       "computerFoot": "ตัวเชื่อมต่อ เครื่องมือ และไฟล์ใช้งานได้บน {{host}}.",
       "computerDetail": "เรียกใช้การแชท เครื่องมือ และระบบอัตโนมัติของบอตนี้",
-      "orcaAccount": "บัญชีออร์ก้า",
+      "orcaAccount": "บัญชีOrca",
       "folder": "โฟลเดอร์",
       "copyPath": "คัดลอกเส้นทาง",
       "pathCopied": "คัดลอกเส้นทางแล้ว",
@@ -5859,7 +5859,7 @@
       "title": "เทมเพลตบอต",
       "blank": "บอตว่างเปล่า",
       "blankLine": "บอกว่ามีไว้เพื่ออะไรในการแชทครั้งแรก",
-      "byOrca": "{{category}} · โดย ออร์ก้า",
+      "byOrca": "{{category}} · โดย Orca",
       "useTemplate": "ใช้เทมเพลต…",
       "backToTemplates": "กลับไปที่เทมเพลต",
       "firstChat": "มันทำอะไรเป็นอย่างแรก",
@@ -6832,9 +6832,9 @@
         "changeTitle": "เปลี่ยนความลับในการลงนาม",
         "addTitle": "เพิ่มความลับในการลงนาม",
         "sender": "ผู้ส่ง",
-        "modeGenerate": "ออร์ก้าสร้างมันขึ้นมา",
+        "modeGenerate": "Orcaสร้างมันขึ้นมา",
         "modePaste": "วางของผู้ส่ง",
-        "generateNote": "ออร์ก้าสร้างความลับนี้ คุณคัดลอกไปที่ {{sender}} ถัดไป",
+        "generateNote": "Orcaสร้างความลับนี้ คุณคัดลอกไปที่ {{sender}} ถัดไป",
         "paste": "{{sender}} ความลับ",
         "save": "บันทึก",
         "back": "กลับไปที่ความลับในการลงนาม",
@@ -7258,8 +7258,8 @@
       "postAs": {
         "title": "โพสต์เป็น",
         "changeOn": "เปลี่ยนใน {{host}}",
-        "orcaUser": "ผู้ใช้ออร์ก้า",
-        "viaOrca": "{{name}} (ผ่าน ออร์ก้า)",
+        "orcaUser": "ผู้ใช้Orca",
+        "viaOrca": "{{name}} (ผ่าน Orca)",
         "sample": "จัดส่งหลังจากนั้น",
         "linePlain": "เมื่อคุณตอบกลับเธรด Slack จาก Orca เธรดนั้นจะโพสต์เป็น {{name}}",
         "approve": "อนุมัติใน Slack",
@@ -8334,7 +8334,7 @@
             "f8b8dbed85": "ใช้งานไม่ได้",
             "e2c6a4f917": "เรียกใช้ Grok เพื่อรีเฟรช",
             "f90b3d7a16": "เรียกใช้ Kimi เพื่อรีเฟรช",
-            "0d8d7cfe15": "กำลังรอเซสชันของคลอดด์",
+            "0d8d7cfe15": "กำลังรอเซสชันของClaude",
             "claude": {
               "waiting": {
                 "label": "อัปเดตเมื่อโคลดทำงาน",
@@ -8423,7 +8423,7 @@
           "claudeOauthTokenUnavailable": "โทเค็นการเข้าถึง Claude OAuth ไม่พร้อมใช้งาน",
           "claudeKeychainUnavailable": "ข้อมูลประจำตัวของ Claude Keychain ไม่พร้อมใช้งาน",
           "claudePlanUsageUnavailable": "การใช้แผน Claude ไม่พร้อมใช้งานสำหรับเซสชัน Claude CLI นี้",
-          "waitingForClaudeSession": "กำลังรอเซสชันของคลอดด์",
+          "waitingForClaudeSession": "กำลังรอเซสชันของClaude",
           "wslClaudeConfigUnavailable": "การกำหนดค่า WSL Claude ไม่พร้อมใช้งานสำหรับ {{distro}}",
           "noCredentials": "ไม่มีข้อมูลรับรอง",
           "fetchAborted": "การดึงข้อมูลขีดจำกัดอัตราถูกยกเลิก",
@@ -8476,7 +8476,7 @@
       "idleCount": "{{count}} ไม่ได้ใช้งาน",
       "offlineTitle": "{{desktop}} ออฟไลน์อยู่",
       "offlineMessage": "เชื่อมต่อใหม่เพื่อเปิดตัวAgentนี้",
-      "actions": "Actions for {{title}}",
+      "actions": "การดำเนินการสำหรับ {{title}}",
       "workers_one": "{{count}} ผู้ปฏิบัติงาน",
       "workers_other": "{{count}} คนงาน",
       "noMatches": "ไม่มีAgentที่ตรงกับ “{{query}}”",

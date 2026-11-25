@@ -1382,7 +1382,7 @@
           "windsurf": "วินด์เซิร์ฟ",
           "devin": "เดวิน",
           "devinDesktop": "เดวินเดสก์ท็อป",
-          "antigravity": "ต้านแรงโน้มถ่วง"
+          "antigravity": "Antigravity"
         }
       },
       "confirmations": {
@@ -1483,7 +1483,7 @@
       },
       "about": {
         "title": "เกี่ยวกับ",
-        "version": "ออร์ก้า {{version}}"
+        "version": "Orca {{version}}"
       },
       "inlineBlameTitle": "ตำหนิ git แบบอินไลน์",
       "inlineBlameDescription": "แสดงว่าใครเปลี่ยนเคอร์เซอร์บรรทัดล่าสุด และเมื่อใด ที่ท้ายบรรทัด",
@@ -1495,7 +1495,7 @@
     "openInApp": {
       "preset": {
         "devinDesktop": "เดวิน เดสก์ท็อป",
-        "antigravityIde": "IDE ต้านแรงโน้มถ่วง"
+        "antigravityIde": "IDE Antigravity"
       }
     },
     "network": {
@@ -1786,7 +1786,7 @@
       },
       "notifyCouldNotFinishOnHostDescription": "การทำงานอัตโนมัติหรือผู้ปฏิบัติงานล้มเหลว เฉพาะโทรศัพท์ที่จับคู่กับ {{host}} เท่านั้นที่จะได้ยิน",
       "group": {
-        "noAccount": "บัญชีออร์ก้า",
+        "noAccount": "บัญชีOrca",
         "notSignedIn": "ไม่ได้ลงชื่อเข้าใช้ · {{computers}}",
         "yourAccount": "บัญชีของคุณ · {{computers}}",
         "signedOut": "ออกจากระบบ Orca",
@@ -1879,7 +1879,7 @@
       "includeHelp": "จับคู่พาธที่สัมพันธ์กับรูทของพื้นที่ทำงาน การไม่มี glob ที่ตรงกันหมายความว่าไม่มีการจัดรูปแบบ * และ ** ข้ามชื่อที่นำหน้าด้วยจุด; แสดงรายการไว้อย่างชัดเจน เช่น .github/**/*.yml เปิดใช้งานรูปแบบในการบันทึกโดยทั่วไป > ตัวแก้ไขเพื่อใช้คำสั่งนี้",
       "saving": "กำลังบันทึก...",
       "save": "บันทึกฟอร์แมตเตอร์",
-      "placeholder": "npx --no-install สวยกว่า --stdin-filepath \"${file}\"",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\"",
       "710343e374": "คำสั่งฟอร์แมตเตอร์"
     },
     "sharedLinks": {
@@ -1929,7 +1929,7 @@
         "hooks": "ตะขอ"
       },
       "copyCommand": "คัดลอกคำสั่ง",
-      "quit": "ออกจากออร์ก้า",
+      "quit": "ออกจากOrca",
       "next": {
         "unknown": "ออกจาก Orca แล้วลบแอป",
         "macApp": "ออกจาก Orca แล้วลากจากแอปพลิเคชันไปที่ถังขยะ",
@@ -1992,7 +1992,7 @@
         "kept": "เก็บไว้"
       },
       "stepFailed": "Orca ไม่สามารถเสร็จสิ้นขั้นตอนนี้",
-      "finishFailed": "ออร์ก้าไม่สามารถทำเช่นนั้นได้"
+      "finishFailed": "Orcaไม่สามารถทำเช่นนั้นได้"
     },
     "notifications": {
       "perfNotices": {
@@ -2174,7 +2174,7 @@
   "menu": {
     "checkForUpdates": "ตรวจสอบการอัปเดต...",
     "settings": "การตั้งค่า",
-    "exploreOrca": "สำรวจออร์ก้า",
+    "exploreOrca": "สำรวจOrca",
     "gettingStarted": "เริ่มต้นใช้งาน Orca",
     "reportCrash": "รายงานข้อขัดข้อง...",
     "file": "ไฟล์",
@@ -2204,9 +2204,9 @@
     "selectAll": "เลือกทั้งหมด",
     "quitAndStopAllSessions": "ออกโดยสมบูรณ์...",
     "quitAndStopAllSessionsTooltip": "ยังหยุดทุกเซสชันเทอร์มินัล รวมถึงเอเจนต์ที่ทำงานอยู่ด้วย Plain Quit ทำให้พวกเขาทำงานต่อไป ดังนั้น Orca จะติดใหม่อีกครั้งในการเปิดตัวครั้งถัดไป",
-    "about": "เกี่ยวกับออร์ก้า",
+    "about": "เกี่ยวกับOrca",
     "cut": "ตัด",
-    "hide": "ซ่อนออร์ก้า",
+    "hide": "ซ่อนOrca",
     "hideOthers": "ซ่อนผู้อื่น",
     "minimize": "ย่อเล็กสุด",
     "redo": "ทำซ้ำ",
@@ -2217,7 +2217,7 @@
     "zoom": "ซูม"
   },
   "tray": {
-    "openOrca": "เปิดออร์ก้า",
+    "openOrca": "เปิดOrca",
     "quit": "ออก",
     "minimizeNotice": {
       "body": "Orca ยังคงทำงานในถาดระบบ"
@@ -3275,7 +3275,7 @@
           "signInWithChatgpt": "ลงชื่อเข้าใช้ด้วย ChatGPT",
           "unknown": "ข้อผิดพลาดที่ไม่รู้จัก",
           "usagePageFetchFailed": "การดึงข้อมูลหน้าการใช้งานล้มเหลว ({{status}})",
-          "waitingForClaudeSession": "กำลังรอเซสชันของคลอดด์",
+          "waitingForClaudeSession": "กำลังรอเซสชันของClaude",
           "workspacesFetchFailed": "การดึงข้อมูลพื้นที่ทำงานล้มเหลว ({{status}})",
           "wslClaudeConfigUnavailable": "การกำหนดค่า WSL Claude ไม่พร้อมใช้งานสำหรับ {{distro}}",
           "wslCodexHomeUnavailable": "หน้าแรก WSL Codex ไม่พร้อมใช้งานสำหรับ {{distro}}",
@@ -3648,10 +3648,10 @@
           "pullRequestReference": "ประชาสัมพันธ์ #{{number}}",
           "issueReference": "ปัญหา #{{number}}",
           "movedFromToInProject": "<actor/> ย้ายสิ่งนี้จาก <from/> เป็น <to/> ใน <project/>",
-          "movedFromTo": "<actor/> ย้ายสิ่งนี้จาก <จาก/> เป็น <to/>",
+          "movedFromTo": "<actor/> ย้ายสิ่งนี้จาก <from/> เป็น <to/>",
           "movedToInProject": "<actor/> ย้ายสิ่งนี้ไปที่ <to/> ใน <project/>",
           "movedTo": "<actor/> ย้ายสิ่งนี้ไปที่ <to/>",
-          "movedFromInProject": "<actor/> ย้ายสิ่งนี้จาก <จาก/> ใน <project/>",
+          "movedFromInProject": "<actor/> ย้ายสิ่งนี้จาก <from/> ใน <project/>",
           "movedFrom": "<actor/> ย้ายสิ่งนี้จาก <from/>",
           "movedInProject": "<actor/> ย้ายสิ่งนี้ใน <project/>",
           "movedThis": "<actor/> ย้ายสิ่งนี้",
@@ -3783,8 +3783,8 @@
       },
       "Landing": {
         "f9eaa9e12d": "เพิ่มโครงการ",
-        "6ca6ff404e": "ออร์ก้า",
-        "520304a067": "โลโก้ออร์ก้า",
+        "6ca6ff404e": "Orca",
+        "520304a067": "โลโก้Orca",
         "c1cf168479": "ซ่อน",
         "00cee697c1": "เรียกใช้ \"gh auth login\" ในเทอร์มินัลเพื่อเชื่อมต่อบัญชี GitHub ของคุณ",
         "9f96d018b7": "GitHub CLI ไม่ได้รับการรับรองความถูกต้อง",
@@ -3994,8 +3994,8 @@
         "closeTitle": "ปิด PR #{{number}}?",
         "mergeLabel": "สร้างการรวมคอมมิต",
         "mergeTitle": "รวม PR #{{number}} เข้ากับการรวมคอมมิตหรือไม่",
-        "rebaseLabel": "รีบูตและรวม",
-        "rebaseTitle": "รีบูตและรวม PR #{{number}}?",
+        "rebaseLabel": "รีเบสและรวม",
+        "rebaseTitle": "รีเบสและรวม PR #{{number}}?",
         "reopenTitle": "เปิด PR อีกครั้ง #{{number}}?",
         "squashLabel": "สควอชและผสาน",
         "squashTitle": "สควอชและรวม PR #{{number}}?"
@@ -4194,7 +4194,7 @@
       "StarNagCard": {
         "30c36231c1": "Orca เป็นโอเพ่นซอร์ส หากช่วยได้ในวันนี้ ดาว GitHub จะช่วยให้นักพัฒนารายอื่นค้นพบมัน",
         "b5e685e4d9": "ยกเลิก",
-        "5f6df21046": "เพลิดเพลินกับออร์ก้าไหม?",
+        "5f6df21046": "เพลิดเพลินกับOrcaไหม?",
         "2d67b6c849": "ติดดาวบน GitHub",
         "af3c9bbb37": "นำแสดงโดย...",
         "d32015fec7": "กำลังเปิด...",
@@ -5906,8 +5906,8 @@
             "c4a8968bdd": "ขยายพื้นที่ทำงาน",
             "b10695d6ce": "ฆ่าเซสชัน",
             "288a4dd177": "Orca",
-            "53dd5560ae": "ยุบออร์ก้า",
-            "e419d27083": "ขยายออร์ก้า",
+            "53dd5560ae": "ยุบOrca",
+            "e419d27083": "ขยายOrca",
             "41ae4fa725": "กำลังฆ่า...",
             "138b99bd80": "เซสชันนี้",
             "888dad8c55": "กำลังโหลด...",
@@ -5936,7 +5936,7 @@
             "remote_server": "เซิร์ฟเวอร์ระยะไกล",
             "runtime_checking": "กำลังตรวจสอบ",
             "runtime_online": "เชื่อมต่อแล้ว",
-            "runtime_unavailable_transport_up": "ออร์ก้าไม่พร้อมใช้งาน",
+            "runtime_unavailable_transport_up": "Orcaไม่พร้อมใช้งาน",
             "runtime_unavailable": "ยกเลิกการเชื่อมต่อ",
             "runtime_connect_unavailable": "ไม่สามารถเข้าถึงโฮสต์ระยะไกลได้",
             "runtime_disconnect_failed": "ยกเลิกการเชื่อมต่อล้มเหลว",
@@ -5957,7 +5957,7 @@
             "24ac89df1a": "โฮสต์ระยะไกล",
             "5e59007df4": "การใช้งานคิมิ",
             "8c86cd77b0": "การใช้งาน OpenCode Go",
-            "c0909c686e": "การใช้โคเด็กซ์",
+            "c0909c686e": "การใช้Codex",
             "3885eb74d8": "การใช้งานของโคลด",
             "c8857b40f7": "รีเฟรชข้อมูลการใช้งาน",
             "75ded02687": "จัดการบัญชี…",
@@ -5985,7 +5985,7 @@
             "c0e972d726": "ยกเลิก",
             "3bbf140864": "การใช้งานขั้นต่ำสูงสุด",
             "remoteServerLabel": "เซิร์ฟเวอร์ระยะไกล",
-            "antigravityUsage": "การใช้ต้านแรงโน้มถ่วง",
+            "antigravityUsage": "การใช้Antigravity",
             "grokUsageMenu": "การใช้งาน Grok",
             "floatingTerminalNewActivity": "{{label}} กิจกรรมใหม่",
             "4fba7dc1e7": "{{value0}} บาล",
@@ -6175,7 +6175,7 @@
             "d1e442a9e5": "หมดอายุทันที",
             "6cf9eaed10": "ถัดไปจะหมดอายุใน {{value0}}",
             "20ad66aed1": "หมดอายุใน {{value0}}",
-            "0d8d7cfe15": "กำลังรอเซสชันของคลอดด์",
+            "0d8d7cfe15": "กำลังรอเซสชันของClaude",
             "1804cd8c3f": "กำลังรีเฟรชการลงชื่อเข้าใช้",
             "f8f0f9d8cc": "ปัญหาเครือข่าย",
             "bf2e739f18": "การลงชื่อเข้าใช้ไม่พร้อมใช้งาน",
@@ -6363,7 +6363,7 @@
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "หน้าจอการใช้งานมีขนาดกะทัดรัด",
-            "compactBody": "หนึ่งเมตริกบรรทัดแรกต่อผู้ให้บริการ เลือก<รายละเอียด>รายละเอียด</รายละเอียด>ในเมนูการใช้งานเพื่อแสดงขีดจำกัดเพิ่มเติม"
+            "compactBody": "หนึ่งเมตริกบรรทัดแรกต่อผู้ให้บริการ เลือก <detailed>รายละเอียด</detailed> ในเมนูการใช้งานเพื่อแสดงขีดจำกัดเพิ่มเติม"
           },
           "usageUnitLabel": {
             "used": "ใช้แล้ว",
@@ -6441,7 +6441,7 @@
           },
           "antigravity": {
             "unknownAccount": "บัญชี Google",
-            "accounts": "บัญชีต้านแรงโน้มถ่วงที่บันทึกไว้",
+            "accounts": "บัญชีAntigravityที่บันทึกไว้",
             "readAgo": "อ่าน {{time}}",
             "notRead": "ไม่ทราบการใช้งาน: ยังไม่ได้อ่าน"
           },
@@ -6505,7 +6505,7 @@
           "e9bf9fce0e": "ตัวเลือกการใช้งานของโคลด",
           "6afacbee37": "การติดตามการใช้งานของโคลด",
           "0cb1a36d7d": "อ่านบันทึกการใช้งาน Claude ในเครื่องเพื่อแสดงโทเค็น โมเดล และสถิติเซสชัน",
-          "5ce4842c2c": "การใช้งานของคลอดด์ในเครื่องทั้งหมด",
+          "5ce4842c2c": "การใช้งานของClaudeในเครื่องทั้งหมด",
           "4f8368c272": "ผังงาน Orca เท่านั้น",
           "cfe2282ffa": "ไม่ทราบ",
           "7765a4c3e1": "ไม่มี",
@@ -6619,7 +6619,7 @@
           "2d9eb39264": "โทเค็นทั้งหมด",
           "beb6f24f37": "ประมาณ. ต้นทุน",
           "da62578d9d": "การใช้งาน",
-          "0eb31e79ee": "ออร์ก้า IDE",
+          "0eb31e79ee": "Orca IDE",
           "960324e9b8": "เหตุการณ์",
           "6adac63cfe": "เปลี่ยน"
         },
@@ -6645,7 +6645,7 @@
           "3887b94ce5": "โทเค็นทั้งหมด",
           "2d13e57f72": "เปิดใช้งาน OpenCode",
           "2f1ee2878b": "เปิดใช้งาน Codex",
-          "0ea0cae435": "เปิดใช้งานคลอดด์",
+          "0ea0cae435": "เปิดใช้งานClaude",
           "6c00c46815": "เปิดใช้งานผู้ให้บริการเพื่อสแกนบันทึกAgentท้องถิ่นและสร้างบัญชีแยกประเภทโทเค็นแบบรวม",
           "49405ccc8d": "เริ่มการติดตามโทเค็น",
           "ca6bc5fded": "รีเฟรช",
@@ -6919,7 +6919,7 @@
           "89e2601162": "ยกเลิกและแทนที่",
           "a5675fb371": "เนื้อหาและปล่อยทิ้งไว้โดยไม่มีใครแตะต้อง เก็บไว้หรือทิ้งอย่างชัดเจนและแทนที่ด้วยเวอร์ชันนี้",
           "37d990b94c": "มีการเปลี่ยนแปลง",
-          "2a31912f14": "พบออร์ก้าแล้ว",
+          "2a31912f14": "พบOrcaแล้ว",
           "651b7d8a57": "สำเนาในเครื่องจำเป็นต้องได้รับการตัดสินใจ",
           "66270286ac": "· คุณสามารถลองอีกครั้งได้อย่างปลอดภัย",
           "157de228b4": "ตรวจสอบทักษะ",
@@ -7710,7 +7710,7 @@
           "80611a8b10": "ค้นหา",
           "0c3395fd32": "ค้นหาแผนผังงานและแท็บเบราว์เซอร์",
           "c86d83b5c3": "ใหม่",
-          "1b5c41caee": "ออร์ก้า โมบาย",
+          "1b5c41caee": "Orca โมบาย",
           "f323383e9a": "ระบบอัตโนมัติ",
           "e7ad3c540d": "เปิดงาน Jira",
           "c39ab10000": "เปิดงานเชิงเส้น",
@@ -7825,7 +7825,7 @@
           "65a9820bd1": "สถานะAgent",
           "219ebf1961": "ชื่อสาขา",
           "folderPathIdentity": "เส้นทางสาขา / โฟลเดอร์",
-          "cli": "ออร์ก้า CLI",
+          "cli": "Orca CLI",
           "optionsActiveFilters_one": "ตัวเลือกพื้นที่ทำงาน ({{count}} เปิดใช้งานตัวกรอง)",
           "optionsActiveFilters_other": "ตัวเลือกพื้นที่ทำงาน ({{count}} ตัวกรองใช้งานอยู่)",
           "optionsFilterCount_one": "ตัวเลือกพื้นที่ทำงาน ({{count}} ตัวกรอง)",
@@ -7928,7 +7928,7 @@
           "automationMissing": "ระบบอัตโนมัติไม่สามารถใช้งานได้อีกต่อไป",
           "automationRunMissing": "ประวัติการเรียกใช้ไม่สามารถใช้ได้อีกต่อไป",
           "automationAvailabilityUnavailable": "ไม่สามารถตรวจสอบความพร้อมใช้งานของระบบอัตโนมัติได้",
-          "cliHeader": "ออร์ก้า CLI",
+          "cliHeader": "Orca CLI",
           "cliCreatedFromAgent": "สร้างโดยAgentผ่าน `orca worktree create`",
           "cliCreatedFromShell": "สร้างผ่าน `orca worktree create`",
           "cliStartupAgent": "เริ่มต้นด้วย {{value0}}",
@@ -8475,34 +8475,34 @@
           "port": "พอร์ต",
           "identityFile": "ไฟล์ข้อมูลประจำตัว",
           "identityFilePlaceholder": "~/.ssh/id_ed25519 (optional)",
-          "nameInOrca": "Name in Orca",
+          "nameInOrca": "ชื่อใน Orca",
           "serverNamePlaceholder": "กล่องการพัฒนา",
           "accessLink": "Access link",
           "pairingCodePlaceholder": "orca://pair?code=...",
-          "sshImportAlreadySynced": "~/.ssh/config already in sync.",
-          "sshImportFailed": "Failed to import SSH config.",
-          "sshAlreadyExists": "That SSH host is already in Orca.",
+          "sshImportAlreadySynced": "~/.ssh/config ซิงค์เรียบร้อยแล้ว",
+          "sshImportFailed": "นำเข้าการกำหนดค่า SSH ไม่สำเร็จ",
+          "sshAlreadyExists": "โฮสต์ SSH นั้นอยู่ใน Orca แล้ว",
           "advanced": "ขั้นสูง",
           "linkDestination": "Link destination",
-          "sshTunnel": "I am using an SSH tunnel",
-          "sshTunnelHelp": "Otherwise, this link points back to this device and cannot identify the other computer.",
-          "loopbackBlocked": "Enable the SSH tunnel override or create a new link using the other host’s Tailscale or LAN address.",
-          "sshConfigPickerLoadFailed": "Failed to read ~/.ssh/config.",
-          "sshConfigPickerResolveFailed": "Failed to resolve that SSH config host.",
-          "sshConfigPickerRestartRequired": "Restart Orca to finish applying the SSH config picker update.",
-          "sshConfigPickerFilled": "Filled from {{value0}}. Review and Save.",
-          "sshConfigPickerTitle": "Choose from ~/.ssh/config",
-          "sshConfigPickerImportDescription": "Pick a host to fill the form, or add every new host to Orca’s host list.",
+          "sshTunnel": "ฉันกำลังใช้ทันเนล SSH",
+          "sshTunnelHelp": "มิฉะนั้น ลิงก์นี้จะชี้กลับไปยังอุปกรณ์นี้และไม่สามารถระบุคอมพิวเตอร์เครื่องอื่นได้",
+          "loopbackBlocked": "เปิดใช้งานการแทนที่ทันเนล SSH หรือสร้างลิงก์ใหม่โดยใช้ที่อยู่ Tailscale หรือ LAN ของโฮสต์อื่น",
+          "sshConfigPickerLoadFailed": "ไม่สามารถอ่าน ~/.ssh/config ได้",
+          "sshConfigPickerResolveFailed": "ไม่สามารถค้นหาที่อยู่ของโฮสต์ในการกำหนดค่า SSH นั้นได้",
+          "sshConfigPickerRestartRequired": "รีสตาร์ท Orca เพื่อเสร็จสิ้นการอัปเดตตัวเลือกการกำหนดค่า SSH",
+          "sshConfigPickerFilled": "กรอกข้อมูลจาก {{value0}} แล้ว ตรวจสอบและบันทึก",
+          "sshConfigPickerTitle": "เลือกจาก ~/.ssh/config",
+          "sshConfigPickerImportDescription": "เลือกโฮสต์เพื่อกรอกแบบฟอร์ม หรือเพิ่มทุกโฮสต์ใหม่ลงในรายการโฮสต์ของ Orca",
           "sshConfigPickerFilter": "Filter hosts…",
-          "sshConfigPickerHostsLabel": "SSH config hosts",
+          "sshConfigPickerHostsLabel": "โฮสต์จากการกำหนดค่า SSH",
           "sshConfigPickerLoading": "Reading ~/.ssh/config…",
-          "sshConfigPickerEmpty": "No hosts in ~/.ssh/config",
+          "sshConfigPickerEmpty": "ไม่มีโฮสต์ใน ~/.ssh/config",
           "sshConfigPickerNoMatch": "ไม่มีโฮสต์ที่ตรงกัน",
-          "sshConfigPickerEmptyHint": "Add a Host entry there, or go back and type the details manually.",
-          "sshConfigPickerNoMatchHint": "Try another filter, or go back and type manually.",
-          "sshConfigPickerMoreResults": "Showing the first {{value0}} matches. Narrow your filter to find more.",
+          "sshConfigPickerEmptyHint": "เพิ่มรายการ Host ที่นั่น หรือย้อนกลับแล้วพิมพ์รายละเอียดด้วยตนเอง",
+          "sshConfigPickerNoMatchHint": "ลองใช้ตัวกรองอื่น หรือย้อนกลับแล้วพิมพ์ด้วยตนเอง",
+          "sshConfigPickerMoreResults": "แสดงผลลัพธ์ {{value0}} รายการแรก จำกัดตัวกรองของคุณให้แคบลงเพื่อค้นหาเพิ่มเติม",
           "sshConfigPickerInOrca": "In Orca",
-          "sshConfigPickerPreviouslyRemoved": "Removed from Orca",
+          "sshConfigPickerPreviouslyRemoved": "ลบออกจาก Orca แล้ว",
           "sshConfigPickerBack": "ย้อนกลับ",
           "fillFromSshConfig": "กรอกจาก ~/.ssh/config…",
           "sshConfigPickerAddingAll": "กำลังเพิ่มโฮสต์…",
@@ -8750,7 +8750,7 @@
           "checksFailing": "ล้มเหลว",
           "checksPending": "รอดำเนินการ",
           "conflictMerging": "การรวม",
-          "conflictRebasing": "การรีบูต",
+          "conflictRebasing": "กำลังรีเบส",
           "conflictCherryPicking": "เก็บเชอร์รี่"
         },
         "folderWorkspaceComposer": {
@@ -9560,7 +9560,7 @@
           "af7d9f4396": "ขอบคุณสำหรับการสนับสนุน!",
           "6922c1fa2b": "ติดดาว Orca บน GitHub",
           "511782265b": "สนับสนุนโครงการด้วยดาว GitHub",
-          "55a87e5fd1": "สนับสนุนออร์ก้า",
+          "55a87e5fd1": "สนับสนุนOrca",
           "964acc6bb4": "ติดดาว",
           "397719bee5": "นำแสดงโดย...",
           "cb65c75b11": "กำลังเปิด...",
@@ -9681,7 +9681,7 @@
           "sourceControlGroupOrderDescription": "เลือกว่าการเปลี่ยนแปลงแบบทีละขั้นหรือการเปลี่ยนแปลงจะปรากฏเป็นอันดับแรกในการควบคุมแหล่งที่มา",
           "changesFirst": "เปลี่ยนแปลงก่อน",
           "stagedFirst": "จัดฉากก่อน",
-          "compareAgainstUpstreamDescription": "เลือกการควบคุมแหล่งที่มาพื้นฐานที่จะใช้เป็นค่าเริ่มต้นสำหรับการเปรียบเทียบการเปลี่ยนแปลงที่คอมมิต Branch upstream ติดตามสาขาปัจจุบันโดยอัตโนมัติและถอยกลับไปยังสาขาเริ่มต้นของที่เก็บข้อมูลเมื่อไม่มีต้นน้ำอยู่ คุณยังคงสามารถเปลี่ยนฐานการเปรียบเทียบต่อเวิร์กทรีได้จากแผง Git ของเวิร์กทรีนั้น Pull Requestและเป้าหมายการรีบูตไม่เปลี่ยนแปลง",
+          "compareAgainstUpstreamDescription": "เลือกการควบคุมแหล่งที่มาพื้นฐานที่จะใช้เป็นค่าเริ่มต้นสำหรับการเปรียบเทียบการเปลี่ยนแปลงที่คอมมิต Branch upstream ติดตามสาขาปัจจุบันโดยอัตโนมัติและถอยกลับไปยังสาขาเริ่มต้นของที่เก็บข้อมูลเมื่อไม่มีต้นน้ำอยู่ คุณยังคงสามารถเปลี่ยนฐานการเปรียบเทียบต่อเวิร์กทรีได้จากแผง Git ของเวิร์กทรีนั้น Pull Request และเป้าหมายการรีเบสไม่เปลี่ยนแปลง",
           "compareBaseRepositoryDefault": "ค่าเริ่มต้นของพื้นที่เก็บข้อมูล",
           "compareBaseBranchUpstream": "สาขาต้นน้ำ",
           "refreshLocalBaseDescription": "เมื่อคุณสร้างพื้นที่ทำงาน Orca จะรีเฟรชฐานระยะไกลและส่งต่อสาขาท้องถิ่นที่ตรงกันของคุณอย่างรวดเร็ว เช่น <mainBranch>main</mainBranch> หรือ <masterBranch>master</masterBranch> ซึ่งจะทำให้คำสั่งเช่น <diffCommand>git diff main...HEAD</diffCommand> จากการเปรียบเทียบกับประวัติเก่า Orca ข้ามการอัปเดตหากสาขานั้นมีการเปลี่ยนแปลงที่ไม่มีการคอมมิตหรือคอมมิตเฉพาะในเครื่องเท่านั้น",
@@ -10311,7 +10311,7 @@
           "hostModelCapabilityWorkspaceRunContext": "บริบทการเรียกใช้พื้นที่ทำงาน",
           "serverConnected": "เชื่อมต่อแล้ว",
           "serverWorkspaceWindowClosed": "หน้าต่างพื้นที่ทำงานปิด",
-          "serverRuntimeUnavailable": "ออร์ก้าไม่พร้อมใช้งาน",
+          "serverRuntimeUnavailable": "Orcaไม่พร้อมใช้งาน",
           "serverRuntimeUnavailableDescription": "การขนส่ง SSH เชื่อมต่อแล้ว แต่รันไทม์ Orca ไม่ตอบสนอง โฮสต์อาจยังคงทำงานอยู่",
           "serverChecking": "กำลังตรวจสอบ...",
           "serverReconnecting": "กำลังเชื่อมต่อใหม่",
@@ -10500,7 +10500,7 @@
         },
         "ShortcutTerminalPolicyControl": {
           "0762983d13": "เทอร์มินัลก่อน",
-          "63308571d8": "ออร์ก้าก่อน",
+          "63308571d8": "Orcaก่อน",
           "c43c7ff5f9": "ตัดสินใจว่าใครจะดักทางลัดก่อน",
           "0f55c6f15c": "เลือกว่า Orca หรือเทอร์มินัลที่โฟกัสจะชนะเมื่อทางลัดทับซ้อนกัน",
           "7d81bebd89": "ทางลัดในเทอร์มินัล"
@@ -10508,16 +10508,16 @@
         "ShortcutsPane": {
           "4b7ae34062": "โดยตรง",
           "38e86e206a": "ปรับแต่งทางลัดด้วยภาพหรือแก้ไข",
-          "f0b35b0b2e": "Disabled while a terminal or TUI has keyboard focus.",
+          "f0b35b0b2e": "ปิดใช้งานในขณะที่เทอร์มินัลหรือ TUI มีโฟกัสแป้นพิมพ์",
           "5c65d5db9d": "เทอร์มินัลก่อน",
-          "dfa8ff612f": "Also runs while a terminal or TUI has keyboard focus.",
-          "2a0e8aeccf": "ออร์ก้าก่อน",
-          "3c0fac059a": "Still runs while a terminal has keyboard focus.",
+          "dfa8ff612f": "ยังคงทำงานในขณะที่เทอร์มินัลหรือ TUI มีโฟกัสแป้นพิมพ์",
+          "2a0e8aeccf": "Orcaก่อน",
+          "3c0fac059a": "ยังคงทำงานในขณะที่เทอร์มินัลมีโฟกัสแป้นพิมพ์",
           "25b0004fbf": "Terminal active",
-          "781cb74d22": "Runs from terminal panes.",
+          "781cb74d22": "ทำงานจากบานหน้าต่างเทอร์มินัล",
           "cb02e00202": "เทอร์มินัล",
           "d8c988dab4": "~/.orca/keybindings.json",
-          "shortcutUnavailable": "Shortcut is no longer available.",
+          "shortcutUnavailable": "ทางลัดนี้ไม่พร้อมใช้งานอีกต่อไป",
           "9a3a3ca03d": "Keyboard shortcuts"
         },
         "SourceControlAiActionRecipeDefaults": {
@@ -10525,11 +10525,11 @@
           "b3914ecbbc": "ยกเลิก",
           "fb09da4345": "เทมเพลตคำสั่ง",
           "0740d30915": "คำสั่งที่กำหนดเอง",
-          "ee0e5c2a48": "Use default agent",
-          "bf84dea6af": "Use variables only when you want Orca to inject context. Leave the agent as default to follow your normal agent preference.",
+          "ee0e5c2a48": "ใช้Agentเริ่มต้น",
+          "bf84dea6af": "ใช้ตัวแปรเฉพาะเมื่อคุณต้องการให้ Orca แทรกบริบท ปล่อยให้Agentเป็นค่าเริ่มต้นเพื่อเป็นไปตามค่ากำหนดAgentตามปกติของคุณ",
           "a79c567194": "สูตรการกระทำ",
-          "cf01d41bce": "Agent, CLI arguments, and command template used by each Source Control AI button.",
-          "b5f46664d3": "Failed to save Source Control AI action default: {{value0}}",
+          "cf01d41bce": "Agent, อาร์กิวเมนต์ CLI และเทมเพลตคำสั่งที่ใช้โดยแต่ละปุ่ม AI ของ Source Control",
+          "b5f46664d3": "ไม่สามารถบันทึกค่าเริ่มต้นการดำเนินการ Source Control AI: {{value0}}",
           "d18d665e12": "บันทึก",
           "4f549a5fa8": "กำลังบันทึก...",
           "9d3cc627f8": "บันทึกแล้ว",
@@ -10548,19 +10548,19 @@
         "SparsePresetSettingsSection": {
           "6fa754d20f": "ลบ",
           "fe1f2c6572": "แก้ไข {{value0}}",
-          "88bfbf1a9c": "No sparse presets saved for this repository.",
-          "17f8c4ce10": "Manage saved directory sets for sparse worktree creation.",
+          "88bfbf1a9c": "ไม่มีค่าที่ตั้งไว้ล่วงหน้าแบบเบาบาง (sparse presets) ที่บันทึกไว้สำหรับที่เก็บนี้",
+          "17f8c4ce10": "จัดการชุดไดเรกทอรีที่บันทึกไว้สำหรับการสร้าง Sparse Worktree",
           "8b64731aaf": "+{{value0}} more",
           "755c6a1a0d": "Confirm",
           "a7bcf206b1": "กำลังลบ",
-          "ba9ad2d4cd": "Updated date unknown",
+          "ba9ad2d4cd": "ไม่ทราบวันที่อัปเดต",
           "568d7e1e49": "Updated {{value0}}",
           "d7b3f0bdc3": "{{value0}} directories",
           "9d3c087fc0": "1 directory",
-          "8deb7024ab": "Loading sparse presets...",
-          "92c08ccae3": "Sparse presets could not be loaded.",
+          "8deb7024ab": "กำลังโหลดค่าที่ตั้งไว้ล่วงหน้าแบบเบาบาง...",
+          "92c08ccae3": "ไม่สามารถโหลดค่าที่ตั้งไว้ล่วงหน้าแบบเบาบางได้",
           "2ef2b2674b": "ลบ {{value0}}",
-          "124ff6ea6c": "Sparse checkout presets",
+          "124ff6ea6c": "ค่าที่ตั้งไว้ล่วงหน้า Sparse Checkout",
           "683e781027": "พรีเซ็ตใหม่"
         },
         "SshDestructiveActionDialog": {
@@ -10568,23 +10568,23 @@
           "moreTargets": "+{{count}} เพิ่มเติม"
         },
         "SshPane": {
-          "c0f1c80166": "No SSH targets configured.",
+          "c0f1c80166": "ไม่มีเป้าหมาย SSH ที่กำหนดค่าไว้",
           "f495689b82": "Import failed",
           "68c13b4589": "Test failed",
           "81d08bcddf": "Connection successful",
           "a43de1d3ee": "ยกเลิกการเชื่อมต่อล้มเหลว",
           "e95d5ae10e": "การเชื่อมต่อล้มเหลว",
-          "c2a69510e3": "Failed to remove target",
+          "c2a69510e3": "ลบเป้าหมายไม่สำเร็จ",
           "a0237eb1ca": "Target removed",
-          "2227ce47b6": "Failed to save target",
+          "2227ce47b6": "บันทึกเป้าหมายไม่สำเร็จ",
           "f602009125": "Target added",
           "b4ba0ce33d": "Target updated",
-          "4db9afce1c": "Port must be between 1 and 65535",
-          "0e5aa04161": "Host or SSH config alias is required",
-          "f1fc50dad2": "Failed to load SSH targets",
-          "0cda732f43": "Connection test failed",
-          "syncedServerSingular": "Synced {{count}} server",
-          "syncedServerPlural": "Synced {{count}} servers",
+          "4db9afce1c": "พอร์ตต้องอยู่ระหว่าง 1 ถึง 65535",
+          "0e5aa04161": "ต้องระบุโฮสต์หรือนามแฝงการกำหนดค่า SSH",
+          "f1fc50dad2": "โหลดเป้าหมาย SSH ไม่สำเร็จ",
+          "0cda732f43": "การทดสอบการเชื่อมต่อล้มเหลว",
+          "syncedServerSingular": "ซิงค์ {{count}} เซิร์ฟเวอร์แล้ว",
+          "syncedServerPlural": "ซิงค์ {{count}} เซิร์ฟเวอร์แล้ว",
           "noFilterMatch": "ไม่มีโฮสต์ที่ตรงกัน",
           "addHost": "เพิ่มโฮสต์",
           "alreadyInSync": "~/.ssh/config already in sync"
@@ -10593,7 +10593,7 @@
           "d5a234456f": "ยกเลิก",
           "c3ce71aad6": "Enter passphrase",
           "abaa0dc653": "Enter password",
-          "ce4fdf7914": "Enter the passphrase for",
+          "ce4fdf7914": "ป้อนข้อความรหัสผ่านสำหรับ",
           "dbf9b6f2d0": "Enter the password for",
           "c55f105262": "Failed to cancel SSH credential request",
           "b8e88fd0de": "Failed to submit SSH credential",
@@ -10616,7 +10616,7 @@
           "removing": "กำลังลบ...",
           "testing": "กำลังทดสอบ...",
           "select": "เลือก {{label}}",
-          "orcaServer": "เซิร์ฟเวอร์ออร์ก้า",
+          "orcaServer": "เซิร์ฟเวอร์Orca",
           "moreActions": "การดำเนินการเพิ่มเติมสำหรับ {{label}}",
           "testConnection": "ทดสอบการเชื่อมต่อ",
           "edit": "แก้ไข...",
@@ -11189,7 +11189,7 @@
             "651f35b2c6": "ตัวสลับ",
             "e5bc35d59e": "หน้าต่าง",
             "d18b54ca90": "เชื่อมต่อ",
-            "1f2880a9d5": "ออร์ก้า",
+            "1f2880a9d5": "Orca",
             "2cfb3420c0": "ไอคอนแอป",
             "e80c2af428": "เลือกไอคอนแอปที่แสดงใน Dock และตัวสลับหน้าต่าง",
             "839fb1e3ed": "กล่องเครื่องมือ",
@@ -11311,7 +11311,7 @@
               "duplicate": "ซ้ำกัน"
             },
             "antigravityUsageDescription": "แสดงการใช้งานการสมัครสมาชิก Antigravity ในแถบสถานะ",
-            "antigravityKeyword": "ต้านแรงโน้มถ่วง",
+            "antigravityKeyword": "Antigravity",
             "e7d1b0f3a5": "แสดงการใช้เครดิต Grok รายสัปดาห์จาก Grok CLI OAuth",
             "d6c0a9e2f4": "กอก",
             "c5b9f8d1e3": "ใช่",
@@ -11359,14 +11359,14 @@
             "4af9002a0c": "แสดงไฟล์ที่ไม่สนใจ Git",
             "b8dc238d07": "ผู้จัดการทรัพยากร",
             "20b33a61c8": "โฮสต์ระยะไกล",
-            "40c10c4deb": "การใช้โคเด็กซ์",
+            "40c10c4deb": "การใช้Codex",
             "19aa904233": "ไอคอนแอป",
             "9bc701a4d1": "ปุ่มแสดงงาน",
             "c29089716e": "การใช้งาน Kimi",
             "96e32c1118": "การใช้งานมินิแม็กซ์",
             "e8d2710689": "การใช้งานรำพึง",
             "aff6e6afdf": "แบบอักษร IDE",
-            "ba1f9d39a6": "การใช้ต้านแรงโน้มถ่วง"
+            "ba1f9d39a6": "การใช้Antigravity"
           }
         },
         "auto": {
@@ -11749,7 +11749,7 @@
             "fb4f338a3d": "เส้นทาง",
             "924a660a78": "คลี",
             "ca529079bf": "ลงทะเบียนหรือลบคำสั่ง Orca CLI",
-            "327e3fa70d": "ออร์ก้า CLI",
+            "327e3fa70d": "Orca CLI",
             "fb84767421": "สวิตช์",
             "f8f0ac213a": "ตามลำดับ",
             "12ecc640a8": "มรู",
@@ -11914,7 +11914,7 @@
             "untrackedFirst": "ยกเลิกการติดตามก่อน",
             "sourceControl": "การควบคุมแหล่งที่มา",
             "gitChanges": "การเปลี่ยนแปลงคอมไพล์",
-            "compareAgainstUpstreamDescription": "เลือกการควบคุมแหล่งที่มาพื้นฐานที่จะใช้เป็นค่าเริ่มต้นสำหรับการเปรียบเทียบการเปลี่ยนแปลงที่คอมมิต Branch upstream ติดตามสาขาปัจจุบันโดยอัตโนมัติและถอยกลับไปยังสาขาเริ่มต้นของที่เก็บข้อมูลเมื่อไม่มีต้นน้ำอยู่ คุณยังคงสามารถเปลี่ยนฐานการเปรียบเทียบต่อเวิร์กทรีได้จากแผง Git ของเวิร์กทรีนั้น Pull Requestและเป้าหมายการรีบูตไม่เปลี่ยนแปลง",
+            "compareAgainstUpstreamDescription": "เลือกการควบคุมแหล่งที่มาพื้นฐานที่จะใช้เป็นค่าเริ่มต้นสำหรับการเปรียบเทียบการเปลี่ยนแปลงที่คอมมิต Branch upstream ติดตามสาขาปัจจุบันโดยอัตโนมัติและถอยกลับไปยังสาขาเริ่มต้นของที่เก็บข้อมูลเมื่อไม่มีต้นน้ำอยู่ คุณยังคงสามารถเปลี่ยนฐานการเปรียบเทียบต่อเวิร์กทรีได้จากแผง Git ของเวิร์กทรีนั้น Pull Request และเป้าหมายการรีเบสไม่เปลี่ยนแปลง",
             "compareBase": "เปรียบเทียบฐาน",
             "defaultCompareBase": "ฐานการเปรียบเทียบเริ่มต้น",
             "defaultBranch": "สาขาเริ่มต้น",
@@ -12046,7 +12046,7 @@
               "1ad6fb6230": "อุปกรณ์เริ่มต้น",
               "ac0a985873": "ทักษะการจำลอง",
               "9353854ff3": "โปรแกรมจำลองปลาวาฬเพชรฆาต",
-              "d4b7833894": "ออร์ก้า คลี",
+              "d4b7833894": "Orca คลี",
               "84e5706975": "serve-sim",
               "7c5a8a2bee": "xcode",
               "bec7231663": "ไอแพด",
@@ -12434,7 +12434,7 @@
             "ca6a0c2df7": "ทางลัด",
             "groupShortcut": "{{value0}} ทางลัด",
             "4811a8264a": "เทอร์มินัลก่อน",
-            "afda131738": "ออร์ก้าก่อน",
+            "afda131738": "Orcaก่อน",
             "0ecfc47434": "ขัดแย้ง",
             "0f8cb15582": "Agent",
             "f1adebbe8c": "เปลือก",
@@ -13183,7 +13183,7 @@
           "notificationPlayground": "สนามเด็กเล่นการแจ้งเตือน",
           "notificationPlaygroundDescription": "ทริกเกอร์สำหรับนักพัฒนาเท่านั้นสำหรับตรวจสอบเค้าโครงโทสต์ การดำเนินการกู้คืน และการตัดสำเนาแบบยาว",
           "devOnly": "การพัฒนาเท่านั้น",
-          "orcaCloud": "ออร์ก้าคลาวด์",
+          "orcaCloud": "Orcaคลาวด์",
           "orcaCloudDescription": "พรีวิวการลงชื่อเข้าใช้ระบบคลาวด์ของบุคคลที่หนึ่งสำหรับนักพัฒนาเท่านั้น ซ่อนอยู่ในการผลิต ใน dev มันยังปรากฏในตัวสลับบัญชีแถบด้านข้างเมื่อตั้งค่า ORCA_CLOUD_API_URL และ ORCA_CLOUD_CLIENT_ID แล้ว",
           "orcaCloudStatus": "สถานะ",
           "orcaCloudSignOut": "ออกจากระบบ",
@@ -13299,7 +13299,7 @@
                 "tickets": "ตั๋ว",
                 "issues": "ปัญหา",
                 "skill": "ทักษะ",
-                "orcaLinear": "ออร์ก้า-เชิงเส้น"
+                "orcaLinear": "Orca-เชิงเส้น"
               }
             }
           }
@@ -13338,7 +13338,7 @@
           "reconnecting": "กำลังเชื่อมต่อใหม่",
           "unavailable": "ไม่สามารถใช้งานได้",
           "pathGroup": "วิธีที่โทรศัพท์เข้าถึงคอมพิวเตอร์เครื่องนี้",
-          "anywhereTitle": "ออร์ก้ารีเลย์",
+          "anywhereTitle": "Orcaรีเลย์",
           "anywhereDescription": "โทรศัพท์สามารถใช้เครือข่ายมือถือหรือ Wi-Fi ใดก็ได้ จำเป็นต้องลงชื่อเข้าใช้สำหรับรีเลย์เท่านั้น",
           "relayUnavailable": "Orca Relay ไม่พร้อมใช้งานในรุ่นนี้ ใช้ LAN",
           "signIn": "ลงชื่อเข้าใช้รีเลย์",
@@ -13865,11 +13865,11 @@
           "unavailable": "การลงชื่อเข้าใช้ Orca ไม่พร้อมใช้งานในรุ่นนี้",
           "signedOut": "ลงชื่อเข้าใช้เพื่อขยาย Orca ด้วยฟีเจอร์คลาวด์ รวมถึง Artifacts และ Orca Relay",
           "checking": "กำลังตรวจสอบสถานะบัญชี…",
-          "account": "บัญชีออร์ก้า",
+          "account": "บัญชีOrca",
           "signOut": "ออกจากระบบ",
           "signInAgain": "ลงชื่อเข้าใช้อีกครั้ง",
           "signIn": "ลงชื่อเข้าใช้ Orca",
-          "title": "บัญชีออร์ก้า",
+          "title": "บัญชีOrca",
           "description": "แชร์งานได้ทันทีและเข้าถึงเดสก์ท็อปของคุณจาก Orca Mobile ไม่ว่าคุณจะอยู่ที่ไหน",
           "searchDescription": "ลงชื่อเข้าใช้หรือออกจากบัญชีที่ใช้โดย Artifacts และ Orca Relay",
           "managed": "ทีมของคุณจัดการการตั้งค่า Orca บางอย่าง",
@@ -13880,7 +13880,7 @@
           "benefitsTitle": "รวมอยู่ในบัญชีของคุณ",
           "artifactsTitle": "การแบ่งปันสิ่งประดิษฐ์",
           "artifactsDescription": "เผยแพร่ไฟล์ HTML และ Markdown จากนั้นจัดการทุกลิงก์ที่แชร์จาก Orca",
-          "relayTitle": "ออร์ก้ารีเลย์",
+          "relayTitle": "Orcaรีเลย์",
           "relayDescription": "เชื่อมต่อ Orca Mobile กับเดสก์ท็อปนี้ผ่านมือถือหรือ Wi-Fi ใดๆ",
           "skillsTitle": "การแบ่งปันทักษะ",
           "skillsDescription": "แบ่งปันทักษะหนึ่งหรือทั้งชุดเบื้องหลังลิงก์ที่ไม่แสดง และติดตั้งลงในเครื่องใดก็ได้ที่คุณใช้",
@@ -14689,7 +14689,7 @@
           "stoppedBody": "มันยังคงขัดข้องอยู่ เริ่มต้นใหม่เพื่อลองอีกครั้ง",
           "invalidTitle": "Orca ไม่สามารถโหลดปลั๊กอินนี้",
           "needsOrcaTitle": "ต้องการ Orca {{value0}} หรือใหม่กว่า",
-          "needsOrcaBody": "คุณมีออร์ก้า {{value0}}.",
+          "needsOrcaBody": "คุณมีOrca {{value0}}.",
           "back": "ปลั๊กอิน",
           "backToPlugin": "ย้อนกลับ",
           "info": "ข้อมูล",
@@ -14752,7 +14752,7 @@
           "updateAvailable": "อัปเดต {{value0}} พร้อมใช้งาน",
           "updateLabel": "อัปเดต {{value0}} เป็น {{value1}}",
           "update": "อัปเดต {{value0}}",
-          "needsOrca": "ต้องการออร์ก้า {{value0}}",
+          "needsOrca": "ต้องการOrca {{value0}}",
           "rollbackTo": "ย้อนกลับไปที่ {{value0}}…",
           "copyContentHash": "คัดลอกแฮชเนื้อหา",
           "reviewUpdate": "ตรวจสอบการอัปเดต",
@@ -15106,7 +15106,7 @@
             "reset": "เวลาก่อนที่จะรีเซ็ต เช่น 3ชม. 15น.",
             "resetAt": "รีเซ็ตเวลานาฬิกา เช่น 20:50",
             "optional": "ลดลงเมื่อตัวยึดตำแหน่งด้านในว่างเปล่า",
-            "usagePools": "กลุ่มการใช้งานที่มีชื่อ เช่น แบบจำลองต้านแรงโน้มถ่วง"
+            "usagePools": "กลุ่มการใช้งานที่มีชื่อ เช่น แบบจำลองAntigravity"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -15596,13 +15596,13 @@
             "locallyResolvedConflictOfKind": "แก้ไขข้อขัดแย้งในเครื่อง ({{kind}})",
             "locallyResolvedConflict": "ข้อขัดแย้งได้รับการแก้ไขในเครื่อง",
             "pushesToForkTarget": "ดันไปที่ทางแยก {{target}}",
-            "abortRebaseConfirmTitle": "ยกเลิกการรีบูตหรือไม่",
+            "abortRebaseConfirmTitle": "ยกเลิกการรีเบสหรือไม่",
             "abortMergeConfirmTitle": "ยกเลิกการรวมหรือไม่",
-            "abortRebaseConfirmDescription": "การดำเนินการนี้จะยกเลิกการรีบูตที่กำลังดำเนินอยู่และสามารถยกเลิกการแก้ไขข้อขัดแย้งที่เกิดขึ้นระหว่างการรีบูตนี้ได้",
+            "abortRebaseConfirmDescription": "การดำเนินการนี้จะยกเลิกการรีเบสที่กำลังดำเนินอยู่และอาจยกเลิกการแก้ไขข้อขัดแย้งที่ทำไประหว่างการรีเบสนี้",
             "abortMergeConfirmDescription": "การดำเนินการนี้จะยกเลิกการรวมที่กำลังดำเนินอยู่ และสามารถยกเลิกการแก้ไขข้อขัดแย้งที่เกิดขึ้นระหว่างการรวมนี้ได้",
             "abortRebaseFailedFallback": "ล้มเหลวในการยกเลิกการรีเบส",
             "abortMergeFailedFallback": "ล้มเหลวในการยกเลิกการรวม",
-            "abortRebaseFailed": "ยกเลิกการรีบูตล้มเหลว",
+            "abortRebaseFailed": "ยกเลิกการรีเบสล้มเหลว",
             "abortMergeFailed": "ยกเลิกการผสานล้มเหลว",
             "clearNotesFromWorkspace_one": "ล้างบันทึก {{count}} ออกจากพื้นที่ทำงานนี้หรือไม่",
             "clearNotesFromWorkspace_other": "ล้างบันทึก {{count}} ออกจากพื้นที่ทำงานนี้หรือไม่",
@@ -15614,27 +15614,27 @@
             "refreshAll": "รีเฟรชทั้งหมด",
             "baseUpToDate": "อัปเดต",
             "rebaseOperationInProgress": "รอให้การดำเนินการ Git ปัจจุบันเสร็จสิ้น",
-            "rebaseButton": "รีบูต",
+            "rebaseButton": "รีเบส",
             "rebaseConflictCount_one": "{{count}} ข้อขัดแย้ง",
             "rebaseConflictCount_other": "{{count}} ข้อขัดแย้ง",
-            "rebasePaused": "การรีบูตถูกหยุดชั่วคราว",
+            "rebasePaused": "การรีเบสถูกหยุดชั่วคราว",
             "rebaseResolveConflictsFirst": "แก้ไขข้อขัดแย้งก่อน",
             "rebaseAbort": "ยกเลิก",
             "rebaseContinue": "ดำเนินการต่อ",
-            "continueRebasePausedAgain": "การรีบูตถูกหยุดชั่วคราวเมื่อมีข้อขัดแย้งครั้งถัดไป",
-            "continueRebaseFailed": "การรีบูตต่อไปล้มเหลว",
+            "continueRebasePausedAgain": "การรีเบสถูกหยุดชั่วคราวเมื่อมีข้อขัดแย้งถัดไป",
+            "continueRebaseFailed": "ทำการรีเบสต่อไปล้มเหลว",
             "rebaseAutostashConflict": "ปรับใช้ใหม่ การเปลี่ยนแปลงที่ไม่มีคอมมิตของคุณไม่ได้นำไปใช้ใหม่หมดจด พวกมันถูกบันทึกไว้ในที่ซ่อน",
-            "rebaseStoppedByGit": "Git หยุดการรีบูตชั่วคราว",
+            "rebaseStoppedByGit": "Git หยุดการรีเบสชั่วคราว",
             "continueRebaseUnconfirmed": "ไม่สามารถยืนยันผลลัพธ์ได้ รีเฟรชการควบคุมแหล่งที่มาเพื่อแสดงสถานะปัจจุบัน",
-            "noRebaseInProgress": "ไม่มีการรีบูต",
+            "noRebaseInProgress": "ไม่มีการรีเบสที่กำลังดำเนินอยู่",
             "rebaseStopMovedOn": "การรีเบสได้ดำเนินต่อไปแล้ว ตรวจสอบแผงควบคุมแล้วลองอีกครั้ง",
-            "rebaseEmptyStep": "ไม่มีอะไรที่จะต้องกระทำในขั้นตอนนี้ ยกเลิกการรีบูตหรือสิ้นสุดในเทอร์มินัล",
+            "rebaseEmptyStep": "ไม่มีสิ่งที่จะต้องคอมมิตในขั้นตอนนี้ ยกเลิกการรีเบสหรือทำให้เสร็จสิ้นในเทอร์มินัล",
             "rebaseStepUnreadableShort": "การตรวจสอบล้มเหลว",
             "rebaseCheckAgain": "ตรวจสอบอีกครั้ง",
             "rebaseRetryInspect": "ลองอีกครั้ง",
-            "rebaseRetryInspectLabel": "ลองตรวจสอบขั้นตอนการรีบูตอีกครั้ง",
+            "rebaseRetryInspectLabel": "ลองตรวจสอบขั้นตอนการรีเบสอีกครั้ง",
             "rebaseStoppedFinishInTerminal": "Git หยุดขั้นตอนนี้ชั่วคราว เสร็จสิ้นในเทอร์มินัลหรือยกเลิก",
-            "rebaseCheckingStep": "กำลังตรวจสอบขั้นตอนการรีบูต",
+            "rebaseCheckingStep": "กำลังตรวจสอบขั้นตอนการรีเบส",
             "rebaseEmptyStepShort": "ขั้นตอนว่าง",
             "rebaseAbortLabel": "ยกเลิกการรีเบส",
             "scopeFileCount_one": "{{count}} ไฟล์",
@@ -15823,7 +15823,7 @@
                 "commentingRequiresGitHubPrTarget": "การแสดงความคิดเห็นจำเป็นต้องมีเป้าหมายพื้นที่เก็บข้อมูล GitHub PR",
                 "selectWorkspaceBeforeAiAction": "เลือกพื้นที่ทำงานก่อนเริ่มการทำงานของ AI",
                 "operation": {
-                  "rebase": "รีบูต",
+                  "rebase": "รีเบส",
                   "merge": "ผสาน",
                   "cherryPick": "เก็บเชอร์รี่"
                 }
@@ -16098,9 +16098,9 @@
                   "titlePublishBranchFirst": "เผยแพร่สาขาก่อนเพื่อซิงค์คอมมิต",
                   "titleUseForcePush": "ใช้ Commit & Force Push — รีโมตมีเฉพาะสำเนาที่เก่ากว่าของคอมมิตในเครื่อง",
                   "titleCommitThenPullPush": "ยอมรับ จากนั้นดึงและผลักดัน",
-                  "rebaseFromBase": "รีบูตจากฐาน",
-                  "rebaseChooseRemoteBase": "เลือกสาขาฐานระยะไกลเพื่อรีบูต",
-                  "rebaseWithLatestFrom": "รีบูตสาขาปัจจุบันด้วยคอมมิตล่าสุดจาก {{baseRef}}",
+                  "rebaseFromBase": "รีเบสจากฐาน",
+                  "rebaseChooseRemoteBase": "เลือกสาขาฐานรีโมตเพื่อรีเบส",
+                  "rebaseWithLatestFrom": "รีเบสสาขาปัจจุบันด้วยคอมมิตล่าสุดจาก {{baseRef}}",
                   "blockedCommitFirst": "ยอมรับการเปลี่ยนแปลงก่อน",
                   "blockedCheckOutBranchFirst": "ตรวจสอบสาขาก่อน",
                   "blockedSwitchToFeatureBranch": "สลับไปใช้สาขาคุณลักษณะ",
@@ -16121,7 +16121,7 @@
                   "titleCommitAndPush": "ยอมรับการเปลี่ยนแปลงตามขั้นตอนแล้วกด",
                   "commitForcePush": "กระทำและบังคับผลักดัน",
                   "commitPush": "มุ่งมั่นและผลักดัน",
-                  "titleAbortRebaseInProgress": "ยกเลิกการรีบูตที่กำลังดำเนินอยู่",
+                  "titleAbortRebaseInProgress": "ยกเลิกการรีเบสที่กำลังดำเนินอยู่",
                   "titleAbortMergeInProgress": "ยกเลิกการรวมที่กำลังดำเนินอยู่",
                   "titleNothingToPushTo": "ไม่มีอะไรที่จะผลักดันไปที่ {{upstreamName}}",
                   "titleNothingToPush": "ไม่มีอะไรให้ผลักดัน",
@@ -16194,10 +16194,10 @@
                   "statusUnsupported": "ไม่รองรับ",
                   "rebaseOntoNamedBase": "Rebase onto {{base}}",
                   "rebaseCommitOrStashFirst": "ยืนยันหรือซ่อนการเปลี่ยนแปลงก่อน",
-                  "continueRebase": "ทำการรีบูตต่อ",
-                  "titleContinueRebase": "ดำเนินการรีบูตที่หยุดชั่วคราวต่อไป",
-                  "rebaseFromNamedBase": "รีบูตจาก {{baseRef}}",
-                  "rebaseDirtyHint": "ลองรีบูต; git อาจต้องมีการดำเนินการหรือซ่อนการเปลี่ยนแปลงในเครื่องก่อน",
+                  "continueRebase": "ทำการรีเบสต่อ",
+                  "titleContinueRebase": "ดำเนินการรีเบสที่หยุดชั่วคราวต่อไป",
+                  "rebaseFromNamedBase": "รีเบสจาก {{baseRef}}",
+                  "rebaseDirtyHint": "ลองรีเบส; Git อาจต้องมีการคอมมิตหรือ stash การเปลี่ยนแปลงในเครื่องก่อน",
                   "statusStashFirst": "เก็บไว้ก่อน"
                 }
               },
@@ -16275,11 +16275,11 @@
                 "status": {
                   "cards": {
                     "5302a1ddba": "รวมข้อขัดแย้ง",
-                    "7f3af87549": "ข้อขัดแย้งในการรีบูต",
+                    "7f3af87549": "ข้อขัดแย้งในการรีเบส",
                     "6a8e9ad490": "ข้อขัดแย้งในการเลือกเชอร์รี่",
                     "bdf8772106": "ข้อขัดแย้ง",
                     "edc2d82a2b": "อยู่ระหว่างการรวม",
-                    "5c3707aa44": "กำลังดำเนินการรีบูต",
+                    "5c3707aa44": "กำลังดำเนินการรีเบส",
                     "ffe53a1da6": "กำลังเก็บเชอร์รี่",
                     "35eb76d323": "อยู่ระหว่างดำเนินการ",
                     "completeMerge": "ผสานให้เสร็จสมบูรณ์"
@@ -16550,10 +16550,10 @@
               "notice": {
                 "merge": "ผสาน",
                 "mergeDescription": "สร้างการคอมมิตแบบผสานเมื่อทั้งภายในและระยะไกลมีการเปลี่ยนแปลง",
-                "rebase": "รีบูต",
+                "rebase": "รีเบส",
                 "rebaseDescription": "เล่นซ้ำการกระทำในเครื่องที่ด้านบนของสาขาระยะไกล",
                 "fastForwardOnly": "กรอไปข้างหน้าเท่านั้น",
-                "fastForwardOnlyDescription": "ดึงเมื่อไม่จำเป็นต้องผสานหรือรีบูตเท่านั้น",
+                "fastForwardOnlyDescription": "Pull เฉพาะเมื่อไม่จำเป็นต้อง merge หรือ rebase เท่านั้น",
                 "title": "การดึงจำเป็นต้องมีนโยบาย",
                 "diverged": "แยกออก",
                 "body": "สาขานี้มีคอมมิตภายในและระยะไกล เรียกใช้หนึ่งคำสั่งในแผนผังงานนี้หรือบนโฮสต์ SSH จากนั้นลองดึงหรือซิงค์อีกครั้ง",
@@ -16878,7 +16878,7 @@
           "90b5d2e363": "macOS ไม่ส่งการแจ้งเตือน Orca"
         },
         "OnboardingFlow": {
-          "1b5e182e9f": "ยินดีต้อนรับสู่ออร์ก้า",
+          "1b5e182e9f": "ยินดีต้อนรับสู่Orca",
           "adaa0aa627": "ไปที่ขั้นตอนการเริ่มต้นใช้งาน {{value0}}: {{value1}}",
           "a249f81538": "Orca",
           "277ba45540": "การเริ่มต้นใช้งาน Orca",
@@ -17102,7 +17102,7 @@
           "34f878d04f": "เพิกถอน {{value0}}",
           "94829abdb1": "จับคู่แล้ว",
           "266c18c105": "เปิด Orca Mobile เพื่อทำต่อจากจุดที่คุณค้างไว้ หรือจับคู่อุปกรณ์อื่น",
-          "5410d55d79": "ออร์ก้า โมบาย",
+          "5410d55d79": "Orca โมบาย",
           "10d27b4cba": "เริ่มต้น",
           "da1d5e5ed0": "ใช้ได้บน",
           "ec0607bf66": "แพลตฟอร์มมือถือที่รองรับ",
@@ -17427,7 +17427,7 @@
           },
           "FeatureWallModal": {
             "33dca8bbbe": "ทัวร์ชม Orca ทีละเวิร์กโฟลว์สั้นๆ",
-            "3567e147c8": "ทำความรู้จักกับออร์ก้า"
+            "3567e147c8": "ทำความรู้จักกับOrca"
           },
           "FeatureWallPreview": {
             "a666384798": "ในเวิร์กโฟลว์นี้ด้วย"
@@ -19240,7 +19240,7 @@
             "zoomIn": "ขยาย",
             "resetZoom": "รีเซ็ตการซูม",
             "appearance": "ลักษณะที่ปรากฏ",
-            "appearanceMatchOrca": "จับคู่ออร์ก้า",
+            "appearanceMatchOrca": "จับคู่Orca",
             "appearanceLight": "สว่าง",
             "appearanceDark": "มืด",
             "zoomPercent": "ซูม {{value0}}%"
@@ -20191,7 +20191,7 @@
             "dialog": {
               "keep": {
                 "orca": {
-                  "button": "เก็บออร์ก้า"
+                  "button": "เก็บOrca"
                 }
               },
               "orca": {
@@ -20502,7 +20502,7 @@
           "a4a49da6af": "แบ่งปันเป็นสิ่งประดิษฐ์",
           "confirmTitle": "แบ่งปันเป็นสิ่งประดิษฐ์",
           "confirmDescription": "การดำเนินการนี้จะเผยแพร่ไฟล์ปัจจุบันตามลิงก์ที่ใครก็ตามที่มี URL สามารถดูได้",
-          "accountTitle": "บัญชีออร์ก้า",
+          "accountTitle": "บัญชีOrca",
           "accountDescription": "ลงชื่อเข้าใช้เพื่อสร้างและจัดการลิงก์นี้",
           "signInAgain": "ลงชื่อเข้าใช้อีกครั้ง",
           "signIn": "ลงชื่อเข้าใช้",
@@ -20658,7 +20658,7 @@
         "1f6b2c9d4e": "สิ่งที่คุณได้รับคืน",
         "8d2e4f7a1b": "การแบ่งปันสิ่งประดิษฐ์",
         "2c9a5b6e8d": "เผยแพร่ไฟล์ HTML และ Markdown และจัดการทุกลิงก์ที่แชร์จาก Orca",
-        "6e3f1a9c5b": "ออร์ก้ารีเลย์",
+        "6e3f1a9c5b": "Orcaรีเลย์",
         "4b7d2e8f1a": "เชื่อมต่อ Orca Mobile กับเดสก์ท็อปนี้ผ่านมือถือหรือ Wi-Fi ใดๆ",
         "9a4c6b2d7e": "การแบ่งปันทักษะ",
         "3d8e5f1b9c": "แบ่งปันทักษะเบื้องหลังลิงก์ที่ไม่แสดง และติดตั้งลงในเครื่องใดก็ได้ที่คุณใช้",
@@ -21109,8 +21109,8 @@
           "lightLooks": "ดูสว่าง",
           "moreThemes": "ธีมเพิ่มเติม",
           "next": "ดูเพิ่มเติม",
-          "orcaDark": "ออร์ก้า ดาร์ก",
-          "orcaLight": "ออร์ก้า ไลท์",
+          "orcaDark": "Orca ดาร์ก",
+          "orcaLight": "Orca ไลท์",
           "pluginsHint": "มีธีมเพิ่มเติมเป็นปลั๊กอิน",
           "previous": "รูปลักษณ์ก่อนหน้า",
           "showsWhenDark": "แสดงเมื่อระบบของคุณมืด",
@@ -21336,7 +21336,7 @@
         "attachmentsExpired": "{{names}} หมดอายุแล้ว"
       },
       "writeNotice": {
-        "notDoneReadHistory": "This chat's history couldn't be loaded.",
+        "notDoneReadHistory": "ไม่สามารถโหลดประวัติการแชทนี้ได้",
         "notDoneSend": "ข้อความของคุณไม่ได้ถูกส่ง",
         "tryAgainComposerSend": "ส่งอีกครั้ง",
         "messageNotSaved": "ไม่สามารถบันทึกข้อความของคุณได้",
@@ -21351,15 +21351,15 @@
         "restartFailed": "Agentไม่สามารถรีสตาร์ทได้",
         "capacity": "Orca on the computer running this chat has hit a request limit. อัปเดต Orca ที่นั่น แล้วลองอีกครั้ง",
         "outcomeUnknown": "Orca ไม่สามารถยืนยันสิ่งที่เกิดขึ้นได้ ตรวจสอบการแชท",
-        "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
+        "sendOutcomeLost": "Orca ไม่สามารถยืนยันได้ว่าข้อความของคุณส่งถึงAgentแล้วหรือไม่ ตรวจสอบการแชทแล้วส่งใหม่อีกครั้งหากจำเป็น",
         "continuationSuperseded": "การแชทนี้ได้ดำเนินต่อไปแล้ว ตรวจสอบข้อความล่าสุดก่อนดำเนินการต่อ",
-        "questionChanged": "This question was already answered or has changed.",
-        "cancelNotSaved": "Couldn't cancel this question or approval.",
-        "historyUnreadable": "Orca couldn't read this chat's saved history.",
+        "questionChanged": "คำถามนี้ได้รับคำตอบแล้วหรือมีการเปลี่ยนแปลง",
+        "cancelNotSaved": "ไม่สามารถยกเลิกคำถามหรือการอนุมัตินี้ได้",
+        "historyUnreadable": "Orca ไม่สามารถอ่านประวัติการแชทที่บันทึกไว้ได้",
         "historyUnusable": "ไม่สามารถโหลดการแชทนี้ได้",
-        "historyUnavailable": "Orca couldn't open this chat's history right now.",
-        "diskFull": "The disk on the computer running this chat is full.",
-        "freeDiskSpace": "Free up space on that disk, then try again.",
+        "historyUnavailable": "Orca ไม่สามารถเปิดประวัติการแชทนี้ได้ในขณะนี้",
+        "diskFull": "ดิสก์บนคอมพิวเตอร์ที่รันแชทนี้เต็ม",
+        "freeDiskSpace": "เพิ่มพื้นที่ว่างบนดิสก์นั้น แล้วลองอีกครั้ง",
         "savedInOtherFolder": "การสนทนานี้ถูกบันทึกไว้ในโฟลเดอร์อื่น",
         "savedByNewerOrca": "การแชทได้รับการบันทึกโดย Orca รุ่นใหม่",
         "updateOrcaToKeepUsing": "อัปเดต Orca เพื่อใช้งานต่อไป",
@@ -21544,7 +21544,7 @@
         "pasteNotSavedLabel": "ไม่ได้บันทึกการวาง",
         "pasteNotSaved": "การวางนี้ไม่ได้รับการบันทึก วางอีกครั้งหรือลบออก",
         "pastedTextTooLarge": "การวางนี้จะทำให้ข้อความของคุณมีขนาดเกินขีดจำกัด 256 KB สำหรับหนึ่งข้อความ ย่อให้สั้นลงแล้ววางอีกครั้ง",
-        "draftNotSaved": "ยังไม่สามารถบันทึกฉบับร่างนี้ได้ ออร์ก้าพยายามต่อไป",
+        "draftNotSaved": "ยังไม่สามารถบันทึกฉบับร่างนี้ได้ Orcaพยายามต่อไป",
         "imageNotBroughtBack": "{{name}} ไม่สามารถนำกลับมาพร้อมกับฉบับร่างนี้ได้ ติดอีกครั้งหรือถอดออก",
         "pastedImageNotBroughtBack": "รูปภาพที่วางนี้ไม่สามารถนำกลับมาพร้อมกับร่างนี้ได้ ลบออกแล้ววางอีกครั้งหากคุณยังต้องการ",
         "removeImageToSend": "ไม่สามารถนำรูปภาพกลับมาได้ ลบออกเพื่อส่ง",
@@ -22360,10 +22360,10 @@
         "grok_4_7": "โมเดลชายแดนล่าสุดของ xAI",
         "grok_4_6": "โมเดลขอบเขตก่อนหน้าของ xAI",
         "grok_4_5": "โมเดล xAI frontier รุ่นก่อนหน้า",
-        "fable": "Most capable for the hardest, longest-running tasks",
-        "opus": "Best for everyday, complex tasks",
-        "sonnet": "Efficient for routine tasks",
-        "haiku": "Fastest for quick answers"
+        "fable": "มีความสามารถสูงสุดสำหรับงานที่ยากและใช้เวลานานที่สุด",
+        "opus": "ดีที่สุดสำหรับงานที่ซับซ้อนในชีวิตประจำวัน",
+        "sonnet": "มีประสิทธิภาพสูงสำหรับงานทั่วไป",
+        "haiku": "เร็วที่สุดสำหรับคำตอบที่รวดเร็ว"
       },
       "transcript": {
         "imageFallback": "รูปภาพ"
@@ -22372,32 +22372,32 @@
         "ran": "Ran {{command}}"
       },
       "runtime": {
-        "readError": "Couldn't read agent chat from the remote runtime.",
-        "tooOld": "This remote runtime is too old to show agent chat history. Update the remote runtime to view it."
+        "readError": "ไม่สามารถอ่านแชทของAgentจากรันไทม์ระยะไกลได้",
+        "tooOld": "รันไทม์ระยะไกลนี้เก่าเกินไปที่จะแสดงประวัติการแชทของAgent อัปเดตรันไทม์ระยะไกลเพื่อดูประวัติ"
       },
       "sessionOption": {
-        "noLiveTerminal": "No live terminal is available.",
-        "commandCanceled": "Chat UI command was canceled because the composer closed.",
-        "commandRejected": "The terminal did not accept the command."
+        "noLiveTerminal": "ไม่มีเทอร์มินัลที่ใช้งานได้ในขณะนี้",
+        "commandCanceled": "คำสั่ง UI แชทถูกยกเลิกเนื่องจากตัวเขียนข้อความถูกปิด",
+        "commandRejected": "เทอร์มินัลไม่ยอมรับคำสั่ง"
       },
       "sessionOptionErrors": {
-        "startOnly": "This option can only be set when the session starts.",
-        "modelRejected": "Claude kept the current model.",
-        "modelUnverified": "Could not verify the model change; open the terminal to check.",
-        "unknownOption": "Unknown session option: {{id}}",
-        "agentPickerOnly": "This option must be changed in the agent picker.",
-        "toggleBaselineUnknown": "Current value is unknown; use the Toggle action instead.",
-        "afterStartOnly": "This option is only available after the session starts.",
-        "valueRequired": "This option requires a value.",
-        "toggleValueKnown": "This option has a known value; choose On or Off instead."
+        "startOnly": "ตัวเลือกนี้สามารถตั้งค่าได้เมื่อเริ่มเซสชันเท่านั้น",
+        "modelRejected": "Claude ยังคงใช้โมเดลปัจจุบัน",
+        "modelUnverified": "ไม่สามารถยืนยันการเปลี่ยนแปลงโมเดลได้ เปิดเทอร์มินัลเพื่อตรวจสอบ",
+        "unknownOption": "ตัวเลือกเซสชันที่ไม่รู้จัก: {{id}}",
+        "agentPickerOnly": "ตัวเลือกนี้ต้องเปลี่ยนในตัวเลือกAgent",
+        "toggleBaselineUnknown": "ไม่ทราบค่าปัจจุบัน โปรดใช้การดำเนินการสลับ (Toggle) แทน",
+        "afterStartOnly": "ตัวเลือกนี้ใช้ได้หลังจากเริ่มเซสชันแล้วเท่านั้น",
+        "valueRequired": "ตัวเลือกนี้ต้องระบุค่า",
+        "toggleValueKnown": "ตัวเลือกนี้มีค่าที่ทราบแล้ว ให้เลือกเปิดหรือปิดแทน"
       },
       "composerErrors": {
-        "goalObjectiveMissing": "Describe the goal after /goal.",
-        "commandUnavailable": "/{{name}} is not available in chat sessions. Use the slash menu to see available commands.",
-        "commandTakesNoArguments": "Use /{{name}} without arguments.",
-        "commandUnsupportedByHost": "/{{name}} is not supported by this chat host.",
-        "modelPickerFailed": "Could not open the model picker.",
-        "effortPickerFailed": "Could not open the effort picker.",
+        "goalObjectiveMissing": "อธิบายเป้าหมายหลัง /goal",
+        "commandUnavailable": "/{{name}} ไม่สามารถใช้ได้ในเซสชันแชท ใช้เมนูสแลชเพื่อดูคำสั่งที่ใช้ได้",
+        "commandTakesNoArguments": "ใช้ /{{name}} โดยไม่ต้องระบุอาร์กิวเมนต์",
+        "commandUnsupportedByHost": "/{{name}} ไม่รองรับโดยโฮสต์แชทนี้",
+        "modelPickerFailed": "ไม่สามารถเปิดตัวเลือกโมเดลได้",
+        "effortPickerFailed": "ไม่สามารถเปิดตัวเลือก Effort ได้",
         "modelApplyFailed": "ไม่สามารถใช้โมเดล {{value}} ได้",
         "effortApplyFailed": "ไม่สามารถใช้ความพยายาม {{value}}."
       },
@@ -22626,7 +22626,7 @@
         "failed": "ไม่สามารถโหลดการใช้งาน Codex ได้ ลองอีกครั้ง",
         "codexVersion": "เวอร์ชัน Codex นี้ไม่ได้รายงานการใช้งาน อัปเดต Codex",
         "apiKeyAuth": "การใช้งาน Codex ไม่สามารถใช้งานได้กับคีย์ API ลงชื่อเข้าใช้ Codex ด้วยบัญชี ChatGPT เพื่อดูการใช้งาน",
-        "title": "การใช้โคเด็กซ์",
+        "title": "การใช้Codex",
         "account": "บัญชีที่ใช้โดยการแชทนี้",
         "retry": "ลองอีกครั้ง",
         "resetFailed": "ไม่สามารถรีเซ็ตขีดจำกัด Codex ได้ ลองอีกครั้ง",
@@ -22927,7 +22927,7 @@
         "signedIn": "ลงชื่อเข้าใช้แล้ว ส่งอีกครั้ง",
         "notSent": "ไม่ได้ส่ง: {{agent}} ไม่ได้ลงชื่อเข้าใช้",
         "notSignedIn": "{{agent}} ไม่ได้ลงชื่อเข้าใช้",
-        "opensAntigravitySettings": "เปิดการตั้งค่า → บัญชี → การต่อต้านแรงโน้มถ่วง",
+        "opensAntigravitySettings": "เปิดการตั้งค่า → บัญชี → Antigravity",
         "signIn": "ลงชื่อเข้าใช้",
         "signsInClaudeAccount": "ลงชื่อเข้าใช้บัญชี Claude นี้",
         "runsCommand": "รัน {{command}} ในเทอร์มินัล",
@@ -22935,15 +22935,15 @@
         "signsInAgy": "ลงชื่อเข้าใช้ agy ด้วย Google ในเบราว์เซอร์ของคุณ"
       },
       "antigravityAuth": {
-        "chipLabel": "ต้านแรงโน้มถ่วงลงชื่อเข้าใช้ด้วย {{method}} เปลี่ยน",
-        "chipTitle": "สัญญาณต้านแรงโน้มถ่วงลงชื่อเข้าใช้ด้วย {{method}}",
-        "menuTitle": "สัญญาณต้านแรงโน้มถ่วงลงชื่อเข้าใช้ด้วย",
+        "chipLabel": "Antigravityลงชื่อเข้าใช้ด้วย {{method}} เปลี่ยน",
+        "chipTitle": "สัญญาณAntigravityลงชื่อเข้าใช้ด้วย {{method}}",
+        "menuTitle": "สัญญาณAntigravityลงชื่อเข้าใช้ด้วย",
         "detected": "ตรวจพบ",
         "settings": "การตั้งค่าการลงชื่อเข้าใช้...",
-        "switched": "ตอนนี้ต้านแรงโน้มถ่วงใช้ {{method}}.",
+        "switched": "ตอนนี้Antigravityใช้ {{method}}.",
         "switchFailed": "Orca ไม่สามารถเปลี่ยนวิธีการลงชื่อเข้าใช้ Antigravity ได้ โปรดลองอีกครั้ง",
         "confirmTitle": "เปลี่ยนเป็น {{method}}?",
-        "confirmBody": "การแชทต้านแรงโน้มถ่วงที่ทำงานบนโฮสต์นี้เริ่มต้นใหม่ การตอบกลับที่กำลังดำเนินอยู่จะหยุดลง บทสนทนาของคุณยังคงอยู่",
+        "confirmBody": "การแชทAntigravityที่ทำงานบนโฮสต์นี้เริ่มต้นใหม่ การตอบกลับที่กำลังดำเนินอยู่จะหยุดลง บทสนทนาของคุณยังคงอยู่",
         "cancel": "ยกเลิก",
         "confirm": "สลับ",
         "otherWays": "คุณสามารถลงชื่อเข้าใช้ด้วยคีย์ API หรือ gcloud แทนได้",
@@ -22958,7 +22958,7 @@
         "askGoogle": "ใช้การลงชื่อเข้าใช้ Google แทนหรือไม่",
         "noSubscription": "บัญชี Google นี้ไม่มีการสมัครสมาชิก Antigravity",
         "ineligible": "บัญชี Google นี้ไม่สามารถใช้ Antigravity ได้",
-        "signedOut": "การต่อต้านแรงโน้มถ่วงไม่ได้ลงชื่อเข้าใช้",
+        "signedOut": "Antigravityไม่ได้ลงชื่อเข้าใช้",
         "refused": "Google ปฏิเสธข้อมูลรับรองการแชทนี้",
         "usageLimit": "การลงชื่อเข้าใช้นี้ถึงขีดจำกัดการใช้งานแล้ว",
         "signInGoogle": "ลงชื่อเข้าใช้ด้วย Google",
@@ -24078,7 +24078,7 @@
           "turnOn": "เปิด",
           "title": "ลบประวัติAgentเมื่อพื้นที่ทำงานถูกลบ",
           "description": "การสนทนา Orca, Claude Code และ Codex จากพื้นที่ทำงานที่ถูกลบจะถูกลบออกโดยอัตโนมัติเพื่อเพิ่มพื้นที่ว่างในดิสก์ ไม่สามารถกู้คืนได้",
-          "codexHistoryBadge": "ประวัติโคเด็กซ์: {{size}}",
+          "codexHistoryBadge": "ประวัติCodex: {{size}}",
           "codexHistoryBadgeAtLeast": "ประวัติโคเดกซ์: {{size}}+",
           "codexHistoryTooltip": "Space Codex ใช้สำหรับประวัติการแชทของตัวเองบน {{host}} รวมถึงการแชทจากพื้นที่ทำงานที่คุณยังมีอยู่",
           "codexHistoryTooltipAtLeast": "Codex ใช้พื้นที่อย่างน้อยเท่านี้สำหรับประวัติการแชทของตัวเองบน {{host}} รวมถึงการแชทจากพื้นที่ทำงานที่คุณยังมีอยู่",
@@ -24573,7 +24573,7 @@
   "featureTips": {
     "voice": {
       "unassignedInstruction": "กำหนดทางลัดการเขียนตามคำบอกก่อนที่จะเริ่มการเขียนตามคำบอกด้วยเสียงในบานหน้าต่างที่โฟกัส",
-      "shortcutInstruction": "เน้นที่เทอร์มินัล ตัวแก้ไข หรือพรอมต์ของAgent จากนั้นกด <ทางลัด/> เพื่อเริ่มการเขียนตามคำบอกด้วยเสียง กด <ทางลัด/> อีกครั้งเพื่อหยุด",
+      "shortcutInstruction": "เน้นที่เทอร์มินัล ตัวแก้ไข หรือพรอมต์ของAgent จากนั้นกด <shortcut/> เพื่อเริ่มการเขียนตามคำบอกด้วยเสียง กด <shortcut/> อีกครั้งเพื่อหยุด",
       "changeInSettings": "เปลี่ยนรุ่น โหมดการเขียนตามคำบอก หรือทางลัดได้ตลอดเวลาใน <link>การตั้งค่า → เสียง</link>",
       "title": "เขียนตามคำบอกลงในบานหน้าต่างใดก็ได้",
       "description": "เริ่มการเขียนตามคำบอกด้วยเสียงในบานหน้าต่างที่โฟกัส จากนั้นใช้ทางลัดอีกครั้งเพื่อหยุด",
@@ -24675,7 +24675,7 @@
       "itemsTitle": "มันใช้งานได้ในรายการเดียว",
       "groupTitle": "บอตทำงานร่วมกัน",
       "pageAnnounce": "หน้า {{number}} จาก {{count}}: {{title}}",
-      "product": "ออร์ก้าบอต",
+      "product": "Orcaบอต",
       "groupName": "ทีมงานเปิดตัว",
       "releaseBot": "ปล่อยบอต",
       "reviewBot": "ตรวจสอบบอต",
@@ -24923,9 +24923,9 @@
         "planModelWithoutThinking": "โมเดล \"{{model}}\" ไม่สนับสนุนระดับความพยายามในการคิด",
         "planThinkingLevelInvalid": "ระดับการคิด \"{{level}}\" ไม่ถูกต้องสำหรับ {{model}}",
         "openCodeInvalidEvents": "OpenCode ส่งคืนเหตุการณ์ JSON ที่ไม่ถูกต้อง",
-        "antigravityInvalidEvents": "การต้านแรงโน้มถ่วงส่งคืนเหตุการณ์ JSON ที่ไม่ถูกต้อง",
-        "antigravityInvalidResult": "แรงต้านแรงโน้มถ่วงส่งคืนผลลัพธ์ที่ไม่ถูกต้อง",
-        "antigravityNoFinalResult": "การต้านแรงโน้มถ่วงไม่ได้ให้ผลลัพธ์สุดท้าย",
+        "antigravityInvalidEvents": "Antigravityส่งคืนเหตุการณ์ JSON ที่ไม่ถูกต้อง",
+        "antigravityInvalidResult": "Antigravityส่งคืนผลลัพธ์ที่ไม่ถูกต้อง",
+        "antigravityNoFinalResult": "Antigravityไม่ได้ให้ผลลัพธ์สุดท้าย",
         "kimiUnreadableOutput": "Kimi ส่งคืนเอาต์พุต Orca ไม่สามารถอ่านได้ ลองอีกครั้ง",
         "kimiSessionOccupied": "Kimi ไม่สามารถใช้เซสชันนี้ได้เนื่องจากมีการใช้งานอยู่ในไคลเอนต์อื่น หยุดเซสชันตรงนั้นหรือออกจากไคลเอ็นต์นั้น แล้วลองอีกครั้ง",
         "kimiInterrupted": "Kimi ถูกขัดจังหวะก่อนที่จะสร้างข้อความเสร็จ ลองอีกครั้ง",
@@ -24981,7 +24981,7 @@
         "push": "การพุชล้มเหลว {{detail}}",
         "fetch": "การดึงข้อมูลล้มเหลว {{detail}}",
         "fastForward": "การกรอไปข้างหน้าล้มเหลว {{detail}}",
-        "rebase": "การรีบูตล้มเหลว {{detail}}",
+        "rebase": "การรีเบสล้มเหลว {{detail}}",
         "pull": "การดึงล้มเหลว {{detail}}"
       },
       "hookBlocked": {
@@ -25015,18 +25015,18 @@
       "forcePushFailed": "การบังคับดันล้มเหลว ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง",
       "pushFailed": "การพุชล้มเหลว ตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง",
       "localChangesBlocked": {
-        "rebase": "บล็อกการรีบูต — คอมมิตหรือซ่อนการเปลี่ยนแปลงในเครื่องของคุณก่อน",
+        "rebase": "การรีเบสถูกบล็อก — คอมมิตหรือ stash การเปลี่ยนแปลงในเครื่องของคุณก่อน",
         "fastForward": "กรอไปข้างหน้าบล็อก — คอมมิตหรือซ่อนการเปลี่ยนแปลงในเครื่องของคุณก่อน",
         "pull": "ดึงบล็อก — กระทำหรือซ่อนการเปลี่ยนแปลงในเครื่องของคุณก่อน"
       },
       "operationFailed": "การดำเนินการระยะไกลล้มเหลว",
       "unconcludedMerge": {
-        "rebase": "การรีบูตถูกบล็อก — แก้ไขข้อขัดแย้งที่มีอยู่ก่อน",
+        "rebase": "การรีเบสถูกบล็อก — แก้ไขข้อขัดแย้งที่มีอยู่ก่อน",
         "sync": "การซิงค์ถูกบล็อก — แก้ไขข้อขัดแย้งในการรวมที่มีอยู่ก่อน",
         "pull": "ดึงบล็อก — แก้ไขข้อขัดแย้งในการรวมที่มีอยู่ก่อน"
       },
       "mergeConflicts": {
-        "rebase": "การรีบูตหยุดลงเนื่องจากข้อขัดแย้ง แก้ไขใน Source Control จากนั้นทำการรีบูตต่อ",
+        "rebase": "การรีเบสหยุดลงเนื่องจากข้อขัดแย้ง แก้ไขใน Source Control แล้วทำการรีเบสต่อ",
         "sync": "การซิงค์หยุดลงเนื่องจากมีข้อขัดแย้งในการผสาน แก้ไขได้ใน Source Control จากนั้นทำการผสาน",
         "pull": "การดึงหยุดเนื่องจากข้อขัดแย้งในการผสาน แก้ไขได้ใน Source Control จากนั้นทำการผสาน"
       },
@@ -25034,7 +25034,7 @@
       "forcePushRejected": "บังคับให้ปฏิเสธการพุช — รีโมตมีการเปลี่ยนแปลงตั้งแต่การดึงข้อมูลครั้งล่าสุด ดึงข้อมูลก่อนแล้วลองอีกครั้ง",
       "pushRejected": "พุชถูกปฏิเสธ — รีโมตมีการเปลี่ยนแปลง ดึงก่อนแล้วลองอีกครั้ง",
       "untrackedFilesBlocked": {
-        "rebase": "ทำการบล็อกการรีบูต — ย้าย ลบ หรือเพิ่มไฟล์ที่ไม่ได้ติดตามก่อน",
+        "rebase": "การรีเบสถูกบล็อก — ย้าย ลบ หรือเพิ่มไฟล์ที่ยังไม่ได้ติดตาม (untracked) ก่อน",
         "fastForward": "กรอไปข้างหน้าที่ถูกบล็อก — ย้าย ลบ หรือเพิ่มไฟล์ที่ไม่ได้ติดตามก่อน",
         "pull": "ดึงบล็อก — ย้าย ลบ หรือเพิ่มไฟล์ที่ไม่ได้ติดตามก่อน"
       },
@@ -25204,7 +25204,7 @@
       "searchDescription": "เปิดการค้นหาเซสชันสำหรับคอมพิวเตอร์เครื่องนี้และเซิร์ฟเวอร์ที่จับคู่ หรือล้างข้อมูลการค้นหา",
       "indexComputers": "ค้นหาภายในเซสชัน",
       "computersConsent": "คอมพิวเตอร์แต่ละเครื่องจะเก็บดัชนีการสนทนาของAgentที่สามารถค้นหาได้ของตัวเอง ไคลเอ็นต์ที่จับคู่ที่ผ่านการรับรองความถูกต้องแล้วสามารถรับผลการค้นหาได้",
-      "serverVersion": "ออร์ก้า v{{version}}",
+      "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "ค้นหาเซสชันใน {{host}}",
       "serverOffline": "ออฟไลน์",
       "serverTooOld": "ต้องการ Orca เวอร์ชันใหม่",
@@ -25335,7 +25335,7 @@
       "dialogCause": "เทอร์มินัลที่เปิดก่อนการอัปเดตนี้ไม่ได้เปิด ดังนั้น claude ที่นี่จึงลงชื่อเข้าใช้ด้วยการเข้าสู่ระบบตามค่าเริ่มต้นของระบบ เปิดเทอร์มินัลใหม่เพื่อใช้บัญชีที่เลือก"
     },
     "claudeDiffPanelNotice": {
-      "title": "Claude Code สามารถเปิดแผงส่วนต่างของตัวเองข้างแชทในเทอร์มินัลแบบกว้าง แผงนั้นเป็นของคลอดด์ ไม่ใช่ของออร์ก้า",
+      "title": "Claude Code สามารถเปิดแผงส่วนต่างของตัวเองข้างแชทในเทอร์มินัลแบบกว้าง แผงนั้นเป็นของClaude ไม่ใช่ของOrca",
       "body": "หากต้องการซ่อน ให้พิมพ์ /diff ใน Claude Code โคลดจำตัวเลือกนั้นไว้สำหรับเซสชันต่อๆ ไป",
       "gotIt": "เข้าใจแล้ว"
     },
@@ -25492,7 +25492,7 @@
       "searchDescription": "บันทึกและเลือกบัญชี Google ดั้งเดิมบนโฮสต์การดำเนินการ",
       "title": "Antigravity",
       "keyword": {
-        "antigravity": "ต้านแรงโน้มถ่วง",
+        "antigravity": "Antigravity",
         "agy": "อายุมาก",
         "google": "กูเกิล",
         "accounts": "บัญชี"
@@ -25500,7 +25500,7 @@
       "windowsChanged": "บัญชีเริ่มต้นของโฮสต์มีการเปลี่ยนแปลง เลือกบัญชีที่บันทึกไว้เพื่อใช้อีกครั้ง",
       "authMethod": "ลงชื่อเข้าใช้ด้วย",
       "personal": "บัญชี Google",
-      "enterprise": "เจมินี่ เอ็นเตอร์ไพรส์",
+      "enterprise": "Gemini Enterprise",
       "gcpProject": "โครงการ Google Cloud",
       "projectPlaceholder": "รหัสโครงการของฉัน",
       "locationPlaceholder": "us-central1",
@@ -25509,7 +25509,7 @@
       "settingsSaveFailed": "Orca ไม่สามารถบันทึกการตั้งค่าการลงชื่อเข้าใช้ Antigravity ของคุณได้ ลองอีกครั้ง",
       "lastReading": "{{reading}} · อ่าน {{time}}",
       "noReading": "ไม่ทราบการใช้งาน: ยังไม่ได้อ่าน",
-      "fd47b5a5dd": "บัญชีต้านแรงโน้มถ่วง",
+      "fd47b5a5dd": "บัญชีAntigravity",
       "personalOption": "แผน Google AI ส่วนตัวของคุณ",
       "enterpriseOption": "ใบอนุญาตขององค์กรของคุณ",
       "apiKeyOption": "กุญแจจาก Google AI Studio",
@@ -25542,7 +25542,7 @@
       "readAt": "อ่าน {{time}}",
       "active": "ใช้งานอยู่",
       "runtime": "รันไทม์",
-      "chatTitle": "แชทต้านแรงโน้มถ่วง",
+      "chatTitle": "แชทAntigravity",
       "terminalTitle": "มีข้อผิดพลาดในเทอร์มินัล",
       "terminalDescription": "ใช้บัญชีที่บันทึกไว้ของ agy การเปลี่ยนมีผลกับเซสชัน Agy ใหม่",
       "addAccountHelp": "หากต้องการเพิ่มบัญชี ให้เรียกใช้ /logout ใน agy ลงชื่อเข้าใช้อีกครั้ง จากนั้นบันทึกที่นี่",
@@ -25585,7 +25585,7 @@
         "keep": "คงไว้เหมือนเดิม",
         "restartOne": "เริ่มเซสชันใหม่",
         "listLabel": "เซสชันของ Claude เพื่อเริ่มต้นใหม่",
-        "session": "เซสชันของคลอดด์",
+        "session": "เซสชันของClaude",
         "busy": "ทำงานอยู่",
         "idle": "ไม่ได้ใช้งาน",
         "settingTitle": "เมื่อคุณสลับบัญชีในขณะที่ Claude ทำงานในเทอร์มินัล",
@@ -25685,6 +25685,12 @@
       "cancel": "ยกเลิก",
       "save": "บันทึก",
       "unsupportedHost": "อัปเดต Orca บน {{host}} เพื่อเปลี่ยนการตั้งค่านี้ที่นั่น"
+    },
+    "selection": {
+      "claudeRemoteWslDefaultUnavailable": "การสลับเลน WSL ของโฮสต์นี้กลับไปเป็นค่าเริ่มต้นของระบบยังไม่พร้อมใช้งานจากที่นี่ในขณะนี้",
+      "claudeWslLanesNotReset": "บัญชี WSL Claude ยังไม่สามารถรีเซ็ตจากที่นี่ได้ในขณะนี้",
+      "codexSystemDefaultIncludingWsl": "ใช้การเข้าสู่ระบบ Codex ปัจจุบันของ {{value0}} รวมถึง WSL",
+      "systemDefaultIncludingWsl": "{{value0}} · รวมถึง WSL"
     }
   },
   "fileSearch": {
@@ -25946,8 +25952,8 @@
       "labels": "ป้ายกำกับ: {{labels}}"
     },
     "attachments": {
-      "updateRuntime": "Update the remote runtime to change workspace links",
-      "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
+      "updateRuntime": "อัปเดตรันไทม์ระยะไกลเพื่อเปลี่ยนลิงก์พื้นที่ทำงาน",
+      "updateRuntimeSafely": "อัปเดตรันไทม์ระยะไกลเพื่อเปลี่ยนลิงก์พื้นที่ทำงานอย่างปลอดภัย"
     },
     "activity": {
       "active": "ใช้งานอยู่",
@@ -25972,25 +25978,25 @@
     },
     "vm": {
       "menu": {
-        "waking": "Waking VM…",
-        "retryResume": "Retry Resume VM",
-        "resume": "Resume VM",
-        "suspend": "Suspend VM",
-        "suspendDescription": "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
+        "waking": "กำลังปลุก VM…",
+        "retryResume": "ลองกลับมาทำงาน VM อีกครั้ง",
+        "resume": "ให้ VM ทำงานต่อ",
+        "suspend": "ระงับการทำงาน VM",
+        "suspendDescription": "ปิดพาเนลของพื้นที่ทำงานนี้และระงับการทำงาน VM การเปิดพื้นที่ทำงานจะปลุก VM ให้ทำงาน"
       },
       "state": {
-        "provisioning": "VM provisioning",
-        "suspended": "VM suspended",
-        "waking": "VM waking",
-        "resumeFailed": "VM resume failed",
-        "provisionFailed": "VM setup failed"
+        "provisioning": "กำลังจัดเตรียม VM",
+        "suspended": "VM ถูกระงับการทำงาน",
+        "waking": "VM กำลังตื่น",
+        "resumeFailed": "การทำงานต่อของ VM ล้มเหลว",
+        "provisionFailed": "การตั้งค่า VM ล้มเหลว"
       },
       "hint": {
-        "provisioning": "The VM is being created.",
-        "suspended": "Asleep to save cost. Opening the workspace wakes it.",
-        "waking": "Resuming the VM and reconnecting.",
-        "resumeFailed": "The VM could not be resumed. Right-click and choose Resume VM to retry.",
-        "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
+        "provisioning": "กำลังสร้าง VM",
+        "suspended": "หลับอยู่เพื่อประหยัดค่าใช้จ่าย การเปิดพื้นที่ทำงานจะปลุกให้ตื่น",
+        "waking": "กำลังให้ VM กลับมาทำงานต่อและเชื่อมต่อใหม่",
+        "resumeFailed": "ไม่สามารถให้ VM กลับมาทำงานได้ คลิกขวาแล้วเลือก ให้ VM ทำงานต่อ เพื่อลองใหม่",
+        "provisionFailed": "ไม่ได้สร้าง VM หรือการสร้างถูกขัดจังหวะ เปิดการตั้งค่าเพื่อทำลายหรือลบออก"
       },
       "suspendFailed": "ไม่สามารถระงับพื้นที่ทำงาน VM"
     }
@@ -26014,15 +26020,15 @@
         "agentNotRun": "Orca ไม่สามารถเรียกใช้Agentชื่อแชทได้",
         "noAgentAvailable": "ไม่มีAgentชื่อแชทใดที่ทำงานในพื้นที่ทำงานนี้",
         "grokFailed": "Grok ไม่สามารถตั้งชื่อแชทนี้ได้ ลองสร้างชื่ออีกครั้ง",
-        "antigravityFailed": "ต้านแรงโน้มถ่วงไม่สามารถตั้งชื่อแชทนี้ได้ ลองสร้างชื่ออีกครั้ง"
+        "antigravityFailed": "Antigravityไม่สามารถตั้งชื่อแชทนี้ได้ ลองสร้างชื่ออีกครั้ง"
       }
     }
   },
   "updates": {
     "installOnQuit": {
       "title": "อัปเดตพร้อมสำหรับการติดตั้ง",
-      "summary": "ออกจากออร์ก้า เปิดใหม่หลังการติดตั้ง",
-      "quit": "ออกจากออร์ก้า",
+      "summary": "ออกจากOrca เปิดใหม่หลังการติดตั้ง",
+      "quit": "ออกจากOrca",
       "later": "ภายหลัง"
     },
     "installBlock": {
@@ -26937,7 +26943,7 @@
       }
     },
     "dialog": {
-      "spaceTitle": "ออร์ก้า สเปซ เบต้า",
+      "spaceTitle": "Orca สเปซ เบต้า",
       "dashboardTitle": "แดชบอร์ดAgent Orca",
       "importCookies": "นำเข้าคุกกี้",
       "cookieFiles": "ไฟล์คุกกี้",
@@ -27450,7 +27456,7 @@
         "title": "การตรวจสอบแบบอินไลน์ กลับไปที่Agent"
       },
       "tile09": {
-        "title": "ออร์ก้า CLI"
+        "title": "Orca CLI"
       },
       "tile10": {
         "title": "แป้นพิมพ์เนทิฟ"
@@ -27725,7 +27731,7 @@
         "noAgents": "ไม่มีAgent",
         "noAgentsAvailable": "ไม่มีAgent",
         "pictureLoading": "กำลังโหลดรูปภาพ…",
-        "updateOrca": "อัปเดตออร์ก้า"
+        "updateOrca": "อัปเดตOrca"
       },
       "parts": {
         "olderHost": "{{host}} ต้องการการอัปเดต Orca เพื่อเพิ่มทักษะและตารางเวลา",
@@ -27906,12 +27912,12 @@
         "anotherWay": "ตั้งค่าด้วยวิธีอื่น"
       },
       "postAs": {
-        "orcaUser": "ผู้ใช้ออร์ก้า",
+        "orcaUser": "ผู้ใช้Orca",
         "thisComputer": "คอมพิวเตอร์เครื่องนี้",
         "caption": "ในเธรด Slack ของบอตนี้",
         "approve": "อนุมัติใน Slack",
         "cancel": "ยกเลิก",
-        "viaOrca": "{{name}} (ผ่าน ออร์ก้า)",
+        "viaOrca": "{{name}} (ผ่าน Orca)",
         "app": "แอป",
         "sample": "จัดส่งหลังจากนั้น",
         "line": "เมื่อคุณตอบกลับกระทู้ Slack จาก Orca กระทู้นั้นจะโพสต์เป็น <picker>{{name}}</picker>",
@@ -28598,9 +28604,9 @@
         "addTitle": "เพิ่มความลับในการลงนาม",
         "note": "จากนั้น Orca จะยอมรับเฉพาะสายที่ลงนามด้วยความลับนี้ ดังนั้น URL ที่รั่วไหลเพียงอย่างเดียวจึงไม่สามารถเริ่ม \"{{automation}}\" ได้",
         "sender": "ผู้ส่ง",
-        "generateNote": "ออร์ก้าสร้างความลับนี้ คุณคัดลอกไปที่ {{sender}} ถัดไป",
+        "generateNote": "Orcaสร้างความลับนี้ คุณคัดลอกไปที่ {{sender}} ถัดไป",
         "mode": "ความลับมาจากไหน",
-        "modeGenerate": "ออร์ก้าสร้างมันขึ้นมา",
+        "modeGenerate": "Orcaสร้างมันขึ้นมา",
         "modePaste": "วางของผู้ส่ง",
         "pasteNote": "ใช้สิ่งนี้เมื่อผู้ส่งให้ความลับแก่คุณ",
         "paste": "{{sender}} ความลับ",
@@ -29088,56 +29094,56 @@
         "title": "ลงชื่อเข้าใช้เพื่อเชื่อมต่อ",
         "note": "เบราว์เซอร์ของคุณเปิดการลงชื่อเข้าใช้ของ Google การลงชื่อเข้าใช้ Google ของคุณจะยังคงอยู่ในคอมพิวเตอร์เครื่องนี้",
         "warning": "Google จะแสดงคำเตือนเนื่องจากแอปนี้เป็นของคุณและเป็นแอปใหม่ เลือกขั้นสูง จากนั้นไปที่ Orca และทำเครื่องหมายทุกช่องในหน้าจอถัดไป",
-        "noteOnHost": "Orca’s browser for {{host}} opens Google’s sign-in. Your Google sign-in stays on {{host}}."
+        "noteOnHost": "เบราว์เซอร์ของ Orca สำหรับ {{host}} จะเปิดการลงชื่อเข้าใช้ของ Google การลงชื่อเข้าใช้ Google จะยังคงอยู่บน {{host}}"
       },
       "connected": {
-        "heading": "Google connected",
+        "heading": "เชื่อมต่อ Google แล้ว",
         "canUse": "{{bot}} can use {{services}}.",
-        "add": "Add a service",
+        "add": "เพิ่มบริการ",
         "share": "การตั้งค่าการแบ่งปัน"
       },
       "progress": {
         "done": "เสร็จสิ้น",
         "waiting": "กำลังรอคุณอยู่",
         "working": "ทำงานอยู่",
-        "heading": "Setting up Google",
+        "heading": "กำลังตั้งค่า Google",
         "you": "คุณ",
         "stopped": "หยุดแล้ว"
       },
-      "letMe": "Let me do this one",
+      "letMe": "ให้ฉันทำขั้นตอนนี้เอง",
       "step": {
         "done": "เสร็จสิ้น",
         "account": "ลงชื่อเข้าใช้ Google",
-        "connect": "Connect and check",
-        "watching": "Watching the page",
-        "headingCount": "Your turn · {{n}} of {{total}}",
+        "connect": "เชื่อมต่อและตรวจสอบ",
+        "watching": "กำลังเฝ้าดูหน้าเว็บ",
+        "headingCount": "ถึงตาคุณแล้ว · {{n}} จาก {{total}}",
         "openInBrowser": "เปิดในเบราว์เซอร์"
       },
-      "takeOver": "Take over from here",
-      "ownerStep": "Step {{step}} of 3",
+      "takeOver": "รับช่วงต่อจากตรงนี้",
+      "ownerStep": "ขั้นตอนที่ {{step}} จาก 3",
       "otherAccount": "สลับบัญชี",
-      "keyMissed": "Downloaded the key and Orca didn’t pick it up?",
-      "pickHostKey": "Pick the key file to import:",
-      "pickKeyHere": "Choose a file on this computer",
+      "keyMissed": "ดาวน์โหลดคีย์แล้วแต่ Orca ไม่พบ?",
+      "pickHostKey": "เลือกไฟล์คีย์ที่จะนำเข้า:",
+      "pickKeyHere": "เลือกไฟล์บนคอมพิวเตอร์เครื่องนี้",
       "action": {
-        "makeNewKey": "Make a new key",
-        "importKey": "Import a key file",
-        "allow": "Allow {{services}}",
+        "makeNewKey": "สร้างคีย์ใหม่",
+        "importKey": "นำเข้าไฟล์คีย์",
+        "allow": "อนุญาต {{services}}",
         "signInAgain": "ลงชื่อเข้าใช้อีกครั้ง",
-        "continueWithout": "Continue without them",
-        "keep": "Keep {{email}}",
-        "signInAs": "Sign in as {{email}}",
+        "continueWithout": "ดำเนินการต่อโดยไม่ใช้",
+        "keep": "เก็บ {{email}} ไว้",
+        "signInAs": "ลงชื่อเข้าใช้เป็น {{email}}",
         "turnOn": "เปิด",
         "copyForAdmin": "คัดลอกสำหรับผู้ดูแลระบบของคุณ",
         "checkAgain": "ตรวจสอบอีกครั้ง",
         "continue": "ดำเนินการต่อ",
-        "startOver": "Start over"
+        "startOver": "เริ่มต้นใหม่"
       },
       "blocker": {
-        "stoppedWhy": "Setup stopped: {{reason}}",
-        "stopped": "Setup stopped.",
-        "paused": "The setup paused at {{step}}. Everything so far is saved.",
-        "yourTurn": "Your turn: {{step}}.",
+        "stoppedWhy": "การตั้งค่าหยุดลง: {{reason}}",
+        "stopped": "การตั้งค่าหยุดลง",
+        "paused": "การตั้งค่าหยุดชั่วคราวที่ {{step}} ทุกอย่างที่ทำไปได้รับการบันทึกแล้ว",
+        "yourTurn": "ถึงตาคุณแล้ว: {{step}}",
         "noKey": "Orca ต้องการคีย์ของแอปก่อน",
         "keyGone": "คีย์ของแอปนี้ใช้งานไม่ได้อีกต่อไป: มันถูกลบออกจาก Google Cloud แล้ว",
         "keyOtherProject": "คีย์ที่บันทึกไว้มีไว้สำหรับโปรเจ็กต์ {{keyProject}} ไม่ใช่ {{project}}",
@@ -29340,7 +29346,7 @@
       "stateFirstChat": "แชทแรก",
       "stateNotConnected": "ไม่ได้เชื่อมต่อ",
       "needsSetup": "จำเป็นต้องตั้งค่า",
-      "publisher": "โดย ออร์ก้า",
+      "publisher": "โดย Orca",
       "official": "เทมเพลต Orca อย่างเป็นทางการ",
       "useTemplate": "ใช้เทมเพลต…",
       "inItsChat": "ในการแชท",
@@ -30160,7 +30166,7 @@
       "wontStart": "จะไม่เริ่ม",
       "finishInBrowser": "เสร็จสิ้นในเบราว์เซอร์",
       "cantReach": "ไม่สามารถเข้าถึงได้",
-      "signInOrca": "ทำงานร่วมกับคลอดด์และ Codex",
+      "signInOrca": "ทำงานร่วมกับClaudeและ Codex",
       "finishing": "เสร็จสิ้นการลงชื่อเข้าใช้…",
       "updateHost": "อัปเดต Orca บน {{host}} เพื่อลงชื่อเข้าใช้แอป",
       "updateServer": "อัปเดต Orca บนเซิร์ฟเวอร์เพื่อลงชื่อเข้าใช้แอป",
@@ -30358,7 +30364,7 @@
       "computerFoot": "ตัวเชื่อมต่อ เครื่องมือ และไฟล์ต่างๆ ใช้งานได้บนคอมพิวเตอร์เครื่องนี้",
       "pairedServer": "เซิร์ฟเวอร์ที่จับคู่ · เรียกใช้แชท เครื่องมือ และระบบอัตโนมัติของบอตนี้",
       "thisComputerDetail": "คอมพิวเตอร์เครื่องนี้",
-      "orcaAccount": "บัญชีออร์ก้า",
+      "orcaAccount": "บัญชีOrca",
       "folder": "โฟลเดอร์",
       "copyPath": "คัดลอกเส้นทาง",
       "topicFiles": "ไฟล์หัวข้อ",
