@@ -314,12 +314,7 @@ export function parseAutomationRrule(rrule: string): {
   if (dayOfWeek === -1) {
     throw new Error('Invalid recurrence day.')
   }
-  return {
-    preset: 'weekly',
-    hour: rule.byHour,
-    minute: rule.byMinute,
-    dayOfWeek
-  }
+  return { preset: 'weekly', hour: rule.byHour, minute: rule.byMinute, dayOfWeek }
 }
 
 export function tryParseAutomationRrule(
