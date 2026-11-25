@@ -20,6 +20,8 @@ import {
   readJournalDomainQueueHead,
   readJournalDomainQueueList,
   readJournalDomainQueuePauses,
+  readJournalDomainReturnedCards,
+  type JournalReturnedCard,
   readJournalDomainUserStopInForce
 } from './journal-domain-queue-reads'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
@@ -46,6 +48,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
   | { kind: 'next-input-card'; automatic: boolean; steer: boolean; now: number }
   | { kind: 'failure-holds' }
   | { kind: 'edit-held'; messageId: string; now: number }
+  | { kind: 'returned'; now: number }
   | { kind: 'pauses' }
   | { kind: 'user-stop-in-force' }
   | { kind: 'reopen-mark' }
@@ -60,6 +63,7 @@ export type JournalSqlQueueReadResult =
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
   | { kind: 'failure-holds'; held: boolean }
   | { kind: 'edit-held'; held: boolean }
+  | { kind: 'returned'; cards: JournalReturnedCard[] }
   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
   /** Whether this handle owes a reopen mark, and where one written now would begin. */
@@ -167,6 +171,8 @@ export function readJournalSqlQueue(
                 AND lease.expires_at>?`)
             .get(target.sessionId, target.epoch, operation.messageId, operation.now) !== undefined
       }
+    case 'returned':
+      return { kind: 'returned', cards: readJournalDomainReturnedCards(db, target, operation.now) }
     case 'pauses':
       return {
         kind: 'pauses',

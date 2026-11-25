@@ -6,6 +6,8 @@ import {
 } from '../../../../../../src/shared/bot-runtime-capabilities'
 import type { BotChatRow } from '../../../../../../src/shared/bots/bot-chat-row'
 import { botMentionOffersChat } from '../../../../../../src/shared/bots/bot-mention-context'
+import { botTemplateText } from '../../../../../../src/shared/bots/bot-template-text'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useHostBotsEntry } from '../../../../bots/host-bot-store'
 import { botChatsRead } from '../../../../bots/host-bots-operations'
 import { readHostBots } from '../../../../bots/host-bots-read'
@@ -15,6 +17,7 @@ import {
 } from '../../../../bots/host-bot-row-facts'
 import { readHostMethodReply } from '../../../../host-screen/sidebar-feed/host-sidebar-feed-operations'
 import { useRouteCapability } from '../../../../worktree/execution-hosts/use-route-capability'
+import { useBotPurposes } from '../../../../bots/use-bot-purposes'
 import { useMobileBotCardHost } from '../../transcript/bot-cards/mobile-bot-card-host'
 import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
 
@@ -25,6 +28,8 @@ export type MentionBot = {
   paused: boolean
   /** The bot whose chat this is: its row lists its other chats. */
   own: boolean
+  /** What it is for, from its SOUL.md; never for the chat's own bot. */
+  purpose?: string
 }
 
 export type MentionBotChats =
@@ -38,6 +43,8 @@ export type MentionBots = {
   chatPicks: boolean
   chats: (botId: string) => MentionBotChats | undefined
   readChats: (botId: string) => void
+  /** `@` opened or closed: each open reads what the bots are for again, as the desktop's does. */
+  opened: (open: boolean) => void
 }
 
 const NO_BOTS: readonly MentionBot[] = []
@@ -54,22 +61,32 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
   const hostKey = host?.hostKey ?? null
   const selfId = identity?.botId ?? null
   const callerSessionId = identity?.sessionId
+  const t = useMobileTranslation()
+  const [open, setOpen] = useState(false)
+  const purposes = useBotPurposes(open && listsBots ? client : null)
 
   const bots = useMemo(() => {
     if (!listing) {
       return NO_BOTS
     }
-    const listed = listing.map((bot): MentionBot => ({
-      id: bot.id,
-      name: bot.name,
-      avatar: mobileBotAvatarSource(bot),
-      paused: bot.paused,
-      own: bot.id === selfId
-    }))
+    const listed = listing.map((bot): MentionBot => {
+      const own = bot.id === selfId
+      const saved = own ? undefined : purposes.get(bot.id)
+      // A template's purpose is saved in English and reads in the UI language, as on the desktop.
+      const purpose = saved ? botTemplateText(saved, t) : undefined
+      return {
+        id: bot.id,
+        name: bot.name,
+        avatar: mobileBotAvatarSource(bot),
+        paused: bot.paused,
+        own,
+        ...(purpose ? { purpose } : {})
+      }
+    })
     // The chat's own bot leads, for its other chats, only where chats can be picked.
     const own = listed.filter((bot) => bot.own && chatPicks)
     return [...own, ...listed.filter((bot) => !bot.own)]
-  }, [listing, selfId, chatPicks])
+  }, [listing, selfId, chatPicks, purposes, t])
 
   // `@` lists what the shared store holds; a chat opened before any screen read the host's bots reads them once.
   const listed = listing !== null
@@ -119,7 +136,8 @@ export function useMobileNativeChatMentionBots(enabled: boolean): MentionBots | 
             bots,
             chatPicks,
             chats: (botId: string) => reads.get(readKey(callerSessionId, botId)),
-            readChats
+            readChats,
+            opened: setOpen
           }
         : undefined,
     [listsBots, bots, chatPicks, reads, readChats, callerSessionId]

@@ -102,6 +102,7 @@ export type RuntimeApi = {
       callback: (event: { sessionId: string }) => void
     ) => () => void
     onPeerMailReturned?: (callback: () => void) => () => void
+    onMcpServersChanged?: (callback: () => void) => () => void
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>

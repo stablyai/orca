@@ -1,7 +1,7 @@
 // What Orca adds to a write a bot makes as its owner (orca linear): the redirect away from the place that
 // woke the run, and who asked when that wasn't the owner. Read from Orca's own record of the turn.
 import type { Bot } from '../../shared/bot-types'
-import type { BotActingTurn, BotWakingPlace } from './bot-request-asker'
+import { turnActsForOwner, type BotActingTurn, type BotWakingPlace } from './bot-request-asker'
 
 export const WAKING_PLACE_REFUSAL =
   'That\'s where you were woken: answer there with `orca bot reply --text "..."` (your final message is posted there too). Labels, assignees and status there are fine with orca linear.'
@@ -21,7 +21,7 @@ export function isSameLinearIssue(key: string, identifier: string | undefined): 
 
 /** "asked by Carol via Scout" when someone other than the owner asked; null for the owner. */
 export function askedByLine(write: BotWriteTurn | null): string | null {
-  if (!write) {
+  if (!write || turnActsForOwner(write.turn)) {
     return null
   }
   const names = [

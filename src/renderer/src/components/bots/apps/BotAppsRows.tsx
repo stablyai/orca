@@ -1,19 +1,16 @@
 import React from 'react'
-import { Plus, Webhook } from 'lucide-react'
+import { Link2, Plus, Webhook } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotConnector } from '../bot-connectors'
 import { RemovedGitHubOrgs } from '../github/RemovedGitHubOrgs'
 import { BotAppBrandLogo } from './BotAppBrandLogo'
-import { BotToolLogo } from './BotToolAppRow'
-import type { BotToolApp } from './bot-tool-apps'
-import { botToolSubtitle, botToolTitle } from '../../../../../shared/bots/bot-tool-labels'
-import { BotAppCaption, BotAppLogo, BotAppRow } from './BotAppRow'
+import { BotAppLogo, BotAppRow, BotAppRowButton } from './BotAppRow'
 import {
   botAppCategoryName,
   directAppLine,
-  matchesAppQuery,
   type BotAppCategory,
   type BotDirectApp
 } from './bot-app-catalog'
@@ -28,6 +25,58 @@ export type DirectRow = { name: string; added: boolean } & (
     }
 )
 
+function AddAnotherButton({
+  label,
+  ariaLabel,
+  onClick
+}: {
+  label: string
+  ariaLabel: string
+  onClick: () => void
+}): React.JSX.Element {
+  const labelRef = React.useRef<HTMLSpanElement>(null)
+  const [tooltipOpen, setTooltipOpen] = React.useState(false)
+  React.useLayoutEffect(() => {
+    const labelElement = labelRef.current
+    if (!tooltipOpen || !labelElement || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(() => {
+      if (labelElement.getClientRects().length > 0) {
+        setTooltipOpen(false)
+      }
+    })
+    observer.observe(labelElement)
+    return () => observer.disconnect()
+  }, [tooltipOpen])
+  return (
+    <Tooltip
+      open={tooltipOpen}
+      onOpenChange={(open) =>
+        setTooltipOpen(open && labelRef.current?.getClientRects().length === 0)
+      }
+    >
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="xs"
+          aria-label={ariaLabel}
+          className="min-w-0 shrink @max-[380px]/app-row:w-6 @max-[380px]/app-row:shrink-0"
+          onClick={onClick}
+        >
+          <Plus aria-hidden className="hidden @max-[380px]/app-row:block" />
+          <span ref={labelRef} title={label} className="truncate @max-[380px]/app-row:hidden">
+            {label}
+          </span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** A connected row's action: the bot's Connectors tab. */
 export function ManageButton({
   name,
@@ -38,14 +87,13 @@ export function ManageButton({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <Button
-      variant="ghost"
-      size="xs"
+    <BotAppRowButton
       aria-label={t('bots.connectors.manageNamed', 'Manage {{name}}', { name })}
       onClick={onClick}
+      className="min-w-0 shrink"
     >
-      {t('bots.connectors.manage', 'Manage')}
-    </Button>
+      <span className="truncate">{t('bots.connectors.manage', 'Manage')}</span>
+    </BotAppRowButton>
   )
 }
 
@@ -82,39 +130,105 @@ export function DirectAppRow({
   return (
     <>
       <BotAppRow
-        logo={<BotAppBrandLogo app={'connector' in row ? row.connector : row.app} />}
+        logo={<BotAppBrandLogo app={'connector' in row ? row.connector : row.app} size="catalog" />}
+        added={row.added}
         name={row.name}
         tag={'tag' in row ? row.tag : undefined}
         line={directAppLine(row.app)}
         action={
           row.added ? (
-            <span className="flex shrink-0 items-center gap-1">
+            <span className="flex min-w-0 max-w-1/2 shrink items-center gap-1">
               {another && connector ? (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  aria-label={another.aria}
+                <AddAnotherButton
+                  label={another.label}
+                  ariaLabel={another.aria}
                   onClick={() => onAnother(connector.id)}
-                >
-                  {another.label}
-                </Button>
+                />
               ) : null}
               <ManageButton name={row.name} onClick={() => onManage(row)} />
             </span>
           ) : (
-            <Button
-              variant="outline"
-              size="xs"
+            <BotAppRowButton
               aria-label={t('bots.connectors.addNamed', 'Add {{name}}', { name: row.name })}
               onClick={() => onAdd(row)}
             >
               {t('bots.apps.add', 'Add')}
-            </Button>
+            </BotAppRowButton>
           )
         }
       />
       {row.added && connector?.id === 'github' ? <RemovedGitHubOrgs bot={bot} /> : null}
     </>
+  )
+}
+
+/** Add apps' own entries: an app by URL, and Webhooks. */
+export type CustomApp = { id: 'url' | 'webhooks'; name: string; line: string; added: boolean }
+
+export function useCustomApps(webhooks: 'off' | 'available' | 'added'): CustomApp[] {
+  const t = useTranslate()
+  return [
+    {
+      id: 'url',
+      name: t('bots.apps.addByUrl', 'Add by URL'),
+      line: t('bots.apps.custom.rowLine', 'Any MCP server'),
+      added: false
+    },
+    ...(webhooks === 'off'
+      ? []
+      : [
+          {
+            id: 'webhooks' as const,
+            name: t('bots.webhooks.name', 'Webhooks'),
+            line: t('bots.apps.webhooks.line', 'Events from any tool or script'),
+            added: webhooks === 'added'
+          }
+        ])
+  ]
+}
+
+export function CustomAppRow({
+  app,
+  onOpen,
+  onManage
+}: {
+  app: CustomApp
+  onOpen: (id: CustomApp['id']) => void
+  onManage: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <BotAppRow
+      logo={
+        app.id === 'url' ? (
+          <BotAppLogo plain icon={<Link2 className="size-5" />} size="catalog" />
+        ) : (
+          <BotAppLogo icon={<Webhook className="size-5" />} size="catalog" />
+        )
+      }
+      added={app.added}
+      name={app.name}
+      line={app.line}
+      action={
+        app.added ? (
+          <ManageButton name={app.name} onClick={onManage} />
+        ) : app.id === 'url' ? (
+          <BotAppRowButton
+            aria-label={t('bots.apps.custom.title', 'Add an app by URL')}
+            onClick={() => onOpen('url')}
+          >
+            {t('bots.apps.add', 'Add')}
+          </BotAppRowButton>
+        ) : (
+          <BotAppRowButton
+            aria-label={t('bots.apps.setUpNamed', 'Set up {{name}}', { name: app.name })}
+            onClick={() => onOpen('webhooks')}
+          >
+            {t('bots.apps.setUp', 'Set up')}
+          </BotAppRowButton>
+        )
+      }
+    />
   )
 }
 
@@ -132,7 +246,7 @@ export function BotAppsNoMatch({
   botName: string
   onClear: () => void
   onSearchAll: () => void
-  onAddByUrl: (() => void) | null
+  onAddByUrl: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const shown = query.trim()
@@ -154,12 +268,10 @@ export function BotAppsNoMatch({
           <Button variant="outline" size="sm" onClick={onClear}>
             {t('bots.connectors.clearSearch', 'Clear search')}
           </Button>
-          {onAddByUrl ? (
-            <Button variant="ghost" size="sm" onClick={onAddByUrl}>
-              <Plus />
-              {t('bots.apps.addByUrl', 'Add by URL')}
-            </Button>
-          ) : null}
+          <Button variant="ghost" size="sm" onClick={onAddByUrl}>
+            <Plus />
+            {t('bots.apps.addByUrl', 'Add by URL')}
+          </Button>
         </div>
       ) : (
         <Button variant="outline" size="sm" onClick={onSearchAll}>
@@ -167,94 +279,5 @@ export function BotAppsNoMatch({
         </Button>
       )}
     </div>
-  )
-}
-
-/** On <bot>: every route the bot has, in name order, each with Manage. */
-export function BotAppsMineList({
-  botName,
-  query,
-  direct,
-  renderDirect,
-  byUrl,
-  webhooks,
-  composio,
-  onManage,
-  empty
-}: {
-  botName: string
-  query: string
-  direct: readonly DirectRow[]
-  renderDirect: (row: DirectRow) => React.ReactNode
-  /** The apps the bot has that were added by URL. */
-  byUrl: readonly BotToolApp[]
-  webhooks: boolean
-  /** The bot's Composio sign-ins: the app and who it signed in as. */
-  composio: readonly { slug: string; name: string; line: string }[]
-  onManage: () => void
-  empty: React.ReactNode
-}): React.JSX.Element {
-  const t = useTranslate()
-  const webhooksName = t('bots.webhooks.name', 'Webhooks')
-  const rows = [
-    ...direct
-      .filter((row) => matchesAppQuery(query, row.name, directAppLine(row.app)))
-      .map((row) => ({ name: row.name, node: renderDirect(row) })),
-    ...byUrl
-      .map(({ tool }) => ({ tool, name: botToolTitle(tool.name), line: botToolSubtitle(tool) }))
-      .filter((app) => matchesAppQuery(query, app.name, app.line))
-      .map((app) => ({
-        name: app.name,
-        node: (
-          <BotAppRow
-            key={`tool:${app.tool.name}`}
-            logo={<BotToolLogo name={app.tool.name} detail={app.tool.detail} />}
-            name={app.name}
-            line={app.line}
-            action={<ManageButton name={app.name} onClick={onManage} />}
-          />
-        )
-      })),
-    ...(webhooks && matchesAppQuery(query, webhooksName)
-      ? [
-          {
-            name: webhooksName,
-            node: (
-              <BotAppRow
-                key="webhooks"
-                logo={<BotAppLogo icon={<Webhook className="size-5" />} />}
-                name={webhooksName}
-                line={t('bots.apps.webhooks.line', 'Events from any tool or script')}
-                action={<ManageButton name={webhooksName} onClick={onManage} />}
-              />
-            )
-          }
-        ]
-      : []),
-    ...composio
-      .filter((app) => matchesAppQuery(query, app.name, app.line))
-      .map((app) => ({
-        name: app.name,
-        node: (
-          <BotAppRow
-            key={`composio:${app.slug}`}
-            logo={<BotAppLogo slug={app.slug} />}
-            name={app.name}
-            tag={t('bots.apps.viaComposio', 'via Composio')}
-            line={app.line}
-            action={<ManageButton name={app.name} onClick={onManage} />}
-          />
-        )
-      }))
-  ].sort((a, b) => a.name.localeCompare(b.name))
-  if (rows.length === 0) {
-    return <>{empty}</>
-  }
-  const title = t('bots.apps.onBot', 'On {{bot}}', { bot: botName })
-  return (
-    <section aria-label={title}>
-      <BotAppCaption title={title} count={rows.length} />
-      <ul className="flex flex-col">{rows.map((row) => row.node)}</ul>
-    </section>
   )
 }

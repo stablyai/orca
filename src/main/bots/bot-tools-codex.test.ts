@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
-import { BotLaunchTools } from './bot-launch-tools'
+import { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import {
   commitBotToolOAuth,
   newBotToolCredentialId,
@@ -13,7 +13,7 @@ import { codexBotToolsThreadConfig } from './bot-tools-codex'
 import { addBotTool, botToolProblems, type BotToolsHome } from './bot-tools-host'
 
 const relay = { grant: async () => ({ origin: 'http://127.0.0.1:1', token: 'token' }) }
-const bot = { botId: 'bot', folder: '/bot', agent: 'codex' }
+const launch = { bot: { botId: 'bot', folder: '/bot' }, agent: 'codex' }
 
 const dirs: string[] = []
 const tempDir = (prefix: string): string => {
@@ -31,12 +31,14 @@ afterEach(() => {
 
 describe('codexBotToolsThreadConfig', () => {
   it("leaves out a url server named like the owner's stdio server, since Codex would merge the two", async () => {
-    const tools = await BotLaunchTools.for(relay, bot, [
-      { name: 'notion', url: 'https://mcp.notion.com/mcp' },
-      { name: 'docs', command: 'npx', args: ['docs-mcp'] }
-    ])
+    const tools = await SessionMcpTools.for(relay, launch, {
+      own: [
+        { name: 'notion', url: 'https://mcp.notion.com/mcp' },
+        { name: 'docs', command: 'npx', args: ['docs-mcp'] }
+      ]
+    })
 
-    expect(codexBotToolsThreadConfig(tools, ['notion', 'docs'])).toEqual({
+    expect(codexBotToolsThreadConfig(tools, new Set(['notion', 'docs']))).toEqual({
       'mcp_servers.docs.command': 'npx',
       'mcp_servers.docs.args': ['docs-mcp']
     })
