@@ -1,7 +1,10 @@
-import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
+
+// A 20 pt text line with 7 above and below, Home's heading-to-group gap.
+const SECTION_HEADER_TEXT_GAP = 7
+const SECTION_HEADER_HEIGHT = 20 + SECTION_HEADER_TEXT_GAP * 2
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   errorText: {
@@ -11,45 +14,59 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   list: {
     paddingBottom: spacing.lg
   },
-  // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
+  // A project's heading over its group, as Home's: 20 above the text, 7 below it, text at x 20.
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset,
-    paddingRight: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: 6
+    height: SECTION_HEADER_HEIGHT,
+    marginTop: 20 - SECTION_HEADER_TEXT_GAP,
+    marginHorizontal: WORKTREE_ROW_LAYOUT.groupInset,
+    paddingLeft: spacing.xs,
+    // The chevron ends where the rows' trailing text does.
+    paddingRight: 14
   },
-  sectionChevron: {
-    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
+  sectionHeaderFirst: {
+    marginTop: 0
+  },
+  sectionToggle: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing.sm
+    gap: spacing.sm
   },
-  sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoIcon: {
-    marginRight: spacing.xs
+  sectionTogglePressed: {
+    opacity: feedback.pressedOpacity
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    flexShrink: 1
+    flexShrink: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textPrimary
   },
   sectionCount: {
-    fontSize: 13,
+    flexShrink: 0,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500',
     color: colors.textMuted,
-    marginLeft: 6
+    fontVariant: ['tabular-nums']
   },
-  // Muted and plain, like the header's count: a fact about the section, not an action.
-  sectionPendingSpinner: {
-    marginLeft: spacing.sm
+  sectionSpacer: {
+    flex: 1
   },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: WORKTREE_ROW_LAYOUT.textInset
+  sectionAdd: {
+    width: SECTION_HEADER_HEIGHT,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sectionChevron: {
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    paddingLeft: spacing.xs
   },
   filterModalSubtitle: {
     fontSize: typography.metaSize,

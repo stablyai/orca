@@ -1743,12 +1743,8 @@
       "placeholder": "Çalışma alanı adı"
     },
     "worktreeListRow": {
-      "child": "Alt çalışma alanı",
       "children_one": "{{count}} alt çalışma alanı",
       "children_other": "{{count}} alt çalışma alanı",
-      "folder": "Klasör",
-      "project": "{{repo}} projesi",
-      "remoteHost": "Uzak sunucu",
       "unsavedName": "Kaydedilmemiş ad: {{name}}"
     },
     "nativeScreenRecovery": {
@@ -1865,15 +1861,6 @@
     },
     "sheetHeader": {
       "close": "Kapat"
-    },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "{{count}} alt ajanı gizle",
-      "hideChildAgents_other": "{{count}} alt ajanı gizle",
-      "showChildAgents_one": "{{count}} alt ajanı göster",
-      "showChildAgents_other": "{{count}} alt ajanı göster",
-      "hideIdleChildren": "Boştaki {{count}} alt ajanı gizle",
-      "showIdleChildren": "Boştaki {{count}} alt ajanı göster",
-      "idleChildCount": "{{count}} boşta"
     },
     "diffReviewFilesSheet": {
       "title": "Dosyalar",

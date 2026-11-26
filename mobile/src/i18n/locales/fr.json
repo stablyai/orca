@@ -1321,14 +1321,10 @@
       "placeholder": "Nom de l'espace de travail"
     },
     "worktreeListRow": {
-      "child": "Enfant",
       "children_many": "{{count}} enfants",
       "children_one": "{{count}} enfant",
       "children_other": "{{count}} enfants",
-      "unsavedName": "Nom non enregistré : {{name}}",
-      "folder": "Dossier",
-      "project": "Projet {{repo}}",
-      "remoteHost": "Hôte distant"
+      "unsavedName": "Nom non enregistré : {{name}}"
     },
     "nativeScreenRecovery": {
       "title": "Une erreur est survenue",

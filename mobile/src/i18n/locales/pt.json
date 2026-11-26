@@ -1482,14 +1482,10 @@
       "placeholder": "Nome do espaço de trabalho"
     },
     "worktreeListRow": {
-      "child": "Filho",
       "children_many": "{{count}} filhos",
       "children_one": "{{count}} filho",
       "children_other": "{{count}} filhos",
-      "unsavedName": "Nome não salvo: {{name}}",
-      "folder": "Pasta",
-      "project": "Projeto {{repo}}",
-      "remoteHost": "Host remoto"
+      "unsavedName": "Nome não salvo: {{name}}"
     },
     "nativeScreenRecovery": {
       "title": "Algo deu errado",
@@ -1600,17 +1596,6 @@
     },
     "sheetHeader": {
       "close": "Fechar"
-    },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "Ocultar {{count}} agente filho",
-      "hideChildAgents_other": "Ocultar {{count}} agentes filhos",
-      "showChildAgents_one": "Mostrar {{count}} agente filho",
-      "showChildAgents_other": "Mostrar {{count}} agentes filhos",
-      "hideIdleChildren": "Ocultar {{count}} agentes filhos inativos",
-      "showIdleChildren": "Mostrar {{count}} agentes filhos ociosos",
-      "idleChildCount": "{{count}} ocioso",
-      "hideChildAgents_many": "Ocultar {{count}} agentes filhos",
-      "showChildAgents_many": "Mostrar {{count}} agentes filhos"
     },
     "diffReviewFilesSheet": {
       "title": "Arquivos",

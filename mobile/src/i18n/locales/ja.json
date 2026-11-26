@@ -1349,13 +1349,9 @@
       "placeholder": "ワークスペース名"
     },
     "worktreeListRow": {
-      "child": "子ワークスペース",
       "children_one": "{{count}} 件の子ワークスペース",
       "children_other": "{{count}} 件の子ワークスペース",
-      "unsavedName": "未保存の名前: {{name}}",
-      "folder": "フォルダー",
-      "project": "プロジェクト {{repo}}",
-      "remoteHost": "リモートホスト"
+      "unsavedName": "未保存の名前: {{name}}"
     },
     "nativeScreenRecovery": {
       "title": "問題が発生しました",

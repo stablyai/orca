@@ -1353,13 +1353,9 @@
       "placeholder": "Name des Arbeitsbereichs"
     },
     "worktreeListRow": {
-      "child": "Untergeordnet",
       "children_one": "{{count}} untergeordneter Arbeitsbereich",
       "children_other": "{{count}} untergeordnete Arbeitsbereiche",
-      "unsavedName": "Nicht gespeicherter Name: {{name}}",
-      "folder": "Ordner",
-      "project": "Projekt {{repo}}",
-      "remoteHost": "Remote-Host"
+      "unsavedName": "Nicht gespeicherter Name: {{name}}"
     },
     "nativeScreenRecovery": {
       "title": "Etwas ist schiefgelaufen",
