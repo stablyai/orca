@@ -80,7 +80,12 @@ export function bindQueuedStartupCommandDelivery(session: ConnectPanePtySession)
           startup,
           isCurrent
         )
-        if (command === null || !isCurrent()) {
+        if (!isCurrent()) {
+          return
+        }
+        if (command === null) {
+          session.pendingStartupCommand = null
+          session.withholdStartupDraftPaste()
           return
         }
         const submitted = session.shouldDeliverStartupViaTerminalPaste

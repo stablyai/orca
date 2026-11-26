@@ -223,6 +223,12 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ? {
               startup: {
                 command: startupCommand.command,
+                shellOverride: opts.shellOverride,
+                cwd,
+                restoring: Boolean(
+                  opts.resumeProviderSession ||
+                  (startupCommand.launchConfig && !startupCommand.launchConfig.commandProvenance)
+                ),
                 launchConfig: startupCommand.launchConfig,
                 launchAgent: startupCommand.launchAgent,
                 nativeChatSignIn: startupCommand.nativeChatSignIn

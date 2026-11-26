@@ -29,6 +29,7 @@ import type { MobileNativeChatHostOutage } from './status/mobile-native-chat-hos
 import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import type { NativeChatTerminalRunner } from './native-chat-terminal-runner'
 
 type Props = {
   controller: MobileNativeChatController
@@ -64,7 +65,7 @@ type Props = {
   onOpenUrlInOrca?: (url: string) => void
   linkOpenMode: MobileLinkOpenMode
   /** Opens a host terminal tab in this chat's workspace running `command`. */
-  onRunInTerminal: import('./native-chat-terminal-runner').NativeChatTerminalRunner
+  onRunInTerminal: NativeChatTerminalRunner
   hostOutage?: MobileNativeChatHostOutage | null
 }
 

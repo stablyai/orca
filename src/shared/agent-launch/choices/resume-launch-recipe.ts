@@ -21,6 +21,7 @@ export function resolveResumeLaunchRecipe(
   return {
     agentArgs: launchConfig.agentArgs,
     agentEnv: launchConfig.agentEnv,
+    ...(launchConfig.authoredCommand ? { authoredCommand: launchConfig.authoredCommand } : {}),
     ...(launchConfig.commandProvenance
       ? { commandProvenance: launchConfig.commandProvenance }
       : {}),

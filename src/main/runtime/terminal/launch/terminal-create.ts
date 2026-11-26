@@ -105,7 +105,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
               claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
               baseEnv: { ...process.env, ...baseEnv },
-              adoptedBeforeLaunch: null
+              connectionId: workspace.connectionId
             },
             preAllocatedHandle
           )
@@ -185,7 +185,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           throw new Error('client_disconnected')
         }
         const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
-          ...initialSize,
+          ...resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup }),
           cwd,
           connectionId: workspace.connectionId,
           worktreeId: workspace.id,

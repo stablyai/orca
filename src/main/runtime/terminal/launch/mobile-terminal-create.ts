@@ -38,6 +38,7 @@ export type MobileTerminalCreateOptions = {
   agent?: TuiAgent
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
   launchAgent?: TuiAgent
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
@@ -54,7 +55,7 @@ export type PendingMobileTerminalCreate = {
   selectIfNoActiveTab: boolean
   viewMode?: 'terminal' | 'chat'
   /** A renderer may mount a bare shell while its create is pending (STA-3214). */
-  startup?: Pick<QueuedAgentLaunch, 'command' | 'launchConfig' | 'launchAgent' | 'nativeChatSignIn'>
+  startup?: Omit<QueuedAgentLaunch, 'terminal' | 'shell' | 'images'>
 }
 
 export type OwnedMobileTerminalCreateOptions = {

@@ -130,7 +130,7 @@ export async function detectInstalledAgentInventory(
   const foundOutsidePath = new Map<string, string>()
   const found = await detectAgentCommandsOnHost(probeCommands, {
     context,
-    outsidePath: foundOutsidePath
+    ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath })
   })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.

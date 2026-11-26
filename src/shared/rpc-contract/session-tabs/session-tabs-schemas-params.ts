@@ -1,4 +1,4 @@
-import { NativeChatSignIn } from '../preflight/preflight-params'
+import { NativeChatSignIn } from '../terminal/native-chat-sign-in-params'
 import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'

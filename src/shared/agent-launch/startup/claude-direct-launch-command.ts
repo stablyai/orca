@@ -8,7 +8,7 @@ import { powerShellNativeLaunch } from './powershell-native-launch'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 const CLAUDE_EXECUTABLE = /^claude(?:\.(?:exe|cmd|bat))?$/i
-export const CLAUDE_DIRECT_POSIX_PREFIX = /* @__PURE__ */ (() =>
+const CLAUDE_DIRECT_POSIX_PREFIX = /* @__PURE__ */ (() =>
   `/bin/sh -c ${quoteStartupArg(getPosixClaudeDirectLaunchScript(), 'posix')} orca-claude `)()
 
 export function withClaudeDirectLaunchCommand(command: string, shell: AgentStartupShell): string {

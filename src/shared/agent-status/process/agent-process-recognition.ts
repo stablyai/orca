@@ -17,7 +17,7 @@ import {
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from '../../agent-launch/startup/omp-fresh-launch'
-import { unwrapDirectAgentLaunchCommand } from '../../agent-launch/startup/codex-startup-image-command'
+import { unwrapDirectAgentLaunchCommand } from '../../agent-launch/startup/direct-agent-launch-recognition'
 
 export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
 

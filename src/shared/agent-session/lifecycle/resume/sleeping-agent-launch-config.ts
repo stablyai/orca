@@ -1,6 +1,7 @@
 export type SleepingAgentLaunchConfig = {
   agentCommand?: string
   commandProvenance?: 'authored' | 'generated'
+  authoredCommand?: string
   selectedExecutable?: string
   agentArgs: string
   agentEnv: Record<string, string>
@@ -9,6 +10,7 @@ export type SleepingAgentLaunchConfig = {
 
 export function buildSleepingAgentLaunchConfig(args: {
   commandProvenance?: SleepingAgentLaunchConfig['commandProvenance']
+  authoredCommand?: string
   selectedExecutable?: string
   agentCommand?: string | null
   agentArgs?: string | null
@@ -18,6 +20,7 @@ export function buildSleepingAgentLaunchConfig(args: {
   return {
     ...(args.agentCommand?.trim() ? { agentCommand: args.agentCommand } : {}),
     ...(args.commandProvenance ? { commandProvenance: args.commandProvenance } : {}),
+    ...(args.authoredCommand ? { authoredCommand: args.authoredCommand } : {}),
     ...(args.selectedExecutable ? { selectedExecutable: args.selectedExecutable } : {}),
     agentArgs: args.agentArgs ?? '',
     // Startup env may contain prompt/pane transport; persist only Orca-managed launch inputs.

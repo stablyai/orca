@@ -23,18 +23,10 @@ import {
   readLaunchPosition,
   type LaunchPosition
 } from './launch-position'
-import {
-  hasPowerShellStopParsing,
-  powerShellNativeLaunch,
-  unwrapPowerShellNativeLaunch
-} from './powershell-native-launch'
-import {
-  CLAUDE_DIRECT_POSIX_PREFIX,
-  withClaudeDirectLaunchCommand
-} from './claude-direct-launch-command'
+import { hasPowerShellStopParsing, powerShellNativeLaunch } from './powershell-native-launch'
+import { withClaudeDirectLaunchCommand } from './claude-direct-launch-command'
+import { CODEX_EXECUTABLE } from './direct-agent-launch-recognition'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
-
-export const CODEX_EXECUTABLE = /^codex(\.(exe|cmd|bat|ps1))?$/i
 
 // What the interactive `codex` shell function adds, for a literal target (such as Orca's own copy by
 // full path) that bypasses it: hook prep, caller identity for commands Codex runs, the remote-viewer
@@ -84,7 +76,6 @@ const powerShellSuffix = (images: boolean): string =>
   ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? '; if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID }' : ''} }`
 
 const BOTH = [true, false]
-// Launch planning can import CODEX_EXECUTABLE without retaining the shell wrappers.
 const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = /* @__PURE__ */ new Set(CODEX_NO_DAEMON_SKIP_ARGS)
 const POSIX_WRAPPERS = /* @__PURE__ */ BOTH.flatMap((images) =>
   BOTH.map((probe) => ({ images, probe, prefix: posixPrefix(images, probe) }))
@@ -158,23 +149,4 @@ export function prepareShellNativeAgentLaunch(
 ): string {
   const codex = withCodexDirectLaunchCommand(command, shell, { images, probeInShell: true })
   return codex === command ? withClaudeDirectLaunchCommand(command, shell) : codex
-}
-
-/** Recover the invocation from Orca's direct launches for startup classification. */
-export function unwrapDirectAgentLaunchCommand(command: string): string {
-  const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
-  const index = prefix.includes('/bin/sh -c ')
-    ? readLaunchPosition(command, 'posix')?.start
-    : undefined
-  if (index !== undefined) {
-    if (command.startsWith(CLAUDE_DIRECT_POSIX_PREFIX, index)) {
-      return command.slice(index + CLAUDE_DIRECT_POSIX_PREFIX.length)
-    }
-    for (const wrapper of POSIX_WRAPPERS) {
-      if (command.startsWith(wrapper.prefix, index)) {
-        return command.slice(index + wrapper.prefix.length)
-      }
-    }
-  }
-  return unwrapPowerShellNativeLaunch(command)
 }

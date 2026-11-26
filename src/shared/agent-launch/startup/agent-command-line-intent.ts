@@ -1,5 +1,5 @@
 import { inferLaunchShell, readLaunchPosition } from './launch-position'
-import { unwrapDirectAgentLaunchCommand } from './codex-startup-image-command'
+import { unwrapDirectAgentLaunchCommand } from './direct-agent-launch-recognition'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 import {
   COMMAND_TOKEN_SCAN_MAX_CHARS,

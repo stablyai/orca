@@ -10,7 +10,7 @@ import {
 const posixClaudeImageCondition = `[ "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" = '${ORCA_IMAGE_PROTOCOL_VALUE}' ] && [ -z "\${CLAUDE_CODE_FORCE_TERMINAL_IMAGES+x}" ]`
 
 // A custom config without Orca's hooks gets the plugin once.
-const posixClaudeHookPlugin = [
+const posixClaudeHookPlugin = /* @__PURE__ */ [
   '__orca_claude_hook_plugin() {',
   `__orca_plugin="\${${CLAUDE_HOOK_PLUGIN_DIR_ENV}:-}" __orca_sep=':'; __orca_claude_plugins=;`,
   '[ -n "$1" ] && [ "$1" != "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] && [ -n "$__orca_plugin" ] || return 0;',
@@ -165,7 +165,7 @@ const powerShellSaveClaudeEnv =
   "$names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR', 'CLAUDE_CODE_FORCE_TERMINAL_IMAGES', 'CLAUDE_CODE_PLUGIN_DIRS'); $saved = @{}; " +
   "foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }"
 
-const powerShellClaudeHookPlugin = [
+const powerShellClaudeHookPlugin = /* @__PURE__ */ [
   `$orcaPlugin = $env:${CLAUDE_HOOK_PLUGIN_DIR_ENV};`,
   '$orcaConfig = $env:CLAUDE_CONFIG_DIR; $sep = [IO.Path]::PathSeparator;',
   '$plugins = @("$env:CLAUDE_CODE_PLUGIN_DIRS".Split($sep) | Where-Object { $_ });',

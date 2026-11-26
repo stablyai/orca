@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import {
   readCodexDirectLaunch,
   withCodexDirectLaunchCommand
@@ -77,6 +78,40 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   })
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
+  const local = !connectionId && input.codexRuntime !== 'wsl'
+  const root = local && process.getuid?.() === 0
+  const authored = launchConfig?.commandProvenance === 'authored'
+  const recordedCommand = launchConfig?.agentCommand
+  const configuredCommand =
+    launchAgent === 'claude' || launchAgent === 'claude-agent-teams'
+      ? (settings?.agentCmdOverrides?.[launchAgent] ?? settings?.agentCmdOverrides?.claude)
+      : undefined
+  const authoredCommand =
+    launchConfig?.authoredCommand ??
+    (configuredCommand && recordedCommand?.startsWith(configuredCommand)
+      ? configuredCommand
+      : undefined)
+  const authoredPrefix =
+    authoredCommand &&
+    !openCodeLaunch.command?.startsWith(authoredCommand) &&
+    launchAgent === 'claude-agent-teams'
+      ? [
+          addClaudeTeammateModeAuto(authoredCommand),
+          addClaudeTeammateModeInProcess(authoredCommand)
+        ].find((command) => openCodeLaunch.command?.startsWith(command))
+      : authoredCommand
+  const authoredRootLaunch =
+    authored && authoredPrefix
+      ? planClaudeRootLaunch({
+          command: openCodeLaunch.command,
+          agent: launchAgent,
+          shell,
+          isRoot: root,
+          env: [env, process.env],
+          authoredPrefix
+        })
+      : null
+  const beforeTeams = authoredRootLaunch?.command ?? openCodeLaunch.command
   const inlineImagesEnabled = applyTerminalImageEnvironment(
     env,
     input.envToDelete,
@@ -85,13 +120,15 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     input.headlessHost
   )
   const pickerTeams =
-    launchAgent === 'claude-agent-teams' && Boolean(launchConfig?.commandProvenance)
+    launchAgent === 'claude-agent-teams' &&
+    Boolean(launchConfig?.commandProvenance) &&
+    recognizeAgentLaunchCommand(beforeTeams)?.agent !== 'claude-agent-teams'
   const teamsCommand =
-    pickerTeams && openCodeLaunch.command
+    pickerTeams && beforeTeams
       ? env.ORCA_AGENT_TEAMS_TEAM_ID
-        ? addClaudeTeammateModeAuto(openCodeLaunch.command)
-        : addClaudeTeammateModeInProcess(openCodeLaunch.command)
-      : openCodeLaunch.command
+        ? addClaudeTeammateModeAuto(beforeTeams)
+        : addClaudeTeammateModeInProcess(beforeTeams)
+      : beforeTeams
   if (pickerTeams && teamsCommand) {
     env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1'
   }
@@ -107,12 +144,11 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     pluginDir && mcp.command
       ? withClaudeAgentViewPlugin(mcp.command, pluginDir, shell)
       : mcp.command
-  const local = !connectionId && input.codexRuntime !== 'wsl'
   const rootLaunch = planClaudeRootLaunch({
     command: viewedCommand,
     agent: launchAgent,
     shell,
-    isRoot: local && launchConfig?.commandProvenance !== 'authored' && process.getuid?.() === 0,
+    isRoot: root && !authored,
     env: [env, process.env]
   })
   const agentCommand = rootLaunch?.command ?? viewedCommand
@@ -139,7 +175,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     launchCommand: sequenced && !blocked ? input.launchCommand : agentCommand,
     startup: sequenced && !blocked ? input.launchCommand : prepared,
     settings,
-    startupNotice: rootLaunch?.notice,
+    startupNotice: authoredRootLaunch?.notice ?? rootLaunch?.notice,
     terminalMcp: mcp.pane
   }
 }

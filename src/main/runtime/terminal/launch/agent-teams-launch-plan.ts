@@ -1,4 +1,3 @@
-import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,
@@ -7,18 +6,16 @@ import {
 import type { TerminalCreateOptions } from './terminal-create-options'
 import { buildClaudeAgentTeamsLaunchPlan } from './claude-agent-teams-shim-env'
 import { inferCapturedClaudeAgentTeamsMode } from './runtime-agent-launch-resolution'
+import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 
 export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   launchConfig: TerminalCreateOptions['launchConfig']
   launchAgent?: TerminalCreateOptions['launchAgent']
   command?: string
+  connectionId?: string | null
   claudeAgentTeamsSourceCommand?: string
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
-  adoptedBeforeLaunch:
-    | boolean
-    | Awaited<ReturnType<NonNullable<RuntimePtyController['adoptStablePane']>>>
-    | undefined
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<{
   plan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
@@ -33,15 +30,18 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
     sourceCommand,
     pickerTeams ? 'native-panes-shim' : args.claudeAgentTeamsMode
   )
-  const plan = args.adoptedBeforeLaunch
-    ? undefined
-    : await buildClaudeAgentTeamsLaunchPlan({
-        command: sourceCommand,
-        pickerTeams,
-        mode,
-        baseEnv: args.baseEnv,
-        createTeamEnv: args.createTeamEnv
-      })
+  const plan =
+    args.connectionId ||
+    process.platform === 'win32' ||
+    (pickerTeams && recognizeAgentLaunchCommand(sourceCommand)?.agent === 'claude-agent-teams')
+      ? undefined
+      : await buildClaudeAgentTeamsLaunchPlan({
+          command: sourceCommand,
+          pickerTeams,
+          mode,
+          baseEnv: args.baseEnv,
+          createTeamEnv: args.createTeamEnv
+        })
   const sequencedStartupCommand =
     plan && sourceCommand && args.command && sourceCommand !== args.command
       ? plan.command
@@ -51,9 +51,9 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
       ? {
           ...args.launchConfig,
           agentCommand: args.launchConfig.agentCommand
-            ? mode === 'in-process' || process.platform === 'win32'
-              ? addClaudeTeammateModeInProcess(args.launchConfig.agentCommand)
-              : addClaudeTeammateModeAuto(args.launchConfig.agentCommand)
+            ? (plan.env.ORCA_AGENT_TEAMS_TEAM_ID
+                ? addClaudeTeammateModeAuto
+                : addClaudeTeammateModeInProcess)(args.launchConfig.agentCommand)
             : plan.command,
           agentEnv: { ...args.launchConfig.agentEnv, ...plan.env }
         }

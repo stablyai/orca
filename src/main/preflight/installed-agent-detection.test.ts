@@ -5,9 +5,6 @@ import { detectInstalledAgents } from './installed-agent-detection'
 vi.mock('./agent-command-detection', () => ({
   detectAgentCommandsOnHost: vi.fn(async () => new Set(['claude', 'codex', 'gemini']))
 }))
-vi.mock('./managed-agent-detection', () => ({
-  readInstalledManagedAgents: vi.fn(async () => [])
-}))
 
 const platform = process.platform
 afterEach(() => {

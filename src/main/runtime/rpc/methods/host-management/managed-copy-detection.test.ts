@@ -2,6 +2,7 @@ import type * as WslAgentDetection from '../../../../ipc/preflight/preflight-wsl
 import type * as PreflightRuntimeTarget from '../../../../ipc/preflight/preflight-runtime-target'
 import type * as InstallerDetection from '../../../../../shared/agent-launch/installation/local-agent-install-dir-detection'
 import type * as NodeOs from 'node:os'
+import type * as AppEnvironment from '../../../../../shared/app-lifecycle/app-environment'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -11,16 +12,18 @@ import { detectInstalledAgentInventory } from '../../../../preflight/installed-a
 import { refreshAgentsOnHost } from '../../../../preflight/workspace-agent-detection'
 import { resolveClaudeTeamsInvocation } from '../../../terminal/launch/claude-teams-invocation'
 
-const fixture = vi.hoisted(() => ({
-  root: '',
-  path: '',
-  installs: undefined as Promise<void> | undefined,
-  enumerate: vi.fn(() => [])
-}))
+const fixture = vi.hoisted(() => {
+  const pending: { installs?: Promise<void> } = {}
+  return Object.assign(pending, { root: '', path: '', enumerate: vi.fn(() => []) })
+})
 
-vi.mock('../../../../../shared/app-lifecycle/app-environment', () => ({
-  hasAppEnvironment: () => true
-}))
+vi.mock('../../../../../shared/app-lifecycle/app-environment', async (original) => {
+  const environment = await original<typeof AppEnvironment>()
+  return {
+    ...environment,
+    hasAppEnvironment: () => fixture.root !== '' && environment.hasAppEnvironment()
+  }
+})
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => fixture.root
 }))
@@ -204,7 +207,9 @@ it.runIf(windows)('rechecks the cmd launch folder after an earlier miss', async 
       },
       'cmd'
     )
-  expect((await launch()).command).toBe('claude --verbose')
+  const byName = await launch()
+  expect(byName.command).toBe('claude --verbose')
+  expect(byName.launchConfig?.selectedExecutable).toBeUndefined()
   await executable('workspace', 'claude.cmd')
   expect((await launch()).command).toBe(`"${user}" --verbose`)
 })

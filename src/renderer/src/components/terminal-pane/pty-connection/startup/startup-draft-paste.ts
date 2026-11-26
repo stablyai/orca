@@ -8,7 +8,10 @@ import {
 } from '../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
-import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
+import {
+  createPasteReadinessTimeoutNotice,
+  notifyBlockedAgentStartup
+} from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
@@ -54,6 +57,14 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     }
   }
   session.cleanupStartupDraftPasteTimers = clearStartupDraftPasteTimers
+  session.withholdStartupDraftPaste = (): void => {
+    startupDraftPasteSettled = true
+    session.startupDraftPasteAttempted = true
+    clearStartupDraftPasteTimers()
+  }
+  session.notifyBlockedStartup = (reason: 'unknown' | 'unavailable'): void => {
+    notifyBlockedAgentStartup(reason, session.startupDraftPrompt ?? session.paneStartup?.command)
+  }
   const getStartupDraftPtyId = (): string | null => {
     const ptyId = session.transport.getPtyId()
     if (

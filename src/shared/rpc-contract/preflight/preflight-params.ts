@@ -8,12 +8,7 @@ import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
-
-export const NativeChatSignIn = z.object({
-  agent: z.string().min(1).max(128),
-  account: z.enum(['system', 'managed']).optional(),
-  remote: z.boolean()
-})
+import { NativeChatSignIn } from '../terminal/native-chat-sign-in-params'
 
 export const PreflightQueuedAgentLaunch = z.object({
   terminal: z.string().min(1).max(4096),
@@ -27,6 +22,7 @@ export const PreflightQueuedAgentLaunch = z.object({
       agentArgs: z.string(),
       agentEnv: z.record(z.string(), z.string()),
       commandProvenance: z.enum(['authored', 'generated']).optional(),
+      authoredCommand: z.string().optional(),
       selectedExecutable: z.string().optional(),
       ompResumeFilePath: z.string().optional()
     })

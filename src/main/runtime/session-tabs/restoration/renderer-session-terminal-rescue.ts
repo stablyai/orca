@@ -6,6 +6,10 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { ptyShellPath } from '../../../providers/local-pty/local-pty-provider-state'
+import { resolvePtyWriteHostPlatform } from '../../terminal/input/pty-write-host-platform'
+import { resolveWindowsShellStartupFamily } from '../../../../shared/shell/launch/windows-terminal-shell'
+import { copySleepingAgentLaunchConfig } from '../../terminal/launch/runtime-agent-launch-resolution'
 
 export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals extends OrcaRuntimeWithWaitForMobileTerminalSurface {
   protected abstract resolveHandleForTab(
@@ -128,26 +132,39 @@ export abstract class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobile
     if (!pending?.startup || !pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
       return
     }
-    const launch = { ...pending.startup, terminal: pty.ptyId, shell: 'posix' as const }
+    const settings = this.store?.getSettings()
+    const shellPath = ptyShellPath.get(pty.ptyId) ?? pending.startup.shellOverride
+    const shell =
+      !pty.isWsl && !pty.wslDistro && resolvePtyWriteHostPlatform(pty) === 'win32'
+        ? resolveWindowsShellStartupFamily(
+            shellPath ?? (pty.connectionId ? undefined : settings?.terminalWindowsShell)
+          )
+        : 'posix'
+    const launch = { ...pending.startup, terminal: pty.ptyId, shell }
     const owner = this.readQueuedLaunchPty(pty.ptyId)
-    const command = mayResolveQueuedAgentLaunch(launch)
-      ? await prepareQueuedAgentLaunch(this, pty.ptyId, launch, this.store?.getSettings()).then(
-          (result) => result.preparedCommand,
-          () => null
+    const { preparedCommand: command, launchConfig } = mayResolveQueuedAgentLaunch(launch)
+      ? await prepareQueuedAgentLaunch(this, pty.ptyId, launch, settings).catch(
+          (): Awaited<ReturnType<typeof prepareQueuedAgentLaunch>> => ({ preparedCommand: null })
         )
-      : launch.command
+      : { preparedCommand: launch.command, launchConfig: launch.launchConfig }
     if (
-      !command ||
       !owner?.isCurrent() ||
       this.pendingMobileTerminalCreatesByKey.get(key) !== pending ||
       this.terminalSpawnCommandsByPtyId.has(pty.ptyId)
     ) {
       return
     }
+    if (!command) {
+      this.noteTerminalSpawnCommand(pty.ptyId, null, 'unknown')
+      return
+    }
     if (this.ptyController?.write(pty.ptyId, command, 'launch')) {
       // Write Enter separately so long commands cannot swallow it.
       this.ptyController.write(pty.ptyId, '\r', 'launch')
       this.noteTerminalSpawnCommand(pty.ptyId, command)
+      if (launchConfig && launchConfig !== launch.launchConfig) {
+        pty.launchConfig = copySleepingAgentLaunchConfig(launchConfig)
+      }
     }
   }
 

@@ -77,7 +77,11 @@ export function applyTerminalLaunchResult(
         launchToken: result.launchToken,
         launchAgent:
           result.launchAgent ??
-          (!rejected && !result.isReattach && startup && 'agent' in startup
+          (!rejected &&
+          !result.agentProgramBlocked &&
+          !result.isReattach &&
+          startup &&
+          'agent' in startup
             ? startup.agent
             : undefined)
       })

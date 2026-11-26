@@ -89,7 +89,11 @@ async function prepareForPty(
     process.platform === 'win32' &&
     Boolean(pty.wslDistro || pty.isWsl || /^wsl(?:\.exe)?$/i.test(win32.basename(wslShell ?? '')))
   if (wsl) {
-    await assertWslDistroRunningForExec(pty.wslDistro)
+    try {
+      await assertWslDistroRunningForExec(pty.wslDistro)
+    } catch {
+      return { preparedCommand: null }
+    }
   }
   const shell = ssh
     ? launch.shell

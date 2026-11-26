@@ -5,9 +5,9 @@ import { join } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
 import {
   prepareShellNativeAgentLaunch,
-  unwrapDirectAgentLaunchCommand,
   withCodexDirectLaunchCommand
 } from './codex-startup-image-command'
+import { unwrapDirectAgentLaunchCommand } from './direct-agent-launch-recognition'
 import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 import { withManagedAgentProgram } from './managed-agent-launch-program'
 import { quoteStartupArg } from './tui-agent-startup-shell'

@@ -69,6 +69,7 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
 export const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   commandProvenance: z.enum(['authored', 'generated']).optional(),
+  authoredCommand: z.string().optional(),
   selectedExecutable: z.string().optional(),
   agentArgs: z.string(),
   agentEnv: sleepingAgentLaunchEnvSchema,

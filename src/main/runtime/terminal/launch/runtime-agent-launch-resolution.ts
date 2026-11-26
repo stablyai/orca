@@ -42,6 +42,7 @@ export function copySleepingAgentLaunchConfig(
 ): SleepingAgentLaunchConfig {
   return {
     ...(config.commandProvenance ? { commandProvenance: config.commandProvenance } : {}),
+    ...(config.authoredCommand ? { authoredCommand: config.authoredCommand } : {}),
     ...(config.selectedExecutable ? { selectedExecutable: config.selectedExecutable } : {}),
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,

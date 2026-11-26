@@ -109,7 +109,7 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
     !ctx.agentProgramBlocked &&
     !resumeSpawnRefusal(ctx.resumeAdmission)
       ? {
-          launchAgent: ctx.agentProgramBlocked ? undefined : args.launchAgent,
+          launchAgent: args.launchAgent,
           launchToken: typeof args.launchToken === 'string' ? args.launchToken : undefined,
           resumeProviderSession: ctx.codexResumeLaunch.droppedResumeArgv
             ? undefined

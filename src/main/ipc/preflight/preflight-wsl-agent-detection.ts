@@ -15,6 +15,13 @@ export async function detectWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
   commands: readonly string[]
 ): Promise<Set<string>> {
+  return (await probeWslCommandsOnPath(wslTarget, commands)) ?? new Set()
+}
+
+export async function probeWslCommandsOnPath(
+  wslTarget: WslPreflightTarget,
+  commands: readonly string[]
+): Promise<Set<string> | null> {
   const uniqueCommands = [...new Set(commands.filter(Boolean))]
   if (uniqueCommands.length === 0) {
     return new Set()
@@ -50,11 +57,11 @@ export async function detectWslCommandsOnPath(
     })
     // Timeout/nonzero results may contain partial stdout, not a complete inventory.
     if (result.timedOut || result.code !== 0) {
-      return new Set()
+      return null
     }
     return parseWslDetectedCommands(result.stdout)
   } catch {
-    return new Set()
+    return null
   }
 }
 

@@ -4,7 +4,7 @@ import type { TuiAgent } from '../catalog/tui-agent'
 import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 import { shellReadyMarkerComesFromLineEditor } from '../../terminal/output/shell-ready-marker-timing'
 import { unwrapPowerShellNativeLaunch } from './powershell-native-launch'
-import { CODEX_EXECUTABLE, unwrapDirectAgentLaunchCommand } from './codex-startup-image-command'
+import { CODEX_EXECUTABLE, unwrapDirectAgentLaunchCommand } from './direct-agent-launch-recognition'
 
 export type StartupCommandDelivery = 'fast' | 'shell-ready'
 

@@ -3995,7 +3995,11 @@ export function createRemoteRuntimePtyTransport(
       }
       if (createdTerminal.isReattach !== true) {
         spawnedHandle = handle
-        onPtySpawn?.(remotePtyId)
+        if (createdTerminal.agentProgramBlocked) {
+          onPtySpawn?.(remotePtyId, createdTerminal.agentProgramBlocked)
+        } else {
+          onPtySpawn?.(remotePtyId)
+        }
       }
       emitRecoveryState()
 

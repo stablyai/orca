@@ -32,10 +32,10 @@ import { isOrcaAgentRuntimePath } from './managed-agent-cli-path'
 import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { isExecutableFile } from '../ipc/command-path/command-path-directory'
 import {
-  detectAgentCommandsOnHost,
   readLocalTerminalAgentProgram,
   type TerminalAgentProgram
 } from '../preflight/agent-command-detection'
+import { probeWslCommandsOnPath } from '../ipc/preflight/preflight-wsl-agent-detection'
 import { prepareNativeChatSignIn } from './prepare-native-chat-sign-in'
 
 type SpawnSettings = Parameters<typeof prepareNativeChatSignIn>[1]
@@ -119,11 +119,12 @@ async function selectProgram(
   pinned: string | undefined
 ): Promise<TerminalAgentProgram> {
   if (spawn.codexRuntime === 'wsl') {
-    const found = await detectAgentCommandsOnHost([program], {
-      context: spawn.expectedWslDistro
-        ? { wslDistro: spawn.expectedWslDistro }
-        : { wslDefault: true }
-    })
+    const found = await probeWslCommandsOnPath({ distro: spawn.expectedWslDistro ?? undefined }, [
+      program
+    ])
+    if (!found) {
+      return { kind: 'unknown' }
+    }
     return found.has(program) ? { kind: 'by-name', path: program } : { kind: 'unavailable' }
   }
   if (spawn.sshTarget) {
@@ -281,7 +282,7 @@ async function rewriteLaunchExecutable(
             }
           : {}),
         commandProvenance: 'generated',
-        ...(!guest ? { selectedExecutable: selected.path } : {})
+        ...(selected.kind === 'full-path' ? { selectedExecutable: selected.path } : {})
       }
     }
   }

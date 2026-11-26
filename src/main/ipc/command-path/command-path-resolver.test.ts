@@ -10,7 +10,7 @@ vi.mock('./command-path-directory-worker-client', async () => ({
     (await import('./command-path-directory')).readDetectionDirectory
   )
 }))
-const filesystem = vi.hoisted(() => ({ realStat: undefined as typeof FileSystem.stat | undefined }))
+const filesystem = vi.hoisted((): { realStat?: typeof FileSystem.stat } => ({}))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof FileSystem>()
   filesystem.realStat = fs.stat

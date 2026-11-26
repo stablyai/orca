@@ -124,7 +124,11 @@ export async function connectIpcPty(
     }
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
-      onPtySpawn?.(spawnResult.id)
+      if (spawnResult.agentProgramBlocked) {
+        onPtySpawn?.(spawnResult.id, spawnResult.agentProgramBlocked)
+      } else {
+        onPtySpawn?.(spawnResult.id)
+      }
       if (context.isDestroyed()) {
         return
       }

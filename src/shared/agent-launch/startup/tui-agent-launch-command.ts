@@ -42,6 +42,7 @@ export type ResolvedAgentLaunchCommand =
         agentCommand: string
         agentArgs?: string
         commandProvenance: 'authored' | 'generated'
+        authoredCommand?: string
         selectedExecutable?: string
       }
       appliedSessionOptions: Record<string, SessionOptionValue>
@@ -172,6 +173,10 @@ export function resolveAgentLaunchCommand(args: {
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
       commandProvenance,
+      ...(commandProvenance === 'authored' &&
+      (args.agent === 'claude' || args.agent === 'claude-agent-teams')
+        ? { authoredCommand: command }
+        : {}),
       ...(program !== command
         ? { selectedExecutable: args.managedAgentCommands?.[args.agent] }
         : {}),

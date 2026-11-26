@@ -33,6 +33,7 @@ export function buildAgentResumeStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
   commandProvenance?: 'authored' | 'generated'
+  authoredCommand?: string
   selectedExecutable?: string
   ompResumeFilePath?: string | null
   sessionOptions?: Record<string, SessionOptionValue>

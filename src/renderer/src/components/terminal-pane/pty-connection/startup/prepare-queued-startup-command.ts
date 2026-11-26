@@ -84,14 +84,19 @@ export async function prepareQueuedStartupCommand(
   if (mayResolveQueuedAgentLaunch(launch)) {
     try {
       const reply = await requestQueuedLaunch(ptyId, paired, launch, isCurrent)
-      if (reply && typeof reply === 'object' && 'preparedCommand' in reply) {
-        const prepared = reply as PreparedAgentLaunch
-        return typeof prepared.preparedCommand === 'string' ? prepared : { preparedCommand: null }
+      if (reply?.preparedCommand === null || typeof reply?.preparedCommand === 'string') {
+        return reply
       }
     } catch {
-      // Delivery can be retried once the pane has a current host again.
+      // A host that cannot prepare the launch still accepts shell-native startup.
     }
-    return { preparedCommand: null }
+    if (
+      !startup.nativeChatSignIn &&
+      mayResolveQueuedAgentLaunch({ command: startup.command, shell })
+    ) {
+      // An older host cannot verify and migrate a recorded Orca executable.
+      return { preparedCommand: null }
+    }
   }
   return {
     preparedCommand:
@@ -106,7 +111,7 @@ async function requestQueuedLaunch(
   paired: ReturnType<typeof getRemoteRuntimePtyOwner>,
   launch: QueuedAgentLaunch,
   isCurrent: () => boolean
-): Promise<unknown> {
+): Promise<PreparedAgentLaunch | undefined> {
   if (!paired) {
     return !isRemoteRuntimePtyId(ptyId) && isCurrent()
       ? window.api.preflight.detectAgents({ launch })
@@ -119,7 +124,7 @@ async function requestQueuedLaunch(
   if (!proof.supported || !isCurrent()) {
     return undefined
   }
-  return callRuntimeRpc<unknown>(
+  return callRuntimeRpc<PreparedAgentLaunch>(
     paired.target,
     'preflight.detectAgents',
     { launch },
