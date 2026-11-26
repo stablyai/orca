@@ -10,6 +10,9 @@ import {
 } from '../../../../shared/bots/bot-chat-people'
 import { useBotItemsPeople, type BotPersonPickLabelled } from './BotPersonPickItems'
 import type { BotChatTree } from './use-bot-chat-tree'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 
 const picks = new Map<string, BotChatPersonPick>()
 const listeners = new Set<() => void>()
@@ -31,7 +34,15 @@ export type BotChatsPersonPick = {
 /** The viewer's own until another pick, as Items opens; a pick whose person is gone falls back. */
 export function useBotChatsPersonPick(bot: Bot): BotChatsPersonPick {
   const key = botRefKey(bot)
-  const people = useBotItemsPeople(bot)
+  const allPeople = useBotItemsPeople(bot)
+  // A teammate's copy filters only chats an up-to-date host names by person; an older host sends
+  // only theirs, unnamed, so they all show.
+  const host = parseExecutionHostId(bot.hostId)
+  const named = useRuntimeEnvironmentCapability(
+    bot.shareViewer && host?.kind === 'runtime' ? host.environmentId : null,
+    BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY
+  )
+  const people = bot.shareViewer && host?.kind === 'runtime' && !named ? null : allPeople
   const picked = useSyncExternalStore(subscribe, () => picks.get(key) ?? null)
   const pick = botItemsPersonPick(people, picked)
   const setPick = useCallback(

@@ -198,7 +198,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
               key={chat.chatId}
               bot={bot}
               chat={chat}
-              hidePerson={pick.kind !== 'everyone'}
+              hidePerson={pick.kind !== 'everyone' || !people}
               unfolded={searching ? null : unfolded.has(chat.chatId)}
               onFold={(open) => fold(chat.chatId, open)}
               loadMore={tree.loadMore}

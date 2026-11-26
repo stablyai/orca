@@ -19,6 +19,9 @@ export type BotChatTreeViewer =
       personName: (accountId: string) => string
       /** The owner as the share names them, for their Home row. */
       ownerName: string
+      /** Their Orca lists everyone's chats; an older one is sent only theirs (`owns`). */
+      everyone: boolean
+      owns: (chatId: string) => boolean
     }
 
 function wireChat({ whoseHome: _internal, ...chat }: BotChatHostChat): BotChatTreeChat {
@@ -108,6 +111,17 @@ function teammateView(
   viewer: Extract<BotChatTreeViewer, { kind: 'teammate' }>,
   page: boolean
 ): BotChatTreeRead {
+  return viewer.everyone
+    ? teammateEveryoneView(tree, viewer, page)
+    : teammateOwnView(tree, viewer, page)
+}
+
+/** For a teammate's Orca that lists everyone's chats with a person filter. */
+function teammateEveryoneView(
+  tree: BotChatHostTree,
+  viewer: Extract<BotChatTreeViewer, { kind: 'teammate' }>,
+  page: boolean
+): BotChatTreeRead {
   const own = (chatId: string, of: BotHomeOf | undefined): boolean =>
     teammateHome(of, viewer.accountId) || botHomePlaceholderAccount(chatId) === viewer.accountId
   const asHome = (chatId: string): string =>
@@ -117,6 +131,10 @@ function teammateView(
   // owner's included) a row named for that person.
   const chats = tree.chats.flatMap((chat): BotChatTreeChat[] => {
     const of = chat.whoseHome
+    // The owner's Home not made yet goes by the id the teammate's own unmade Home row has here.
+    if (chat.chatId === NO_HOME_CHAT_ID) {
+      return []
+    }
     if (own(chat.chatId, of)) {
       return [
         {
@@ -171,9 +189,71 @@ function teammateView(
     chats: withHome,
     workspaceChats: Object.fromEntries(
       Object.entries(tree.workspaceChats).flatMap(([workspace, chatId]) =>
-        !botHomePlaceholderAccount(chatId) || shown.has(asHome(chatId))
+        chatId !== NO_HOME_CHAT_ID &&
+        (!botHomePlaceholderAccount(chatId) || shown.has(asHome(chatId)))
           ? [[workspace, asHome(chatId)] as const]
           : []
+      )
+    )
+  }
+}
+
+/** For an older teammate's Orca, which has no person filter: only their own chats. */
+function teammateOwnView(
+  tree: BotChatHostTree,
+  viewer: Extract<BotChatTreeViewer, { kind: 'teammate' }>,
+  page: boolean
+): BotChatTreeRead {
+  const byId = new Map(tree.chats.map((chat) => [chat.chatId, chat]))
+  // By identity, so their Home not made yet (no record says whom it acts for) is never dropped.
+  const theirs = (chatId: string): boolean =>
+    teammateHome(byId.get(chatId)?.whoseHome, viewer.accountId) ||
+    botHomePlaceholderAccount(chatId) === viewer.accountId ||
+    viewer.owns(chatId)
+  const asHome = (chatId: string): string =>
+    botHomePlaceholderAccount(chatId) === viewer.accountId ? NO_HOME_CHAT_ID : chatId
+  const chats = tree.chats.flatMap((chat): BotChatTreeChat[] => {
+    if (!theirs(chat.chatId)) {
+      return []
+    }
+    if (!teammateHome(chat.whoseHome, viewer.accountId)) {
+      return [teammateWireChat(chat)]
+    }
+    return [
+      {
+        ...teammateWireChat(chat),
+        chatId: asHome(chat.chatId),
+        origin: 'home',
+        title: HOME_CHAT_TITLE
+      }
+    ]
+  })
+  const hasHome = chats.some((chat) => chat.origin === 'home' && !chat.closed)
+  const withHome =
+    hasHome || page
+      ? chats
+      : [
+          {
+            chatId: NO_HOME_CHAT_ID,
+            title: HOME_CHAT_TITLE,
+            origin: 'home' as const,
+            live: 'idle' as const,
+            lastActiveAt: 0,
+            unread: false,
+            closed: false,
+            running: [],
+            runningTotal: 0,
+            finished: [],
+            finishedTotal: 0,
+            failedTotal: 0
+          },
+          ...chats
+        ]
+  return {
+    chats: withHome,
+    workspaceChats: Object.fromEntries(
+      Object.entries(tree.workspaceChats).flatMap(([workspace, chatId]) =>
+        theirs(chatId) ? [[workspace, asHome(chatId)] as const] : []
       )
     )
   }

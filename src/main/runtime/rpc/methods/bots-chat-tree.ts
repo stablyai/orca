@@ -8,7 +8,12 @@ import { readSharedBotChatTree, runtimeBotChatTreeHost } from '../../../bots/bot
 import { readBotOwnChatPanes } from '../../../bots/bot-own-chat-panes'
 import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat-search-host'
 import { defineMethod, type RpcContext } from '../core'
-import { botShareScopeOf, withBotChatPeople } from '../../../bots/team-share/bot-share-chats'
+import {
+  botShareChatFilter,
+  botShareScopeOf,
+  withBotChatPeople
+} from '../../../bots/team-share/bot-share-chats'
+import { BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
   botShareHostOwnerName,
   botShareScopedView,
@@ -20,12 +25,14 @@ import {
   type BotChatTreeViewer
 } from '../../../bots/bot-chat-tree-viewer'
 import type { Bot } from '../../../../shared/bot-types'
+import type { BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
 import { botHomePlaceholderId, botSharePersonName } from '../../../../shared/bots/bot-home-of'
 
 /** Who reads the bot's chats: the owner, or the teammate a share connection is. */
 function botChatTreeViewerOf(
-  context: Pick<RpcContext, 'callerScope'>,
+  context: Pick<RpcContext, 'callerScope' | 'clientCapabilities' | 'runtime'>,
   bot: Pick<Bot, 'shares'> | undefined
 ): BotChatTreeViewer {
   const share = botShareScopeOf(context)
@@ -35,9 +42,26 @@ function botChatTreeViewerOf(
         kind: 'teammate',
         accountId: share.accountId,
         personName,
-        ownerName: botShareHostOwnerName() ?? HOST_OWNER_FALLBACK_NAME
+        ownerName: botShareHostOwnerName() ?? HOST_OWNER_FALLBACK_NAME,
+        everyone:
+          context.clientCapabilities?.includes(BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY) ??
+          false,
+        owns: botShareChatFilter(context.runtime, share)
       }
     : { kind: 'owner', personName }
+}
+
+/** Each chat named for whose it is, for a viewer that filters by person; an older teammate's Orca
+ *  would print its own name on its own chats. */
+function withViewerPeople<T extends { chats: BotChatTreeChat[] }>(
+  runtime: OrcaRuntimeService,
+  bot: Bot | undefined,
+  viewer: BotChatTreeViewer,
+  read: T
+): T {
+  return viewer.kind === 'teammate' && !viewer.everyone
+    ? read
+    : withBotChatPeople(runtime, bot, read)
 }
 
 export const BOT_CHAT_TREE_METHODS = [
@@ -58,7 +82,7 @@ export const BOT_CHAT_TREE_METHODS = [
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       const viewer = botChatTreeViewerOf(context, bot)
       const view = botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
-      return withBotChatPeople(runtime, bot, view)
+      return withViewerPeople(runtime, bot, viewer, view)
     }
   }),
   // Each bot's own side chats, pane and title, so its row's line says what any of them is doing.
@@ -86,11 +110,8 @@ export const BOT_CHAT_TREE_METHODS = [
       const { runtime } = context
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       const result = await searchBotChats(runtimeBotChatSearchHost(runtime), params)
-      return withBotChatPeople(
-        runtime,
-        bot,
-        botChatSearchForViewer(result, botChatTreeViewerOf(context, bot))
-      )
+      const viewer = botChatTreeViewerOf(context, bot)
+      return withViewerPeople(runtime, bot, viewer, botChatSearchForViewer(result, viewer))
     }
   })
 ]
