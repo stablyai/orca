@@ -1,5 +1,4 @@
 // Share detached Vite/headless Chromium between fixtures-shot.mjs and the fixtures MCP server.
-import { execFileSync } from 'node:child_process'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
@@ -27,6 +26,7 @@ const STOP_GRACE_MS = 10_000
 const GUARD_WAIT_MS = 20_000
 // Module scope keeps the guard connection open; a collected connection would drop the lock.
 let serverGuard = null
+let browserPromise = Promise.resolve(null)
 
 process.chdir(repoRoot)
 
@@ -54,9 +54,21 @@ async function launchHeadlessBrowser() {
   const failures = []
   for (const attempt of attempts) {
     try {
-      const browser = await chromium.launch({ headless: true, ...attempt.options })
+      // Why a browser server: process() is a handle whose exit can be confirmed on every platform.
+      // Why handleSIG* off: stop() owns signals, so no signal closes the browser under this server.
+      const server = await chromium.launchServer({
+        headless: true,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false,
+        ...attempt.options
+      })
+      const browser = await chromium.connect(server.wsEndpoint()).catch(async (error) => {
+        await server.kill()
+        throw error
+      })
       console.log(`[fixtures] browser: ${attempt.label}`)
-      return browser
+      return { server, browser }
     } catch (error) {
       failures.push(`${attempt.label}: ${String(error?.message ?? error).split('\n')[0]}`)
     }
@@ -169,36 +181,17 @@ function createFixtureApiPlugin(session) {
   }
 }
 
-function isProcessAlive(pid) {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error?.code === 'EPERM'
+// Exits only once the browser process is confirmed gone. Until then this process keeps the
+// server guard, so a successor waits for it (or gives up) instead of starting beside it.
+async function exitAfterBrowser(browserPromise, code) {
+  const child = (await browserPromise.catch(() => null))?.server.process()
+  if (child) {
+    while (child.exitCode === null && child.signalCode === null) {
+      await child.kill('SIGKILL')
+      await delay(100)
+    }
   }
-}
-
-// Why: a hung browser.close() must not leave the browser running after this process (and its
-// guard) is gone, or a successor would start beside it. POSIX only; Windows just exits.
-async function forceExit() {
-  let pids = []
-  if (process.platform !== 'win32') {
-    try {
-      pids = execFileSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' })
-        .split('\n')
-        .filter(Boolean)
-        .map(Number)
-    } catch {}
-  }
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 'SIGKILL')
-    } catch {}
-  }
-  for (const started = Date.now(); Date.now() - started < 2000 && pids.some(isProcessAlive);) {
-    await delay(50)
-  }
-  process.exit(0)
+  process.exit(code)
 }
 
 async function main() {
@@ -213,20 +206,11 @@ async function main() {
   const port = await findFreePort()
   const baseUrl = `http://127.0.0.1:${port}`
   // Why parallel: browser launch and Vite startup are independent cold costs.
-  const browserPromise = launchHeadlessBrowser()
+  browserPromise = launchHeadlessBrowser()
   browserPromise.catch(() => {})
   const session = { runner: null, lastActivity: Date.now(), stopping: false, stop: () => {} }
-  const vite = await createViteServer({
-    configFile: 'config/vite.fixtures.config.ts',
-    clearScreen: false,
-    logLevel: 'warn',
-    // Why no HMR: the runner reloads its page on change, so pushed updates would only race it.
-    server: { port, strictPort: true, host: '127.0.0.1', open: false, hmr: false },
-    plugins: [createFixtureApiPlugin(session)]
-  })
-  await vite.listen()
-  await browserPromise
-
+  let idleTimer
+  let vitePromise = Promise.resolve(null)
   const stop = async () => {
     if (session.stopping) {
       return
@@ -235,22 +219,52 @@ async function main() {
     session.stopping = true
     clearInterval(idleTimer)
     // Why: a successor waits for this process to exit, so teardown cannot hang.
-    setTimeout(() => void forceExit(), STOP_GRACE_MS).unref()
+    setTimeout(() => void exitAfterBrowser(browserPromise, 0), STOP_GRACE_MS).unref()
     // Leave the last endpoint for the client to probe. A successor may already own it.
-    await (await browserPromise.catch(() => null))?.close()
-    await vite.close()
+    await (await browserPromise.catch(() => null))?.server.close()
+    await (await vitePromise.catch(() => null))?.close()
     process.exit(0)
   }
-  const idleTimer = setInterval(() => {
+  session.stop = () => void stop()
+  // Signals are ours from launch on, so cancelling a startup runs the same teardown as stop.
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, session.stop)
+  }
+  const ownSigterm = process.listeners('SIGTERM')
+  vitePromise = createViteServer({
+    configFile: 'config/vite.fixtures.config.ts',
+    clearScreen: false,
+    logLevel: 'warn',
+    // Why no HMR: the runner reloads its page on change, so pushed updates would only race it.
+    server: { port, strictPort: true, host: '127.0.0.1', open: false, hmr: false },
+    plugins: [createFixtureApiPlugin(session)]
+  })
+  const vite = await vitePromise
+  // Why: Vite's own SIGTERM and stdin-end handler exits before the browser is closed.
+  for (const listener of process.listeners('SIGTERM')) {
+    if (!ownSigterm.includes(listener)) {
+      process.off('SIGTERM', listener)
+    }
+  }
+  process.stdin.removeAllListeners('end')
+  await vite.listen()
+  const { browser } = await browserPromise
+  // Never publish a server that is stopping or whose browser is already gone.
+  if (session.stopping) {
+    return
+  }
+  if (!browser.isConnected()) {
+    throw new Error('Fixture browser disconnected during startup.')
+  }
+  idleTimer = setInterval(() => {
     if (Date.now() - session.lastActivity > IDLE_SHUTDOWN_MS) {
       void stop()
     }
   }, 30_000)
-  for (const signal of ['SIGINT', 'SIGTERM']) {
-    process.on(signal, () => void stop())
-  }
-  session.stop = () => void stop()
-  session.runner = createFixturePageRunner(baseUrl, browserPromise)
+  session.runner = createFixturePageRunner(
+    baseUrl,
+    browserPromise.then((launched) => launched.browser)
+  )
 
   const pendingState = `${serverStatePath}.${process.pid}.tmp`
   await writeFile(pendingState, JSON.stringify({ pid: process.pid, port, url: baseUrl, codeStamp }))
@@ -260,5 +274,5 @@ async function main() {
 
 main().catch(async (error) => {
   console.error(`[fixtures] server failed: ${error?.stack ?? error}`)
-  process.exit(1)
+  await exitAfterBrowser(browserPromise, 1)
 })
