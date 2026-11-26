@@ -265,11 +265,14 @@ export async function readBotTurn(
    *  so the read's cost never grows with the chat's history. */
   {
     indexedOnly = false,
-    root: knownRoot
+    root: knownRoot,
+    conversationActsFor
   }: {
     indexedOnly?: boolean
     /** The session's /clear root when the caller already resolved it, so it isn't walked again. */
     root?: string
+    /** Whom the conversation acts for when the caller already read it, so it isn't read again. */
+    conversationActsFor?: readonly BotRequestAsker[]
   } = {}
 ): Promise<{
   turn: BotActingTurn
@@ -288,9 +291,11 @@ export async function readBotTurn(
   const root =
     knownRoot ?? (isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId)
   // Index-only takes the record as saved: an old automation run's repair looks through every run.
-  let recorded = indexedOnly
-    ? db.getBotConversationActsFor(root)
-    : readBotConversationActsFor(runtime, root)
+  let recorded = conversationActsFor
+    ? { actsFor: [...conversationActsFor] }
+    : indexedOnly
+      ? db.getBotConversationActsFor(root)
+      : readBotConversationActsFor(runtime, root)
   if (!recorded && (!indexedOnly || host.hasSession(root))) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
     // says, and is kept as the record.

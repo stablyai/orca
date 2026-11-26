@@ -20,29 +20,36 @@ export async function closingTurnActsFor(
   runtime: OrcaRuntimeService,
   writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> }
 ): Promise<BotRequestAsker[]> {
-  const askers = await closingAskers(runtime, writer)
-  return askers ? whoOnly(askers) : closingChatActsFor(runtime, writer)
+  // Read once, for the turn read and as its fallback.
+  const chat = await chatActsFor(runtime, writer.actor.chatId)
+  return whoOnly((await closingAskers(runtime, writer, chat)) ?? chat)
 }
 
-/** Whom the writer's chat acts for, as closes read it before they read turns: its record, else its
- *  /clear root's first message when that conversation is already open (never opening one). For a
- *  write that most likely closes nothing, so it reads no turn. */
+/** Whom the writer's chat acts for, as closes read it before they read turns. For a write that most
+ *  likely closes nothing, so it reads no turn. */
 export async function closingChatActsFor(
   runtime: OrcaRuntimeService,
   writer: { actor: Pick<BotItemWriter['actor'], 'chatId'> }
 ): Promise<BotRequestAsker[]> {
-  const root = writer.actor.chatId
+  return whoOnly(await chatActsFor(runtime, writer.actor.chatId))
+}
+
+/** The chat's record, else its /clear root's first message when that conversation is already open
+ *  (never opening one); unknown, never the owner, when neither says. */
+async function chatActsFor(
+  runtime: OrcaRuntimeService,
+  root: string
+): Promise<readonly BotRequestAsker[]> {
   try {
     const db = runtime.getOrchestrationDb()
     const recorded = db.getBotConversationActsFor(root)?.actsFor
     const host = getStructuredAgentSessionHost()
     // Started in the same tick as the check, so it takes the open handle and can't reopen one.
     const reads = !recorded && host?.hasSession(root) ? host.journalReads(root) : null
-    const askers = recorded ?? (reads ? await readFirstMessageActsFor(db, reads, null) : null)
-    return whoOnly(askers ?? UNKNOWN)
+    return recorded ?? (reads ? await readFirstMessageActsFor(db, reads, null) : null) ?? UNKNOWN
   } catch (error) {
     console.warn('[bots] could not read whom a closing chat acts for', error)
-    return whoOnly(UNKNOWN)
+    return UNKNOWN
   }
 }
 
@@ -66,13 +73,15 @@ function whoOnly(askers: readonly BotRequestAsker[]): BotRequestAsker[] {
 
 async function closingAskers(
   runtime: OrcaRuntimeService,
-  writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> }
+  writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> },
+  chat: readonly BotRequestAsker[]
 ): Promise<readonly BotRequestAsker[] | null> {
-  const db = runtime.getOrchestrationDb()
   try {
+    const db = runtime.getOrchestrationDb()
     const { turn } = await readBotTurn(runtime, db, writer.sessionId, undefined, {
       indexedOnly: true,
-      root: writer.actor.chatId
+      root: writer.actor.chatId,
+      conversationActsFor: chat
     })
     // A device Orca can't place as the owner typed in it: the owner's chat, but not known to be them.
     return turnActsForOwner(turn)
