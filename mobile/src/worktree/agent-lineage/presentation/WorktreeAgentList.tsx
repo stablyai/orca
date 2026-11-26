@@ -19,6 +19,7 @@ import type { AgentListStatus as AgentDotState } from '../../../../../src/shared
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
+import { WorktreeAgentCarousel } from './WorktreeAgentCarousel'
 import { useSharedNow } from '../../../hooks/use-now'
 import { worktreeAgentChildRows } from '../worktree-agent-child-rows'
 
@@ -172,7 +173,22 @@ export function WorktreeAgentList({
           onToggle={() => setExpanded((value) => !value)}
         />
       ) : null}
-      {!usesSummary || expanded ? roots.map(renderNode) : null}
+      {!usesSummary ? (
+        roots.map(renderNode)
+      ) : expanded ? (
+        // Several agents: a swipeable strip of square tiles instead of thin rows; hold a tile for its full name.
+        <WorktreeAgentCarousel
+          agents={roots.map((node) => ({
+            agent: node.row,
+            childCount: childItemsOf(node).length
+          }))}
+          now={now}
+          unvisited={unvisited}
+          isReadOnly={isReadOnly}
+          onAgentPress={onAgentPress}
+          onWorkspaceActions={onAgentLongPress}
+        />
+      ) : null}
     </View>
   )
 }

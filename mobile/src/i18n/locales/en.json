@@ -1187,6 +1187,11 @@
       "inProgress": "In progress",
       "closed": "Closed",
       "done": "Done"
+    },
+    "agentCarousel": {
+      "holdHint": "Touch and hold to see the full name",
+      "openAgent": "Open agent",
+      "workspaceActions": "Workspace actions"
     }
   },
   "components": {

@@ -10,6 +10,7 @@ import {
 import type { TerminalQuickCommand } from '../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockForkedChatsRequest } from './mock-server-forked-chats-scenario'
+import { handleMockManyAgentsRequest } from './mock-server-many-agents-scenario'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
@@ -126,6 +127,7 @@ export function handleRequest(
   // Each returns false for methods it does not own; first owner wins.
   if (
     handleMockForkedChatsRequest(request, respond, success) ||
+    handleMockManyAgentsRequest(request, respond, success) ||
     handleMockGitRequest(request, respond, success) ||
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||
