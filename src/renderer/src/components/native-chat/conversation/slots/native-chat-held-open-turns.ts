@@ -8,6 +8,7 @@ import {
   nativeChatFindCarriedRunDisclosures
 } from './native-chat-carried-run-disclosures'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
+import { nativeChatRowSuccessors } from './native-chat-row-successors'
 import {
   buildNativeChatTranscript,
   type NativeChatTranscriptSlot
@@ -108,19 +109,24 @@ export function nativeChatTurnsHeldOpen(
       slot.kind === 'message' && slot.turnFolds && slot.turnKey !== undefined ? [slot.turnKey] : []
     )
   )
+  // A row the reader saw may now be part of an earlier row that took in its tool calls.
+  const successors = nativeChatRowSuccessors(previous.messages, current.messages, drawnBefore)
+  const rowsNow = new Set(successors.values())
   const turnOf = new Map<string, string | undefined>()
   for (const [index, message] of current.messages.entries()) {
-    if (drawnBefore.has(message.id)) {
+    if (rowsNow.has(message.id)) {
       turnOf.set(message.id, current.turnKeys[index])
     }
   }
   const held = new Set<string>()
   for (const id of drawnBefore) {
-    const turnKey = turnOf.get(id)
+    const row = successors.get(id)
+    const turnKey = row === undefined ? undefined : turnOf.get(row)
     if (
+      row !== undefined &&
       turnKey !== undefined &&
       folding.has(turnKey) &&
-      !drawnNow.has(id) &&
+      !drawnNow.has(row) &&
       !expandedTurnKeys.has(turnKey)
     ) {
       held.add(turnKey)
@@ -156,7 +162,11 @@ export function nativeChatNextHeadTrack(
   return {
     build: current,
     held: withTurns(head.held, held),
-    carried: nativeChatFindCarriedRunDisclosures(head.build.slots, drawn, head.carried),
+    carried: nativeChatFindCarriedRunDisclosures(
+      head.build,
+      { messages: input.messages, slots: drawn },
+      head.carried
+    ),
     paging
   }
 }
