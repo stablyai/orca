@@ -76,11 +76,11 @@ export const CONNECTOR_METHODS = [
         conversation.source === 'slack' &&
         'sessionId' in params &&
         context.runtime.bots.enabled() &&
-        botOfSession(context.runtime.bots, params.sessionId) &&
         (['actions', 'files.direct', 'reply.files'] satisfies ConnectorCloudFeature[]).every(
           (feature) => features?.has(feature)
         ) &&
-        splitHtmlDocumentFences(text).documents.length > 0
+        splitHtmlDocumentFences(text).documents.length > 0 &&
+        botOfSession(context.runtime.bots, params.sessionId)
       ) {
         throw new Error(CONNECTOR_REPLY_HTML_PAGE_AS_FILE)
       }
