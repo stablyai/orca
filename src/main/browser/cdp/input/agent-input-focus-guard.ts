@@ -120,11 +120,9 @@ export function enablePageFocusEmulation(
     () => {
       if (guest) {
         focusEmulatedGuests.add(guest)
-        try {
-          guest.debugger?.once?.('detach', () => {
-            focusEmulatedGuests.delete(guest)
-          })
-        } catch {}
+        guest.debugger.once('detach', () => {
+          focusEmulatedGuests.delete(guest)
+        })
       }
     },
     () => undefined

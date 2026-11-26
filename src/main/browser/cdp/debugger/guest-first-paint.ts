@@ -22,7 +22,7 @@ const navigationWatchedGuests = new WeakSet<WebContents>()
 
 function markGuestPainted(guest: WebContents): void {
   paintedGuests.add(guest)
-  if (navigationWatchedGuests.has(guest) || typeof guest.on !== 'function') {
+  if (navigationWatchedGuests.has(guest)) {
     return
   }
   navigationWatchedGuests.add(guest)

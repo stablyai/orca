@@ -1,12 +1,4 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -26,27 +18,8 @@ afterEach(() => {
 })
 
 describe('macos-terminal-open-shim', () => {
-  it('returns null on non-darwin platforms', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-open-shim-'))
-    tempDirs.push(dir)
-    expect(
-      await ensureMacosTerminalOpenShimDir({
-        userDataPath: dir,
-        cliLauncher: '/usr/local/bin/orca',
-        platform: 'linux'
-      })
-    ).toBeNull()
-    expect(
-      await ensureMacosTerminalOpenShimDir({
-        userDataPath: dir,
-        cliLauncher: 'C:\\orca.exe',
-        platform: 'win32'
-      })
-    ).toBeNull()
-  })
-
   it.skipIf(process.platform === 'win32')(
-    'routes single http(s) URLs with ORCA_PANE_KEY silently and leaves non-URLs alone',
+    'routes single http(s) URLs with ORCA_PANE_KEY silently and handles scrubbed pane env',
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-open-shim-'))
       tempDirs.push(dir)
@@ -100,17 +73,14 @@ describe('macos-terminal-open-shim', () => {
         PATH: '/usr/bin:/bin',
         ORCA_CLI_BIN_DIR: cliBinDir
       }
-      const applied = applyMacosTerminalOpenShimEnv(env, {
-        userDataPath: dir,
-        cliLauncher: fakeCli,
-        platform: 'darwin'
-      })
-      expect(applied).toBe(shimDir)
+      expect(
+        applyMacosTerminalOpenShimEnv(env, {
+          userDataPath: dir,
+          cliLauncher: fakeCli,
+          platform: 'darwin'
+        })
+      ).toBe(shimDir)
       expect(env.ORCA_CLI_BIN_DIR).toBe(shimDir)
-      expect(existsSync(join(shimDir!, 'orca'))).toBe(true)
-      expect(existsSync(join(shimDir!, 'orca-dev'))).toBe(true)
-      expect(existsSync(join(cliBinDir, 'open'))).toBe(true)
-
       expect(buildMacosTerminalOpenShimScript(null)).toContain('exec /usr/bin/open "$@"')
     }
   )

@@ -77,11 +77,11 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
                 await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
-          const point =
+          const crossSitePoint =
             cdpButton === 'left' && !mainPoint.handled && !mainPoint.adjusted
-              ? ((await resolveCrossSiteMobileTouchClick(wc, x, y, radius, cdpModifiers === 0)) ??
-                mainPoint)
-              : mainPoint
+              ? await resolveCrossSiteMobileTouchClick(wc, x, y, radius, cdpModifiers === 0)
+              : null
+          const point = crossSitePoint ?? mainPoint
           // Mobile-emulated guests can ignore CDP clicks, so hit testing may already activate the control.
           await this.browserManager.showAgentPointer(wc, {
             type: 'mousePressed',
@@ -89,30 +89,43 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
             y: point.y
           })
           if (!point.handled) {
+            const dispatchX = crossSitePoint?.framePoint.x ?? point.x
+            const dispatchY = crossSitePoint?.framePoint.y ?? point.y
+            const dispatchSessionId = crossSitePoint?.frameSessionId
             if (cdpButton === 'right') {
               noteInjectedRightPress(wc, 'mousePressed')
             }
-            await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
-              type: 'mousePressed',
-              x: point.x,
-              y: point.y,
-              button: cdpButton,
-              buttons,
-              modifiers: cdpModifiers,
-              clickCount: 1
-            })
+            await sendGuestCdpCommand(
+              wc,
+              'Input.dispatchMouseEvent',
+              {
+                type: 'mousePressed',
+                x: dispatchX,
+                y: dispatchY,
+                button: cdpButton,
+                buttons,
+                modifiers: cdpModifiers,
+                clickCount: 1
+              },
+              dispatchSessionId
+            )
             if (cdpButton === 'right') {
               noteInjectedRightPress(wc, 'mouseReleased')
             }
-            await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
-              type: 'mouseReleased',
-              x: point.x,
-              y: point.y,
-              button: cdpButton,
-              buttons: 0,
-              modifiers: cdpModifiers,
-              clickCount: 1
-            })
+            await sendGuestCdpCommand(
+              wc,
+              'Input.dispatchMouseEvent',
+              {
+                type: 'mouseReleased',
+                x: dispatchX,
+                y: dispatchY,
+                button: cdpButton,
+                buttons: 0,
+                modifiers: cdpModifiers,
+                clickCount: 1
+              },
+              dispatchSessionId
+            )
           }
           return {
             clicked: {

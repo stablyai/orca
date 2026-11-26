@@ -153,7 +153,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   await refuseRealtimeSchedulingUnderZeroRtTime()
   const userData = app.getPath('userData')
   if (process.platform === 'darwin') {
-    void ensureMacosTerminalOpenShimDir({
+    await ensureMacosTerminalOpenShimDir({
       userDataPath: userData,
       cliLauncher: thisAppOrcaCliLauncher(userData)
     })

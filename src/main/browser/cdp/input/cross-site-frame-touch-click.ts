@@ -1,12 +1,17 @@
 import type { WebContents } from 'electron'
+import { createGuestRawCdpSender } from '../debugger/guest-cdp-command'
 import { mobileTouchClickExpression, readClickPoint } from './cdp-pointer-targets'
-import {
-  readRecord,
-  sendFrameSessionInput,
-  settle,
-  type GuestSessionCdpSender
-} from './guest-frame-input-sessions'
+import { readRecord, sendFrameSessionInput, settle } from './guest-frame-input-sessions'
 import { resolveCrossSitePointerTarget } from './offscreen-frame-pointer-route'
+
+export type ResolvedCrossSiteTouchClick = {
+  x: number
+  y: number
+  adjusted: boolean
+  handled: boolean
+  frameSessionId: string
+  framePoint: { x: number; y: number }
+}
 
 /** Activates touch targets inside cross-site iframes (e.g. Google Sign-In) under mobile emulation. */
 export async function resolveCrossSiteMobileTouchClick(
@@ -15,16 +20,11 @@ export async function resolveCrossSiteMobileTouchClick(
   y: number,
   radius: number | undefined,
   allowDomActivation: boolean
-): Promise<{ x: number; y: number; adjusted: boolean; handled: boolean } | null> {
+): Promise<ResolvedCrossSiteTouchClick | null> {
   if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
     return null
   }
-  const sendRaw: GuestSessionCdpSender = (method, params, sessionId) =>
-    Promise.resolve(
-      sessionId === undefined
-        ? webContents.debugger.sendCommand(method, params)
-        : webContents.debugger.sendCommand(method, params, sessionId)
-    )
+  const sendRaw = createGuestRawCdpSender(webContents)
   const target = await resolveCrossSitePointerTarget(webContents, sendRaw, { x, y })
   if (!target) {
     return null
@@ -56,6 +56,8 @@ export async function resolveCrossSiteMobileTouchClick(
     x: x + (parsed.x - target.framePoint.x),
     y: y + (parsed.y - target.framePoint.y),
     adjusted: parsed.adjusted,
-    handled: parsed.handled
+    handled: parsed.handled,
+    frameSessionId: target.sessionId,
+    framePoint: { x: parsed.x, y: parsed.y }
   }
 }

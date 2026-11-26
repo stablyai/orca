@@ -1,3 +1,10 @@
+import {
+  isBrowserTabPopupRequest,
+  isNewBrowserTabPopupIntent,
+  waitsForPopupOpener,
+  type NewBrowserTabPopupRequest
+} from './browser-popup-new-tab-intent'
+import { normalizeExternalBrowserUrl } from '../../../../shared/browser/navigation/browser-url'
 import { safeOrigin } from '../browser-event-origin'
 import type { ObservedBrowserGuestGesture } from '../input/browser-guest-input-gesture'
 import type { BrowserPageEvent } from '../page-activity/browser-page-events'
@@ -19,58 +26,44 @@ import {
   popupChildOpener
 } from './presentation/popup-origin-bar-window'
 import { installBrowserJavaScriptDialogs } from '../prompts/browser-javascript-dialogs'
+import {
+  addBrowserPopupViewer,
+  getActiveBrowserPopupViewer,
+  hasActiveBrowserScreencastViewer,
+  markHiddenPopupGuest,
+  unmarkHiddenPopupGuest
+} from './browser-popup-viewer-registry'
 
-const activePopupViewersByPageId = new Map<string, Set<string>>()
+export { addBrowserPopupViewer, getActiveBrowserPopupViewer, hasActiveBrowserScreencastViewer }
 
-export function addBrowserPopupViewer(browserPageId: string, pairedDeviceId: string): () => void {
-  let viewers = activePopupViewersByPageId.get(browserPageId)
-  if (!viewers) {
-    viewers = new Set()
-    activePopupViewersByPageId.set(browserPageId, viewers)
-  }
-  viewers.delete(pairedDeviceId)
-  viewers.add(pairedDeviceId)
-  return () => {
-    const current = activePopupViewersByPageId.get(browserPageId)
-    if (!current) {
-      return
-    }
-    current.delete(pairedDeviceId)
-    if (current.size === 0) {
-      activePopupViewersByPageId.delete(browserPageId)
-    }
-  }
+export type PopupViewerTarget = {
+  shownToViewers: boolean
+  pairedDeviceId: string | null
 }
 
-export function getActiveBrowserPopupViewer(
-  browserPageId: string | null | undefined
-): string | null {
-  if (!browserPageId) {
-    return null
-  }
-  const viewers = activePopupViewersByPageId.get(browserPageId)
-  return viewers && viewers.size > 0 ? ([...viewers].at(-1) ?? null) : null
-}
-
-export function isPopupShownToPairedViewers(input: {
+/** Decides once at window-open time whether this popup belongs to paired viewers and which device follows it. */
+export function resolvePopupViewerTarget(input: {
   isListedAsServerPage: boolean
   browserTabId: string | null
   immediatePageId?: string
   peekCreditDeviceId: (browserTabId: string) => string | null
   observed?: ObservedBrowserGuestGesture | null
-}): boolean {
-  if (input.isListedAsServerPage) {
-    return true
+}): PopupViewerTarget {
+  if (
+    !input.isListedAsServerPage &&
+    input.observed?.byAgent === false &&
+    input.observed.fromThisDesktop
+  ) {
+    return { shownToViewers: false, pairedDeviceId: null }
   }
-  if (input.observed?.byAgent === false && input.observed.fromThisDesktop) {
-    return false
+  const pairedDeviceId =
+    (input.browserTabId !== null ? input.peekCreditDeviceId(input.browserTabId) : null) ??
+    getActiveBrowserPopupViewer(input.immediatePageId) ??
+    getActiveBrowserPopupViewer(input.browserTabId)
+  return {
+    shownToViewers: input.isListedAsServerPage || pairedDeviceId !== null,
+    pairedDeviceId
   }
-  return Boolean(
-    (input.browserTabId !== null &&
-      (input.peekCreditDeviceId(input.browserTabId) !== null ||
-        getActiveBrowserPopupViewer(input.browserTabId) !== null)) ||
-    getActiveBrowserPopupViewer(input.immediatePageId) !== null
-  )
 }
 
 // Lists a popup as a viewer tab and returns the opening paired client to its opener on close.
@@ -79,24 +72,22 @@ export function publishBrowserPopupToViewers(input: {
   owner: PopupOwnerContext
   worktreeId: string | undefined
   immediateOpenerPageId?: string
-  consumePairedDeviceId: (browserTabId: string) => string | null
+  pairedDeviceId: string | null
   presentPopup: ((popup: ServerPagePopupPresentation) => void) | null
   closePopup: ((popup: ServerPagePopupClosure) => Promise<void> | void) | null
   notifyGuestStateChanged: (worktreeId: string) => void
 }): void {
-  const { contents, owner, worktreeId, immediateOpenerPageId } = input
+  const { contents, owner, worktreeId, immediateOpenerPageId, pairedDeviceId } = input
   if (!worktreeId) {
     return
   }
   // Hidden on the host, so its viewers and agents answer its dialogs, as for a server page.
+  markHiddenPopupGuest(contents.id)
   installBrowserJavaScriptDialogs(contents, () => null)
   const browserPageId = browserPopupPageId(contents.id)
-  const pairedDeviceId =
-    input.consumePairedDeviceId(owner.browserTabId) ??
-    getActiveBrowserPopupViewer(immediateOpenerPageId) ??
-    getActiveBrowserPopupViewer(owner.browserTabId)
   const openerBrowserPageId = immediateOpenerPageId ?? owner.browserTabId
   contents.once('destroyed', () => {
+    unmarkHiddenPopupGuest(contents.id)
     if (pairedDeviceId && input.closePopup) {
       // Switch the paired client back to its opener before broadcasting removal so it never snaps elsewhere first.
       void Promise.resolve(
@@ -210,4 +201,64 @@ export function openManagedPopupChildWindow(input: {
     }
   })
   return popup.contentWebContents
+}
+
+// Web pages must not reach the filesystem; only a local page may link to local files.
+export function isLocalFileLinkFromLocalPage(guest: Electron.WebContents, url: string): boolean {
+  return url.startsWith('file:') && guest.getURL().startsWith('file:')
+}
+
+/** Answers a new-tab request as an Orca tab; false leaves opener-dependent requests to a child window. */
+export function openManagedGuestNewTabPopup(input: {
+  guest: Electron.WebContents
+  ownerContext: PopupOwnerContext | null
+  request: NewBrowserTabPopupRequest
+  observed: ObservedBrowserGuestGesture | null
+  childOpener?: Electron.WebFrameMain | null
+  tryConsumePageInitiatedTab: (rootGuestId: number) => boolean
+  isAwaitingDownloadFrom: (guestId: number, rootGuestId: number) => boolean
+  isAgentLeadingGuest: (guestId: number) => boolean
+  openLinkInOrcaTab: (
+    browserTabId: string,
+    url: string,
+    activate: boolean,
+    agentOpened: boolean
+  ) => boolean
+  forwardPopupEvent: (
+    guestId: number,
+    event: { origin: string; action: 'blocked' | 'opened-in-orca' | 'opened-external' }
+  ) => void
+}): boolean {
+  const { guest, ownerContext, request, observed, childOpener } = input
+  const newTabUrl =
+    normalizeExternalBrowserUrl(request.url) ??
+    (isLocalFileLinkFromLocalPage(guest, request.url) ? request.url : null)
+  const answersAsTab =
+    childOpener === undefined
+      ? isNewBrowserTabPopupIntent(request) && !waitsForPopupOpener(request, observed)
+      : childOpener === null && isBrowserTabPopupRequest(request)
+  if (!ownerContext || !newTabUrl || !answersAsTab) {
+    return false
+  }
+  if (!observed && !input.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
+    input.forwardPopupEvent(guest.id, { origin: safeOrigin(newTabUrl), action: 'blocked' })
+    return true
+  }
+  if (input.isAwaitingDownloadFrom(guest.id, ownerContext.rootGuestWebContentsId)) {
+    guest.downloadURL(newTabUrl)
+    return true
+  }
+  const agentOpened = observed?.byAgent !== false && input.isAgentLeadingGuest(guest.id)
+  if (
+    input.openLinkInOrcaTab(
+      ownerContext.browserTabId,
+      newTabUrl,
+      request.disposition !== 'background-tab',
+      agentOpened
+    )
+  ) {
+    input.forwardPopupEvent(guest.id, { origin: safeOrigin(newTabUrl), action: 'opened-in-orca' })
+  }
+  // A vanished renderer must not turn new-tab intent into a native popup.
+  return true
 }

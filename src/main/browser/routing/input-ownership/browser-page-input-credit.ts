@@ -1,10 +1,16 @@
-import { isRecentBrowserGuestInput } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import {
   isAgentRpcCaller,
   type RpcCallerIdentity
 } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 const RECENT_PAIRED_ECHO_MS = 300
+// Cover async OAuth/SSO iframe handshakes for paired viewers without loosening desktop external-app guards.
+const PAIRED_VIEWER_CREDIT_WINDOW_MS = 4_500
+
+function isFreshCredit(at: number, now: number): boolean {
+  const elapsed = now - at
+  return elapsed >= 0 && elapsed <= PAIRED_VIEWER_CREDIT_WINDOW_MS
+}
 
 type Runner = {
   pairedDeviceId: string | null
@@ -18,7 +24,7 @@ export class BrowserPageInputCredit {
   private readonly runnerByPageId = new Map<string, Runner>()
   private readonly recentPairedByPageId = new Map<
     string,
-    { pairedDeviceId: string; endedAt: number }
+    { pairedDeviceId: string; tabId?: string; endedAt: number }
   >()
   private readonly creditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
   // The same input, for what the page prints; opening a tab doesn't spend it.
@@ -66,8 +72,10 @@ export class BrowserPageInputCredit {
       if (this.runnerByPageId.get(browserPageId) === runner) {
         this.runnerByPageId.delete(browserPageId)
         if (runner.pairedDeviceId) {
+          const existing = this.recentPairedByPageId.get(browserPageId)
           this.recentPairedByPageId.set(browserPageId, {
             pairedDeviceId: runner.pairedDeviceId,
+            tabId: existing?.tabId,
             endedAt: this.now()
           })
         }
@@ -97,10 +105,19 @@ export class BrowserPageInputCredit {
       this.withdraw(browserTabId)
       return
     }
+    if (active?.pairedDeviceId) {
+      this.recentPairedByPageId.set(browserPageId, {
+        pairedDeviceId: active.pairedDeviceId,
+        tabId: browserTabId,
+        endedAt: now
+      })
+    } else if (recent) {
+      recent.tabId = browserTabId
+    }
     // Unconsumed credits for tabs that opened nothing would otherwise pile up.
     for (const credits of [this.creditByTabId, this.printCreditByTabId]) {
       for (const [tabId, credit] of credits) {
-        if (!isRecentBrowserGuestInput(credit.at, now)) {
+        if (!isFreshCredit(credit.at, now)) {
           credits.delete(tabId)
         }
       }
@@ -117,25 +134,28 @@ export class BrowserPageInputCredit {
   withdraw(browserTabId: string): void {
     this.creditByTabId.delete(browserTabId)
     this.printCreditByTabId.delete(browserTabId)
-    this.recentPairedByPageId.delete(browserTabId)
+    for (const [pageId, recent] of this.recentPairedByPageId) {
+      if (pageId === browserTabId || recent.tabId === browserTabId) {
+        this.recentPairedByPageId.delete(pageId)
+      }
+    }
   }
 
   /** Whose input just reached the tab, for a print it makes; a tab that input opened doesn't spend it. */
   printer(browserTabId: string): string | null {
     const credit = this.printCreditByTabId.get(browserTabId)
-    return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
+    return credit && isFreshCredit(credit.at, this.now()) ? credit.pairedDeviceId : null
   }
 
-  /** Non-consuming check for recent paired-client input on this tab. */
   peek(browserTabId: string): string | null {
     const credit = this.creditByTabId.get(browserTabId)
-    return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
+    return credit && isFreshCredit(credit.at, this.now()) ? credit.pairedDeviceId : null
   }
 
   /** Single-use, like the input gesture it accompanies: one click cannot steer a second tab. */
   consume(browserTabId: string): string | null {
     const credit = this.creditByTabId.get(browserTabId)
     this.creditByTabId.delete(browserTabId)
-    return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
+    return credit && isFreshCredit(credit.at, this.now()) ? credit.pairedDeviceId : null
   }
 }

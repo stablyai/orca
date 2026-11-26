@@ -13,6 +13,7 @@ import {
   type MobileSessionTabCloseOptions
 } from './mobile-session-tab-close-outcome'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
 import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-command-controller'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/restoration/headless-editor-tabs'
@@ -271,7 +272,8 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       const pageId = tab.browserPageId
       if (
         pageId &&
-        (getRuntimeBrowserPageRegistry(this).getPage(pageId) || pageId.startsWith('popup-'))
+        (getRuntimeBrowserPageRegistry(this).getPage(pageId) ||
+          browserPopupPageWebContentsId(pageId) !== null)
       ) {
         await this.browserTabClose({ worktree: `id:${worktreeId}`, page: pageId })
       } else if (this.isOffscreenMobileSessionBrowserTab(snapshot, tab)) {

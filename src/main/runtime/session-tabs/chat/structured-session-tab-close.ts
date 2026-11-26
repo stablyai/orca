@@ -1,4 +1,5 @@
 import { retireMobileSessionTabSelection } from '../layout/mobile-session-tab-selection'
+import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../restoration/mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
@@ -188,7 +189,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       return
     }
     const { targetGroupId, focusesHost } = options
-    const isPopupPage = browserPageId.startsWith('popup-')
+    const isPopupPage = browserPopupPageWebContentsId(browserPageId) !== null
     // Client-placed and popup pages live outside offscreen backing.
     if (
       !this.offscreenBrowserBackend &&

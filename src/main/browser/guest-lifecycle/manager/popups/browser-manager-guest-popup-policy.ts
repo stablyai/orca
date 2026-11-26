@@ -8,9 +8,6 @@ import {
   type ObservedBrowserGuestGesture
 } from '../../input/browser-guest-input-gesture'
 import {
-  isNewBrowserTabPopupIntent,
-  isBrowserTabPopupRequest,
-  waitsForPopupOpener,
   normalizeBrowserPopupUrl,
   type NewBrowserTabPopupRequest
 } from '../../popups/browser-popup-new-tab-intent'
@@ -25,13 +22,18 @@ import type {
 } from '../../popups/browser-popup-ownership'
 import {
   allowManagedGuestPopupWindow,
-  isPopupShownToPairedViewers,
+  isLocalFileLinkFromLocalPage,
+  openManagedGuestNewTabPopup,
   openManagedPopupChildWindow,
-  publishBrowserPopupToViewers
+  publishBrowserPopupToViewers,
+  resolvePopupViewerTarget,
+  type PopupViewerTarget
 } from '../../popups/browser-viewer-popup-publication'
 import { watchBrowserPopupSiteFrameRemoval } from '../navigation/browser-guest-frame-user-agent-demand'
 import { isBrowserRouteGuestPopup } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { requestBrowserExternalAppLaunch } from '../../prompts/browser-external-app-launch'
+
+export { isLocalFileLinkFromLocalPage }
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   private serverPagePopupPresenter: ((popup: ServerPagePopupPresentation) => void) | null = null
@@ -39,23 +41,21 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     null
   protected serverPageLinkTabPresenter: ((link: ServerPageLinkTabPresentation) => void) | null =
     null
+  private readonly pendingPopupViewerTargetByOpener = new WeakMap<
+    Electron.WebContents,
+    PopupViewerTarget
+  >()
 
-  setServerPagePopupPresenter(
-    presenter: ((popup: ServerPagePopupPresentation) => void) | null
-  ): void {
-    this.serverPagePopupPresenter = presenter
+  setServerPagePopupPresenter(fn: typeof this.serverPagePopupPresenter): void {
+    this.serverPagePopupPresenter = fn
   }
 
-  setServerPagePopupCloser(
-    closer: ((popup: ServerPagePopupClosure) => Promise<void> | void) | null
-  ): void {
-    this.serverPagePopupCloser = closer
+  setServerPagePopupCloser(fn: typeof this.serverPagePopupCloser): void {
+    this.serverPagePopupCloser = fn
   }
 
-  setServerPageLinkTabPresenter(
-    presenter: ((link: ServerPageLinkTabPresentation) => void) | null
-  ): void {
-    this.serverPageLinkTabPresenter = presenter
+  setServerPageLinkTabPresenter(fn: typeof this.serverPageLinkTabPresenter): void {
+    this.serverPageLinkTabPresenter = fn
   }
 
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
@@ -71,11 +71,14 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     })
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Popups inherit ownership without replacing the primary guest registration.
+      const viewerTarget = this.pendingPopupViewerTargetByOpener.get(guest)
+      this.pendingPopupViewerTargetByOpener.delete(guest)
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
         this.attachPopupGuestPolicies(
           window.webContents,
           this.resolvePopupOwnerContext(guest.id),
-          this.pageIdForGuest(guest.id)
+          this.pageIdForGuest(guest.id),
+          viewerTarget
         )
         this.inheritAgentLead(guest.id, window.webContents.id)
       }
@@ -91,14 +94,15 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const browserTabId = this.resolvePopupOwnerContext(guest.id)?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
 
-      // A server page's popup (or one opened by a paired mobile viewer) reaches its viewer as a tab, never flashing on the host screen.
-      // Hidden, not offscreen: Electron never sizes or paints an offscreen window.open child (electron/electron#55565).
-      const shownToViewers = this.isPopupShownToViewers(guest.id, browserTabId, observed)
+      // Decide once per open: hidden, not offscreen (Electron never paints offscreen window.open children).
+      const viewerTarget = this.resolveRoutePopupViewerTarget(guest.id, observed)
+      const shownToViewers = viewerTarget.shownToViewers
       // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
       const showWhenAppActive = !shownToViewers && observed?.byAgent !== false
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
       if (browserTabId && canOpenAsChild) {
+        this.pendingPopupViewerTargetByOpener.set(guest, viewerTarget)
         return allowManagedGuestPopupWindow({
           opener: guest,
           url,
@@ -108,10 +112,15 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           shownToViewers,
           showWhenAppActive,
           canPresent: () => Boolean(this.resolvePopupOwnerContext(guest.id)),
-          tryOpenAsTabWithoutOpener: (childOpener) =>
-            this.openNewTabPopup(guest, request, observed, childOpener),
+          tryOpenAsTabWithoutOpener: (childOpener) => {
+            const openedAsTab = this.openNewTabPopup(guest, request, observed, childOpener)
+            if (openedAsTab) {
+              this.pendingPopupViewerTargetByOpener.delete(guest)
+            }
+            return openedAsTab
+          },
           createChildWindow: (options) =>
-            this.createPopupChildWindowWithOriginBar(guest, url, options)
+            this.createPopupChildWindowWithOriginBar(guest, url, options, viewerTarget)
         })
       } else if (externalUrl && !postBody && observed?.byAgent === false) {
         // The OS browser takes the foreground, so only the desktop user's own click opens it. Redact Kagi's bearer token first.
@@ -140,53 +149,26 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     }
   }
 
-  /**
-   * Answers a new-tab request as an Orca tab; false leaves opener-dependent requests to a child window.
-   * Once Chromium has created the child, pass its `childOpener`: only a child without one becomes a tab.
-   */
   openNewTabPopup(
     guest: Electron.WebContents,
     request: NewBrowserTabPopupRequest,
     observed: ObservedBrowserGuestGesture | null,
     childOpener?: Electron.WebFrameMain | null
   ): boolean {
-    const ownerContext = this.resolvePopupOwnerContext(guest.id)
-    const newTabUrl =
-      normalizeExternalBrowserUrl(request.url) ??
-      (isLocalFileLinkFromLocalPage(guest, request.url) ? request.url : null)
-    const answersAsTab =
-      childOpener === undefined
-        ? isNewBrowserTabPopupIntent(request) && !waitsForPopupOpener(request, observed)
-        : childOpener === null && isBrowserTabPopupRequest(request)
-    if (!ownerContext || !newTabUrl || !answersAsTab) {
-      return false
-    }
-    // Scripted opens persist as tabs, so opens without observed input consume a budget.
-    if (!observed && !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
-      this.forwardOrQueuePopupEvent(guest.id, { origin: safeOrigin(newTabUrl), action: 'blocked' })
-      return true
-    }
-    // A new tab's download would miss the agent's `download` claim, so save the link here.
-    if (this.isAwaitingDownloadFrom(guest.id, ownerContext.rootGuestWebContentsId)) {
-      guest.downloadURL(newTabUrl)
-      return true
-    }
-    const agentOpened = observed?.byAgent !== false && this.isAgentLeadingGuest(guest.id)
-    if (
-      this.openLinkInOrcaTab(
-        ownerContext.browserTabId,
-        newTabUrl,
-        request.disposition !== 'background-tab',
-        agentOpened
-      )
-    ) {
-      this.forwardOrQueuePopupEvent(guest.id, {
-        origin: safeOrigin(newTabUrl),
-        action: 'opened-in-orca'
-      })
-    }
-    // A vanished renderer must not turn new-tab intent into a native popup.
-    return true
+    return openManagedGuestNewTabPopup({
+      guest,
+      ownerContext: this.resolvePopupOwnerContext(guest.id),
+      request,
+      observed,
+      childOpener,
+      tryConsumePageInitiatedTab: (rootGuestId) => this.tryConsumePageInitiatedTab(rootGuestId),
+      isAwaitingDownloadFrom: (guestId, rootGuestId) =>
+        this.isAwaitingDownloadFrom(guestId, rootGuestId),
+      isAgentLeadingGuest: (guestId) => this.isAgentLeadingGuest(guestId),
+      openLinkInOrcaTab: (tabId, url, activate, agentOpened) =>
+        this.openLinkInOrcaTab(tabId, url, activate, agentOpened),
+      forwardPopupEvent: (guestId, event) => this.forwardOrQueuePopupEvent(guestId, event)
+    })
   }
 
   requestExternalAppLaunch(
@@ -216,48 +198,52 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
   private attachPopupGuestPolicies(
     contents: Electron.WebContents,
     owner: PopupOwnerContext | null,
-    immediateOpenerPageId?: string
+    immediateOpenerPageId?: string,
+    viewerTarget?: PopupViewerTarget
   ): void {
     const fresh = !this.policyAttachedGuestIds.has(contents.id)
     this.attachGuestPolicies(contents, owner)
-    if (fresh) {
-      watchBrowserPopupSiteFrameRemoval(contents)
-      if (owner && this.isPopupShownToViewers(contents.id, owner.browserTabId)) {
-        this.publishServerPagePopup(contents, owner, immediateOpenerPageId)
-      }
+    if (!fresh) {
+      return
+    }
+    watchBrowserPopupSiteFrameRemoval(contents)
+    if (owner && viewerTarget?.shownToViewers) {
+      this.publishServerPagePopup(
+        contents,
+        owner,
+        viewerTarget.pairedDeviceId,
+        immediateOpenerPageId
+      )
     }
   }
 
-  isRoutePopupShownToViewers(
+  resolveRoutePopupViewerTarget(
     openerWebContentsId: number,
     observed?: ObservedBrowserGuestGesture | null
-  ): boolean {
-    const browserTabId = this.resolvePopupOwnerContext(openerWebContentsId)?.browserTabId ?? null
-    return this.isPopupShownToViewers(openerWebContentsId, browserTabId, observed)
+  ): PopupViewerTarget {
+    return resolvePopupViewerTarget({
+      isListedAsServerPage: this.isListedAsServerPage(openerWebContentsId),
+      browserTabId: this.resolvePopupOwnerContext(openerWebContentsId)?.browserTabId ?? null,
+      immediatePageId: this.pageIdForGuest(openerWebContentsId),
+      peekCreditDeviceId: (tabId) => this.pageInputCredit.peek(tabId),
+      observed
+    })
   }
 
   publishRouteGuestPopup(
     openerGuest: Electron.WebContents,
-    popupContents: Electron.WebContents
+    popupContents: Electron.WebContents,
+    viewerTarget?: PopupViewerTarget
   ): void {
     const owner = this.resolvePopupOwnerContext(openerGuest.id)
-    if (owner && this.isPopupShownToViewers(openerGuest.id, owner.browserTabId)) {
-      this.publishServerPagePopup(popupContents, owner, this.pageIdForGuest(openerGuest.id))
+    if (owner && viewerTarget?.shownToViewers) {
+      this.publishServerPagePopup(
+        popupContents,
+        owner,
+        viewerTarget.pairedDeviceId,
+        this.pageIdForGuest(openerGuest.id)
+      )
     }
-  }
-
-  private isPopupShownToViewers(
-    guestWebContentsId: number,
-    browserTabId: string | null,
-    observed?: ObservedBrowserGuestGesture | null
-  ): boolean {
-    return isPopupShownToPairedViewers({
-      isListedAsServerPage: this.isListedAsServerPage(guestWebContentsId),
-      browserTabId,
-      immediatePageId: this.pageIdForGuest(guestWebContentsId),
-      peekCreditDeviceId: (tabId) => this.pageInputCredit.peek(tabId),
-      observed
-    })
   }
 
   /** An agent's command drives the guest's page on this desktop; a Server page is shown to its viewers instead. */
@@ -287,14 +273,16 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
   private publishServerPagePopup(
     contents: Electron.WebContents,
     owner: PopupOwnerContext,
+    pairedDeviceId: string | null,
     immediateOpenerPageId?: string
   ): void {
+    this.pageInputCredit.consume(owner.browserTabId)
     publishBrowserPopupToViewers({
       contents,
       owner,
       worktreeId: this.worktreeIdByTabId.get(owner.browserTabId),
       immediateOpenerPageId,
-      consumePairedDeviceId: (browserTabId) => this.pageInputCredit.consume(browserTabId),
+      pairedDeviceId,
       presentPopup: this.serverPagePopupPresenter,
       closePopup: this.serverPagePopupCloser,
       notifyGuestStateChanged: (worktreeId) =>
@@ -305,7 +293,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
   protected createPopupChildWindowWithOriginBar(
     openerGuest: Electron.WebContents,
     targetUrl: string,
-    options: PopupChildWindowOptions
+    options: PopupChildWindowOptions,
+    viewerTarget?: PopupViewerTarget
   ): Electron.WebContents {
     return openManagedPopupChildWindow({
       openerGuest,
@@ -319,7 +308,13 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         if (!owner) {
           return false
         }
-        this.attachPopupGuestPolicies(contents, owner, this.pageIdForGuest(openerGuest.id))
+        this.pendingPopupViewerTargetByOpener.delete(openerGuest)
+        this.attachPopupGuestPolicies(
+          contents,
+          owner,
+          this.pageIdForGuest(openerGuest.id),
+          viewerTarget
+        )
         this.inheritAgentLead(openerGuest.id, contents.id)
         return true
       },
@@ -328,9 +323,4 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       emitPageEvent: (tabId, event) => this.pageEvents.emit(tabId, event)
     })
   }
-}
-
-// Web pages must not reach the filesystem; only a local page may link to local files.
-export function isLocalFileLinkFromLocalPage(guest: Electron.WebContents, url: string): boolean {
-  return url.startsWith('file:') && guest.getURL().startsWith('file:')
 }

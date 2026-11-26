@@ -16,8 +16,9 @@ export type ScreencastWindowHostHold = {
 export function holdScreencastWindowHost(
   guest: {
     getType(): string
-    isDestroyed?: () => boolean
-    isOffscreen?: () => boolean
+    isDestroyed(): boolean
+    isOffscreen(): boolean
+    // Electron exposes these capturer methods at runtime though its WebContents d.ts omits them.
     incrementCapturerCount?: (
       size?: { width: number; height: number },
       stayHidden?: boolean
@@ -31,9 +32,9 @@ export function holdScreencastWindowHost(
   let heldStayHiddenCapturer = false
   if (
     guest.getType() !== 'webview' &&
-    guest.isOffscreen?.() !== true &&
-    typeof guest.incrementCapturerCount === 'function' &&
-    typeof guest.decrementCapturerCount === 'function'
+    !guest.isOffscreen() &&
+    guest.incrementCapturerCount &&
+    guest.decrementCapturerCount
   ) {
     try {
       guest.incrementCapturerCount(undefined, true)
@@ -46,7 +47,7 @@ export function holdScreencastWindowHost(
     }
     heldStayHiddenCapturer = false
     try {
-      if (guest.isDestroyed?.() !== true) {
+      if (!guest.isDestroyed()) {
         guest.decrementCapturerCount?.(true)
       }
     } catch {}

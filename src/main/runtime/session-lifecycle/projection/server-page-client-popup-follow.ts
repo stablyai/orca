@@ -62,6 +62,46 @@ export async function returnClientToPopupOpener(
   runtime.applyTabNavigation(snapshot, openerTab.id, 'caller', popup.pairedDeviceId, true)
 }
 
+export function waitForGraphSyncValue<T>(
+  graphSyncCallbacks: (() => void)[],
+  read: () => T | undefined,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<T | undefined> {
+  const immediate = read()
+  if (immediate !== undefined || signal?.aborted) {
+    return Promise.resolve(signal?.aborted ? undefined : immediate)
+  }
+  return new Promise<T | undefined>((resolve) => {
+    const cleanup = (): void => {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
+      const idx = graphSyncCallbacks.indexOf(check)
+      if (idx !== -1) {
+        graphSyncCallbacks.splice(idx, 1)
+      }
+    }
+    const check = (): void => {
+      const found = read()
+      if (found === undefined) {
+        return
+      }
+      cleanup()
+      resolve(found)
+    }
+    const onAbort = (): void => {
+      cleanup()
+      resolve(undefined)
+    }
+    const timeout = setTimeout(() => {
+      cleanup()
+      resolve(read())
+    }, timeoutMs)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    graphSyncCallbacks.push(check)
+  })
+}
+
 export async function followOpenedRendererLinkTabForClient(
   runtime: {
     getStoredSnapshot(worktreeId: string): RuntimeMobileSessionTabsSnapshot | undefined
@@ -88,35 +128,12 @@ export async function followOpenedRendererLinkTabForClient(
           (tab): tab is RuntimeMobileSessionBrowserTab =>
             tab.type === 'browser' && !knownTabIds.has(tab.id)
         ) ?? []
-    return candidates.find((tab) => tab.url === link.url) ?? candidates[0]
+    return (
+      candidates.find((tab) => tab.url === link.url) ??
+      (candidates.length === 1 ? candidates[0] : undefined)
+    )
   }
-  const added = await new Promise<RuntimeMobileSessionBrowserTab | undefined>((resolve) => {
-    const immediate = findAddedBrowserTab()
-    if (immediate) {
-      resolve(immediate)
-      return
-    }
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      const idx = runtime.graphSyncCallbacks.indexOf(check)
-      if (idx !== -1) {
-        runtime.graphSyncCallbacks.splice(idx, 1)
-      }
-    }
-    const check = (): void => {
-      const found = findAddedBrowserTab()
-      if (!found) {
-        return
-      }
-      cleanup()
-      resolve(found)
-    }
-    const timeout = setTimeout(() => {
-      cleanup()
-      resolve(findAddedBrowserTab())
-    }, 3_000)
-    runtime.graphSyncCallbacks.push(check)
-  })
+  const added = await waitForGraphSyncValue(runtime.graphSyncCallbacks, findAddedBrowserTab, 3_000)
   if (!added) {
     return
   }

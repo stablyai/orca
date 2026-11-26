@@ -17,6 +17,7 @@ import type {
   FollowMobileBrowserTabOptions,
   RuntimeBrowserCommandHost
 } from '../commands/browser-command-contracts'
+import { waitForGraphSyncValue } from '../../session-lifecycle/projection/server-page-client-popup-follow'
 
 export type MobileServerTabCreateInput = [
   {
@@ -39,8 +40,7 @@ export async function openUrlForMobileOrClient(options: {
     paneKey?: string
     onlyWhenMobileViewing?: boolean
   }
-  canCreateServerTab: boolean
-  createServerTab: (...args: MobileServerTabCreateInput) => Promise<{ browserPageId: string }>
+  createServerTab?: (...args: MobileServerTabCreateInput) => Promise<{ browserPageId: string }>
   closeServerTab?: (browserPageId: string, worktree: string) => Promise<void>
   signal?: AbortSignal
 }): Promise<{ browserPageId: string | null }> {
@@ -50,12 +50,12 @@ export async function openUrlForMobileOrClient(options: {
       ? options.params.paneKey
       : undefined
   const worktree =
-    paneKey && options.canCreateServerTab
+    paneKey && options.createServerTab
       ? await options.host.resolveBrowserWorkspace(options.params.worktree)
       : undefined
   const mobileViewing =
     paneKey !== undefined && options.host.hasMobileTerminalViewer?.(paneKey, worktree?.id) === true
-  if (mobileViewing && options.canCreateServerTab && worktree) {
+  if (mobileViewing && options.createServerTab && worktree) {
     const created = await options.createServerTab(
       {
         url: options.params.url,
@@ -120,10 +120,14 @@ export function activeMobileViewerClientIdsForPane(
           .map((s) => s.clientId)
       : []
   const tabId = parsed?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
-  if (ptyViewers.length > 0 || !worktreeId || (!tabId && !ptyId) || !source.getMobileListenerIds) {
+  if (!worktreeId || !source.getMobileListenerIds) {
     return ptyViewers
   }
-  // Chat UI pauses terminal.subscribe; still route when a connected phone has this pane's tab selected.
+  const listenerIds = source.getMobileListenerIds(worktreeId)
+  if (listenerIds.length === 0 || (!tabId && !ptyId)) {
+    return []
+  }
+  // Resolve in the pairedDeviceId namespace used by session.tabs navigation so multi-device targeting stays isolated.
   const snapshot = source.getMobileSessionSnapshot?.(worktreeId)
   const matchingTabIds = new Set(
     snapshot?.tabs
@@ -135,7 +139,11 @@ export function activeMobileViewerClientIdsForPane(
       )
       .map((t) => t.id) ?? (tabId ? [tabId] : [])
   )
-  return source.getMobileListenerIds(worktreeId).filter((clientId) => {
+  const ptyViewerSet = new Set(ptyViewers)
+  return listenerIds.filter((clientId) => {
+    if (ptyViewerSet.has(clientId)) {
+      return true
+    }
     const activeId = source.getClientActiveTabId?.(clientId, worktreeId) ?? snapshot?.activeTabId
     return Boolean(activeId && matchingTabIds.has(activeId))
   })
@@ -149,15 +157,8 @@ export function selectTargetMobileNavigationIds(
   if (!paneViewerClientIds) {
     return uniqueListeners
   }
-  // If the initiating phone left the pane while tab creation was in flight, do not broadcast to other phones.
-  if (paneViewerClientIds.length === 0) {
-    return []
-  }
   const viewerSet = new Set(paneViewerClientIds)
-  const matched = uniqueListeners.filter((id) => viewerSet.has(id))
-  // Terminal subscribers key by deviceToken while session.tabs keys by pairedDeviceId;
-  // fall back to the worktree's mobile listeners when those ID namespaces differ.
-  return matched.length > 0 ? matched : uniqueListeners
+  return uniqueListeners.filter((id) => viewerSet.has(id))
 }
 
 export function createMobileBrowserOpenRuntimeHost(runtime: {
@@ -253,34 +254,7 @@ export async function followCreatedBrowserTabOnMobile(
   let tab = findBrowserTab()
   if (!tab && !runtime.hasOffscreenBrowser) {
     // Desktop renderer publishes the new browser tab asynchronously via syncWindowGraph.
-    tab = await new Promise<RuntimeMobileSessionBrowserTab | undefined>((resolve) => {
-      const cleanup = (): void => {
-        clearTimeout(timeout)
-        signal?.removeEventListener('abort', onAbort)
-        const idx = runtime.graphSyncCallbacks.indexOf(check)
-        if (idx !== -1) {
-          runtime.graphSyncCallbacks.splice(idx, 1)
-        }
-      }
-      const check = (): void => {
-        const found = findBrowserTab()
-        if (!found) {
-          return
-        }
-        cleanup()
-        resolve(found)
-      }
-      const onAbort = (): void => {
-        cleanup()
-        resolve(undefined)
-      }
-      const timeout = setTimeout(() => {
-        cleanup()
-        resolve(findBrowserTab())
-      }, 3_000)
-      signal?.addEventListener('abort', onAbort, { once: true })
-      runtime.graphSyncCallbacks.push(check)
-    })
+    tab = await waitForGraphSyncValue(runtime.graphSyncCallbacks, findBrowserTab, 3_000, signal)
   }
   if (!tab || signal?.aborted) {
     return false

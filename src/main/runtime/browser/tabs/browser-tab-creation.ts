@@ -240,7 +240,6 @@ export class RuntimeBrowserTabCreation {
     return openUrlForMobileOrClient({
       host: this.host,
       params,
-      canCreateServerTab: true,
       signal: options?.signal,
       createServerTab: (tabParams, caller) => this.browserTabCreate(tabParams, caller),
       closeServerTab: this.closeServerTab

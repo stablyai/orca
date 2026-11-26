@@ -35,9 +35,14 @@ describe('BrowserPageInputCredit print attribution', () => {
     expect(credit.printer('tab')).toBeNull()
 
     // Delayed cross-origin iframe input echoes arriving right after during() keep the viewer's credit.
-    await credit.during('tab', viewer, async () => {})
+    await credit.during('popup-99', viewer, async () => {})
     now += 50
-    credit.creditInput('tab', 'tab')
+    credit.creditInput('tab', 'popup-99')
     expect(credit.peek('tab')).toBe('desk-a')
+
+    // Withdrawing the tab clears delayed popup-page echo credit too.
+    credit.withdraw('tab')
+    credit.creditInput('tab', 'popup-99')
+    expect(credit.peek('tab')).toBeNull()
   })
 })

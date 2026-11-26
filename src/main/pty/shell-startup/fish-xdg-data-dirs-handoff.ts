@@ -66,15 +66,15 @@ function __orca_fish_xdg_handoff
 ${FISH_CWD_REPORT_BLOCK}
     function __orca_define_codex --on-event fish_prompt
         functions -e __orca_define_codex
-        if set -q ORCA_OPEN_SHIM_DIR; and test -n "$ORCA_OPEN_SHIM_DIR"
-            if not contains -- "$ORCA_OPEN_SHIM_DIR" $PATH
-                set -gx PATH "$ORCA_OPEN_SHIM_DIR" $PATH
-            else if test "$PATH[1]" != "$ORCA_OPEN_SHIM_DIR"
+        if set -q ORCA_CLI_BIN_DIR; and test -n "$ORCA_CLI_BIN_DIR"
+            if not contains -- "$ORCA_CLI_BIN_DIR" $PATH
+                set -gx PATH "$ORCA_CLI_BIN_DIR" $PATH
+            else if test "$PATH[1]" != "$ORCA_CLI_BIN_DIR"
                 set -l rest
                 for entry in $PATH
-                    test "$entry" != "$ORCA_OPEN_SHIM_DIR"; and set -a rest "$entry"
+                    test "$entry" != "$ORCA_CLI_BIN_DIR"; and set -a rest "$entry"
                 end
-                set -gx PATH "$ORCA_OPEN_SHIM_DIR" $rest
+                set -gx PATH "$ORCA_CLI_BIN_DIR" $rest
             end
         end
 ${MANAGED_DATA_ACCOUNT_FISH_RESTORE}

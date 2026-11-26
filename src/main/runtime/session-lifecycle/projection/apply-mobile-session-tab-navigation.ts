@@ -58,16 +58,28 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   protected abstract getPtyRecordForPaneKey(paneKey: string): { ptyId: string } | null
   protected abstract getMobileDisplayMode(ptyId: string): 'auto' | 'desktop'
 
-  private readonly popupClientRuntime = bindServerPagePopupClientRuntime({
-    getActiveTabId: (c, id) => this.clientSessionTabSelections.getActiveTabId(c, id),
-    getStoredSnapshot: (id) => this.mobileSessionTabsByWorktree.get(id),
+  private readonly mobileTabFollowRuntime = {
+    getActiveTabId: (c: string, id: string) =>
+      this.clientSessionTabSelections.getActiveTabId(c, id),
+    getStoredSnapshot: (id: string) => this.mobileSessionTabsByWorktree.get(id),
     graphSyncCallbacks: this.graphSyncCallbacks,
-    getMobileSessionTabsForWorktree: (id) =>
+    getMobileSessionTabsForWorktree: (id: string) =>
       this.getMobileSessionTabsForWorktree(id, undefined, { includeAgentSenders: false }),
-    applyTabNavigation: (s, t, n, c, f) => void this.applyMobileSessionTabNavigation(s, t, n, c, f)
-  })
+    applyTabNavigation: (
+      s: RuntimeMobileSessionTabsResult,
+      t: string,
+      n: RuntimeNavigationTarget,
+      c: string,
+      f: boolean
+    ) => void this.applyMobileSessionTabNavigation(s, t, n, c, f)
+  }
+
+  private readonly popupClientRuntime = bindServerPagePopupClientRuntime(
+    this.mobileTabFollowRuntime
+  )
 
   private readonly mobileBrowserOpenHost = createMobileBrowserOpenRuntimeHost({
+    ...this.mobileTabFollowRuntime,
     getLeafPtyId: (t, l) => this.leaves.get(this.getLeafKey(t, l))?.ptyId,
     getPanePtyId: (k) => this.getPtyRecordForPaneKey(k)?.ptyId,
     getDisplayMode: (id) => this.getMobileDisplayMode(id),
@@ -77,15 +89,11 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       this.selectMobileSessionTabsListeners(id)
         .filter((s) => s.clientKind === 'mobile' && Boolean(s.clientNavigationId))
         .map((s) => s.clientNavigationId!),
-    getClientActiveTabId: (c, id) => this.clientSessionTabSelections.getActiveTabId(c, id),
+    getClientActiveTabId: this.mobileTabFollowRuntime.getActiveTabId,
     hasOffscreenBrowser: () =>
       !this.hasAuthoritativeWindow() && Boolean(this.offscreenBrowserBackend),
     hydrateHeadlessTabs: (id) => this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id),
-    getMobileSessionSnapshot: (id) => this.mobileSessionTabsByWorktree.get(id),
-    graphSyncCallbacks: this.graphSyncCallbacks,
-    getMobileSessionTabsForWorktree: (id) =>
-      this.getMobileSessionTabsForWorktree(id, undefined, { includeAgentSenders: false }),
-    applyTabNavigation: (s, t, n, c, f) => void this.applyMobileSessionTabNavigation(s, t, n, c, f)
+    getMobileSessionSnapshot: this.mobileTabFollowRuntime.getStoredSnapshot
   })
 
   closeServerPagePopupForClient(popup: ServerPagePopupClosure): Promise<void> {

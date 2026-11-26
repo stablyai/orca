@@ -5,6 +5,7 @@ import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quo
 import { isPathInsideOrEqual } from '../command-paths/cli-install-path-format'
 
 const SHIM_DIR_NAME = 'macos-open-shim'
+const ensuredShimKeys = new Set<string>()
 
 async function writeExecutableIfChanged(filePath: string, content: string): Promise<void> {
   let existing: string | null = null
@@ -81,6 +82,7 @@ export async function ensureMacosTerminalOpenShimDir(options: {
         await writeExecutableIfChanged(join(launcherDir, 'open'), script)
       }
     }
+    ensuredShimKeys.add(`${options.userDataPath}\0${options.cliLauncher ?? ''}`)
   } catch {
     return null
   }
@@ -96,28 +98,19 @@ export function applyMacosTerminalOpenShimEnv(
     platform?: NodeJS.Platform
   }
 ): string | null {
-  const previousShimDir = env.ORCA_OPEN_SHIM_DIR
-  delete env.ORCA_OPEN_SHIM_DIR
-  const platform = options.platform ?? process.platform
-  if (options.isWsl || platform !== 'darwin') {
-    if (previousShimDir && env.PATH) {
-      env.PATH = env.PATH.split(':')
-        .filter((entry) => entry.length > 0 && entry !== previousShimDir)
-        .join(':')
-    }
+  if (options.isWsl || (options.platform ?? process.platform) !== 'darwin') {
     return null
   }
   const shimDir = join(options.userDataPath, SHIM_DIR_NAME)
-  void ensureMacosTerminalOpenShimDir(options)
-  env.ORCA_OPEN_SHIM_DIR = shimDir
-  if (options.cliLauncher) {
-    // Persistent orcad daemons across app updates restore ORCA_CLI_BIN_DIR ahead of /usr/bin.
+  if (!ensuredShimKeys.has(`${options.userDataPath}\0${options.cliLauncher ?? ''}`)) {
+    void ensureMacosTerminalOpenShimDir(options)
+  }
+  if (options.cliLauncher || !env.ORCA_CLI_BIN_DIR) {
+    // Login shell PATH restores (POSIX and fish) and persistent orcad daemons restore ORCA_CLI_BIN_DIR ahead of /usr/bin.
     env.ORCA_CLI_BIN_DIR = shimDir
   }
   const currentPath = env.PATH ?? process.env.PATH ?? ''
-  const entries = currentPath
-    .split(':')
-    .filter((entry) => entry.length > 0 && entry !== shimDir && entry !== previousShimDir)
+  const entries = currentPath.split(':').filter((entry) => entry.length > 0 && entry !== shimDir)
   env.PATH = [shimDir, ...entries].join(':')
   if (env.BROWSER === undefined && process.env.BROWSER === undefined) {
     // Route $BROWSER-aware CLIs (e.g. aws sso, gh) through the same mobile-aware open shim.

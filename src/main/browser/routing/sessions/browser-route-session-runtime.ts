@@ -92,10 +92,10 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId),
   isAgentCommandShownHere: (webContentsId) => browserManager.isAgentCommandShownHere(webContentsId),
   isPersonCommandRunning: (webContentsId) => browserManager.isPersonCommandRunning(webContentsId),
-  isPopupShownToViewers: (webContentsId, observed) =>
-    browserManager.isRoutePopupShownToViewers(webContentsId, observed),
-  popupOpened: (opener, popupContents) =>
-    browserManager.publishRouteGuestPopup(opener, popupContents)
+  resolvePopupViewerTarget: (webContentsId, observed) =>
+    browserManager.resolveRoutePopupViewerTarget(webContentsId, observed),
+  popupOpened: (opener, popupContents, viewerTarget) =>
+    browserManager.publishRouteGuestPopup(opener, popupContents, viewerTarget)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 
