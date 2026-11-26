@@ -24,6 +24,9 @@ import { createNonSecureContextUuid } from '../../../../../../shared/identifiers
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { customAcpDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/custom-acp-default-agent'
+import { launchCustomAcpAgentChat } from '@/lib/agent-session/launch/new-tab/launch-custom-acp-agent-chat'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 
 type DefaultChatHost = { target: AgentDetectionTarget; preferences: AgentLaunchPreferences }
 
@@ -76,6 +79,19 @@ export function openDefaultAgentChatInEmptyWorkspace(
   initialCwd?: string
 ): { primaryTabId: string | null } | null {
   const state = useAppStore.getState()
+  // A custom default needs no detected CLI: its command is the chat program.
+  const custom = customAcpDefaultAgentForWorktree(state, worktreeId)
+  if (custom) {
+    const opened = launchCustomAcpAgentChat({
+      agent: custom.id,
+      worktreeId,
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      onHostDeclined: () => ({ opened: seedShell() })
+    })
+    return opened && !('refused' in opened)
+      ? { primaryTabId: opened.surface.kind === 'local-chat' ? opened.surface.tabId : null }
+      : null
+  }
   const host = defaultChatHost(state, worktreeId)
   if (!host) {
     return null

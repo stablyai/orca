@@ -2,7 +2,14 @@
 
 import React, { useCallback } from 'react'
 import { Bot } from 'lucide-react'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut
+} from '@/components/ui/dropdown-menu'
+import { useAppStore } from '@/store/index'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { customAcpDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/custom-acp-default-agent'
 import { useTranslate } from '@/i18n/use-translate'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { launchCustomAcpAgentChat } from '@/lib/agent-session/launch/new-tab/launch-custom-acp-agent-chat'
@@ -54,6 +61,11 @@ export function CustomAcpAgentMenuItems({
 }): React.JSX.Element {
   const t = useTranslate()
   const launch = useCustomAcpAgentMenuLaunch(target, disabled)
+  // New Agent's shortcut opens the default, so its row shows the chord as a built-in default does.
+  const defaultId = useAppStore(
+    (state) => customAcpDefaultAgentForWorktree(state, target.worktreeId)?.id ?? null
+  )
+  const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   return (
     <>
       <DropdownMenuSeparator />
@@ -78,6 +90,9 @@ export function CustomAcpAgentMenuItems({
               ? t('agentMenu.customAcpAgent.missing', 'Command not found')
               : t('agentMenu.customAcpAgent.badge', 'ACP')}
           </span>
+          {newAgentShortcut !== null && row.agent === defaultId ? (
+            <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
       ))}
     </>

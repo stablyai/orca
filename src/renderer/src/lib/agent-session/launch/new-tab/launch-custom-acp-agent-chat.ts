@@ -6,6 +6,7 @@ import { createNonSecureContextUuid } from '../../../../../../shared/identifiers
 import type { CustomAcpAgentId } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
+import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 
 export function launchCustomAcpAgentChat(args: {
   agent: CustomAcpAgentId
@@ -13,6 +14,8 @@ export function launchCustomAcpAgentChat(args: {
   executionHostId: ExecutionHostId
   groupId?: string
   focusIntent?: NativeChatComposerFocusIntent
+  /** What opens instead when the host declines, such as an empty workspace's shell. */
+  onHostDeclined?: () => StructuredLaunchTerminal
 }): ReturnType<typeof launchStructuredAgentFromNewTab> {
   const plan = adoptAgentSessionLaunchVerdict({
     route: 'structured-native-chat',
@@ -27,6 +30,7 @@ export function launchCustomAcpAgentChat(args: {
     worktreeId: args.worktreeId,
     ...(args.groupId ? { groupId: args.groupId } : {}),
     ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
+    ...(args.onHostDeclined ? { onHostDeclined: args.onHostDeclined } : {}),
     // The chat itself says why its host declined; there is no terminal to open instead.
     openTerminal: () => ({ refused: { delivered: false, failureNotified: false } })
   })

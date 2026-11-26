@@ -12,6 +12,8 @@ import {
   type AgentTabLaunchContext
 } from '../../../lib/agent-session/launch/pane/agent-tab-launch-context'
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
+import { launchCustomAcpAgentChat } from '@/lib/agent-session/launch/new-tab/launch-custom-acp-agent-chat'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 
 function launchAgentTab(
   worktreeId: string,
@@ -31,10 +33,24 @@ function launchAgentTab(
 /** Launch a resolved new-agent-tab shortcut in the pane it was pressed in, waiting on detection if needed. */
 export function launchAgentTabShortcut(
   worktreeId: string,
-  { agent, pendingAgent }: Pick<TerminalAgentTabShortcut, 'agent' | 'pendingAgent'>,
+  {
+    agent,
+    pendingAgent,
+    customAgent
+  }: Pick<TerminalAgentTabShortcut, 'agent' | 'pendingAgent' | 'customAgent'>,
   isTargetCurrent: () => boolean
 ): void {
   const context = captureAgentTabLaunchContext(worktreeId)
+  if (customAgent) {
+    launchCustomAcpAgentChat({
+      agent: customAgent.id,
+      worktreeId,
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      groupId: context.groupId,
+      focusIntent: context.focusIntent
+    })
+    return
+  }
   if (agent) {
     launchAgentTab(worktreeId, agent, context)
     return
@@ -59,7 +75,7 @@ export function launchAgentTabShortcut(
 }
 
 export function launchFloatingWorkspaceAgentShortcut(
-  shortcut: Pick<TerminalAgentTabShortcut, 'agent' | 'pendingAgent'>
+  shortcut: Pick<TerminalAgentTabShortcut, 'agent' | 'pendingAgent' | 'customAgent'>
 ): void {
   launchAgentTabShortcut(FLOATING_TERMINAL_WORKTREE_ID, shortcut, () =>
     selectFloatingWorkspacePanelVisible(useAppStore.getState())

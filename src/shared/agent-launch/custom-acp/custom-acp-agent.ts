@@ -27,6 +27,21 @@ export type CustomAcpAgent = {
 export type CustomAcpAgentSettings = {
   /** Local ACP commands this host runs as Chat agents; absent means none. */
   customAcpAgents?: CustomAcpAgent[]
+  /** New agent tabs open this custom agent's chat while `defaultTuiAgent` is unset. Separate so
+   *  features that need an agent CLI never see it; choosing a built-in default clears it. */
+  defaultCustomAcpAgent?: CustomAcpAgentId | null
+}
+
+/** The saved custom default, when it still names an agent that is defined and switched on. */
+export function savedCustomAcpDefaultAgent(
+  settings: (CustomAcpAgentSettings & { defaultTuiAgent?: unknown }) | null | undefined
+): CustomAcpAgent | null {
+  const id = settings?.defaultCustomAcpAgent
+  if (!isCustomAcpAgentId(id) || settings?.defaultTuiAgent) {
+    return null
+  }
+  const agent = normalizeCustomAcpAgents(settings?.customAcpAgents).find((row) => row.id === id)
+  return agent && !agent.disabled ? agent : null
 }
 
 export const CUSTOM_ACP_AGENT_LIMITS = {
