@@ -39,7 +39,7 @@ export function connectorMessageShown(
       return []
     }
     const text = block.text.replace(SENT_LINE, '')
-    const shown = connectorMessageShownText(text, remaining)
+    const shown = connectorMessageShownText(text, remaining, asker?.source === 'slack')
     if (shown === null) {
       if (textLimit === Infinity) {
         return [block]
@@ -54,7 +54,7 @@ export function connectorMessageShown(
     const author = index === own ? undefined : ASKED_BY.exec(text)?.[1]
     const words = author ? `${author}\n\n${shown}` : shown
     const slack = asker?.source === 'slack' ? slackMarkupShownText(words) : null
-    const shownBlock = { ...block, text: slack?.text ?? words }
+    const shownBlock = { ...block, text: (slack?.text ?? words).slice(0, remaining) }
     if (drawMarkdown && singleText && slack) {
       drawnMarkdown = slack.markdown
     }

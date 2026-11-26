@@ -114,7 +114,8 @@ async function submitPiRpcPrompt(
       input.signal?.throwIfAborted()
       input.onExecutionSnapshot?.()
       ranOptions = Object.fromEntries(session.optionProof.current)
-    }
+    },
+    input.signal
   )
   return outcome.state === 'accepted' || outcome.state === 'admitted'
     ? { ...outcome, ranOptions }

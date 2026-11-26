@@ -1,7 +1,6 @@
 import {
   hasStructuredAgentSessionRequest,
   latestStructuredAgentSessionAssistantMessage,
-  latestStructuredAgentSessionPrompt,
   structuredAgentSessionRequestFromItem,
   type StructuredAgentSessionLatestRequest
 } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
@@ -11,8 +10,7 @@ import {
 } from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
-  normalizeOptionalField,
-  normalizePromptField
+  normalizeOptionalField
 } from '../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isQuietBotResult } from '../../../shared/bot-quiet-result'
 import {
@@ -72,7 +70,6 @@ export function readJournalSqlRequestStatus(
   if (!hasRequest) {
     return { hasRequest: false, latestPrompt: '', latestRequest: null }
   }
-  const prompt = selects({ kind: 'prompt' })[Symbol.iterator]().next().value?.item
   const floor = selects({ kind: 'clear' })[Symbol.iterator]().next().value?.item.sequence ?? 0
   const bodyOf = (id: string) => {
     const item = state.displayed(id)
@@ -138,7 +135,7 @@ export function readJournalSqlRequestStatus(
   const lastAssistantMessage = normalizeOptionalField(assistant, AGENT_STATUS_MAX_FIELD_LENGTH)
   return {
     hasRequest: true,
-    latestPrompt: normalizePromptField(prompt ? latestStructuredAgentSessionPrompt([prompt]) : ''),
+    latestPrompt: state.latestPrompt(),
     latestRequest,
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
     ...(quietAnswer ? { quietAnswer: true as const } : {})

@@ -12,7 +12,7 @@ import { chatPaneKey, watchChatNews, type ConversationChatHost } from './externa
 import { deliverToChat } from './external-conversation-chat-send'
 import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
-import type { AskerImages } from './connector-asker-images'
+import type { AskerImages, StagedConnectorImages } from './connector-asker-images'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
 import { ReturnedImageProgress } from './external-conversation-returned-image-progress'
 import { connectorMissingImages } from './connector-asker-stored-image'
@@ -29,6 +29,7 @@ export type ConnectorChatDelivery = ConnectorMessage & {
   deliveryId: string
   signal: AbortSignal
   askerImages?: AskerImages
+  stagedImages?: StagedConnectorImages
   preparation?: DeliveryPreparation
 }
 

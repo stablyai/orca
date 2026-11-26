@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ConnectorFailure } from '../../shared/connectors/connector-failure-contract'
 import {
   CONNECTOR_SOURCES,
   type ConnectorSource
@@ -13,13 +14,29 @@ import {
   type DeliveryAdmissionAttempt,
   type DeliveryPreparation
 } from './external-conversation-delivery-preparation'
-import { refused, type ConversationKey, type Delivery } from './external-conversation-types'
+import {
+  CONNECTOR_REFUSALS,
+  refused,
+  type ConversationKey,
+  type Delivery
+} from './external-conversation-types'
 
 export type DeliveryReceiptDb = OrchestrationDb
 export { DeliveryPreparation } from './external-conversation-delivery-preparation'
 
-const RecordedDelivery = z.discriminatedUnion('outcome', [
+const RecordedDelivery = z.union([
   z.object({ outcome: z.literal('accepted') }),
+  z
+    .object({
+      outcome: z.literal('refused'),
+      reason: z.enum(CONNECTOR_REFUSALS),
+      failure: ConnectorFailure.optional()
+    })
+    .transform(({ reason, failure }) => ({
+      outcome: 'refused' as const,
+      reason,
+      ...(failure ? { failure } : {})
+    })),
   z.object({
     outcome: z.literal('unknown'),
     reason: z.enum(['writer_failed', 'replayed_after_restart'])

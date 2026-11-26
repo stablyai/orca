@@ -49,7 +49,7 @@ export type ConversationChat = StructuredAgentTurnHost &
           sessionId: string
         ):
           | (Pick<AgentSessionConversationView, 'currentFence'> &
-              Partial<Pick<AgentSessionConversationView, 'agent' | 'location'>>)
+              Partial<Pick<AgentSessionConversationView, 'provider' | 'location'>>)
           | null
       }
     }

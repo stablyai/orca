@@ -8,7 +8,11 @@ const OPENER = /^<{3,}$/
 /** The asker's own words in a prompt connectorAskerPrompt built, read forward so no fenced text can
  *  change where a part ends; several messages sent together read one after another. Null for any
  *  other text. */
-export function connectorMessageShownText(text: string, maxChars = Infinity): string | null {
+export function connectorMessageShownText(
+  text: string,
+  maxChars = Infinity,
+  keepSlackToken = false
+): string | null {
   let next = 0
   const line = () => {
     const from = next
@@ -49,7 +53,14 @@ export function connectorMessageShownText(text: string, maxChars = Infinity): st
     }
     if (label === CONNECTOR_ASKER_MESSAGE_LABEL) {
       const from = next
-      const message = text.slice(from, Math.max(from, Math.min(close, from + remaining)))
+      const end = Math.max(from, Math.min(close, from + remaining))
+      let message = text.slice(from, end)
+      if (keepSlackToken && end < close && message.lastIndexOf('<') > message.lastIndexOf('>')) {
+        const tokenEnd = text.indexOf('>', end)
+        if (tokenEnd !== -1 && tokenEnd < close && !text.slice(end, tokenEnd).includes('<')) {
+          message = text.slice(from, tokenEnd + 1)
+        }
+      }
       messages.push(message)
       remaining -= message.length + 2
       if (remaining <= 0) {

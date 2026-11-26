@@ -24,7 +24,13 @@ import {
   type ConnectorMessage,
   type Delivery
 } from './external-conversation-types'
-import type { AskerImages, ConnectorImage } from './connector-asker-images'
+import {
+  ASKER_IMAGES_BUDGET_MS,
+  hasEarlierImages,
+  type AskerImages,
+  type ConnectorImage,
+  type StagedConnectorImages
+} from './connector-asker-images'
 import {
   connectorImageInspection,
   type ConnectorImageInspection
@@ -32,9 +38,7 @@ import {
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
 import type { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
-import { AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES } from '../../shared/agent-session/agent-session-attachments'
-import { PI_UNSHRUNK_IMAGE_LIMITS } from '../pi/rpc/prompts/pi-rpc-image-limits'
-import type { EarlierImageBudget } from './connector-asker-images'
+import { budgetForEarlierImages, earlierImagesThatFit } from './connector-asker-image-budget'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
  *  labelled with who asked, where and what came before; the chat shows the message alone. Its
@@ -50,6 +54,7 @@ export async function deliverToChat(
     admitted?: () => (() => void) | void
     deliveryId?: string
     askerImages?: AskerImages
+    stagedImages?: StagedConnectorImages
     preparation?: DeliveryPreparation
     missingImages?: CapabilityProbeCache<string>
     returnedImageProgress?: ReturnedImageProgress
@@ -79,7 +84,20 @@ export async function deliverToChat(
     }
   }
   try {
-    let inspection: ConnectorImageInspection | undefined
+    // The download timeout only limits new image staging. Returned requests use the delivery lease.
+    const inspection: ConnectorImageInspection | undefined =
+      link.bot &&
+      !delivery.stagedImages &&
+      delivery.askerImages &&
+      hasEarlierImages(link.source, delivery.asker)
+        ? connectorImageInspection(
+            getAgentSessionAttachmentStore()?.rootDir,
+            delivery.preparation
+              ? signal
+              : AbortSignal.any([signal, AbortSignal.timeout(ASKER_IMAGES_BUDGET_MS)]),
+            delivery.missingImages
+          )
+        : undefined
     let firstCarry: Promise<CarriedMessages> | undefined
     const readCarry = (direct: readonly ConnectorImage[]) =>
       readCarriedMessages(
@@ -101,28 +119,24 @@ export async function deliverToChat(
     let carried: CarriedMessages | undefined
     let directCount: number | undefined
     const images =
-      link.bot && delivery.asker && delivery.askerImages
+      link.bot && !delivery.stagedImages && delivery.asker && delivery.askerImages
         ? await delivery
             .askerImages({
               botId: link.bot.botId,
               conversation: { source: link.source, externalId: link.externalId },
               asker: delivery.asker,
               signal,
-              earlierBudget: async (direct, signal) => {
+              earlierBudget: async (direct) => {
                 directCount = direct.length
-                inspection = connectorImageInspection(
-                  getAgentSessionAttachmentStore()?.rootDir,
-                  signal,
-                  delivery.missingImages
-                )
                 firstCarry = readCarry(direct)
                 return earlierBudget(await firstCarry, direct)
               }
             })
             .catch(() => [])
         : []
-    const direct = images.slice(0, directCount)
-    const earlier = directCount === undefined ? [] : images.slice(directCount)
+    const direct = delivery.stagedImages?.direct ?? images.slice(0, directCount)
+    const earlier =
+      delivery.stagedImages?.earlier ?? (directCount === undefined ? [] : images.slice(directCount))
     // A carried card that changed since it was read (a Retry, an edit) refuses the send: read again.
     for (let attempt = 1; ; attempt += 1) {
       const stoppedBeforeCarry = stopped()
@@ -186,44 +200,6 @@ export async function deliverToChat(
 
 // Reads of the carried cards before the message goes alone: each retry follows a person's change.
 const CARRY_READS = 3
-
-function budgetForEarlierImages(
-  agent: ExternalConversationLink['agent'],
-  budget: EarlierImageBudget,
-  direct: readonly ConnectorImage[]
-): EarlierImageBudget {
-  if (agent !== 'pi') {
-    return budget
-  }
-  // Before launch we do not know whether this Pi shrinks images. Keep automatic attachments safe
-  // on older versions and leave larger files available through the existing download instructions.
-  const { image, total } = PI_UNSHRUNK_IMAGE_LIMITS
-  return {
-    ...budget,
-    maxImageBytes: image,
-    bytes: Math.min(
-      budget.bytes - (AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES - total),
-      total - direct.reduce((bytes, image) => bytes + image.bytes, 0)
-    )
-  }
-}
-
-function earlierImagesThatFit(images: readonly ConnectorImage[], budget: EarlierImageBudget) {
-  let { count, bytes } = budget
-  return images.filter((image) => {
-    if (
-      count <= 0 ||
-      image.bytes > bytes ||
-      (budget.maxImageBytes !== undefined && image.bytes > budget.maxImageBytes) ||
-      budget.fileIds.has(image.fileId)
-    ) {
-      return false
-    }
-    count -= 1
-    bytes -= image.bytes
-    return true
-  })
-}
 
 function sendConnectorTurn(
   chat: ConversationChat,

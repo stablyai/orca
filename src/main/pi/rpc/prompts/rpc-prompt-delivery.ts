@@ -100,7 +100,8 @@ export class PiRpcPromptDelivery {
     id: string,
     at: number,
     frame: JsonlRpcRecord,
-    before?: () => Promise<void>
+    before?: () => Promise<void>,
+    signal?: AbortSignal
   ): Promise<AgentSessionDispatchOutcome> {
     if (this.ended) {
       throw new Error('Pi prompt queue unavailable')
@@ -121,9 +122,10 @@ export class PiRpcPromptDelivery {
     const submission: Submission = { id, at, frame, bytes, accepted: false, retries: 0 }
     this.pending.add(submission)
     this.heldBytes += bytes
+    let sending = false
     try {
       await before?.()
-      if (submission.stopped) {
+      if (submission.stopped || signal?.aborted) {
         this.remove(submission)
         return piRejection(agentSessionFailureFact('cancelled', { neverReachedAgent: true }))
       }
@@ -133,12 +135,15 @@ export class PiRpcPromptDelivery {
       this.deps.beforeWrite?.()
       this.acknowledgements.push(submission)
       this.waiting.push(submission)
+      sending = true
       await this.deps.send(frame)
       return { state: 'admitted' }
     } catch {
       this.remove(submission)
       this.deps.refused?.()
-      return { state: 'unknown', reason: 'Pi prompt write did not settle' }
+      return !sending && signal?.aborted
+        ? piRejection(agentSessionFailureFact('cancelled', { neverReachedAgent: true }))
+        : { state: 'unknown', reason: 'Pi prompt write did not settle' }
     }
   }
 

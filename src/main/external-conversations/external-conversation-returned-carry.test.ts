@@ -1,3 +1,4 @@
+import { ReturnedImageProgress } from './external-conversation-returned-image-progress'
 import { closeSync, ftruncateSync, mkdtempSync, openSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -474,6 +475,7 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   }
   failedStart('failed', failed, 'notSignedIn', NOW + 20)
   const missing = connectorMissingImages()
+  const progress = new ReturnedImageProgress()
   const carry = () =>
     carriedMessages(
       THREAD,
@@ -481,9 +483,12 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
       ACCOUNT,
       NOW + 30,
       [],
-      connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, missing)
+      connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, missing),
+      { owner: progress, key: 'thread' }
     )
   expect((await carry()).cards).toEqual([])
+  // Interleaved conversations may evict all path misses. The returned queue can still advance.
+  missing.clear()
   const carried = await carry()
 
   const reads: string[] = []

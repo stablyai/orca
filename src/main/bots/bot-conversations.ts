@@ -5,7 +5,10 @@ import {
   ConnectorWorkLink
 } from '../../shared/connector-work-link-contract'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { ConversationBots } from '../external-conversations/external-conversation-bots'
+import type {
+  ConversationBots,
+  ConversationChatOpening
+} from '../external-conversations/external-conversation-bots'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeBotChats, startBotSession } from './bot-chat-session'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -17,7 +20,7 @@ export function botConversations(deps: {
   /** The bot's Chat, created on first use. */
   ensureChat: (botId: string) => Promise<string>
   /** A new native chat in the bot's home. */
-  startSession: (bot: Bot, sessionId?: string) => Promise<string>
+  startSession: (bot: Bot, opening?: ConversationChatOpening) => Promise<string>
   botWork: Pick<BotWorkRecord, 'pullRequests'>
 }): ConversationBots {
   const find = (botId: string) => deps.bots.list().find((entry) => entry.id === botId)
@@ -27,15 +30,13 @@ export function botConversations(deps: {
       const bot = deps.bots.enabled() ? find(botId) : undefined
       return !bot ? 'bot_not_found' : bot.paused ? 'bot_paused' : null
     },
-    open: async ({ kind, botId }, preferredSessionId) => {
+    open: async ({ kind, botId }, opening) => {
       const bot = find(botId)
       if (!bot) {
         throw new Error('bot_not_found')
       }
       const sessionId =
-        kind === 'bot-chat'
-          ? await deps.ensureChat(botId)
-          : await deps.startSession(bot, preferredSessionId)
+        kind === 'bot-chat' ? await deps.ensureChat(botId) : await deps.startSession(bot, opening)
       return { worktreeId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId, agent: bot.agent }
     },
     workLinks: async ({ bot, source, externalId }) =>
@@ -63,14 +64,19 @@ export function runtimeBotConversations(runtime: OrcaRuntimeService): Conversati
   return botConversations({
     bots: runtime.bots,
     ensureChat: chats.ensure,
-    startSession: async (bot, sessionId) => {
+    startSession: async (bot, opening) => {
+      const sessionId = opening?.sessionId
+      const signal = opening?.signal
       if (sessionId) {
         await runtime.ensureStructuredAgentSessionHost()
+        signal?.throwIfAborted()
         if (getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)) {
           return sessionId
         }
       }
-      return await startBotSession(runtime, bot, { background: true, sessionId })
+      await opening?.beforeCreate?.(bot.agent)
+      signal?.throwIfAborted()
+      return await startBotSession(runtime, bot, { background: true, sessionId, signal })
     },
     botWork: runtime.botWork
   })

@@ -1,5 +1,9 @@
 import type { ConnectorAsker } from '../../shared/connectors/connector-cloud-contract'
+import type { NativeChatAgent } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { isBotAgent } from '../../shared/bot-types'
+import { budgetForEarlierImages } from './connector-asker-image-budget'
+import type { AskerImages, StagedConnectorImages } from './connector-asker-images'
+import { NOTHING_CARRIED } from './external-conversation-returned-carry'
 import { botChatFor, deliveryChatId } from './external-conversation-bots'
 import type { ConnectorChatDelivery, LinkableChat } from './external-conversation-chat-delivery'
 import type { DeliveryPreparation } from './external-conversation-delivery-preparation'
@@ -17,7 +21,7 @@ import {
 } from './external-conversation-types'
 
 export async function startConnectorConversation(
-  deps: Pick<ExternalConversationSeamDeps, 'store' | 'receipts'> & {
+  deps: Pick<ExternalConversationSeamDeps, 'store' | 'receipts' | 'askerImages'> & {
     enqueue(run: (signal: AbortSignal) => Promise<Delivery>): Promise<Delivery>
     deliver(chat: LinkableChat, delivery: ConnectorChatDelivery): Promise<Delivery>
     link(chat: LinkableChat, text: string, asker?: ConnectorAsker): void
@@ -36,23 +40,53 @@ export async function startConnectorConversation(
     [agent, target, prompt],
     () =>
       deps.enqueue(async (signal) => {
-        const stopped = preparation?.stopped(preparation.signal(signal))
+        const deliverySignal = preparation?.signal(signal) ?? signal
+        const stopped = preparation?.stopped(deliverySignal)
         if (stopped) {
           return stopped
         }
         if (!isBotAgent(agent)) {
           return refused('unsupported_agent')
         }
-        const chat = await botChatFor(
-          deps.store,
-          host.bots,
-          key,
-          target,
-          preparation ? deliveryId : undefined
-        )
-        return 'outcome' in chat
-          ? chat
-          : deps.deliver(chat, { ...message, text: prompt, deliveryId, signal })
+        let stagedImages: StagedConnectorImages | undefined
+        const beforeCreate = async (agent: NativeChatAgent) => {
+          if (message.asker && deps.askerImages) {
+            stagedImages = await stageInitialImages(deps.askerImages, {
+              agent,
+              asker: message.asker,
+              botId: target.botId,
+              conversation: key,
+              signal: deliverySignal
+            })
+          }
+          if (preparation?.stopped(deliverySignal)) {
+            throw new Error('connector_delivery_stopped')
+          }
+        }
+        try {
+          const chat = await botChatFor(
+            deps.store,
+            host.bots,
+            key,
+            target,
+            preparation ? { deliveryId, signal: deliverySignal, beforeCreate } : undefined
+          )
+          return 'outcome' in chat
+            ? chat
+            : deps.deliver(chat, {
+                ...message,
+                text: prompt,
+                deliveryId,
+                signal,
+                ...(stagedImages ? { stagedImages } : {})
+              })
+        } catch (error) {
+          const stoppedDuringStart = preparation?.stopped(deliverySignal)
+          if (stoppedDuringStart) {
+            return stoppedDuringStart
+          }
+          throw error
+        }
       }),
     preparation
   )
@@ -65,13 +99,40 @@ export async function startConnectorConversation(
     // The journal may have committed before the thread link was written.
     const sessionId = deliveryChatId(key, target, deliveryId)
     const chat = host.chat?.current()?.deps.store.getConversation(sessionId)
-    if (chat?.location && chat.agent && isBotAgent(chat.agent)) {
+    if (chat?.location && chat.provider && isBotAgent(chat.provider)) {
       deps.link(
-        { sessionId, agent: chat.agent, worktreeId: chat.location.workspaceId, bot: target },
+        { sessionId, agent: chat.provider, worktreeId: chat.location.workspaceId, bot: target },
         message.asker?.text ?? prompt,
         message.asker
       )
     }
   }
   return { conversation: key, initial }
+}
+
+async function stageInitialImages(
+  stage: AskerImages,
+  { agent, ...request }: Parameters<AskerImages>[0] & { agent: NativeChatAgent }
+): Promise<StagedConnectorImages> {
+  let directCount: number | undefined
+  const images = await stage({
+    ...request,
+    earlierBudget: async (direct) => {
+      directCount = direct.length
+      const available = NOTHING_CARRIED.earlierBudget
+      return budgetForEarlierImages(
+        agent,
+        {
+          count: available.count - direct.length,
+          bytes: available.bytes - direct.reduce((sum, image) => sum + image.bytes, 0),
+          fileIds: new Set(direct.map((image) => image.fileId))
+        },
+        direct
+      )
+    }
+  }).catch(() => [])
+  return {
+    direct: images.slice(0, directCount),
+    earlier: directCount === undefined ? [] : images.slice(directCount)
+  }
 }

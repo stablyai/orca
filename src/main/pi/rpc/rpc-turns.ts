@@ -107,12 +107,13 @@ export class PiRpcTurns {
     id: string,
     at: number,
     frame: JsonlRpcRecord,
-    before?: () => Promise<void>
+    before?: () => Promise<void>,
+    signal?: AbortSignal
   ): Promise<AgentSessionDispatchOutcome> {
     if (this.ended) {
       throw new Error('Pi session ended before dispatch')
     }
-    return this.delivery.submit(id, at, frame, before)
+    return this.delivery.submit(id, at, frame, before, signal)
   }
 
   receive(frame: JsonlRpcRecord): void {

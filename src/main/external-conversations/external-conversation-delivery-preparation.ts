@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { rejectedSendRefusal } from './external-conversation-failure'
 import { refusalOf } from './external-conversation-chain'
 import type { DeliveryReceiptDb } from './external-conversation-delivery-receipts'
 import { refused, type Delivery } from './external-conversation-types'
@@ -83,7 +84,8 @@ export async function recoverConnectorAdmission(
 ): Promise<Delivery | null> {
   await ensureHost?.()
   const host = getStructuredAgentSessionHost()
-  if (host?.deps.store.getConversation(sessionId)) {
+  const conversation = host?.deps.store.getConversation(sessionId)
+  if (host && conversation) {
     const read = await host.deps.store.readCommandReceipt({ kind: 'global' }, operationId)
     if (read.verdict === 'absent') {
       return null
@@ -93,7 +95,20 @@ export async function recoverConnectorAdmission(
       read.receipt.sessionId === sessionId &&
       read.receipt.method === 'agentSession.send'
     ) {
-      return read.receipt.status === 'accepted' ? { outcome: 'accepted' } : null
+      if (read.receipt.status === 'rejected') {
+        return null
+      }
+      const submission = await (await host.journalReads(sessionId)).submission(operationId)
+      if (submission?.dispatchState === 'rejected') {
+        return await rejectedSendRefusal(
+          host,
+          { sessionId, agent: conversation.provider },
+          submission
+        )
+      }
+      return submission?.dispatchState === 'unknown'
+        ? { outcome: 'unknown', reason: 'writer_failed' }
+        : { outcome: 'accepted' }
     }
   }
   return { outcome: 'unknown', reason: 'replayed_after_restart' }

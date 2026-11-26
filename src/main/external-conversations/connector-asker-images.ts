@@ -17,6 +17,8 @@ import type { ConnectorResult } from '../connector-cloud/connector-cloud-request
 
 export type ConnectorImage = { path: string; fileId: string; bytes: number }
 
+export type StagedConnectorImages = { direct: ConnectorImage[]; earlier: ConnectorImage[] }
+
 export type EarlierImageBudget = {
   count: number
   bytes: number
