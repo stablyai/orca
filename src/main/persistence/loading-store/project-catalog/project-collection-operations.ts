@@ -116,6 +116,10 @@ export class ProjectCollectionOperations {
     return getProjectHostOperations(this).getRepoForHost(id, hostId)
   }
 
+  getRepoRegistrationHosts(id: string): ReadonlySet<ExecutionHostId> {
+    return getProjectHostOperations(this).getRepoRegistrationHosts(id)
+  }
+
   setResolvedRepoGitUsername(
     target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     username: string

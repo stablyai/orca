@@ -260,6 +260,11 @@ export class ProjectHostPersistenceOperations {
     return this.state.repos.length
   }
 
+  /** Every host `id` is registered on, by key: never a pass over every registration. */
+  getRepoRegistrationHosts(id: string): ReadonlySet<ExecutionHostId> {
+    return this.repoLookup().registrationHostsFor(id)
+  }
+
   /** The first registration under `id`, by key. */
   getRepo(id: string): Repo | undefined {
     const repo = this.repoLookup().rowsFor(id)[0]
