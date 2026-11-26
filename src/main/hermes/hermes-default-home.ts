@@ -1,7 +1,6 @@
 import { statSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 
 const LOCAL_APP_DATA_MAX_LENGTH = 32_768
 
@@ -56,25 +55,4 @@ export function getHermesHome(env: NodeJS.ProcessEnv = process.env, homeDir?: st
   return explicit ? explicit : resolveDefaultHermesHome({ env, homeDir })
 }
 
-/**
- * The profile folder Hermes runs from `home`. Hermes trusts a `HERMES_HOME` inside `profiles/`;
- * for its root it follows the sticky `active_profile`, which `hermes profile use` changes.
- */
-export async function resolveHermesActiveProfileHome(home: string): Promise<string> {
-  if (basename(dirname(home)) === 'profiles') {
-    return home
-  }
-  const name = await readFile(join(home, 'active_profile'), 'utf-8').then(
-    (text) => text.replace(/^\uFEFF/u, '').trim(),
-    () => ''
-  )
-  if (!name || name === 'default' || !/^[\w.-]+$/u.test(name)) {
-    return home
-  }
-  const profile = join(home, 'profiles', name)
-  const exists = await stat(profile).then(
-    (entry) => entry.isDirectory(),
-    () => false
-  )
-  return exists ? profile : home
-}
+export { resolveHermesActiveProfileHome } from '../../shared/hermes/hermes-active-profile-home'

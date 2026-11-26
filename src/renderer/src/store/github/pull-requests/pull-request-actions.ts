@@ -127,6 +127,7 @@ export const createPullRequestActions = (
       !inflightRequest.controller.signal.aborted &&
       (!options?.force || inflightRequest.force) &&
       inflightRequest.lookupHintKey === lookupHintKey &&
+      (!inflightRequest.background || isBackgroundPRRead(options)) &&
       !(
         inflightRequest.reason === 'swr' &&
         bypassesGitHubPRRefreshFreshness(options?.reason ?? 'manual')
@@ -183,6 +184,7 @@ export const createPullRequestActions = (
       force: Boolean(options?.force),
       generation,
       reason: options?.reason,
+      background: isBackgroundPRRead(options),
       lookupHintKey
     }
     inflightPRRequests.set(cacheKey, inflight)
@@ -216,4 +218,9 @@ function waitForPullRequest(
       }
       throw error
     })
+}
+
+/** Tagged by its caller, or a timer's revalidation the user didn't ask for (#46567). */
+function isBackgroundPRRead(options: Parameters<GitHubSlice['fetchPRForBranch']>[2]): boolean {
+  return options?.background === true || (options?.reason === 'swr' && options.userRefresh !== true)
 }

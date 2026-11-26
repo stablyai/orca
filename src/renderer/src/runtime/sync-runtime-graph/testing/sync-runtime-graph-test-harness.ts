@@ -20,6 +20,8 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
     browserCertificateFailuresByPageId: {},
+    browserAudiblePageIds: {},
+    browserAudioMutedTabIds: {},
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,

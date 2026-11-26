@@ -15,8 +15,12 @@ import { remarkGitHubCallouts } from '@/lib/markdown/remark-github-callouts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
 import { MARKDOWN_CODE_LANGUAGES } from '@/lib/markdown/markdown-code-languages'
 
+// Authored ids are prefixed by the sanitizer; heading slugs are not.
+export const MARKDOWN_PREVIEW_HTML_ID_PREFIX = 'user-content-'
+
 const markdownPreviewSanitizeSchema = {
   ...defaultSchema,
+  clobberPrefix: MARKDOWN_PREVIEW_HTML_ID_PREFIX,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
   protocols: {
     ...defaultSchema.protocols,

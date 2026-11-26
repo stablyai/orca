@@ -6,7 +6,11 @@ import {
   type AutomationConnectorEventTrigger,
   type AutomationEventTrigger
 } from '../../shared/automation-event-triggers'
-import { needsGitHub2, needsWorkflows } from '../../shared/automation-github-triggers'
+import {
+  needsCiFinished,
+  needsGitHub2,
+  needsWorkflows
+} from '../../shared/automation-github-triggers'
 import { botLinearWorkspaces, botSlackApps, type Bot } from '../../shared/bot-types'
 import type { BotsCloudClient } from '../connector-cloud/bots-cloud-client'
 
@@ -49,42 +53,36 @@ export function assertOwnTriggers(
 export const GITHUB2_TRIGGERS_UNSUPPORTED =
   "This computer's Orca Cloud doesn't send that GitHub event (or label=) yet: wait on another event, or try again after it updates."
 
-/**
- * A new rule on a GitHub event only a newer Orca Cloud sends is refused where this one can't: an
- * older cloud keeps the rule and never fires it. One already saved stays.
- */
-export function assertGitHub2Triggers(
+/** A new rule this host's Orca Cloud can't send is refused (an older cloud keeps it and never fires
+ *  it); one already saved stays. */
+function refuseNewRules(
   takes: boolean,
+  needs: (rule: AutomationEventTrigger) => boolean,
+  refusal: string,
   on: readonly AutomationEventTrigger[] | undefined,
-  saved: readonly AutomationEventTrigger[] = []
+  saved: readonly AutomationEventTrigger[]
 ): void {
-  const kept = new Set(saved.filter(needsGitHub2).map((rule) => rule.id))
-  if (!takes && (on ?? []).some((rule) => needsGitHub2(rule) && !kept.has(rule.id))) {
-    throw new Error(GITHUB2_TRIGGERS_UNSUPPORTED)
+  const kept = new Set(saved.filter(needs).map((rule) => rule.id))
+  if (!takes && (on ?? []).some((rule) => needs(rule) && !kept.has(rule.id))) {
+    throw new Error(refusal)
   }
 }
 
 export const WORKFLOW_TRIGGERS_UNSUPPORTED =
   "This computer's Orca Cloud doesn't send github.workflow_finished yet: make it a reminder at the time the run should be done (--once --by), or try again after it updates."
 
-/**
- * A new rule waiting on a GitHub Actions run is refused where this host's Orca Cloud can't send it.
- * One already saved stays.
- */
-export function assertWorkflowTriggers(
-  takes: boolean,
-  on: readonly AutomationEventTrigger[] | undefined,
-  saved: readonly AutomationEventTrigger[] = []
-): void {
-  const kept = new Set(saved.filter(needsWorkflows).map((rule) => rule.id))
-  if (!takes && (on ?? []).some((rule) => needsWorkflows(rule) && !kept.has(rule.id))) {
-    throw new Error(WORKFLOW_TRIGGERS_UNSUPPORTED)
-  }
-}
+export const CI_FINISHED_TRIGGERS_UNSUPPORTED =
+  "This computer's Orca Cloud doesn't send github.ci_finished yet: wait on github.ci_passed and github.ci_failed instead, or try again after it updates."
 
 /** What this host's Orca Cloud takes: rules on your own pull requests (`triggers.own`), GitHub's
- *  newer events and label= (`triggers.github2`), and finished workflow runs (`triggers.workflows`). */
-export type CloudTriggers = { own: boolean; github2: boolean; workflows: boolean }
+ *  newer events and label= (`triggers.github2`), finished workflow runs (`triggers.workflows`) and
+ *  finished CI (`triggers.ci_finished`). */
+export type CloudTriggers = {
+  own: boolean
+  github2: boolean
+  workflows: boolean
+  ciFinished: boolean
+}
 
 /** The refusals above, for the rules this host's Orca Cloud takes as `takes` says. */
 export function assertCloudTakesTriggers(
@@ -93,8 +91,9 @@ export function assertCloudTakesTriggers(
   saved: readonly AutomationEventTrigger[] = []
 ): void {
   assertOwnTriggers(takes.own, on, saved)
-  assertGitHub2Triggers(takes.github2, on, saved)
-  assertWorkflowTriggers(takes.workflows, on, saved)
+  refuseNewRules(takes.github2, needsGitHub2, GITHUB2_TRIGGERS_UNSUPPORTED, on, saved)
+  refuseNewRules(takes.workflows, needsWorkflows, WORKFLOW_TRIGGERS_UNSUPPORTED, on, saved)
+  refuseNewRules(takes.ciFinished, needsCiFinished, CI_FINISHED_TRIGGERS_UNSUPPORTED, on, saved)
 }
 
 export const TRIGGER_PEOPLE_UNSUPPORTED =

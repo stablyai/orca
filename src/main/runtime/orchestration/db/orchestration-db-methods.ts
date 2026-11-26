@@ -4,6 +4,7 @@ import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-st
 import type { DispatchCompletionMethods } from './dispatch-context/dispatch-completion'
 import type { DispatchContextStoreMethods } from './dispatch-context/dispatch-context-store'
 import type { DispatchLinksByIdMethods } from './dispatch-context/dispatch-links-by-id'
+import type { SessionPartyRowsMethods } from './worker-terminal/session-party-rows'
 import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
 import type { DispatchDepthMethods } from './dispatch-depth'
 import type { WorkerReportSettlementMethods } from './dispatch-context/worker-report-settlement'
@@ -62,6 +63,7 @@ import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
 import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
+import type { MailWakeAttemptStoreMethods } from './messages/mail-wake-attempt-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
@@ -69,6 +71,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   BotRequestStoreMethods &
   BotConversationActsForMethods &
   BotRunResendMethods &
+  MailWakeAttemptStoreMethods &
   BotRequestOutcomeMethods &
   CreateTablesMethods &
   SchemaMigrateMethods &
@@ -124,6 +127,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   WorkerTerminalListingMethods &
   DispatchContextStoreMethods &
   DispatchLinksByIdMethods &
+  SessionPartyRowsMethods &
   DispatchLookupMethods &
   DispatchDepthMethods &
   DispatchCompletionMethods &

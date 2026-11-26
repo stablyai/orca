@@ -30,6 +30,7 @@ export type CodexEventLabel =
   | 'pre_compact'
   | 'post_compact'
   | 'session_start'
+  | 'session_end'
   | 'user_prompt_submit'
   | 'subagent_start'
   | 'subagent_stop'

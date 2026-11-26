@@ -1,6 +1,7 @@
 import { BotMemoryUpdatedNoteSchema } from '../../../shared/bots/bot-memory-updated-note'
 // What a bot's chat adds to a saved journal, declared so strict storage keeps it.
 import { z } from 'zod'
+import { storedRefusalReference } from './durable-rows/journal-storage-refusal-schema'
 
 const text = z.string().optional()
 
@@ -14,7 +15,8 @@ export const storedConnectorAsker = z.object({
   avatarUrl: text,
   messageRef: text,
   noAccess: z.array(z.object({ name: text, text: z.string() })).optional(),
-  via: z.object({ userId: z.string(), name: z.string() }).optional()
+  via: z.object({ userId: z.string(), name: z.string() }).optional(),
+  app: z.literal(true).optional()
 })
 
 export const storedAutomationResultNote = z.object({
@@ -46,7 +48,8 @@ export const storedBotRequestCard = z.object({
   purpose: z.string(),
   subject: z.string(),
   messageId: text,
-  refusal: text
+  refusal: text,
+  client: z.object({ installationId: z.string(), computer: z.string() }).optional()
 })
 
 /** Saved by builds that had bot take-over; still read so those chats open, as their plain text. */
@@ -193,6 +196,7 @@ export const storedAutomationRunNotStarted = {
     })
   ),
   error: z.string(),
+  refusal: storedRefusalReference.optional(),
   text: z.string(),
   at: z.number()
 }

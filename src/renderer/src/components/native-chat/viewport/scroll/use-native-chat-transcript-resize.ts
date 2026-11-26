@@ -38,6 +38,11 @@ export function useNativeChatTranscriptResize({
     observer.observe(element)
     if (contentRef.current) {
       observer.observe(contentRef.current)
+      // Its padded frame's border box too: end room a floating worker pill reserves is padding.
+      const frame = contentRef.current.parentElement
+      if (frame && frame !== element) {
+        observer.observe(frame, { box: 'border-box' })
+      }
     }
     return () => observer.disconnect()
   }, [

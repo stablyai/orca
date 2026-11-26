@@ -15,8 +15,11 @@ export async function writeDiffCommentsToHost(
 ): Promise<void> {
   const worktreeId = owner.worktreeId
   const scope = parseWorkspaceKey(worktreeId)
+  // Why base: the host applies only this edit, so notes another device added meanwhile survive.
+  const baseUpdate = diffCommentsBase ? { diffCommentsBase } : {}
   if (scope?.type === 'folder' && owner.kind === 'folder') {
     const runtimeEnvironmentId = owner.runtimeEnvironmentId
+    const updates = { diffComments, ...baseUpdate }
     const updated = runtimeEnvironmentId
       ? (
           await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
@@ -26,13 +29,13 @@ export async function writeDiffCommentsToHost(
               at: 'local'
             }),
             'folderWorkspace.update',
-            { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
+            { folderWorkspaceId: scope.folderWorkspaceId, updates },
             { timeoutMs: 15_000 }
           )
         ).folderWorkspace
       : await window.api.folderWorkspaces.update({
           folderWorkspaceId: scope.folderWorkspaceId,
-          updates: { diffComments }
+          updates
         })
     if (!updated?.diffComments) {
       throw new Error('Failed to persist folder workspace review notes')
@@ -48,8 +51,7 @@ export async function writeDiffCommentsToHost(
     const meta = await window.api.worktrees.updateMeta({
       worktreeId,
       executionHostId: at,
-      // Why base: the host applies only this edit, so notes another device added meanwhile survive.
-      updates: { diffComments, ...(diffCommentsBase ? { diffCommentsBase } : {}) }
+      updates: { diffComments, ...baseUpdate }
     })
     // Why: main answers null when it refuses or drops the write; reporting success would lose the notes.
     if (!meta) {
@@ -63,7 +65,7 @@ export async function writeDiffCommentsToHost(
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
       diffComments,
-      ...(diffCommentsBase ? { diffCommentsBase } : {})
+      ...baseUpdate
     },
     { timeoutMs: 15_000 }
   )

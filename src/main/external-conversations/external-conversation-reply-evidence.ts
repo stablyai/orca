@@ -21,6 +21,10 @@ import {
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ReplyRecoveryChat } from './external-conversation-reply-recovery'
+import { connectorReplyTurnOutcome } from '../../shared/agent-session/journal/journal-connector-reply-turn'
+import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-turn-reply'
+import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../shared/agent-session/journal/journal-connector-reply'
+import { capAnswer } from '../connector-cloud/connector-snapshot'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 
 // What the journal proves about reply outbox rows (Phase 1): which cut a row is in, what its claim's
@@ -31,6 +35,7 @@ type Unfilled = JournalConnectorReplyRow
 export type ReplyRecoveryVerdict = {
   outcome: JournalConnectorReplyOutcome
   failure?: ConnectorFailure
+  prose?: string
 }
 
 // The machine lost track of the request across a restart: it may have finished (Phase 1 §1.8).
@@ -129,6 +134,8 @@ export async function readReplyEvidence(
     const opener = turn?.userItemId ?? agentJournalSubmissionKey(cutTurnId)
     return snapshot.items.find((item) => item.itemId === opener)
   }
+  const cutVerdicts = new Map<string, ReturnType<typeof turnVerdictOf>>()
+  const cutWords = new Map<string, string>()
   // A claimed row's end, read from the continuation that claimed it (Phase 1 §1.7); null waits.
   const claimVerdict = (claimMessageId: string): ReplyRecoveryVerdict | null => {
     const turn = turnOpenedBy(claimMessageId)
@@ -155,6 +162,22 @@ export async function readReplyEvidence(
     turnOpenedBy,
     cutOpener,
     claimVerdict,
+    // Once per cut per read: every row a retry held names the same one.
+    cutTurnVerdict: (cutTurnId: string) => {
+      if (!cutVerdicts.has(cutTurnId)) {
+        const row = turnRowOf(cutTurnId)
+        cutVerdicts.set(cutTurnId, row ? turnVerdictOf(row) : null)
+      }
+      return cutVerdicts.get(cutTurnId) ?? null
+    },
+    // A held turn's newest words, before its last tool: its answer once no retry runs.
+    cutTurnWords: (cutTurnId: string) => {
+      if (!cutWords.has(cutTurnId)) {
+        const { prose } = structuredAgentSessionTurnReply(snapshot.items, cutTurnId)
+        cutWords.set(cutTurnId, prose)
+      }
+      return cutWords.get(cutTurnId) ?? ''
+    },
     // Only turns that could have answered a row still unfilled.
     turns: () => {
       const placed = rows.map((row) => messageOf(row)?.sequence ?? 0).filter((at) => at > 0)
@@ -237,18 +260,29 @@ export function rowVerdict(
     endedCuts: ReadonlySet<string>
     idle: boolean
     lastEnded: number
+    /** When this host process started: a send accepted before it was cut off by a restart. */
+    startedAt: number
     rejectionOf: (submission: AgentJournalSubmission) => { failure?: ConnectorFailure }
   }
 ): ReplyRecoveryVerdict | null {
-  const { view, cut, unresolved, settled, endedCuts, idle, lastEnded, rejectionOf } = facts
+  const { view, cut, unresolved, settled, endedCuts, idle, lastEnded, startedAt, rejectionOf } =
+    facts
   if (row.claimMessageId !== undefined) {
-    return settled ? view.claimVerdict(row.claimMessageId) : null
+    const claimed = settled ? view.claimVerdict(row.claimMessageId) : null
+    // A hidden retry refused before it ran: the held turn's own words answer, as if never asked.
+    return claimed?.outcome === 'failed' && row.emptyRetried
+      ? (heldAnswer(row, view) ?? claimed)
+      : claimed
   }
   if (row.cut?.kind === 'usage_limit') {
     // Its scheduler's to close: once no continue will come, it fails with the limit it hit.
     return endedCuts.has(row.cut.turnId)
       ? { outcome: 'failed', ...(row.cutFailure ? { failure: row.cutFailure } : {}) }
       : null
+  }
+  const held = heldAnswer(row, view)
+  if (held) {
+    return held
   }
   if (row.cut) {
     return settled ? { outcome: 'interrupted' } : null
@@ -272,10 +306,34 @@ export function rowVerdict(
       return { outcome: 'interrupted' }
     }
   }
-  // Delivered, no turn proves it took it, and a turn after it ended with the chat idle: the
-  // machine lost track of it. Never "answered together" on position alone.
+  // Delivered, no turn proves it took it, and a turn after it ended with the chat idle. Accepted
+  // before a restart: the machine lost track of it. Accepted in this process: a send handed into
+  // a running turn (Claude records no steer), answered together with it. Still queued: owed.
   const at = view.messageOf(row)?.sequence ?? 0
-  return settled && idle && at > 0 && at < lastEnded
+  const queued = submission?.handoverRecorded === true && submission.handedOverAt === undefined
+  if (queued || !(settled && idle && at > 0 && at < lastEnded)) {
+    return null
+  }
+  return (submission?.submittedAt ?? 0) < startedAt
     ? { outcome: 'interrupted', failure: UNCONFIRMED }
-    : null
+    : { outcome: 'unattributed' }
+}
+
+/** A row held for an empty turn's retry that never ran (refused, or the app quit first), whose
+ *  turn finished: answered only by any words that turn wrote before its last tool. */
+function heldAnswer(
+  row: Unfilled,
+  view: Awaited<ReturnType<typeof readReplyEvidence>>
+): ReplyRecoveryVerdict | null {
+  if (!row.emptyRetried || !row.cut || view.cutTurnVerdict(row.cut.turnId) !== 'success') {
+    return null
+  }
+  const { outcome, prose } = connectorReplyTurnOutcome({
+    outcome: 'success',
+    prose: view.cutTurnWords(row.cut.turnId),
+    bot: true
+  })
+  return prose
+    ? { outcome, prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) }
+    : { outcome }
 }

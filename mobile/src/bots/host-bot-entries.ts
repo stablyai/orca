@@ -2,6 +2,7 @@ import {
   botPreviewFacts,
   botStatusNeedsAttention
 } from '../../../src/shared/bots/bot-collapsed-preview'
+import { translate } from '../i18n/mobile-i18n'
 import { accessRequestPerson } from '../../../src/shared/bots/bot-access-request'
 import { getBotSidebarEntries } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { BotSidebarEntryActivity } from '../../../src/shared/bots/bot-sidebar-view'
@@ -25,6 +26,12 @@ import type {
 import { resolveWorktreeHostId } from '../worktree/row-presentation/worktree-host-context-labels'
 import type { MobileLineageStores } from '../worktree/agent-lineage/mobile-workspace-lineage'
 import { botStatusLine, mobileBotAvatarSource } from './host-bot-row-facts'
+import {
+  botPurposeSnippet,
+  matchBotSearchText,
+  type BotSearchRange
+} from '../../../src/shared/bots/bot-sidebar-search'
+import { botTemplateText } from '../../../src/shared/bots/bot-template-text'
 import type { ListedHostBots, HostBotListing } from './host-bot-listing'
 import { hostAgentsByPaneKey, hostBotGroupRow } from './host-bot-group-row'
 import { hostBotWorkerLines, type lazyHostBotLineage } from './host-bot-worker-lines'
@@ -42,6 +49,10 @@ export type HostBotSectionInputs = {
   collapsedGroups: ReadonlySet<string>
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   search: string
+  /** The search shows paused bots the Bot options hide. */
+  showPaused?: boolean
+  /** What this computer's bots are for, by id, read while searching; a bot also matches by it. */
+  purposes?: ReadonlyMap<string, string>
   /** How the list draws a row, e.g. this phone's highlight. */
   drawRow: (row: Worktree) => WorkspaceListItem
   lineageStores?: MobileLineageStores
@@ -66,6 +77,26 @@ export type DrawnBotEntry = {
 
 /** A host's name and down word by id, for worker lines on another computer than their bot's. */
 export type BotHostNames = ReadonlyMap<ExecutionHostId, { label: string; offline?: string }>
+
+/** About what a row's line shows of a purpose before it cuts. */
+const PURPOSE_SHOWN = 32
+
+function phonePurposeSnippet(
+  purpose: string,
+  ranges: BotSearchRange[]
+): { text: string; ranges: BotSearchRange[] } {
+  if ((ranges[0]?.start ?? 0) <= PURPOSE_SHOWN) {
+    return { text: purpose, ranges }
+  }
+  const cut = botPurposeSnippet(purpose, ranges)
+  // The snippet leads with a one-unit "…" when it cuts.
+  return cut.text.startsWith('…')
+    ? {
+        text: cut.text.slice(1),
+        ranges: cut.ranges.map(({ start, end }) => ({ start: start - 1, end: end - 1 }))
+      }
+    : cut
+}
 
 function matches(row: Worktree, query: string): boolean {
   return row.displayName.toLowerCase().includes(query)
@@ -117,6 +148,8 @@ export function drawHostBotEntries(
   )
   const agentByPaneKey = hostAgentsByPaneKey(hostRows)
   const query = inputs.search.trim().toLowerCase()
+  // A server's bots aren't in the paired computer's roster.
+  const purposes = query && hostId === LOCAL_EXECUTION_HOST_ID ? inputs.purposes : undefined
   const listed = new Set<string>()
   const drawn: DrawnBotEntry[] = []
   const offline = listing.offline
@@ -136,10 +169,9 @@ export function drawHostBotEntries(
         drawnHome: shown(home.row),
         sectionListKey: `bot-group:${identity(home.row)}`,
         bots: listing.bots,
-        avatarUris: listing.avatarUris,
         agentByPaneKey
       })
-      if (!query || matches(groupRow.row, query)) {
+      if (!query || matchBotSearchText(entry.group.name, inputs.search)) {
         drawn.push({
           entry,
           items: [groupRow],
@@ -194,18 +226,10 @@ export function drawHostBotEntries(
     // Searching lists the matching workspaces flat, as before chats; otherwise its chats, once read. A
     // down host's last tree is not live, and its bot lists nothing.
     const tree = query || offline ? undefined : inputs.chatTrees.get(hostBotTreeKey(hostId, bot.id))
+    // Until its first read lands it lists nothing, so its rows don't swap under you.
     const chatItems =
       tree === 'loading'
-        ? [
-            {
-              row: drawnHome.row,
-              view: {
-                sectionListKey: `bot-chat-loading:${identity(home.row)}`,
-                botChatLoading: true as const,
-                ...(bot.paused ? { dimmed: true as const } : {})
-              }
-            }
-          ]
+        ? []
         : hostBotChatItems({
             tree,
             branches: branches.map((branch) => ({ id: branch.id, lines: branch.lines.map(place) })),
@@ -217,18 +241,27 @@ export function drawHostBotEntries(
             steps: inputs.chatSteps,
             dimmed: bot.paused
           })
+    // As the desktop's search: a bot whose name doesn't match may match by what it's for, which its row then shows.
+    const nameMatches = !query || matchBotSearchText(bot.name, inputs.search) !== null
+    const saved = nameMatches ? undefined : purposes?.get(bot.id)
+    // A template's purpose is saved in English and reads in the UI language, as on the desktop.
+    const purpose = saved ? botTemplateText(saved, translate) : null
+    const purposeRanges = purpose ? matchBotSearchText(purpose, inputs.search) : null
+    // The row cuts its own end, so the start is cut only for a match past what one line shows,
+    // and then without the ellipsis.
+    const purposeMatch =
+      purpose && purposeRanges ? phonePurposeSnippet(purpose, purposeRanges) : null
     // A down host shows no live work.
     const workerCounts = countLiveBotWorkspaces(offline ? [] : workspaceStatuses)
     const botFacts = {
       botId: bot.id,
-      // Its chats fold with it, even with no workspace under them.
-      ...(chatItems && chatItems.length > 0 ? { foldsChats: true as const } : {}),
-      avatar: mobileBotAvatarSource(bot, listing.avatarUris.get(bot.id)),
+      ...(chatItems ? { listsChats: true as const } : {}),
+      avatar: mobileBotAvatarSource(bot),
       status,
       dot,
       foldLive: offline ? null : botFoldLiveStatus(workerCounts),
+      workspaceIds: [home.row.worktreeId, ...workers.map((worker) => worker.worktreeId)],
       ...(upNext > 0 ? { upNext } : {}),
-      ...(needsYou > 0 ? { needsYou } : {}),
       line: {
         chatSessionId: bot.chatSessionId ?? null,
         links: listing.links?.[home.id] ?? [],
@@ -239,7 +272,8 @@ export function drawHostBotEntries(
         itemsNeedingYou: needsYou + access.length
       },
       ...(access[0] ? { askedForAccess: accessRequestPerson(access[0]) } : {}),
-      statusLine: botStatusLine(dot, bot.paused),
+      statusLine: botStatusLine(dot, bot.paused, translate),
+      ...(purposeMatch ? { searchPurpose: purposeMatch } : {}),
       paused: bot.paused,
       ...(host ? { host } : {})
     }
@@ -262,18 +296,20 @@ export function drawHostBotEntries(
     }
     const placed = chatItems ?? lines.map(place)
     const shownLines = query ? placed.filter((line) => matches(line.row, query)) : placed
-    if (query && !matches(botRow.row, query) && shownLines.length === 0) {
+    if (!nameMatches && !purposeMatch && shownLines.length === 0) {
       continue
     }
     drawn.push({
       entry,
       items: [botRow, ...(listsUnder ? shownLines : [])],
       preview: {
-        id: composeWorktreeHostIdentity(hostId, bot.id),
-        name: bot.name,
-        avatar: botFacts.avatar,
         ...preview,
-        // A down host's faces carry no live pip.
+        // What its row's Needs you count reads, which the folded header adds up; a down host's is
+        // its last read, not live.
+        needs: offline
+          ? { line: {}, agents: [] }
+          : { line: botFacts.line, agents: home.row.agents ?? [] },
+        // A down host's bots carry no live mark.
         ...(offline ? { status: 'inactive' as const, attention: false, unread: false } : {})
       },
       activity: {

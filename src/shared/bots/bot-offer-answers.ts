@@ -80,3 +80,32 @@ export async function answerBotOffer(
   }
   return sent ? 'sent' : 'refused'
 }
+
+/**
+ * A further action on a card already answered with one (another account added from a Connected card):
+ * its own press, so it takes no claim; it replaces the card's answer and tells the bot. A refused send
+ * puts the previous answer back.
+ */
+export async function answerBotOfferAgain(
+  answer: { cardId: string; sent: NonNullable<BotOfferAnswer['sent']> },
+  previous: BotOfferAnswer['sent'],
+  ops: {
+    update: (offerAnswer: BotOfferAnswerUpdate) => Promise<unknown>
+    send: () => Promise<boolean>
+  }
+): Promise<Exclude<BotOfferAnswerOutcome, 'already_answered'>> {
+  await ops.update(answer)
+  let sent = false
+  try {
+    sent = await ops.send()
+  } finally {
+    if (!sent) {
+      await ops.update(
+        previous
+          ? { cardId: answer.cardId, sent: previous }
+          : { cardId: answer.cardId, release: 'sent' }
+      )
+    }
+  }
+  return sent ? 'sent' : 'refused'
+}

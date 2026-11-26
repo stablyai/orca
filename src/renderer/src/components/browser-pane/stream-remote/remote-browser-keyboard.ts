@@ -1,3 +1,10 @@
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import {
+  shortcutProducesText,
+  textInputOwnsComposition
+} from '../../../../../shared/keybindings/text-input-shortcut-policy'
+
 type RemoteBrowserKeyboardEvent = {
   key: string
   code?: string
@@ -54,4 +61,28 @@ export function getRemoteBrowserKeyboardShortcut(event: RemoteBrowserKeyboardEve
   }
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
   return `${modifiers.join('+')}+${key}`
+}
+
+/** A key whose text comes from the input method or the layout, so it reaches the page as text. */
+export function isRemoteBrowserProxyTextKey(event: KeyboardEvent): boolean {
+  const platform = getShortcutPlatform()
+  return (
+    isImeOwnedKeyboardEvent(event) ||
+    textInputOwnsComposition(event) ||
+    // Off macOS a plain Alt chord types nothing, so only AltGr (Ctrl+Alt on Windows) is text.
+    (shortcutProducesText(event, platform) && (platform === 'darwin' || event.ctrlKey))
+  )
+}
+
+/** Takes a commit, or text inserted without composing (Option characters, punctuation, the emoji picker). */
+export function takeRemoteBrowserProxyText(event: {
+  nativeEvent: Event
+  currentTarget: HTMLTextAreaElement
+}): string | null {
+  if (event.nativeEvent instanceof InputEvent && event.nativeEvent.isComposing) {
+    return null
+  }
+  const text = event.currentTarget.value
+  event.currentTarget.value = ''
+  return text || null
 }

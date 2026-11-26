@@ -11,6 +11,10 @@ import {
 import { installTerminalImeCompositionTracker } from './ime/terminal-ime-composition-tracker'
 import { installTerminalImeComposerPlaceholderMask } from './ime/terminal-ime-composer-placeholder-mask'
 import { createTerminalKittyOrphanKeyupGuard } from './keyboard/terminal-kitty-orphan-keyup-guard'
+import {
+  encodeKittyUnidentifiedSpaceRelease,
+  resolveKittyUnidentifiedSpacePress
+} from './keyboard/terminal-kitty-unidentified-space'
 import { installTerminalImeNativeTextForwarder } from './ime/terminal-ime-native-text-forwarder'
 import { installTerminalIosHangulPreedit } from './ime/terminal-ios-hangul-preedit'
 import { createTerminalIosHangulPreeditRenderer } from './ime/terminal-ios-hangul-preedit-overlay'
@@ -52,6 +56,7 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
   } = context
   let pendingTerminalInterruptKeyup = false
   let claimedNonLatinControlChordCode: string | null = null
+  let claimedKittyUnidentifiedSpacePress = false
   const pendingTerminalImeCandidateKeyReleases = createTerminalImePendingCandidateKeyReleases()
   const isMac = navigator.userAgent.includes('Mac')
   // Android/ChromeOS UAs also contain "Linux"; scope the candidate-key policy to desktop Linux.
@@ -106,6 +111,22 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
       isMac,
       isLinux
+    }
+    if (claimedKittyUnidentifiedSpacePress && event.code === 'Space') {
+      if (event.type === 'keyup') {
+        // Before IME suppression: a composing keyup still ends the press this handler reported.
+        claimedKittyUnidentifiedSpacePress = false
+        clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
+        const release = encodeKittyUnidentifiedSpaceRelease(event, getKittyKeyboardFlags())
+        if (release) {
+          pane.terminal.input(release)
+        }
+        return false
+      }
+      if (event.type === 'keydown' && !event.repeat) {
+        // A fresh press proves the claimed keyup was missed.
+        claimedKittyUnidentifiedSpacePress = false
+      }
     }
     if (shouldSuppressTerminalImeKeyboardEvent(event, imeKeyboardOptions)) {
       clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
@@ -174,13 +195,23 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     if (imeNativeTextForwarder.claimKeyEvent(event)) {
       return false
     }
+    const kittyKeyboardFlags = getKittyKeyboardFlags()
     const shouldBypass = shouldBypassXtermKeyboardEvent(event, {
       isMac,
       isIosWeb,
       hasSelection: pane.terminal.hasSelection(),
-      kittyKeyboardFlags: getKittyKeyboardFlags()
+      kittyKeyboardFlags
     })
-    return !shouldBypass
+    if (shouldBypass) {
+      return false
+    }
+    const unidentifiedSpacePress = resolveKittyUnidentifiedSpacePress(event, kittyKeyboardFlags)
+    if (unidentifiedSpacePress) {
+      claimedKittyUnidentifiedSpacePress = true
+      pane.terminal.input(unidentifiedSpacePress)
+      return false
+    }
+    return true
   }
 
   pane.terminal.attachCustomKeyEventHandler((event) =>

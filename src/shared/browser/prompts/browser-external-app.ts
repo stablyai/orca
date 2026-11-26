@@ -8,6 +8,8 @@ export type BrowserExternalAppPrompt = {
   origin: string | null
   /** The site an "Always allow" answer is saved for; null offers no checkbox. */
   rememberSite: string | null
+  /** Set for a streamed server page: the viewer opens the link on its own computer. */
+  url?: string
 }
 
 /** `always` also lets the site open this scheme without asking next time. */

@@ -125,8 +125,3 @@ export function registerBackgroundWorktreeRemovalBridge(unsubs: (() => void)[]):
     })
   )
 }
-
-export function _resetBackgroundWorktreeRemovalBridgeForTests(): void {
-  hostMarkedDeleteStates.clear()
-  hostFailedDeleteStates.clear()
-}

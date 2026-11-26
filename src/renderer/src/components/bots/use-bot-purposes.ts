@@ -1,4 +1,6 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useTranslate } from '@/i18n/use-translate'
+import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { botRefKey, forEachBotHost } from '@/lib/bot-hosts'
 import type { BotRosterEntry } from '../../../../shared/bot-roster'
@@ -39,7 +41,13 @@ export function refreshBotPurposes(): Promise<void> {
 
 /** What each bot is for (by botRefKey), from its SOUL.md, as last read; reading it is left to `refreshBotPurposes`. */
 export function useKnownBotPurposes(): ReadonlyMap<string, string> {
-  return useSyncExternalStore(subscribe, read, read)
+  const t = useTranslate()
+  const known = useSyncExternalStore(subscribe, read, read)
+  // Why: a template's purpose is saved in English; it reads in the UI language until the owner rewrites it.
+  return useMemo(
+    () => new Map([...known].map(([key, purpose]) => [key, botTemplateText(purpose, t)])),
+    [known, t]
+  )
 }
 
 /** What each bot is for, read again on mount so an edit shows at once; empty until the host answers.

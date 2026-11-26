@@ -29,6 +29,7 @@ export function limitPushDatabaseConcurrency(
     lockQuotaScope: (key) => database.lockQuotaScope(key),
     tryLockScope: (key) => database.tryLockScope(key),
     tryLockSharedScope: (key) => database.tryLockSharedScope(key),
+    afterCommit: (fn) => database.afterCommit(fn),
     close: () => database.close()
   }
 }

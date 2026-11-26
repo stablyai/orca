@@ -104,18 +104,6 @@
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
       "contextSha256": "3c069468bcb4a681493c94dad98bc2e4d2d56d0cbf641e797684fa307922d9e1",
       "sourceClosureSha256": "38b77f62aefd7dd361825a98cf2fa9cfac1924c72d9e2a5f21d427e54381c04e"
-    },
-    {
-      "file": "src/main/daemon/emulation/testing/serialize-grid-transcript-replay.test.ts",
-      "inputs": ["src/main/runtime/__fixtures__/", "src/main/daemon/__fixtures__/"],
-      "emptyEnv": [
-        "SERIALIZE_TRANSCRIPT_DIR",
-        "ORCA_OLD_SERIALIZE_ADDON",
-        "ORCA_NEW_SERIALIZE_ADDON"
-      ],
-      "reason": "Captured transcript replay reads these fixture directories. Optional external capture/addon paths must be unset; package dependencies and the entire local source closure are fingerprinted.",
-      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
-      "sourceClosureSha256": "34f58dd735cddb41300e48a9c774612f5faef171b4630a9dfd0d64b727062101"
     }
   ]
 }

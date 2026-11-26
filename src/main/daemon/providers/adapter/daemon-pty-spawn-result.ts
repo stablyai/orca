@@ -36,6 +36,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       this.resultForExitBeforeSpawnReply(sessionId, result, operation) ?? {
         ...spawnResult,
         ...(!result.isNew ? { isReattach: true } : {}),
+        ...(result.hostTerminalUsage ? { hostTerminalUsage: result.hostTerminalUsage } : {}),
         ...(result.isNew && !historyRecovery.identityChanged
           ? { startupCwdSource: effectiveCwd === opts.cwd ? 'request' : 'recovered-history' }
           : {})

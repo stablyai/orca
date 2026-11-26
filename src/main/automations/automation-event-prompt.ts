@@ -63,6 +63,7 @@ export type AutomationEventAsker = 'owner' | 'member' | 'other'
 const NO_ASKER_EVENTS = new Set<string>([
   'ci_failed',
   'ci_passed',
+  'ci_finished',
   'pr_conflicted',
   'deploy_finished',
   'security_alert',

@@ -5,6 +5,7 @@ export type BotGroupPeerLine =
   | { kind: 'asked' | 'told'; from: string; to: string }
   | { kind: 'read'; reader: string; peer: string }
   | { kind: 'followed'; bot: string }
+  | { kind: 'items'; bot: string }
   | { kind: 'paused'; count: number }
 
 /** A row with no stored requester or replier (older ones too) is a plain follow-up: the room's
@@ -18,6 +19,9 @@ export function botGroupPeerLine(message: BotGroupMessage): BotGroupPeerLine {
   if (message.requester) {
     const kind = message.requester.told ? 'told' : 'asked'
     return { kind, from: message.requester.name, to: message.turns[0]?.botName ?? name }
+  }
+  if (message.fromItems) {
+    return { kind: 'items', bot: name }
   }
   return message.answeredBy
     ? { kind: 'read', reader: name, peer: message.answeredBy.name }

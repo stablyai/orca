@@ -103,6 +103,18 @@ export function writeWorkerPresence(
     )
 }
 
+/** The current rest is decided as no news: its report is dropped unsent. */
+export function settleWorkerRestUnreported(db: OrchestrationDb, dispatchId: string): void {
+  const row = readWorkerPresence(db, dispatchId)
+  if (row?.report) {
+    writeWorkerPresence(db, dispatchId, {
+      ...row,
+      report: null,
+      reportedGeneration: row.generation
+    })
+  }
+}
+
 /** Dispatches whose worker rests, or went away, with a report still undecided. */
 export function listUndecidedWorkerRests(db: OrchestrationDb): string[] {
   return db.db

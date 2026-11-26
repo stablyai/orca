@@ -178,10 +178,3 @@ export function createGhMultiAccountUnsupportedError(): Error & {
     stderr: message
   })
 }
-
-/** @internal — test-only */
-export function clearGhCapabilityStateForTests(): void {
-  capabilityByExecutionHost.clear()
-  probesByExecutionHost.clear()
-  generationByExecutionHost.clear()
-}

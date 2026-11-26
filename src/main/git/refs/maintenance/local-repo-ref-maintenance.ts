@@ -116,17 +116,6 @@ export function postponeRepoRefMaintenance(): void {
   shared?.postponeAll()
 }
 
-/** `overrides` preseeds the shared instance so a test can shorten the quiet period. */
-export function _resetLocalRepoRefMaintenanceForTests(
-  overrides?: Partial<RepoRefMaintenanceOptions>
-): void {
-  shared?.dispose()
-  shared = overrides ? new RepoRefMaintenance({ ...localMaintenanceOptions(), ...overrides }) : null
-  activityProbe = null
-  repoBusyProbes.clear()
-  clearRepoPackIndexMaintenanceCache()
-}
-
 /** Translate WSL Git's common dir to a UNC refs directory the main process can enumerate. */
 function refsDirectoryForMainProcess(commonDir: string, wslDistro: string | undefined): string {
   if (wslDistro && !isWslUncPath(commonDir) && !isWindowsAbsolutePathLike(commonDir)) {

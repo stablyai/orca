@@ -47,6 +47,7 @@ import {
 import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { cn } from '@/lib/class-names'
 import { wholeFileDiffTintClass } from './whole-file-diff-tint'
+import { syncKeptDiffModelsOnMount } from './diff-kept-model-content-sync'
 
 export default function DiffViewer({
   modelKey,
@@ -123,10 +124,10 @@ export default function DiffViewer({
   }, [scrollToDiffCommentId, diffComments, worktreeId])
 
   // A draft keeps its captured owner across a same-tab rename but saves under the file's current path.
-  const relativePathRef = useRef(relativePath)
+  const propsRef = useRef({ relativePath, language, onSave, originalContent, modifiedContent })
   useLayoutEffect(() => {
-    relativePathRef.current = relativePath
-  }, [relativePath])
+    propsRef.current = { relativePath, language, onSave, originalContent, modifiedContent }
+  }, [relativePath, language, onSave, originalContent, modifiedContent])
   const handleCreateComment = useCallback(
     async ({
       lineNumber,
@@ -150,7 +151,7 @@ export default function DiffViewer({
       const result = await (commentOwner
         ? addDiffComment(commentOwner, {
             worktreeId,
-            filePath: relativePathRef.current,
+            filePath: propsRef.current.relativePath,
             source: 'diff',
             startLine,
             lineNumber,
@@ -237,8 +238,6 @@ export default function DiffViewer({
 
   const { setupCopy, toastNode } = useContextualCopySetup()
 
-  const propsRef = useRef({ relativePath, language, onSave })
-  propsRef.current = { relativePath, language, onSave }
   const currentDiffModelPaths = useDiffViewerLargeDiffLifecycle({
     limited: renderLimit.limited,
     modelKey,
@@ -284,6 +283,8 @@ export default function DiffViewer({
         setModifiedEditor(null)
       })
       diffEditor.onDidDispose(preserveDiffViewStateAcrossModelSwaps(diffEditor).dispose)
+      // Before the content listener attaches, so reconciling never reads as a user edit.
+      syncKeptDiffModelsOnMount(diffEditor, propsRef)
 
       setupCopy(originalEditor, monaco, filePath, propsRef)
       setupCopy(modifiedEditor, monaco, filePath, propsRef)

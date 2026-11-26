@@ -41,6 +41,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   workspaceSessionsByHostId: 'keep',
   remoteLayoutSnapshots: 'keep',
   hostRepoCatalogSnapshots: 'keep',
+  pairedPortForwards: 'keep',
   sshTargets: 'keep',
   sshTargetGenerationCounter: 'keep',
   deletedSshConfigAliases: 'keep',

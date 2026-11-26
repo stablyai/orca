@@ -112,11 +112,3 @@ export function queueAcceptedWebSessionTerminalSnapshot(
     }
   })
 }
-
-export function getWebSessionTerminalHandleSubscriberCountForTests(): number {
-  let count = 0
-  for (const subscribers of subscribersBySession.values()) {
-    count += subscribers.size
-  }
-  return count
-}

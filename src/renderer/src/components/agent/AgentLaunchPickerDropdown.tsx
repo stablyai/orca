@@ -321,12 +321,15 @@ function AgentLaunchOpenAs({
     return null
   }
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
+  // Why this place refuses a chat the agent has; a disabled button can't show it on hover.
+  const chatRefused =
+    !entry.surfaces.includes('chat') && unavailable?.kind === 'chat-unavailable'
+      ? chatUnavailableLabel(unavailable.reason, t)
+      : undefined
   const reasons: Partial<Record<AgentPickerSurface, string>> = {
     chat: entry.surfaces.includes('chat')
       ? undefined
-      : unavailable?.kind === 'chat-unavailable'
-        ? chatUnavailableLabel(unavailable.reason, t)
-        : t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label }),
+      : (chatRefused ?? t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label })),
     terminal: entry.surfaces.includes('terminal')
       ? undefined
       : t('agentPicker.noTerminal', 'No terminal for {{agent}}', { agent: entry.label })
@@ -334,19 +337,22 @@ function AgentLaunchOpenAs({
   // A surface the agent lacks stays as a disabled button that says why.
   const missing = (['chat', 'terminal'] as const).filter((surface) => !order.includes(surface))
   return (
-    <div className="flex items-center border-t border-border px-2 py-2">
-      <AgentLaunchSurfaceButtons
-        entry={entry}
-        surfaces={[...missing, ...order]}
-        verb="open"
-        disabled={disabled}
-        unavailable={reasons}
-        primary={entry.defaultSurface}
-        onSelect={onChoose}
-      />
-      {entrySetupLabel(entry, t) ? (
-        <span className="ml-auto text-xs text-muted-foreground">{entrySetupLabel(entry, t)}</span>
-      ) : null}
+    <div className="flex flex-col gap-1.5 border-t border-border px-2 py-2">
+      <div className="flex items-center">
+        <AgentLaunchSurfaceButtons
+          entry={entry}
+          surfaces={[...missing, ...order]}
+          verb="open"
+          disabled={disabled}
+          unavailable={reasons}
+          primary={entry.defaultSurface}
+          onSelect={onChoose}
+        />
+        {entrySetupLabel(entry, t) ? (
+          <span className="ml-auto text-xs text-muted-foreground">{entrySetupLabel(entry, t)}</span>
+        ) : null}
+      </div>
+      {chatRefused ? <p className="text-xs text-muted-foreground">{chatRefused}</p> : null}
     </div>
   )
 }

@@ -31,10 +31,12 @@ type PostBatchLateSettlementState = {
   skippedAncestors: SkippedWorkspaceCleanupAncestor[]
   failedCandidates: WorkspaceCleanupCandidate[]
   failures: WorkspaceCleanupFailure[]
+  supersededTimeouts: WeakSet<WorkspaceCleanupFailure>
   provisionallyBlocked: Set<WorkspaceCleanupCandidate>
   removeCandidates: WorkspaceCleanupRemoveCandidates | null
   removalTimeoutMs: number
   removalSettlementGraceMs: number
+  onRowStarted: ((candidate: WorkspaceCleanupCandidate) => void) | undefined
 }
 
 export type PostBatchLateSettlementResultReporter = (
@@ -53,7 +55,8 @@ export function createPostBatchLateSettlementReporter({
   removeCandidates,
   removalTimeoutMs,
   removalSettlementGraceMs,
-  reportResult
+  reportResult,
+  onRowStarted
 }: {
   skippedAncestors: readonly SkippedWorkspaceCleanupAncestor[]
   failedCandidates: readonly WorkspaceCleanupCandidate[]
@@ -62,6 +65,8 @@ export function createPostBatchLateSettlementReporter({
   removalTimeoutMs: number
   removalSettlementGraceMs: number
   reportResult: PostBatchLateSettlementResultReporter
+  /** Fires when an unblocked ancestor's automatic delete starts, so its row starts a new generation. */
+  onRowStarted?: (candidate: WorkspaceCleanupCandidate) => void
 }): PostBatchLateSettlementReporterSelector {
   // Detached IPC may outlive the dialog; retain unresolved blockers/skips, never completed result arrays.
   const retainedSkippedAncestors = skippedAncestors
@@ -81,10 +86,12 @@ export function createPostBatchLateSettlementReporter({
     skippedAncestors: retainedSkippedAncestors,
     failedCandidates: retainedCandidates,
     failures: retainedSkippedAncestors.map((entry) => entry.failure),
+    supersededTimeouts: new WeakSet(),
     provisionallyBlocked: new Set(retainedCandidates),
     removeCandidates,
     removalTimeoutMs,
-    removalSettlementGraceMs
+    removalSettlementGraceMs,
+    onRowStarted
   }
   let reconcileChain: Promise<void> = Promise.resolve()
   const reportLateSettlement: WorkspaceCleanupLateSettlementReporter = (candidate, result) => {
@@ -97,8 +104,11 @@ export function createPostBatchLateSettlementReporter({
           result,
           reportLateSettlement
         )
-        if (reconciled.result.removedIds.length > 0 || reconciled.result.failures.length > 0) {
-          reportResult(reconciled.result, reconciled.pendingSettlementFailures)
+        const failures = reconciled.result.failures.filter(
+          (failure) => !state.supersededTimeouts.has(failure)
+        )
+        if (reconciled.result.removedIds.length > 0 || failures.length > 0) {
+          reportResult({ ...reconciled.result, failures }, reconciled.pendingSettlementFailures)
         }
       })
       .catch((error: unknown) => {
@@ -171,6 +181,7 @@ async function reconcilePostBatchLateSettlement(
         worktreeId: ancestor.worktreeId,
         executionHostId: getWorkspaceCleanupCandidateHostId(ancestor),
         displayName: ancestor.displayName,
+        provisional,
         message: getSkippedAncestorMessage(provisional)
       }
       if (provisional) {
@@ -189,6 +200,7 @@ async function reconcilePostBatchLateSettlement(
     }
     let removal: Promise<WorkspaceCleanupRemoveResult>
     try {
+      state.onRowStarted?.(ancestor)
       removal = removeCandidates([ancestor.worktreeId], {
         approvedCandidates: [ancestor]
       })
@@ -214,7 +226,11 @@ async function reconcilePostBatchLateSettlement(
       lateFailures.push(timeoutFailure)
       pendingSettlementFailures.add(timeoutFailure)
       const tracker = trackWorkspaceCleanupLateSettlement(outcome.settlement, ancestor, () => {})
-      tracker.detach(reportLateSettlement)
+      tracker.detach((candidate, result) => {
+        // This result can reach Browse before an accumulated timeout from the same retry.
+        state.supersededTimeouts.add(timeoutFailure)
+        reportLateSettlement(candidate, result)
+      })
       continue
     }
     const result =
@@ -259,6 +275,7 @@ function releaseSettledPostBatchState(state: PostBatchLateSettlementState): void
   state.failures.length = 0
   state.provisionallyBlocked.clear()
   state.removeCandidates = null
+  state.onRowStarted = undefined
 }
 
 function removeArrayEntry<T>(entries: T[], entry: T): void {

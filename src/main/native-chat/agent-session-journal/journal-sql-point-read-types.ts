@@ -78,7 +78,7 @@ export type JournalSqlPointRead = {
     | { kind: 'item'; itemId: string }
     | { kind: 'item-detail'; itemId: string }
     | { kind: 'submission'; clientMessageId: string }
-    | { kind: 'submission-body'; clientMessageId: string }
+    | { kind: 'submission-body'; clientMessageId: string; family?: true }
     | { kind: 'acceptance'; clientMessageId: string }
     | { kind: 'item-provenance'; itemId: string }
     | { kind: 'has-recorded-item'; itemId: string }

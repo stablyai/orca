@@ -1,17 +1,23 @@
+import { useId } from 'react'
 import type { BundledSkillLocation } from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import type { BundledSkillOutcome } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   bundledSkillOutcomeText,
   type BundledSkillPlanSkillSummary
 } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { bundledSkillOutcomeRefusalNotices } from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   locationPlaceLabel,
   locationStateText,
+  replaceBackupText,
   skillOutcomeText,
   skillPlanHeadline
 } from './skill-plan-op-copy'
+import { skillBackupPaths, type SkillBackupLocation } from './skill-backup-location'
+import { SkillBackupPathLine } from './SkillBackupPathLine'
+import { SkillRefusalNotice } from './SkillRefusalNotice'
 
 export type SkillRowPhase = 'plan' | 'pending' | 'result'
 
@@ -23,13 +29,16 @@ export type SkillReplaceToggle = {
 function ChoiceLine({
   location,
   reason,
-  replace
+  replace,
+  backup
 }: {
   location: BundledSkillLocation
   reason: string | null
   replace?: SkillReplaceToggle
+  backup: SkillBackupLocation
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const backupDescriptionId = useId()
   if (!reason && !(replace && location.replaceable)) {
     return null
   }
@@ -41,16 +50,27 @@ function ChoiceLine({
         </span>
       ) : null}
       {replace && location.replaceable ? (
-        <label className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
-          <Checkbox
-            checked={replace.isReplaced(location.path)}
-            onCheckedChange={(checked) => replace.onReplaceChange(location.path, checked === true)}
-          />
-          {t(
-            'auto.components.skills.SkillUpdateRow.replaceWithOrca',
-            "Replace with Orca's copy (keeps a backup)"
-          )}
-        </label>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <label className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox
+              aria-describedby={backupDescriptionId}
+              checked={replace.isReplaced(location.path)}
+              onCheckedChange={(checked) =>
+                replace.onReplaceChange(location.path, checked === true)
+              }
+            />
+            {t(
+              'auto.components.skills.SkillUpdateRow.replaceWithOrca',
+              "Replace with Orca's copy (keeps a backup)"
+            )}
+          </label>
+          <span
+            id={backupDescriptionId}
+            className="pl-5.5 text-xs text-muted-foreground [overflow-wrap:anywhere]"
+          >
+            {replaceBackupText(location.observedKind, backup, t)}
+          </span>
+        </div>
       ) : null}
     </div>
   )
@@ -83,13 +103,16 @@ export function SkillUpdateRow({
   phase,
   outcome,
   replace,
-  showLocations
+  showLocations,
+  backup
 }: {
   skill: BundledSkillPlanSkillSummary
   phase: SkillRowPhase
   outcome?: BundledSkillOutcome
   replace?: SkillReplaceToggle
   showLocations: boolean
+  /** The planned host's backups folder, named before Replace and beside each result path. */
+  backup: SkillBackupLocation
 }): React.JSX.Element {
   const t = useTranslate()
   const replacement = skill.locations.find((location) => location.state === 'replace')
@@ -109,6 +132,7 @@ export function SkillUpdateRow({
     (location) => location.state === 'leave' || (phase !== 'result' && location.state === 'replace')
   )
   const seenReasons = new Set<string>()
+  const backupPaths = phase === 'result' && outcome ? skillBackupPaths(outcome.ops) : []
   return (
     <div
       data-skill-row={skill.name}
@@ -120,6 +144,11 @@ export function SkillUpdateRow({
       </span>
       <div className="flex min-w-0 flex-col gap-1.5 text-foreground">
         {headline ? <span>{headline}</span> : null}
+        {phase === 'result' && outcome
+          ? bundledSkillOutcomeRefusalNotices(outcome).map((notice) => (
+              <SkillRefusalNotice key={notice.path} notice={notice} />
+            ))
+          : null}
         {choices.map((location) => {
           const reason = location.state === 'leave' ? locationStateText(location) : null
           const uniqueReason = reason && !seenReasons.has(reason) ? reason : null
@@ -131,10 +160,14 @@ export function SkillUpdateRow({
               key={location.path}
               location={location}
               reason={uniqueReason}
+              backup={backup}
               {...(replace ? { replace } : {})}
             />
           )
         })}
+        {backupPaths.map((path) => (
+          <SkillBackupPathLine key={path} path={path} host={backup.host} />
+        ))}
         {showLocations ? <LocationTable locations={skill.locations} /> : null}
       </div>
     </div>

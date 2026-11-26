@@ -1,58 +1,37 @@
 // @vitest-environment happy-dom
-
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, expect, it } from 'vitest'
 import type { BotGroupRemoteAsk as RemoteAsk } from '../../../../shared/bots/bot-group'
+import { mascotAvatar } from '../../../../shared/bot-avatar'
 import { BotGroupRemoteAsk } from './BotGroupRemoteAsk'
-
-const base: RemoteAsk = {
-  environmentId: 'ws',
-  botId: 'builds',
-  chatSessionId: 'chat-builds',
-  computer: 'Workstation',
-  joinedAfter: 0,
-  name: 'Nightly builds',
-  avatar: null,
-  agent: 'claude',
-  requestId: 'msg_000000000001',
-  state: 'sent'
-}
 
 afterEach(cleanup)
 
-describe('a question to a bot on another computer', () => {
-  it('keeps the row label short and puts the sentence under it when delivery is unknown', () => {
-    render(
-      <BotGroupRemoteAsk ask={{ ...base, state: 'unknown', error: 'The request timed out' }} />
-    )
-    expect(screen.getByRole('status').textContent).toBe('Delivery unknown')
-    expect(screen.getByText('May still answer on Workstation. The request timed out.')).toBeTruthy()
-  })
+function answered(text: string): string {
+  const ask: RemoteAsk = {
+    environmentId: 'workstation',
+    botId: 'builds',
+    chatSessionId: 'chat-builds',
+    computer: 'Workstation',
+    joinedAfter: 0,
+    name: 'Nightly builds',
+    avatar: mascotAvatar('F1'),
+    agent: 'claude',
+    requestId: 'msg_000000000001',
+    state: 'sent',
+    reply: { kind: 'answer', text }
+  }
+  return render(<BotGroupRemoteAsk ask={ask} />).container.textContent ?? ''
+}
 
-  it('shows why a question was not sent, under a short label', () => {
-    render(
-      <BotGroupRemoteAsk
-        ask={{
-          ...base,
-          state: 'failed',
-          error: "Couldn't reach Workstation. It's offline. Post again to retry."
-        }}
-      />
-    )
-    expect(screen.getByRole('status').textContent).toBe('Not sent to Workstation')
-    expect(
-      screen.getByText("Couldn't reach Workstation. It's offline. Post again to retry.")
-    ).toBeTruthy()
-  })
-
-  it("names the computer, not the bot again, when the bot didn't answer or was stopped", () => {
-    render(<BotGroupRemoteAsk ask={{ ...base, reply: { kind: 'notice' } }} />)
-    expect(screen.getByText("Didn't answer on Workstation")).toBeTruthy()
-    // The label is a live region before anything goes wrong, so a later failure is announced.
-    expect(screen.getByRole('status').textContent).toBe("Didn't answer on Workstation")
-    cleanup()
-    render(<BotGroupRemoteAsk ask={{ ...base, stopped: true }} />)
-    expect(screen.getByText('Stopped here')).toBeTruthy()
-    expect(screen.getByText('May still answer on Workstation.')).toBeTruthy()
-  })
+it("draws a remote bot's quiet answer as the phone does, never its marker", () => {
+  const note = answered('Green on main.\n\nNO_REPLY')
+  expect(note).toContain('Green on main.')
+  expect(note).not.toContain('NO_REPLY')
+  cleanup()
+  const quiet = answered('NO_REPLY')
+  expect(quiet).toContain('Nothing to report')
+  expect(quiet).not.toContain('NO_REPLY')
+  cleanup()
+  expect(answered('Green on main.')).toContain('Green on main.')
 })

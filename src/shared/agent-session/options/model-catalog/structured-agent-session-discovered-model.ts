@@ -19,8 +19,9 @@ function effortOption(
   model: AgentSessionOptionsResult['models'][number],
   agent: AgentType
 ): CatalogOption | null {
+  const levels = structuredModelEfforts(model)
   // Pi menus are exact; other agents (OMP's recorded menus) still offer unconfirmed choices.
-  if ((agent === 'pi' && model.effortsKnown === false) || model.efforts.length === 0) {
+  if ((agent === 'pi' && model.effortsKnown === false) || levels.length === 0) {
     return null
   }
   return {
@@ -29,8 +30,8 @@ function effortOption(
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: structuredModelEfforts(model),
-      defaultValue: model.defaultEffort ?? model.efforts[0]!.value,
+      choices: levels,
+      defaultValue: model.defaultEffort ?? levels[0]!.value,
       ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
     },
     apply: { midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` } }

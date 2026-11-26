@@ -9,6 +9,7 @@ import { PluginService } from '../../plugins/plugin-service'
 import { PluginKillListService } from '../../plugins/catalog/plugin-kill-list-service'
 import { PluginInstallStatsService } from '../../plugins/catalog/plugin-install-stats-service'
 import { PluginMarketplaceService } from '../../plugins/catalog/plugin-marketplace-service'
+import { getCatalogManagingTeams } from '../../plugins/catalog/plugin-marketplace-team-policy'
 import { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-marketplace-installer'
 import { PluginAutoUpdater } from '../../plugins/catalog/plugin-auto-updater'
 import { PluginReleaseFirstSeenStore } from '../../plugins/catalog/plugin-release-first-seen-store'
@@ -29,10 +30,6 @@ import {
   normalizePluginIdList
 } from '../../../shared/plugins/approval/plugin-consent-state'
 import { projectPluginAgentStatusChangedPayload } from '../../plugins/events/plugin-agent-status-event'
-import { setMainPluginLanguagePacks, setMainUiLanguage } from '../../i18n/main-i18n'
-import { isUsablePluginLanguagePack } from '../../../shared/plugins/languages/plugin-language-pack-coverage'
-import { rebuildAppMenu } from '../../menu/register-app-menu'
-import { rebuildSystemTrayMenu } from '../../tray/system-tray'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import {
@@ -47,7 +44,15 @@ import type { Store } from '../../persistence/loading-store/store'
 import { PluginStatusBarState } from '../../plugins/status-bar/plugin-status-bar-state'
 import { createDesktopPluginAppearance } from '../../plugins/appearance/desktop-plugin-appearance'
 import { bindPluginEditorTypography } from '../../plugins/appearance/plugin-editor-typography'
+import { bindDesktopPluginNotices } from './desktop-plugin-notices'
 import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
+import { getActiveTeamCapabilities } from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
+import { watchTeamPluginPolicy } from './team-plugin-policy-reconciliation'
+import {
+  findTeamPluginBlock,
+  getRequiredTeamPlugins
+} from '../../plugins/installation/plugin-team-install-policy'
 
 const PLUGIN_AUTO_UPDATE_STARTUP_DELAY_MS = 60_000
 // Why: the official catalog fetch must not compete with first paint; opening the marketplace seeds sooner.
@@ -59,12 +64,13 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     throw new Error('Keybindings and runtime must be initialized before plugins')
   }
   const pluginSystemStartupStartedAt = performance.now()
-  core.pluginKillListService = new PluginKillListService({
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
-  })
+  const pluginsDataDir = getPluginsDataDir(app.getPath('userData'))
+  core.pluginKillListService = new PluginKillListService({ pluginsDataDir })
   await core.pluginKillListService.initialize()
+  const getPluginBlock = (key: string) =>
+    core.pluginKillListService?.find(key) ?? findTeamPluginBlock(key)
   core.pluginInstallStatsService = new PluginInstallStatsService({
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    pluginsDataDir,
     // Why packaged only (like the safety list): dev and e2e runs must not reach the network unasked.
     isFetchAllowed: () =>
       store.getSettings().pluginSystemEnabled === true &&
@@ -77,14 +83,13 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       }
     }
   })
-  const pluginImageCache = new PluginImageCache(
-    join(getPluginsDataDir(app.getPath('userData')), 'image-cache')
-  )
+  const pluginImageCache = new PluginImageCache(join(pluginsDataDir, 'image-cache'))
   core.pluginMarketplaceService = new PluginMarketplaceService({
     imageCache: pluginImageCache,
-    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
-    getKillListEntry: (pluginKey) => core.pluginKillListService?.find(pluginKey) ?? null,
-    hostVersion: pluginHostVersion(app.getVersion())
+    pluginsDataDir,
+    getKillListEntry: getPluginBlock,
+    hostVersion: pluginHostVersion(app.getVersion()),
+    getTeamCapabilities: getActiveTeamCapabilities
   })
   const requestOfficialMarketplaceSeed = (): void => {
     if (store.getSettings().pluginSystemEnabled !== true) {
@@ -114,12 +119,17 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     hostVersion: pluginHostVersion(app.getVersion()),
     // Feature flag: with the setting off, discovery returns nothing and no
     // plugin code path runs at all.
-    isPluginSystemEnabled: () => store.getSettings().pluginSystemEnabled === true,
+    isPluginSystemEnabled: () =>
+      store.getSettings().pluginSystemEnabled === true &&
+      getActiveTeamCapabilities()?.flags[ORCA_CLOUD_TEAM_POLICY_FLAGS.plugins] !== false,
     getDisabledPlugins: () => normalizePluginIdList(store.getSettings().disabledPlugins),
+    getRequiredPlugins: getRequiredTeamPlugins,
+    getCatalogManagingTeams: (source) =>
+      getCatalogManagingTeams(source, getActiveTeamCapabilities()),
     getPluginConsents: () => normalizePluginConsents(store.getSettings().pluginConsents),
     getDevPluginPaths: () => normalizePluginIdList(store.getSettings().devPluginPaths),
     getKeybindings: () => core.keybindings?.getOverrides() ?? {},
-    getPluginKillListEntry: (pluginKey) => core.pluginKillListService?.find(pluginKey) ?? null,
+    getPluginKillListEntry: getPluginBlock,
     hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged),
     getDesktopFrameServices: getPluginDesktopFrameServices,
     statusBar: new PluginStatusBarState(),
@@ -128,6 +138,14 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     bundledPluginRoot
   })
   const pluginService = core.pluginService
+  core.stopTeamPluginPolicy?.()
+  core.stopTeamPluginPolicy = watchTeamPluginPolicy(
+    pluginService,
+    core.pluginMarketplaceService,
+    core.pluginMarketplaceInstaller,
+    PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS,
+    store
+  )
   const pluginAutoUpdater = new PluginAutoUpdater({
     pluginService,
     installer: core.pluginMarketplaceInstaller,
@@ -164,7 +182,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
     getHeld: () => pluginAutoUpdater.getHeldForReview(),
     findName: (pluginKey) => pluginService.findValidPlugin(pluginKey)?.manifest.name ?? null,
-    isKillListed: (pluginKey) => Boolean(core.pluginKillListService?.find(pluginKey))
+    isKillListed: (pluginKey) => Boolean(getPluginBlock(pluginKey))
   })
   // Why packaged only (like the safety list): dev and e2e runs must not update fixtures unasked.
   const autoUpdateScheduled = app.isPackaged || process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'
@@ -269,26 +287,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       )
     core.pluginKillListService.syncPeriodicRefresh(true)
   }
-  core.pluginService.onChanged((event) => {
-    if (
-      event.contentPacksChanged &&
-      setMainPluginLanguagePacks(
-        (core.pluginService?.contentPacks.languagePacks.list() ?? []).filter(
-          isUsablePluginLanguagePack
-        )
-      )
-    ) {
-      void setMainUiLanguage(store.getSettings().uiLanguage).then(() => {
-        rebuildAppMenu()
-        rebuildSystemTrayMenu()
-      })
-    }
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('plugins:changed', event)
-      }
-    }
-  })
+  bindDesktopPluginNotices(pluginService, store)
   requestBundledPluginBootstrap()
   setTimeout(() => {
     if (net.isOnline()) {

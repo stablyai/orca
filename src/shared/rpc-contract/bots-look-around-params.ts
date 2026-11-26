@@ -69,7 +69,9 @@ export const BotConnectors = z.object({
 
 /** How a bot request on a card in the owner's chat stands. */
 export const BotRequestOutcomeParams = z.object({
-  messageId: requiredString('Missing messageId')
+  messageId: requiredString('Missing messageId'),
+  /** Asked of an agent on a paired computer: read from this host's own record of the ask. */
+  onClient: z.boolean().optional()
 })
 
 /** Read a bot's Tidy-up, or start one now. */

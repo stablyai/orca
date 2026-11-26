@@ -262,12 +262,3 @@ export function getEditorDraftVersionByFileId(
 ): ReadonlyMap<string, string> {
   return getEditorDraftHashCache(editorDrafts, openFiles).hashByFileId
 }
-
-export function resetRuntimeMobileSyncProjectionCachesForTests(): void {
-  graphState.cachedTabsProjection = null
-  graphState.cachedOpenFilesProjection = null
-  graphState.cachedBrowserWorkspacesProjection = null
-  graphState.cachedBrowserPagesProjection = null
-  graphState.cachedEditorDraftHashes = null
-  cachedDraftSourceFileIds = null
-}

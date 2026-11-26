@@ -7,9 +7,14 @@ export const WSL_HOST_CAPABILITY_CHANNEL = 'wslHosts:capabilityChanged'
 /** What an in-flight Add waits for, before the host has a status of its own. */
 export const WSL_HOST_ADD_PROGRESS_CHANNEL = 'wslHosts:addProgress'
 
+/** The launch step an Add's connect is on; deploy can't tell a fresh install from a no-op one, so both read as installing. */
+export type WslHostAddStage = 'starting-distro' | 'installing-server' | 'connecting'
+
 /** `detail` is null once the Add no longer waits on anything it can name. */
 export type WslHostAddProgress = {
   distro: string
+  /** Absent from older mains. */
+  stage?: WslHostAddStage
   detail: string | null
   detailCode?: string
   detailParams?: WslHostCopyParams
@@ -49,8 +54,21 @@ export type WslHostStatus = {
   removalPending?: boolean
 }
 
-/** An explicit Update retries a skipped build behind the terminal census; Force also passes it. */
-export type WslHostConnectIntent = 'update' | 'force'
+/**
+ * An explicit Update retries a skipped build behind the terminal census; Force also passes it.
+ * Restart-as-WSL-host ends the server's terminals, then starts it again as a WSL host.
+ */
+export type WslHostConnectIntent = WslHostUpdateIntent | 'restart-as-wsl-host'
+export type WslHostUpdateIntent = 'update' | 'force'
+
+/**
+ * The distro's server was started some other way (usually by an SSH host), without the WSL host
+ * marker, and terminals keep it from restarting on its own. It cannot take moved projects.
+ */
+export const ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE = 'orcad_not_started_as_wsl_host'
+
+/** Update anyway over an uncounted census: Update's admission, pinned to the build the user confirmed. */
+export type WslHostPastUncountedTerminals = { incumbentVersion: string | null }
 
 /** A host a newer Orca runs refused this build: only Force (or updating Orca) changes that. */
 export const ORCAD_HOST_NEWER_DEFERRAL_CODE = 'orcad_host_newer'
@@ -65,6 +83,8 @@ export type WslHostDeferredUpdate = {
   reason: string
   /** False when forcing cannot make the update safe (e.g. it would strand terminals). */
   forceable: boolean
+  /** The build the deferral was decided over; Update anyway is pinned to it. Absent from older mains. */
+  incumbentVersion?: string | null
 }
 
 export type WslHostCapability = {

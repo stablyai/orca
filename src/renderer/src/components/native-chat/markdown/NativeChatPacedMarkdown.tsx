@@ -1,25 +1,40 @@
-import type { ComponentProps } from 'react'
+import { memo, useRef, type ComponentProps } from 'react'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
+import { useKeptMathSelection } from './use-kept-math-selection'
+
+/** A save the reveal takes in changes its state, not the text drawn yet; that renders no reply. */
+const PacedMarkdownBody = memo(NativeChatMarkdown)
 
 /** Isolate paced text updates so animation frames do not rerender the rest of the row. */
 export function NativeChatPacedMarkdown({
   rowKey,
   content,
   streaming,
+  savedRevision,
   ...props
-}: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeWords'> & {
+}: Omit<
+  ComponentProps<typeof NativeChatMarkdown>,
+  'growing' | 'fadeFrom' | 'fadeHold' | 'fadeAnimates'
+> & {
   rowKey: string
   streaming: boolean
+  /** The row's saved journal revision, where it has one. */
+  savedRevision?: number
 }): React.JSX.Element {
-  const paced = useNativeChatPacedText(rowKey, content, streaming)
+  const root = useRef<HTMLDivElement | null>(null)
+  const paced = useNativeChatPacedText(rowKey, content, streaming, root, savedRevision)
+  useKeptMathSelection(root, streaming || paced.revealing)
   return (
-    <NativeChatMarkdown
+    <PacedMarkdownBody
       {...props}
+      ref={root}
       rowKey={rowKey}
       content={paced.text}
       streaming={streaming || paced.revealing}
-      fadeWords={paced.fading}
+      fadeFrom={paced.fadeFrom}
+      fadeHold={paced.fadeHold}
+      fadeAnimates={paced.fadeAnimates}
     />
   )
 }

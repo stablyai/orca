@@ -30,7 +30,3 @@ export function isFrameDrawnServerWorkspace(environmentId: string, worktreeId: s
 export function isServerFrameDrawnWorkspace(environmentId: string, worktreeId: string): boolean {
   return ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, worktreeId)
 }
-
-export function resetFrameDrawnServerWorkspacesForTests(): void {
-  frameDrawnWorktreeIdsByEnvironment.clear()
-}

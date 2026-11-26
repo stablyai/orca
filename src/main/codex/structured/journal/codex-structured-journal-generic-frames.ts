@@ -67,7 +67,7 @@ export class CodexJournalGenericFrames {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account'
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account' | 'localClock'
     > & {
       attributionFor: CodexRowAttribution
     },
@@ -75,6 +75,7 @@ export class CodexJournalGenericFrames {
   ) {
     this.failures = new CodexTurnFailures({
       account: deps.account,
+      localClock: deps.localClock === true,
       activeTurn,
       append: (threadId, payload, frame) => this.appendFrameRow(threadId, payload, frame)
     })

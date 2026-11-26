@@ -83,13 +83,18 @@ type BotChatSceneOptions = {
   side?: boolean
   older?: boolean
   name?: string
-  expect?: 'hidden' | 'visible'
+  expect?: 'not rendered' | 'hidden' | 'shown'
 }
 
 function botChatScene(
   hostId: ExecutionHostId,
   width: number,
-  { side = false, older = false, name = bot.name, expect = 'hidden' }: BotChatSceneOptions = {}
+  {
+    side = false,
+    older = false,
+    name = bot.name,
+    expect = side || older ? 'not rendered' : 'shown'
+  }: BotChatSceneOptions = {}
 ) {
   const ruled = hostId === 'local' || !older
   const sceneBot: Bot = { ...bot, name }
@@ -218,54 +223,32 @@ function botChatScene(
         header.clientWidth -
         Number.parseFloat(style.paddingLeft) -
         Number.parseFloat(style.paddingRight)
-      if (
-        hostId === 'local' &&
-        expect === 'hidden' &&
-        (!banner || getComputedStyle(banner).display !== 'none' || containerWidth > 260)
-      ) {
-        throw new Error('Narrow Home fixture did not fully hide the banner at the breakpoint')
+      const visibility = !banner
+        ? 'not rendered'
+        : getComputedStyle(banner).display === 'none'
+          ? 'hidden'
+          : 'shown'
+      if (visibility !== expect) {
+        throw new Error(`Expected banner ${expect}, got ${visibility}`)
       }
       const nameElement = banner?.querySelector<HTMLElement>('[data-bot-home-banner-name]')
-      if (
-        hostId === 'local' &&
-        expect === 'visible' &&
-        (!banner ||
-          getComputedStyle(banner).display === 'none' ||
-          !nameElement ||
-          nameElement.getBoundingClientRect().width === 0)
-      ) {
+      if (visibility === 'shown' && !nameElement?.getBoundingClientRect().width) {
         throw new Error('Home fixture did not show the banner with its name')
       }
-      if (hostId === PAIRED_HOST && older === Boolean(banner)) {
-        throw new Error(`Paired Home fixture ${older ? 'rendered' : 'lost'} its banner`)
-      }
       frame.querySelector<HTMLElement>('[data-home-fixture-measurement]')!.textContent =
-        `Pane ${width}px · header content ${containerWidth}px · banner ${
-          !banner
-            ? 'not rendered'
-            : getComputedStyle(banner).display === 'none'
-              ? 'hidden'
-              : 'shown'
-        }`
+        `Pane ${width}px · header content ${containerWidth}px · banner ${visibility}`
     }
   })
 }
 
-export const localHomeHiddenAt260 = botChatScene('local', 264)
-export const localHomeShortName = botChatScene('local', 720, { name: 'Atlas', expect: 'visible' })
-export const localHomeLongName = botChatScene('local', 720, { name: LONG_NAME, expect: 'visible' })
-export const localHomeNarrowLongName = botChatScene('local', 300, {
-  name: LONG_NAME,
-  expect: 'visible'
-})
+export const localHomeHiddenAt260 = botChatScene('local', 264, { expect: 'hidden' })
+export const localHomeShortName = botChatScene('local', 720, { name: 'Atlas' })
+export const localHomeLongName = botChatScene('local', 720, { name: LONG_NAME })
+export const localHomeNarrowLongName = botChatScene('local', 300, { name: LONG_NAME })
 export const pairedHome = botChatScene(PAIRED_HOST, 720)
 export const pairedHomeOlderServer = botChatScene(PAIRED_HOST, 720, { older: true })
 
-export const localSideChat = botChatScene('local', 720, { side: true, expect: 'visible' })
+export const localSideChat = botChatScene('local', 720, { side: true })
 export const pairedSideChat = botChatScene(PAIRED_HOST, 720, { side: true })
 
-export const localSideChatNarrow = botChatScene('local', 300, {
-  side: true,
-  name: LONG_NAME,
-  expect: 'visible'
-})
+export const localSideChatNarrow = botChatScene('local', 300, { side: true, name: LONG_NAME })

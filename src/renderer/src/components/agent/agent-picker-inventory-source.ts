@@ -55,7 +55,9 @@ export type AgentPickerAcquisitionReads = {
   catalog: (
     entry: AgentPickerEntry,
     waitForListing: boolean,
-    signal: AbortSignal
+    signal: AbortSignal,
+    /** The host lists this agent's models again before answering. */
+    relist?: boolean
   ) => Promise<AgentPickerEntry['catalog'] | undefined>
   refreshOnInvalidation?: (entry: AgentPickerEntry) => boolean
   subscribeInvalidation?: (listener: () => void) => () => void

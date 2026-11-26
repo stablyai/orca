@@ -160,6 +160,8 @@ export function setupBotMail(h: ReturnType<typeof createOrchestrationRpcHarness>
   const seamStub = seam as unknown as ReturnType<OrcaRuntimeService['getExternalConversationSeam']>
   vi.spyOn(runtime, 'getExternalConversationSeam').mockReturnValue(seamStub)
   vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+  // A `--chat new` chat's tab, shown in the bot's home.
+  const publishTab = vi.spyOn(runtime, 'publishStructuredAgentSessionTab').mockResolvedValue()
   startBotSession.mockClear()
   closeBotSession.mockClear()
   setUserConversationName.mockClear()
@@ -187,5 +189,14 @@ export function setupBotMail(h: ReturnType<typeof createOrchestrationRpcHarness>
     JSON.parse(JSON.stringify(await send(from, params)))
   const reply = (from: string, params: Record<string, unknown>) =>
     h.call('orchestration.reply', params, context(from))
-  return { db, runtime, bots, send, sent, reply, conversationTurn: seam.conversationTurn }
+  return {
+    db,
+    runtime,
+    bots,
+    send,
+    sent,
+    reply,
+    publishTab,
+    conversationTurn: seam.conversationTurn
+  }
 }

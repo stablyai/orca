@@ -1,7 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
-import { handleSpinnerAnimationStart } from '@/components/ui/spinner-phase'
+import { handleSpinnerAnimationStart } from '@/components/ui/shared-animation-clock'
 
 // Offscreen rings drop their animation; the restart on reveal re-anchors phase via animationstart.
 function observeSpinner(el: HTMLSpanElement): () => void {

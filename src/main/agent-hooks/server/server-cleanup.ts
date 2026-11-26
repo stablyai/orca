@@ -14,14 +14,16 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import { discardCodexPaneOwner } from '../../../shared/agent-hook-listener/providers/codex/codex-pane-transcript-retirement'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 import { endedPresenceOf } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
-  /** The pane's shell is back: a process-less owner ended. */
-  confirmedExit?: boolean
+  /** The pane's shell is back: a process-less owner ended. 'proven' when the host's process
+   *  table found the shell alone, not only a command mark standing. */
+  confirmedExit?: boolean | 'proven'
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
   /** One pane's identity, already read while its row stayed unchanged. */
@@ -268,14 +270,11 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
         if (deleted.payload.agentType === 'codex') {
-          // A replacement remote process may reuse the pane; discard the lost owner's children.
-          this.state.codexSubagentRosterByPaneKey.delete(paneKey)
-          this.state.codexLeadStateByPaneKey.delete(paneKey)
-          this.state.codexAsyncQuestionsByPaneKey.delete(paneKey)
+          discardCodexPaneOwner(this.state, paneKey)
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)
-          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+          this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
           this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
           this.state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
           this.state.claudeSessionOwnerByPaneKey.delete(paneKey)

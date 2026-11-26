@@ -11,3 +11,8 @@ export function isSafeDisplayText(value: string): boolean {
 export function stripUnsafeDisplayCharacters(value: string): string {
   return value.replace(UNSAFE_DISPLAY_CHARACTERS, '')
 }
+
+/** One line of plain text from another machine: breaks become spaces, hiding characters go. */
+export function toSafeDisplayLine(value: string): string {
+  return stripUnsafeDisplayCharacters(value.replace(/\s+/g, ' ')).trim()
+}

@@ -1,4 +1,5 @@
 export const CLAUDE_IDLE = '\u2733'
+// Gemini CLI's title glyphs; Qoder and DeepSeek Build titles still use them.
 export const GEMINI_WORKING = '\u2726' // ✦
 export const GEMINI_SILENT_WORKING = '\u23f2' // ⏲
 export const GEMINI_IDLE = '\u25c7' // ◇

@@ -7,7 +7,7 @@ import {
 } from '../../tool-input-preview'
 import { readFirstString } from '../../interactive-tool'
 import { readLastAssistantFromTranscript } from '../../transcript-lines'
-import { isAntigravityStopStillBusy } from './antigravity-event-rules'
+import { isAntigravityStopFailed, isAntigravityStopStillBusy } from './antigravity-event-rules'
 
 export function readAntigravityToolCall(hookPayload: Record<string, unknown>): {
   toolName?: string
@@ -43,7 +43,9 @@ export function extractAntigravityToolFields(
     if (isAntigravityStopStillBusy(hookPayload)) {
       return {}
     }
+    // A failed turn's last words are the error, not the progress update before it.
     const message =
+      (isAntigravityStopFailed(hookPayload) ? readString(hookPayload, 'error') : undefined) ??
       readString(hookPayload, 'last_assistant_message') ??
       readLastAssistantFromTranscript(hookPayload.transcriptPath ?? hookPayload.transcript_path)
     if (message) {

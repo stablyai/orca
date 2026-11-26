@@ -38,7 +38,6 @@ export async function commentAsMaker(
     type: 'status',
     to: `orca_session_id:${chat.sessionId}`,
     messageId: `msg_item_${randomUUID().replaceAll('-', '')}`,
-    keepChat: true,
     ...botItemMakerCommentMail(item, writer.bot.name, text, images)
   })
   try {

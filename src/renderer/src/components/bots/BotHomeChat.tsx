@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import { openBotChat } from '@/lib/bot-catalog'
 import { useBotForWorkspace } from './bot-workspace'
+import { botErrorMessage } from './bot-presentation'
+import { readAgentSessionErrorRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { useAppStore } from '@/store'
 import { isBotHomeTab, isLocalBotChatTab } from '../../../../shared/bots/bot-home-tab'
 
@@ -23,9 +26,13 @@ export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
   )
   useEffect(() => {
     if (botId && hostId && ready && !shown) {
-      openBotChat({ hostId, id: botId }).catch((error: unknown) =>
+      openBotChat({ hostId, id: botId }).catch((error: unknown) => {
         console.error('Failed to open the bot chat:', error)
-      )
+        // A refused Home says why once per bot; a dropped call still retries quietly on the next change.
+        if (readAgentSessionErrorRefusal(error)) {
+          toast.error(botErrorMessage(error), { id: `bot-home-refused:${botId}` })
+        }
+      })
     }
   }, [botId, hostId, agent, sessionId, ready, shown])
   return null

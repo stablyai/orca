@@ -71,7 +71,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       project: (frame, navigation) => this.projectMobileSessionTabsForClient(frame, navigation),
       deliver: (subscription, frame, sequence, delivery) =>
         this.deliverMobileSessionTabsFrame(subscription, frame, sequence, delivery),
-      source: (worktree) => this.mobileSessionTabsByWorktree.get(worktree),
+      source: (worktree) => this.mobileSessionTabsByWorktree.deliverySource(worktree),
       epoch: () => this.getAuthoritativeSessionTabsInventoryEpoch(),
       releaseHistory: () => this.releaseAgentSenderHistoryIfUnobserved()
     })

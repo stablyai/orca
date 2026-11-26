@@ -1,4 +1,5 @@
 import type { WebSocket } from 'ws'
+import type { RpcContext } from '../core'
 import type { TerminalStreamFrame } from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from './pairing/device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './pairing/e2ee-keypair'
@@ -27,8 +28,24 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     return this.binaryMessageRouter.registerRawMessage(connectionId, handler)
   }
 
+  /** Binary frames are client data (terminal input, uploads), so they are use on every socket. */
   protected handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
+    if (this.idleStopFenced) {
+      return
+    }
+    this.lastClientRequestAt = Date.now()
     this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
+  }
+
+  /** Request signal plus a retainer so handlers can outlive the request but not the socket. */
+  protected webSocketDispatchLifetime(
+    ws: WebSocket | undefined,
+    registration: { signal: AbortSignal } | null
+  ): Pick<RpcContext, 'signal' | 'retainConnectionLifetime'> {
+    return {
+      signal: registration?.signal,
+      retainConnectionLifetime: ws ? () => this.registerWebSocketDispatchAbort(ws) : undefined
+    }
   }
 
   protected registerWebSocketDispatchAbort(ws: WebSocket): {

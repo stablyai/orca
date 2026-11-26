@@ -106,10 +106,6 @@ export function forgetManagedOrcadServingVerdict(environmentId: string): void {
   checks.delete(environmentId)
 }
 
-export function resetManagedOrcadServingForTests(): void {
-  checks.clear()
-}
-
 async function checkAndStart(input: OrcadManagedServingInput): Promise<OrcadManagedServing> {
   if (await input.probe(input.environment, PROBE_TIMEOUT_MS)) {
     getManagedOrcadCrashLoopBrake().noteServing(input.environment.id)

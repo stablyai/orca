@@ -70,11 +70,12 @@ function isAnchoredTriggerPosition(
 }
 
 export function getDefaultFloatingTerminalTriggerCommittedPosition(): FloatingTerminalAnchoredTriggerPosition {
+  const narrow = getViewport().width < 440
   return {
     anchorX: 'right',
-    anchorY: 'bottom',
+    anchorY: narrow ? 'top' : 'bottom',
     offsetX: DEFAULT_RIGHT_GAP,
-    offsetY: DEFAULT_BOTTOM_GAP
+    offsetY: narrow ? TITLEBAR_SAFE_TOP + TRIGGER_SIZE : DEFAULT_BOTTOM_GAP
   }
 }
 

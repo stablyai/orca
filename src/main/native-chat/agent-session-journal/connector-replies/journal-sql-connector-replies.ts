@@ -4,6 +4,7 @@ import type {
   JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
+  JournalConnectorReplyRetryRows,
   JournalConnectorReplyRow
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
 import type { JournalSqlDatabase } from '../database/journal-sql-database'
@@ -23,6 +24,42 @@ export class JournalSqlConnectorReplies {
     const result = await this.db.readers.database({
       kind: 'connector-replies',
       ...(sessionId === undefined ? {} : { sessionId })
+    })
+    if (result.kind !== 'connector-replies') {
+      throw new Error('journal reader returned no connector replies')
+    }
+    return result.rows
+  }
+
+  /** Whether a turn's answer to one conversation is still unsent (a leave's line waits for it). */
+  async unsentAnswer(
+    sessionId: string,
+    conversation: { source: string; externalId: string },
+    turnStartedAt: number
+  ): Promise<boolean> {
+    const result = await this.db.readers.database({
+      kind: 'connector-reply-unsent',
+      sessionId,
+      conversation,
+      turnStartedAt
+    })
+    if (result.kind !== 'connector-reply-unsent') {
+      throw new Error('journal reader returned no unsent answer check')
+    }
+    return result.unsent
+  }
+
+  /** One page of an account's filled, unsent rows after a delivery id (null: from the start). */
+  async readOwed(
+    account: string,
+    after: string | null,
+    limit: number
+  ): Promise<JournalConnectorReplyRow[]> {
+    const result = await this.db.readers.database({
+      kind: 'connector-replies-owed',
+      account,
+      after,
+      limit
     })
     if (result.kind !== 'connector-replies') {
       throw new Error('journal reader returned no connector replies')
@@ -53,6 +90,14 @@ export class JournalSqlConnectorReplies {
     failure?: ConnectorFailure
   ): Promise<boolean> {
     return await this.maintain({ kind: 'connector-replies-recut', claimMessageId, cut, failure })
+  }
+
+  /** An empty turn's rows, held for its one retry to claim; whether any changed. */
+  async holdForRetry(rows: JournalConnectorReplyRetryRows): Promise<boolean> {
+    return await this.maintain(
+      { kind: 'connector-replies-retry-hold', rows },
+      rows.keys.length + rows.claims.length
+    )
   }
 
   /** The claiming message never became the continuation: its rows are their cut's again. */

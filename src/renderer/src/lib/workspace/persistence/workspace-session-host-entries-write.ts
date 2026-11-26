@@ -90,6 +90,9 @@ export function patchHostSlice(
       if (result.normalizedFields?.length) {
         acknowledged.forget(hostId, result.normalizedFields)
       }
+      if (result.normalizedEntries) {
+        acknowledged.forgetEntries(hostId, result.normalizedEntries)
+      }
       return carriedRelayAnswer(hostId, relays, result)
     },
     (error: unknown) => {

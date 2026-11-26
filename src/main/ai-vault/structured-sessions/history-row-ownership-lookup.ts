@@ -43,6 +43,21 @@ export function historyRowOwnershipLookup():
   }
 }
 
+/** Whether a deleted chat held the row's conversation: Orca never lists or resumes it again. */
+export function historyRowOfDeletedChat():
+  | ((row: { agent: string; sessionId: string }) => boolean)
+  | null {
+  // Absent on a store opened before any delete could be read.
+  const deleted = getStructuredAgentSessionHost()?.deps.store.deletedChats
+  if (!deleted) {
+    return null
+  }
+  return (row) =>
+    historyRowOwners(row.agent).some((provider) =>
+      deleted.hasConversation({ provider, providerSessionId: row.sessionId })
+    )
+}
+
 const ownershipKey = (ownership: { provider: string; providerSessionId: string }): string =>
   `${ownership.provider}\0${ownership.providerSessionId}`
 
