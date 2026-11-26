@@ -3,9 +3,10 @@
 ; (about 1-1.5 s each) and missed exactly one leftover process (electron-builder #10454: .Count on
 ; one CimInstance is empty in PowerShell 5.1), so the old uninstaller then failed on busy files and
 ; a silent update exited with code 2. This walks the process list in-process and stops every
-; process whose image is under $INSTDIR\. The relocated terminal daemon runs from a copy outside
-; $INSTDIR, so terminals survive; never fall back to matching Orca.exe by name, which would also
-; stop that copy.
+; process whose image is under $INSTDIR\. The terminal daemon normally runs from a relocated copy
+; outside $INSTDIR, so terminals survive; never fall back to matching Orca.exe by name, which would
+; also stop that copy. A daemon that could not be relocated runs from $INSTDIR and is stopped like
+; any other process: it holds the files being replaced, so sparing it would fail the update.
 ; An update gives the quitting app ORCA_UPDATE_EXIT_GRACE_MS to exit on its own (Orca's exit
 ; watchdog fires first: WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS, update-install-exit-watchdog.ts);
 ; a manual install asks first, then stops it at once. What still runs 2 s after that gets "cannot
