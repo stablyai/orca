@@ -75,6 +75,8 @@ const buttonVariants = cva(
           'text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15',
         // A status that is also its fix, e.g. "Update in Slack": loud colour, link weight.
         'warning-link': 'text-status-warning-foreground underline-offset-4 hover:underline',
+        // An inline action in a menu row, e.g. an account's Sign in: accent text, underlined while hovered or highlighted.
+        'theme-accent-link': `text-theme-accent underline-offset-4 hover:underline focus:underline ${insetFocusRingClasses}`,
         // A chat notice's quiet icon tool: faint until hovered or open; pressed fills like a toggle.
         'chat-tool':
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
