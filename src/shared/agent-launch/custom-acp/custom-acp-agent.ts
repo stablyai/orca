@@ -22,6 +22,8 @@ export type CustomAcpAgent = {
   env: Record<string, string>
   /** Off keeps it out of new-chat menus; its existing chats still run. Absent means on. */
   disabled?: true
+  /** The model new chats start on, as the agent names it; absent leaves the agent's own default. */
+  defaultModel?: string
 }
 
 export type CustomAcpAgentSettings = {
@@ -50,6 +52,7 @@ export const CUSTOM_ACP_AGENT_LIMITS = {
   command: 1024,
   args: 64,
   arg: 4096,
+  model: 256,
   envEntries: 64,
   envValue: 8192
 } as const
@@ -75,7 +78,14 @@ const customAcpAgentSchema = z.object({
     .refine((env) => Object.keys(env).length <= CUSTOM_ACP_AGENT_LIMITS.envEntries)
     .default({}),
   // Anything but true reads as on, so a malformed flag never hides an agent.
-  disabled: z.literal(true).optional().catch(undefined)
+  disabled: z.literal(true).optional().catch(undefined),
+  defaultModel: z
+    .string()
+    .trim()
+    .min(1)
+    .max(CUSTOM_ACP_AGENT_LIMITS.model)
+    .optional()
+    .catch(undefined)
 })
 
 /** The saved agents this build can run; each row parses alone, so one bad row hides no others. */
@@ -90,8 +100,13 @@ export function normalizeCustomAcpAgents(value: unknown): CustomAcpAgent[] {
     const id = parsed?.id
     if (parsed && isCustomAcpAgentId(id) && !seen.has(id)) {
       seen.add(id)
-      const { disabled, ...rest } = parsed
-      agents.push({ ...rest, id, ...(disabled ? { disabled } : {}) })
+      const { disabled, defaultModel, ...rest } = parsed
+      agents.push({
+        ...rest,
+        id,
+        ...(disabled ? { disabled } : {}),
+        ...(defaultModel ? { defaultModel } : {})
+      })
     }
   }
   return agents

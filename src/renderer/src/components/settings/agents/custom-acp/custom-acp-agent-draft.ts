@@ -21,6 +21,8 @@ export type CustomAcpAgentDraft = {
   env: CustomAcpEnvRow[]
   /** Kept through an edit; the row's switch changes it. */
   disabled?: true
+  /** Empty leaves the agent's own default. */
+  defaultModel: string
 }
 
 let nextRowKey = 0
@@ -33,7 +35,7 @@ export function draftRowKey(): number {
 export type CustomAcpAgentDraftProblem = 'name' | 'command' | 'envName'
 
 export function emptyCustomAcpAgentDraft(): CustomAcpAgentDraft {
-  return { name: '', command: '', args: [], env: [] }
+  return { name: '', command: '', args: [], env: [], defaultModel: '' }
 }
 
 export function customAcpAgentDraftFrom(agent: CustomAcpAgent): CustomAcpAgentDraft {
@@ -43,7 +45,8 @@ export function customAcpAgentDraftFrom(agent: CustomAcpAgent): CustomAcpAgentDr
     command: agent.command,
     args: agent.args.map((value) => ({ key: draftRowKey(), value })),
     env: Object.entries(agent.env).map(([name, value]) => ({ key: draftRowKey(), name, value })),
-    ...(agent.disabled ? { disabled: agent.disabled } : {})
+    ...(agent.disabled ? { disabled: agent.disabled } : {}),
+    defaultModel: agent.defaultModel ?? ''
   }
 }
 
@@ -81,7 +84,8 @@ export function saveCustomAcpAgentDraft(
         .map(({ name, value }) => [name.trim(), value] as const)
         .filter(([name]) => name !== '')
     ),
-    ...(draft.disabled ? { disabled: draft.disabled } : {})
+    ...(draft.disabled ? { disabled: draft.disabled } : {}),
+    ...(draft.defaultModel.trim() ? { defaultModel: draft.defaultModel.trim() } : {})
   }
   return draft.id && saved.some(({ id }) => id === draft.id)
     ? saved.map((existing) => (existing.id === draft.id ? agent : existing))

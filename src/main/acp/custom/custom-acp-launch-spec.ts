@@ -34,10 +34,12 @@ export function customAcpLaunchSpec(agent: CustomAcpAgent): AcpLaunchSpec {
     loginCommand: [],
     account: CUSTOM_ACP_ACCOUNT,
     installDirectories: () => [],
-    // Models come from the running chat: Orca never starts a user's command just to list them.
+    // A disposable session in a private folder; never in warm-up, only when someone asks for the list.
     modelDiscovery: {
-      kind: 'unavailable',
-      reason: 'A custom ACP agent reports its models once a chat starts.'
+      kind: 'session',
+      listingNamesConfiguredModel: false,
+      inPrivateFolder: true,
+      listsOnDemand: true
     },
     transcriptImport: null,
     sessionHistory: CUSTOM_ACP_SESSION_HISTORY

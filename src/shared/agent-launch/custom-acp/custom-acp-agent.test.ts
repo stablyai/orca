@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   createCustomAcpAgentId,
   normalizeCustomAcpAgents,
-  savedCustomAcpDefaultAgent
+  savedCustomAcpDefaultAgent,
+  type CustomAcpAgent,
+  type CustomAcpAgentId
 } from './custom-acp-agent'
 
 describe('normalizeCustomAcpAgents', () => {
@@ -38,16 +40,16 @@ describe('normalizeCustomAcpAgents', () => {
 })
 
 describe('savedCustomAcpDefaultAgent', () => {
-  const agents = [
-    { id: 'custom-acp-on', name: 'On', command: 'on' },
-    { id: 'custom-acp-off', name: 'Off', command: 'off', disabled: true }
+  const agents: CustomAcpAgent[] = [
+    { id: 'custom-acp-on', name: 'On', command: 'on', args: [], env: {} },
+    { id: 'custom-acp-off', name: 'Off', command: 'off', args: [], env: {}, disabled: true }
   ]
 
   it('applies only to a defined, switched-on agent while no built-in default is saved', () => {
-    const pick = (defaultCustomAcpAgent: string, defaultTuiAgent: unknown = null) =>
+    const pick = (defaultCustomAcpAgent: CustomAcpAgentId, defaultTuiAgent: unknown = null) =>
       savedCustomAcpDefaultAgent({
         customAcpAgents: agents,
-        defaultCustomAcpAgent: defaultCustomAcpAgent as `custom-acp-${string}`,
+        defaultCustomAcpAgent,
         defaultTuiAgent
       })?.id ?? null
     expect(pick('custom-acp-on')).toBe('custom-acp-on')

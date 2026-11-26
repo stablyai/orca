@@ -22,9 +22,11 @@ import type { StructuredAgentRegistry } from '../../../native-chat/agent-session
 import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import {
+  listStructuredAgentRuntimeMetadata,
   STRUCTURED_AGENT_RUNTIME_METADATA,
   structuredAgentRuntimeMetadata
 } from '../installation/structured-agent-runtime-metadata'
+import { onCustomAcpAgentsChanged } from '../../../acp/custom/custom-acp-agent-registry'
 
 // The store is process-global; hydrate it from disk at most once per process.
 let persistenceAttached: Promise<void> | null = null
@@ -73,6 +75,42 @@ export function registeredModelCatalogDiscovery(
   return { probes, listingNamesConfiguredModel, listsInChatFolder, listsOnDemand }
 }
 
+// The custom ACP agents' built probes, by agent, kept while the agent stays defined.
+const customProbes = new Map<string, AgentModelCatalogProbe>()
+
+/** The registration list's discovery, plus the custom ACP agents settings define now and later:
+ *  the service reads these collections on every lookup, so they are updated in place. */
+function followedModelCatalogDiscovery(
+  registrations: readonly CatalogRegistration[],
+  context: StructuredAgentModelCatalogContext
+): ReturnType<typeof registeredModelCatalogDiscovery> {
+  const discovery = registeredModelCatalogDiscovery(registrations, context)
+  const builtIn = new Set(registrations.map(({ definition }) => definition.agent))
+  const sync = (): void => {
+    const late = listStructuredAgentRuntimeMetadata().filter(
+      ({ definition }) => !builtIn.has(definition.agent)
+    )
+    const current = new Set(late.map(({ definition }) => definition.agent))
+    for (const agent of customProbes.keys()) {
+      if (!current.has(agent)) {
+        customProbes.delete(agent)
+        delete discovery.probes[agent]
+        discovery.listsOnDemand.delete(agent)
+      }
+    }
+    const added = late.filter(({ definition }) => !customProbes.has(definition.agent))
+    const next = registeredModelCatalogDiscovery(added, context)
+    for (const [agent, probe] of Object.entries(next.probes)) {
+      customProbes.set(agent, probe)
+      discovery.probes[agent] = probe
+    }
+    next.listsOnDemand.forEach((agent) => discovery.listsOnDemand.add(agent))
+  }
+  sync()
+  onCustomAcpAgentsChanged(sync)
+  return discovery
+}
+
 /** Build the existing catalog from late-bound session access; no journal is needed for discovery. */
 export async function modelCatalogHostDeps(input: {
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'getConversation' | 'listConversations'>
@@ -102,7 +140,7 @@ export async function modelCatalogHostDeps(input: {
       workspaceMayOverrideDefaultModel,
       hasChatRecords: (agent) =>
         input.store.listConversations().some((record) => record.provider === agent),
-      ...registeredModelCatalogDiscovery(input.registrations, {
+      ...followedModelCatalogDiscovery(input.registrations, {
         deps,
         environment: input.environment
       })

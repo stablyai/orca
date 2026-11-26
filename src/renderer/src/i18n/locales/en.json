@@ -1334,7 +1334,21 @@
         "commandPlaceholder": "my-agent",
         "envNamePlaceholder": "NAME",
         "envValuePlaceholder": "value",
-        "availability": "{{value0}} availability"
+        "availability": "{{value0}} availability",
+        "models": {
+          "notSignedIn": "The agent needs to be signed in.",
+          "commandMissing": "Orca could not run the command.",
+          "failed": "The agent didn't report any models. You can still type a model id.",
+          "label": "Default model",
+          "description": "New chats start on this model. Refresh starts the agent once in a private folder to list its models.",
+          "saveFirst": "Save the agent to list its models. You can type a model id now.",
+          "agentDefault": "Agent's own default",
+          "listing": "Listing…",
+          "refresh": "Refresh",
+          "idPlaceholder": "Or type a model id",
+          "idLabel": "Default model id",
+          "summary": "Model: {{value0}}"
+        }
       }
     },
     "followSymlinkedDirectoriesKeywords": {
