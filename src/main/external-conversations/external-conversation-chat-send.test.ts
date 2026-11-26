@@ -148,16 +148,9 @@ it('returns chat gone when its destination is deleted during attachment preparat
   rig = await createQueuedMessageTestRig({ starting: true })
   const deliveries = new ChatDeliveries(vi.fn())
   const { result, finish } = await holdImageDelivery(deliveries, rig.host)
-  const record = rig.store.getRecord(SESSION)!
-  const lease = record.lease
   let forgotten: boolean
   try {
-    await rig.store.evictProvenDeadOwner({
-      sessionId: SESSION,
-      expectedFence: lease.runtimeFence,
-      probe: { outcome: 'pid-absent' },
-      now: lease.leaseDeadlineAt + 60_000
-    })
+    await rig.host.close(SESSION, 'evict')
     forgotten = await rig.store.forgetChat({
       chatId: SESSION,
       sessionIds: [SESSION],
