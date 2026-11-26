@@ -5,17 +5,21 @@ import type { BotItemBotActor } from '../../../bots/bot-items-input'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import { BotItemsStore } from '../../../bots/bot-items-store'
 import { botItemListScope, botItemsOfPeople } from '../../../bots/bot-item-access'
+import { makeTestBot } from '../../../bots/bot.test-fixture'
+import type { RpcContext } from '../core'
 import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
 import { ownerActor } from './bots-items-owner-person'
 
 const AGENT: BotItemBotActor = { kind: 'bot', botId: 'bot-1', chatId: 'chat-1' }
-const BOT = {
+const share = (accountId: string, name: string, email: string) =>
+  ({ kind: 'account', shareId: `s-${accountId}`, accountId, name, email, addedAt: 1 }) as const
+const BOT: Bot = makeTestBot({
   id: 'bot-1',
   shares: [
-    { kind: 'account', accountId: 'acct-a', name: 'Alice Park', email: 'a@example.com' },
-    { kind: 'account', accountId: 'acct-d', name: 'Dana Reyes', email: 'd@example.com' }
+    share('acct-a', 'Alice Park', 'a@example.com'),
+    share('acct-d', 'Dana Reyes', 'd@example.com')
   ]
-} as unknown as Bot
+})
 
 const stores: BotItemsStore[] = []
 afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
@@ -57,11 +61,13 @@ async function list(
       }
     }
   }
+  const params = method.params.parse({
+    botId: 'bot-1',
+    ...(person !== undefined ? { person } : {})
+  })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these context parts
-  return (await method.handler(
-    { botId: 'bot-1', ...(person !== undefined ? { person } : {}) } as never,
-    context as never
-  )) as never
+  const rpcContext = context as unknown as RpcContext
+  return await method.handler(params, rpcContext)
 }
 
 const rows = (read: { items: BotItem[] }): string[] =>
@@ -119,9 +125,11 @@ it("counts only the owner's own Needs you for the badge, the same items the defa
 })
 
 it("writes the owner's own panel actions as the owner, naming no teammate", () => {
-  const context = { runtime: { bots: { assertEnabled: () => {} } } }
-  expect(ownerActor(context as never)).toEqual({ kind: 'owner' })
-  expect(ownerActor({ ...context, pairedDeviceId: 'phone' } as never)).toEqual({
+  const runtime = { bots: { assertEnabled: () => {} } }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownerActor reads only the caller, scope, device and assertEnabled
+  const owner = { runtime } as unknown as RpcContext
+  expect(ownerActor(owner)).toEqual({ kind: 'owner' })
+  expect(ownerActor({ ...owner, pairedDeviceId: 'phone' })).toEqual({
     kind: 'owner',
     device: 'phone'
   })

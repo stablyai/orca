@@ -471,10 +471,9 @@ describe('the share guard', () => {
       ...SHARED,
       shares: [share('acct-alice', 'Alice'), share('acct-bob', 'Bob')]
     })
-    vi.spyOn(runtime.bots, 'listing').mockReturnValue({
-      bots: [shared],
-      botsEnabled: true
-    } as never)
+    const listing = { bots: [shared], botsEnabled: true }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the share branch of bots.list reads only bots and botsEnabled
+    vi.spyOn(runtime.bots, 'listing').mockReturnValue(listing as never)
     const response = await call('bots.list', undefined)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list's answer
     const listed = (response.ok ? response.result : null) as { bots: Bot[] } | null
