@@ -54,5 +54,6 @@ export function railRingStackFit(args: {
   }
   const pitch = item + minGap
   const shown = Math.max(1, Math.floor((room - peek - paddingTop - item) / pitch) + 1)
-  return layout(minGap, tightBottom, paddingTop + (shown - 1) * pitch + item + 1 + peek)
+  // The fade covers `peek` at the bottom; the last label has to finish above it once the stack is scrolled to the end.
+  return layout(minGap, peek, paddingTop + (shown - 1) * pitch + item + 1 + peek)
 }

@@ -7,10 +7,30 @@ import {
   pruneEndedUsageHistory,
   recordUsageWindowSample,
   usageHistoryKey,
-  type UsageHistoryByWindow
+  type UsageHistoryByWindow,
+  type UsageWindowHistory
 } from '../../../shared/agent-usage/rate-limits/usage-window-history'
 
 const SAVE_DELAY_MS = 5_000
+
+/** Claude/Codex readings name the account; older hosts omit it, and a missing name must not wipe history. */
+function readingOwner(limits: ProviderRateLimits): string | null {
+  const reading = limits.usageMetadata?.readingAccount
+  if (!reading) {
+    return null
+  }
+  return reading.wslDistro
+    ? `${reading.accountId}@${reading.runtime}:${reading.wslDistro}`
+    : `${reading.accountId}@${reading.runtime}`
+}
+
+function ownersDiffer(previous: string | undefined, next: string | null): boolean {
+  return previous !== undefined && next !== null && previous !== next
+}
+
+function stampOwner(series: UsageWindowHistory, owner: string | undefined): UsageWindowHistory {
+  return owner ? { ...series, owner } : series
+}
 
 /** Samples each active provider window's used percent at every usage reading; no fetches of its own. */
 export class UsageHistoryRecorder {
@@ -34,19 +54,27 @@ export class UsageHistoryRecorder {
             // Replay startup readings onto the saved series. A spread would drop every saved sample for that key.
             let history = saved
             for (const [key, series] of Object.entries(this.history)) {
+              if (series.samples.length === 0) {
+                continue
+              }
+              // A startup reading from another account replaces the saved series instead of appending to it.
+              let base = ownersDiffer(history[key]?.owner, series.owner ?? null)
+                ? undefined
+                : history[key]
               for (const sample of series.samples) {
-                history = {
-                  ...history,
-                  [key]: recordUsageWindowSample(
-                    history[key],
-                    {
-                      usedPercent: sample.usedPercent,
-                      windowMinutes: series.windowMinutes,
-                      resetsAt: series.resetsAt
-                    },
-                    sample.at
-                  )
-                }
+                const recorded = recordUsageWindowSample(
+                  base,
+                  {
+                    usedPercent: sample.usedPercent,
+                    windowMinutes: series.windowMinutes,
+                    resetsAt: series.resetsAt
+                  },
+                  sample.at
+                )
+                base = stampOwner(recorded, series.owner ?? base?.owner)
+              }
+              if (base) {
+                history = { ...history, [key]: base }
               }
             }
             this.history = pruneEndedUsageHistory(history, Date.now())
@@ -65,6 +93,7 @@ export class UsageHistoryRecorder {
         continue
       }
       this.lastReadingAt.set(provider, limits.updatedAt)
+      const owner = readingOwner(limits)
       for (const slot of listUsageWindowSlots(limits)) {
         const { window } = slot
         if (window.windowMinutes <= 0 || (window.resetsAt !== null && window.resetsAt <= now)) {
@@ -72,11 +101,13 @@ export class UsageHistoryRecorder {
         }
         // Keyed by the provider id mobile reads, so the graph finds its window whatever the state slot is called.
         const key = usageHistoryKey(limits.provider, slot.id)
-        this.history[key] = recordUsageWindowSample(
-          this.history[key],
+        const previous = this.history[key]
+        const recorded = recordUsageWindowSample(
+          ownersDiffer(previous?.owner, owner) ? undefined : previous,
           window,
           limits.updatedAt || now
         )
+        this.history[key] = stampOwner(recorded, owner ?? previous?.owner)
         changed = true
       }
     }

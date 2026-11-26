@@ -49,6 +49,27 @@ describe('UsageHistoryRecorder', () => {
     ])
   })
 
+  it('starts a new series when the same window is read for a different account', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'usage-history-'))
+    dirs.push(dir)
+    const recorder = new UsageHistoryRecorder(join(dir, 'history.json'))
+    await recorder.loaded
+    const account = (id: string, usedPercent: number, updatedAt: number): ProviderRateLimits => ({
+      ...limits(usedPercent, updatedAt),
+      usageMetadata: { readingAccount: { accountId: id, runtime: 'host', wslDistro: null } }
+    })
+    recorder.record({ claude: account('a', 80, now - 7_200_000) }, now)
+    recorder.record({ claude: account('b', 10, now - 3_600_000) }, now)
+    expect(recorder.snapshot(now)['claude:weekly']?.samples).toEqual([
+      { at: now - 3_600_000, usedPercent: 10 }
+    ])
+    recorder.record({ claude: account('b', 12, now - 1_800_000) }, now)
+    expect(recorder.snapshot(now)['claude:weekly']?.samples).toEqual([
+      { at: now - 3_600_000, usedPercent: 10 },
+      { at: now - 1_800_000, usedPercent: 12 }
+    ])
+  })
+
   it('keeps saved samples when a reading is flushed before the file loads', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'usage-history-'))
     dirs.push(dir)
