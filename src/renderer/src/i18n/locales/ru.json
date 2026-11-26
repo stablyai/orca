@@ -25831,6 +25831,7 @@
       "pictureColor": "Цвет фона",
       "pictureColorCustom": "Свой цвет",
       "useChatDefaults": "Использовать настройки чата по умолчанию",
+      "chatDefault": "Как в чатах",
       "name": "Имя",
       "validation": {
         "addName": "Добавьте имя",

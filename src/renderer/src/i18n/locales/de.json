@@ -25034,6 +25034,7 @@
       "computerHint": "Wo der Bot läuft.",
       "computerAccountHint": "Wo der Bot läuft, bei Orca angemeldet als {{account}}.",
       "useChatDefaults": "Chat-Standardeinstellungen verwenden",
+      "chatDefault": "Wie im Chat",
       "agent": "Agent",
       "folder": "Ordner: {{path}}",
       "name": "Name",

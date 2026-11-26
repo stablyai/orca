@@ -27931,7 +27931,7 @@
       "computerHint": "Dónde se ejecuta el bot.",
       "computerAccountHint": "Dónde se ejecuta el bot, con la sesión de Orca iniciada como {{account}}.",
       "useChatDefaults": "Usar los valores predeterminados del chat",
-      "useChatDefaultsHint": "Restablece el modelo, las opciones y los permisos del agente a tus valores predeterminados de chat",
+      "chatDefault": "Del chat",
       "agent": "Agente",
       "folder": "Carpeta: {{path}}",
       "name": "Nombre",

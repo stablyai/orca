@@ -26098,6 +26098,7 @@
       "pictureColor": "Cor de fundo",
       "pictureColorCustom": "Cor personalizada",
       "useChatDefaults": "Usar os padrões do chat",
+      "chatDefault": "Do chat",
       "name": "Nome",
       "validation": {
         "addName": "Adicione um nome",
