@@ -53,21 +53,21 @@ describe('decodeCommandDetailsAvailable', () => {
     }
   })
 
-  it('never passes the raw list through roster admission, and equality sees an availability change', () => {
+  it('roster admission never keeps the list: availability is credit, decoded only by the latch', () => {
     const withList = admitAgentSessionBackgroundTaskState({
       state: 'monitoring',
       children,
       commandDetailsAvailable: [tuple('a'), tuple('zzz')]
     })
-    expect(withList?.commandDetailsAvailable).toEqual([tuple('a')])
+    expect(withList).not.toHaveProperty('commandDetailsAvailable')
     const withoutList = admitAgentSessionBackgroundTaskState({ state: 'monitoring', children })
-    expect(withoutList).not.toHaveProperty('commandDetailsAvailable')
-    expect(backgroundTaskStatesEqual(withList, withoutList)).toBe(false)
+    // The same roster either way: an availability-only frame changes no reader state.
+    expect(backgroundTaskStatesEqual(withList, withoutList)).toBe(true)
     expect(
       admitAgentSessionBackgroundTaskState(
         { state: 'monitoring', children, commandDetailsAvailable: [tuple('a')] },
-        withList
+        withoutList
       )
-    ).toBe(withList)
+    ).toBe(withoutList)
   })
 })

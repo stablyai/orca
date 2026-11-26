@@ -3,7 +3,6 @@
 import type { AgentSessionBackgroundTaskState } from './agent-session-background-task-wire'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { decodeAgentChildWorkViews } from '../../agent-status/child-work/agent-status-child-work-view-wire'
-import { decodeCommandDetailsAvailable } from './agent-session-command-details'
 
 /** Preserve identity on repeated rosters so memoized readers skip unchanged frames. */
 export function admitAgentSessionBackgroundTaskState(
@@ -13,14 +12,10 @@ export function admitAgentSessionBackgroundTaskState(
   if (!next) {
     return next
   }
-  const { children: raw, commandDetailsAvailable: rawAvailable, ...rest } = next
+  // Command availability is credit, not roster state: only the desktop credit latch decodes it,
+  // from the frame itself, so it is never kept or compared here (and phones never carry it).
+  const { children: raw, commandDetailsAvailable: _credit, ...rest } = next
   const children = decodeAgentChildWorkViews(raw)
-  // Decoded against this same roster's children, never passed through.
-  const commandDetailsAvailable = decodeCommandDetailsAvailable(rawAvailable, children)
-  const decoded = {
-    ...rest,
-    ...(children ? { children } : {}),
-    ...(commandDetailsAvailable ? { commandDetailsAvailable } : {})
-  }
+  const decoded = { ...rest, ...(children ? { children } : {}) }
   return previous && backgroundTaskStatesEqual(decoded, previous) ? previous : decoded
 }

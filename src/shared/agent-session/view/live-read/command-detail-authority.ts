@@ -6,6 +6,7 @@ import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import { admitAgentSessionBackgroundTaskState } from '../../background-tasks/agent-session-background-task-state-admission'
 import {
   commandDetailKeysOf,
+  decodeCommandDetailsAvailable,
   commandDetailTupleKey,
   type AgentSessionCommandDetailTuple
 } from '../../background-tasks/agent-session-command-details'
@@ -117,7 +118,13 @@ export function createCommandDetailAuthority(): CommandDetailAuthority {
     frameFence: number | null,
     state: Parameters<typeof admitAgentSessionBackgroundTaskState>[0]
   ): void => {
-    const keys = commandDetailKeysOf(admitAgentSessionBackgroundTaskState(state))
+    // Decoded from this frame against its own admitted children: roster admission drops the list.
+    const keys = commandDetailKeysOf({
+      commandDetailsAvailable: decodeCommandDetailsAvailable(
+        state?.commandDetailsAvailable,
+        admitAgentSessionBackgroundTaskState(state)?.children
+      )
+    })
     for (const entry of openings) {
       if (!keys.has(entry.key) || entry.fence !== frameFence) {
         entry.lose()
