@@ -13,6 +13,10 @@ import type { MarkdownDocument } from '../../../shared/file-listing/file-documen
 import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
+  AgentLaunchSplitReply,
+  AgentLaunchSplitRequest
+} from '../../../shared/agent-launch/contracts/agent-launch-split'
+import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
@@ -227,6 +231,8 @@ export type UiCommandEventApi = {
   replyTerminalCreate: (reply: TerminalTabCreateReply) => void
   onPublishAgentLaunchTab: (callback: (data: AgentLaunchTabPublishRequest) => void) => () => void
   replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply) => void
+  onPlaceAgentLaunchSplit?: (callback: (data: AgentLaunchSplitRequest) => void) => () => void
+  replyAgentLaunchSplit?: (reply: AgentLaunchSplitReply) => void
   onAgentLaunchPaneVerdict: (callback: (data: AgentLaunchPaneVerdictEvent) => void) => () => void
   onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void

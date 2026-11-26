@@ -4,7 +4,8 @@ import {
   formatAgentLaunch,
   getAgentLaunchCapabilities,
   parseCliAgent,
-  readCliAgentLaunch
+  readCliAgentLaunch,
+  readCliAgentLaunchSplit
 } from './agent-launch-request'
 import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
@@ -19,6 +20,15 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
     const launch = readCliAgentLaunch(flags, parseCliAgent(getRequiredStringFlag(flags, 'agent')), {
       createsWorktree: false
     })
+    const split = readCliAgentLaunchSplit(flags, process.env)
+    if (split && (client.isRemote || launch.surface === 'terminal')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        client.isRemote
+          ? '--split places the chat beside your tab in this Orca window; it does not work with a remote host.'
+          : '--split opens a chat; it does not work with --surface terminal.'
+      )
+    }
     if (client.isRemote && !flags.has('worktree')) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -45,10 +55,11 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
     }
     const result = await callAgentLaunch(
       client,
-      launch,
+      split ? { ...launch, surface: 'chat' } : launch,
       {
         target: { kind: 'existing', worktree },
-        presentation: flags.get('focus') === true ? 'focused' : 'background'
+        presentation: flags.get('focus') === true ? 'focused' : 'background',
+        ...(split ? { placement: { split } } : {})
       },
       capabilities,
       rawArgs

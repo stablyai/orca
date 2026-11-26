@@ -10,6 +10,8 @@ import type { ClaudeAccountSelectionChange } from '../../../../shared/agent-acco
 import type { AgentLaunchPaneVerdictEvent } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneLaunchRecipe } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
+import type { AgentLaunchSplitRequest } from '../../../../shared/agent-launch/contracts/agent-launch-split'
+import type { AgentLaunchPlacementReceipt } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule,
@@ -116,6 +118,10 @@ export type RuntimeNotifier = {
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
     | void
   /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
+  /** The window moves a launched chat beside the caller and says where it landed. */
+  placeAgentLaunchSplit?(
+    request: Omit<AgentLaunchSplitRequest, 'requestId'>
+  ): Promise<AgentLaunchPlacementReceipt>
   publishAgentLaunchTab?(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished>

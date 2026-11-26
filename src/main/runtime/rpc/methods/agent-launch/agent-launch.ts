@@ -45,6 +45,7 @@ import {
   selectLaunchedTab
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
+import { assertAgentLaunchSplitAdmissible, placeLaunchedChat } from './agent-launch-split'
 import {
   assertAgentLaunchTargetAuthorized,
   supportsAgentLaunch
@@ -67,6 +68,7 @@ async function runAgentLaunch(
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
   const callerNavigationId = agentLaunchCallerNavigationId(context)
+  let placing: ReturnType<typeof placeLaunchedChat>
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
@@ -91,9 +93,10 @@ async function runAgentLaunch(
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
       await selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
+      placing = placeLaunchedChat(context.runtime, surface, view)
     }
   })
-  return withPlacement(result, view)
+  return { ...withPlacement(result, view), ...(await placing) }
 }
 
 /** Legacy unnamed launches retain the 60-second create dedupe cache (repo/mutation id, no caller partition).
@@ -109,10 +112,7 @@ function runLegacyAgentLaunch(
         callerRendersStructured: callerRendersLaunchedChat(context, params.agent)
       }),
       context,
-      {
-        early: null,
-        presentation: params.presentation
-      }
+      { early: null, presentation: params.presentation, split: params.placement?.split }
     )
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     const { repo, repoHostId } = params.target.create
@@ -175,7 +175,8 @@ async function executeReplaySafeAgentLaunch(
   return withEarlyTab(early, () =>
     executeAdmittedAgentLaunch(params, context, admission, {
       early,
-      presentation: params.presentation
+      presentation: params.presentation,
+      split: params.placement?.split
     })
   )
 }
@@ -268,6 +269,7 @@ export const AGENT_LAUNCH_METHODS = [
         throw new Error('agent_launch_replay_unsupported')
       }
       assertAgentLaunchTargetAuthorized(params.target, context)
+      assertAgentLaunchSplitAdmissible(params, context)
       try {
         return await runReplaySafeAgentLaunch(params, context)
       } catch (error) {
@@ -310,6 +312,7 @@ export async function launchAgentOnHost(
     throw new Error('agent_launch_unsupported')
   }
   assertAgentLaunchTargetAuthorized(params.target, host)
+  assertAgentLaunchSplitAdmissible(params, host)
   if (!operationId) {
     return runLegacyAgentLaunch(params, host)
   }

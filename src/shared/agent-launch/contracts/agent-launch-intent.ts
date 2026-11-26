@@ -71,7 +71,8 @@ export type AgentLaunchPresentation = 'focused' | 'background'
 export type AgentLaunchPlacementReceipt = {
   groupId: string
   /** Present when the requested group was not used: the anchor tab's group, or the active one. */
-  fallback?: 'anchor-group' | 'active-group'
+  /** `not-split`: a `--split` chat stays a tab (no live pane to split, or the chat was never listed). */
+  fallback?: 'anchor-group' | 'active-group' | 'not-split'
 }
 
 /** The surface the host actually created. */

@@ -3,6 +3,8 @@ import { publishAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-lau
 import { applyAgentLaunchPaneVerdict } from '@/lib/agent-session/launch/pane/agent-launch-pane-verdict-application'
 import { keepAgentLaunchTabMainWrote } from '@/lib/agent-session/launch/pane/agent-launch-tab-main-written'
 import { afterLayoutFrame } from '@/runtime/workspace-layout/frames/layout-frame-position'
+import { placeAgentLaunchSplit } from '@/lib/agent-session/launch/pane/agent-launch-split-placement'
+import { useAppStore } from '@/store/index'
 
 function replyToPublish(request: AgentLaunchTabPublishRequest): void {
   try {
@@ -30,4 +32,15 @@ export function registerAgentLaunchTabIpcBridge(unsubs: (() => void)[]): void {
     ),
     window.api.ui.onAgentLaunchPaneVerdict(applyAgentLaunchPaneVerdict)
   )
+  // An older preload can linger through an in-place reload; keep this listener additive.
+  const { onPlaceAgentLaunchSplit, replyAgentLaunchSplit } = window.api.ui
+  if (onPlaceAgentLaunchSplit && replyAgentLaunchSplit) {
+    unsubs.push(
+      onPlaceAgentLaunchSplit((request) => {
+        void placeAgentLaunchSplit(useAppStore, request).then((placement) =>
+          replyAgentLaunchSplit({ requestId: request.requestId, placement })
+        )
+      })
+    )
+  }
 }

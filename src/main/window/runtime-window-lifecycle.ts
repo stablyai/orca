@@ -11,7 +11,7 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/creation/launc
 import type { RuntimeMobileSessionTabMove } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
-import { requestAgentLaunchTabPublishFromRenderer } from './renderer-relays/agent-launch-tab-publish-relay'
+import { agentLaunchTabRelays } from './renderer-relays/agent-launch-tab-publish-relay'
 import { requestAgentPaneActivityFromRenderer } from './renderer-relays/agent-pane-activity-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerRendererDocumentNavigation } from './security/renderer-document-navigation'
@@ -166,8 +166,7 @@ export function registerRuntimeWindowLifecycle(
           reject(new Error('runtime_unavailable'))
         }
       }),
-    publishAgentLaunchTab: (request) =>
-      requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
+    ...agentLaunchTabRelays(mainWindow),
     agentLaunchPaneVerdict: (event) => send('ui:agentLaunchPaneVerdict', event),
     rememberLaunchRecipe: (recipe) => send('ui:launchRecipe', recipe),
     restartOffersChanged: () => send('agentStatus:restartOffersChanged', {}),

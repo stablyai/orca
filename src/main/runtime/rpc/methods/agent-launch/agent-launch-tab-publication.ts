@@ -16,6 +16,7 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import type { AgentLaunchSplit } from '../../../../../shared/agent-launch/contracts/agent-launch-split'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { trackRunningAgentLaunchPane } from '../../../../agent-launch/agent-launch-pane-attachment'
@@ -82,6 +83,8 @@ export type EarlyAgentLaunchTab = {
 export type AgentLaunchView = {
   early: EarlyAgentLaunchTab | null
   presentation: AgentLaunchParams['presentation']
+  /** `--split`: the chat moves beside the caller once the window lists it. */
+  split?: AgentLaunchSplit
 }
 
 export function withPlacement(result: AgentLaunchResult, view: AgentLaunchView): AgentLaunchResult {

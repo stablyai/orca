@@ -16,8 +16,10 @@ import {
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_SPLIT_RUNTIME_CAPABILITY
 } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import type { AgentLaunchSplit } from '../../shared/agent-launch/contracts/agent-launch-split'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -59,6 +61,19 @@ function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
     throw new RuntimeClientError('invalid_argument', '--surface must be one of: chat, terminal')
   }
   return known
+}
+
+/** `--split right|down`, beside the chat that runs the command (`ORCA_AGENT_SESSION_ID`). */
+export function readCliAgentLaunchSplit(
+  flags: Flags,
+  env: Readonly<Record<string, string | undefined>>
+): AgentLaunchSplit | undefined {
+  const direction = flags.has('split') ? getRequiredStringFlag(flags, 'split') : undefined
+  if (direction !== undefined && direction !== 'right' && direction !== 'down') {
+    throw new RuntimeClientError('invalid_argument', '--split must be right or down')
+  }
+  const fromSessionId = env.ORCA_AGENT_SESSION_ID?.trim()
+  return direction && { direction, ...(fromSessionId ? { fromSessionId } : {}) }
 }
 
 export function parseCliAgent(value: string): TuiAgent {
@@ -123,7 +138,11 @@ export async function getAgentLaunchCapabilities(
 export async function callAgentLaunch(
   client: RuntimeClient,
   launch: CliAgentLaunch,
-  request: { target: CliAgentLaunchTarget; presentation?: 'focused' | 'background' },
+  request: {
+    target: CliAgentLaunchTarget
+    presentation?: 'focused' | 'background'
+    placement?: { split: AgentLaunchSplit }
+  },
   capabilities: readonly string[],
   rawArgs?: readonly string[]
 ): Promise<RuntimeRpcSuccess<AgentLaunchResult & { operationId?: string }>> {
@@ -142,6 +161,13 @@ export async function callAgentLaunch(
   }
   if (launch.surface && !capabilities.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError('incompatible_runtime', SURFACE_UNSUPPORTED_MESSAGE)
+  }
+  // Older and windowless hosts would open a tab; refuse rather than ignore the flag, retries included.
+  if (request.placement?.split && !capabilities.includes(AGENT_LAUNCH_SPLIT_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot open a chat in a split: it needs an Orca window and a version with --split. Update Orca on the execution host, or omit --split.'
+    )
   }
   if (
     launch.agent === 'pi' &&
@@ -185,6 +211,9 @@ export function formatAgentLaunch(result: AgentLaunchResult & { operationId?: st
     ...(result.operationId ? [`operationId: ${result.operationId}`] : []),
     `why: ${receipt.detail}`,
     ...(result.prompt ? [`prompt: ${result.prompt.outcome}`] : []),
+    ...(result.placement?.fallback === 'not-split'
+      ? ['placement: opened as a tab, not split']
+      : []),
     ...(result.warning ? [`warning: ${result.warning}`] : [])
   ].join('\n')
 }

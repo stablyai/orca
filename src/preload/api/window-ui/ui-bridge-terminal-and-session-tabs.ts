@@ -7,6 +7,10 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education/
 import type { RendererTerminalSplitRequest } from '../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import type { TerminalTabCreateReply } from '../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type {
+  AgentLaunchSplitReply,
+  AgentLaunchSplitRequest
+} from '../../../shared/agent-launch/contracts/agent-launch-split'
+import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
@@ -126,6 +130,15 @@ export const uiTerminalAndSessionTabsApi = {
   },
   replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply): void => {
     ipcRenderer.send('agentLaunch:tabPublishReply', reply)
+  },
+  onPlaceAgentLaunchSplit: (callback: (data: AgentLaunchSplitRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentLaunchSplitRequest) =>
+      callback(data)
+    ipcRenderer.on('ui:placeAgentLaunchSplit', listener)
+    return () => ipcRenderer.removeListener('ui:placeAgentLaunchSplit', listener)
+  },
+  replyAgentLaunchSplit: (reply: AgentLaunchSplitReply): void => {
+    ipcRenderer.send('agentLaunch:splitReply', reply)
   },
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: TerminalPaneRevealRequest) =>

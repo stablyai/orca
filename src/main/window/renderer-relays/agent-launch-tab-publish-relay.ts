@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type {
+  AgentLaunchSplitReply,
+  AgentLaunchSplitRequest
+} from '../../../shared/agent-launch/contracts/agent-launch-split'
+import { requestRendererReply } from './renderer-reply-request'
+import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishReply,
   AgentLaunchTabPublishRequest
@@ -48,4 +53,21 @@ export function requestAgentLaunchTabPublishFromRenderer(
     ipcMain.on('agentLaunch:tabPublishReply', onReply)
     webContents.send('ui:publishAgentLaunchTab', { ...request, requestId })
   })
+}
+
+export function agentLaunchTabRelays(mainWindow: BrowserWindow) {
+  return {
+    publishAgentLaunchTab: (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
+      requestAgentLaunchTabPublishFromRenderer(mainWindow, request),
+    /** Rejects without an answer: the window may still have moved the chat, so it is unconfirmed. */
+    placeAgentLaunchSplit: (request: Omit<AgentLaunchSplitRequest, 'requestId'>) =>
+      requestRendererReply<AgentLaunchSplitReply>(mainWindow, {
+        requestChannel: 'ui:placeAgentLaunchSplit',
+        replyChannel: 'agentLaunch:splitReply',
+        payload: request,
+        // The window stops placing at expiresAt; this only covers its answer arriving.
+        timeoutMs: Math.max(0, request.expiresAt - Date.now()) + 5_000,
+        timeoutError: 'agent_launch_split_unconfirmed'
+      }).then((reply) => reply.placement)
+  }
 }
