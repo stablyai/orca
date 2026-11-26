@@ -151,21 +151,21 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       const pending = window.api.preflight
         .detectAgents({
           ...detectArgs,
+          ...managedCommands.agentInventoryRetryParams(existing),
           ...(wake ? { wakeWslDistro: true } : {}),
           withManagedAgentCommands: true
         })
         .then((reply) => {
-          const { agents, incomplete, keepManagedAgentCommands } = read(reply)
+          const detection = read(reply)
           const typed = managedCommands.mergeAgentDetection(
-            agents,
-            incomplete,
+            detection,
             get().localDetectedAgentIdsByContext[contextKey]
           )
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
           ) {
-            keepManagedAgentCommands()
+            detection.keepManagedAgentCommands()
             lifecycle.refusedContextKeys.delete(contextKey)
             lifecycle.failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey

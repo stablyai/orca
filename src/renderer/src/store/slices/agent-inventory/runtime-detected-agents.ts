@@ -3,13 +3,11 @@ import {
   RuntimeAgentDetectionNeedsServerUpdateError,
   type NestedSshAgentDetection
 } from './runtime-agent-detection-request'
-export {
-  callRuntimeAgentDetection,
-  RuntimeAgentDetectionNeedsServerUpdateError
-} from './runtime-agent-detection-request'
+export { callRuntimeAgentDetection, RuntimeAgentDetectionNeedsServerUpdateError }
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
+  agentInventoryRetryParams,
   beginAgentDetection,
   forgetRuntimeManagedAgentCommands,
   isIncompleteAgentInventory,
@@ -195,17 +193,17 @@ export const createRuntimeDetectedAgentsSlice: (
           callRuntimeRpc<AgentDetectionReply>(
             target,
             'preflight.detectAgents',
-            { ...params, withManagedAgentCommands: true },
+            { ...params, ...agentInventoryRetryParams(existing), withManagedAgentCommands: true },
             fence
           ),
         nestedSshDetection(target, worktreeId, fence)
       )
         .then((reply) => {
-          const { agents, incomplete, keepManagedAgentCommands } = read(reply)
-          const typed = mergeAgentDetection(agents, incomplete, get().runtimeDetectedAgentIds[key])
+          const detection = read(reply)
+          const typed = mergeAgentDetection(detection, get().runtimeDetectedAgentIds[key])
           // Removed or re-paired environments must not regain stale entries from in-flight detection.
           if (runtimeDetectPromises.get(key) === pending) {
-            keepManagedAgentCommands()
+            detection.keepManagedAgentCommands()
             commitDetection(key, typed, false)
           }
           return typed
@@ -285,11 +283,11 @@ export const createRuntimeDetectedAgentsSlice: (
           : request()
       )
         .then((reply) => {
-          const { agents, incomplete, keepManagedAgentCommands } = read(reply)
-          const typed = mergeAgentDetection(agents, incomplete, get().runtimeDetectedAgentIds[key])
+          const detection = read(reply)
+          const typed = mergeAgentDetection(detection, get().runtimeDetectedAgentIds[key])
           // Ignore refreshes detached by environment removal or re-pair.
           if (runtimeRefreshPromises.get(key) === pending) {
-            keepManagedAgentCommands()
+            detection.keepManagedAgentCommands()
             commitDetection(key, typed, false)
           }
           return typed

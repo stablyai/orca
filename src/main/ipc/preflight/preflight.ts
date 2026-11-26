@@ -25,6 +25,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 type AgentDetectionRequest = PreflightRuntimeContext & {
   enabledOnly?: boolean
   withManagedAgentCommands?: boolean
+  afterPublication?: number
 }
 /** Set by a user act (window focus, a click, opening a picker): it may start its WSL distro. */
 type PreflightWake = { wakeWslDistro?: boolean }
@@ -81,7 +82,10 @@ export function registerPreflightHandlers(
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
         return args?.withManagedAgentCommands
-          ? detectAgentInventoryOnHost(host, detectionOptions(args))
+          ? detectAgentInventoryOnHost(host, {
+              ...detectionOptions(args),
+              afterPublication: args.afterPublication
+            })
           : detectAgentsOnHost(host, detectionOptions(args))
       })
     }

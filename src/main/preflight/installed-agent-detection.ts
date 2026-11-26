@@ -34,6 +34,8 @@ export type InstalledAgentDetectionOptions = {
   agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
   /** Probe only this agent, for a caller that checks one agent rather than listing them all. */
   onlyTuiAgent?: TuiAgent
+  /** Publication sequence from this caller's incomplete detect reply. */
+  afterPublication?: number
 }
 
 function activeDetectionCommands(
@@ -109,6 +111,7 @@ function overrideProbeCommands(
 export type InstalledAgentInventory = {
   agents: string[]
   incomplete?: boolean
+  afterPublication?: number
   /** Legacy wire name for the user's CLI paths outside the terminal PATH. */
   managedAgentCommands?: ManagedAgentCommands
   outsidePath?: ManagedAgentCommands
@@ -132,14 +135,18 @@ export async function detectInstalledAgentInventory(
     ])
   ]
   const foundOutsidePath = new Map<string, string>()
-  const { found, incomplete } = await detectAgentCommandInventoryOnHost(probeCommands, {
-    context,
-    ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
-    ...(options?.onlyTuiAgent ? { onlyRequested: true } : {}),
-    ...(refresh ? { refresh: true } : {}),
-    ...(signal ? { signal } : {}),
-    ...(prepare ? { prepare } : {})
-  })
+  const { found, incomplete, afterPublication } = await detectAgentCommandInventoryOnHost(
+    probeCommands,
+    {
+      context,
+      afterPublication: options?.afterPublication,
+      ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
+      ...(options?.onlyTuiAgent ? { onlyRequested: true } : {}),
+      ...(refresh ? { refresh: true } : {}),
+      ...(signal ? { signal } : {}),
+      ...(prepare ? { prepare } : {})
+    }
+  )
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
   const outsidePath: ManagedAgentCommands = {}
@@ -162,6 +169,7 @@ export async function detectInstalledAgentInventory(
   return {
     agents: detected,
     ...(incomplete ? { incomplete: true } : {}),
+    ...(afterPublication === undefined ? {} : { afterPublication }),
     ...(runtime === 'wsl' ? {} : { outsidePath, managedAgentCommands: outsidePath })
   }
 }

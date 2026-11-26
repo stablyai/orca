@@ -87,7 +87,10 @@ export const PREFLIGHT_METHODS = [
       // A client's inventory read is background work: it must not start a stopped WSL distro (E9).
       await assertAgentDetectionHostRunning(host)
       return params.withManagedAgentCommands
-        ? detectAgentInventoryOnHost(host, hostDetectionOptions(runtime))
+        ? detectAgentInventoryOnHost(host, {
+            ...hostDetectionOptions(runtime),
+            afterPublication: params.afterPublication
+          })
         : detectAgentsOnHost(host, hostDetectionOptions(runtime))
     }
   }),

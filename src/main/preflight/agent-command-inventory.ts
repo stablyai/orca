@@ -56,12 +56,11 @@ type InventoryPublication = {
   generation: number | undefined
   sequence: number
 }
-type InventorySlot = {
+export type InventorySlot = {
   distro?: string
   localEnv?: () => NodeJS.ProcessEnv | undefined
   pending?: PendingInventory
   published?: InventoryPublication
-  detectDeadlineSequence?: number
   retry?: { after: number; generation: number | undefined }
 }
 const scanPriority: Record<InventoryMode, number> = {

@@ -35,11 +35,13 @@ export type AgentDetectionArgs = PreflightRuntimeContext & {
   enabledOnly?: boolean
   wakeWslDistro?: boolean
   userInitiated?: boolean
+  afterPublication?: number
 }
 
 export type AgentInventoryReply = {
   agents: string[]
   incomplete?: boolean
+  afterPublication?: number
   managedAgentCommands?: Record<string, string>
   outsidePath?: Record<string, string>
 }

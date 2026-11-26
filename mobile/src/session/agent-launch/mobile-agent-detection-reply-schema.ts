@@ -10,7 +10,8 @@ const agentListSchema = z.array(z.unknown())
 
 export const refreshedAgentsSchema = z.object({
   agents: agentListSchema,
-  incomplete: z.boolean().optional()
+  incomplete: z.boolean().optional(),
+  afterPublication: z.number().int().nonnegative().optional()
 })
 
 // Older hosts and remote detection return the list alone.

@@ -6,7 +6,7 @@ import type { ManagedAgentCommands } from '../../../../../shared/agent-launch/st
 // workspace, so the map is bounded by the paired hosts and drops with them.
 const byHost = new Map<string, { started: number; commands: ManagedAgentCommands }>()
 const listeners = new Set<() => void>()
-const incompleteInventories = new WeakSet<TuiAgent[]>()
+const incompleteInventories = new WeakMap<TuiAgent[], number | undefined>()
 let lastStarted = 0
 
 export const LOCAL_MANAGED_AGENT_HOST = 'local'
@@ -21,6 +21,7 @@ export type AgentDetectionReply =
   | {
       agents: readonly string[]
       incomplete?: boolean
+      afterPublication?: number
       outsidePath?: Record<string, string>
       managedAgentCommands?: Record<string, string>
     }
@@ -28,6 +29,7 @@ export type AgentDetectionReply =
 export type AgentDetectionReading = {
   agents: TuiAgent[]
   incomplete: boolean
+  afterPublication?: number
   /** Called once the reply is current; a reply started before the one already kept is dropped. */
   keepManagedAgentCommands: () => void
 }
@@ -44,6 +46,7 @@ export function beginAgentDetection(
     return {
       agents: ('agents' in reply ? reply.agents : reply).filter(isTuiAgent),
       incomplete,
+      afterPublication: incomplete ? reply.afterPublication : undefined,
       keepManagedAgentCommands: () => {
         const kept = byHost.get(host)
         if (!paths || started <= (kept?.started ?? 0)) {
@@ -63,20 +66,30 @@ export function beginAgentDetection(
 }
 
 export function mergeAgentDetection(
-  agents: TuiAgent[],
-  incomplete: boolean,
+  {
+    agents,
+    incomplete,
+    afterPublication
+  }: Pick<AgentDetectionReading, 'agents' | 'incomplete' | 'afterPublication'>,
   previous: TuiAgent[] | null | undefined
 ): TuiAgent[] {
   if (!incomplete) {
     return agents
   }
   const merged = [...new Set([...(previous ?? []), ...agents])]
-  incompleteInventories.add(merged)
+  incompleteInventories.set(merged, afterPublication)
   return merged
 }
 
 export function isIncompleteAgentInventory(agents: TuiAgent[] | null | undefined): boolean {
   return !!agents && incompleteInventories.has(agents)
+}
+
+export function agentInventoryRetryParams(agents: TuiAgent[] | null | undefined): {
+  afterPublication?: number
+} {
+  const afterPublication = agents ? incompleteInventories.get(agents) : undefined
+  return afterPublication === undefined ? {} : { afterPublication }
 }
 
 function sameCommands(a: ManagedAgentCommands, b: ManagedAgentCommands): boolean {

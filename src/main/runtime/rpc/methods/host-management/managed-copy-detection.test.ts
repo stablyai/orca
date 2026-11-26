@@ -384,28 +384,34 @@ it('publishes a completed scan and resolves its early waiter while a successor r
   }
 })
 
-it('lets the picker reuse a completed inventory after its cold deadline', async () => {
+it('lets two pickers reuse a completed inventory after their cold deadlines', async () => {
   await executable('path', claudeName)
   const entered = Promise.withResolvers<void>()
   const held = Promise.withResolvers<void>()
   fixture.onScan = entered.resolve
   fixture.installs = held.promise
   vi.useFakeTimers()
-  const detectForPicker = () => detectAgentInventoryOnHost(HOST_DEFAULT_AGENT_DETECTION)
-  const detect = detectForPicker().catch((error: unknown) => error)
+  const detectForPicker = (afterPublication?: number) =>
+    detectAgentInventoryOnHost(HOST_DEFAULT_AGENT_DETECTION, { afterPublication })
+  const detections = Promise.all([detectForPicker(), detectForPicker()])
   try {
     await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(await detect).toMatchObject({ agents: [], incomplete: true })
+    await expect(detections).resolves.toMatchObject([
+      { agents: [], incomplete: true, afterPublication: 0 },
+      { agents: [], incomplete: true, afterPublication: 0 }
+    ])
   } finally {
     const completion = readLocalTerminalAgentProgram('claude', shell)
     held.resolve()
     await completion
   }
-  const retry = await detectForPicker()
-  expect(retry.agents).toEqual(['claude'])
-  expect(retry.incomplete).toBeUndefined()
-  expect(fixture.enumerate).toHaveBeenCalledTimes(1)
+  for (const reply of await detections) {
+    const retry = await detectForPicker(reply.afterPublication)
+    expect(retry.agents).toEqual(['claude'])
+    expect(retry.incomplete).toBeUndefined()
+    expect(fixture.enumerate).toHaveBeenCalledTimes(1)
+  }
   await detectForPicker()
   expect(fixture.enumerate).toHaveBeenCalledTimes(2)
 })
@@ -422,7 +428,11 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
   try {
     await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(await detect).toMatchObject({ agents: ['claude'], incomplete: true })
+    expect(await detect).toMatchObject({
+      agents: ['claude'],
+      incomplete: true,
+      afterPublication: 1
+    })
   } finally {
     const completion = detectInstalledAgentInventory()
     held.resolve()

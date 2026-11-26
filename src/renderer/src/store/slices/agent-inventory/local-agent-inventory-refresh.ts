@@ -115,17 +115,15 @@ export function refreshLocalAgentInventory(
   const pending = window.api.preflight
     .refreshAgents({ ...refreshArgs, ...options })
     .then((result) => {
-      const { agents, incomplete, keepManagedAgentCommands } = read(result)
+      const detection = read(result)
       const state = get()
-      const typed = mergeAgentDetection(
-        agents,
-        incomplete,
-        state.localDetectedAgentIdsByContext[contextKey]
-      )
+      const typed = mergeAgentDetection(detection, state.localDetectedAgentIdsByContext[contextKey])
       const published = includeDisabled
         ? mergeAgentDetection(
-            filterEnabledTuiAgents(typed, state.settings?.disabledTuiAgents),
-            incomplete,
+            {
+              ...detection,
+              agents: filterEnabledTuiAgents(typed, state.settings?.disabledTuiAgents)
+            },
             state.localDetectedAgentIdsByContext[publishedContextKey]
           )
         : typed
@@ -133,7 +131,7 @@ export function refreshLocalAgentInventory(
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
       ) {
-        keepManagedAgentCommands()
+        detection.keepManagedAgentCommands()
         const ownsPublished = ownsPublishedRefresh()
         const settledKeys = ownsPublished ? refreshContextKeys : new Set([contextKey])
         lifecycle.failedDetectContextKeys.delete(contextKey)

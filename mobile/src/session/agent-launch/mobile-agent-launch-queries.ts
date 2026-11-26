@@ -35,14 +35,14 @@ async function detectAgents(
   client: RpcClient,
   target: HostQueryTarget,
   input: DetectionInput,
-  refresh?: MobileAgentRefresh
+  options: { refresh?: MobileAgentRefresh; afterPublication?: number } = {}
 ): Promise<MobileDetectedAgents> {
   try {
     const detected = await loadMobileDetectedAgents({
       client,
       worktreeId: target.worktree ?? '',
       hostRefusesOtherRuntime: input.refusesOtherRuntime,
-      refresh
+      ...options
     })
     return { kind: 'detected', ...detected }
   } catch (error) {
@@ -71,8 +71,14 @@ export const detectedAgentsQuery = defineHostQuery<DetectionInput, MobileDetecte
   staleTime: ({ state: { data } }) =>
     data?.kind === 'detected' && data.incomplete ? 0 : 10 * 60_000,
   gcTime: 30 * 60_000,
-  fetch: async (client, target, input, previous) =>
-    mergeDetectedAgents(await detectAgents(client, target, input), previous)
+  fetch: async (client, target, input, previous) => {
+    const afterPublication =
+      previous?.kind === 'detected' && previous.incomplete ? previous.afterPublication : undefined
+    return mergeDetectedAgents(
+      await detectAgents(client, target, input, { afterPublication }),
+      previous
+    )
+  }
 })
 
 // Rewrites the cached list after the host re-reads its login-shell PATH, as desktop's refresh does.
@@ -87,7 +93,7 @@ export async function refreshDetectedAgents(
   const queryKey = hostQueryKey(host.hostId, detectedAgentsQuery.family, target, input)
   await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
   const result = await detectAgents(hostReadClient(host.client), target, input, {
-    onSent: onRefreshSent
+    refresh: { onSent: onRefreshSent }
   })
   // A read started during refresh may have merged against the list from before this write.
   await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })

@@ -117,6 +117,41 @@ describe('win32 PATH lookup', () => {
     }
   })
 
+  it('reuses settled candidate misses for staggered callers during a cmd folder check', async () => {
+    const entered = Promise.withResolvers<void>()
+    const held = Promise.withResolvers<void>()
+    const candidates = ['EXE', 'CMD', 'BAT', 'COM'].map((ext) =>
+      path.join(quotedBin, `staggered-tool.${ext}`)
+    )
+    const statFile = vi.mocked(stat)
+    statFile.mockClear()
+    statFile.mockImplementation(async (file) => {
+      if (file === candidates[3]) {
+        entered.resolve()
+        await held.promise
+      }
+      throw new Error('Missing executable')
+    })
+    const lookup = () =>
+      resolveCmdLaunchFolderProgram(
+        'staggered-tool',
+        quotedBin,
+        '.EXE;.CMD;.BAT;.COM',
+        new AbortController().signal
+      )
+    try {
+      const first = lookup()
+      await Promise.race([entered.promise, first])
+      const second = lookup()
+      held.resolve()
+      await expect(Promise.all([first, second])).resolves.toEqual([null, null])
+      expect(statFile.mock.calls).toEqual(candidates.map((candidate) => [candidate]))
+    } finally {
+      held.resolve()
+      statFile.mockReset()
+    }
+  })
+
   it('resolves commands from quoted Windows PATH entries in single and batch lookups', async () => {
     const options = {
       platform: 'win32' as const,

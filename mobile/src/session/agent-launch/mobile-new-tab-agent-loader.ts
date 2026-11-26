@@ -64,6 +64,7 @@ type MobileAgentLaunchContextArgs = {
   hostRefusesOtherRuntime?: boolean
   /** Re-reads the host's login-shell PATH before probing, as desktop's refresh does. */
   refresh?: MobileAgentRefresh
+  afterPublication?: number
 }
 
 export type MobileAgentRefresh = {
@@ -92,15 +93,23 @@ export async function loadMobileAgentLaunchContext(
   }
 }
 
-export async function loadMobileDetectedAgents(
-  args: MobileAgentLaunchContextArgs
-): Promise<Pick<MobileAgentLaunchContext, 'detectedAgents' | 'repo'> & { incomplete?: boolean }> {
+export async function loadMobileDetectedAgents(args: MobileAgentLaunchContextArgs): Promise<
+  Pick<MobileAgentLaunchContext, 'detectedAgents' | 'repo'> & {
+    incomplete?: boolean
+    afterPublication?: number
+  }
+> {
   const detected = await loadDetectedAgents(args.client, args.worktreeId, {
     ...args,
     includeInventoryStatus: true
   })
-  const { agents, incomplete } = interpretDetectedAgents(detected)
-  return { detectedAgents: agents, incomplete, repo: detected.repo }
+  const { agents, incomplete, afterPublication } = interpretDetectedAgents(detected)
+  return {
+    detectedAgents: agents,
+    incomplete,
+    ...(afterPublication === undefined ? {} : { afterPublication }),
+    repo: detected.repo
+  }
 }
 
 export function newTabAgentOptionsFrom(
@@ -172,7 +181,7 @@ async function loadDetectedAgents(
 async function probeHostAgents(
   client: RpcClient,
   params: { worktreeId: string } | undefined,
-  { refresh, includeInventoryStatus }: HostProbeOptions
+  { refresh, includeInventoryStatus, afterPublication }: HostProbeOptions
 ): Promise<Omit<DetectedAgentsReply, 'repo'>> {
   if (refresh) {
     const reply = await preflightRefreshAgentsRead.request(client, params, {
@@ -185,7 +194,11 @@ async function probeHostAgents(
   }
   // This opt-in returns an inventory object; older hosts ignore it and return their usual array.
   const detectParams = includeInventoryStatus
-    ? { ...params, withManagedAgentCommands: true }
+    ? {
+        ...params,
+        withManagedAgentCommands: true,
+        ...(afterPublication === undefined ? {} : { afterPublication })
+      }
     : params
   return {
     reply: await (detectParams

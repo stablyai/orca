@@ -63,14 +63,17 @@ const discoveredQuery = defineHostQuery({
   signal: { events: ['mcpServersChanged'] }
 })
 
-const agentsQuery = defineHostQuery<
-  typeof NO_HOST_LIST_INPUT,
-  { agents: TuiAgent[]; incomplete?: boolean }
->({
+type McpAgentInventory = { agents: TuiAgent[]; incomplete?: boolean; afterPublication?: number }
+
+const agentsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, McpAgentInventory>({
   family: 'mcpServers.agents',
   fetch: async (client, _target, _input, previous) => {
-    const { agents, incomplete } = preflightDetectAgentsRead.interpret(
-      await preflightDetectAgentsRead.request(client, { withManagedAgentCommands: true })
+    const retryAfter = previous?.incomplete ? previous.afterPublication : undefined
+    const { agents, incomplete, afterPublication } = preflightDetectAgentsRead.interpret(
+      await preflightDetectAgentsRead.request(client, {
+        withManagedAgentCommands: true,
+        ...(retryAfter === undefined ? {} : { afterPublication: retryAfter })
+      })
     )
     const detected = new Set(agents)
     if (incomplete) {
@@ -82,7 +85,8 @@ const agentsQuery = defineHostQuery<
       agents: MOBILE_AGENT_CATALOG.filter((agent) => detected.has(agent.id)).map(
         (agent) => agent.id
       ),
-      incomplete
+      incomplete,
+      afterPublication
     }
   },
   staleTime: ({ state: { data } }) => (data?.incomplete ? 0 : 10 * 60_000),
@@ -127,6 +131,15 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
 
   const { refetch: refetchList } = list
   const { refetch: refetchDiscovered } = discovered
+  const { refetch: refetchAgents } = agents
+  const canReadAgents = enabled && client !== null
+  const retryIncompleteAgents = useCallback(() => {
+    const key = hostQueryKey(hostId, agentsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+    if (canReadAgents && queryClient.getQueryData<McpAgentInventory>(key)?.incomplete) {
+      void refetchAgents({ cancelRefetch: false })
+    }
+  }, [canReadAgents, hostId, queryClient, refetchAgents])
+
   // A host without the capability is never asked, even on focus.
   const reread = useCallback(() => {
     if (enabled) {
@@ -135,7 +148,12 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
       void refetchDiscovered({ cancelRefetch: false })
     }
   }, [enabled, refetchList, refetchDiscovered])
-  useFocusEffect(reread)
+  useFocusEffect(
+    useCallback(() => {
+      reread()
+      retryIncompleteAgents()
+    }, [reread, retryIncompleteAgents])
+  )
 
   /** A change's answer shows at once; the re-read after it catches what else changed. */
   const applyServer = useCallback(
@@ -196,6 +214,7 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
     workspaces,
     problems,
     reread,
+    retryIncompleteAgents,
     applyServer
   }
 }
