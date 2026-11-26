@@ -35,7 +35,7 @@ export function agentPickerModelCatalogReads(
         ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
         : !target
           ? undefined
-          : entry.agent === 'antigravity'
+          : entry.agent === 'antigravity' || (entry.agent === 'qwenwork' && relist)
             ? callStructuredAgentSession<AgentSessionModelCatalogResult>(
                 target,
                 'agentSession.modelCatalog',

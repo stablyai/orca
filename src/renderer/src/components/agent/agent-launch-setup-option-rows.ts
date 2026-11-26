@@ -209,30 +209,39 @@ export function agentLaunchSetupCatalogState(
     settled &&
     (entry.catalogRead === 'unsupported' ||
       (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined))
+  const qwenWorkConnectionHelp =
+    entry.agent === 'qwenwork' &&
+    (entry.catalogRead === 'failed' ||
+      (entry.catalog.origin === 'unknown' && !entry.catalog.unavailable))
   const missing =
     !settled || unsupported
       ? null
-      : entry.catalogRead === 'failed'
-        ? t('agentPicker.catalogLoadFailed', 'Could not load {{agent}} models.', {
-            agent: entry.label
-          })
-        : entry.catalog.unavailable?.reason === 'notSignedIn'
-          ? t('agentPicker.catalogSignInToLoad', 'Sign in to {{agent}} to load its models.', {
+      : qwenWorkConnectionHelp
+        ? t(
+            'agentPicker.qwenWorkCatalogLoadFailed',
+            'Open QwenWork desktop with local control enabled, sign in, and retry.'
+          )
+        : entry.catalogRead === 'failed'
+          ? t('agentPicker.catalogLoadFailed', 'Could not load {{agent}} models.', {
               agent: entry.label
             })
-          : entry.catalog.unavailable?.reason === 'cliMissing'
-            ? t(
-                'agentPicker.catalogInstallToLoad',
-                'Install {{agent}} on this host to load its models.',
-                { agent: entry.label }
-              )
-            : entry.catalog.unavailable ||
-                ((entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress) &&
-                  !hasModels)
-              ? t('agentPicker.catalogNotLoaded', '{{agent}} models have not loaded.', {
-                  agent: entry.label
-                })
-              : null
+          : entry.catalog.unavailable?.reason === 'notSignedIn'
+            ? t('agentPicker.catalogSignInToLoad', 'Sign in to {{agent}} to load its models.', {
+                agent: entry.label
+              })
+            : entry.catalog.unavailable?.reason === 'cliMissing'
+              ? t(
+                  'agentPicker.catalogInstallToLoad',
+                  'Install {{agent}} on this host to load its models.',
+                  { agent: entry.label }
+                )
+              : entry.catalog.unavailable ||
+                  ((entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress) &&
+                    !hasModels)
+                ? t('agentPicker.catalogNotLoaded', '{{agent}} models have not loaded.', {
+                    agent: entry.label
+                  })
+                : null
   const commandRefused =
     surface === 'chat' && entry.catalog.unavailable?.reason === 'agentCommandNotRunnable'
   const catalogMessage = catalogPending

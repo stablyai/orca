@@ -21044,6 +21044,7 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "qwenWorkWelcome": "Choose a model from QwenWork desktop, then send a message.",
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…",
         "cliInstall": "Install",
@@ -26935,6 +26936,7 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
+    "qwenWorkCatalogLoadFailed": "Open QwenWork desktop with local control enabled, sign in, and retry.",
     "refreshModels": "Refresh models",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
