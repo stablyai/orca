@@ -7,6 +7,7 @@ import {
 import type { DraftPasteReadySignal, TuiAgentConfig } from '../../catalog/tui-agent-config-types'
 import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
+import { createOuroStatusReportScanner } from './ouro-status-report-scanner'
 
 // Paste mode precedes composer readiness; per-agent markers avoid guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
@@ -35,11 +36,6 @@ const ANTIGRAVITY_COMPOSER_READY = new RegExp(
 // Copilot's composer row: a rule then `❯` at column 1. Its trust menu draws `❯ 1. Yes` inside a box, never after a rule row.
 // Evidence: Copilot CLI 1.0.107 draws this at ~1.2-2.4s, then animates its loading spinner and mascot past 4s.
 const COPILOT_COMPOSER_READY = new RegExp(`─{8}${SGR_RUN}\\r*\\n${SGR_RUN}❯`)
-// `ouro chat` reports idle over OSC 7501 once its composer takes input, and clears its row on exit. Its agent
-// picker runs before the chat and reports nothing, and a shell never writes 7501, so the paste cannot answer the picker.
-const OURO_STATUS_REPORT = '\x1b]7501;'
-const OURO_STATUS_CLEAR = '\x1b]7501;state=clear'
-const OURO_COMPOSER_READY = 'state=idle:app=ouro'
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -66,13 +62,15 @@ type DraftPasteReadySignalSpec = {
 }
 
 // Signals that read the screen's structure, not one marker; a Record so none lacks its scanner.
-type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt'
+type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt' | 'ouro-composer-prompt'
 const STRUCTURAL_SCANNERS: Record<
   StructuralSignal,
   () => { observe: (data: string) => { ready: boolean; readyAfterMs?: number | null } }
 > = {
   'opencode-agent-row': createOpenCodeAgentRowScanner,
-  'codex-composer-prompt': createCodexComposerReadyScanner
+  'codex-composer-prompt': createCodexComposerReadyScanner,
+  // No quiet fallback: a quiet window can settle while the agent picker waits, and the paste would answer it.
+  'ouro-composer-prompt': createOuroStatusReportScanner
 }
 
 type SingleSignal = Exclude<DraftPasteReadySignal, StructuralSignal>
@@ -131,12 +129,6 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     marker: COPILOT_COMPOSER_READY,
     // Keep the quiet fallback for a build or platform whose composer row differs.
     quietAnchor: DECSET_BRACKETED_PASTE
-  },
-  // No quiet fallback: a quiet window can settle while the agent picker waits, and the paste would answer it.
-  'ouro-composer-prompt': {
-    markerAnchors: [{ enter: OURO_STATUS_REPORT, exit: OURO_STATUS_CLEAR }],
-    marker: OURO_COMPOSER_READY,
-    quietAnchor: null
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchors: null,
