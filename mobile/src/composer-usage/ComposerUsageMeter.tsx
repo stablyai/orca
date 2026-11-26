@@ -1,7 +1,10 @@
 import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { lazy, Suspense, useContext, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { composerInputStyles } from '../components/composer-input/composer-input-styles'
+import {
+  composerInputStyles,
+  MESSAGE_TEXT_INSET
+} from '../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -24,6 +27,7 @@ import {
   composerUsageMeterReadout,
   type ComposerUsageMeterReadout
 } from './composer-usage-meter-readout'
+import { useComposerUsagePosition } from './composer-usage-position-preference'
 import { useComposerUsageWindow } from './composer-usage-window-preference'
 import { composerUsageWideMeterLayout } from './composer-usage-wide-meter'
 import { ComposerUsageTrack, TRACK_MIN_WIDTH } from './ComposerUsageTrack'
@@ -111,11 +115,15 @@ function useComposerUsageReading(agent: string | null | undefined): Reading | nu
   }
 }
 
-/** The composer action row's flexible gap, with the agent's usage meter centered in it. */
+/** The composer action row's flexible gap, with the agent's usage meter centered in it unless it sits above. */
 export function ComposerUsageSlot({ agent, spanSideStrip }: Props): React.JSX.Element {
+  const position = useComposerUsagePosition()
   const [room, setRoom] = useState<number | null>(null)
   // The full meter's width, whatever part of it shows, so the row never re-splits as parts drop.
   const [basis, setBasis] = useState<number | null>(null)
+  if (position === 'above') {
+    return <View style={[composerInputStyles.actionSpacer, styles.emptySlot]} />
+  }
   return (
     <View
       style={[
@@ -148,13 +156,7 @@ export function ComposerUsageMeter({
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const reading = useComposerUsageReading(agent)
-  const [open, setOpen] = useState(false)
-  // Latched on first open: the lazy pop-up mounts once, then stays mounted while the meter lives.
-  const [opened, setOpened] = useState(false)
-  const showSheet = (): void => {
-    setOpened(true)
-    setOpen(true)
-  }
+  const { showSheet, sheet } = useComposerUsageSheet(reading, spanSideStrip)
   // The labels' own widths, measured off the row, so a dropped label still reports its need.
   const [resetWidth, setResetWidth] = useState<number | null>(null)
   const [compactWidth, setCompactWidth] = useState<number | null>(null)
@@ -244,7 +246,60 @@ export function ComposerUsageMeter({
           onPercentWidth={setWidePercentWidth}
         />
       </View>
-      {opened ? (
+      {sheet}
+    </>
+  )
+}
+
+/** The meter as one full-width line over the composer text, when the owner moves it out of the controls row. */
+export function ComposerUsageStrip({
+  agent,
+  spanSideStrip = false
+}: Props): React.JSX.Element | null {
+  useMobileColorScheme()
+  const position = useComposerUsagePosition()
+  const reading = useComposerUsageReading(agent)
+  const { showSheet, sheet } = useComposerUsageSheet(reading, spanSideStrip)
+  if (position !== 'above' || !reading) {
+    return null
+  }
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={reading.accessibilityLabel}
+        hitSlop={4}
+        onPress={showSheet}
+        style={({ pressed }) => [styles.strip, pressed && composerInputStyles.pressed]}
+        testID="composer-usage-strip"
+      >
+        <Text style={[styles.text, styles.window]} numberOfLines={1}>
+          {`${reading.provider} · ${reading.resetsIn}`}
+        </Text>
+        <ComposerUsageTrack readout={reading.readout} color={reading.color} />
+        <Text style={styles.text} numberOfLines={1}>
+          {reading.percentLabel}
+        </Text>
+      </Pressable>
+      {sheet}
+    </>
+  )
+}
+
+function useComposerUsageSheet(
+  reading: Reading | null,
+  spanSideStrip: boolean
+): { showSheet: () => void; sheet: React.ReactNode } {
+  const [open, setOpen] = useState(false)
+  // Latched on first open: the lazy pop-up mounts once, then stays mounted while the meter lives.
+  const [opened, setOpened] = useState(false)
+  return {
+    showSheet: () => {
+      setOpened(true)
+      setOpen(true)
+    },
+    sheet:
+      opened && reading ? (
         <Suspense fallback={null}>
           <ComposerUsageSheet
             visible={open}
@@ -254,9 +309,8 @@ export function ComposerUsageMeter({
             spanSideStrip={spanSideStrip}
           />
         </Suspense>
-      ) : null}
-    </>
-  )
+      ) : null
+  }
 }
 
 const LABEL_GAP = spacing.xs
@@ -292,6 +346,10 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     minWidth: 0
   },
+  // Cancels one row gap, so an empty spacer squeezed to nothing hands the model pill all its room.
+  emptySlot: {
+    marginLeft: -spacing.sm
+  },
   meter: {
     justifyContent: 'center',
     gap: 2,
@@ -306,6 +364,16 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: LABEL_GAP
+  },
+  // Inset like the message text below it, so the two share a left edge.
+  strip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 20,
+    paddingHorizontal: MESSAGE_TEXT_INSET,
+    marginBottom: spacing.xs,
+    borderRadius: radii.pill
   },
   // Zero-height and clipped, but wide, so a two-word label measures on one line without showing.
   measure: {

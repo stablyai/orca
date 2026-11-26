@@ -20,6 +20,7 @@ import { useComposerUsageDisplay } from './composer-usage-display-preference'
 import { composerUsageMeterReadout } from './composer-usage-meter-readout'
 import { useComposerUsageWindow } from './composer-usage-window-preference'
 import { ComposerUsageDisplayPicker } from './ComposerUsageDisplayPicker'
+import { ComposerUsagePositionPicker } from './ComposerUsagePositionPicker'
 import { ComposerUsageWindowDetail, windowTitle } from './ComposerUsageWindowDetail'
 import { ComposerUsageWindowPicker } from './ComposerUsageWindowPicker'
 import { usageProviderTabLogo } from './usage-provider-logo'
@@ -122,6 +123,7 @@ export function ComposerUsageSheet({ visible, onClose, usage, snapshot, spanSide
         ) : null}
         <ComposerUsageWindowPicker windows={active.windows} />
         <ComposerUsageDisplayPicker />
+        <ComposerUsagePositionPicker />
       </View>
     </BottomDrawer>
   )

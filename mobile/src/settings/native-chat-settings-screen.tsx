@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Platform } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ComposerUsageDisplayPicker } from '../composer-usage/ComposerUsageDisplayPicker'
+import { ComposerUsagePositionPicker } from '../composer-usage/ComposerUsagePositionPicker'
 import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
@@ -173,6 +174,7 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
         >
           <ComposerUsageWindowPicker inSettings />
           <ComposerUsageDisplayPicker inSettings />
+          <ComposerUsagePositionPicker inSettings />
         </SettingsSection>
       </SettingsScreen>
     </GestureHandlerRootView>

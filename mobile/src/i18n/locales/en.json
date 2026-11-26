@@ -8648,6 +8648,13 @@
       "legend": "Dashed line: an even pace to reset",
       "legendNoReset": "Usage since the first reading",
       "collecting": "Collecting usage history. The graph fills in as the desktop checks usage."
+    },
+    "position": {
+      "label": "Meter position",
+      "row": "Controls",
+      "rowHint": "Show the meter in the controls row",
+      "above": "Above text",
+      "aboveHint": "Show the meter on its own line above the text"
     }
   },
   "mcpServers": {

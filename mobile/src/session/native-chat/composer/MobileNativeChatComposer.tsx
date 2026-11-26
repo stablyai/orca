@@ -40,6 +40,7 @@ import type { MobileNativeChatComposerProps } from './mobile-native-chat-compose
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 import { MobileNativeChatActionGap } from './MobileNativeChatActionGap'
+import { ComposerUsageStrip } from '../../../composer-usage/ComposerUsageMeter'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -266,6 +267,7 @@ export function MobileNativeChatComposer({
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
         <View {...contextRing.barProps} style={barStyle} testID="native-chat-composer">
+          {editSession ? null : <ComposerUsageStrip agent={agent} spanSideStrip />}
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}

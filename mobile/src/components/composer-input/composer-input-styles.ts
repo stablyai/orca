@@ -44,6 +44,9 @@ const edge = (borderColor: string) =>
 // The box owns the focus ring, so the browser's own ring on the text inside is dropped.
 const noOwnRing = { outlineWidth: 0 } as const
 
+/** The message text's side inset, which lines composer rows up with the text. */
+export const MESSAGE_TEXT_INSET = 6
+
 // The chat composer's look, shared by every text input so they cannot drift apart; plain fields add the edge.
 export const composerInputStyles = themedStyleSheet(() => ({
   box: {
@@ -94,7 +97,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     fontSize: COMPOSER_TEXT_SIZE,
     lineHeight: COMPOSER_LINE_HEIGHT,
     color: colors.textPrimary,
-    paddingHorizontal: 6,
+    paddingHorizontal: MESSAGE_TEXT_INSET,
     paddingTop: MESSAGE_PADDING_VERTICAL,
     paddingBottom: MESSAGE_PADDING_VERTICAL
   },

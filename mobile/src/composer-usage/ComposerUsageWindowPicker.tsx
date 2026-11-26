@@ -1,14 +1,6 @@
-import { Text, View } from 'react-native'
-import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import {
-  composerUsageWindowToggleChoices,
-  type ComposerUsageWindowChoice,
-  type UsageWindowEntry
-} from './agent-usage-provider'
+import { composerUsageWindowToggleChoices, type UsageWindowEntry } from './agent-usage-provider'
+import { ComposerUsageChoiceRow } from './ComposerUsageChoiceRow'
 import { setComposerUsageWindow, useComposerUsageWindow } from './composer-usage-window-preference'
 
 /** Picks the window the composer meter shows; lives in Settings and in the usage sheet. */
@@ -20,7 +12,6 @@ export function ComposerUsageWindowPicker({
   /** The open provider's windows. Settings has no provider, so it keeps both choices. */
   windows?: readonly UsageWindowEntry[]
 }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const choice = useComposerUsageWindow()
   const choices = windows
@@ -37,34 +28,13 @@ export function ComposerUsageWindowPicker({
         : t('composerUsage.picker.weekly', 'Weekly')
   }))
   return (
-    <View style={[styles.row, inSettings && styles.settingsRow]}>
-      <Text style={styles.label}>{t('composerUsage.picker.label', 'Show in composer')}</Text>
-      <MobileSegmentedControl<ComposerUsageWindowChoice>
-        segments={segments}
-        selected={choice}
-        onSelect={setComposerUsageWindow}
-        onSheet={!inSettings}
-        testIDPrefix="composer-usage-window-"
-      />
-    </View>
+    <ComposerUsageChoiceRow
+      label={t('composerUsage.picker.label', 'Show in composer')}
+      segments={segments}
+      selected={choice}
+      onSelect={setComposerUsageWindow}
+      inSettings={inSettings}
+      testIDPrefix="composer-usage-window-"
+    />
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.md
-  },
-  settingsRow: {
-    paddingHorizontal: spacing.md + 2
-  },
-  label: {
-    flexShrink: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  }
-}))
