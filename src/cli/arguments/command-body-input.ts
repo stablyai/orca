@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { resolveCallerLocalPath } from '../../shared/file-access/caller-local-path'
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import { readStdin } from './flag-or-stdin-payload'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -65,7 +66,8 @@ export async function readTextOrFileFlag(
 
 async function readBodyFile(path: string, cwd: string): Promise<string> {
   if (path !== '-') {
-    const resolved = isAbsolute(path) ? path : join(cwd, path)
+    // A WSL caller's Linux path names a distro file; plain node:path reads it as C:\home\...
+    const resolved = resolveCallerLocalPath(path, cwd, getWslCallerDistro(cwd))
     try {
       return await readFile(resolved, 'utf8')
     } catch (error) {
