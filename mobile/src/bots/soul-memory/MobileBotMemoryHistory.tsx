@@ -26,7 +26,7 @@ import {
   ListRow,
   SectionHeader
 } from '../../components/list/ListGroup'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsNote } from '../../settings/settings-screen-frame'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -36,6 +36,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botMemoryHistory, botMemoryUndo } from './bot-memory-operations'
 import type { MemoryActions } from './MobileBotMemory'
+import { CLOCK_TIME, SHORT_MONTH_DAY } from '../../../../src/shared/i18n/regional-date-time-format'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -55,7 +56,7 @@ function dayLabel(t: ReturnType<typeof useMobileTranslation>, at: number, now: D
   if (at >= today - DAY_MS) {
     return t('settings.bots.memoryHistory.yesterday', 'Yesterday')
   }
-  return new Intl.DateTimeFormat(getUiIntlLocale(), { month: 'short', day: 'numeric' }).format(at)
+  return uiDateTimeFormat(SHORT_MONTH_DAY).format(at)
 }
 
 function HistoryRow(props: {
@@ -68,10 +69,7 @@ function HistoryRow(props: {
   const t = useMobileTranslation()
   const { row } = props
   const Icon = ICONS[botMemoryHistoryKind(row)]
-  const time = new Intl.DateTimeFormat(getUiIntlLocale(), {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(row.at)
+  const time = uiDateTimeFormat(CLOCK_TIME).format(row.at)
   const Chevron = props.open ? ChevronUp : ChevronDown
   // The desktop's tidy-up line explains Undo; on a phone row the name is enough.
   const author =

@@ -9,7 +9,7 @@ import { textLineCount } from '../../../../src/shared/bots/bot-text-scan'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -38,6 +38,12 @@ export type ReviewContext = {
   open: (page: ReviewPage) => void
   /** The tools ticked to contact; null for an original only looked at, where nothing is chosen. */
   consent: { toolIds: string[]; setToolIds: (ids: string[]) => void } | null
+}
+
+const PUBLISHED_DAY: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric'
 }
 
 export function reviewListTitle(list: ReviewList, t: ReturnType<typeof useMobileTranslation>) {
@@ -120,11 +126,7 @@ export function MobileBotShareReviewOverview(props: {
   const count = (value: number) => (value > 0 ? String(value) : none)
   const [first] = spots
   const secret = spots.some((spot) => spot.flag.kind === 'secret')
-  const date = new Intl.DateTimeFormat(getUiIntlLocale(), {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(new Date(review.publishedAt))
+  const date = uiDateTimeFormat(PUBLISHED_DAY).format(new Date(review.publishedAt))
   const row = (
     title: string,
     value: string,

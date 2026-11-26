@@ -8,6 +8,7 @@ import { MOBILE_WEB_SHELL_GRANTS } from '../../routing/page-route-policy'
 import { BRIDGE_PROTOCOL_VERSION, BRIDGE_SHELL_GRANTS } from './bridge-frame-fields'
 import type {
   BridgeColorScheme,
+  BridgeDateTimeRegion,
   BridgeHostMessage,
   BridgeInitHost,
   BridgeUiLocale
@@ -22,12 +23,20 @@ import {
 import type { BridgeFoldDivision } from '../page-geometry/bridge-fold-division'
 import type { BridgeTerminalKeyRail } from '../native-capabilities/bridge-terminal-key'
 import type { HostStatusReply } from '../../../transport/hosts/host-status-reply-schema'
+import { currentOsDateTimeRegion } from '../../../../../src/shared/i18n/regional-date-time-format'
 
 // Grant the intersection of implemented capabilities and route declarations, plus protocol fault. Use the same resolved list for init and enforcement; new names need no version bump.
 export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
   ...BRIDGE_SHELL_GRANTS,
   ...MOBILE_WEB_SHELL_GRANTS
 ]
+
+// A device fact the shell set at launch. Omitted when unknown: absent is what older shells send,
+// and the page then keeps the language's own date format.
+function dateTimeRegionField(): { dateTimeRegion?: BridgeDateTimeRegion } {
+  const { region, hourCycle } = currentOsDateTimeRegion()
+  return region || hourCycle ? { dateTimeRegion: { region, hourCycle } } : {}
+}
 
 export function createBridgeInitFrame(args: {
   sessionId: string
@@ -98,6 +107,7 @@ export function createBridgeInitFrame(args: {
     ...(args.colorScheme === 'light' ? { colorScheme: 'light' as const } : {}),
     // Sent even for English: an absent field lets the page fall back to the WebView's language.
     ...(args.uiLocale === undefined ? {} : { uiLocale: args.uiLocale }),
+    ...dateTimeRegionField(),
     pageRoutes: [...args.pageRoutes],
     // Copy entries so no frame retains access to the shell’s held route-grant objects.
     ...(args.pageRouteGrants === undefined

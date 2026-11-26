@@ -1,5 +1,7 @@
 import type React from 'react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 
 type ChecksPanelUpdatedAtMetadataProps = {
   reviewShortLabel: string
@@ -19,7 +21,7 @@ export function ChecksPanelUpdatedAtMetadata({
         '{{review}} updated {{time}}',
         {
           review: reviewShortLabel,
-          time: new Date(updatedAt).toLocaleString(intlLocale)
+          time: uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(new Date(updatedAt))
         }
       )}
     </div>

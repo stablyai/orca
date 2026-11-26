@@ -12,6 +12,8 @@ import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../shared/i18n/regional-date-time-format'
 
 const RECENT_DAY_COUNT = 42
 
@@ -31,7 +33,7 @@ function formatUpdatedAt(
     return t('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
   }
   return t('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
-    time: new Date(timestamp).toLocaleString(intlLocale)
+    time: uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(new Date(timestamp))
   })
 }
 

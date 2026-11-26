@@ -37,6 +37,8 @@ import {
   subscribeToRecentTerminalImages,
   type RecentTerminalImage
 } from '../input/recent-terminal-images'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { CLOCK_TIME } from '../../../../../shared/i18n/regional-date-time-format'
 
 type ImageLocation = { worktreeId: string; worktreePath: string; sourceTabId: string }
 
@@ -156,7 +158,7 @@ function TerminalImagePreview({
   const dotIndex = image.path.lastIndexOf('.')
   const extension = dotIndex > 0 ? image.path.slice(dotIndex + 1).toUpperCase() : ''
   const date = new Date(image.addedAt)
-  const timeLabel = date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
+  const timeLabel = uiDateTimeFormat(CLOCK_TIME, locale).format(date)
   const copyLabel = t('terminal.recentImages.copyPath', 'Copy path')
   const revealLabel = getRevealInFileManagerLabel(t)
 

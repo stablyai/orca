@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { CLOCK_TIME } from '../../../../shared/i18n/regional-date-time-format'
 
 type AgentCommandFailedDialogProps = {
   open: boolean
@@ -99,9 +100,7 @@ export function AgentCommandFailedDialog({
           'auto.components.sidebar.AutoRenameFailedDialog.errorDetailsAt',
           'Error details · {{time}}',
           {
-            time: uiDateTimeFormat({ hour: 'numeric', minute: '2-digit' }, intlLocale).format(
-              detailsFinishedAt
-            )
+            time: uiDateTimeFormat(CLOCK_TIME, intlLocale).format(detailsFinishedAt)
           }
         )
   // Announce the reason, or the label and first error line; never the full output.

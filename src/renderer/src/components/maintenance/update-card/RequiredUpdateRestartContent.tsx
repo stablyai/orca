@@ -12,6 +12,9 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/lib/window-activity/use-now'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import type { TeamUpdateRestart } from '../../../../../shared/updater/update-status-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+
+const RESTART_DEADLINE: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }
 
 function RestartCountdown({ until }: { until: number }): React.JSX.Element {
   const now = useNow(1000)
@@ -82,10 +85,9 @@ export function RequiredUpdateRestartContent({
               'updates.teamRequired.deadline',
               'Restart by {{deadline}}. Orca saves your sessions before restarting.',
               {
-                deadline: new Date(restart.deadlineAt).toLocaleString(locale, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short'
-                })
+                deadline: uiDateTimeFormat(RESTART_DEADLINE, locale).format(
+                  new Date(restart.deadlineAt)
+                )
               }
             )
   return (

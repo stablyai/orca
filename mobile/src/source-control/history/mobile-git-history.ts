@@ -1,5 +1,5 @@
 import { translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import type {
   MobileGitHistoryBranchRange,
   MobileGitHistoryItem,
@@ -8,6 +8,8 @@ import type {
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import { gitHistoryRead } from '../git/mobile-git-read-operations'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
+
+const COMMIT_DATE: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }
 
 export const MOBILE_GIT_HISTORY_PAGE_SIZE = 50
 
@@ -233,12 +235,7 @@ export function buildMobileCommitDetail(item: MobileGitHistoryItem): MobileCommi
           )
         : author,
     date:
-      item.timestamp == null
-        ? ''
-        : new Date(item.timestamp).toLocaleString(getUiIntlLocale(), {
-            dateStyle: 'medium',
-            timeStyle: 'short'
-          })
+      item.timestamp == null ? '' : uiDateTimeFormat(COMMIT_DATE).format(new Date(item.timestamp))
   }
 }
 

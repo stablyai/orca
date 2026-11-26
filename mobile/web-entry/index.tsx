@@ -39,6 +39,7 @@ import { BRIDGE_OPEN_ROUTE_PARAM } from '../src/mobile-web-shell/bridge/page-lif
 import { activateMobileUiLocale, subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { startPageLocaleCatalogs } from '../src/i18n/page-locale-catalog-source'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
+import { setOsDateTimeRegion } from '../../src/shared/i18n/regional-date-time-format'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-lifecycle/page-host-profile'
 import { publishExternalLinkOpener } from '../src/platform/external-links/external-link.web'
@@ -170,6 +171,8 @@ bootstrapShellPage({
       startPageLocaleCatalogs({ client, store: deviceStore })
     }
     // Subscribe before the first catalog load so a switch during startup is not lost; the latest request wins.
+    // Dates follow the phone's region and clock; set before the first render formats one.
+    setOsDateTimeRegion(session.dateTimeRegion)
     let uiLocaleActivation = activatePageUiLocale(session.uiLocale)
     client.onUiLocaleUpdate((locale) => {
       uiLocaleActivation = activatePageUiLocale(locale)

@@ -35,6 +35,7 @@ import {
   WorkspaceCleanupWorkspaceLine,
   workspaceCleanupRowKey
 } from './workspace-cleanup-workspace-line'
+import { SHORT_MONTH_DAY_TIME } from '../../../../../shared/i18n/regional-date-time-format'
 
 const KEPT_PREVIEW_COUNT = 4
 
@@ -124,12 +125,7 @@ function ActivityRun({
       : null
   ].filter((part): part is string => part !== null)
   const separator = t('components.settings.workspaceCleanup.listSeparator', ', ')
-  const when = uiDateTimeFormat({
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(run.startedAt)
+  const when = uiDateTimeFormat(SHORT_MONTH_DAY_TIME).format(run.startedAt)
   const Chevron = open ? ChevronDown : ChevronRight
 
   return (

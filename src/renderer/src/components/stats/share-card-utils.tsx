@@ -9,6 +9,8 @@ import type {
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY } from '../../../../shared/i18n/regional-date-time-format'
 
 export type ClaudeShareData = {
   provider: 'claude'
@@ -39,13 +41,15 @@ export function formatCost(value: number | null): string {
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
 }
 
+const SHARE_END_DAY: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric'
+}
+
 export function formatDateRange(range: string, intlLocale: string = getIntlLocale()): string {
   const now = new Date()
-  const end = now.toLocaleDateString(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
+  const end = uiDateTimeFormat(SHARE_END_DAY, intlLocale).format(now)
   if (range === 'all') {
     return `Through ${end}`
   }
@@ -54,7 +58,7 @@ export function formatDateRange(range: string, intlLocale: string = getIntlLocal
     return end
   }
   const start = new Date(now.getTime() - days * 86_400_000)
-  const startStr = start.toLocaleDateString(intlLocale, { month: 'short', day: 'numeric' })
+  const startStr = uiDateTimeFormat(SHORT_MONTH_DAY, intlLocale).format(start)
   return `${startStr} – ${end}`
 }
 

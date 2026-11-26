@@ -3,6 +3,7 @@ import { BRIDGE_APP_INACTIVE_FRAME } from '../page-lifecycle/bridge-app-inactive
 import { BRIDGE_APP_RESUMED_FRAME } from '../page-lifecycle/bridge-app-resumed'
 import { salvagedOptional } from '../../../../../src/shared/validation/zod-salvage'
 import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/i18n/ui-locale'
+import { REGION_SUBTAG } from '../../../../../src/shared/i18n/regional-date-time-format'
 import { NODE_PLATFORM_NAMES } from '../../../transport/connection/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../../transport/rpc/rpc-envelope-fields'
 import { isRpcResponse } from '../../../transport/rpc/rpc-response-shape'
@@ -85,6 +86,14 @@ export type BridgeColorScheme = z.infer<typeof BridgeColorSchemeSchema>
 export const BridgeUiLocaleSchema = z.enum(SUPPORTED_UI_LOCALES)
 
 export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
+
+// The phone's Region setting and 12/24-hour clock, which page dates follow instead of the language's.
+export const BridgeDateTimeRegionSchema = z.object({
+  region: z.string().regex(REGION_SUBTAG).nullable(),
+  hourCycle: z.enum(['h12', 'h23']).nullable()
+})
+
+export type BridgeDateTimeRegion = z.infer<typeof BridgeDateTimeRegionSchema>
 
 export const BridgeInitStorageSchema = z
   .record(
@@ -279,6 +288,8 @@ const BridgeHostMessageSchema = z.union([
     terminalKeyRail: salvagedOptional('terminalKeyRail', BridgeTerminalKeyRailSchema).optional(),
     // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
     uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
+    // Older pages strip this key; an unreadable value drops the field, not `init`.
+    dateTimeRegion: salvagedOptional('dateTimeRegion', BridgeDateTimeRegionSchema).optional(),
     host: BridgeInitHostSchema.optional(),
     // The status the shell's compatibility gate already read; older shells omit it and the page asks.
     // Opaque here: the page's status gate validates it with the reader it already loads.

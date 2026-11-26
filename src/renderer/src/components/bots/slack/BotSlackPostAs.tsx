@@ -24,6 +24,8 @@ import { ConnectorAvatar } from '@/components/ConnectorAvatar'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { SlackPersonPlaceholder } from './SlackPersonPlaceholder'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { CLOCK_TIME } from '../../../../../shared/i18n/regional-date-time-format'
 
 type Installed = Extract<ConnectorBotSlackState, { state: 'installed' }>
 
@@ -236,7 +238,7 @@ function SlackPostPreview({
   onPick: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const time = SAMPLE_TIME.toLocaleTimeString(i18n.language, { hour: 'numeric', minute: '2-digit' })
+  const time = uiDateTimeFormat(CLOCK_TIME).format(SAMPLE_TIME)
   return (
     <button
       type="button"

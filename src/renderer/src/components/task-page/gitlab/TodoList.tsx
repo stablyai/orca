@@ -2,6 +2,8 @@ import type { TaskPageComposerActionsModel } from '../use-task-page-composer-act
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { ExternalLink } from 'lucide-react'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_NUMERIC } from '../../../../../shared/i18n/regional-date-time-format'
 export function TaskPageGitLabTodoList({
   model
 }: {
@@ -90,7 +92,9 @@ export function TaskPageGitLabTodoList({
                 {todo.projectPath}
               </span>
               <span className="text-xs text-muted-foreground">
-                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString(intlLocale) : ''}
+                {todo.updatedAt
+                  ? uiDateTimeFormat(DATE_NUMERIC, intlLocale).format(new Date(todo.updatedAt))
+                  : ''}
               </span>
               <span className="flex justify-end">
                 <ExternalLink className="size-3.5 text-muted-foreground" />

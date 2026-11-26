@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { OsDateTimeRegion } from '../../shared/i18n/regional-date-time-format'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
@@ -20,6 +21,8 @@ import type { PreloadApi } from '../api-types'
 export const appApi = {
   getSystemLanguageDetection: (browserPreferences?: readonly string[]) =>
     ipcRenderer.invoke('app:getSystemLanguageDetection', browserPreferences),
+  getOsDateTimeRegion: (): Promise<OsDateTimeRegion | null> =>
+    ipcRenderer.invoke('app:getOsDateTimeRegion'),
   isProfileStateSaveDelayed: (): Promise<boolean> =>
     ipcRenderer.invoke('app:isProfileStateSaveDelayed'),
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void): (() => void) => {

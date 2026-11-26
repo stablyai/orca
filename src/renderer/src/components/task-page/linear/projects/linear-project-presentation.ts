@@ -4,6 +4,8 @@ import type {
   LinearProjectDetail,
   LinearProjectSummary
 } from '../../../../../../shared/linear/project-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 
 export type LinearProjectPresentation = (LinearProjectDetail | LinearProjectSummary) & {
   summary?: string
@@ -44,7 +46,9 @@ export function linearProjectDateLabel(
     return linearProjectNoneLabel(t)
   }
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(intlLocale)
+  return Number.isNaN(date.getTime())
+    ? value
+    : uiDateTimeFormat(DATE_NUMERIC, intlLocale).format(date)
 }
 
 export function linearProjectPriorityLabel(

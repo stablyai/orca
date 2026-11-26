@@ -8,6 +8,8 @@ import { workerDockGlyph } from './worker-dock-card-order'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../../../../shared/i18n/regional-date-time-format'
 
 export type WorkerDockRowView = WorkerDockEntry & {
   retired?: boolean
@@ -30,7 +32,10 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
     visible && at !== null
   )
   return at === null ? null : (
-    <span className="tabular-nums" title={new Date(at).toLocaleString(locale)}>
+    <span
+      className="tabular-nums"
+      title={uiDateTimeFormat(DATE_TIME_NUMERIC, locale).format(new Date(at))}
+    >
       {label}
     </span>
   )

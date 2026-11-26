@@ -50,6 +50,11 @@ function monthWeeks(month: Date): (Date | null)[][] {
   return Array.from({ length: cells.length / 7 }, (_, week) => cells.slice(week * 7, week * 7 + 7))
 }
 
+const CAPTION: Intl.DateTimeFormatOptions = { month: 'long', year: 'numeric' }
+const WEEKDAY_NARROW: Intl.DateTimeFormatOptions = { weekday: 'narrow' }
+const WEEKDAY_LONG: Intl.DateTimeFormatOptions = { weekday: 'long' }
+const FULL_DATE: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric' }
+
 /** A month grid: arrows move a day or week, Home/End to the week's ends, Page Up/Down a month. */
 export function MonthCalendar({
   selected,
@@ -108,10 +113,10 @@ export function MonthCalendar({
     : reachable(selected)
       ? selected
       : clamp(month, min, max)
-  const caption = uiDateTimeFormat({ month: 'long', year: 'numeric' }).format(month)
-  const narrow = uiDateTimeFormat({ weekday: 'narrow' })
-  const long = uiDateTimeFormat({ weekday: 'long' })
-  const fullDate = uiDateTimeFormat({ weekday: 'long', month: 'long', day: 'numeric' })
+  const caption = uiDateTimeFormat(CAPTION).format(month)
+  const narrow = uiDateTimeFormat(WEEKDAY_NARROW)
+  const long = uiDateTimeFormat(WEEKDAY_LONG)
+  const fullDate = uiDateTimeFormat(FULL_DATE)
   const weekdays = Array.from({ length: 7 }, (_, index) => addDays(month, index - month.getDay()))
 
   return (

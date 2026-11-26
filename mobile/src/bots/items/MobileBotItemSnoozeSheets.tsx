@@ -12,11 +12,12 @@ import {
 } from '../../../../src/shared/bots/bot-item-snooze'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { PickerListDrawer } from '../../components/sheets/PickerListDrawer'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { useNow } from '../../hooks/use-now'
+import { CLOCK_TIME } from '../../../../src/shared/i18n/regional-date-time-format'
 
 export type BotItemSnoozeSheet =
   | { kind: 'snooze'; items: readonly BotItem[] }
@@ -26,6 +27,8 @@ export type BotItemSnoozeSheet =
 const PICK_DAYS = 14
 const FIRST_HOUR = 6
 const LAST_HOUR = 23
+
+const SNOOZE_DAY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }
 
 /** Snooze… for the open items among `items`; none when all are closed. */
 export function snoozeAction(
@@ -96,11 +99,7 @@ export function MobileBotItemSnoozeSheets({
         ]
       : [])
   ]
-  const dayName = new Intl.DateTimeFormat(getUiIntlLocale(), {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric'
-  })
+  const dayName = uiDateTimeFormat(SNOOZE_DAY)
   const days = Array.from({ length: PICK_DAYS }, (_, index) => {
     const day = startOfDay(now, index)
     return {
@@ -114,10 +113,7 @@ export function MobileBotItemSnoozeSheets({
       day
     }
   }).filter(({ day }) => day + LAST_HOUR * 60 * 60_000 > now)
-  const hourName = new Intl.DateTimeFormat(getUiIntlLocale(), {
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  const hourName = uiDateTimeFormat(CLOCK_TIME)
   const pickedDay = sheet?.kind === 'snooze-hour' ? sheet.day : startOfDay(now)
   const hours = Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, index) => {
     const at = new Date(pickedDay)

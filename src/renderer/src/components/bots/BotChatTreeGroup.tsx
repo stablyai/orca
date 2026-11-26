@@ -36,6 +36,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host/executio
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
+import { SHORT_MONTH_DAY } from '../../../../shared/i18n/regional-date-time-format'
 
 function openChat(bot: Bot, chat: BotChatTreeChat): void {
   const { run } = chat
@@ -107,7 +108,7 @@ function BotChatPreview({ bot, chat }: { bot: Bot; chat: BotChatTreeChat }): Rea
   const t = useTranslate()
   const closed = chat.closedAt
     ? t('bots.chats.closedOn', 'closed {{date}}', {
-        date: uiDateTimeFormat({ month: 'short', day: 'numeric' }).format(chat.closedAt)
+        date: uiDateTimeFormat(SHORT_MONTH_DAY).format(chat.closedAt)
       })
     : null
   const preview =

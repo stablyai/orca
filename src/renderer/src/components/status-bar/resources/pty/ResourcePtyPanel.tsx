@@ -11,6 +11,8 @@ import {
 import { ResourcePtyList } from './ResourcePtyList'
 import type { useResourceSessionInventory } from '../inventory/use-resource-session-inventory'
 import { canEndResourcePty, type useResourcePtyActions } from './use-resource-pty-actions'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { TIME_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 
 const EMPTY_PTY_ROWS: ReturnType<typeof buildResourcePtyRows> = []
 const ptyRowKey = (row: ResourcePtyRow): string => row.identity
@@ -119,7 +121,9 @@ export function ResourcePtyPanel({
         {inventory.observedAt !== null && (
           <div className="text-xs text-muted-foreground">
             {t('resourceManager.pty.observedTime', 'Last observed {{time}}', {
-              time: new Date(inventory.observedAt).toLocaleTimeString(intlLocale)
+              time: uiDateTimeFormat(TIME_NUMERIC, intlLocale).format(
+                new Date(inventory.observedAt)
+              )
             })}
           </div>
         )}

@@ -1,6 +1,7 @@
 // When a catalog plugin was listed, and the Newly added row built from it. Mirrors the website's
 // derivation (orca-site src/lib/plugins/pluginCatalog.ts and pluginNew.ts) so both show the same
 // plugins with the same ages. Catalogs carry no listing date; it is estimated from release dates.
+import { regionalDateTimeFormat } from '../../i18n/regional-date-time-format'
 
 /** Cards the Newly added row may hold. */
 export const PLUGIN_NEW_LIMIT = 9
@@ -60,6 +61,13 @@ export function pickNewPlugins<T>(
     .map(({ item }) => item)
 }
 
+const ADDED_DAY: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC'
+}
+
 /**
  * "just now", "3 hours ago", "1 day ago"; the absolute date once it is two months old. Null for a
  * missing, malformed or future date. Defaults read exactly like the website; pass the UI locale
@@ -85,10 +93,5 @@ export function formatAddedAgo(
   if (days < 60) {
     return relative.format(-days, 'day')
   }
-  return new Date(Date.parse(addedAt)).toLocaleDateString(locale, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC'
-  })
+  return regionalDateTimeFormat(ADDED_DAY, locale).format(Date.parse(addedAt))
 }

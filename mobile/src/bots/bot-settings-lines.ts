@@ -11,12 +11,12 @@ import {
   CONNECTOR_SOURCE_NAMES,
   CONNECTOR_SOURCES
 } from '../../../src/shared/connectors/external-conversation-link'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../i18n/ui-intl-locale'
 import { translate } from '../i18n/mobile-i18n'
 
 const LINE_WORDS: BotSettingsLineWords = {
   t: translate,
-  format: (at, options) => new Intl.DateTimeFormat(getUiIntlLocale(), options).format(at)
+  format: (at, options) => uiDateTimeFormat(options).format(at)
 }
 
 /** "Twice a day, 8 AM and 1 PM · last looked 1:02 PM". */

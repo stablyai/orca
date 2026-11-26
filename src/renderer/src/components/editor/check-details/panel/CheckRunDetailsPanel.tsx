@@ -15,6 +15,8 @@ import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from '../reading/use-check-details-reading-position'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY_TIME } from '../../../../../../shared/i18n/regional-date-time-format'
 
 function formatCheckTimestamp(
   value: string | null | undefined,
@@ -27,12 +29,7 @@ function formatCheckTimestamp(
   if (Number.isNaN(parsed.getTime())) {
     return value
   }
-  return parsed.toLocaleString(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  return uiDateTimeFormat(SHORT_MONTH_DAY_TIME, intlLocale).format(parsed)
 }
 
 type CheckStatusLike = {

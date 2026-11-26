@@ -9,6 +9,7 @@ import type { BotShareReview } from '../../../../../shared/bots/bot-share-receiv
 import { botShareErrorMessage } from '../sharing/bot-share-error-copy'
 import { reviewBotShare } from '../sharing/bot-share-rpc'
 import { BotShareReviewDialog } from '../sharing/BotShareReviewDialog'
+import { SHORT_MONTH_DAY } from '../../../../../shared/i18n/regional-date-time-format'
 
 /** "Shared by Dara · Nov 8 · View original": the original shows read-only while its link still serves it.
  *  A long name truncates; View original always stays whole. */
@@ -26,7 +27,7 @@ export function BotSharedFromLine({ bot }: { bot: Bot }): React.JSX.Element | nu
   })
   const date = Number.isNaN(sharedAt.getTime())
     ? null
-    : uiDateTimeFormat({ month: 'short', day: 'numeric' }, locale).format(sharedAt)
+    : uiDateTimeFormat(SHORT_MONTH_DAY, locale).format(sharedAt)
   const viewOriginal = (): void => {
     setOriginal('loading')
     reviewBotShare(from.shareId, from.versionId).then(

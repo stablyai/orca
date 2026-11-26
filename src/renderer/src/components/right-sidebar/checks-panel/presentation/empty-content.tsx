@@ -16,6 +16,8 @@ import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 import { useNow } from '@/lib/window-activity/use-now'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { TIME_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 
 export function ChecksPanelEmptyContent({
   model
@@ -227,7 +229,11 @@ export function ChecksPanelEmptyContent({
         ? t(
             'auto.components.right.sidebar.ChecksPanel.review.auto_retry',
             'Orca will retry at {{time}}.',
-            { time: new Date(reviewState.autoRetryAt).toLocaleTimeString(intlLocale) }
+            {
+              time: uiDateTimeFormat(TIME_NUMERIC, intlLocale).format(
+                new Date(reviewState.autoRetryAt)
+              )
+            }
           )
         : null
     const reviewRecoveryRetryDisabled =

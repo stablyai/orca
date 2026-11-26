@@ -1,4 +1,5 @@
 import { getSystemLanguageDetection } from '../i18n/system-language'
+import { getOsDateTimeRegionForWindow } from '../i18n/os-date-time-region'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { existsSync } from 'node:fs'
@@ -145,6 +146,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
     return detection
   })
+  ipcMain.handle('app:getOsDateTimeRegion', getOsDateTimeRegionForWindow)
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
   ipcMain.handle('app:getMacosUpgradeSupport', (_event, minimumMacosVersion: unknown) =>
     getMacosUpgradeSupport(minimumMacosVersion)

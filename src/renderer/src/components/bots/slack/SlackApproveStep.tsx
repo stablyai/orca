@@ -9,6 +9,7 @@ import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { SlackInstallLink } from './slack-install-link'
+import { CLOCK_TIME } from '../../../../../shared/i18n/regional-date-time-format'
 
 export function SlackApproveStep({
   hostName,
@@ -34,10 +35,7 @@ export function SlackApproveStep({
   const [expanded, setExpanded] = useState(false)
   // A copied link keeps its field in view while the dialog waits for it.
   const open = expanded || copied
-  const until =
-    link.expiresAt === null
-      ? null
-      : uiDateTimeFormat({ hour: 'numeric', minute: '2-digit' }).format(link.expiresAt)
+  const until = link.expiresAt === null ? null : uiDateTimeFormat(CLOCK_TIME).format(link.expiresAt)
   const note = hostName
     ? until
       ? t(

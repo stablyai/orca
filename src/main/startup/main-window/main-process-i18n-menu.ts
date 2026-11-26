@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { setMainUiLanguage } from '../../i18n/main-i18n'
+import { getOsDateTimeRegion } from '../../i18n/os-date-time-region'
 import {
   registerAppMenu,
   rebuildAppMenu,
@@ -28,6 +29,8 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     throw new Error('Store must be initialized before menu')
   }
   await setMainUiLanguage(store.getSettings().uiLanguage)
+  // Main's own dates (serve output, notifications) follow the OS clock before any window asks.
+  getOsDateTimeRegion()
   logStartupMilestone('i18n-ready')
   registerAppMenu({
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,

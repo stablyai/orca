@@ -1,19 +1,19 @@
 import { Pressable, Text, View } from 'react-native'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { mobileSessionReviewCommentStyles as styles } from '../source-control/review/review-notes/mobile-session-review-comment-styles'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { DocumentEditDraftOffer } from './use-document-edit-draft'
+import {
+  CLOCK_TIME,
+  SHORT_MONTH_DAY_TIME
+} from '../../../src/shared/i18n/regional-date-time-format'
 
 function savedAtLabel(savedAt: number): string {
   const saved = new Date(savedAt)
   const today = saved.toDateString() === new Date().toDateString()
-  return new Intl.DateTimeFormat(getUiIntlLocale(), {
-    ...(today ? {} : { month: 'short', day: 'numeric' }),
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(saved)
+  return uiDateTimeFormat(today ? CLOCK_TIME : SHORT_MONTH_DAY_TIME).format(saved)
 }
 
 /** The editor's floating bar while edits from before a kill wait for Restore or Discard. */

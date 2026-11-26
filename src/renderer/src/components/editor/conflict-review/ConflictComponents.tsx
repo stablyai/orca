@@ -22,6 +22,8 @@ import { ConflictReviewFileTree } from './ConflictReviewFileTree'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { TIME_NUMERIC } from '../../../../../shared/i18n/regional-date-time-format'
 
 const getConflictKindLabels = createLocalizedCatalog<Record<GitConflictKind, string>>(() => ({
   both_modified: translate('editorConflicts.kind.bothModified', 'Both modified'),
@@ -264,9 +266,9 @@ export function ConflictReviewPanel({
     0
   )
   const [renderStartTime] = React.useState(() => Date.now())
-  const snapshotTime = new Date(
-    file.conflictReview?.snapshotTimestamp ?? renderStartTime
-  ).toLocaleTimeString(intlLocale)
+  const snapshotTime = uiDateTimeFormat(TIME_NUMERIC, intlLocale).format(
+    new Date(file.conflictReview?.snapshotTimestamp ?? renderStartTime)
+  )
   const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
     conflictReviewFileTreeCollapsedPreference = collapsed
     setFileTreeCollapsedState(collapsed)

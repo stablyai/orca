@@ -6,7 +6,7 @@ import { reviewFlagSpots } from '../../../../src/shared/bots/bot-share-review-fi
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
@@ -24,6 +24,7 @@ import {
   type ReviewPage
 } from './MobileBotShareReview'
 import { MobileBotShareReviewPage } from './MobileBotShareReviewPages'
+import { SHORT_MONTH_DAY } from '../../../../src/shared/i18n/regional-date-time-format'
 
 type SharedFrom = NonNullable<PhoneBot['sharedFrom']>
 
@@ -46,9 +47,7 @@ export function useBotSharedFromSettings(
   const sharedAt = new Date(from.sharedAt)
   const date = Number.isNaN(sharedAt.getTime())
     ? null
-    : new Intl.DateTimeFormat(getUiIntlLocale(), { month: 'short', day: 'numeric' }).format(
-        sharedAt
-      )
+    : uiDateTimeFormat(SHORT_MONTH_DAY).format(sharedAt)
   return {
     rows: [
       {

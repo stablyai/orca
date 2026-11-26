@@ -5,10 +5,11 @@ import { buildAutomationCronSchedule } from '../../../src/shared/automations/sch
 import { ListGroup } from '../components/list/ListGroup'
 import type { PickerOption } from '../components/sheets/PickerModal'
 import { DrillRow } from '../host-screen/workspace-options/workspace-option-rows'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { getUiIntlLocale, uiDateTimeFormat } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { BotAutomationDraft } from './bot-automation-edit-draft'
 import type { PresentAutomationSheet } from './AutomationSheets'
+import { CLOCK_TIME } from '../../../src/shared/i18n/regional-date-time-format'
 
 /** A row naming its choice; tapping it opens the choices in a sheet. */
 export function PickerRow<Value extends string>(props: {
@@ -117,7 +118,7 @@ export function BotAutomationWhenRows(props: {
       : [])
   ]
   const cadence: Cadence = draft.eventsOnly ? 'none' : (preset ?? 'custom')
-  const clock = new Intl.DateTimeFormat(getUiIntlLocale(), { hour: 'numeric', minute: '2-digit' })
+  const clock = uiDateTimeFormat(CLOCK_TIME)
   const timeLabel = (minutes: number) =>
     clock.format(new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60))
   const weekday = new Intl.DateTimeFormat(getUiIntlLocale(), { weekday: 'long', timeZone: 'UTC' })

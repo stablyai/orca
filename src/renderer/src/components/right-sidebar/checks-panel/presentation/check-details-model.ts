@@ -4,6 +4,8 @@ import type {
 } from '../../../../../../shared/github/checks/check-types'
 import { getCheckConclusion } from '../../../../../../shared/source-control/checks/pr-check-status-label'
 import { getIntlLocale } from '@/i18n/i18n'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY_TIME } from '../../../../../../shared/i18n/regional-date-time-format'
 
 export type CheckDetailsLoadState = {
   requestId?: number
@@ -57,12 +59,7 @@ export function formatCheckTimestamp(
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleString(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  return uiDateTimeFormat(SHORT_MONTH_DAY_TIME, intlLocale).format(date)
 }
 
 export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetail[] {

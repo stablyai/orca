@@ -3,8 +3,12 @@ import {
   type AutomationRunFailureCode
 } from '../../../src/shared/automations/history/automation-run-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { getUiIntlLocale, uiDateTimeFormat } from '../i18n/ui-intl-locale'
 import type { MobileAutomationRun } from './automation-reply-schema'
+import {
+  regionalDateTimeFormat,
+  DATE_TIME_NUMERIC
+} from '../../../src/shared/i18n/regional-date-time-format'
 
 export function automationRunStatusLabel(status: string): string {
   const runStatusLabels: Record<string, string> = {
@@ -29,18 +33,16 @@ export function automationRunStatusLabel(status: string): string {
   }
   return runStatusLabels[status] ?? translate('automations.mobile.unknownResult', 'Unknown result')
 }
+const RUN_DATE: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }
+
 export function automationDate(timestamp: number | null | undefined, timezone?: string): string {
   if (timestamp == null) {
     return translate('automations.mobile.notReported', 'Not reported')
   }
   try {
-    return new Date(timestamp).toLocaleString(getUiIntlLocale(), {
-      ...(timezone ? { timeZone: timezone } : {}),
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    })
+    return regionalDateTimeFormat(RUN_DATE, getUiIntlLocale(), timezone).format(timestamp)
   } catch {
-    return new Date(timestamp).toLocaleString(getUiIntlLocale())
+    return uiDateTimeFormat(DATE_TIME_NUMERIC).format(timestamp)
   }
 }
 export function runMatchesOutcome(run: MobileAutomationRun, outcome: string): boolean {

@@ -4,6 +4,7 @@ import {
   type CodexRateLimitWindowsSnapshot,
   type CodexRateWindowSnapshot
 } from './codex-rate-limit-window-classification'
+import { formatTimeOrWeekdayTime } from '../../../../shared/i18n/regional-date-time-format'
 
 export function mapCodexRateLimitWindow(
   raw: CodexRateWindowSnapshot | null | undefined,
@@ -20,15 +21,7 @@ export function mapCodexRateLimitWindow(
     const date = new Date(raw.resetsAt * 1000)
     if (!Number.isNaN(date.getTime())) {
       resetsAt = date.getTime()
-      const now = new Date()
-      const isToday = date.toDateString() === now.toDateString()
-      resetDescription = isToday
-        ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-        : date.toLocaleDateString(undefined, {
-            weekday: 'short',
-            hour: 'numeric',
-            minute: '2-digit'
-          })
+      resetDescription = formatTimeOrWeekdayTime(date)
     }
   }
 

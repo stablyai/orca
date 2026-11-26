@@ -9,6 +9,8 @@ import type {
 } from './usage-overview-types'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY } from '../../../../shared/i18n/regional-date-time-format'
 
 const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   0: 'border-border/60 bg-muted/40',
@@ -70,10 +72,7 @@ function formatDayLabel(day: string, intlLocale: string = getIntlLocale()): stri
   if (Number.isNaN(parsed.getTime())) {
     return day
   }
-  return parsed.toLocaleDateString(intlLocale, {
-    month: 'short',
-    day: 'numeric'
-  })
+  return uiDateTimeFormat(SHORT_MONTH_DAY, intlLocale).format(parsed)
 }
 
 export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): React.JSX.Element {

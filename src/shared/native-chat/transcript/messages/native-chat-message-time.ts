@@ -1,26 +1,37 @@
+import {
+  createRegionalDateTimeFormat,
+  osDateTimeRegionKey
+} from '../../../i18n/regional-date-time-format'
+
 const timeFormat: Intl.DateTimeFormatOptions = {
   hour: 'numeric',
   minute: '2-digit'
 }
 
 function createNativeChatMessageTimeFormatter(locale: string | undefined, timeZone: string) {
-  const time = new Intl.DateTimeFormat(locale, { ...timeFormat, timeZone })
+  const time = createRegionalDateTimeFormat({ ...timeFormat, timeZone }, locale)
   const dateOptions: Intl.DateTimeFormatOptions = {
     ...timeFormat,
     timeZone,
     month: 'short',
     day: 'numeric'
   }
-  const dateTime = new Intl.DateTimeFormat(locale, dateOptions)
-  const dateTimeWithYear = new Intl.DateTimeFormat(locale, { ...dateOptions, year: 'numeric' })
-  const full = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'long', timeZone })
-  const day = new Intl.DateTimeFormat(locale, { timeZone, month: 'short', day: 'numeric' })
-  const dayWithYear = new Intl.DateTimeFormat(locale, {
-    timeZone,
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  const dateTime = createRegionalDateTimeFormat(dateOptions, locale)
+  const dateTimeWithYear = createRegionalDateTimeFormat({ ...dateOptions, year: 'numeric' }, locale)
+  const full = createRegionalDateTimeFormat(
+    { dateStyle: 'full', timeStyle: 'long', timeZone },
+    locale
+  )
+  const day = createRegionalDateTimeFormat({ timeZone, month: 'short', day: 'numeric' }, locale)
+  const dayWithYear = createRegionalDateTimeFormat(
+    {
+      timeZone,
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    },
+    locale
+  )
 
   return {
     /** `yesterday` wraps the time in the UI language's "Yesterday {{time}}"; without it, yesterday shows its date. */
@@ -77,6 +88,7 @@ export function getNativeChatMessageDay(now: number): NativeChatMessageDay {
 let cached: {
   locale: string | undefined
   timeZone: string
+  region: string
   formatter: ReturnType<typeof createNativeChatMessageTimeFormatter>
 } | null = null
 
@@ -84,10 +96,17 @@ export function getNativeChatMessageTimeFormatter(
   locale?: string,
   { timeZone } = getNativeChatMessageDay(Date.now())
 ) {
-  if (!cached || cached.locale !== locale || cached.timeZone !== timeZone) {
+  const region = osDateTimeRegionKey()
+  if (
+    !cached ||
+    cached.locale !== locale ||
+    cached.timeZone !== timeZone ||
+    cached.region !== region
+  ) {
     cached = {
       locale,
       timeZone,
+      region,
       formatter: createNativeChatMessageTimeFormatter(locale, timeZone)
     }
   }

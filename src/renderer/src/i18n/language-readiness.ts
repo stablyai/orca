@@ -5,6 +5,7 @@ import {
   type UiLanguageDetection
 } from '../../../shared/i18n/ui-locale'
 import { isWebClientLocation } from '../app-shell/platform/web-client-location'
+import { setRendererOsDateTimeRegion } from './i18n'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 export const useLanguageReadiness = create<{
@@ -30,6 +31,20 @@ function publishLanguageDetection(detection: UiLanguageDetection): UiLanguageDet
   setRendererLanguageDetection(detection)
   useLanguageReadiness.setState({ detection })
   return detection
+}
+
+// Asked at load, before settings, so it lands before dates are drawn; a later answer repaints them once.
+// Readiness never waits on it.
+function loadOsDateTimeRegion(): void {
+  try {
+    void window.api?.app?.getOsDateTimeRegion?.().then(setRendererOsDateTimeRegion, () => undefined)
+  } catch {
+    // Older bridges keep dates in the UI language's own conventions.
+  }
+}
+
+if (!isWebClientLocation()) {
+  loadOsDateTimeRegion()
 }
 
 export function initializeLanguageDetection(): Promise<UiLanguageDetection> {

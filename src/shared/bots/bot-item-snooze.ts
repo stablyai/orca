@@ -102,17 +102,19 @@ export function botItemSnoozeDayRange(now: number): { first: Date; last: Date } 
   return { first, last }
 }
 
+// Constants, so formatter caches keyed by options identity reuse one formatter per shape.
+const SNOOZE_TIME = { hour: 'numeric', minute: '2-digit' } as const
+const SNOOZE_WEEKDAY_TIME = { weekday: 'short', ...SNOOZE_TIME } as const
+const SNOOZE_DATE_TIME = { month: 'short', day: 'numeric', ...SNOOZE_TIME } as const
+
 /** How a wake time reads: "6:00 PM" today, "Thu 9:00 AM" within the week, else "Nov 30, 9:00 AM". */
 export function botItemSnoozeTimeFormat(until: number, now: number): Intl.DateTimeFormatOptions {
-  const time = { hour: 'numeric', minute: '2-digit' } as const
   const day = new Date(until)
   const today = new Date(now)
   if (day.toDateString() === today.toDateString()) {
-    return time
+    return SNOOZE_TIME
   }
-  return until - now < 6 * 24 * 60 * 60_000
-    ? { weekday: 'short', ...time }
-    : { month: 'short', day: 'numeric', ...time }
+  return until - now < 6 * 24 * 60 * 60_000 ? SNOOZE_WEEKDAY_TIME : SNOOZE_DATE_TIME
 }
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string

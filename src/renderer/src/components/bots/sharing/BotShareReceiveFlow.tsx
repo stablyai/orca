@@ -25,6 +25,7 @@ import { reviewBotShare } from './bot-share-rpc'
 import { BotShareReviewDialog } from './BotShareReviewDialog'
 import { NewBotDialog } from '../NewBotDialog'
 import type { NewBotShareSource } from './new-bot-from-share'
+import { SHORT_MONTH_DAY } from '../../../../../shared/i18n/regional-date-time-format'
 
 type Step =
   | { kind: 'paste' }
@@ -90,9 +91,7 @@ function AlreadyHave({
   onReviewAgain: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const made = uiDateTimeFormat({ month: 'short', day: 'numeric' }, useIntlLocale()).format(
-    new Date(bot.createdAt)
-  )
+  const made = uiDateTimeFormat(SHORT_MONTH_DAY, useIntlLocale()).format(new Date(bot.createdAt))
   return (
     <Dialog open onOpenChange={(next) => !next && closeBotShareLink()}>
       <DialogContent

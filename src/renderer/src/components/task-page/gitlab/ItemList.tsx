@@ -5,6 +5,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Button } from '@/components/ui/button'
 import { ArrowRight, ExternalLink } from 'lucide-react'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_NUMERIC } from '../../../../../shared/i18n/regional-date-time-format'
 export function TaskPageGitLabItemList({
   model
 }: {
@@ -104,7 +106,9 @@ export function TaskPageGitLabItemList({
                 · {item.state}
               </span>
               <span className="text-xs text-muted-foreground">
-                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString(intlLocale) : ''}
+                {item.updatedAt
+                  ? uiDateTimeFormat(DATE_NUMERIC, intlLocale).format(new Date(item.updatedAt))
+                  : ''}
               </span>
               <div className="flex items-center justify-end gap-1">
                 <Tooltip>

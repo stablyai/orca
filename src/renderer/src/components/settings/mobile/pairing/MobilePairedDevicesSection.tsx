@@ -3,6 +3,8 @@ import { Button } from '../../../ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { PairedMobileDevice } from '../../../mobile/paired-mobile-devices'
 import { LegacyEncryptionNotice } from '../../legacy-encryption-notice'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 
 type MobilePairedDevicesSectionProps = {
   devices: readonly PairedMobileDevice[]
@@ -42,7 +44,7 @@ export function MobilePairedDevicesSection({
                 <div className="text-sm font-medium">{device.name}</div>
                 <div className="text-muted-foreground text-xs">
                   {t('auto.components.settings.MobilePane.254a6d09e4', 'Paired')}
-                  {new Date(device.pairedAt).toLocaleDateString(intlLocale)}
+                  {uiDateTimeFormat(DATE_NUMERIC, intlLocale).format(new Date(device.pairedAt))}
                 </div>
                 {device.usesLegacyEncryption ? (
                   <LegacyEncryptionNotice

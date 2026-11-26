@@ -7,6 +7,10 @@ import type { DetailCommentGroup } from '../mobile-tasks-view-state-types'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import type { DetailComment } from '../mobile-tasks-provider-detail-types'
 import { styles } from '../mobile-tasks-legacy-styles'
+import {
+  DATE_NUMERIC,
+  regionalDateTimeFormat
+} from '../../../../src/shared/i18n/regional-date-time-format'
 
 export function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'github') {
@@ -60,7 +64,7 @@ export function commentDate(value: string | undefined): string {
     return ''
   }
   const time = Date.parse(value)
-  return Number.isFinite(time) ? new Date(time).toLocaleDateString() : ''
+  return Number.isFinite(time) ? regionalDateTimeFormat(DATE_NUMERIC).format(time) : ''
 }
 
 export function formatDurationSeconds(value: number | null | undefined): string {

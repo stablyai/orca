@@ -31,6 +31,7 @@ import {
   botItemSnoozeSlots
 } from '../../../../../shared/bots/bot-item-snooze'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
+import { CLOCK_TIME } from '../../../../../shared/i18n/regional-date-time-format'
 
 const rowClass =
   'flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50'
@@ -71,7 +72,7 @@ export function BotItemSnoozeDialog({
   // A time that has passed on the chosen day rolls forward to the next open slot.
   const slot = botItemSnoozeSlotOn(pickedDay, minutes, now)
   const until = slot === null ? null : botItemSnoozeAt(pickedDay, slot)
-  const slotLabel = uiDateTimeFormat({ hour: 'numeric', minute: '2-digit' })
+  const slotLabel = uiDateTimeFormat(CLOCK_TIME)
   const submit = (): void => {
     if (until !== null) {
       onSnooze(until)

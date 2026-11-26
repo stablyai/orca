@@ -1,4 +1,5 @@
 import type { RateLimitWindow } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { formatTimeOrWeekdayTime } from '../../../../shared/i18n/regional-date-time-format'
 
 export type ClaudeUsageWindowInput = {
   utilization?: number
@@ -34,17 +35,7 @@ function parseClaudeUsageResetDescription(resetValue: string | number | undefine
     return null
   }
   try {
-    const date = new Date(resetTimestamp)
-    const now = new Date()
-    const isToday = date.toDateString() === now.toDateString()
-    if (isToday) {
-      return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    }
-    return date.toLocaleDateString(undefined, {
-      weekday: 'short',
-      hour: 'numeric',
-      minute: '2-digit'
-    })
+    return formatTimeOrWeekdayTime(new Date(resetTimestamp))
   } catch {
     return null
   }

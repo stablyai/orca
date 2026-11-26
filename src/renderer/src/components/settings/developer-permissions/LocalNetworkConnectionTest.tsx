@@ -16,6 +16,8 @@ import {
   saveLocalNetworkConnectionSuccess,
   type LocalNetworkConnectionSuccess
 } from './local-network-connection-history'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../../shared/i18n/regional-date-time-format'
 
 function failureMessage(
   failure: LocalNetworkConnectionTestFailure | undefined,
@@ -131,8 +133,10 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
                     'auto.components.settings.DeveloperPermissionsPane.connectionTestLastVerified',
                     'Last verified'
                   )}{' '}
-                  {new Date(lastSuccess.testedAt).toLocaleString(intlLocale)} ·{' '}
-                  {formatTarget(lastSuccess)}
+                  {uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(
+                    new Date(lastSuccess.testedAt)
+                  )}{' '}
+                  · {formatTarget(lastSuccess)}
                 </>
               ) : (
                 t(

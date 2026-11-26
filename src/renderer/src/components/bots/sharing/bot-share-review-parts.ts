@@ -42,12 +42,15 @@ export function reviewAccounts(review: BotShareReview): string[] {
   )
 }
 
+const PUBLISHED_DAY: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric'
+}
+
 /** "Dara · Nov 8, 2026 · Not reviewed": who shared it and when, from their account. */
 export function reviewByline(review: BotShareReview): string {
-  const date = uiDateTimeFormat(
-    { month: 'short', day: 'numeric', year: 'numeric' },
-    getIntlLocale()
-  ).format(new Date(review.publishedAt))
+  const date = uiDateTimeFormat(PUBLISHED_DAY, getIntlLocale()).format(new Date(review.publishedAt))
   return translate('bots.share.review.byline', '{{who}} · {{date}} · Not reviewed', {
     who: review.publisher ?? translate('bots.share.review.someone', 'Someone'),
     date

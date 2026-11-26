@@ -12,6 +12,10 @@ import {
   type RateLimitBucketKind
 } from '../../api/rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
+import {
+  regionalDateTimeFormat,
+  TIME_NUMERIC
+} from '../../../../shared/i18n/regional-date-time-format'
 // REST branch lookup can fall back to GraphQL-backed gh commands; guard and debit both buckets.
 export const PR_BRANCH_LOOKUP_BUCKETS = ['core', 'graphql'] as const
 
@@ -55,7 +59,7 @@ export async function assertRateLimitBudget(
   const guard = repositoryRateLimitGuard(repository, bucket, executionOptions)
   if (guard.blocked) {
     throw new Error(
-      `GitHub ${bucket} rate limit is low; retry after ${new Date(guard.resetAt * 1000).toLocaleTimeString()}`
+      `GitHub ${bucket} rate limit is low; retry after ${regionalDateTimeFormat(TIME_NUMERIC).format(guard.resetAt * 1000)}`
     )
   }
 }

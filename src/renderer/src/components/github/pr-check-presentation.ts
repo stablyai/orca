@@ -6,6 +6,8 @@ import type {
   PRCheckDetail,
   PRCheckJob
 } from '../../../../shared/github/checks/check-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY_TIME } from '../../../../shared/i18n/regional-date-time-format'
 
 export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = translate): string {
   if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
@@ -107,10 +109,5 @@ export function formatCheckTimestamp(
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleString(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  return uiDateTimeFormat(SHORT_MONTH_DAY_TIME, intlLocale).format(date)
 }

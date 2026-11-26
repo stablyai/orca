@@ -45,6 +45,7 @@ import {
   MAX_BRANCH_MAP_ENTRIES,
   NO_REVIEW_REFRESH_INTERVAL_MS
 } from './hosted-review-refresh-pacing'
+import { regionalDateTimeFormat, TIME_NUMERIC } from '../../shared/i18n/regional-date-time-format'
 
 /** All desktop/mobile/serve callers share this host's API quota. Pace active selection separately from the O(N) worktree list (#11532). */
 
@@ -137,9 +138,7 @@ function canAdoptDetachedAnswer(key: string, startedAt: number): boolean {
 function lookupUnavailableReason(key: string): string | null {
   const until = backoffUntil(key)
   if (until !== null) {
-    return `Hosted review lookup is backing off after repeated failures. Retrying after ${new Date(
-      until
-    ).toLocaleTimeString()}.`
+    return `Hosted review lookup is backing off after repeated failures. Retrying after ${regionalDateTimeFormat(TIME_NUMERIC).format(until)}.`
   }
   return lookupCapacityRefusal(key)
 }

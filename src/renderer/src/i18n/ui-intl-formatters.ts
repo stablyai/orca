@@ -1,14 +1,13 @@
 import { getIntlLocale } from './i18n'
 import { supportedIntlLocale } from './intl-locale-support'
+import {
+  regionalDateTimeFormat,
+  type RegionalDateTimeFormat
+} from '../../../shared/i18n/regional-date-time-format'
 
 type CachedFormatter<T> = { locale: string; formatter: T }
-type FormatterOptions =
-  | Intl.DateTimeFormatOptions
-  | Intl.NumberFormatOptions
-  | Intl.CollatorOptions
-  | Intl.DisplayNamesOptions
+type FormatterOptions = Intl.NumberFormatOptions | Intl.CollatorOptions | Intl.DisplayNamesOptions
 
-const dateTimeFormats = new WeakMap<FormatterOptions, CachedFormatter<Intl.DateTimeFormat>>()
 const numberFormats = new WeakMap<FormatterOptions, CachedFormatter<Intl.NumberFormat>>()
 const collators = new WeakMap<FormatterOptions, CachedFormatter<Intl.Collator>>()
 const displayNames = new WeakMap<FormatterOptions, CachedFormatter<Intl.DisplayNames>>()
@@ -33,16 +32,17 @@ function cachedFormatter<T>(
   return formatter
 }
 
+/** Dates and times in the UI language with the OS region and clock; pass module-constant options. */
 export function uiDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   intlLocale?: string
-): Intl.DateTimeFormat {
-  return cachedFormatter(
-    dateTimeFormats,
+): RegionalDateTimeFormat {
+  // getIntlLocale() already checks support; only a caller's own tag needs it.
+  return regionalDateTimeFormat(
     options,
-    Intl.DateTimeFormat,
-    (locale) => new Intl.DateTimeFormat(locale, options),
-    intlLocale
+    intlLocale === undefined
+      ? getIntlLocale()
+      : supportedIntlLocale(intlLocale, Intl.DateTimeFormat)
   )
 }
 

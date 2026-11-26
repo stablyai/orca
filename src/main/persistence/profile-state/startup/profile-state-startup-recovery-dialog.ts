@@ -7,6 +7,14 @@ import {
   includesProjectListSection,
   profileStateSectionLabels
 } from '../recovery/profile-state-section-labels'
+import {
+  regionalDateTimeFormat,
+  DATE_TIME_NUMERIC
+} from '../../../../shared/i18n/regional-date-time-format'
+
+function formatRecoveryTime(time: Date): string {
+  return regionalDateTimeFormat(DATE_TIME_NUMERIC).format(time)
+}
 
 // Why injected: profile-state tests run under Bun, where main-i18n (Electron, renderer catalogs) must not load.
 export type ProfileStateDialogTranslate = (
@@ -108,7 +116,7 @@ function modifiedAt(path: string): Date | undefined {
 export async function chooseProfileStateCopy(
   deps: ProfileStateCopyChoiceDialogDeps
 ): Promise<ProfileStateCopyChoice | undefined> {
-  const format = deps.formatTime ?? ((time: Date) => time.toLocaleString())
+  const format = deps.formatTime ?? formatRecoveryTime
   const savedAt = (time: Date | undefined): string =>
     time === undefined
       ? ''
@@ -164,7 +172,7 @@ export type ProfileStateRepairChoiceDialogDeps = {
 export async function chooseProfileStateRepair(
   deps: ProfileStateRepairChoiceDialogDeps
 ): Promise<boolean> {
-  const format = deps.formatTime ?? ((time: Date) => time.toLocaleString())
+  const format = deps.formatTime ?? formatRecoveryTime
   const lines = deps.sections.map((repair) => {
     const { domain, backupCreatedAtMs } = repair
     const [section] = profileStateSectionLabels([domain], deps.translate)

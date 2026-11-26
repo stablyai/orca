@@ -22,6 +22,12 @@ import type { UiLanguage } from '../../../shared/i18n/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { supportedIntlLocale } from './intl-locale-support'
+import {
+  osDateTimeRegionKey,
+  regionalFormatsBuilt,
+  setOsDateTimeRegion,
+  type OsDateTimeRegion
+} from '../../../shared/i18n/regional-date-time-format'
 import { createOrcaI18n } from '../../../shared/i18n/orca-i18n-instance'
 
 // Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
@@ -108,9 +114,18 @@ i18n.store.on('removed', onBundleChange)
 // The language is part of the scope itself, so re-selecting the same one changes nothing.
 i18n.on('languageChanged', notifyTranslationScope)
 
-/** Changes exactly when translate() results can change: init, active language or its resources. */
+/** Changes exactly when translated or formatted output can change: init, active language, its resources or the OS region. */
 export function getTranslationScope(): string {
-  return `${i18n.isInitialized}\0${i18n.language}\0${activeResourceVersion}`
+  return `${i18n.isInitialized}\0${i18n.language}\0${activeResourceVersion}\0${osDateTimeRegionKey()}`
+}
+
+/** A region that lands after dates were shown repaints them once, like a language change. */
+export function setRendererOsDateTimeRegion(region: OsDateTimeRegion | null): void {
+  const before = osDateTimeRegionKey()
+  setOsDateTimeRegion(region)
+  if (osDateTimeRegionKey() !== before && regionalFormatsBuilt()) {
+    notifyTranslationScope()
+  }
 }
 
 export function subscribeTranslationScope(listener: () => void): () => void {
