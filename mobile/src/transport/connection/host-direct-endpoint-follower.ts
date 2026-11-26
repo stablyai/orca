@@ -33,6 +33,7 @@ export type HostDirectEndpointFollower = {
   directEndpoint(): string
   /** Open a return-probe dial; a direct win at the replacement proves it, a failure tries the other. */
   dial(open: (endpoint: string) => RpcClient): RpcClient
+  onNetworkArrival(): void
   onConnected(): void
   refresh(): void
 }
@@ -112,11 +113,18 @@ export function createHostDirectEndpointFollower(args: {
         }
       })
   }
+  let adopting = false
   const saveVerifiedCandidate = (): void => {
     const verified = candidate
-    if (verified === null || lastDialed !== verified || client.getActivePath() === 'relay') {
+    if (
+      adopting ||
+      verified === null ||
+      lastDialed !== verified ||
+      client.getActivePath() === 'relay'
+    ) {
       return
     }
+    adopting = true
     // This connection authenticated at the replacement, so it is reachable from here: keep it.
     void adoptHostDirectEndpoint(hostId, saved.endpoint, verified)
       .then((fields) => {
@@ -126,6 +134,9 @@ export function createHostDirectEndpointFollower(args: {
         }
       })
       .catch(() => {})
+      .finally(() => {
+        adopting = false
+      })
   }
   const directEndpoint = (): string => candidate ?? saved.endpoint
   return {
@@ -138,11 +149,7 @@ export function createHostDirectEndpointFollower(args: {
       const stop = client.onStateChange((state) => {
         if (state === 'connected') {
           stop()
-        } else if (
-          state === 'disconnected' ||
-          state === 'reconnecting' ||
-          state === 'auth-failed'
-        ) {
+        } else if (state === 'disconnected' || state === 'auth-failed') {
           stop()
           if (lastDialed === endpoint && candidate !== null) {
             dialSaved = endpoint !== saved.endpoint
@@ -150,6 +157,10 @@ export function createHostDirectEndpointFollower(args: {
         }
       })
       return client
+    },
+    onNetworkArrival() {
+      // A dial aborted by the network change is not evidence against the replacement.
+      dialSaved = false
     },
     onConnected() {
       unsupported = false
