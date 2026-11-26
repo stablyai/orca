@@ -57,8 +57,8 @@ export function itemsAccess(
     peer: context.orchestrationCaller?.kind === 'peer',
     identity: session
       ? { handle: session.address, paneKey: session.paneKey, sessionId: session.sessionId }
-      : terminal?.terminalHandle
-        ? { handle: terminal.terminalHandle, paneKey: terminal.paneKey ?? null }
+      : terminal?.terminalHandle || terminal?.paneKey
+        ? { handle: terminal.terminalHandle ?? '', paneKey: terminal.paneKey ?? null }
         : null
   })
 }

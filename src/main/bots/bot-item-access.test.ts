@@ -131,14 +131,18 @@ it("reads an item from before teammates as the owner's: his chats reach it, a te
  *  session or terminal it runs in. */
 function startWorker(
   creator: DispatchCreator,
-  runsIn: { session: string } | { terminal: string }
+  runsIn: { session: string } | { terminal: string },
+  retryOf?: string
 ): string {
-  const task = db.createTask({ runId: 'run_legacy_local', spec: 'Look into it' })
+  const taskId = retryOf
+    ? db.getDispatchContextById(retryOf)!.task_id
+    : db.createTask({ runId: 'run_legacy_local', spec: 'Look into it' }).id
   const { dispatch } = db.createStartingWorkerDispatch({
     creator,
     maxDepth: 10,
-    taskId: task.id,
-    startOptions: { agent: 'claude' }
+    taskId,
+    startOptions: { agent: 'claude' },
+    ...(retryOf ? { retryOf } : {})
   })
   const handle = 'session' in runsIn ? `orca_session_id:${runsIn.session}` : runsIn.terminal
   db.db
@@ -206,4 +210,42 @@ it('makes an item added for another chat act for that chat, and only from a chat
   expect(botItemAddedFor(sources, theirs, SLACK_CHAT)).toEqual(['acct-2'])
   expect(() => botItemAddedFor(sources, theirs, OWNER_CHAT)).toThrow('for someone else')
   expect(() => botItemAddedFor(sources, theirs, SHARED_CHAT)).not.toThrow()
+})
+
+it("trusts the owner's paired computer as the owner, and only a share device as a teammate", () => {
+  addItem('Owner work', null)
+  addItem('Kim work', ['acct-2'])
+  const kim = { kind: 'bot-share' as const, botId: 'bot-1', accountId: 'acct-2', name: 'Kim' }
+  // A paired computer's coordinator, and a worker it starts here (its creator is a peer: handle).
+  expect(listed(botItemAccessOfCaller(sources, { peer: true }))).toEqual(['Kim work', 'Owner work'])
+  const paired = startWorker({ kind: 'terminal', handle: 'peer:conv-1' }, { terminal: 'term_p' })
+  expect(reachOf(paired)).toEqual(['Kim work', 'Owner work'])
+  // A share device is the teammate whatever else the call carries.
+  expect(listed(botItemAccessOfCaller(sources, { share: kim }))).toEqual(['Kim work'])
+  expect(listed(botItemAccessOfCaller(sources, { share: kim, peer: true }))).toEqual(['Kim work'])
+})
+
+it("keeps a teammate's worker theirs when the owner retries it, and finds a worker by its pane alone", () => {
+  addItem('Owner work', null)
+  addItem('Kim work', ['acct-2'])
+  startWorker(fromSession(TEAMMATE_CHAT), { terminal: 'term_first' })
+  const first = db.getActiveDispatchForIdentity('term_first')!.id
+  // It failed, as a worker's start or exit settles it.
+  db.db.prepare("UPDATE worker_dispatches SET state = 'failed' WHERE dispatch_id = ?").run(first)
+  db.db
+    .prepare("UPDATE tasks SET status = 'failed' WHERE id = ?")
+    .run(db.getDispatchContextById(first)!.task_id)
+  const retried = startWorker(
+    { kind: 'terminal', handle: 'term_owner' },
+    { terminal: 'term_retry' },
+    first
+  )
+  expect(reachOf(retried)).toEqual(['Kim work'])
+
+  db.db
+    .prepare("UPDATE dispatch_contexts SET assignee_pane_key = 'pane-9' WHERE assignee_handle = ?")
+    .run(retried)
+  expect(
+    listed(botItemAccessOfCaller(sources, { identity: { handle: '', paneKey: 'pane-9' } }))
+  ).toEqual(['Kim work'])
 })

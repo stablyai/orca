@@ -2,30 +2,54 @@ import type Database from '../../../sqlite/sync-database'
 import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { DispatchCreatorTurnSource } from './dispatch-depth'
+import { actsForOwner, type BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
 
 /** Centralize live-worker inserts to enforce depth; callers retain transactions, receipts and companion writes. */
 
-/** Whom a new Dispatch acts for, copied once from whoever makes it: a paired Orca's coordinator
- *  names no one here (unknown); a worker passes on its own Dispatch's stamp; a chat its record. None
- *  of those (the owner's terminal or own chats) leaves it null: the owner. Bound to the creator's
- *  handle, Dispatch id (twice) and session id, in that order. */
-const STAMP_ACTS_FOR_SQL = `CASE
-    WHEN ? LIKE 'peer:%' THEN '[{"kind":"unknown"}]'
-    WHEN ? IS NOT NULL THEN (SELECT stamp.acts_for FROM dispatch_contexts stamp WHERE stamp.id = ?)
-    ELSE (SELECT record.acts_for FROM bot_conversation_acts_for record WHERE record.session_id = ?)
-  END`
+/** Whom a new Dispatch acts for (JSON, as `bot_conversation_acts_for`), copied once from whoever
+ *  makes it: a worker passes on its own Dispatch's stamp, a chat its record; anything else of the
+ *  owner's (his terminals, own chats and paired computers) leaves it null, the owner. A retry or
+ *  follow-up the owner makes keeps the narrower stamp of the worker it continues. */
+function actsForStamp(
+  db: Database.Database,
+  params: {
+    creatorDispatchId?: string | null
+    creatorOrcaSessionId?: OrcaSessionId | null
+    continuesDispatchId?: string | null
+  }
+): string | null {
+  const read = (sql: string, key: string): string | null => {
+    const value = db.prepare(sql).get(key)?.acts_for
+    return typeof value === 'string' ? value : null
+  }
+  const own = params.creatorDispatchId
+    ? read('SELECT acts_for FROM dispatch_contexts WHERE id = ?', params.creatorDispatchId)
+    : params.creatorOrcaSessionId
+      ? read(
+          'SELECT acts_for FROM bot_conversation_acts_for WHERE session_id = ?',
+          params.creatorOrcaSessionId
+        )
+      : null
+  if (!params.continuesDispatchId || !ownersStamp(own)) {
+    return own
+  }
+  return (
+    read('SELECT acts_for FROM dispatch_contexts WHERE id = ?', params.continuesDispatchId) ?? own
+  )
+}
 
-function stampArgs(params: {
-  creatorHandle?: string | null
-  creatorDispatchId?: string | null
-  creatorOrcaSessionId?: OrcaSessionId | null
-}): (string | null)[] {
-  return [
-    params.creatorHandle ?? null,
-    params.creatorDispatchId ?? null,
-    params.creatorDispatchId ?? null,
-    params.creatorOrcaSessionId ?? null
-  ]
+/** Whether a stamp is the owner's: none, or a record naming only him. */
+function ownersStamp(stamp: string | null): boolean {
+  if (stamp === null) {
+    return true
+  }
+  try {
+    const parsed: unknown = JSON.parse(stamp)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stamps are copied from acts-for records, which hold BotRequestAsker lists
+    return Array.isArray(parsed) && actsForOwner(parsed as BotRequestAsker[])
+  } catch {
+    return false
+  }
 }
 
 export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
@@ -34,8 +58,7 @@ export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
   creator_turn_source, status, failure_count, depth, dispatched_at, acts_for
 )
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now'),
-  ${STAMP_ACTS_FOR_SQL}
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now'), ?
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
@@ -65,8 +88,7 @@ const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
    creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
    creator_turn_source, depth, status, failure_count, dispatched_at, follow_up_of_dispatch_id,
    origin_ref, for_message_id, chat_lineage, acts_for
- ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?,
-   ${STAMP_ACTS_FOR_SQL})`
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?, ?)`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
    dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
@@ -121,7 +143,7 @@ export function claimDispatchContextRow(
       params.creatorTurnSource ?? null,
       params.priorFailures,
       params.depth,
-      ...stampArgs(params),
+      actsForStamp(db, params),
       params.taskId,
       params.assigneeHandle,
       params.assigneePaneKey,
@@ -173,7 +195,10 @@ export function insertStartingDispatchContextRow(
     params.originRef ?? null,
     params.forMessageId ?? null,
     params.chatLineage ? 1 : null,
-    ...stampArgs(params)
+    actsForStamp(db, {
+      ...params,
+      continuesDispatchId: params.retryOfDispatchId ?? params.followUpOfDispatchId ?? null
+    })
   )
 }
 

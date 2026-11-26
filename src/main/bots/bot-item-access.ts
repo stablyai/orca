@@ -85,15 +85,17 @@ export function botItemAccessOfChat(
 export type BotItemCallerIdentity = { handle: string; paneKey?: string | null; sessionId?: string }
 
 /**
- * What a caller reaches: a teammate's own connection, their items; a paired Orca's coordinator, the
- * owner's own (it names no one here); a bot chat, what its people reach; a worker, chat or terminal
+ * What a caller reaches: a teammate's share device (the only caller that carries a teammate), their
+ * items; one of the owner's paired computers, which is the owner, everyone's; a bot chat, what its people reach; a worker, chat or terminal
  * alike, what its Dispatch's stamp reaches (`acts_for`, copied when it was made, so a worker's worker
  * reaches the same); anything else of the owner's (his CLI, terminals and own chats), everyone's.
  */
 export function botItemAccessOfCaller(
   sources: BotConversationActsForSources,
   caller: {
+    /** A teammate's share device, from the share admission's scope. */
     share?: BotShareCallerScope | null
+    /** One of the owner's paired computers, from its pairing. */
     peer?: boolean
     identity?: BotItemCallerIdentity | null
   }
@@ -101,8 +103,9 @@ export function botItemAccessOfCaller(
   if (caller.share) {
     return botItemsOfPeople([caller.share.accountId])
   }
+  // Never a paired computer's say-so about a terminal or Dispatch here: it is the owner.
   if (caller.peer) {
-    return botItemsOfPeople(null)
+    return BOT_ITEMS_EVERYONE
   }
   const { identity } = caller
   if (!identity) {
