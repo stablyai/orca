@@ -56,7 +56,7 @@ export class ProviderTimelineTextStreams {
       emit: (id, text) => this.flushOnWindow(id, text)
     })
     this.releaseLiveText = deps.sink.bindLiveText?.({
-      read: (epoch) => this.liveText(epoch),
+      read: (epoch, readers) => this.liveText(epoch, readers?.takes),
       flush: () => this.flush()
     })
   }
@@ -260,9 +260,9 @@ export class ProviderTimelineTextStreams {
     return admission?.accepted !== false || admission.reason !== 'backpressure'
   }
 
-  private liveText(epoch: string): AgentJournalRenderItem[] {
+  private liveText(epoch: string, takes?: (itemId: string) => boolean): AgentJournalRenderItem[] {
     return [...this.byId.values()].flatMap((stream) =>
-      providerTimelineLiveText(stream, epoch, this.coalescer.snapshot(stream.id))
+      providerTimelineLiveText(stream, epoch, () => this.coalescer.snapshot(stream.id), takes)
     )
   }
 

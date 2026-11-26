@@ -80,6 +80,10 @@ describe('findPinnedHomeTabId', () => {
     expect(findPinnedHomeTabId([chatItem('home', 'home-chat')], offBotPage)).toBeNull()
     expect(findPinnedHomeTabId([], onBotPage)).toBeNull()
   })
+
+  it('pins nothing on a strip no bot calls home, even over a chat shaped like Home', () => {
+    expect(findPinnedHomeTabId([chatItem('home', 'home-chat')], null)).toBeNull()
+  })
 })
 
 describe('withPinnedHomeFirst', () => {
@@ -123,6 +127,11 @@ describe('withBotHomeFirstTabIds', () => {
       'side-a',
       'home'
     ])
+  })
+
+  it('hands back the same order, unread, for a group no bot calls home', () => {
+    const order = ['side-a', 'home']
+    expect(withBotHomeFirstTabIds(order, [chatTab('home', 'home-chat')], null)).toBe(order)
   })
 })
 

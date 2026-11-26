@@ -34,6 +34,7 @@ import {
   pairedForwardTunnelEnvironmentIds,
   tearDownPairedForwardTunnel
 } from './paired-port-forward-tunnels'
+import { assertSocksClientOwnerLookup } from '../../browser/network/tunnels/remote-browser-socks-client-owner'
 
 type PairedPortForwardsDeps = {
   resolveConnection: (environmentId: string) => Promise<PairedRuntimeConnection>
@@ -289,12 +290,13 @@ export async function closeAllPairedPortForwards(): Promise<void> {
   await manager.closeAll()
 }
 
-/** Refuses a server that is removed or disconnected, before any listener binds for it. Returns its
- *  host key's digest, after retiring forwards made for another machine paired under the same entry. */
+/** Refuses a removed or disconnected server, or a computer that can't check who connects, before any
+ *  port probe or listener. Returns its host key digest, after retiring forwards made for another
+ *  machine paired under the same entry. */
 async function requireForwardableServer(environmentId: string): Promise<string> {
-  const resolveConnection = requireConnectionResolver()
   const teardown = pairedForwardTeardownStamp(environmentId)
-  const connection = await resolveConnection(environmentId)
+  await assertSocksClientOwnerLookup('port forward')
+  const connection = await requireConnectionResolver()(environmentId)
   if (pairedForwardTeardownStamp(environmentId) !== teardown) {
     throw new PortForwardTornDownError()
   }
@@ -328,10 +330,9 @@ function save(
 }
 
 function retireIdleTunnel(environmentId: string): void {
-  if (manager.listForwards(environmentId).length > 0) {
-    return
+  if (manager.listForwards(environmentId).length === 0) {
+    disposePairedForwardTunnel(environmentId)
   }
-  disposePairedForwardTunnel(environmentId)
 }
 
 /** A failed first forward leaves no tunnel behind for a server with nothing forwarded. */

@@ -5,7 +5,15 @@ import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/
 import { KIND_ICONS } from '../background-task-kind-icons'
 import type { WorkerDockGlyph as Glyph } from './worker-dock-card-order'
 
-export function WorkerDockGlyph({ glyph, kind }: { glyph: Glyph; kind?: WorkerDockEntry['kind'] }) {
+export function WorkerDockGlyph({
+  glyph,
+  kind,
+  still = false
+}: {
+  glyph: Glyph
+  kind?: WorkerDockEntry['kind']
+  still?: boolean
+}) {
   const KindIcon = kind && KIND_ICONS[kind === 'worker' ? 'agent' : kind]
   return (
     <span aria-hidden="true" className="inline-flex shrink-0 items-center gap-1">
@@ -16,6 +24,8 @@ export function WorkerDockGlyph({ glyph, kind }: { glyph: Glyph; kind?: WorkerDo
       >
         {glyph === 'ask' ? (
           <AgentQuestionIcon className="size-3" />
+        ) : glyph === 'running' && still ? (
+          <span className="block size-1.5 rounded-full bg-agent-working" />
         ) : glyph === 'running' ? (
           <AgentWorkingSpinner className="size-2.5" />
         ) : (

@@ -100,7 +100,7 @@ export function WorkerDockPill({
           </>
         ) : (
           <>
-            <WorkerDockGlyph glyph={glyph} kind={kind} />
+            <WorkerDockGlyph glyph={glyph} kind={kind} still />
             <span data-worker-dock-pill-title="" className="min-w-0 truncate">
               {label}
             </span>

@@ -21,7 +21,13 @@
     "heading_one": "{{count}} CLI update available",
     "heading_other": "{{count}} CLI updates available",
     "statusCount_one": "{{count}} CLI update",
-    "statusCount_other": "{{count}} CLI updates"
+    "statusCount_other": "{{count}} CLI updates",
+    "toastDone_one": "{{count}} CLI updated",
+    "toastDone_other": "{{count}} CLIs updated",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
+    "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
+    "toastUpdating_other": "Updating {{current}} of {{count}} CLIs"
   },
   "agentLaunch": {
     "opencode": {
@@ -1616,11 +1622,15 @@
         "zoom": "Meetings, recordings and transcripts"
       },
       "line": {
+        "airtable": "Query and edit bases, tables and records",
         "atlassian": "Jira issues and Confluence pages",
+        "clickup": "Manage tasks, lists and docs",
         "cloudflare": "Manage Workers, DNS and the rest of an account",
         "context7": "Current docs and examples for code libraries",
         "datadog": "Search logs, metrics and monitors",
         "gitlab": "Read and update issues and merge requests",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles",
         "neon": "Run SQL and manage Postgres branches",
         "netlify": "Deploy sites and check their builds",
         "notion": "Search, read and edit pages",
@@ -1628,7 +1638,9 @@
         "sentry": "Look into errors and the events behind them",
         "stripe": "Look up payments, customers and subscriptions",
         "supabase": "Query databases and manage projects",
-        "vercel": "Check deployments and read their logs"
+        "todoist": "Add, sort and complete tasks",
+        "vercel": "Check deployments and read their logs",
+        "zapier": "Run actions in the apps you set up in Zapier"
       }
     },
     "chats": {
@@ -1655,6 +1667,9 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
       "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
@@ -3609,6 +3624,22 @@
       "serverCount_one": "{{count}} server",
       "serverCount_other": "{{count}} servers"
     },
+    "mcpServers": {
+      "toast": {
+        "restart_one": "Restart {{count}} session",
+        "restart_other": "Restart {{count}} sessions",
+        "staleTerminalsOnHost_one": "{{count}} agent terminal on {{host}} uses an older MCP setup",
+        "staleTerminalsOnHost_other": "{{count}} agent terminals on {{host}} use an older MCP setup",
+        "staleTerminalsRestartManual_one": "Restart it yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_other": "Restart them yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartSome_one": "{{restartable}} can be resumed here. Restart the other one yourself.",
+        "staleTerminalsRestartSome_other": "{{restartable}} can be resumed here. Restart the other {{count}} yourself.",
+        "staleTerminalsRestart_one": "Restart it to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestart_other": "Restart them to reconnect Orca’s MCP servers.",
+        "staleTerminals_one": "{{count}} agent terminal uses an older MCP setup",
+        "staleTerminals_other": "{{count}} agent terminals use an older MCP setup"
+      }
+    },
     "network": {
       "proxyUrlErrors": {
         "invalid": "Enter a valid proxy URL.",
@@ -3925,18 +3956,6 @@
         "noAgentAvailable": "No chat-name agent can run in this workspace.",
         "noName": "The chat-name agent returned no name."
       }
-    }
-  },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} tab",
-      "chipOnlyName_other": "{{title}}, {{count}} tabs",
-      "moreTabs_one": "{{count}} more tab",
-      "moreTabs_other": "{{count}} more tabs",
-      "needAttention_one": ", {{count}} needs attention",
-      "needAttention_other": ", {{count}} need attention",
-      "openTabs_one": "{{count}} open tab",
-      "openTabs_other": "{{count}} open tabs"
     }
   },
   "taskProviders": {

@@ -85,7 +85,7 @@ export function botAutomationSessions(
       bot,
       { text, title, sessionId: named, run, actsFor, beforeFirstMessage, beforeDelivery }
     ) => {
-      const clientMessageId = randomUUID()
+      const clientMessageId = run?.messageId ?? randomUUID()
       const sessionId = await deps.startSession(
         bot,
         { text, clientMessageId, ...(run ? { run } : {}) },

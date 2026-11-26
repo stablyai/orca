@@ -4,7 +4,9 @@ import {
 } from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
-import { botToolsOffInstruction, withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
+import { botToolsOffInstruction } from '../../bots/bot-launch-tools'
+import { withSessionMcpToolsEnv } from '../../mcp-servers/session-mcp-tools'
+import { deliverHostMcpServersBesideConfig } from '../../mcp-servers/session-host-mcp-delivery'
 import { acpBotMcpServers } from '../../bots/bot-tools-acp'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
@@ -72,7 +74,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   sessionMetaOnReopen?: true
   takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
   sessionMetaOptional?: true
-  aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
+  aroundSessionOpen?: AcpInstructionsLaunch['aroundSessionOpen']
   release?: AcpInstructionsLaunch['release']
   /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
   mcpServers?: McpServer[]
@@ -226,7 +228,20 @@ export function acpStructuredLaunchPart(
     })
     const loaded = skill?.loaded ?? []
     const skillLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
-    const tools = await basis.toolServers()
+    // A managed release's receipt names its version; other programs answer the check.
+    const launchedVersion = version ?? launchVersion.version
+    // The agent's own servers, which a same-named server from the host's list leaves running. Like
+    // its other tools, a read-only session gets none.
+    const ownServers = basis.readOnly
+      ? []
+      : ((await spec.ownMcpServers?.({
+          cwd,
+          env: childEnvironmentView(env, inherited, envToDelete),
+          version: launchedVersion
+        })) ?? [])
+    // An agent that ignores a session's servers gets none of the host list's; a bot's own are noted off.
+    const named = { env, cwd, also: ownServers.map((one) => one.name), hostOff: !!spec.botToolsOff }
+    const tools = await deliverHostMcpServersBesideConfig(basis, spec.agent, named)
     // Why a bot's tools are off for this agent; its chat starts without them and is told so.
     const toolsOff = tools.servers.length > 0 ? spec.botToolsOff : undefined
     const own = await basis.instructions(
@@ -250,18 +265,8 @@ export function acpStructuredLaunchPart(
     const instructions = delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
-    // A managed release's receipt names its version; other programs answer the check.
-    const launchedVersion = version ?? launchVersion.version
     const botServers = toolsOff ? [] : acpBotMcpServers(tools)
-    // Like its bot tools, a read-only session gets none of the agent's own servers.
-    const ownServers = basis.readOnly
-      ? []
-      : ((await spec.ownMcpServers?.({
-          cwd,
-          env: childEnvironmentView(env, inherited, envToDelete),
-          version: launchedVersion
-        })) ?? [])
-    // On a shared name the bot's server wins.
+    // On a shared name the bot's server wins; the host list's never shares one (above).
     const mcpServers = [
       ...botServers,
       ...ownServers.filter((own) => !botServers.some((bot) => bot.name === own.name))
@@ -291,8 +296,8 @@ export function acpStructuredLaunchPart(
               ...(instructions.sessionMetaOptional ? { sessionMetaOptional: true as const } : {})
             }
           : {}),
-        ...(instructions?.aroundNewSession
-          ? { aroundNewSession: instructions.aroundNewSession }
+        ...(instructions?.aroundSessionOpen
+          ? { aroundSessionOpen: instructions.aroundSessionOpen }
           : {}),
         ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
@@ -317,7 +322,7 @@ export function acpStructuredLaunchPart(
           : null
       },
       env: withNativeChatVisualsEnv(
-        withBotLaunchToolsEnv({ ...env, ...skill?.env, ...instructions?.env }, tools),
+        withSessionMcpToolsEnv({ ...env, ...skill?.env, ...instructions?.env }, tools),
         visualsLoaded
       ),
       inheritedEnvToDelete: [
