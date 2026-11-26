@@ -1,4 +1,8 @@
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import {
+  HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeMobileSessionTabsResult,
+  type RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { selectMobileSessionTab } from '../../session-tabs/layout/mobile-session-tab-selection'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/publication/session-tabs-change-publication'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/restoration/mobile-session-publication-preservation'
@@ -10,15 +14,13 @@ import type {
   ServerPagePopupPresentation
 } from '../../../browser/guest-lifecycle/popups/browser-popup-ownership'
 import { bindServerPagePopupClientRuntime } from './server-page-client-popup-follow'
-import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { FollowMobileBrowserTabOptions } from '../../browser/commands/browser-command-contracts'
 import { createMobileBrowserOpenRuntimeHost } from '../../browser/tabs/mobile-terminal-browser-open'
-import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { navigationTargetsClients } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import {
+  navigationTargetsClients,
+  type RuntimeNavigationTarget
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import {
   activateClientSessionTabSelection,
   deriveClientSessionTabSelection,
@@ -58,21 +60,16 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   protected abstract getPtyRecordForPaneKey(paneKey: string): { ptyId: string } | null
   protected abstract getMobileDisplayMode(ptyId: string): 'auto' | 'desktop'
 
-  private readonly mobileTabFollowRuntime = {
-    getActiveTabId: (c: string, id: string) =>
-      this.clientSessionTabSelections.getActiveTabId(c, id),
-    getStoredSnapshot: (id: string) => this.mobileSessionTabsByWorktree.get(id),
-    graphSyncCallbacks: this.graphSyncCallbacks,
-    getMobileSessionTabsForWorktree: (id: string) =>
-      this.getMobileSessionTabsForWorktree(id, undefined, { includeAgentSenders: false }),
-    applyTabNavigation: (
-      s: RuntimeMobileSessionTabsResult,
-      t: string,
-      n: RuntimeNavigationTarget,
-      c: string,
-      f: boolean
-    ) => void this.applyMobileSessionTabNavigation(s, t, n, c, f)
-  }
+  private readonly mobileTabFollowRuntime: Parameters<typeof bindServerPagePopupClientRuntime>[0] =
+    {
+      getActiveTabId: (c, id) => this.clientSessionTabSelections.getActiveTabId(c, id),
+      getStoredSnapshot: (id) => this.mobileSessionTabsByWorktree.get(id),
+      graphSyncCallbacks: this.graphSyncCallbacks,
+      getMobileSessionTabsForWorktree: (id) =>
+        this.getMobileSessionTabsForWorktree(id, undefined, { includeAgentSenders: false }),
+      applyTabNavigation: (s, t, n, c, f) =>
+        void this.applyMobileSessionTabNavigation(s, t, n, c, f)
+    }
 
   private readonly popupClientRuntime = bindServerPagePopupClientRuntime(
     this.mobileTabFollowRuntime
@@ -196,6 +193,10 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     }
     this.applyMobileSessionTabNavigation(snapshot, tab.id, 'caller', clientNavigationId)
     return true
+  }
+
+  reopenClosedMobileSessionTab(worktreeId: string, tabId: string): void {
+    this.clientSessionTabSelections.reopenForAllClients(worktreeId, tabId)
   }
 
   async reopenMobileSessionTabForClient(

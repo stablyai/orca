@@ -4496,9 +4496,6 @@
       "agentCouldNotStart": "无法启动 {{label}}。请在设置中检查智能体命令后重试",
       "agentFailedToStart": "{{label}} 启动失败。请在设置中检查智能体命令后重试",
       "agentReportedError": "{{label}} 报告了错误",
-      "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
-      "antigravityInvalidResult": "Antigravity 返回了无效的结果",
-      "antigravityNoFinalResult": "Antigravity 未返回最终结果",
       "chatNameAgentUnsupported": "请在设置 -> 聊天 -> 聊天名称中为此操作选择支持的聊天命名智能体。支持的智能体：{{agents}}，或选择“自定义命令”",
       "chatNameCustomCommandEmpty": "自定义命令为空。请在设置 -> 聊天 -> 聊天名称中添加",
       "cliFailed": "{{label}} CLI 命令执行失败，退出码为 {{exitCode}}",
@@ -5305,6 +5302,9 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在检查主机",
       "connectToDownload": "连接到此主机以下载最新版本的应用",
@@ -5317,7 +5317,9 @@
       "openingWorkspace": "正在打开工作区",
       "renderProcessGone": "工作区已停止响应",
       "statusUnreadable": "无法读取此主机的状态。请返回后重新打开",
-      "tryAgain": "重试"
+      "tryAgain": "重试",
+      "downloadingLatestApp": "正在下载最新版本的应用",
+      "downloadProgressFromHost": "来自 {{host}} · {{progress}}"
     }
   },
   "workspace": {
@@ -6779,7 +6781,9 @@
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
         "skipped": "已跳过",
-        "notNow": "暂不"
+        "notNow": "暂不",
+        "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张照片。请移除一些后重试。",
+        "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请移除一些后重试。"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -8324,5 +8328,8 @@
     "cardSlot": {
       "working": "工作中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所在组织的 Claude 设置阻止"
   }
 }

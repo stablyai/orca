@@ -1,6 +1,7 @@
 /** Opaque migration blobs travel beside the signed catalog. Gate each kind by its destination capability:
  * older destinations drop unknown kinds, so clients must refuse before staging. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import {
   ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES,
   OrcadMigrationChunkBase64Schema,
@@ -90,34 +91,38 @@ export const ORCAD_MIGRATION_DESTINATION_BLOB_KIND_UNSUPPORTED =
 // Windows refuses these as file names whatever the extension, so a key must never be one.
 const WINDOWS_RESERVED_FILE_NAME = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i
 
-export const OrcadMigrationBlobDescriptorSchema = z
-  .object({
-    blobKind: z.enum(ORCAD_MIGRATION_BLOB_KINDS),
-    key: z.string().max(256),
-    sha256: OrcadMigrationDigestSchema,
-    byteLength: z.number().int().min(1)
-  })
-  .superRefine((value, context) => {
-    const contract = ORCAD_MIGRATION_BLOB_KIND_CONTRACTS[value.blobKind]
-    if (!contract.key.test(value.key) || WINDOWS_RESERVED_FILE_NAME.test(value.key)) {
-      context.addIssue({
-        code: 'custom',
-        message: 'orcad_migration_blob_key_invalid'
-      })
-    }
-    if (value.byteLength > contract.maxBytes) {
-      context.addIssue({ code: 'custom', message: 'orcad_migration_blob_too_large' })
-    }
-  })
+export const OrcadMigrationBlobDescriptorSchema = lazyZodSchema(() =>
+  z
+    .object({
+      blobKind: z.enum(ORCAD_MIGRATION_BLOB_KINDS),
+      key: z.string().max(256),
+      sha256: OrcadMigrationDigestSchema,
+      byteLength: z.number().int().min(1)
+    })
+    .superRefine((value, context) => {
+      const contract = ORCAD_MIGRATION_BLOB_KIND_CONTRACTS[value.blobKind]
+      if (!contract.key.test(value.key) || WINDOWS_RESERVED_FILE_NAME.test(value.key)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'orcad_migration_blob_key_invalid'
+        })
+      }
+      if (value.byteLength > contract.maxBytes) {
+        context.addIssue({ code: 'custom', message: 'orcad_migration_blob_too_large' })
+      }
+    })
+)
 
 // Not strict: an older host must ignore optional fields a newer client adds.
-export const OrcadMigrationBlobChunkRequestSchema = z.object({
-  migrationId: OrcadMigrationIdentitySchema,
-  manifestSha256: OrcadMigrationDigestSchema,
-  blob: OrcadMigrationBlobDescriptorSchema,
-  offset: z.number().int().nonnegative().max(MAX_ORCAD_MIGRATION_BLOB_TOTAL_BYTES),
-  bytesBase64: OrcadMigrationChunkBase64Schema
-})
+export const OrcadMigrationBlobChunkRequestSchema = lazyZodSchema(() =>
+  z.object({
+    migrationId: OrcadMigrationIdentitySchema,
+    manifestSha256: OrcadMigrationDigestSchema,
+    blob: OrcadMigrationBlobDescriptorSchema,
+    offset: z.number().int().nonnegative().max(MAX_ORCAD_MIGRATION_BLOB_TOTAL_BYTES),
+    bytesBase64: OrcadMigrationChunkBase64Schema
+  })
+)
 
 export type OrcadMigrationBlobChunkRequest = z.infer<typeof OrcadMigrationBlobChunkRequestSchema>
 

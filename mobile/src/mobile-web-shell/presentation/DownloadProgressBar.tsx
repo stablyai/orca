@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -11,12 +13,31 @@ const FILL_EASE_MS = 100
 const FILL_RESTART_MS = 50
 const useNativeDriver = Platform.OS !== 'web'
 
-export function downloadedMegabytesCaption(receivedBytes: number, totalBytes: number): string {
-  return `${megabytes(receivedBytes)} of ${megabytes(totalBytes)} MB`
+export function downloadedMegabytesCaption(
+  receivedBytes: number,
+  totalBytes: number,
+  t: Translate
+): string {
+  return t('webShell.downloadProgress.megabytes', '{{received}} of {{total}} MB', {
+    received: megabytes(receivedBytes),
+    total: megabytes(totalBytes)
+  })
 }
 
+let megabytesFormat: { locale: string; formatter: Intl.NumberFormat } | null = null
+
 function megabytes(bytes: number): string {
-  return (bytes / 1_000_000).toFixed(1)
+  const locale = getUiIntlLocale()
+  if (megabytesFormat?.locale !== locale) {
+    megabytesFormat = {
+      locale,
+      formatter: new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      })
+    }
+  }
+  return megabytesFormat.formatter.format(bytes / 1_000_000)
 }
 
 // Use the native driver so the bar moves while JS decodes; React still supplies caption and accessibility byte counts.

@@ -241,6 +241,7 @@ export const MESSAGE_COLUMN_LIST = everyColumnOf<MessageRow>()([
   'delivered_at',
   'sender_pane_key',
   'answer_sender_snapshot',
+  'reply_to',
   'pointer_enter_pending',
   'pointer_pty_id',
   'pointer_process_incarnation'

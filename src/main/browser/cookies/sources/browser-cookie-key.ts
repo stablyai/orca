@@ -1,7 +1,7 @@
 import { pbkdf2Sync } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
+import { readChromiumLocalStateDpapiKey } from '../../../windows-dpapi/chromium-local-state-key'
 import { unprotectWindowsDpapiCurrentUser } from '../../../windows-dpapi/current-user-unprotect'
 import { diag } from '../browser-cookie-import-diagnostics'
 import {
@@ -131,28 +131,13 @@ export async function getWindowsEncryptionKey(
     return null
   }
 
-  const localStatePath = join(root, 'Local State')
-  if (!existsSync(localStatePath)) {
-    return null
-  }
-
   try {
-    const raw = readFileSync(localStatePath, 'utf-8')
-    const localState = JSON.parse(raw)
-    const encryptedKeyB64 = localState?.os_crypt?.encrypted_key
-    if (typeof encryptedKeyB64 !== 'string') {
+    const localStateKey = await readChromiumLocalStateDpapiKey(join(root, 'Local State'))
+    if (localStateKey.status !== 'ok') {
       return null
     }
 
-    const encryptedKey = Buffer.from(encryptedKeyB64, 'base64')
-    const dpapiPrefix = Buffer.from('DPAPI', 'utf-8')
-    if (!encryptedKey.subarray(0, dpapiPrefix.length).equals(dpapiPrefix)) {
-      return null
-    }
-
-    const key = await unprotectWindowsDpapiCurrentUser(
-      encryptedKey.subarray(dpapiPrefix.length).toString('base64')
-    )
+    const key = await unprotectWindowsDpapiCurrentUser(localStateKey.wrappedKey)
     if (!key) {
       diag('  Windows DPAPI key extraction failed: PowerShell exited non-zero')
       return null

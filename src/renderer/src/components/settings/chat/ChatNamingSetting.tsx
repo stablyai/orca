@@ -166,9 +166,6 @@ export function ChatNamingSetting({
                   draftValue={value}
                   baseValue={persisted}
                   hasUnsavedChanges={dirty}
-                  defaultTuiAgent={
-                    cliAgent && cliAgent !== 'custom' ? cliAgent : settings.defaultTuiAgent
-                  }
                   isSavingTemplate={isSaving}
                   onAgentChange={(_id, selected) => void saveAgent(selected)}
                   onTemplateChange={(_id, template) =>

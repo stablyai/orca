@@ -86,7 +86,6 @@ function roster(preset: Preset, claudeExtra?: Partial<ProviderRateLimits>): Prov
       weekly: win(92, 10_080, 6 * DAY + 11 * HOUR)
     },
     { ...claudeFor(preset), ...claudeExtra },
-    { ...base('antigravity'), status: 'unavailable' },
     { ...base('opencode-go'), session: win(0, 300, 4 * HOUR + 58 * MIN) }
   ]
 }

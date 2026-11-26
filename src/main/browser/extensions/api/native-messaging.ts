@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { BROWSER_EXTENSION_EVENT_CHANNEL } from '../../../../shared/browser/extensions/browser-extension-channels'
 import { emitBrowserExtensionWorkerStartEvent } from '../api-runtime/browser-extension-api-host'
 import {
@@ -24,15 +25,17 @@ import {
 const NATIVE_MESSAGING_NAMESPACE = 'orcaNativeMessaging'
 const PORT_EVENT = 'onPortEvent'
 
-const portId = z.string().min(1).max(100)
-const jsonText = z.string().refine((text) => {
-  try {
-    JSON.parse(text)
-    return true
-  } catch {
-    return false
-  }
-}, 'not JSON')
+const portId = lazyZodSchema(() => z.string().min(1).max(100))
+const jsonText = lazyZodSchema(() =>
+  z.string().refine((text) => {
+    try {
+      JSON.parse(text)
+      return true
+    } catch {
+      return false
+    }
+  }, 'not JSON')
+)
 
 /** Sends a port's event to the one context that opened it. */
 function deliverToOwner(caller: BrowserExtensionCaller, id: string, event: NativePortEvent): void {

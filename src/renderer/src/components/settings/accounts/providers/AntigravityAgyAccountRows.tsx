@@ -1,31 +1,19 @@
-import { AlertCircle, RefreshCw, Trash2, UserPlus } from 'lucide-react'
+import { AlertCircle, Trash2, UserPlus } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
-import type { ProviderRateLimits } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
-import { formatTimeAgo } from '../../../status-bar/usage/provider-usage-panel'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { AntigravityChatSignInFlowPanel } from '../../../provider-accounts/AntigravityChatSignInFlowPanel'
 import type { AntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 
-export type AntigravityAccountAction = 'List' | 'AddCurrent' | 'Select' | 'Remove' | 'Usage'
-
-export function formatUsageReading(usage: ProviderRateLimits, t: Translate = translate): string {
-  return t('accounts.antigravity.usageReading', 'Session: {{session}} · Weekly: {{weekly}}', {
-    session: usage.session ? `${Math.round(usage.session.usedPercent)}%` : '—',
-    weekly: usage.weekly ? `${Math.round(usage.weekly.usedPercent)}%` : '—'
-  })
-}
+export type AntigravityAccountAction = 'List' | 'AddCurrent' | 'Select' | 'Remove'
 
 /** agy's Google logins, which agy in the terminal and Google-account chats share: the current
  *  login, then saved accounts. With `signIn`, signing in and adding an account run in Orca. */
 export function AntigravityAgyAccountRows({
   state,
-  usage,
   error,
   busy,
   windowsHost,
@@ -33,7 +21,6 @@ export function AntigravityAgyAccountRows({
   signIn
 }: {
   state: AntigravityAccountState | null
-  usage: ProviderRateLimits | null
   error: string | null
   busy: boolean
   windowsHost: boolean
@@ -56,38 +43,6 @@ export function AntigravityAgyAccountRows({
         'accounts.antigravity.changed',
         'The native account changed. Select a saved account again before launching agy.'
       )
-  const usageButton = (savedUsage?: ProviderRateLimits | null) => {
-    const reading = usage ?? savedUsage
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="xs"
-            aria-label={
-              reading && !reading.error
-                ? t('accounts.antigravity.usageWithReading', 'Refresh usage ({{reading}})', {
-                    reading: formatUsageReading(reading, t)
-                  })
-                : t('accounts.antigravity.usage', 'Refresh usage')
-            }
-            disabled={busy}
-            onClick={() => run('Usage')}
-          >
-            <RefreshCw />
-            {reading && !reading.error
-              ? formatUsageReading(reading, t)
-              : t('accounts.antigravity.usage', 'Refresh usage')}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {t('accounts.antigravity.usage', 'Refresh usage')}
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  const usageError = usage?.error ? <span className="text-destructive">{usage.error}</span> : null
-
   const terminalRows: React.ReactNode[] = []
   if (error) {
     terminalRows.push(
@@ -170,53 +125,33 @@ export function AntigravityAgyAccountRows({
         title={email ?? t('accounts.antigravity.currentLogin', 'Current agy login')}
         active
         detail={
-          usageError ??
-          (changed ? (
+          changed ? (
             <span className="text-status-warning-text">{changedText}</span>
           ) : email ? (
             t('accounts.antigravity.currentNotSaved', 'Current agy login · not saved')
           ) : (
             t('accounts.antigravity.noEmailNotSaved', "agy didn't report an email · not saved")
-          ))
+          )
         }
         actions={
-          <>
-            {usageButton()}
-            <Button size="xs" variant="outline" disabled={busy} onClick={() => run('AddCurrent')}>
-              {t('accounts.antigravity.saveShort', 'Save')}
-            </Button>
-          </>
+          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('AddCurrent')}>
+            {t('accounts.antigravity.saveShort', 'Save')}
+          </Button>
         }
       />
     )
   }
   for (const account of state?.accounts ?? []) {
     const active = state?.activeAccountId === account.id
-    const reading =
-      account.usage === undefined
-        ? null
-        : account.usage
-          ? active
-            ? t('accounts.antigravity.readAt', 'Read {{time}}', {
-                time: formatTimeAgo(account.usage.updatedAt, t)
-              })
-            : t('accounts.antigravity.lastReading', '{{reading}} · Read {{time}}', {
-                reading: formatUsageReading(account.usage, t),
-                time: formatTimeAgo(account.usage.updatedAt, t)
-              })
-          : t('accounts.antigravity.noReading', 'Usage unknown: not read yet')
     terminalRows.push(
       <AntigravityAccountRow
         key={account.id}
         title={account.email ?? t('accounts.antigravity.saved', 'Saved Google account')}
         active={active}
-        detail={(active ? usageError : null) ?? reading}
         selectDisabled={busy}
         onSelect={() => run('Select', account.id)}
         actions={
-          active ? (
-            usageButton(account.usage)
-          ) : (
+          active ? null : (
             <Button
               variant="ghost"
               size="xs"

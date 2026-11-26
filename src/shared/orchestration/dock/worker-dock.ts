@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import * as z from 'zod'
 import { CrewParty } from '../orchestration-crew'
 
@@ -47,14 +48,16 @@ export const WorkerDockEntry = z.object({
   ownerActionsAvailable: z.boolean().default(true)
 })
 export type WorkerDockEntry = z.infer<typeof WorkerDockEntry>
-export const WorkerDockIdentity = WorkerDockEntry.pick({
-  id: true,
-  dispatchId: true,
-  state: true,
-  changedAt: true,
-  ownerActionsAvailable: true,
-  settlement: true
-}).extend({ kind: WorkerDockEntry.shape.kind.optional(), hasModel: z.boolean().default(false) })
+export const WorkerDockIdentity = lazyZodSchema(() =>
+  WorkerDockEntry.pick({
+    id: true,
+    dispatchId: true,
+    state: true,
+    changedAt: true,
+    ownerActionsAvailable: true,
+    settlement: true
+  }).extend({ kind: WorkerDockEntry.shape.kind.optional(), hasModel: z.boolean().default(false) })
+)
 export const WorkerDockSnapshot = z.object({
   revision: z.number(),
   currentOnly: z.literal(true).optional(),
