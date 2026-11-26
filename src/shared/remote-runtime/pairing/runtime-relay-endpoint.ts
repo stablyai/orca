@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { unshippedTestSwitchOn } from '../../app-lifecycle/unshipped-test-switch'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { PAIRING_RELAY_OFFER_FIELDS, type PairingRelay } from './mobile-relay-pairing-offer'
 import { encodePairingOffer, parsePairingCode } from './pairing'
 
@@ -54,6 +55,16 @@ export function runtimeRelayEndpoint(relay: PairingRelay): string {
 
 export function isRuntimeRelayEndpoint(endpoint: string): boolean {
   return endpoint.startsWith(RELAY_ENDPOINT_PREFIX)
+}
+
+/** A host paired over Relay has no address to dial: anything that would open a socket to it refuses. */
+export function relayOnlyEndpointRefusal(endpoint: string): RemoteRuntimeClientError | null {
+  return isRuntimeRelayEndpoint(endpoint)
+    ? new RemoteRuntimeClientError(
+        'remote_runtime_unavailable',
+        'This server is reached only over Relay, and its Relay link is not open.'
+      )
+    : null
 }
 
 export function parseRuntimeRelayEndpoint(endpoint: string): RuntimeRelayReach | null {

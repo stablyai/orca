@@ -17,16 +17,8 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../../../shared/remote-runtime/re
 
 // Test-only Relay pairings keep their resume credential for this app run; a restart pairs again.
 const entries = new Map<string, SharedHostLinkEntry>()
-// The control connection each host reached over Relay rides, by environment.
-const claimed = new Map<
-  string,
-  {
-    connection: PairedRuntimeConnection
-    control: RemoteRuntimeSharedControlConnection
-    close: (environmentId: string) => void
-  }
->()
-let stopWatchingCloudFlag: (() => void) | undefined
+// Relay channels open now, each with its one-link decision and a cut that ends it as a drop.
+const liveRelayChannels = new Set<{ allowed: () => boolean; cut: () => void }>()
 
 /**
  * How a control connection reaches a host paired over Relay: its Relay link, the only way there.
@@ -35,7 +27,9 @@ let stopWatchingCloudFlag: (() => void) | undefined
  */
 export function relayControlChannelOpener(
   connection: PairedRuntimeConnection,
-  allowed: () => boolean
+  allowed: () => boolean,
+  // Tests reach a stand-in cell; the app dials the real one.
+  platform = NODE_RELAY_CLIENT_PLATFORM
 ): ((clientCapabilities: readonly string[]) => AuthenticatedRuntimeChannelOpener) | null {
   if (!isRuntimeRelayEndpoint(connection.endpoint)) {
     return null
@@ -43,7 +37,7 @@ export function relayControlChannelOpener(
   const key = connection.credential.deviceToken
   return (clientCapabilities) => {
     const relay = relayRuntimeChannelOpener(connection, {
-      platform: NODE_RELAY_CLIENT_PLATFORM,
+      platform,
       store: {
         entry: () => entries.get(key) ?? runtimeRelayLinkEntry(connection) ?? undefined,
         save: (entry) => void entries.set(key, entry)
@@ -52,16 +46,33 @@ export function relayControlChannelOpener(
       randomBytes: (length) => new Uint8Array(randomBytes(length)),
       newId: randomUUID
     })
-    return (events) =>
-      allowed()
-        ? relay(events)
-        : {
-            ok: false,
-            error: new RemoteRuntimeClientError(
-              'relay_one_link_off',
-              'Connections to this server over Relay are turned off.'
-            )
-          }
+    return (events) => {
+      if (!allowed()) {
+        return { ok: false, error: relayOneLinkOffError() }
+      }
+      const live = { allowed, cut: () => {} }
+      const opened = relay({
+        ...events,
+        onClosed: (...closed) => {
+          liveRelayChannels.delete(live)
+          events.onClosed(...closed)
+        }
+      })
+      if (!opened.ok) {
+        return opened
+      }
+      const { channel } = opened
+      const close = (): void => {
+        liveRelayChannels.delete(live)
+        channel.close()
+      }
+      live.cut = () => {
+        close()
+        events.onClosed(relayOneLinkOffError(), 'socket_close')
+      }
+      liveRelayChannels.add(live)
+      return { ok: true, channel: { ...channel, close } }
+    }
   }
 }
 
@@ -83,31 +94,33 @@ export function controlLinkOptions(
 /**
  * A host reached over Relay has no other way there: everything rides its link from the start, and
  * when one link is off, callers hear that from the link instead of dialing an address it lacks.
- * `close` drops the host's control connection, should Orca Cloud turn one link off while it is live.
  */
 export function claimRelayOneLink(
   environmentId: string,
   connection: PairedRuntimeConnection,
-  control: RemoteRuntimeSharedControlConnection,
-  close: (environmentId: string) => void
+  control: RemoteRuntimeSharedControlConnection
 ): void {
-  if (!isRuntimeRelayEndpoint(connection.endpoint)) {
-    return
+  if (isRuntimeRelayEndpoint(connection.endpoint)) {
+    setRemoteRuntimeOneLink(environmentId, connection, () => control)
   }
-  claimed.set(environmentId, { connection, control, close })
-  stopWatchingCloudFlag ??= onTeamCapabilitiesInvalidated(closeRelayLinksTurnedOff)
-  setRemoteRuntimeOneLink(environmentId, connection, () => control)
 }
 
-// Orca Cloud turning one link off cuts live Relay links now, not only at their next dial.
-function closeRelayLinksTurnedOff(): void {
-  for (const [environmentId, { connection, control, close }] of claimed) {
-    if (control.getDiagnostics().state === 'closed') {
-      continue
-    }
-    if (!remoteRuntimeOneLinkAllowed(environmentId, connection)) {
-      claimed.delete(environmentId)
-      close(environmentId)
+/**
+ * Orca Cloud turning one link off cuts live Relay links now, not only at their next dial. Each
+ * control connection stays its host's link, so a stream reopening on it hears one link is off.
+ */
+export function cutRelayLinksTurnedOff(): void {
+  for (const live of liveRelayChannels) {
+    if (!live.allowed()) {
+      live.cut()
     }
   }
+}
+onTeamCapabilitiesInvalidated(cutRelayLinksTurnedOff)
+
+function relayOneLinkOffError(): RemoteRuntimeClientError {
+  return new RemoteRuntimeClientError(
+    'relay_one_link_off',
+    'Connections to this server over Relay are turned off.'
+  )
 }

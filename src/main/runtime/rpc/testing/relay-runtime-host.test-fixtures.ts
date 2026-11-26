@@ -32,6 +32,8 @@ import { CloudRelayTransport } from '../transports/relay-transport'
 import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { burst, ticks } from './one-link-burst-streams.test-fixtures'
 import { startRelayProtocolCellStandIn } from './relay-protocol-cell-stand-in'
+import { relayControlChannelOpener } from '../../../ipc/runtime-environments/connections/runtime-environment-relay-link'
+import { remoteRuntimeOneLinkAllowed } from '../../../ipc/runtime-environments/connections/runtime-environment-one-link'
 
 export const RELAY_TEST_INVITE = 'I'.repeat(43)
 const CELL_ORIGIN = 'https://cell.test'
@@ -44,6 +46,8 @@ export async function startHostOverRelay(
     /** Runs once the host committed a resume credential, before its reply leaves. */
     afterInstallCommitted?: () => void
     control?: Partial<RemoteRuntimeSharedControlConnectionOptions>
+    /** Dial through main's opener (its one-link decision and cut), not the bare Relay channel. */
+    mainOpener?: boolean
   } = {}
 ) {
   vi.stubEnv('ORCA_TEST_RUNTIME_RELAY_PAIRING', '1')
@@ -208,14 +212,20 @@ export async function startHostOverRelay(
     binaryChannels: true,
     appHeartbeat: {},
     ...options.control,
-    openChannel: (clientCapabilities) =>
-      relayRuntimeChannelOpener(connection, {
-        platform,
-        store: { entry: () => entry, save: (next) => void (entry = next) },
-        clientCapabilities,
-        randomBytes: (length) => new Uint8Array(randomBytes(length)),
-        newId: randomUUID
-      })
+    openChannel: options.mainOpener
+      ? relayControlChannelOpener(
+          connection,
+          () => remoteRuntimeOneLinkAllowed('relay-link-test', connection),
+          platform
+        )!
+      : (clientCapabilities) =>
+          relayRuntimeChannelOpener(connection, {
+            platform,
+            store: { entry: () => entry, save: (next) => void (entry = next) },
+            clientCapabilities,
+            randomBytes: (length) => new Uint8Array(randomBytes(length)),
+            newId: randomUUID
+          })
   })
   setRemoteRuntimeOneLink('relay-link-test', connection, () => link)
   cleanups.push(() => {

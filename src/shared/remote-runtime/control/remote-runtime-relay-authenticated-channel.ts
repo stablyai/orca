@@ -47,13 +47,7 @@ export function relayRuntimeChannelOpener(
     const entry = config.store.entry()
     const dial = entry ? credentialToDial(entry, Date.now()) : null
     if (!entry || !dial) {
-      return {
-        ok: false,
-        error: new RemoteRuntimeClientError(
-          'relay_credential_unavailable',
-          'This server can be reached only over Relay, and its pairing has expired. Pair it again.'
-        )
-      }
+      return { ok: false, error: credentialUnavailableError() }
     }
     return {
       ok: true,
@@ -130,6 +124,11 @@ function openRelayRuntimeChannel(
         dial.kind === 'resume' &&
         (hello.credentialKind !== 'resume' || hello.acceptedCredentialVersion !== dial.version)
       ) {
+        // Never dialed again: Relay holds another credential for this computer.
+        const current = config.store.entry()
+        if (current) {
+          config.store.save(withoutRefusedDial(current, dial))
+        }
         end(
           new RemoteRuntimeClientError(
             'relay_credential_mismatch',
@@ -162,14 +161,19 @@ function openRelayRuntimeChannel(
         })
         return
       }
-      void kept.then(becomeReady, (error: unknown) =>
+      void kept.then(becomeReady, (error: unknown) => {
+        // Admitted, yet the host can't confirm the install: drop it rather than redial it forever.
+        const current = dial.kind === 'pending-resume' ? config.store.entry() : undefined
+        if (current && state !== 'closed') {
+          config.store.save(withoutRefusedDial(current, dial))
+        }
         end(
           new RemoteRuntimeClientError(
             'relay_credential_install_failed',
             `Could not keep this server's Relay pairing: ${errorMessage(error)}`
           )
         )
-      )
+      })
     },
     onText: (plaintext) => {
       events.onAnswer()
@@ -188,8 +192,14 @@ function openRelayRuntimeChannel(
     onError: (error) => {
       if (relayRefusedCredential(error)) {
         const current = config.store.entry()
-        if (current) {
-          config.store.save(withoutRefusedDial(current, dial))
+        const next = current ? withoutRefusedDial(current, dial) : undefined
+        if (next) {
+          config.store.save(next)
+        }
+        if (!next || !credentialToDial(next, Date.now())) {
+          // Nothing left to present: say so now, so the connection stops instead of redialing.
+          end(credentialUnavailableError())
+          return
         }
       }
       if (error instanceof PairedE2EEAuthenticationError) {
@@ -219,6 +229,13 @@ function withoutRefusedDial(entry: SharedHostLinkEntry, dial: RelayRuntimeDial) 
   return dial.kind === 'pending-resume'
     ? { ...entry, pendingResume: undefined }
     : withoutRefusedCredential(entry, dial)
+}
+
+function credentialUnavailableError(): RemoteRuntimeClientError {
+  return new RemoteRuntimeClientError(
+    'relay_credential_unavailable',
+    'This server can be reached only over Relay, and its pairing has expired. Pair it again.'
+  )
 }
 
 function errorMessage(error: unknown): string {
