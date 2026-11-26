@@ -321,20 +321,18 @@ export class ClaudeChildWorkDecoder {
     ownerOf?: ClaudeToolOwner
   ): void {
     const task = this.live.get(id)
-    this.taskInvocations.settle(id, status, reported.runId ?? task?.toolUseId)
+    const runId = reported.runId ?? task?.toolUseId
+    this.taskInvocations.settle(id, status, runId)
     this.childrenByOwner.forget(id, task)
     this.live.delete(id)
     const outcome = claudeChildWorkOutcome(status)
     this.ended.set(id, {
-      run: reported.runId ?? task?.toolUseId,
+      run: runId,
       outcome,
       // Kept only for an agent a task it launched can wake.
       ...(task?.kind === 'agent' ? { task } : {})
     })
-    if (outcome !== 'cancelled') {
-      // Every ending but a stop notifies, which wakes the subagent that launched the task.
-      this.wake.fromEnding(reported.runId ?? task?.toolUseId, ownerOf, task?.parentTaskId)
-    }
+    this.wake.fromEnding(id, outcome, runId, ownerOf, task?.parentTaskId)
     this.pending.push((observedAt) =>
       childWorkEndedEvidence(id, reported.runId, outcome, observedAt, reported)
     )

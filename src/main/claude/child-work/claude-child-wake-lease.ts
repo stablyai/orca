@@ -31,10 +31,17 @@ export class ClaudeChildWake {
 
   /** A child's ending wakes the subagent it was launched from, showing it working from that frame, not a restart. */
   fromEnding(
+    id: string,
+    outcome: EndedClaudeTask['outcome'],
     toolUseId: string | undefined,
     ownerOf: ((id: string) => string | null) | undefined,
     parentTaskId?: string
   ): void {
+    this.wakes.delete(id)
+    this.expired.delete(id)
+    if (outcome === 'cancelled') {
+      return
+    }
     const ownerId = parentTaskId ?? (toolUseId ? ownerOf?.(toolUseId) : null)
     if (ownerId) {
       this.owner(ownerId)

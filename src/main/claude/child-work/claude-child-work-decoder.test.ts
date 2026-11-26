@@ -165,6 +165,29 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
     expect(states(evidence)).toContainEqual([OWNER, 'working'])
   })
 
+  it.each([false, true])(
+    'keeps a confirmed ending when the wake already expired: %s',
+    (expired) => {
+      const decoder = new ClaudeChildWorkDecoder()
+      finishOwnerThenChildEnds(decoder)
+      if (expired) {
+        decoder.drain(NOW + CLAUDE_CHILD_WAKE_LEASE_MS)
+      }
+      observe(decoder, notification(OWNER, PARENT, 'completed'))
+      expect(decoder.wakeExpiryAt()).toBeUndefined()
+      vi.setSystemTime(NOW + CLAUDE_CHILD_WAKE_LEASE_MS + 1)
+      decoder.drain(Date.now())
+      const evidence = observe(decoder, {
+        type: 'system',
+        subtype: 'background_tasks_changed',
+        tasks: [
+          { task_id: OWNER, tool_use_id: PARENT, status: 'running', task_type: 'local_agent' }
+        ]
+      })
+      expect(states(evidence)).not.toContainEqual([OWNER, 'working'])
+    }
+  )
+
   it('still rejects an ended task that never had a wake', () => {
     const decoder = new ClaudeChildWorkDecoder()
     observe(decoder, start(OWNER, PARENT))
