@@ -8,6 +8,11 @@ const uploadedSources: string[] = []
 // Host path → staged original, for every upload the stand-in host made.
 const uploadedHosts = new Map<string, string>()
 let nextUpload = 0
+// A new runtime id is a new upload target (cache key) for the same conversation.
+let runtimeId = 'rt'
+// Set to hold the next upload until the test settles it (true: it uploads; false: it fails).
+let holdUpload = false
+let settleHeldUpload: ((uploads: boolean) => void) | undefined
 vi.mock('../attachments/uploads/native-chat-attachment-owner', () => ({
   resolveNativeChatRuntimeSessionAttachmentOwner: (session: { sessionId: string }) => ({
     kind: 'runtime-session',
@@ -18,10 +23,21 @@ vi.mock('../attachments/uploads/native-chat-attachment-owner', () => ({
 vi.mock('../attachments/uploads/native-chat-session-attachment-upload', () => ({
   prepareNativeChatSessionAttachmentUpload: async (owner: { sessionId: string }) => ({
     ok: true,
-    target: { environmentId: 'env', sessionId: owner.sessionId, expectedEnvironmentRuntimeId: 'rt' }
+    target: {
+      environmentId: 'env',
+      sessionId: owner.sessionId,
+      expectedEnvironmentRuntimeId: runtimeId
+    }
   }),
   uploadNativeChatSessionAttachmentPaths: async (paths: string[]) => {
     uploadedSources.push(...paths)
+    if (holdUpload) {
+      holdUpload = false
+      const uploads = await new Promise<boolean>((resolve) => (settleHeldUpload = resolve))
+      if (!uploads) {
+        throw new Error('The upload failed.')
+      }
+    }
     return {
       uploaded: paths.map((sourcePath) => {
         const path = `/host/agent-session-attachments/restore${nextUpload++}/file.png`
@@ -65,8 +81,9 @@ beforeEach(() => {
 
 const session = { runtimeEnvironmentId: 'env' }
 const uploadIdOf = (host: string): string => agentSessionAttachmentUploadIdOfPath(host)!
-const hostOf = (original: string): string =>
-  [...uploadedHosts].find(([, from]) => from === original)![0]
+/** The host path of an upload of `original`: its first, or (-1) its latest. */
+const hostOf = (original: string, which: 0 | -1 = 0): string =>
+  [...uploadedHosts].filter(([, from]) => from === original).at(which)![0]
 
 /**
  * A pending creation's first send: an image, a file named in its text, and a sibling image, all
@@ -141,6 +158,9 @@ it('leaves an adopted browser file out of the source Retry and keeps it whole in
   )
 
   const retry = worktreeCreationFirstSend(sent.source, sent.request, sent.pending)
+  // The plan itself is what goes out when the source has nothing left to prepare.
+  expect(retry.attachments?.map(({ path }) => path)).toEqual([sent.sibling])
+  expect(retry.text).not.toContain(sent.text)
   const outgoing = await captureNativeChatStagedInput(sent.source, retry).prepare(retry, {
     ...session,
     sessionId: sent.sessionId
@@ -268,6 +288,117 @@ it('names only the unrecovered expired attachments in the refusal notice', async
   const fully = await firstSendFromPendingSource('notice-fully')
   refuse(fully)
   expect(words(fully.sessionId)).toBe(
+    agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('composer-send'))
+  )
+})
+
+/** The old send's late refusal: its image and file uploads expired, and the hand-back adopts them. */
+const lateRefusal = (sent: FirstSend) =>
+  handBackStructuredAgentSessionMessage(
+    sent.sessionId,
+    'late',
+    refusedMessage(sent),
+    undefined,
+    expiredOf(sent)
+  )
+const browserTokensIn = (input: { text: string; attachments?: readonly { path: string }[] }) =>
+  [input.text, ...(input.attachments ?? []).map(({ path }) => path)].join(' ')
+
+// The fail-closed invariant at the boundary where the payload leaves: a Retry planned while the source
+// still owned its browser files is prepared after the old send's late refusal gave them to the old
+// chat. What goes out holds no browser-file reference the sending staging does not own at that moment,
+// attachment or text reference, with a healthy sibling (uploaded and sent) and without one (nothing left).
+it('never lets a browser file adopted after the plan leave in the prepared payload', async () => {
+  const sent = await firstSendFromPendingSource('late')
+  const retry = worktreeCreationFirstSend(sent.source, sent.request, sent.pending)
+  expect(retry.attachments?.map(({ path }) => path)).toEqual([sent.image, sent.sibling])
+  const withSibling = captureNativeChatStagedInput(sent.source, retry)
+  const alone = { text: '', attachments: [{ path: sent.image }] }
+  const withoutSibling = captureNativeChatStagedInput(sent.source, alone)
+
+  lateRefusal(sent)
+
+  const retrySession = { ...session, sessionId: `${sent.sessionId}-retry` }
+  const outgoing = await withSibling.prepare(retry, retrySession)
+  expect(browserTokensIn(outgoing)).not.toContain('orca-browser-file:')
+  expect(outgoing.attachments?.map(({ path }) => path)).toEqual([hostOf(sent.sibling, -1)])
+  expect(uploadedSources).toEqual([sent.sibling])
+
+  const nothing = await withoutSibling.prepare(alone, retrySession)
+  expect(nothing).toMatchObject({ text: '', attachments: [] })
+  expect(readNativeChatComposerDraft(sent.recipient).images.map(({ path }) => path)).toContain(
+    sent.image
+  )
+})
+
+// An upload still in flight when its original is adopted settles with the staging that holds it then:
+// its record lands in the recipient, and a failure removes the recipient's cached promise, so the
+// recipient's next Send uploads afresh instead of reusing a failed upload.
+it('settles an upload in flight at adoption with the staging that holds it', async () => {
+  const done = await firstSendFromPendingSource('in-flight-done')
+  const otherDone = { ...session, sessionId: `${done.sessionId}-other` }
+  const input = { text: '', attachments: [{ path: done.image }] }
+  holdUpload = true
+  const preparing = captureNativeChatStagedInput(done.source, input).prepare(input, otherDone)
+  await vi.waitFor(() => expect(settleHeldUpload).toBeDefined())
+  lateRefusal(done)
+  settleHeldUpload!(true)
+  settleHeldUpload = undefined
+  const host = (await preparing).attachments![0].path
+  expect(stagedNativeChatFiles(done.recipient)?.uploaded.get(host)).toMatchObject({
+    source: done.image,
+    sessionId: otherDone.sessionId
+  })
+  expect(stagedNativeChatFiles(done.source)?.uploaded.has(host)).toBeFalsy()
+
+  const failed = await firstSendFromPendingSource('in-flight-failed')
+  const otherFailed = { ...session, sessionId: `${failed.sessionId}-other` }
+  const again = { text: '', attachments: [{ path: failed.image }] }
+  holdUpload = true
+  const failing = captureNativeChatStagedInput(failed.source, again).prepare(again, otherFailed)
+  await vi.waitFor(() => expect(settleHeldUpload).toBeDefined())
+  lateRefusal(failed)
+  settleHeldUpload!(false)
+  settleHeldUpload = undefined
+  await expect(failing).rejects.toThrow('The upload failed.')
+  const cached = [...stagedNativeChatFiles(failed.recipient)!.uploads.values()]
+  expect(cached.some((uploads) => uploads.has(failed.image))).toBe(false)
+})
+
+// Two expired uploads of one original (two upload targets of the same conversation) both come back as
+// that original, and both count as recovered: the notice is the ordinary "not sent", naming neither.
+it('counts both expired uploads of one original as recovered', async () => {
+  const sent = await firstSendFromPendingSource('twice')
+  runtimeId = 'rt-twice'
+  const again = { text: '', attachments: [{ path: sent.image }] }
+  const second = await captureNativeChatStagedInput(sent.source, again).prepare(again, {
+    ...session,
+    sessionId: sent.sessionId
+  })
+  runtimeId = 'rt'
+  const secondHost = second.attachments![0].path
+  expect(secondHost).not.toBe(sent.imageHost)
+
+  const slot = reserveStructuredAgentSessionSend({
+    sessionId: sent.sessionId,
+    text: `see ${formatNativeChatFileReference(secondHost)}`,
+    attachments: [{ path: sent.imageHost, previewUri: '' }]
+  })!
+  handBackRefused(findStructuredAgentSessionPendingSend(sent.sessionId, slot.clientMessageId)!, {
+    kind: 'refused',
+    code: 'agent_session_operation_invalid',
+    details: {
+      expiredAttachments: [
+        { uploadId: uploadIdOf(sent.imageHost), name: 'first-upload.png' },
+        { uploadId: uploadIdOf(secondHost), name: 'second-upload.png' }
+      ]
+    }
+  })
+
+  const returned = readNativeChatComposerDraft(sent.recipient)
+  expect(returned.images.map(({ path }) => path)).toEqual([sent.image])
+  expect(returned.text).toContain(formatNativeChatFileReference(sent.image))
+  expect(getStructuredAgentSessionSendNotice(sent.sessionId)).toBe(
     agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('composer-send'))
   )
 })

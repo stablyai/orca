@@ -52,6 +52,7 @@ import {
   withNativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
+import { returnedDraftTextReplaces } from '../../../../../shared/native-chat/input/drafts/returned-draft-text'
 /** Edit scopes share input machinery but never enter draft persistence. */
 export function openNativeChatEditDraft(scopeKey: string, draft: NativeChatComposerDraft): void {
   ephemeralDrafts.set(scopeKey, { scopeKey, active: true })
@@ -188,7 +189,7 @@ export function updateNativeChatComposerDraft(
  * replaced the text, or a placement already applied or given up, carries nothing.
  */
 function carriedNativeChatDraftPosition(
-  before: DraftRecord | undefined,
+  before: NativeChatComposerDraft | undefined,
   text: string
 ): NativeChatDraftPosition | undefined {
   const previous = before && nativeChatDraftPositions.get(before)
@@ -196,8 +197,9 @@ function carriedNativeChatDraftPosition(
   if (
     !previous?.pending ||
     text === before?.text ||
-    // A replace (of nothing, or of a lone command) never keeps the old text as a `kept\n\n` prefix.
-    kept === '' ||
+    // The merge's own rule decides a replace (an empty draft, or a lone command, even when the
+    // returned text begins with that command); only an append keeps the old text as a prefix.
+    returnedDraftTextReplaces(before?.text ?? '') ||
     !text.startsWith(`${kept}\n\n`)
   ) {
     return undefined
@@ -241,9 +243,13 @@ export function appendToNativeChatComposerDraft(
     },
     'immediate',
     (loaded) => {
+      // Replayed over the loaded draft, the placement follows the same rule as the immediate write.
       const merged = compose(loaded)
-      if (position) {
-        nativeChatDraftPositions.set(merged, position(merged))
+      const placed = position
+        ? position(merged)
+        : carriedNativeChatDraftPosition(loaded, merged.text)
+      if (placed) {
+        nativeChatDraftPositions.set(merged, placed)
       }
       return merged
     },

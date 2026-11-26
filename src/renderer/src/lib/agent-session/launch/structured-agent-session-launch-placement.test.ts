@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { expect, it, vi } from 'vitest'
+import type { StoredNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 
 // The launch tab lookup is the only stand-in: the move, the draft store and its positions run for real.
 vi.mock('./structured-agent-session-launch-surface', () => ({
@@ -12,7 +13,7 @@ const {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } = await import('@/components/native-chat/drafts/native-chat-composer-draft-store')
-const { nativeChatDraftPositions, records } =
+const { clearDraftMemoryForTests, load, nativeChatDraftPositions, records } =
   await import('@/components/native-chat/drafts/native-chat-composer-draft-memory')
 const { structuredAgentSessionDraftScopeKey } =
   await import('@/components/native-chat/drafts/native-chat-draft-scope')
@@ -113,4 +114,54 @@ it('carries nothing for a settled placement or a replacing append', () => {
   appendToNativeChatComposerDraft(blank, { text: '\n\nrefused' })
   expect(readNativeChatComposerDraft(blank).text).toBe('\n\nrefused')
   expect(positionOf(blank)).toBeUndefined()
+})
+
+// The merge decides what is a replace, and the carry follows that same rule: returned text that begins
+// with the lone command it replaces (`/compact` → `/compact\n\ncontext`) is a replace, not an append,
+// so the command's old placement is not carried into the replacement.
+it('carries nothing through a replace that begins with the replaced command', () => {
+  const scope = structuredAgentSessionDraftScopeKey('placement-command-prefix')
+  updateNativeChatComposerDraft(scope, { text: '/compact' }, 'immediate', undefined, {
+    at: 'end',
+    pending: true
+  })
+  appendToNativeChatComposerDraft(scope, { text: '/compact\n\ncontext' })
+  expect(readNativeChatComposerDraft(scope).text).toBe('/compact\n\ncontext')
+  expect(positionOf(scope)).toBeUndefined()
+})
+
+// Before saved drafts load, the move and the later refusal are replayed over the loaded draft; the
+// replayed refusal keeps the move's still-pending placement, as the immediate write did.
+it('keeps a carried placement when the appends replay over a later-loaded draft', () => {
+  // Saved drafts have not loaded yet, and this chat draft was never edited here, so its appends
+  // replay over whatever loads.
+  clearDraftMemoryForTests()
+  const placed = move('replayed', '', { text: 'hello world' }, { from: 6, to: 11 })
+  appendToNativeChatComposerDraft(placed.scope, { text: 'refused message' })
+  const replays = load.appendsBeforeLoad.get(placed.scope) ?? []
+  expect(replays.length).toBeGreaterThanOrEqual(2)
+
+  const saved: StoredNativeChatComposerDraft = { text: 'saved earlier', images: [], savedAt: 0 }
+  const replayed = replays.reduce<StoredNativeChatComposerDraft>(
+    (draft, entry) => entry.append(draft),
+    saved
+  )
+  const { from, to } = spanOf(nativeChatDraftPositions.get(replayed))
+  expect(replayed.text.slice(from, to)).toBe('world')
+  expect(nativeChatDraftPositions.get(replayed)?.pending).toBe(true)
+})
+
+// A move with no content (no text, no images) places nothing: the chat's own pending placement stays.
+it('leaves the chat placement untouched when the moved draft is empty', () => {
+  const sessionId = 'placement-empty-move'
+  const scope = structuredAgentSessionDraftScopeKey(sessionId)
+  const own = { at: 'selection' as const, from: 1, to: 3, pending: true }
+  updateNativeChatComposerDraft(scope, { text: 'mine' }, 'immediate', undefined, own)
+  moveStructuredAgentLaunchDraft(
+    { sessionId, worktreeId: 'wt', executionHostId: 'local' },
+    'pending-creation:placement-empty-move',
+    { from: 0, to: 0 }
+  )
+  expect(positionOf(scope)).toBe(own)
+  expect(own.pending).toBe(true)
 })

@@ -22,6 +22,9 @@ type DraftDestination = Pick<
  * receiver already ends with is that same text). A move with no span of its own there (empty,
  * image-only, whitespace-only, or text the receiver holds only in another form, such as trimmed) puts
  * the caret at the end, never at the start of the receiver's own text.
+ *
+ * A move with no content at all (no text and no images) adds nothing, so it places nothing: the
+ * receiver's draft keeps its own selection and pending placement untouched.
  */
 function movedSelection(
   merged: string,

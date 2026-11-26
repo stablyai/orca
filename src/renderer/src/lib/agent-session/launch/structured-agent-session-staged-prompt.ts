@@ -217,9 +217,17 @@ export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
       continue
     }
     prompt.discarded = true
-    // Settled before its reservation is released and before the discard is announced.
-    void finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
-    prompt.discard()
+    // Settled before its reservation is released and before the discard is announced; a reservation
+    // that already ended on its own reports its actual result first, then the discard.
+    const finished = finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
+    if (finished instanceof Promise) {
+      void finished.then((result) => {
+        prompt.settleCreate(result)
+        prompt.discard()
+      })
+    } else {
+      prompt.discard()
+    }
   }
 }
 

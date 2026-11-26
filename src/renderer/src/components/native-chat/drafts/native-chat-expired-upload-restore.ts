@@ -54,6 +54,9 @@ export function planNativeChatExpiredUploadRestore(
  * same original stays), and the original moves into `scope`'s own staging, its single owner from now
  * on. A planned original the installed draft does not hold is left exactly where it was. Returns the
  * expired host paths that were restored.
+ *
+ * Each record is looked up where it lives now, not where it was planned: adopting an original moves
+ * all of its records, so a second expired upload of the same original is found in the recipient.
  */
 export function commitNativeChatExpiredUploadRestore(
   scope: string,
@@ -61,8 +64,11 @@ export function commitNativeChatExpiredUploadRestore(
   held: (original: string) => boolean
 ): Set<string> {
   const restored = new Set<string>()
-  for (const [host, { owner, origin }] of plan) {
-    if (!held(origin.source) || owner.uploaded.get(host) !== origin) {
+  for (const [host, { origin }] of plan) {
+    const owner = nativeChatStagedFileOwners().find(
+      (candidate) => candidate.uploaded.get(host) === origin
+    )
+    if (!owner || !held(origin.source)) {
       continue
     }
     owner.uploaded.delete(host)
@@ -87,9 +93,20 @@ export function ownedNativeChatStagedInput<T extends NativeChatStagedInput>(
   input: T
 ): T {
   const files = stagedNativeChatFiles(scope)
-  const owned = files && currentFiles(files)
+  return withoutUnownedBrowserFiles(files && currentFiles(files), input)
+}
+
+/**
+ * The fail-closed rule, applied with the staging that sends: a browser-file reference `owner` does not
+ * stage at this moment is removed, attachment and text reference alike. It is the same rule the first
+ * send's plan applies, checked again where the payload leaves (see `captureNativeChatStagedInput`).
+ */
+export function withoutUnownedBrowserFiles<T extends NativeChatStagedInput>(
+  owner: StagedFiles | undefined,
+  input: T
+): T {
   const foreign = (path: string): boolean =>
-    isBrowserAttachmentToken(path) && !owned?.paths.has(path)
+    isBrowserAttachmentToken(path) && !owner?.paths.has(path)
   const text = nativeChatTextAttachmentParts(input.text, true, foreign)
     .map((part) => (part.path ? '' : part.text))
     .join('')
