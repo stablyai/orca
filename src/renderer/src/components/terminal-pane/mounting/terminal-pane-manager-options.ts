@@ -17,6 +17,7 @@ import {
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
+import { normalizeTerminalScrollbarWidth } from '../../../../../shared/terminal/appearance/terminal-scroll-settings'
 import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
@@ -179,6 +180,9 @@ export function createTerminalPaneManagerOptions(
         scrollOnUserInput: resolveTerminalScrollOnUserInput(
           currentSettings?.terminalScrollOnUserInput
         ),
+        scrollbar: {
+          width: normalizeTerminalScrollbarWidth(currentSettings?.terminalScrollbarWidth)
+        },
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),
         wordSeparator: currentSettings?.terminalWordSeparator

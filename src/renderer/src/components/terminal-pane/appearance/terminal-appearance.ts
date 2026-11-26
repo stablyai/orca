@@ -23,6 +23,7 @@ import {
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
+import { applyTerminalScrollbarSettings } from '@/lib/pane-manager/terminal-scrollbar-visibility'
 import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-focus/pane-cursor-blink-suspension'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
@@ -225,6 +226,7 @@ export function applyTerminalAppearance(
     pane.terminal.options.scrollOnUserInput = resolveTerminalScrollOnUserInput(
       settings.terminalScrollOnUserInput
     )
+    applyTerminalScrollbarSettings(pane.terminal, pane.container, settings)
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)

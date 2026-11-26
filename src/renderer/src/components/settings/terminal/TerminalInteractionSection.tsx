@@ -6,7 +6,10 @@ import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getTerminalScrollOnUserInputSearchEntry } from './appearance/terminal-pane-appearance-search'
+import {
+  getTerminalScrollbarSearchEntries,
+  getTerminalScrollOnUserInputSearchEntry
+} from './appearance/terminal-pane-appearance-search'
 import { getTerminalRightClickToPasteSearchEntry } from './platform/terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../../terminal-pane/clipboard/osc52-clipboard-setting-anchor'
 import { isMacPlatform } from '../../terminal-pane/links/terminal-link-open-hints'
@@ -22,6 +25,11 @@ import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   normalizeTerminalTuiMouseWheelMultiplier
 } from '@/lib/pane-manager/terminal-input/pane-terminal-tui-wheel-reports'
+import {
+  MAX_TERMINAL_SCROLLBAR_WIDTH,
+  MIN_TERMINAL_SCROLLBAR_WIDTH,
+  normalizeTerminalScrollbarWidth
+} from '../../../../../shared/terminal/appearance/terminal-scroll-settings'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalInteractionSectionProps = {
@@ -36,6 +44,8 @@ export function TerminalInteractionSection({
   searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const { alwaysVisible: scrollbarAlwaysVisibleEntry, width: scrollbarWidthEntry } =
+    getTerminalScrollbarSearchEntries()
   // Context-menu escape always uses Control; call it Control-click on macOS and Ctrl+right-click elsewhere.
   const isMac = isMacPlatform()
   const rightClickPasteDescription = isMac
@@ -190,6 +200,45 @@ export function TerminalInteractionSection({
             })
           }
         />
+      </SearchableSetting>
+
+      <SearchableSetting {...scrollbarAlwaysVisibleEntry}>
+        <SettingsSwitchRow
+          label={t(
+            'components.settings.TerminalInteraction.scrollbarAlwaysVisible',
+            'Always show scrollbar'
+          )}
+          description={t(
+            'components.settings.TerminalInteraction.scrollbarAlwaysVisibleDescription',
+            'Keep the terminal scrollbar visible instead of only while hovering or scrolling.'
+          )}
+          checked={settings.terminalScrollbarAlwaysVisible === true}
+          onChange={() =>
+            updateSettings({
+              terminalScrollbarAlwaysVisible: settings.terminalScrollbarAlwaysVisible !== true
+            })
+          }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting {...scrollbarWidthEntry}>
+        <div className="py-3">
+          <ScrollSpeedSlider
+            label={t('components.settings.TerminalInteraction.scrollbarWidth', 'Scrollbar width')}
+            description={t(
+              'components.settings.TerminalInteraction.scrollbarWidthDescription',
+              'Width of the terminal scrollbar in pixels. A wider bar is easier to see and drag.'
+            )}
+            value={normalizeTerminalScrollbarWidth(settings.terminalScrollbarWidth)}
+            min={MIN_TERMINAL_SCROLLBAR_WIDTH}
+            max={MAX_TERMINAL_SCROLLBAR_WIDTH}
+            step={1}
+            suffix="px"
+            onChange={(value) =>
+              updateSettings({ terminalScrollbarWidth: normalizeTerminalScrollbarWidth(value) })
+            }
+          />
+        </div>
       </SearchableSetting>
 
       {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (

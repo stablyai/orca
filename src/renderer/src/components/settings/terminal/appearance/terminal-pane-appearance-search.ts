@@ -61,6 +61,36 @@ export const getTerminalScrollOnUserInputSearchEntry = createLocalizedCatalog(()
   }
 ])
 
+export const getTerminalScrollbarSearchEntries = createLocalizedCatalog(() => {
+  const keywords = [
+    ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+    ...translateSearchKeyword('auto.components.settings.terminal.search.scroll', 'scroll'),
+    ...translateSearchKeyword('components.settings.terminal.search.scrollbar', 'scrollbar'),
+    ...translateSearchKeyword('components.settings.terminal.search.accessibility', 'accessibility')
+  ]
+  return {
+    alwaysVisible: {
+      title: translate(
+        'components.settings.TerminalInteraction.scrollbarAlwaysVisible',
+        'Always show scrollbar'
+      ),
+      description: translate(
+        'components.settings.TerminalInteraction.scrollbarAlwaysVisibleDescription',
+        'Keep the terminal scrollbar visible instead of only while hovering or scrolling.'
+      ),
+      keywords
+    },
+    width: {
+      title: translate('components.settings.TerminalInteraction.scrollbarWidth', 'Scrollbar width'),
+      description: translate(
+        'components.settings.TerminalInteraction.scrollbarWidthDescription',
+        'Width of the terminal scrollbar in pixels. A wider bar is easier to see and drag.'
+      ),
+      keywords
+    }
+  }
+})
+
 export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -83,6 +113,7 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
     ]
   },
   ...getTerminalScrollOnUserInputSearchEntry(),
+  ...Object.values(getTerminalScrollbarSearchEntries()),
   {
     title: translate(
       'auto.components.settings.terminal.search.1b00063795',

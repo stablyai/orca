@@ -1,4 +1,5 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions } from '@xterm/xterm'
+import { DEFAULT_TERMINAL_SCROLLBAR_WIDTH } from '../../../../shared/terminal/appearance/terminal-scroll-settings'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 
@@ -64,7 +65,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions & ITerminalInitO
     drawBoldTextInBrightColors: true,
     scrollbar: {
       // Accept the slim scrollbar’s ~one-column gutter cost and enable overview ruler. The old v1.4.51 table corruption was the ZWJ width bug, now fixed by terminal-unicode-provider; composeActiveTerminalTheme hides the ruler border.
-      width: 7
+      width: DEFAULT_TERMINAL_SCROLLBAR_WIDTH
     },
     // Advertise KKP so handshake-gated CLIs accept Orca’s enhanced CSI-u chords (including Shift+Enter off Windows), matching VS Code.
     vtExtensions: {
