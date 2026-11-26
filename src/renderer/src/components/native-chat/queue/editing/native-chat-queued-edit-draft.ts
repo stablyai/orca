@@ -41,6 +41,10 @@ import {
   resolveNativeChatPastedText
 } from '../../paste/native-chat-composer-pasted-text-references'
 import { nativeChatQueuedEditValueKey, sameQueuedEditImage } from './native-chat-queued-edit-value'
+import {
+  clearNativeChatHeldNotesWhere,
+  moveNativeChatHeldNotes
+} from '../../media/notes/native-chat-held-notes'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
@@ -158,6 +162,9 @@ export function handBackNativeChatQueuedEdit(
     images,
     pastedTextFiles: draft.pastedTextFiles
   })
+  // Notes kept for media while the edit's box held a command go back with the rest of its additions
+  // (before the redirect, after which the edit's scope reads as the chat's).
+  moveNativeChatHeldNotes(edit.scopeKey, edit.destination)
   redirectNativeChatEditDraft(edit.scopeKey, edit.destination)
   moveNativeChatPendingAttachments(edit.scopeKey, edit.destination)
   for (const token of draft.text.split(NATIVE_CHAT_PASTED_TEXT_TOKEN)) {
@@ -172,5 +179,7 @@ export function handBackNativeChatQueuedEdit(
 
 export function discardNativeChatQueuedEdit(edit: NativeChatQueuedEditDraft): void {
   clearNativeChatPendingAttachments(edit.scopeKey)
+  // The edit's scope is never used again: notes still kept under it would stay saved for nothing.
+  clearNativeChatHeldNotesWhere((scopeKey) => scopeKey === edit.scopeKey)
   closeNativeChatEditDraft(edit.scopeKey)
 }
