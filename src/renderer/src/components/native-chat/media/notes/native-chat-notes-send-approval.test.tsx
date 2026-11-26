@@ -94,6 +94,8 @@ async function sendFromViewer(opener: { current: Element | null }): Promise<void
       title: 'a.png',
       source: SOURCE,
       offset: 0,
+      initialNotes: undefined,
+      onAttached: undefined,
       onOpenChange: noop,
       showPanel: noop,
       onRestored: noop

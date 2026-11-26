@@ -256,7 +256,7 @@ it('clearing every note of a chip another viewer still edits closes, leaving the
   })
   const endFirst = markNativeChatNotedImageEditing(SCOPE, 'chip')
   const endSecond = markNativeChatNotedImageEditing(SCOPE, 'chip')
-  const onCleared = vi.fn(() => () => {})
+  const onCleared = vi.fn(() => () => true)
   const onOpenChange = vi.fn()
   // This viewer removed every note; closing would put the clean image in the chip's place.
   const view = renderHook(() => {
