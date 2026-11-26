@@ -67,6 +67,14 @@ export const sessionBotItemReplyTargets: BotItemReplyTargetStore = {
   }
 }
 
+/** Words the app puts back in an empty box (a refused reply's) answer no question, whether or not a
+ *  box is open: set before the draft is written, so an open box reads it as it shows the words. */
+export function putBackBotItemReplyTarget(store: BotItemReplyTargetStore, scope: string): void {
+  const key = botItemReplyTargetKey(scope)
+  const hidden = parseKept(store.read(key))?.hidden ?? null
+  store.write(key, serializeKept({ bound: 'none', wasEmpty: false, hidden }))
+}
+
 /** The item is read (with its Activity) and waits on no question, so the box's kept lines are gone. */
 export function botItemWaitsOnNoQuestion(
   item: BotItem | null,
@@ -134,7 +142,9 @@ function settleKept(
   seenEmpty: boolean,
   live: boolean,
   boxEmpty: boolean,
-  { open, noQuestion }: Asked
+  { open, noQuestion }: Asked,
+  /** Drop lines no longer asked; off for a change in an event, whose `open` may predate it. */
+  prune = true
 ): Kept {
   const asked = (id: string): boolean => open.some((line) => line.id === id)
   // An open line other than it, or none at all on a read item: never a line still loading or on its way.
@@ -150,10 +160,10 @@ function settleKept(
     }
     wasEmpty = boxEmpty
   }
-  if (hidden !== null && gone(hidden)) {
+  if (prune && hidden !== null && gone(hidden)) {
     hidden = null
   }
-  if (bound !== null && bound !== 'none' && gone(bound.id)) {
+  if (prune && bound !== null && bound !== 'none' && gone(bound.id)) {
     bound = boxEmpty ? null : 'none'
   }
   return { bound, wasEmpty, hidden }
@@ -207,7 +217,8 @@ export function createBotItemReplyTargetHook(
           null)
     // Read fresh, so a second change in the same event keeps the first.
     const update = (change: (kept: Kept) => Partial<Kept>): void => {
-      const fresh = settleKept(parseKept(store.read(key)), boxEmpty, true, boxEmpty, asked)
+      // Unpruned: a line this event just bound (its pick just cleared) is not in this render's `open`.
+      const fresh = settleKept(parseKept(store.read(key)), boxEmpty, true, boxEmpty, asked, false)
       store.write(key, serializeKept({ ...fresh, ...change(fresh) }))
     }
     const line = lineOf(current)

@@ -13,9 +13,10 @@ import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-c
 import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import {
   botItemReplyTargetKey,
+  putBackBotItemReplyTarget,
   sessionBotItemReplyTargets
 } from '../../../../../shared/bots/bot-item-reply-target'
-import { botItemCommentDraftScope } from './bot-item-comment-draft'
+import { botItemCommentDraftScope, returnBotItemCommentDraft } from './bot-item-comment-draft'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
 afterEach(cleanup)
@@ -362,22 +363,22 @@ describe.each([
   ['desktop', desktop],
   ['phone', phone]
 ] as const)('%s comment box emptied while away', (app, open) => {
-  it('forgets the target, so a later draft started away names none', () => {
+  it('names none when a refused reply is put back with no box open', () => {
     const uid = `${app}-emptied`
     const start = { item: needsYou(A), events: [A] }
-    // The box's draft changed with the box closed: the desktop's store; the phone's is read on mount.
-    const away = (text: string): void => {
-      if (app === 'desktop') {
-        updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text }, 'immediate')
-      }
-    }
     open(uid, start).type('words')
     cleanup()
-    away('')
-    open(uid, start, true)
-    cleanup()
-    away('other words')
-    expect(open(uid, start, false).line()).toBeNull()
+    // Closed throughout: the draft empties, then a refused reply's words come back.
+    if (app === 'desktop') {
+      updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: '' }, 'immediate')
+      returnBotItemCommentDraft(bot, uid, 'refused words')
+    } else {
+      putBackBotItemReplyTarget(sessionBotItemReplyTargets, uid)
+    }
+    const again = open(uid, start, false)
+    expect(again.line()).toBeNull()
+    again.send()
+    expect(again.posted).toEqual([{ questionId: undefined, plain: true }])
   })
 })
 
@@ -533,4 +534,19 @@ describe.each([
     again.send()
     expect(again.posted).toEqual([{ questionId: undefined, plain: true }])
   })
+})
+
+it("editing a picked line's answer keeps that line named", () => {
+  const uid = 'edit-picked'
+  const hook = renderHook(() =>
+    useBotItemQuestionSteps(bot, { ...needsYou(PAIR), uid }, [PAIR], () => {}, [], true)
+  )
+  act(() => hook.result.current.steps!.pick(1, 'Yes'))
+  // The picked line's edit: the step binds it (clearing its pick), then the box fills and shows.
+  act(() => {
+    hook.result.current.steps!.bind(1)
+    hook.result.current.replyMark.show()
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: 'Yes ' }, 'immediate')
+  })
+  expect(hook.result.current.waitingLine?.id).toBe(`${PAIR.id}:1`)
 })
