@@ -1,5 +1,5 @@
 import { SharedControlRequests } from './remote-runtime-shared-control-requests'
-import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
+import * as pairing from '../pairing/paired-runtime-connection'
 import { schedulePreparedControlRetry } from './remote-runtime-shared-control-hold'
 import { openPreparedSharedControlChannel } from './remote-runtime-shared-control-open'
 import type { AuthenticatedRuntimeChannel } from './remote-runtime-authenticated-channel'
@@ -59,7 +59,7 @@ export class RemoteRuntimeSharedControlConnection {
   private readonly binaryChannels: SharedControlBinaryChannels | null
 
   constructor(
-    private readonly connection: PairedRuntimeConnection,
+    private readonly connection: pairing.PairedRuntimeConnection,
     private readonly options: SharedControlTypes.RemoteRuntimeSharedControlConnectionOptions = {}
   ) {
     this.diagnostics = new SharedControlDiagnosticsTracker(options, () => ({
@@ -163,7 +163,7 @@ export class RemoteRuntimeSharedControlConnection {
         pendingRequests: this.pendingRequests,
         subscriptions: this.subscriptions,
         retiredRequestIds: this.retiredRequestIds,
-        deviceToken: this.connection.credential.deviceToken,
+        deviceToken: pairing.pairedRuntimeConnectionToken(this.connection),
         send: (payload) => this.sendEncrypted(payload),
         binaryChannels: this.binaryChannels,
         fail: (error) => this.handleSocketClosed(error, generation, 'protocol_error')
@@ -232,7 +232,7 @@ export class RemoteRuntimeSharedControlConnection {
   private replaySubscriptions(): void {
     this.everReady = sharedControlActions.replayRuntimeControlSubscriptions({
       subscriptions: this.subscriptions,
-      deviceToken: this.connection.credential.deviceToken,
+      deviceToken: pairing.pairedRuntimeConnectionToken(this.connection),
       send: (payload) => this.sendEncrypted(payload),
       tagReplayedResponses: this.everReady
     })
@@ -244,7 +244,7 @@ export class RemoteRuntimeSharedControlConnection {
       subscriptions: this.subscriptions,
       retiredRequestIds: this.retiredRequestIds,
       requestId,
-      deviceToken: this.connection.credential.deviceToken,
+      deviceToken: pairing.pairedRuntimeConnectionToken(this.connection),
       send: (payload) => this.sendEncrypted(payload)
     })
   }

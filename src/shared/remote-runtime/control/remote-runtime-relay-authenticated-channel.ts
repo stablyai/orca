@@ -23,6 +23,7 @@ import type {
   AuthenticatedRuntimeChannelOpener
 } from './remote-runtime-authenticated-channel'
 import { createRelayCredentialCalls } from './remote-runtime-relay-credential-calls'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 
 /**
  * What a dial presents: the host's invite, the installed resume credential, or a resume credential
@@ -95,7 +96,7 @@ function openRelayRuntimeChannel(
   let settleDial: ((result: { ok: true } | { ok: false; error: Error }) => void) | null = null
   const memory = config.memory ?? new RelayRuntimeDialMemory()
   const calls = createRelayCredentialCalls(
-    connection.credential.deviceToken,
+    pairedRuntimeConnectionToken(connection),
     (payload) => link?.sendText(payload) ?? false
   )
   const takeDial = () => {

@@ -18,6 +18,7 @@ import { isRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairin
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import type { SharedHostLinkEntry } from '../../../../shared/remote-runtime/relay/client/shared-host-relay-link'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
+import { pairedRuntimeConnectionIdentity } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 // Test-only Relay pairings keep their resume credential for this app run; a restart pairs again.
 const entries = new Map<string, SharedHostLinkEntry>()
@@ -42,7 +43,7 @@ export function relayControlChannelOpener(
   if (!isRuntimeRelayEndpoint(connection.endpoint)) {
     return null
   }
-  const key = connection.credential.deviceToken
+  const key = pairedRuntimeConnectionIdentity(connection)
   return (clientCapabilities) => {
     const relay = relayRuntimeChannelOpener(connection, {
       platform,

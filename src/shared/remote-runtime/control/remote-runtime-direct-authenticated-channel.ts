@@ -24,6 +24,7 @@ import type {
 } from './remote-runtime-authenticated-channel'
 import { openSharedControlSocket } from './remote-runtime-shared-control-open'
 import { toRemoteRuntimeClientError } from './remote-runtime-shared-control-protocol'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 
 /** What a control connection opens: its own opener (e.g. Relay), else a direct socket. */
 export function controlChannelOpener(
@@ -86,7 +87,7 @@ function openDirectRuntimeChannel(
       events.onAuthenticating()
       void sendRemoteRuntimeTokenAuth({
         handshake,
-        deviceToken: connection.credential.deviceToken,
+        deviceToken: pairedRuntimeConnectionToken(connection),
         clientCapabilities: config.clientCapabilities,
         stillAwaiting: () => !ended && phase === 'awaiting_authenticated' && ws.readyState === 1,
         send: (sealed) => ws.send(sealed),

@@ -35,6 +35,7 @@ import {
   RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
   RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
 } from '../../../../shared/remote-runtime/recipe-vm-wake'
+import { pairedRuntimeConnectionToken } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
 
@@ -194,7 +195,7 @@ export function createRuntimeEnvironmentStatusOwner(
         recordRuntimeEnvironmentUsage(userDataPath, environment.id, {
           runtimeId: response._meta.runtimeId,
           pairedDeviceId: response.result.pairedDeviceId,
-          pairingDeviceToken: connection.credential.deviceToken
+          pairingDeviceToken: pairedRuntimeConnectionToken(connection)
         })
         if (capable) {
           transport.establish()

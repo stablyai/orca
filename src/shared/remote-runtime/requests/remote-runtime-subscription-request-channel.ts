@@ -9,6 +9,7 @@ import {
 } from '../remote-runtime-memory-limits'
 import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../concurrency/timer-delay'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 
 type PendingRemoteRuntimeSubscriptionRequest = {
   resolve: (response: RuntimeRpcResponse<unknown>) => void
@@ -69,7 +70,7 @@ export class RemoteRuntimeSubscriptionRequestChannel {
     try {
       serialized = serializeRemoteRuntimeRpcRequest({
         requestId,
-        deviceToken: this.options.connection.credential.deviceToken,
+        deviceToken: pairedRuntimeConnectionToken(this.options.connection),
         method,
         params,
         // Why: the host closes the shared socket on an oversized frame, ending the subscription too.

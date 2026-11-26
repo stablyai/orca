@@ -35,6 +35,7 @@ import {
   refuseRelayOnlyHostWithoutLink,
   remoteRuntimeOneLinkFor
 } from '../control/remote-runtime-one-link'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 
 export async function subscribeRemoteRuntimeTransport<TResult>(
   connection: PairedRuntimeConnection,
@@ -57,7 +58,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
-    deviceToken: connection.credential.deviceToken,
+    deviceToken: pairedRuntimeConnectionToken(connection),
     method,
     params,
     idlePassive: options?.idlePassive
@@ -85,10 +86,9 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     const frameRouter = new RemoteRuntimeSubscriptionFrameRouter({
       handshake,
       sealAuth: () =>
-        handshake.sealAuth(
-          { kind: 'token', deviceToken: connection.credential.deviceToken },
-          { clientCapabilities: remoteRuntimeClientCapabilities(options?.clientCapabilities) }
-        ),
+        handshake.sealAuth(connection.credential, {
+          clientCapabilities: remoteRuntimeClientCapabilities(options?.clientCapabilities)
+        }),
       isSettled: () => terminalFailure || closing,
       serializedRequest,
       requestId,

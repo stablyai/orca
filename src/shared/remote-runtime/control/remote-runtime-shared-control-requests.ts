@@ -8,6 +8,7 @@ import type { SharedControlRetiredRequestIds } from '../requests/remote-runtime-
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
 import type { SharedControlBinaryChannels } from './remote-runtime-shared-control-binary-channels'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 
 export class SharedControlRequests {
   constructor(
@@ -47,7 +48,7 @@ export class SharedControlRequests {
         : undefined,
       captureSendGuard: () => this.host.captureSendGuard(),
       pendingRequests: this.host.pendingRequests,
-      deviceToken: this.host.connection().credential.deviceToken,
+      deviceToken: pairedRuntimeConnectionToken(this.host.connection()),
       method,
       params,
       timeoutMs: responseTimeoutMs ?? timeoutMs,
@@ -78,7 +79,7 @@ export class SharedControlRequests {
     const binaryChannels = stream ? this.host.binaryChannels() : null
     return startSharedControlSubscription({
       subscriptions: this.host.subscriptions,
-      deviceToken: this.host.connection().credential.deviceToken,
+      deviceToken: pairedRuntimeConnectionToken(this.host.connection()),
       method,
       params,
       callbacks,
@@ -88,7 +89,7 @@ export class SharedControlRequests {
         sendSharedControlSubscription({
           subscriptions: this.host.subscriptions,
           subscription,
-          deviceToken: this.host.connection().credential.deviceToken,
+          deviceToken: pairedRuntimeConnectionToken(this.host.connection()),
           send: (payload) => this.host.sendEncrypted(payload)
         }),
       closeSubscription: (requestId) => this.host.closeSubscription(requestId),

@@ -12,6 +12,7 @@ import type { RemoteRuntimeSharedControlConnection } from './remote-runtime-shar
 import { SharedControlBinaryChannels } from './remote-runtime-shared-control-binary-channels'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { unshippedTestSwitchOn } from '../../app-lifecycle/unshipped-test-switch'
+import { pairedRuntimeConnectionIdentity } from '../pairing/paired-runtime-connection'
 
 /**
  * Hosts whose client carries everything on one connection: calls, every stream and their binary.
@@ -43,7 +44,7 @@ export function remoteRuntimeOneLinkLocallyDisabled(): boolean {
 }
 
 function linkKey(connection: PairedRuntimeConnection): string {
-  return `${connection.endpoint}\n${connection.hostPublicKeyB64}\n${connection.credential.deviceToken}`
+  return `${connection.endpoint}\n${connection.hostPublicKeyB64}\n${pairedRuntimeConnectionIdentity(connection)}`
 }
 
 export function setRemoteRuntimeOneLink(

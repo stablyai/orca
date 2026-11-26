@@ -22,6 +22,7 @@ import {
   writeRuntimeEnvironmentSidecarEntry,
   type RuntimeEnvironmentSidecarEntry
 } from './runtime-environment-sidecar'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 
 type SidecarState = Omit<RuntimeEnvironmentSidecarEntry, 'binding'>
 
@@ -94,7 +95,7 @@ export function linkVerifiedRuntimeEnvironmentSshAccess(
     !args.verifiedRuntimeId.trim() ||
     (existing.runtimeId !== null && existing.runtimeId !== args.verifiedRuntimeId) ||
     args.verifiedConnection.hostPublicKeyB64 !== offer.publicKeyB64 ||
-    args.verifiedConnection.credential.deviceToken !== offer.deviceToken ||
+    pairedRuntimeConnectionToken(args.verifiedConnection) !== offer.deviceToken ||
     args.verifiedConnection.pairedDeviceId !== offer.pairedDeviceId
   ) {
     throw invalid('The SSH endpoint did not verify as this paired server.')
@@ -219,7 +220,7 @@ function requireMatchingCompletedLink(
   if (
     linkedRuntime !== args.verifiedRuntimeId ||
     offer.endpoint !== args.verifiedConnection.endpoint ||
-    offer.deviceToken !== args.verifiedConnection.credential.deviceToken ||
+    offer.deviceToken !== pairedRuntimeConnectionToken(args.verifiedConnection) ||
     offer.publicKeyB64 !== args.verifiedConnection.hostPublicKeyB64 ||
     offer.pairedDeviceId !== args.verifiedConnection.pairedDeviceId ||
     access.sshTargetId !== args.tunnel.sshTargetId ||

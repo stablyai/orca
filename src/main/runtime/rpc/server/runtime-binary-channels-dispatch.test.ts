@@ -23,6 +23,7 @@ import { defineStreamingMethod } from '../core'
 import { STATUS_METHODS } from '../methods/host-management/status'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { pairedRuntimeConnectionToken } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 // Echoes each binary frame back with its own tag, until its connection goes away.
 const echo = defineStreamingMethod({
@@ -92,7 +93,7 @@ async function connect(clientCapabilities: string[]) {
         phase = 'auth'
         void sendRemoteRuntimeTokenAuth({
           handshake,
-          deviceToken: connection.credential.deviceToken,
+          deviceToken: pairedRuntimeConnectionToken(connection),
           clientCapabilities,
           stillAwaiting: () => true,
           send: (sealed) => ws.send(sealed),
@@ -127,7 +128,7 @@ async function connect(clientCapabilities: string[]) {
       socket.handshake.channel.sealText(
         JSON.stringify({
           id,
-          deviceToken: connection.credential.deviceToken,
+          deviceToken: pairedRuntimeConnectionToken(connection),
           method,
           params: null,
           ...(binaryChannel === undefined ? {} : { binaryChannel })
