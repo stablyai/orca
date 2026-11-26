@@ -19947,6 +19947,8 @@
           "output": "Output",
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
+          "runShowOutput": "Show output",
+          "runHideOutput": "Hide output",
           "runReplyLabel": "Reply to the command",
           "runReplyPlaceholder": "Type a reply, Enter to send",
           "runStop": "Stop",

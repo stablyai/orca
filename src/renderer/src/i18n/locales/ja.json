@@ -20369,6 +20369,8 @@
       "runTimedOut": "5 分後に停止しました",
       "runClosed": "完了前にターミナルが閉じました",
       "runFailed": "実行できませんでした",
+      "runShowOutput": "出力を表示",
+      "runHideOutput": "出力を隠す",
       "runReplyLabel": "コマンドに応答",
       "runReplyPlaceholder": "応答を入力し、Enter で送信",
       "runStop": "停止",

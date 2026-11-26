@@ -20302,6 +20302,8 @@
       "runTimedOut": "Arrêté après 5 minutes",
       "runClosed": "Le terminal s’est fermé avant la fin",
       "runFailed": "Impossible de l’exécuter",
+      "runShowOutput": "Afficher la sortie",
+      "runHideOutput": "Masquer la sortie",
       "runReplyLabel": "Répondre à la commande",
       "runReplyPlaceholder": "Tapez une réponse, Entrée pour envoyer",
       "runStop": "Arrêter",

@@ -18822,6 +18822,8 @@
           "output": "출력",
           "runNumber": "실행 #{{number}}",
           "runFailed": "실행하지 못했습니다.",
+          "runShowOutput": "출력 표시",
+          "runHideOutput": "출력 숨기기",
           "runReplyLabel": "명령에 응답",
           "runReplyPlaceholder": "응답을 입력하고 Enter로 보내기",
           "runStop": "중지",

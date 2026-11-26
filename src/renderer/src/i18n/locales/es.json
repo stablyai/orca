@@ -20041,6 +20041,8 @@
       "runTimedOut": "Detenido tras 5 minutos",
       "runClosed": "El terminal se cerró antes de terminar",
       "runFailed": "No se pudo ejecutar",
+      "runShowOutput": "Mostrar salida",
+      "runHideOutput": "Ocultar salida",
       "runReplyLabel": "Responder al comando",
       "runReplyPlaceholder": "Escribe una respuesta, Intro para enviar",
       "runStop": "Detener",

@@ -21828,6 +21828,8 @@
       "runTimedOut": "Interrompido após 5 minutos",
       "runClosed": "O terminal fechou antes de terminar",
       "runFailed": "Não foi possível executar",
+      "runShowOutput": "Mostrar saída",
+      "runHideOutput": "Ocultar saída",
       "runReplyLabel": "Responder ao comando",
       "runReplyPlaceholder": "Digite uma resposta, Enter para enviar",
       "runStop": "Parar",

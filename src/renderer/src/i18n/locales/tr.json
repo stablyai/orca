@@ -19782,6 +19782,8 @@
           "output": "Çıktı",
           "runNumber": "Çalıştırma #{{number}}",
           "runFailed": "Çalıştırma başarısız oldu.",
+          "runShowOutput": "Çıktıyı göster",
+          "runHideOutput": "Çıktıyı gizle",
           "runReplyLabel": "Komuta yanıt ver",
           "runReplyPlaceholder": "Bir yanıt yazın, göndermek için Enter",
           "runStop": "Durdur",

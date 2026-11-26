@@ -20988,6 +20988,8 @@
       "runTimedOut": "Остановлено через 5 минут",
       "runClosed": "Терминал закрылся до завершения",
       "runFailed": "Не удалось запустить",
+      "runShowOutput": "Показать вывод",
+      "runHideOutput": "Скрыть вывод",
       "runReplyLabel": "Ответить команде",
       "runReplyPlaceholder": "Введите ответ, Enter — отправить",
       "runStop": "Стоп",

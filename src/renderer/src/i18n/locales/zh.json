@@ -19056,6 +19056,8 @@
           "output": "输出",
           "runNumber": "运行 #{{number}}",
           "runFailed": "运行失败",
+          "runShowOutput": "显示输出",
+          "runHideOutput": "隐藏输出",
           "runReplyLabel": "回复命令",
           "runReplyPlaceholder": "输入回复，按 Enter 发送",
           "runStop": "停止",

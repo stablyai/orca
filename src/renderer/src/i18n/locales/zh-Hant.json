@@ -19462,6 +19462,8 @@
           "output": "輸出",
           "runNumber": "執行 #{{number}}",
           "runFailed": "執行失敗。",
+          "runShowOutput": "顯示輸出",
+          "runHideOutput": "隱藏輸出",
           "runReplyLabel": "回覆指令",
           "runReplyPlaceholder": "輸入回覆，按 Enter 傳送",
           "runStop": "停止",

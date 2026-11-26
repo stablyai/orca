@@ -60,6 +60,10 @@ export function NativeChatCodeBlock({
   const fallbackKey = useId()
   const runKey = `code-run:${blockKey ?? fallbackKey}`
   const runState = useNativeChatCodeBlockRun(runKey)
+  const { open: runHidden, setOpen: setRunHidden } = useNativeChatDisclosure(
+    blockKey && `code-run-hidden:${blockKey}`,
+    false
+  )
   const actions = code ? (
     <>
       {host && worktreeId && script ? (
@@ -120,7 +124,13 @@ export function NativeChatCodeBlock({
           children
         )}
       </pre>
-      {runState ? <NativeChatCodeBlockRunOutput state={runState} /> : null}
+      {runState ? (
+        <NativeChatCodeBlockRunOutput
+          state={runState}
+          hidden={runHidden}
+          onToggleHidden={() => setRunHidden(!runHidden)}
+        />
+      ) : null}
       {code && !language ? (
         <div className="absolute right-2 top-2 flex items-center gap-0.5 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100">
           {actions}
