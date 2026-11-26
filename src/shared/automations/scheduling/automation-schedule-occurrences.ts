@@ -130,9 +130,15 @@ function matchingCronMinute(
       candidate += direction * MINUTE_MS
       continue
     }
-    // Skip excluded dates in calendar time; matching dates still visit both DST clock passes.
+    // A midnight rollback can put the previous date inside this day's absolute interval.
+    // Visit transition days and repeated date fragments minute by minute, as matching dates do.
     const day = calendar.startOfDay(candidate)
-    const next = direction === 1 ? calendar.addDays(day, 1) : day - MINUTE_MS
+    const nextDay = calendar.addDays(day, 1)
+    if (nextDay - day !== DAY_MS || candidate < day || candidate >= nextDay) {
+      candidate += direction * MINUTE_MS
+      continue
+    }
+    const next = direction === 1 ? nextDay : day - MINUTE_MS
     candidate =
       direction === 1
         ? Math.max(candidate + MINUTE_MS, next)
