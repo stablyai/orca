@@ -37,23 +37,53 @@ export function readOpenCodePromptFailure(
   return getSharedClient().readOpenCodePromptFailure(query)
 }
 
-/** Return oldest-first rows after cursor; unreadable or unavailable readers answer []. */
-export async function readOpenCodeBinderSessions(
-  dbPath: string,
-  cursor: OpenCodeSessionCursor
-): Promise<BinderSessionRow[]> {
+const lastEmptyOpenCodeBinderStampByPath = new Map<string, string>()
+
+async function statStamp(path: string): Promise<string | null> {
   try {
-    // Skip absent stores before waking a worker on every binder poll.
-    await stat(dbPath)
+    const info = await stat(path)
+    return `${info.ino}:${info.size}:${info.mtimeMs}`
   } catch (error) {
     if (
       error instanceof Error &&
       'code' in error &&
       (error.code === 'ENOENT' || error.code === 'ENOTDIR')
     ) {
-      return []
+      return 'missing'
     }
-    // Other stat failures still go through worker error reporting and its fresh open.
+    return null
   }
-  return getSharedClient().readOpenCodeBinderSessions(dbPath, cursor)
+}
+
+/** Return oldest-first rows after cursor; unreadable or unavailable readers answer []. */
+export async function readOpenCodeBinderSessions(
+  dbPath: string,
+  cursor: OpenCodeSessionCursor
+): Promise<BinderSessionRow[]> {
+  // Skip absent or unchanged stores before waking a worker on every binder poll.
+  const dbStamp = await statStamp(dbPath)
+  if (dbStamp === 'missing') {
+    lastEmptyOpenCodeBinderStampByPath.delete(dbPath)
+    return []
+  }
+  let stamp: string | null = null
+  if (dbStamp !== null) {
+    const [walStamp, journalStamp] = await Promise.all([
+      statStamp(`${dbPath}-wal`),
+      statStamp(`${dbPath}-journal`)
+    ])
+    if (walStamp !== null && journalStamp !== null) {
+      stamp = `${dbStamp}|${walStamp}|${journalStamp}|${cursor.ms}|${cursor.id}`
+      if (lastEmptyOpenCodeBinderStampByPath.get(dbPath) === stamp) {
+        return []
+      }
+    }
+  }
+  const result = await getSharedClient().readOpenCodeBinderSessionsWithStatus(dbPath, cursor)
+  if (result.ok && result.value.length === 0 && stamp !== null) {
+    lastEmptyOpenCodeBinderStampByPath.set(dbPath, stamp)
+  } else {
+    lastEmptyOpenCodeBinderStampByPath.delete(dbPath)
+  }
+  return result.value
 }
