@@ -6,13 +6,13 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { CONNECTOR_METHODS } from './connector'
 
-const HTML = '```html\n<!doctype html>\n<html><body>Report</body></html>\n```'
+const HTML = '  ~~~~ \tHTML title\r\n<!doctype html>\r\n<html><body>Report</body></html>\r\n  ~~~~'
 const SESSION_ID = '55555555-5555-4555-8555-555555555555'
 
 afterEach(() => setStructuredAgentSessionHost(null))
 
 it.each([20, 200])(
-  'only rediscovers a bot for a reply that can become an HTML file (%i bots)',
+  'skips repeat discovery for ordinary replies and unsupported clouds (%i bots)',
   async (botCount) => {
     const bots = Array.from({ length: botCount }, (_, index) => ({
       id: `bot-${index}`,
@@ -76,7 +76,9 @@ it.each([20, 200])(
 
     expect(await reply('old-cloud', HTML)).toMatchObject({ ok: true, result: { status: 'posted' } })
     features.add('reply.files')
-    expect(await reply('ordinary', 'The report is ready.')).toMatchObject({
+    expect(
+      await reply('ordinary', 'The report is ready.\n```ts\nconst format = "html"\n```')
+    ).toMatchObject({
       ok: true,
       result: { status: 'posted' }
     })
