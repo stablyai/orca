@@ -112,25 +112,7 @@ export class AntigravityAccountService {
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
-      const switching = !current || !this.matches(selected, current)
-      if (switching) {
-        await this.backend.write(selected.credentials, current?.contents ?? null)
-      }
-      const readback = await this.backend.read()
-      if (!readback || !this.matches(selected, readback)) {
-        throw new Error(
-          'Antigravity account switching could not be verified; refresh before retrying.'
-        )
-      }
-      const latest = await this.store.read()
-      if (
-        !latest.accounts.some((account) => account.id === id && this.matches(account, readback))
-      ) {
-        throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
-      }
-      latest.selectedAccountId = id
-      this.updateSnapshot(latest, readback)
-      await this.store.write(latest)
+      const { latest, readback, switching } = await this.applySelection(selected, current)
       if (switching) {
         switched?.()
       }
@@ -165,12 +147,47 @@ export class AntigravityAccountService {
         return
       }
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
-      if (!selected || !current || !this.matches(selected, current)) {
+      if (selected && current && this.matches(selected, current)) {
+        return
+      }
+      // Each running agy writes its own login back to the one native slot on every token refresh.
+      // When that login is saved (reconcile just refreshed its snapshot), restoring the selection
+      // loses nothing; an unsaved login or a sign-out is never overwritten.
+      if (!selected || !current || !vault.accounts.some((entry) => this.matches(entry, current))) {
         throw new Error(
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
         )
       }
+      await this.applySelection(selected, current)
     })
+  }
+
+  private async applySelection(
+    selected: StoredAntigravityAccount,
+    current: AntigravityNativeCredential | null
+  ) {
+    const switching = !current || !this.matches(selected, current)
+    if (switching) {
+      await this.backend.write(selected.credentials, current?.contents ?? null)
+    }
+    const readback = await this.backend.read()
+    if (!readback || !this.matches(selected, readback)) {
+      throw new Error(
+        'Antigravity account switching could not be verified; refresh before retrying.'
+      )
+    }
+    const latest = await this.store.read()
+    if (
+      !latest.accounts.some(
+        (account) => account.id === selected.id && this.matches(account, readback)
+      )
+    ) {
+      throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
+    }
+    latest.selectedAccountId = selected.id
+    this.updateSnapshot(latest, readback)
+    await this.store.write(latest)
+    return { latest, readback, switching }
   }
 
   beginUsageRead(): Promise<AntigravityUsageReadStart | null> {
