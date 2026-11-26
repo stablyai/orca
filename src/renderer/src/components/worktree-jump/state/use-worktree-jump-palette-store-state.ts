@@ -27,7 +27,7 @@ import {
 import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
-const NO_WORKTREES_BY_REPO: ReturnType<typeof selectWorktreesByRepo> = {}
+const NO_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
 const NO_WORKSPACES: Worktree[] = []
 const NO_UNIFIED_TABS: AppState['unifiedTabsByWorktree'] = {}
 const NO_BROWSER_PAGES: AppState['browserPagesByWorkspace'] = {}
@@ -177,6 +177,7 @@ export function useWorktreeJumpPaletteStoreState({
 
   return {
     visible,
+    resultsReady,
     paletteNowMs,
     closeModal,
     openModal,

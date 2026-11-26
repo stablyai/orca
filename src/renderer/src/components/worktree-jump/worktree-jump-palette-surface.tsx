@@ -21,9 +21,13 @@ import {
 const RESULT_KEYS = new Set(['Enter', 'ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'])
 
 export function WorktreeJumpPaletteSurface({
-  controller
+  controller,
+  resultsReady,
+  revealResultsNow
 }: {
   controller: WorktreeJumpPaletteController
+  resultsReady: boolean
+  revealResultsNow: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const selectedTask = controller.taskItems.find(
@@ -72,8 +76,8 @@ export function WorktreeJumpPaletteSurface({
         onValueChange: controller.handleCommandSelectionChange,
         className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
-          if (!controller.resultsReady && RESULT_KEYS.has(event.key)) {
-            controller.revealResultsNow()
+          if (!resultsReady && RESULT_KEYS.has(event.key)) {
+            revealResultsNow()
           }
           if (
             selectedTask &&
@@ -175,7 +179,7 @@ export function WorktreeJumpPaletteSurface({
         className="max-h-[min(600px,calc(100vh-14rem))] px-2.5 pb-2.5 pt-2"
       >
         {/* The opening frame paints only the input; results fill in on the next frame. */}
-        {!controller.resultsReady ? null : controller.isLoading &&
+        {!resultsReady ? null : controller.isLoading &&
           controller.selectableItems.length === 0 &&
           !controller.showCreateAction ? (
           <PaletteState

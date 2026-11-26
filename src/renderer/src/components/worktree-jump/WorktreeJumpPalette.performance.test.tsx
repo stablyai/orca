@@ -1,9 +1,27 @@
 // @vitest-environment happy-dom
 // Perf contract (Cmd+K first paint): at 1,900 workspaces the opening frame built and mounted every
 // result section before the input could paint (~150 ms cold). The opening commit now mounts the input
-// with no result rows, and the rows arrive once that frame has painted.
+// with no result rows and builds no workspace search documents; both arrive once that frame has painted.
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type * as WorktreePaletteDocumentModule from '@/lib/workspace/search/worktrees/worktree-palette-document'
+
+const documentsBuilt = vi.hoisted((): { count: number } => ({ count: 0 }))
+
+vi.mock('@/lib/workspace/search/worktrees/worktree-palette-document', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreePaletteDocumentModule>()
+  return {
+    ...actual,
+    buildWorktreePaletteDocuments: (
+      ...args: Parameters<typeof actual.buildWorktreePaletteDocuments>
+    ) => {
+      const documents = actual.buildWorktreePaletteDocuments(...args)
+      documentsBuilt.count += documents.size
+      return documents
+    }
+  }
+})
+
 import { useAppStore } from '@/store'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
@@ -17,6 +35,7 @@ function resultRowCount(): number {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  documentsBuilt.count = 0
   const worktrees = Array.from({ length: WORKSPACE_COUNT }, (_, index) =>
     makeWorktree(`repo-1::/tmp/ws-${index}`, `ws-${index}`, {
       path: `/tmp/ws-${index}`,
@@ -45,10 +64,12 @@ it('mounts no result rows in the opening commit and fills them in after the pain
   })
   expect(document.querySelector('[cmdk-input]')).not.toBeNull()
   expect(resultRowCount()).toBe(0)
+  expect(documentsBuilt.count).toBe(0)
 
   await act(async () => {
     await vi.advanceTimersByTimeAsync(200)
   })
   // The empty-query first screen for this fixture.
   expect(resultRowCount()).toBe(11)
+  expect(documentsBuilt.count).toBe(WORKSPACE_COUNT)
 })
