@@ -1,3 +1,5 @@
+import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
+import { nativeChatTimeDividers } from '../../conversation/slots/native-chat-time-dividers'
 import { Fragment, useMemo } from 'react'
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { NativeChatWaitingAgentMailRows } from '../../queue/NativeChatWaitingAgentMailRows'
@@ -44,7 +46,12 @@ export function NativeChatTranscriptItems({
   newRowsMarker?: NativeChatNewRowsMarkerState
 }): React.JSX.Element {
   // A streamed text revision draws the same rows, so its keys are its base's.
+  const messaging = useNativeChatMessagingStyle() && context.turnBot != null
   const keySlots = stageBesideStreamedText(slots)
+  const timeDividers = useMemo(
+    () => (messaging ? nativeChatTimeDividers(keySlots) : new Map<number, number>()),
+    [keySlots, messaging]
+  )
   const rowKeys = useMemo(() => keySlots.map(nativeChatSlotKey), [keySlots])
   const replyReveals = useNativeChatReplyReveals(rowKeys, loadedMessageIds)
   const placed = useNativeChatTimedRows(slots, timedRows)
@@ -82,6 +89,8 @@ export function NativeChatTranscriptItems({
                       <NativeChatTranscriptRow
                         slot={slot}
                         context={rowContext}
+                        timeDivider={timeDividers.get(item.index)}
+                        timeDividerBelow={timeDividers.has(item.index + 1)}
                         joinsMessageAbove={nativeChatSlotJoinsMessageAbove({
                           slot,
                           previous: slots[item.index - 1],
@@ -141,6 +150,11 @@ export function NativeChatWaitingTranscriptItems({
   /** Ends with other agents' waiting mail; rows stacked outside a conversation have none. */
   agentMail?: boolean
 }): React.JSX.Element {
+  const messaging = useNativeChatMessagingStyle() && context.turnBot != null
+  const timeDividers = useMemo(
+    () => (messaging ? nativeChatTimeDividers(slots) : new Map<number, number>()),
+    [slots, messaging]
+  )
   return (
     <>
       {slots.map((slot, index) => (
@@ -148,6 +162,8 @@ export function NativeChatWaitingTranscriptItems({
           key={nativeChatSlotKey(slot)}
           slot={slot}
           context={context}
+          timeDivider={timeDividers.get(index)}
+          timeDividerBelow={timeDividers.has(index + 1)}
           joinsMessageAbove={nativeChatSlotJoinsMessageAbove({
             slot,
             previous: slots[index - 1],

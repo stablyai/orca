@@ -21338,7 +21338,8 @@
         }
       },
       "messaging": {
-        "usingTool": "{{tool}} を使用中"
+        "usingTool": "{{tool}} を使用中",
+        "todayAt": "今日 {{time}}"
       }
     },
     "tab": {

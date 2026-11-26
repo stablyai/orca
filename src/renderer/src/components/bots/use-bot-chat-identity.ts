@@ -1,3 +1,4 @@
+import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-color'
 import { useMemo } from 'react'
 import { isListedBotHost } from '@/lib/bot-hosts'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -17,6 +18,7 @@ import { selectFolderWorkspaceOnHost } from '../../store/folder-workspaces/folde
 export type BotChatIdentity = {
   showName?: boolean
   name: string
+  color?: string
   src: string | null
   /** The outfit's art, drawn over `src`. */
   outfit?: BotOutfitArt | null
@@ -64,10 +66,11 @@ export function useBotChatOwner(
   // Keyed on what it shows, not the Bot object: a re-read bot is a new object, and a new identity here
   // would re-render every mounted row of the chat.
   const name = turnBot?.name ?? null
+  const color = turnBot?.avatarColor ?? DEFAULT_BOT_AVATAR_COLOR
   const fallback = turnBot ? botFallback(turnBot) : null
   const identity = useMemo<BotChatIdentity | null>(
-    () => (name !== null && fallback !== null ? { name, src, outfit, fallback } : null),
-    [name, src, outfit, fallback]
+    () => (name !== null && fallback !== null ? { name, src, outfit, fallback, color } : null),
+    [name, src, outfit, fallback, color]
   )
   return { ownerWorktreeId, turnBot: identity, bot: turnBot }
 }

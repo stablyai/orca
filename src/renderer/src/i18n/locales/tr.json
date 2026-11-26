@@ -22931,7 +22931,8 @@
         "title": "Sohbete başlamak için {{agent}} oturumunuzu açın"
       },
       "messaging": {
-        "usingTool": "{{tool}} kullanılıyor"
+        "usingTool": "{{tool}} kullanılıyor",
+        "todayAt": "Bugün {{time}}"
       }
     },
     "tab": {

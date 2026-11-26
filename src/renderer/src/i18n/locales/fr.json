@@ -21274,7 +21274,8 @@
         }
       },
       "messaging": {
-        "usingTool": "Utilisation de {{tool}}"
+        "usingTool": "Utilisation de {{tool}}",
+        "todayAt": "Aujourd’hui {{time}}"
       }
     },
     "tab": {

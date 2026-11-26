@@ -1,3 +1,4 @@
+import { NativeChatTimeDivider } from '../../NativeChatDividerRow'
 import { useNativeChatMessageArrival } from './use-native-chat-message-arrival'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { memo, useContext } from 'react'
@@ -94,9 +95,13 @@ function NativeChatRowNewRowsMarker({
   slot,
   deliveryNotice,
   readerAtEnd,
-  onReveal
+  onReveal,
+  messaging,
+  botColor
 }: {
   marker: NativeChatNewRowsMarkerState
+  messaging: boolean
+  botColor?: string
   slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>
   deliveryNotice: NativeChatDeliveryNotice | undefined
   readerAtEnd: () => boolean
@@ -107,6 +112,8 @@ function NativeChatRowNewRowsMarker({
   return (
     <NativeChatNewRowsMarker
       marker={marker}
+      messaging={messaging}
+      botColor={botColor}
       readerAtEnd={readerAtEnd}
       onReveal={onReveal}
       className={newRowsMarkerSpacing(marker.place, slot, deliveryNotice, slackPostLineDraws)}
@@ -121,7 +128,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   newRowsMarker,
   newRowsMarkerBelow = false,
   joinsActivityAbove = false,
-  joinsMessageAbove = false
+  joinsMessageAbove = false,
+  timeDivider,
+  timeDividerBelow = false
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
@@ -132,6 +141,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   /** Opens 4 px below the row above's activity row (`nativeChatSlotJoinsActivityAbove`). */
   joinsActivityAbove?: boolean
   joinsMessageAbove?: boolean
+  timeDivider?: number
+  timeDividerBelow?: boolean
 }): React.JSX.Element {
   const messagingEnabled = useNativeChatMessagingStyle()
   const messaging = messagingEnabled && context.turnBot != null
@@ -162,6 +173,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const marker = newRowsMarker ? (
     <NativeChatRowNewRowsMarker
       marker={newRowsMarker}
+      messaging={messaging}
+      botColor={context.turnBot?.color}
       slot={slot}
       deliveryNotice={deliveryNotice}
       readerAtEnd={context.readerAtEnd}
@@ -205,13 +218,22 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
         slot.continuesTurn &&
           !(slot.endsResponse && !slot.activeTurnIsWorking) &&
           !newRowsMarkerBelow &&
+          !(messaging && timeDividerBelow) &&
           '-mb-3',
         // Into the row gap (gap-5) all but the one-line rows' own gap (gap-1.5,
         // NATIVE_CHAT_ACTIVITY_ROW_GAP_PX).
-        joinsActivityAbove && '-mt-3.5',
-        messaging && joinsMessageAbove && !newRowsMarker && !joinsActivityAbove && '-mt-3'
+        joinsActivityAbove && !(messaging && timeDivider !== undefined) && '-mt-3.5',
+        messaging &&
+          joinsMessageAbove &&
+          !newRowsMarker &&
+          timeDivider === undefined &&
+          !joinsActivityAbove &&
+          '-mt-3'
       )}
     >
+      {messaging && timeDivider !== undefined ? (
+        <NativeChatTimeDivider timestamp={timeDivider} />
+      ) : null}
       {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}

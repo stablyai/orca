@@ -22021,7 +22021,8 @@
       "htmlViewCode": "代码",
       "htmlViewPreview": "预览",
       "messaging": {
-        "usingTool": "正在使用 {{tool}}"
+        "usingTool": "正在使用 {{tool}}",
+        "todayAt": "今天 {{time}}"
       }
     },
     "tab": {

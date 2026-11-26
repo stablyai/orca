@@ -22192,7 +22192,8 @@
         }
       },
       "messaging": {
-        "usingTool": "{{tool}} 사용 중"
+        "usingTool": "{{tool}} 사용 중",
+        "todayAt": "오늘 {{time}}"
       }
     },
     "tab": {

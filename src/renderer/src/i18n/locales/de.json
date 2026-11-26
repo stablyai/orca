@@ -21268,7 +21268,8 @@
         }
       },
       "messaging": {
-        "usingTool": "Verwendet {{tool}}"
+        "usingTool": "Verwendet {{tool}}",
+        "todayAt": "Heute {{time}}"
       }
     },
     "tab": {

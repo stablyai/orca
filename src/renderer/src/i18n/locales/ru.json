@@ -21971,7 +21971,8 @@
         }
       },
       "messaging": {
-        "usingTool": "Используется {{tool}}"
+        "usingTool": "Используется {{tool}}",
+        "todayAt": "Сегодня {{time}}"
       }
     },
     "tab": {
