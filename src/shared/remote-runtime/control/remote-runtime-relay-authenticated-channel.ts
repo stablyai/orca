@@ -6,10 +6,16 @@ import { PairedE2EEAuthenticationError } from '../relay/client/paired-e2ee-v2-ph
 import { RelayE2eeLink, RelayOuterError } from '../relay/client/relay-e2ee-link'
 import {
   keepRelayResumeCredential,
-  relayRefusedCredential,
   withoutRefusedCredential,
   type SharedHostLinkEntry
 } from '../relay/client/shared-host-relay-link'
+import { RelayDialAbortedError } from '../relay/client/relay-director-fallback'
+import type { resolveRelayEndpoint } from '../relay/client/relay-director-resolve'
+import {
+  dialRelayRuntimeLink,
+  RelayRuntimeDialMemory,
+  relayCredentialRefused
+} from './remote-runtime-relay-dial-memory'
 import type { SharedHostRelayCredential } from '../relay/client/shared-host-relay-connection'
 import type {
   AuthenticatedRuntimeChannelEvents,
@@ -41,6 +47,10 @@ export function relayRuntimeChannelOpener(
     clientCapabilities: readonly string[]
     randomBytes: (length: number) => Uint8Array
     newId: () => string
+    /** Kept by the host's control connection across dials; a fresh one per dial otherwise. */
+    memory?: RelayRuntimeDialMemory
+    /** The director lookup; tests reach a stand-in. */
+    resolveRelay?: typeof resolveRelayEndpoint
   }
 ): AuthenticatedRuntimeChannelOpener {
   return (events) => {
@@ -78,13 +88,24 @@ function openRelayRuntimeChannel(
 ) {
   let state: 'connecting' | 'open' | 'closed' = 'connecting'
   let ready = false
-  const calls = createRelayCredentialCalls(connection.credential.deviceToken, (payload) =>
-    link.sendText(payload)
+  let link: RelayE2eeLink | null = null
+  // Settles the dial in flight: the cell admitted it (hello), or refused or dropped it first.
+  let settleDial: ((result: { ok: true } | { ok: false; error: Error }) => void) | null = null
+  const memory = config.memory ?? new RelayRuntimeDialMemory()
+  const calls = createRelayCredentialCalls(
+    connection.credential.deviceToken,
+    (payload) => link?.sendText(payload) ?? false
   )
+  const takeDial = () => {
+    const settle = settleDial
+    settleDial = null
+    return settle
+  }
   const shut = (): void => {
     state = 'closed'
     calls.failAll(new Error('relay link closed'))
-    link.close()
+    link?.close()
+    takeDial()?.({ ok: false, error: new RelayDialAbortedError() })
   }
   const end = (error: RemoteRuntimeClientError, close?: { code: number; reason: string }): void => {
     if (state !== 'closed') {
@@ -103,123 +124,165 @@ function openRelayRuntimeChannel(
     randomBytes: config.randomBytes,
     newId: config.newId
   }
-  const relay = entry.resume?.relay ?? entry.offer!.relay
-  const link = new RelayE2eeLink({
-    platform: config.platform,
-    endpoint: { cellUrl: relay.cellUrl, relayHostId: relay.relayHostId },
-    ...(dial.kind === 'invite'
-      ? { credential: dial.inviteToken, expectedCredentialKind: 'invite' as const }
-      : { credential: dial.token, expectedCredentialKind: 'resume' as const }),
-    authCredential: connection.credential,
-    clientCapabilities: config.clientCapabilities,
-    // Token auth over Relay carries capabilities, as a direct socket's does.
-    v2TokenCapabilities: true,
-    desktopPublicKeyB64: connection.hostPublicKeyB64,
-    onOpen: () => {
-      state = 'open'
-      events.onTransportOpen()
-    },
-    onHello: (hello) => {
-      if (
-        dial.kind === 'resume' &&
-        (hello.credentialKind !== 'resume' || hello.acceptedCredentialVersion !== dial.version)
-      ) {
-        // Never dialed again: Relay holds another credential for this computer.
-        const current = config.store.entry()
-        if (current) {
-          config.store.save(withoutRefusedDial(current, dial))
-        }
-        end(
-          new RemoteRuntimeClientError(
-            'relay_credential_mismatch',
-            'Relay resumed another credential.'
-          )
-        )
+  // Read again for each dial: the director may have named another cell since.
+  const cell = () => {
+    const current = config.store.entry() ?? entry
+    return current.resume?.relay ?? current.offer!.relay
+  }
+  const fail = (error: Error): void => {
+    if (state === 'closed' || error instanceof RelayDialAbortedError) {
+      return
+    }
+    if (relayCredentialRefused(error)) {
+      const current = config.store.entry()
+      const next = current ? withoutRefusedDial(current, dial) : undefined
+      if (next) {
+        config.store.save(next)
+      }
+      if (!next || !credentialToDial(next, Date.now())) {
+        // Nothing left to present: say so now, so the connection stops instead of redialing.
+        end(credentialUnavailableError())
         return
       }
-      events.onAuthenticating()
-    },
-    onAuthenticated: () => {
-      events.onAnswer()
-      // Invite, or an install that may have committed: install (idempotent per reqId) before
-      // anything else. Resume: renew alongside.
-      const mode = dial.kind === 'resume' ? 'renew' : 'install'
-      const kept = keepRelayResumeCredential(calls.port, mode, liveStore, 'runtime')
-      const becomeReady = (): void => {
-        if (state !== 'closed' && !ready) {
-          ready = true
-          events.onAuthenticated()
-        }
-      }
-      if (mode === 'renew') {
-        becomeReady()
-        // Like the share link: a failed renewal is logged; the next dial confirms again.
-        void kept.catch((error: unknown) => {
-          if (state !== 'closed') {
-            console.warn('[remote-runtime] Relay resume renewal failed', errorMessage(error))
+    }
+    if (error instanceof PairedE2EEAuthenticationError) {
+      // The host itself refused this device (revoked or unknown): its pairing owner recovers.
+      end(new RemoteRuntimeClientError('unauthorized', error.message))
+      return
+    }
+    const code = error instanceof RelayOuterError ? error.code : 1006
+    end(
+      new RemoteRuntimeClientError('remote_runtime_unavailable', error.message, {
+        closeCode: code
+      }),
+      { code, reason: error.message }
+    )
+  }
+  const openLink = (relay: { cellUrl: string; relayHostId: string }) =>
+    new RelayE2eeLink({
+      platform: config.platform,
+      endpoint: { cellUrl: relay.cellUrl, relayHostId: relay.relayHostId },
+      ...(dial.kind === 'invite'
+        ? { credential: dial.inviteToken, expectedCredentialKind: 'invite' as const }
+        : { credential: dial.token, expectedCredentialKind: 'resume' as const }),
+      authCredential: connection.credential,
+      clientCapabilities: config.clientCapabilities,
+      // Token auth over Relay carries capabilities, as a direct socket's does.
+      v2TokenCapabilities: true,
+      desktopPublicKeyB64: connection.hostPublicKeyB64,
+      onOpen: () => {
+        state = 'open'
+        events.onTransportOpen()
+      },
+      onHello: (hello) => {
+        if (
+          dial.kind === 'resume' &&
+          (hello.credentialKind !== 'resume' || hello.acceptedCredentialVersion !== dial.version)
+        ) {
+          // Never dialed again: Relay holds another credential for this computer.
+          const current = config.store.entry()
+          if (current) {
+            config.store.save(withoutRefusedDial(current, dial))
           }
-        })
-        return
-      }
-      void kept.then(becomeReady, (error: unknown) => {
-        // Admitted, yet the host can't confirm the install: drop it rather than redial it forever.
-        const current = dial.kind === 'pending-resume' ? config.store.entry() : undefined
-        if (current && state !== 'closed') {
-          config.store.save(withoutRefusedDial(current, dial))
-        }
-        end(
-          new RemoteRuntimeClientError(
-            'relay_credential_install_failed',
-            `Could not keep this server's Relay pairing: ${errorMessage(error)}`
+          end(
+            new RemoteRuntimeClientError(
+              'relay_credential_mismatch',
+              'Relay resumed another credential.'
+            )
           )
-        )
-      })
-    },
-    onText: (plaintext) => {
-      events.onAnswer()
-      events.onActivity?.()
-      if (!calls.answer(plaintext) && ready) {
-        events.onText(plaintext)
-      }
-    },
-    onBinary: (plaintext) => {
-      events.onAnswer()
-      events.onActivity?.()
-      if (ready) {
-        events.onBinary(plaintext)
-      }
-    },
-    onError: (error) => {
-      if (relayRefusedCredential(error)) {
-        const current = config.store.entry()
-        const next = current ? withoutRefusedDial(current, dial) : undefined
-        if (next) {
-          config.store.save(next)
-        }
-        if (!next || !credentialToDial(next, Date.now())) {
-          // Nothing left to present: say so now, so the connection stops instead of redialing.
-          end(credentialUnavailableError())
           return
         }
+        takeDial()?.({ ok: true })
+        events.onAuthenticating()
+      },
+      onAuthenticated: () => {
+        memory.lastConnectedAt = Date.now()
+        events.onAnswer()
+        // Invite, or an install that may have committed: install (idempotent per reqId) before
+        // anything else. Resume: renew alongside.
+        const mode = dial.kind === 'resume' ? 'renew' : 'install'
+        const kept = keepRelayResumeCredential(calls.port, mode, liveStore, 'runtime')
+        const becomeReady = (): void => {
+          if (state !== 'closed' && !ready) {
+            ready = true
+            events.onAuthenticated()
+          }
+        }
+        if (mode === 'renew') {
+          becomeReady()
+          // Like the share link: a failed renewal is logged; the next dial confirms again.
+          void kept.catch((error: unknown) => {
+            if (state !== 'closed') {
+              console.warn('[remote-runtime] Relay resume renewal failed', errorMessage(error))
+            }
+          })
+          return
+        }
+        void kept.then(becomeReady, (error: unknown) => {
+          // Admitted, yet the host can't confirm the install: drop it rather than redial it forever.
+          const current = dial.kind === 'pending-resume' ? config.store.entry() : undefined
+          if (current && state !== 'closed') {
+            config.store.save(withoutRefusedDial(current, dial))
+          }
+          end(
+            new RemoteRuntimeClientError(
+              'relay_credential_install_failed',
+              `Could not keep this server's Relay pairing: ${errorMessage(error)}`
+            )
+          )
+        })
+      },
+      onText: (plaintext) => {
+        events.onAnswer()
+        events.onActivity?.()
+        if (!calls.answer(plaintext) && ready) {
+          events.onText(plaintext)
+        }
+      },
+      onBinary: (plaintext) => {
+        events.onAnswer()
+        events.onActivity?.()
+        if (ready) {
+          events.onBinary(plaintext)
+        }
+      },
+      onError: (error) => {
+        const settle = takeDial()
+        if (settle) {
+          settle({ ok: false, error })
+          return
+        }
+        fail(error)
       }
-      if (error instanceof PairedE2EEAuthenticationError) {
-        // The host itself refused this device (revoked or unknown): its pairing owner recovers.
-        end(new RemoteRuntimeClientError('unauthorized', error.message))
+    })
+  const dialOnce = () =>
+    new Promise<{ ok: true } | { ok: false; error: Error }>((resolve) => {
+      if (state === 'closed') {
+        resolve({ ok: false, error: new RelayDialAbortedError() })
         return
       }
-      const code = error instanceof RelayOuterError ? error.code : 1006
-      end(
-        new RemoteRuntimeClientError('remote_runtime_unavailable', error.message, {
-          closeCode: code
-        }),
-        { code, reason: error.message }
-      )
+      settleDial = resolve
+      link = openLink(cell())
+    })
+  const dialed = dialRelayRuntimeLink({
+    endpoint: connection.endpoint,
+    resumeToken: dial.kind === 'invite' ? null : dial.token,
+    memory,
+    cell,
+    dialOnce,
+    store: config.store,
+    resolveRelay: config.resolveRelay
+  })
+  void dialed.then((result) => {
+    if (!result.ok) {
+      fail(result.error)
     }
   })
   return {
     state: () => state,
-    sendText: (plaintext: string) => ready && link.sendText(plaintext),
-    sendBinary: (plaintext: Uint8Array<ArrayBufferLike>) => ready && link.sendBinary(plaintext),
+    sendText: (plaintext: string) => ready && (link?.sendText(plaintext) ?? false),
+    sendBinary: (plaintext: Uint8Array<ArrayBufferLike>) =>
+      ready && (link?.sendBinary(plaintext) ?? false),
     close: shut
   }
 }

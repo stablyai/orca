@@ -9,6 +9,7 @@ import {
   relayRuntimeChannelOpener,
   runtimeRelayLinkEntry
 } from '../../../../shared/remote-runtime/control/remote-runtime-relay-authenticated-channel'
+import { RelayRuntimeDialMemory } from '../../../../shared/remote-runtime/control/remote-runtime-relay-dial-memory'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { isRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
@@ -35,6 +36,8 @@ export function relayControlChannelOpener(
     return null
   }
   const key = connection.credential.deviceToken
+  // Across this connection's dials: its 4404 streak and the cell the director last named.
+  const memory = new RelayRuntimeDialMemory()
   return (clientCapabilities) => {
     const relay = relayRuntimeChannelOpener(connection, {
       platform,
@@ -44,7 +47,8 @@ export function relayControlChannelOpener(
       },
       clientCapabilities,
       randomBytes: (length) => new Uint8Array(randomBytes(length)),
-      newId: randomUUID
+      newId: randomUUID,
+      memory
     })
     return (events) => {
       if (!allowed()) {

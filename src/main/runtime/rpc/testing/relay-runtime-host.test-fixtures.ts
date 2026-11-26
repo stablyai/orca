@@ -15,6 +15,8 @@ import {
   relayRuntimeChannelOpener,
   runtimeRelayLinkEntry
 } from '../../../../shared/remote-runtime/control/remote-runtime-relay-authenticated-channel'
+import { RelayRuntimeDialMemory } from '../../../../shared/remote-runtime/control/remote-runtime-relay-dial-memory'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../../shared/remote-runtime/relay/mobile-relay-close-codes'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { runtimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
@@ -48,6 +50,8 @@ export async function startHostOverRelay(
     control?: Partial<RemoteRuntimeSharedControlConnectionOptions>
     /** Dial through main's opener (its one-link decision and cut), not the bare Relay channel. */
     mainOpener?: boolean
+    /** Stands in for the Relay director's lookup (the bare channel only). */
+    resolveRelay?: Parameters<typeof relayRuntimeChannelOpener>[1]['resolveRelay']
   } = {}
 ) {
   vi.stubEnv('ORCA_TEST_RUNTIME_RELAY_PAIRING', '1')
@@ -85,10 +89,19 @@ export async function startHostOverRelay(
   // The host's Relay service, as far as a desktop's credential install and renewal reach it.
   const installs = new Map<string, DeviceCredentialInstalled>()
   const revokesQueued: RelayRevokeOutboxItem[] = []
-  const cellState: { resumeHash: string | null; inviteSpent: boolean; resumeRevoked: boolean } = {
+  const cellState: {
+    resumeHash: string | null
+    inviteSpent: boolean
+    resumeRevoked: boolean
+    /** The cell host the director names; a dial to any other host gets 4409 (wrong cell). */
+    hostCell: string
+    dialedHosts: string[]
+  } = {
     resumeHash: null,
     inviteSpent: false,
-    resumeRevoked: false
+    resumeRevoked: false,
+    hostCell: 'cell.test',
+    dialedHosts: []
   }
   server.setMobileRelayPairingProvider({
     createPairingRelay: () => Promise.reject(new Error('not in this test')),
@@ -139,6 +152,9 @@ export async function startHostOverRelay(
   let transport: CloudRelayTransport | null = null
   const cell = await startRelayProtocolCellStandIn({
     admit: (credential) => {
+      if (cellState.dialedHosts.at(-1) !== cellState.hostCell) {
+        return { closeCode: MOBILE_RELAY_CLOSE_CODE.WRONG_CELL }
+      }
       const kind =
         credential === RELAY_TEST_INVITE && !cellState.inviteSpent
           ? 'invite'
@@ -203,10 +219,16 @@ export async function startHostOverRelay(
   }
   const platform: RelayClientPlatform = {
     ...NODE_RELAY_CLIENT_PLATFORM,
-    createSocket: (url, events) =>
-      NODE_RELAY_CLIENT_PLATFORM.createSocket(url.replace(/^wss:\/\/[^/]+/, cell.url), events)
+    createSocket: (url, events) => {
+      cellState.dialedHosts.push(new URL(url).host)
+      return NODE_RELAY_CLIENT_PLATFORM.createSocket(
+        url.replace(/^wss:\/\/[^/]+/, cell.url),
+        events
+      )
+    }
   }
   let entry: SharedHostLinkEntry | undefined = runtimeRelayLinkEntry(connection) ?? undefined
+  const memory = new RelayRuntimeDialMemory()
   const link = new RemoteRuntimeSharedControlConnection(connection, {
     environmentId: 'relay-link-test',
     binaryChannels: true,
@@ -224,7 +246,9 @@ export async function startHostOverRelay(
             store: { entry: () => entry, save: (next) => void (entry = next) },
             clientCapabilities,
             randomBytes: (length) => new Uint8Array(randomBytes(length)),
-            newId: randomUUID
+            newId: randomUUID,
+            memory,
+            resolveRelay: options.resolveRelay
           })
   })
   setRemoteRuntimeOneLink('relay-link-test', connection, () => link)

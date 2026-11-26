@@ -38,7 +38,10 @@ const RuntimeRelayReachSchema = z.object({
   cellUrl: PAIRING_RELAY_OFFER_FIELDS.cellUrl,
   relayHostId: PAIRING_RELAY_OFFER_FIELDS.relayHostId,
   inviteToken: PAIRING_RELAY_OFFER_FIELDS.inviteToken,
-  inviteExpiresAt: z.number().int()
+  inviteExpiresAt: z.number().int(),
+  // Where the client asks for the host's current cell when the one it knows stops answering.
+  directorUrl: PAIRING_RELAY_OFFER_FIELDS.directorUrl.optional(),
+  assignmentEpoch: PAIRING_RELAY_OFFER_FIELDS.assignmentEpoch.optional()
 })
 
 export type RuntimeRelayReach = z.infer<typeof RuntimeRelayReachSchema>
@@ -48,7 +51,9 @@ export function runtimeRelayEndpoint(relay: PairingRelay): string {
     cellUrl: relay.cellUrl,
     relayHostId: relay.relayHostId,
     inviteToken: relay.inviteToken,
-    inviteExpiresAt: relay.inviteExpiresAt
+    inviteExpiresAt: relay.inviteExpiresAt,
+    directorUrl: relay.directorUrl,
+    assignmentEpoch: relay.assignmentEpoch
   }
   return `${RELAY_ENDPOINT_PREFIX}${btoa(JSON.stringify(reach))}`
 }

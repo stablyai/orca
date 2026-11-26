@@ -14,8 +14,8 @@ export type RelayCellAdmission = {
 }
 
 export async function startRelayProtocolCellStandIn(args: {
-  /** Null refuses the credential, as the cell does an unknown or spent one. */
-  admit: (credential: string) => RelayCellAdmission | null
+  /** Null refuses the credential, as the cell does an unknown or spent one; a code closes with it. */
+  admit: (credential: string) => RelayCellAdmission | null | { closeCode: number }
 }): Promise<RelayCellStandIn & { credentials: string[] }> {
   const server = new WebSocketServer({ port: 0, host: '127.0.0.1', maxPayload: 8 * 1024 * 1024 })
   await new Promise<void>((resolve) => server.once('listening', () => resolve()))
@@ -45,6 +45,10 @@ export async function startRelayProtocolCellStandIn(args: {
         auth && typeof auth === 'object' && 'credential' in auth ? String(auth.credential) : ''
       credentials.push(credential)
       const admitted = args.admit(credential)
+      if (admitted && 'closeCode' in admitted) {
+        socket.close(admitted.closeCode, 'refused')
+        return
+      }
       if (!admitted) {
         const code = MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
         socket.send(JSON.stringify({ type: 'relay-hello', ok: false, code }))
