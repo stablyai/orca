@@ -35,9 +35,7 @@ import {
 } from './structured-agent-session-status-ownership'
 
 export class StructuredAgentSessionStatusFeed {
-  private readonly ownership = new StructuredAgentSessionStatusOwnership(() =>
-    this.deps.statusSink?.()
-  )
+  private readonly ownership = new StructuredAgentSessionStatusOwnership(() => this.deps)
   private readonly subscriptions = new StructuredAgentSessionStatusSubscriptions()
   private readonly broadcast = this.subscriptions.broadcast
   // Live chats and shown tabs (all closed chats on stores that can't list tabs); names come from records.
@@ -291,6 +289,9 @@ export class StructuredAgentSessionStatusFeed {
 
   drainChildWork = (sessionId?: string): Promise<void> =>
     this.deps.drainChildWork?.(sessionId) ?? Promise.resolve()
+
+  readCommandDetail = (id: string, childWorkId: string) =>
+    this.ownership.readCommandDetail(id, childWorkId)
 
   readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
     try {

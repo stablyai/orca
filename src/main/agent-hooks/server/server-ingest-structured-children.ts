@@ -14,10 +14,16 @@ import {
   type AgentChildWorkView
 } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
+  agentStatusSubjectsEqual,
   parseAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
 } from '../../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServerIngestStructured } from './server-ingest-structured'
+import {
+  commandDetailSlotsOf,
+  type StructuredChildWorkAuthority,
+  type StructuredCommandDetailSlot
+} from '../../native-chat/agent-session-wire/command-details/structured-command-detail-slots'
 
 // Superseded evidence is an expected refusal.
 const EXPECTED_REFUSALS: ReadonlySet<string> = new Set(['stale-invocation'])
@@ -27,7 +33,8 @@ export abstract class AgentHookServerIngestStructuredChildren extends AgentHookS
   ingestStructuredChildWork(
     subject: AgentStatusStructuredSessionSubject,
     evidence: AgentChildWorkEvidence[],
-    provider: string
+    provider: string,
+    authority?: StructuredChildWorkAuthority
   ): AgentChildWorkReconcileOutcome | null {
     const parent = parseAgentStatusSubject(subject)
     if (!parent || parent.kind !== 'structured-session') {
@@ -42,7 +49,11 @@ export abstract class AgentHookServerIngestStructuredChildren extends AgentHookS
       admission: createAgentChildWorkAdmission(store, { mintChildWorkId: () => randomUUID() }),
       parent,
       provider,
-      evidence
+      evidence,
+      liveAdmission: commandDetailSlotsOf(store).observer(
+        (childWorkId) => store.getChild(childWorkId),
+        authority
+      )
     })
     const unexpected = outcome.rejected.filter(({ reason }) => !EXPECTED_REFUSALS.has(reason))
     if (unexpected.length > 0) {
@@ -52,6 +63,19 @@ export abstract class AgentHookServerIngestStructuredChildren extends AgentHookS
       )
     }
     return outcome
+  }
+
+  /** One child of this exact parent by its indexed ID, with its private exact command if any. */
+  getStructuredCommandDetail(
+    subject: AgentStatusStructuredSessionSubject,
+    childWorkId: string
+  ): { record: AgentChildWorkRecord; slot: StructuredCommandDetailSlot | undefined } | null {
+    const parent = parseAgentStatusSubject(subject)
+    const record = parent ? this.canonicalStatusStore.getChild(childWorkId) : null
+    if (!parent || !record || !agentStatusSubjectsEqual(record.parent, parent)) {
+      return null
+    }
+    return { record, slot: commandDetailSlotsOf(this.canonicalStatusStore).read(record) }
   }
 
   getStructuredChildWork(subject: AgentStatusStructuredSessionSubject): AgentChildWorkRecord[] {

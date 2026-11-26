@@ -12,7 +12,9 @@ export function admitAgentSessionBackgroundTaskState(
   if (!next) {
     return next
   }
-  const { children: raw, ...rest } = next
+  // Command availability is credit, not roster state: only the desktop credit latch decodes it,
+  // from the frame itself, so it is never kept or compared here (and phones never carry it).
+  const { children: raw, commandDetailsAvailable: _credit, ...rest } = next
   const children = decodeAgentChildWorkViews(raw)
   const decoded = { ...rest, ...(children ? { children } : {}) }
   return previous && backgroundTaskStatesEqual(decoded, previous) ? previous : decoded

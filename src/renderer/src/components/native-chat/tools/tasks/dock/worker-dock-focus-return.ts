@@ -3,6 +3,21 @@ export function workerDockOpenerPane(opener: HTMLElement): Element | null {
   return opener.closest('[data-native-chat-root]')
 }
 
+/** The row that opened a dialog, or the row now showing the same worker when a remount (a crew
+ *  coming and going) replaced it; the old element when neither is on screen. */
+export function currentWorkerDockOpener(
+  opener: HTMLElement,
+  pane: Element | null,
+  rowId: string
+): HTMLElement {
+  if (opener.isConnected || !pane) {
+    return opener
+  }
+  // Compared, not put in a selector: row ids carry quotes and brackets.
+  const rows = pane.querySelectorAll<HTMLElement>('[data-worker-dock-open]')
+  return [...rows].find((row) => row.dataset.workerDockOpen === rowId) ?? opener
+}
+
 /** That pane's message box, when focus the worker card held has nowhere left to go. */
 export function focusWorkerDockPaneEditor(pane: Element | null | undefined): void {
   pane?.querySelector<HTMLElement>('[data-native-chat-prompt-editor]')?.focus()

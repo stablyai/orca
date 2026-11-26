@@ -1,7 +1,8 @@
 import { AgentHookServerStateContract } from './server-state-contract'
+import { createCanonicalAgentStatusStore } from '../../native-chat/agent-session-wire/command-details/structured-command-detail-slots'
 
 import type { createServer } from 'node:http'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 
 import {
   createHookListenerState,
@@ -19,10 +20,7 @@ import {
 } from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 
-import {
-  createAgentStatusStore,
-  type AgentStatusStore
-} from '../../../shared/agent-status/store/agent-status-store'
+import type { AgentStatusStore } from '../../../shared/agent-status/store/agent-status-store'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import type { AgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import type {
@@ -203,11 +201,9 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
 
   // Lazy initialization avoids needing live crypto when the singleton module is imported.
   private canonicalStatusStoreInstance: AgentStatusStore | null = null
+  // Its private exact-command slots live and die with this instance (`commandDetailSlotsOf`).
   protected get canonicalStatusStore(): AgentStatusStore {
-    this.canonicalStatusStoreInstance ??= createAgentStatusStore({
-      epoch: randomUUID(),
-      mode: 'authority'
-    })
+    this.canonicalStatusStoreInstance ??= createCanonicalAgentStatusStore()
     return this.canonicalStatusStoreInstance
   }
   protected readonly canonicalListingOrder = new Map<string, number>()

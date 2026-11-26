@@ -21506,7 +21506,7 @@
         "staysDefault": "{{email}} 仍为默认账户"
       },
       "workerDock": {
-        "commandOutputPending": "命令输出暂不可用",
+        "commandOutputPending": "暂无输出。",
         "notNow": "暂不",
         "retry": "重试",
         "dismiss": "关闭",

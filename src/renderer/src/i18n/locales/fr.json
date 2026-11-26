@@ -21846,7 +21846,7 @@
         "staysDefault": "{{email}} reste le compte par défaut"
       },
       "workerDock": {
-        "commandOutputPending": "La sortie de la commande n’est pas encore disponible.",
+        "commandOutputPending": "Pas encore de sortie.",
         "notNow": "Pas maintenant",
         "retry": "Réessayer",
         "dismiss": "Ignorer",

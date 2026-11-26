@@ -33,12 +33,40 @@ function readsChildViews(ctx: BackgroundTaskReader): boolean {
   )
 }
 
-/** Older readers interpret every roster as running work; withhold unreadable child views until legacy shapes retire (structured-agent-session-child-work-legacy). */
+/** Older readers interpret every roster as running work; withhold unreadable child views until legacy shapes retire (structured-agent-session-child-work-legacy).
+ *  Exact-command availability names child views, so it goes with them. */
 function withoutChildViews(
   state: AgentSessionBackgroundTaskState
 ): AgentSessionBackgroundTaskState {
-  const { children: _children, ...legacy } = state
+  const { children: _children, commandDetailsAvailable: _available, ...legacy } = state
   return legacy
+}
+
+/** Phones never read exact commands, even when they read child views. */
+function withoutCommandDetails(
+  state: AgentSessionBackgroundTaskState
+): AgentSessionBackgroundTaskState {
+  if (state.commandDetailsAvailable === undefined) {
+    return state
+  }
+  const { commandDetailsAvailable: _available, ...rest } = state
+  return rest
+}
+
+function readsCommandDetails(ctx: BackgroundTaskReader): boolean {
+  return ctx.clientKind !== 'mobile' && readsChildViews(ctx)
+}
+
+/** The early per-subscriber audience projection: before fitting, fingerprint and comparison, so a
+ *  change to availability alone never reaches a phone or legacy reader. */
+export function backgroundTaskSubscriberProjection(
+  ctx: BackgroundTaskReader
+):
+  | ((state: AgentSessionBackgroundTaskState | null) => AgentSessionBackgroundTaskState | null)
+  | undefined {
+  return readsCommandDetails(ctx)
+    ? undefined
+    : (state) => (state ? withoutCommandDetails(state) : state)
 }
 
 /** Older readers draw stop on every row; with targeted-stop support, hide unstoppable rows or they get dead buttons.
@@ -57,7 +85,13 @@ function projectState(
   state: AgentSessionBackgroundTaskState | null | undefined,
   ctx: BackgroundTaskReader
 ): AgentSessionBackgroundTaskState | null | undefined {
-  const views = !state || readsChildViews(ctx) ? state : withoutChildViews(state)
+  const views = !state
+    ? state
+    : !readsChildViews(ctx)
+      ? withoutChildViews(state)
+      : ctx.clientKind === 'mobile'
+        ? withoutCommandDetails(state)
+        : state
   const rows = !views || honoursRowStop(ctx) ? views : withoutUnstoppableRows(views)
   // Legacy readers always offer a stop; retain their pre-producer empty strip.
   return rows?.supportsStopAll === false && !rows.supportsTaskStop && !supportsReadOnlyTasks(ctx)

@@ -21986,7 +21986,7 @@
         "staysDefault": "{{email}} 계정이 기본으로 유지됩니다"
       },
       "workerDock": {
-        "commandOutputPending": "명령 출력이 아직 없습니다.",
+        "commandOutputPending": "아직 출력이 없습니다.",
         "notNow": "나중에",
         "retry": "다시 시도",
         "dismiss": "닫기",

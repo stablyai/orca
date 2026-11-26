@@ -39,6 +39,17 @@ export type AgentChildWorkEvidenceContext = AgentChildWorkEvidenceScope & {
   outcome: AgentChildWorkReconcileOutcome
 }
 
+/** A trusted host's view of one live edge's admission, in the same synchronous stack. */
+export type AgentChildWorkLiveAdmissionObserver = {
+  /** Runs right after the handle resolves and before every exit, refusals included. */
+  resolved: (
+    child: AgentChildWorkLiveObservation,
+    resolution: { ambiguous: boolean; existing: boolean; highestGeneration: number | null }
+  ) => void
+  /** The edge's admission committed; `created` only for the record this edge brought into being. */
+  admitted: (child: AgentChildWorkLiveObservation, childWorkId: string, created: boolean) => void
+}
+
 function counted(
   ctx: AgentChildWorkEvidenceContext,
   handleId: string,
@@ -119,10 +130,23 @@ export function applyAgentChildWorkLive(
   ctx: AgentChildWorkEvidenceContext,
   child: AgentChildWorkLiveObservation,
   observedAt: number,
-  restart: boolean
+  restart: boolean,
+  observer?: AgentChildWorkLiveAdmissionObserver
 ): void {
   const { handle } = child
   const resolution = resolveAgentChildWorkHandle(ctx, [handle.idKind], handle.id)
+  if (resolution) {
+    observer?.resolved(child, {
+      ambiguous: resolution.ambiguous,
+      existing: resolution.child !== null,
+      highestGeneration: resolution.highestGeneration
+    })
+  }
+  const admitted = (result: AgentChildWorkAdmissionResult, created: boolean): void => {
+    if (result.accepted) {
+      observer?.admitted(child, result.childWorkId, created && result.created)
+    }
+  }
   if (!resolution || resolution.ambiguous) {
     ctx.outcome.rejected.push({ handleId: handle.id, reason: resolution ? 'ambiguous' : 'invalid' })
     return
@@ -145,6 +169,7 @@ export function applyAgentChildWorkLive(
       lifetime: retired === null ? 'current' : 'proven-new'
     })
     counted(ctx, handle.id, result, 'admitted')
+    admitted(result, true)
     return
   }
   const run = agentChildWorkRunVerdict(ctx, existing, handle.runId)
@@ -166,6 +191,7 @@ export function applyAgentChildWorkLive(
       aliases
     })
     counted(ctx, handle.id, result, 'admitted')
+    admitted(result, false)
     return
   }
   if (existing.membership === 'settled') {
@@ -182,6 +208,7 @@ export function applyAgentChildWorkLive(
         })
       : ctx.admission.announce({ ...fields, fence: existing.invocation, lifetime: 'current' })
   counted(ctx, handle.id, result, 'admitted')
+  admitted(result, false)
 }
 
 export function settleAgentChildWork(

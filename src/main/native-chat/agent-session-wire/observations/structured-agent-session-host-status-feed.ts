@@ -93,7 +93,9 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
       subagentRows.changed(sessionId, producer)
       args.onChildWorkChanged?.(sessionId)
     },
-    drainChildWork: (sessionId) => subagentRows.drain(sessionId)
+    drainChildWork: (sessionId) => subagentRows.drain(sessionId),
+    // Forget removes the subject's children, which can withdraw a reader's exact command.
+    onSubjectForgotten: (sessionId) => args.onChildWorkChanged?.(sessionId)
   })
   return feed
 }

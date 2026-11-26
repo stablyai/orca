@@ -22274,7 +22274,7 @@
         "staysDefault": "{{email}} 仍為預設"
       },
       "workerDock": {
-        "commandOutputPending": "目前還無法取得命令輸出。",
+        "commandOutputPending": "尚無輸出。",
         "notNow": "稍後再說",
         "retry": "重試",
         "dismiss": "關閉",

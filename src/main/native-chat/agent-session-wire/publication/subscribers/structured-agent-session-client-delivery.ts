@@ -68,7 +68,7 @@ export class StructuredAgentSessionClientDelivery {
       onJournalActivity: (sessionId: string, activity?: boolean, inputChanged?: boolean) => void
     },
     onAgentStarted: (sessionId: string) => void,
-    onChildWorkChanged: (sessionId: string) => void,
+    private readonly onChildWorkChanged: (sessionId: string) => void,
     // Current clients interpret an absent opening roster as no tasks.
     readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>,
     starting?: (sessionId: string) => boolean,
@@ -190,6 +190,8 @@ export class StructuredAgentSessionClientDelivery {
   readChildWork = (sessionId: string): AgentChildWorkView[] | undefined =>
     this.statusFeed.readChildWork(sessionId)
 
+  readCommandDetail = (id: string, child: string) => this.statusFeed.readCommandDetail(id, child)
+
   childWorkOpen = (sessionId: string): boolean => this.statusFeed.childWorkOpen(sessionId)
 
   captureChildWorkStops = (
@@ -290,6 +292,9 @@ export class StructuredAgentSessionClientDelivery {
     }
     // Reopen rebaselines instead of reannouncing the prior turn.
     this.turnCompletionFeed.forget(sessionId)
+    // Readers outlive the conversation: re-derive what they may open now, before the journal
+    // closes or anything awaits.
+    this.onChildWorkChanged(sessionId)
   }
 
   async closeAll(): Promise<void> {

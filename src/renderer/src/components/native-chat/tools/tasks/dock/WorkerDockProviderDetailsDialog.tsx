@@ -1,4 +1,8 @@
-import { returnWorkerDockFocus, workerDockOpenerPane } from './worker-dock-focus-return'
+import {
+  currentWorkerDockOpener,
+  returnWorkerDockFocus,
+  workerDockOpenerPane
+} from './worker-dock-focus-return'
 import { useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -15,27 +19,36 @@ import type { AgentJournalCursor } from '../../../../../../../shared/agent-sessi
 import type { AgentSessionHistoryResult } from '../../../../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../../shared/native-chat/native-chat-types'
 import type { WorkerDockRowView } from './WorkerDockRow'
+import { WorkerDockCommandBlock } from './WorkerDockCommandBlock'
+import { useWorkerDockCommandDetail } from './use-worker-dock-command-detail'
 
 export function WorkerDockProviderDetailsDialog({
   row,
   opener,
+  openerPane,
   sessionId,
   target,
   onClose
 }: {
   row: WorkerDockRowView
   opener: HTMLElement
+  /** The opener's chat pane, found when it was clicked. */
+  openerPane?: Element | null
   sessionId: string
   target: RuntimeClientTarget
   onClose: () => void
 }) {
-  const [pane] = useState(() => workerDockOpenerPane(opener))
+  // The pane as of the click: a dialog shown again after a crew left has a detached opener.
+  const [pane] = useState(() => openerPane ?? workerDockOpenerPane(opener))
+  // The held row as opened: output lookup and exact text never retarget while the dialog is up.
+  const [held] = useState(row)
   const t = useTranslate()
   const [block, setBlock] = useState<NativeChatBackgroundTaskBlock | null>(null)
+  const command = useWorkerDockCommandDetail(held, sessionId, target)
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      if (row.settlement) {
+      if (held.settlement) {
         return
       }
       let cursor: AgentJournalCursor | undefined
@@ -57,12 +70,12 @@ export function WorkerDockProviderDetailsDialog({
           if (item.body.kind !== 'message') {
             continue
           }
-          const command = item.body.blocks.find(
+          const found = item.body.blocks.find(
             (candidate): candidate is NativeChatBackgroundTaskBlock =>
-              candidate.type === 'background-task' && candidate.taskId === row.providerId
+              candidate.type === 'background-task' && candidate.taskId === held.providerId
           )
-          if (command) {
-            setBlock(command)
+          if (found) {
+            setBlock(found)
             return
           }
         }
@@ -75,7 +88,8 @@ export function WorkerDockProviderDetailsDialog({
     return () => {
       cancelled = true
     }
-  }, [row, sessionId, target])
+  }, [held, sessionId, target])
+  const isCommand = held.kind === 'command'
   return (
     <Dialog
       open
@@ -89,23 +103,27 @@ export function WorkerDockProviderDetailsDialog({
         scrollable
         onCloseAutoFocus={(event) => {
           event.preventDefault()
-          returnWorkerDockFocus(opener, pane)
+          returnWorkerDockFocus(currentWorkerDockOpener(opener, pane, held.id), pane)
         }}
       >
         <DialogHeader>
           <DialogTitle>{row.name}</DialogTitle>
-          <DialogDescription>{row.title}</DialogDescription>
+          {isCommand ? null : <DialogDescription>{row.title}</DialogDescription>}
         </DialogHeader>
+        {isCommand ? (
+          <WorkerDockCommandBlock
+            text={command.exact ?? row.title}
+            exact={command.exact !== null}
+            onCopy={command.copy}
+          />
+        ) : null}
         {block ? (
           <NativeChatBackgroundTaskRun block={block} />
         ) : (
           <p className="text-sm text-muted-foreground">
             {row.reason ??
               (row.kind === 'command'
-                ? t(
-                    'components.native-chat.workerDock.commandOutputPending',
-                    'Command output is not available yet.'
-                  )
+                ? t('components.native-chat.workerDock.commandOutputPending', 'No output yet.')
                 : t(
                     'components.native-chat.workerDock.resultUnavailable',
                     'Worker result unavailable'

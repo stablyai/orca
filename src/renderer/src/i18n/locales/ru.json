@@ -22334,7 +22334,7 @@
         "staysDefault": "По умолчанию остаётся {{email}}"
       },
       "workerDock": {
-        "commandOutputPending": "Вывод команды пока недоступен.",
+        "commandOutputPending": "Вывода пока нет.",
         "notNow": "Не сейчас",
         "retry": "Повторить",
         "dismiss": "Скрыть",

@@ -19,13 +19,14 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
   target: RuntimeClientTarget,
   method: string,
   params: unknown,
-  onEvent: (event: TEvent) => void,
+  onEvent: (event: TEvent, runtimeId?: string) => void,
   onError: (error: unknown) => void,
   onClose: () => void
 ): Promise<{ unsubscribe: () => void }> {
   return subscribeRuntimeRpc(target, method, params, {
+    // The authenticated runtime travels with each frame, so a reader can pin what it was shown.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the method whose frames are TEvent; unchecked as before.
-    onEvent: (result) => onEvent(result as TEvent),
+    onEvent: (result, runtimeId) => onEvent(result as TEvent, runtimeId),
     onError,
     onClose
   })
@@ -34,7 +35,7 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
 export function subscribeStructuredAgentSession(
   target: RuntimeClientTarget,
   params: unknown,
-  onEvent: (event: AgentSessionSubscribeEvent) => void,
+  onEvent: (event: AgentSessionSubscribeEvent, runtimeId?: string) => void,
   onError: (error: unknown) => void,
   onClose: () => void
 ): Promise<{ unsubscribe: () => void }> {

@@ -55,8 +55,8 @@ export function workerDockFailureSink(
   }
   return {
     ...sink,
-    publishChildWork: (subject, evidence, provider) => {
-      const result = sink.publishChildWork?.(subject, evidence, provider)
+    publishChildWork: (subject, evidence, provider, authority) => {
+      const result = sink.publishChildWork?.(subject, evidence, provider, authority)
       if (result?.failures?.length) {
         // Stored under the chat's /clear root, where its dock reads and clears them.
         retainProviderFailures(

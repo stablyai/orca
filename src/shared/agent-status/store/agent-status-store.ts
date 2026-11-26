@@ -10,7 +10,10 @@ import {
   agentStatusStoreChildrenOf,
   resolveAgentStatusChildBindings
 } from './agent-status-store-child-queries'
-import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
+import {
+  commitAgentStatusStoreMutation,
+  type AgentStatusStoreChildCommit
+} from './agent-status-store-commit'
 import type { AgentStatusStoreSnapshot } from './agent-status-store-contract'
 import {
   isAgentStatusStoreEpoch,
@@ -59,6 +62,8 @@ export type AgentStatusStore = {
 export type CreateAgentStatusStoreOptions = {
   epoch: string
   mode: AgentStatusStoreMode
+  /** Authority only: runs inside each committed mutation, after it lands and before it returns. */
+  onChildrenCommitted?: (changes: readonly AgentStatusStoreChildCommit[]) => void
 }
 
 export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): AgentStatusStore {
@@ -125,7 +130,15 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
         return null
       }
       const previousRevision = state.revision
-      if (!commitAgentStatusStoreMutation(state, indexes, mutation, previousRevision + 1)) {
+      if (
+        !commitAgentStatusStoreMutation(
+          state,
+          indexes,
+          mutation,
+          previousRevision + 1,
+          options.onChildrenCommitted
+        )
+      ) {
         return null
       }
       return deepFreezeAgentStatusStoreValue({

@@ -11,6 +11,7 @@ import { startStructuredAgentSessionReadTransport } from './structured-agent-ses
 import { withDocumentSavesOnly } from './document-viewer-visibility'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { createReadOwnerCommandCredit } from './structured-agent-session-read-owner-command-credit'
 
 import { createStructuredAgentSessionReadActivity } from './structured-agent-session-read-activity'
 import { createStructuredAgentSessionOlderPageLoader } from './structured-agent-session-older-page-loader'
@@ -88,6 +89,7 @@ export function createReadOwner(
       setSnapshot({ ...snapshot, current: false })
     }
   }
+  const commandCredit = createReadOwnerCommandCredit(markStale)
   const setProviderSession = (providerSession: AgentProviderSessionMetadata | undefined): void => {
     if (!agentProviderSessionsEqual(undefined, snapshot.providerSession, providerSession)) {
       setSnapshot({ ...snapshot, providerSession })
@@ -119,10 +121,8 @@ export function createReadOwner(
     })
   }
   const trimHistory = (): void => {
-    if (disposed) {
-      return
-    }
-    if (snapshot.initialHistoryAutoLoad) {
+    // trimUnusedHistory does nothing once disposed.
+    if (!disposed && snapshot.initialHistoryAutoLoad) {
       setSnapshot({ ...snapshot, initialHistoryAutoLoad: false })
     }
     trimUnusedHistory()
@@ -167,7 +167,7 @@ export function createReadOwner(
         apply({ type: 'error', message, refusal })
       },
       getCursor: () => snapshot.state.cursor,
-      onContactLost: markStale,
+      ...commandCredit.forRun(),
       onHistoryReadInvalidated: invalidateOlderPages,
       hydrate: snapshot.state.epoch === null ? hydrate : undefined,
       sessionId,
@@ -178,7 +178,7 @@ export function createReadOwner(
       captureActiveHistoryReadGuard = () => retiredHistoryRead
       transport.dispose()
       stopActiveRun = null
-      markStale()
+      commandCredit.lost()
     }
   }
 
@@ -290,6 +290,7 @@ export function createReadOwner(
       }
     },
     subscribeCommandsChanged: (listener) => subscribeTo(commandListeners, listener),
+    commandDetails: commandCredit.reader,
     loadOlder: createStructuredAgentSessionOlderPageLoader({
       target,
       sessionId,

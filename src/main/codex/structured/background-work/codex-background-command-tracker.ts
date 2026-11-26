@@ -10,6 +10,13 @@ import { readCodexThreadItem } from '../items/codex-thread-item-identity'
 import type { CodexAbandonedCommand } from '../prompts/codex-prompt-registry'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import { codexPrimaryCommandTaskId } from '../../../../shared/agent-session/view/structured-session-foreground-commands'
+import { codexCommandOutlivesTurn } from '../items/codex-command-lifecycle'
+import { codexExactCommandDisplay } from './codex-command-exact-display'
+import {
+  createStructuredCommandOccurrence,
+  endStructuredCommandOccurrence,
+  type StructuredCommandOccurrence
+} from '../../../native-chat/agent-session-wire/command-details/structured-command-occurrence'
 
 const MAX_SETTLED_COMMANDS = 128
 
@@ -20,6 +27,8 @@ type Command = {
   task: AgentSessionBackgroundTask
   /** Codex's id for the command's process, which a background-terminal stop names. */
   processId?: string
+  /** This accepted start; every restatement of the command carries the same one. */
+  occurrence: StructuredCommandOccurrence
 }
 
 export type CodexBackgroundCommandChange =
@@ -30,6 +39,8 @@ export type CodexBackgroundCommandChange =
       backgrounded: boolean
       task: AgentSessionBackgroundTask
       processId?: string
+      /** Weak, so a queued edge never keeps the command or its text alive. */
+      occurrence?: WeakRef<StructuredCommandOccurrence>
     }
   | { type: 'ended'; threadId: string; taskId: string }
 
@@ -49,9 +60,11 @@ export class CodexBackgroundCommandTracker {
     if (completed) {
       return this.end(key)
     }
+    // A duplicate start leaves the first occurrence and its text untouched.
     if (this.commands.has(key)) {
       return null
     }
+    command.occurrence = createStructuredCommandOccurrence(parsed.exact)
     this.commands.set(key, command)
     const thread = this.byThread.get(command.threadId) ?? new Set<string>()
     thread.add(key)
@@ -88,7 +101,8 @@ export class CodexBackgroundCommandTracker {
       turnId,
       backgrounded,
       task,
-      ...(processId !== undefined ? { processId } : {})
+      ...(processId !== undefined ? { processId } : {}),
+      occurrence: new WeakRef(command.occurrence)
     }
   }
 
@@ -143,11 +157,10 @@ export class CodexBackgroundCommandTracker {
 
   clear(): CodexBackgroundCommandChange[] {
     const ended = [...this.commands.values()].map(
-      ({ threadId, task }): CodexBackgroundCommandChange => ({
-        type: 'ended',
-        threadId,
-        taskId: task.id
-      })
+      ({ threadId, task, occurrence }): CodexBackgroundCommandChange => {
+        endStructuredCommandOccurrence(occurrence)
+        return { type: 'ended', threadId, taskId: task.id }
+      }
     )
     this.commands.clear()
     this.byThread.clear()
@@ -159,6 +172,7 @@ export class CodexBackgroundCommandTracker {
   private end(key: string): CodexBackgroundCommandChange | null {
     const existing = this.commands.get(key)
     if (existing) {
+      endStructuredCommandOccurrence(existing.occurrence)
       this.commands.delete(key)
       const thread = this.byThread.get(existing.threadId)
       thread?.delete(key)
@@ -188,7 +202,7 @@ export class CodexBackgroundCommandTracker {
 
   private parse(
     event: CodexBackgroundTaskEvent
-  ): { key: string; command: Command; completed: boolean } | null {
+  ): { key: string; command: Command; completed: boolean; exact: string | null } | null {
     if (event.method !== 'item/started' && event.method !== 'item/completed') {
       return null
     }
@@ -204,7 +218,19 @@ export class CodexBackgroundCommandTracker {
       .trim()
     const turnId = readCodexTurnId(event.params)
     const processId = readString(item, 'processId') ?? undefined
-    const command = {
+    // Only a live persistent-exec start with its process proves the presentation it carries;
+    // placeholders, approvals, interaction, imports and completion-only items never do.
+    const raw = item.command
+    const exact =
+      !completed &&
+      event.method === 'item/started' &&
+      item.status === 'inProgress' &&
+      codexCommandOutlivesTurn(item) &&
+      processId !== undefined &&
+      typeof raw === 'string'
+        ? codexExactCommandDisplay(raw)
+        : null
+    const command: Command = {
       threadId: event.threadId,
       turnId,
       backgrounded: turnId !== null && this.settled.has(this.turnKey(event.threadId, turnId)),
@@ -216,8 +242,10 @@ export class CodexBackgroundCommandTracker {
         kind: 'command' as const,
         ...(description ? { description } : {})
       },
-      ...(processId !== undefined ? { processId } : {})
+      ...(processId !== undefined ? { processId } : {}),
+      // Replaced by the tracker only when it accepts this start.
+      occurrence: createStructuredCommandOccurrence(null)
     }
-    return { key, completed, command }
+    return { key, completed, command, exact }
   }
 }

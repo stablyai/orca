@@ -21,19 +21,10 @@ import type {
 import type { StructuredAgentSessionAction } from './structured-agent-session-reducer'
 import { createReconnectScheduler } from './structured-agent-session-reconnect'
 import { createStructuredAgentSessionSubscribeAsks } from './structured-agent-session-subscribe-asks'
-import type { StructuredAgentSessionSubscribeCapabilities } from './structured-agent-session-subscribe-asks'
+import type { StructuredAgentSessionLiveReadCredit } from './command-detail-authority'
+import type { StructuredAgentSessionLiveSubscribe } from './structured-agent-session-live-subscribe'
 
-/** One `agentSession.subscribe` stream, opened by whichever transport the client has. */
-export type StructuredAgentSessionLiveSubscribe = (
-  params: {
-    sessionId: string
-    cursor?: AgentJournalCursor
-    capabilities?: StructuredAgentSessionSubscribeCapabilities
-  },
-  onEvent: (event: AgentSessionSubscribeEvent) => void,
-  onError: (error: unknown) => void,
-  onClose: () => void
-) => Promise<{ unsubscribe: () => void }>
+export type { StructuredAgentSessionLiveSubscribe } from './structured-agent-session-live-subscribe'
 
 /** Resume from the last applied cursor after stream end/failure with capped exponential backoff. */
 export function startStructuredAgentSessionLiveRead(args: {
@@ -62,6 +53,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   ) => Promise<AgentSessionCurrentRequestsPiece>
   /** Calls `retryNow` when the host is likely reachable again; returns what stops listening. */
   subscribeRetryNow: (retryNow: () => void) => () => void
+  /** The exact-command credit latch's view of each open and frame. */
+  credit?: StructuredAgentSessionLiveReadCredit
 }): {
   captureHistoryReadGuard: () => () => boolean
   dispose: () => void
@@ -103,9 +96,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   }
   const isCurrentOpenGeneration = (candidate: number): boolean =>
     !stopped && candidate === openGeneration
-  const clearUnattachedReadGrace = (): void => {
-    unattachedSince = null
-  }
+  const clearUnattachedReadGrace = (): null => (unattachedSince = null)
   /** Older hosts can transiently refuse reads during attach/close. Reconnect through the grace window;
    * report persistent refusal afterwards instead of leaving an endless spinner. */
   const applyReadFailure = (error: unknown): void => {
@@ -151,7 +142,11 @@ export function startStructuredAgentSessionLiveRead(args: {
     connected = false
     void open()
   }
-  const handleEvent = (received: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
+  const handleEvent = (
+    received: AgentSessionSubscribeEvent,
+    eventOpenGeneration: number,
+    runtimeId: string | undefined
+  ): void => {
     if (
       !isCurrentOpenGeneration(eventOpenGeneration) ||
       eventOpenGeneration === replacedOpenGeneration
@@ -164,6 +159,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       return
     }
     clearUnattachedReadGrace()
+    args.credit?.observeFrame(event, eventOpenGeneration, runtimeId)
     // Note delivered frames; local subscribe can resolve before the host refuses opening.
     if (event.type !== 'end') {
       reconnectScheduler.noteDelivered()
@@ -217,6 +213,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       return
     }
     const currentOpenGeneration = ++openGeneration
+    args.credit?.openGenerationAdvanced(currentOpenGeneration)
     openingFrameGeneration = currentOpenGeneration
     requestReader.invalidate()
     args.onHistoryReadInvalidated()
@@ -231,6 +228,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       }
       let closedDuringOpen = false
       const cursor = args.getCursor()
+      args.credit?.subscribeCursor(currentOpenGeneration, cursor)
       readTextAppends = textAppend ? createAgentSessionTextAppendReader(textAppend) : null
       const handle = await args.subscribe(
         {
@@ -238,9 +236,9 @@ export function startStructuredAgentSessionLiveRead(args: {
           ...(cursor ? { cursor } : {}),
           ...(capabilities ? { capabilities } : {})
         },
-        (event) => {
+        (event, runtimeId) => {
           closedDuringOpen ||= event.type === 'end'
-          handleEvent(event, currentOpenGeneration)
+          handleEvent(event, currentOpenGeneration, runtimeId)
         },
         (error) => {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {

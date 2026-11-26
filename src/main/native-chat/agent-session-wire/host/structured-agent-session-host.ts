@@ -74,8 +74,7 @@ export class StructuredAgentSessionHost {
       this.clientDelivery.subscribers,
       (sessionId) => this.lifetime.conversation(sessionId),
       this.clientDelivery.readCurrentWork,
-      this.clientDelivery.readChildWork,
-      this.clientDelivery.childWorkIncomplete
+      this.clientDelivery
     )
     this.runtimeState = new StructuredAgentSessionHostRuntimeState(
       deps,
@@ -228,7 +227,7 @@ export class StructuredAgentSessionHost {
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
     this.sessions.endPublications()
-    ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+    ;[this.conversationDelivery, this.queued.drain, this.background].forEach((d) => d.dispose())
     this.usageLimitContinue.dispose()
   }
 
@@ -325,6 +324,7 @@ export class StructuredAgentSessionHost {
   settleLateDispatch = this.mutations.settleLateDispatch
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
   publishBackgroundTasks = (sessionId: string): void => this.background.publish(sessionId)
+  commandDetail: Background['commandDetail'] = (...a) => this.background.commandDetail(...a)
 
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (id: string, key: string): void => this.clientDelivery.subscribers.close(id, key)

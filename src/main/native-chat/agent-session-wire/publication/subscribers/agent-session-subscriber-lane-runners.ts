@@ -29,14 +29,8 @@ export function subscriberLaneRunners(
   return {
     catchUp: ({ journal, port, hostNow, activity }) =>
       deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity }),
-    backgroundTasks: (fence) =>
-      republishSubscriberBackgroundTasks(
-        owner.deliveryPort(),
-        [subscriber],
-        sessionId,
-        fence,
-        owner.now()
-      ),
+    backgroundTasks: () =>
+      republishSubscriberBackgroundTasks(owner.deliveryPort(), subscriber, sessionId, owner.now()),
     liveText: ({ journal, fence, items, hostNow }) =>
       publishSubscriberLiveText(owner.deliveryPort(), {
         sessionId,

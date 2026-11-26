@@ -3,9 +3,20 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { InvalidArgumentError } from '../runtime/rpc/core'
 import { runtimeBotGroups } from './bot-group-runtime'
 
+/** True for every non-group session, and for a group member session while it is still a member. */
+export function botGroupSessionMembershipCurrent(
+  runtime: OrcaRuntimeService,
+  sessionId: string
+): boolean {
+  return (
+    !isBotGroupMemberSession(sessionId) ||
+    runtimeBotGroups(runtime).store.memberOf(sessionId) !== null
+  )
+}
+
 /** Any caller, a person or an agent, may operate a group member session while it is still a member. */
 export function assertBotGroupSessionAccess(runtime: OrcaRuntimeService, sessionId: string): void {
-  if (isBotGroupMemberSession(sessionId) && !runtimeBotGroups(runtime).store.memberOf(sessionId)) {
+  if (!botGroupSessionMembershipCurrent(runtime, sessionId)) {
     throw new Error('This bot is no longer a member of the group.')
   }
 }

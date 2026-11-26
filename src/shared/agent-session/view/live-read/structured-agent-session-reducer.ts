@@ -15,6 +15,7 @@ import {
   type AgentSessionCurrentRequestsState
 } from '../../requests/agent-session-current-requests'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
+import { admitsAgentSessionBatch } from './structured-agent-session-batch-admission'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -220,10 +221,7 @@ export function reduceStructuredAgentSession(
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
-  if (state.epoch !== event.batch.cursor.epoch) {
-    return state
-  }
-  if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
+  if (!admitsAgentSessionBatch(state, event.batch.cursor)) {
     return state
   }
   const requests = currentRequestsAfterEvent(state, event, action.opensSubscription === true)

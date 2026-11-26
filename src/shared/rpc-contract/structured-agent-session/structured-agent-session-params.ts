@@ -233,6 +233,16 @@ export const SwitchToTerminalParams = OptionsParams.extend({
     .optional()
 }).strict()
 export const ItemParams = OptionsParams.extend({ itemId: z.string().min(1) }).strict()
+/** One listed background command's exact invocation; the host returns its command or null. */
+export const BackgroundCommandParams = OptionsParams.extend({
+  childWorkId: z.string().min(1).max(256),
+  invocation: z
+    .object({
+      invocationId: z.string().min(1).max(1024),
+      generation: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
+    })
+    .strict()
+}).strict()
 export const ToolCallerParams = z.object({ token: z.string().min(1).max(256) }).strict()
 // Why optional: only a host advertising the workspace-sleep-mark capability is sent `markAsleep`.
 export const SleepWorkspaceParams = z

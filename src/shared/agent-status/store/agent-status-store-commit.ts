@@ -21,6 +21,14 @@ import {
 } from './agent-status-store-state'
 import { AgentStatusStoreDraftTable } from './agent-status-store-table'
 import { serializeAgentStatusSubject } from '../contracts/agent-status-subject'
+import type { AgentChildWorkRecord } from '../child-work/agent-status-child-work'
+
+/** One child record a committed mutation touched. `replaced`: deleted and possibly re-added, never an update. */
+export type AgentStatusStoreChildCommit = {
+  previous: AgentChildWorkRecord | undefined
+  next: AgentChildWorkRecord | undefined
+  replaced: boolean
+}
 
 /** Present keys of one draft that an index (or this mutation) places under a query, in map order. */
 function draftQuery<V>(
@@ -155,7 +163,8 @@ export function commitAgentStatusStoreMutation(
   state: AgentStatusStoreState,
   indexes: AgentStatusStoreIndexes,
   mutation: AgentStatusStoreMutation,
-  revision: number
+  revision: number,
+  onChildrenCommitted?: (changes: readonly AgentStatusStoreChildCommit[]) => void
 ): boolean {
   const { drafts, tables } = draftTables(state, indexes, revision)
   if (
@@ -164,6 +173,14 @@ export function commitAgentStatusStoreMutation(
   ) {
     return false
   }
+  // Read before landing: the committed map is the previous side of every change.
+  const children = onChildrenCommitted
+    ? [...drafts.children.touched()].map(({ key, previous, next }) => ({
+        previous,
+        next,
+        replaced: drafts.children.removedKeys.has(key)
+      }))
+    : []
   commitAgentStatusStoreIndexes(indexes, drafts)
   drafts.parents.commitInto(state.parents)
   drafts.children.commitInto(state.children)
@@ -171,5 +188,8 @@ export function commitAgentStatusStoreMutation(
   drafts.facts.commitInto(state.facts)
   drafts.tombstones.commitInto(state.tombstones)
   state.revision = revision
+  if (children.length > 0) {
+    onChildrenCommitted?.(children)
+  }
   return true
 }

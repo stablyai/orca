@@ -15,6 +15,7 @@ import { requireStructuredHost, startBotSession } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import * as remote from './bot-group-remote'
 import { closeMemberChat } from './bot-mail-chat'
+import { publishMembershipRevocation } from './bot-group-membership-revocation'
 
 /** The bots behind these ids, refusing duplicates and bots this host cannot run in a room. */
 export function requireGroupBots(groups: BotGroupRuntime, ids: readonly string[]): Bot[] {
@@ -188,6 +189,7 @@ export function deleteBotGroup(groups: BotGroupRuntime, groupId: string): Promis
   return runKeyedSerializedOperation(groups.queues, groupId, async () => {
     const group = groups.store.get(groupId)
     groups.store.deleteGroup(groupId)
+    publishMembershipRevocation(botGroupRoomMembers(group).flat())
     groups.changed()
     await closeSessions(groups, botGroupRoomMembers(group).flat())
     await groups.runtime.deleteFolderWorkspace(group.folderWorkspaceId)
@@ -257,6 +259,7 @@ async function retireMembers(groups: BotGroupRuntime, next: BotGroup): Promise<B
       })
     }
   })
+  publishMembershipRevocation(leaving)
   await closeSessions(groups, leaving)
   groups.changed()
   return group

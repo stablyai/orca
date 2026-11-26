@@ -139,6 +139,11 @@ export function markRuntimeEnvironmentCompatible(
   rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(status ?? null, true))
 }
 
+/** The runtime the last observed status named for this environment, if any. Never issues a request. */
+export function observedRuntimeEnvironmentRuntimeId(environmentId: string): string | undefined {
+  return runtimeCompatibilityChecks.get(environmentId.trim())?.status?.runtimeId
+}
+
 /**
  * Synchronous capability verdict from an already-cached status, positive or negative, within the
  * capability TTL; `undefined` when no fresh status is cached. Never issues a request.

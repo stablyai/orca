@@ -1,6 +1,7 @@
 // Background task wire rows and roster; keep task equality consistent across host publication and client reduction.
 
 import type { AgentChildWorkView } from '../../agent-status/child-work/agent-status-child-work-view'
+import type { AgentSessionCommandDetailTuple } from './agent-session-command-details'
 
 /** Optional state uses dashboard vocabulary; older hosts fall back to kind-derived defaults. */
 export type AgentSessionBackgroundTaskRunState =
@@ -45,6 +46,9 @@ export type AgentSessionBackgroundTaskState = {
   children?: AgentChildWorkView[]
   /** Unlisted/refused/dropped child work remains live; absence proves no end. Clear missing evidence on admission, its own end or session end. */
   incomplete?: true
+  /** Desktop chat readers only: listed command children whose exact command the host can return.
+   *  Absent means none; it never carries the command itself. */
+  commandDetailsAvailable?: AgentSessionCommandDetailTuple[]
 }
 
 function backgroundTaskFieldsEqual(

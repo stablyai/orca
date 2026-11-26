@@ -24,6 +24,7 @@ import {
 } from '../../app-server/codex-structured-thread-facts'
 import { CODEX_TOKEN_USAGE_METHOD, readCodexThreadTokenTotal } from './codex-subagent-activity'
 import type { CodexExecutionChild, CodexSubagentExecutions } from './codex-subagent-executions'
+import { markLiveEvidenceOccurrence } from '../../../native-chat/agent-session-wire/command-details/structured-command-occurrence'
 
 const CHILD_FRAME_METHODS: ReadonlySet<string> = new Set([
   'item/started',
@@ -55,20 +56,23 @@ function commandLive(
   ownerId: string | null,
   stopsTerminals: boolean
 ) {
-  const { task } = command
-  return (observedAt: number): AgentChildWorkEvidence => ({
-    type: 'live',
-    observedAt,
-    child: {
+  // Capture lifecycle fields and the weak occurrence marker only, never the command's text.
+  const { task, backgrounded, processId, occurrence } = command
+  return (observedAt: number): AgentChildWorkEvidence => {
+    const child: AgentChildWorkLiveObservation = {
       handle: { idKind: 'task_id', id: task.id },
       kind: 'command',
-      residency: command.backgrounded ? 'background' : 'foreground',
+      residency: backgrounded ? 'background' : 'foreground',
       state: 'working',
       ...(task.description ? { description: task.description } : {}),
       ...(ownerId !== null ? { ownerId } : {}),
-      stoppable: stopsTerminals && command.backgrounded && command.processId !== undefined
+      stoppable: stopsTerminals && backgrounded && processId !== undefined
     }
-  })
+    if (occurrence) {
+      markLiveEvidenceOccurrence(child, occurrence)
+    }
+    return { type: 'live', observedAt, child }
+  }
 }
 
 export class CodexChildWorkEvidence {
