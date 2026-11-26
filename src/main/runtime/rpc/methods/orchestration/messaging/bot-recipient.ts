@@ -15,7 +15,6 @@ import {
   type BotRequestConversation
 } from '../../../../../bots/bot-request-asker'
 import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
-import { JournalWindowNotIndexed } from '../../../../../native-chat/agent-session-journal/journal-operation-window-sends'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
@@ -305,7 +304,7 @@ export async function readBotTurn(
   }
   if (!opening && indexedOnly && !host.hasSession(sessionId)) {
     // Opening a chat at rest can convert its whole history first. Checked in the tick that reads.
-    throw new JournalWindowNotIndexed()
+    throw Object.assign(new Error('the chat is at rest'), { name: 'JournalWindowNotIndexed' })
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
