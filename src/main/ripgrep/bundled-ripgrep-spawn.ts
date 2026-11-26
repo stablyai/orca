@@ -68,6 +68,9 @@ function spawnNativeRipgrepOnWorkerThread(
   if (
     process.platform !== 'win32' ||
     !hasPipedOutputOnly(options.stdio) ||
+    // The worker child has no abort signal or timeout of its own; those launches keep Node's handling.
+    options.signal ||
+    options.timeout ||
     !canSpawnOnWorkerThread()
   ) {
     return null
@@ -83,8 +86,10 @@ function spawnNativeRipgrepOnWorkerThread(
     cwd: resolved.cwd,
     env: { ...(options.env ?? process.env) }
   })
-  // Worker children always get a stdin pipe; close it like the 'ignore' stdin rg callers ask for.
-  child.stdin.end()
+  // Worker children always get a stdin pipe; close it when the caller asked for 'ignore'.
+  if (Array.isArray(options.stdio) && options.stdio[0] === 'ignore') {
+    child.stdin.end()
+  }
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in implements every ChildProcess member rg callers use (pid, exitCode, signalCode, kill, on/once/off, stdout/stderr data, setEncoding, resume); bundled-ripgrep-worker-spawn.test.ts drives a real caller through it.
   return child as unknown as ChildProcess

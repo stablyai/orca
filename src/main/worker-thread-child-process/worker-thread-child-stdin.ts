@@ -133,6 +133,8 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':
+        // An own undefined pid marks a failed spawn, as on a Node child, before callers see the error.
+        this.pid = undefined
         this.emit('group-terminated')
         this.emitErrorIfObserved(event.error)
         this.receive({ type: 'exit', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
