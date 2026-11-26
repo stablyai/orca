@@ -1,4 +1,4 @@
-import type { SshMutationExpectation } from '../ssh-types'
+import type { SshMutationExpectation } from '../remote-runtime/ssh/ssh-types'
 
 export type RuntimeUploadSkipReason = 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
 

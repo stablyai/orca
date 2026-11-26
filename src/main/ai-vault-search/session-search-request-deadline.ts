@@ -1,4 +1,4 @@
-import { abandonRemoteSessionScanOnCancel } from '../ai-vault/ai-vault-scan-cancellation'
+import { abandonRemoteSessionScanOnCancel } from '../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 
 /** Cleanup continues after a caller leaves; native retirement must never extend an IPC deadline. */
 export async function withinSessionSearchDeadline<T>(

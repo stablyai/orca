@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { SkillDeleteResult } from '../../../../../shared/skill-delete-contract'
+import type { SkillDeleteResult } from '../../../../../shared/skills/deletion/skill-delete-contract'
 import { skillDeleteResultLines } from './skill-delete-copy'
 import { SKILLS_PAGE_COLUMN } from '../catalog/skills-page-column'
 

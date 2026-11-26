@@ -4,21 +4,21 @@
 import {
   type AgentSessionAgentsResult,
   AGENT_SESSION_AGENTS_METHOD
-} from '../../../../../../shared/agent-session/agent-session-registered-agents'
+} from '../../../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
 import {
   AGENT_SESSION_AVAILABILITY_METHOD,
   type AgentSessionAvailabilityFrame
-} from '../../../../../../shared/agent-session/agent-session-agent-availability'
+} from '../../../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../../../agent-session/installation/structured-agent-runtime-metadata'
 import { defineMethod, defineStreamingMethod } from '../../../core'
 import { requireStructuredCapability } from '../creation/structured-agent-session-gate'
 import {
   AgentsParams,
   AvailabilityParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import { clientReadsStructuredSessionAgent } from '../structured-agent-session-policy'
 import { bindStructuredAgentSessionStream } from '../subscriptions/structured-agent-session-status-stream'
 import { structuredAgentSessionAvailabilitySubscriptionId } from '../subscriptions/structured-agent-session-subscription-id'

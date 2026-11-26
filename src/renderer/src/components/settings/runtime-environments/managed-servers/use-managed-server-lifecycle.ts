@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
+  isOrcadUncountedTerminalsDeferral,
   ORCAD_RECOVERY_CHANGED_STATE_CODE,
   ORCAD_UPDATE_TERMINALS_RUNNING_CODE,
   type OrcadManagedDeferral,
   type OrcadManagedPastLiveTerminals,
   type OrcadManagedRuntimeStatus
-} from '../../../../../../shared/orcad-managed-runtime'
+} from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 
@@ -30,7 +31,7 @@ export type ManagedServerLifecycle = {
   confirmingStop: boolean
   confirmingForget: boolean
   confirmingRestore: boolean
-  /** An Update deferred only by running terminals, which Update anyway restarts past. */
+  /** An Update deferred only by running or uncounted terminals, which Update anyway restarts past. */
   confirmingForceUpdate: OrcadManagedPastLiveTerminals | null
   setConfirmingForceUpdate: (value: OrcadManagedPastLiveTerminals | null) => void
   setConfirmingStop: (value: boolean) => void
@@ -40,13 +41,17 @@ export type ManagedServerLifecycle = {
   run: (action: ManagedServerAction) => Promise<void>
 }
 
-function isLiveTerminalsDeferral(result: { outcome: string } | OrcadManagedDeferral): boolean {
-  return (
-    result.outcome === 'deferred' &&
-    'code' in result &&
-    result.forceable === true &&
-    result.code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE
-  )
+/** The confirmation an Update anyway needs, or null when force cannot pass this result. */
+function forceableTerminalsDeferral(
+  result: { outcome: string } | OrcadManagedDeferral
+): 'counted' | 'uncounted' | null {
+  if (result.outcome !== 'deferred' || !('code' in result) || result.forceable !== true) {
+    return null
+  }
+  if (result.code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE) {
+    return 'counted'
+  }
+  return isOrcadUncountedTerminalsDeferral(result.code) ? 'uncounted' : null
 }
 
 function outcomeMessage(result: Parameters<typeof managedServerOutcomeLabel>[0]): string | null {
@@ -148,11 +153,14 @@ export function useManagedServerLifecycle({
                 : action === 'forget'
                   ? await api.forget(selector)
                   : await api.cancelStop(selector)
-      const forceable = action === 'update' && isLiveTerminalsDeferral(result)
+      const forceable = action === 'update' ? forceableTerminalsDeferral(result) : null
       const message = forceable ? null : outcomeMessage(result)
       if (mountedRef.current) {
         if (forceable) {
-          setConfirmingForceUpdate({ incumbentVersion })
+          setConfirmingForceUpdate({
+            incumbentVersion,
+            ...(forceable === 'uncounted' ? { uncounted: true as const } : {})
+          })
         } else if (action === 'update' || action === 'forceUpdate') {
           setConfirmingForceUpdate(null)
         }

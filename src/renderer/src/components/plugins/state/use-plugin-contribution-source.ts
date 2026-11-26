@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import {
@@ -52,7 +52,8 @@ function useInstalledPluginContributionSource(
       customEditors: plugin.customEditors ?? [],
       vmRecipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? [],
       newFiles: plugin.newFiles ?? [],
-      statusBarItems: statusBarItemTitles(plugin.statusBarItems)
+      statusBarItems: statusBarItemTitles(plugin.statusBarItems),
+      mcpServers: plugin.mcpServers ?? []
     }
   }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])
 }

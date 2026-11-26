@@ -1,5 +1,5 @@
 import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import {
   resolveBrowserDriverAfterMobileRelease,
@@ -7,7 +7,7 @@ import {
   type BrowserScreencastSubscriber
 } from './browser-screencast-driver-scope'
 import type { RuntimeBrowserCommands } from '../commands/browser-commands'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 
 type RuntimeBrowserScreencastControllerDeps = {
   getCommands: () => Pick<RuntimeBrowserCommands, 'browserScreencast'>
@@ -37,6 +37,13 @@ export class RuntimeBrowserScreencastController {
       if (stream.drivesAsMobile) {
         stream.cancel(emitEnd)
       }
+    }
+  }
+
+  /** Tells the page's viewers who drives it, so they lock input while a phone does. */
+  publishDriver(browserPageId: string, driver: RuntimeTerminalDriverState): void {
+    for (const stream of this.activeByPage.get(browserPageId) ?? []) {
+      stream.emitDriver?.(driver)
     }
   }
 
@@ -155,7 +162,14 @@ export class RuntimeBrowserScreencastController {
       registeredSubscriptionId = screencast.subscriptionId
       options.emit(screencast.ready)
       readyEmitted = true
+      if (params.driverEvents === 1) {
+        const browserPageId = activeBrowserPageId
+        activePageStream.emitDriver = (driver) =>
+          options.emit({ type: 'driver', browserPageId, driver })
+        activePageStream.emitDriver(this.deps.getDriver(browserPageId))
+      }
       screencast.flushPendingFrame()
+      screencast.startViewerEvents()
       await screencast.session.done
       end(true)
       this.deps.cleanupSubscription(screencast.subscriptionId)

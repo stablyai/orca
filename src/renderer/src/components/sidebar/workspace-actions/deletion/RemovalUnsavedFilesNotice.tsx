@@ -1,13 +1,7 @@
-import { useEffect, useMemo, type JSX } from 'react'
+import type { JSX } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { useAppStore } from '@/store'
 import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
-import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
-import {
-  flushRemovalPendingEdits,
-  lastViewUnsavedFiles
-} from '@/components/editor/save/flush/removal-unsaved-editor-files'
-import { runAfterEditorFramesFlush } from '@/components/editor/save/flush/editor-pending-flush'
+import { useRemovalUnsavedFiles } from './use-removal-unsaved-files'
 import { discardedUnsavedFilesLabel, moreUnsavedFilesLabel } from './removal-unsaved-files'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -22,27 +16,7 @@ export function RemovalUnsavedFilesNotice({
   enabled: boolean
 }): JSX.Element | null {
   const t = useTranslate()
-  const openFiles = useAppStore((s) => (enabled ? s.openFiles : null))
-  const editorDrafts = useAppStore((s) => (enabled ? s.editorDrafts : null))
-
-  useEffect(() => {
-    if (enabled) {
-      // Flush delayed typing so this list includes the latest unsaved drafts.
-      const state = useAppStore.getState()
-      const fileIds = worktreePurgeClosedFileIds(state, targets)
-      flushRemovalPendingEdits(state, fileIds)
-      // Custom editor frames answer asynchronously; the list re-renders when their edits land.
-      runAfterEditorFramesFlush(state, fileIds, () => {})
-    }
-  }, [enabled, targets])
-
-  const files = useMemo(() => {
-    if (!openFiles || !editorDrafts) {
-      return []
-    }
-    const state = { ...useAppStore.getState(), openFiles, editorDrafts }
-    return lastViewUnsavedFiles(state, worktreePurgeClosedFileIds(state, targets))
-  }, [editorDrafts, openFiles, targets])
+  const files = useRemovalUnsavedFiles(targets, enabled)
 
   if (files.length === 0) {
     return null

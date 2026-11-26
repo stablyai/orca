@@ -1,9 +1,22 @@
-import type { TaskPageJiraSummaryGenerationModel } from './jira/use-task-page-jira-summary-generation'
+import type { TaskPageJiraSummaryGenerationModel } from './jira/creation/use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+
+function isTextEntryTarget(target: HTMLElement): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable
+  )
+}
+
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
   const {
     closeTaskPage,
+    closeTaskDetailPage,
+    taskSource,
     activeModal,
     linearStatusContextKey,
     preflightStatusChecked,
@@ -28,12 +41,14 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newJiraIssueOpen
   } = model
   const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
+  // GitHub and Linear details replace the list in-page; the Jira detail is a Sheet that owns Esc.
+  const detailPageOpen =
+    (taskSource === 'github' && Boolean(dialogWorkItem)) ||
+    (taskSource === 'linear' && Boolean(selectedLinearIssue))
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
-      dialogWorkItem ||
       selectedJiraIssue ||
-      selectedLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
@@ -50,22 +65,24 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
         return
       }
 
+      if (detailPageOpen) {
+        // Why: fields (reply, description, mentions) and overlays on the detail own Esc; the
+        // router runs first in capture, so blurring here would also trigger their cancel.
+        if (event.defaultPrevented || isTextEntryTarget(target) || hasVisibleOverlay()) {
+          return
+        }
+        event.preventDefault()
+        closeTaskDetailPage()
+        return
+      }
+
       // Why: open menus/popovers/selects own Esc; capture-phase leave would steal it from Radix.
-      if (
-        document.querySelector(
-          '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"], [role="menu"]'
-        )
-      ) {
+      if (hasVisibleOverlay()) {
         return
       }
 
       // Esc first blurs input; leave the page only when focus is outside one.
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        target.isContentEditable
-      ) {
+      if (isTextEntryTarget(target)) {
         event.preventDefault()
         target.blur()
         return
@@ -77,12 +94,12 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     return () => removeAppKeyListener('keydown', onKeyDown)
   }, [
     activeModal,
+    closeTaskDetailPage,
     closeTaskPage,
-    dialogWorkItem,
+    detailPageOpen,
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
-    selectedLinearIssue,
     selectedJiraIssue
   ])
   useEffect(() => {

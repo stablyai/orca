@@ -18,7 +18,10 @@ import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { runProcess, runProcessSync } from '@orca/process-host'
-import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
+import {
+  NODE_RUNTIME_ASSETS,
+  NODE_RUNTIME_PIN
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import {
   buildWindowsSecurityAddon,
   probeWindowsSecurityAddon
@@ -299,7 +302,7 @@ export async function benchmarkWindowsSecurityReuse(
       'pnpm-workspace.yaml',
       'package.json',
       '.github/actions/prepare-native-runtime/action.yml',
-      'src/shared/node-runtime-pin.ts',
+      'src/shared/node-runtime/node-runtime-pin.ts',
       'config/scripts/native-build/windows/build-windows-security-addon.mjs',
       'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
       'config/scripts/performance/windows-security/benchmark-windows-security-reuse.mjs'

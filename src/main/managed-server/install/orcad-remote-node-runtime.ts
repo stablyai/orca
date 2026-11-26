@@ -7,13 +7,13 @@ import {
   NODE_RUNTIME_PIN,
   nodeRuntimeExecutablePath,
   type NodeRuntimeTarget
-} from '../../../shared/node-runtime-pin'
+} from '../../../shared/node-runtime/node-runtime-pin'
 import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME,
   orcadNodeRuntimeExecutable
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {

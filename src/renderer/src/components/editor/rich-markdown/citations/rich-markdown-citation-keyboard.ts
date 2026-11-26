@@ -5,12 +5,14 @@ export function handleRichMarkdownCitationKey({
   editor,
   event,
   linkBubbleOwnerId,
-  onOpen
+  onOpen,
+  onOpenBubble
 }: {
   editor: Editor | null
   event: KeyboardEvent
   linkBubbleOwnerId: string
   onOpen?: () => boolean
+  onOpenBubble?: () => boolean
 }): boolean {
   const selection = editor?.state?.selection
   if (
@@ -28,13 +30,13 @@ export function handleRichMarkdownCitationKey({
   if (event.key !== 'Tab' || event.shiftKey) {
     return false
   }
-  const firstAction = document.querySelector<HTMLButtonElement>(
-    `[data-rich-markdown-link-bubble-owner="${linkBubbleOwnerId}"] button:not([disabled])`
-  )
-  if (!firstAction) {
+  const selector = `[data-rich-markdown-link-bubble-owner="${linkBubbleOwnerId}"] button:not([disabled])`
+  if (!onOpenBubble?.()) {
     return false
   }
   event.preventDefault()
-  firstAction.focus()
+  requestAnimationFrame(() => {
+    document.querySelector<HTMLButtonElement>(selector)?.focus()
+  })
   return true
 }

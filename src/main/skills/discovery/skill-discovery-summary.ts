@@ -1,5 +1,5 @@
 import { open, stat } from 'node:fs/promises'
-import { summarizeSkillMarkdown } from '../../../shared/skill-metadata'
+import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
 import { bundledSkillDiscoveryName } from './bundled-skill-discovery-name'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024

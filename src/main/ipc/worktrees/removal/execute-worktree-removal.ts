@@ -1,10 +1,10 @@
-import type { Repo } from '../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import {
@@ -23,20 +23,17 @@ import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import { getEffectiveHooks, runHook } from '../../../workspace-hooks/hooks'
-import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
+import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import {
-  cleanupUnusedWorktreePushTargetRemote,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote, notifyWorktreesChanged } from '../worktree-remote'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
-import { formatWorktreeRemovalError } from '../../worktree-logic'
+import { formatWorktreeRemovalError } from '../paths/worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'
 import { rememberPreservedBranchCleanupTarget } from './preserved-branch-cleanup'
-import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
+import { removeDeletedCheckoutMetadataAndTransientState } from './worktree-removal-ownership'
 import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
@@ -151,7 +148,7 @@ export async function executeWorktreeRemoval(
       removedPushTarget
     )
     runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
+    await removeDeletedCheckoutMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
       removalHostId,

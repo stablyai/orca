@@ -4,7 +4,7 @@ import {
 } from '../output/terminal-input-echo-delay'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { useAppStore } from '@/store'
-import { requestTerminalWritePipelineProbe } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { requestTerminalWritePipelineProbe } from '@/lib/pane-manager/terminal-output/terminal-write-pipeline-health'
 import { subscribeToTerminalUserInput } from '../../input/terminal-user-input-signal'
 
 export function initializeTerminalInputActivityState(session: ConnectPanePtySession): void {
@@ -53,6 +53,7 @@ export function installTerminalInputActivity(session: ConnectPanePtySession): vo
 export function bindAcceptedTerminalInputActivity(session: ConnectPanePtySession): void {
   session.markAcceptedTerminalInputSent = (): void => {
     session.markTerminalInputSent()
+    session.agentCompletionCoordinator.observeInputActivity()
     session.recordTerminalInputForHibernationFallback()
   }
 }

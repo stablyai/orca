@@ -3,7 +3,8 @@
 import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { quotedProviderDetail } from '../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readAgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionRequestFailure } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 
@@ -41,7 +42,7 @@ export function chatRequestError(
         agentJournalSubmissionKey(entry.clientMessageId) === request.id
     )
     return submission?.reason
-      ? withDetail(submission.reason, readAgentSessionFailureFact(submission.rejection))
+      ? failureRequestError(submission.reason, readAgentSessionFailureFact(submission.rejection))
       : null
   }
   const items = snapshot.items
@@ -78,28 +79,31 @@ export function chatRequestError(
       entry.answeredInTurn?.turnItemId === turnItemId &&
       entry.answeredInTurn.via === 'start' &&
       entry.reason &&
-      !isSenderOwnRejection(withDetail(entry.reason, readAgentSessionFailureFact(entry.rejection)))
+      !isSenderOwnRejection(
+        failureRequestError(entry.reason, readAgentSessionFailureFact(entry.rejection))
+      )
   )
   const related = rejection?.reason
-    ? withDetail(rejection.reason, readAgentSessionFailureFact(rejection.rejection))
+    ? failureRequestError(rejection.reason, readAgentSessionFailureFact(rejection.rejection))
     : null
   const error =
     row?.body.kind === 'status' && row.body.text
-      ? withDetail(row.body.text, readAgentSessionFailureFact(row.body.failure))
+      ? failureRequestError(row.body.text, readAgentSessionFailureFact(row.body.failure))
       : related
   return error && related && !error.detail && related.text !== error.text
     ? { ...error, detail: related.detail ?? related.text }
     : error
 }
 
-function withDetail(
+/** A failure's sentence with the provider's own words beside it, unless the sentence quotes them. */
+export function failureRequestError(
   text: string,
   fact: ReturnType<typeof readAgentSessionFailureFact>
 ): ChatRequestError {
   const detail = fact?.detail?.text
   return {
     text,
-    ...(detail && detail !== text ? { detail } : {}),
+    ...(detail && !text.includes(quotedProviderDetail(detail)) ? { detail } : {}),
     ...(fact ? { kind: fact.kind } : {})
   }
 }

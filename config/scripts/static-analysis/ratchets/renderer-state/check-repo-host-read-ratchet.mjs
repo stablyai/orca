@@ -13,7 +13,10 @@ const RAW_READ = /\b(?:repo|\w*Repo)(?:[A-Z]\w*)?!?\??\.connectionId\b(?!\s*=(?!
 
 /** Files that define what the two spellings mean, with the reason. Keep each reason true. */
 export const RESOLVER_FILES = new Map([
-  ['src/shared/execution-host.ts', 'the canonical resolvers read both spellings by definition'],
+  [
+    'src/shared/execution-host/execution-host.ts',
+    'the canonical resolvers read both spellings by definition'
+  ],
   [
     'src/main/workspaces/execution-host/repo-execution-host.ts',
     'the main-process gates built on those resolvers'
@@ -67,7 +70,7 @@ export function main(root = process.cwd(), arg = undefined) {
       ],
       collect: collectRepoHostReads,
       fix: [
-        "Resolve the row's host instead of reading `connectionId` (src/shared/execution-host.ts):",
+        "Resolve the row's host instead of reading `connectionId` (src/shared/execution-host/execution-host.ts):",
         '  getRepoRoutingConnectionId(repo)  drop-in for `repo.connectionId` in a routing/SSH check',
         '  getRepoExecutionHostId(repo)      the host id, for comparisons and host-scoped lookups',
         '  requireRepoLocalGitRoute(repo)    (src/main/workspaces/execution-host/repo-execution-host.ts) before local Git'

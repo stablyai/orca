@@ -1,26 +1,25 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
-import { isKnownHarnessInjectedUserTurnText } from '../harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../agent-session/journal/harness-injected-user-turns'
 import type { ToolSnapshot } from './listener-event'
 import type { ExtractedPromptText } from './prompt-fields'
-import { extractClaudeToolFields } from './providers/claude-tool-fields'
-import { extractCodexToolFields } from './providers/codex-tool-fields'
-import { extractGeminiToolFields } from './providers/gemini-tool-fields'
-import { extractAntigravityToolFields } from './providers/antigravity-tool-fields'
-import { extractAmpToolFields } from './providers/amp-tool-fields'
-import { extractOpenCodeToolFields } from './providers/opencode-family-tool-fields'
-import { extractCursorToolFields } from './providers/cursor-tool-fields'
+import { extractClaudeToolFields } from './providers/claude/claude-tool-fields'
+import { extractCodexToolFields } from './providers/codex/codex-tool-fields'
+import { extractAntigravityToolFields } from './providers/antigravity/antigravity-tool-fields'
+import { extractAmpToolFields } from './providers/amp/amp-tool-fields'
+import { extractOpenCodeToolFields } from './providers/opencode-family/opencode-family-tool-fields'
+import { extractCursorToolFields } from './providers/cursor/cursor-tool-fields'
 import {
   extractCopilotToolFields,
   normalizeCopilotEventName
-} from './providers/copilot-tool-fields'
-import { extractPiToolFields } from './providers/pi-family-tool-fields'
-import { extractDroidToolFields } from './providers/droid-tool-fields'
-import { extractCommandCodeToolFields } from './providers/command-code-tool-fields'
+} from './providers/copilot/copilot-tool-fields'
+import { extractPiToolFields } from './providers/pi-family/pi-family-tool-fields'
+import { extractDroidToolFields } from './providers/droid/droid-tool-fields'
+import { extractCommandCodeToolFields } from './providers/command-code/command-code-tool-fields'
 import { isGrokEvent } from './provider-event-names'
-import { extractGrokToolFields } from './providers/grok-tool-fields'
-import { extractHermesToolFields } from './providers/hermes-tool-fields'
-import { extractJcodeToolFields } from './providers/jcode-tool-fields'
-import { extractKiroToolFields } from './providers/kiro-tool-fields'
+import { extractGrokToolFields } from './providers/grok/grok-tool-fields'
+import { extractHermesToolFields } from './providers/hermes/hermes-tool-fields'
+import { extractJcodeToolFields } from './providers/jcode/jcode-tool-fields'
+import { extractKiroToolFields } from './providers/kiro/kiro-tool-fields'
 
 /** Share provider boundaries with observation stamping; avoid a second event-name list. */
 export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
@@ -47,8 +46,6 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
-    case 'gemini':
-      return eventName === 'BeforeAgent'
     case 'antigravity':
       return eventName === 'PreInvocation'
     case 'amp':
@@ -111,8 +108,6 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'droid':
     case 'devin':
       return eventName === 'Stop'
-    case 'gemini':
-      return eventName === 'AfterAgent'
     case 'amp':
       return eventName === 'agent.end'
     case 'command-code':
@@ -230,8 +225,6 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
-    case 'gemini':
-      return extractGeminiToolFields(eventName, hookPayload)
     case 'antigravity':
       return extractAntigravityToolFields(eventName, hookPayload)
     case 'amp':

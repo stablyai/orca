@@ -3,12 +3,12 @@ import {
   isAgentStatusHooksEnabledForAgent,
   type AgentStatusHooksSettings
 } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import type { ClaudeAgentViewSettings } from '../../../shared/claude-agent-view'
+import type { ClaudeAgentViewSettings } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType,
   type PiAgentKind
-} from '../../../shared/pi-agent-kind'
+} from '../../../shared/agent-launch/catalog/pi-agent-kind'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { wslHookRelayManager, type WslHookRelayManager } from './wsl-hook-relay-manager'
 import { blockedWslDistroForExec } from '../../wsl/discovery/wsl-background-exec-gate'

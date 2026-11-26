@@ -5,7 +5,7 @@ import {
   installManagedRuntime
 } from '@/runtime/hosts/installation/managed-runtime-install-status'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
+import type { ManagedRuntimeInstallState } from '../../../../shared/agent-launch/installation/managed-runtime-install'
 import {
   managedRuntimeInstallCard,
   type ManagedRuntimeInstallCard,

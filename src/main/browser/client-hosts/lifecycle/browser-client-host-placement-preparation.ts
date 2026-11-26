@@ -5,8 +5,8 @@ import type {
 } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
 import { expectsBrowserClientHosting } from '../../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const SERVER_PLACEMENT = Object.freeze({ kind: 'server' as const })
 
@@ -15,7 +15,9 @@ type BrowserClientHostPlacementPreparationOptions = {
   expectedPairingRevision?: number
   preference: BrowserClientHostPlacementPreference
   enabled: boolean
-  resolveEnvironment: (selector: string) => KnownRuntimeEnvironment
+  resolveEnvironment: (
+    selector: string
+  ) => KnownRuntimeEnvironment | Promise<KnownRuntimeEnvironment>
   getStatus: (environmentId: string) => Promise<RuntimeRpcResponse<RuntimeStatus>>
   startHost: (options: {
     environment: KnownRuntimeEnvironment
@@ -32,7 +34,7 @@ export async function prepareBrowserClientHostPlacement(
     return SERVER_PLACEMENT
   }
 
-  const initialEnvironment = options.resolveEnvironment(options.selector)
+  const initialEnvironment = await options.resolveEnvironment(options.selector)
   const pairingRevision = requireCurrentPairing(initialEnvironment, options.expectedPairingRevision)
   const response = await options.getStatus(initialEnvironment.id)
   if (!response.ok) {
@@ -43,7 +45,7 @@ export async function prepareBrowserClientHostPlacement(
   if (status.runtimeId !== response._meta.runtimeId) {
     throw new Error('browser_client_host_runtime_identity_changed')
   }
-  const environment = options.resolveEnvironment(initialEnvironment.id)
+  const environment = await options.resolveEnvironment(initialEnvironment.id)
   requireCurrentPairing(environment, pairingRevision)
   if (
     !expectsBrowserClientHosting({
@@ -63,7 +65,7 @@ export async function prepareBrowserClientHostPlacement(
     environment,
     authorityRuntimeId: status.runtimeId
   })
-  const currentEnvironment = options.resolveEnvironment(initialEnvironment.id)
+  const currentEnvironment = await options.resolveEnvironment(initialEnvironment.id)
   try {
     requireCurrentPairing(currentEnvironment, pairingRevision)
     if (authority.authorityRuntimeId !== status.runtimeId) {

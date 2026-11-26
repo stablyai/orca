@@ -2,24 +2,27 @@ import { useState } from 'react'
 import { FolderInput, Plus, TerminalSquare, Trash2 } from 'lucide-react'
 import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
+  ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE,
   type WslHostConnectIntent,
+  type WslHostPastUncountedTerminals,
   type WslHostStatus
-} from '../../../../../../shared/wsl-host-types'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { toast } from 'sonner'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
 } from '../../../sidebar/host-admission/ssh/AddRemoteHostDialog'
-import { HostRemoveDialog } from '../../../sidebar/HostRemoveDialog'
+import { HostRemoveDialog } from '../../../sidebar/host-lifecycle/HostRemoveDialog'
+import { WslHostRestartAsWslHostDialog } from './WslHostRestartAsWslHostDialog'
 import {
   openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
@@ -27,19 +30,24 @@ import {
   useWslHostsEnabled,
   useWslHostServerFilesMissing,
   wslHostsAvailable
-} from '../../../sidebar/use-wsl-hosts-enabled'
+} from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   getWslHostRowDetail,
   getWslHostStatusLabel,
   getWslHostServerFilesMissingLabel,
   getWslHostsPausedLabel,
   getWslHostsTurnedOffLabel
-} from '../../../sidebar/wsl-host-row-status'
-import { wslHostStatusDetailMessage } from '../../../sidebar/wsl-host-failure-text'
+} from '../../../sidebar/host-admission/wsl/wsl-host-row-status'
+import { wslHostStatusDetailMessage } from '../../../sidebar/host-admission/wsl/wsl-host-failure-text'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
-import { managedServerOutcomeLabel } from '../../runtime-environments/managed-servers/managed-server-copy'
+import {
+  managedServerOutcomeLabel,
+  uncountedForceUpdateMessage
+} from '../../runtime-environments/managed-servers/managed-server-copy'
+import { ConfirmStrip } from '../../runtime-environments/managed-servers/managed-server-row-content'
+import { isOrcadUncountedTerminalsDeferral } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { ServerListRow, ServerRowChip, type ServerRowStatus } from '../../host-rows/ServerListRow'
 import { WslMoveOrchestratorStatusLine } from '../../../wsl-move/WslMoveOrchestratorStatusLine'
 import { wslMoveOrchestratorLine } from '../../../wsl-move/wsl-move-orchestrator-copy'
@@ -106,13 +114,20 @@ export function WslHostsSection({
   const [dialogMode, setDialogMode] = useState<AddRemoteHostMode | null>(null)
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PublicKnownRuntimeEnvironment | null>(null)
+  // Forcing past an uncounted census may end terminals the server runs itself, so it asks first.
+  const [confirmingForceId, setConfirmingForceId] = useState<string | null>(null)
+  const [restarting, setRestarting] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const hosts = environments.filter(isWslHostRuntimeEnvironment)
   // Retain disabled hosts so projects cannot appear to vanish; rows explain their idle state.
   if (!wslHostsAvailable() || (!enabled && hosts.length === 0)) {
     return null
   }
 
-  const connect = async (environmentId: string, intent?: WslHostConnectIntent): Promise<void> => {
+  const connect = async (
+    environmentId: string,
+    intent?: WslHostConnectIntent,
+    pastUncountedTerminals?: WslHostPastUncountedTerminals
+  ): Promise<void> => {
     const api = window.api.runtimeEnvironments?.wslHosts
     if (!api || connectingId) {
       return
@@ -120,7 +135,11 @@ export function WslHostsSection({
     setConnectingId(environmentId)
     try {
       // Update retries a deferred or skipped update behind the terminal check; Force passes it.
-      await api.connect({ environmentId, ...(intent ? { intent } : {}) })
+      await api.connect({
+        environmentId,
+        ...(intent ? { intent } : {}),
+        ...(pastUncountedTerminals ? { pastUncountedTerminals } : {})
+      })
       onChanged()
     } catch (error) {
       // The main process's message is for the user; Electron's wrapper and the class name aren't.
@@ -146,7 +165,7 @@ export function WslHostsSection({
                 ? getWslHostsPausedLabel(t)
                 : t(
                     'auto.components.settings.wslHosts.description',
-                    'Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.'
+                    'Orca runs a server inside each distro. To start a stopped distro, click Start, open a terminal, or connect it here.'
                   ))}
           </p>
         </div>
@@ -168,7 +187,7 @@ export function WslHostsSection({
             size="sm"
             onClick={openWslHostsExperimentalSetting}
           >
-            {t('auto.components.settings.wslHosts.turnOn', 'Turn on in Experimental')}
+            {t('auto.components.settings.wslHosts.turnOn', 'Open Experimental')}
           </Button>
         )}
       </div>
@@ -178,6 +197,8 @@ export function WslHostsSection({
             const status = statuses[environment.id]
             const ready = status?.state === 'ready'
             const deferred = unavailableLabel ? null : status?.deferredUpdate
+            // Started by an SSH host, not as a WSL host: a restart, not an update, fixes it.
+            const notWslHost = deferred?.code === ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE
             const connectDisabled =
               unavailableLabel !== null || connectingId !== null || status?.state === 'connecting'
             const distro = environment.orcadDeployment.distro
@@ -197,23 +218,66 @@ export function WslHostsSection({
                 }
                 meta={
                   <span className="truncate">
-                    {deferred
-                      ? `${t(
-                          'auto.components.settings.managedServers.row.deferredVersion',
-                          'Update to {{version}} deferred.',
-                          { version: deferred.candidateVersion }
-                        )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code }, t)}`
-                      : `${unavailableLabel ?? getWslHostRowDetail(status, t)}${
-                          !unavailableLabel && status?.detail
-                            ? ` — ${wslHostStatusDetailMessage(status)}`
-                            : ''
-                        }`}
+                    {notWslHost
+                      ? t(
+                          'auto.components.settings.wslHosts.notStartedAsWslHost',
+                          "An SSH host started this server, so projects can't move here. Restart it as a WSL host to fix this."
+                        )
+                      : deferred
+                        ? `${t(
+                            'auto.components.settings.managedServers.row.deferredVersion',
+                            'Update to {{version}} deferred.',
+                            { version: deferred.candidateVersion }
+                          )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code }, t)}`
+                        : `${unavailableLabel ?? getWslHostRowDetail(status, t)}${
+                            !unavailableLabel && status?.detail
+                              ? ` — ${wslHostStatusDetailMessage(status)}`
+                              : ''
+                          }`}
                   </span>
                 }
                 status={getWslHostRowStatus(status, unavailableLabel !== null, t)}
-                footer={moveLine ? <WslMoveOrchestratorStatusLine distro={distro} /> : undefined}
+                footer={
+                  confirmingForceId === environment.id &&
+                  deferred?.forceable &&
+                  deferred.incumbentVersion !== undefined ? (
+                    <ConfirmStrip
+                      message={uncountedForceUpdateMessage(t)}
+                      confirmLabel={t(
+                        'auto.components.settings.managedServers.row.updateAnyway',
+                        'Update anyway'
+                      )}
+                      keepLabel={t('auto.components.settings.managedServers.row.notNow', 'Not now')}
+                      disabled={connectingId !== null}
+                      onConfirm={() => {
+                        setConfirmingForceId(null)
+                        // Update's admission, pinned to the build this deferral was decided over.
+                        void connect(environment.id, 'update', {
+                          incumbentVersion: deferred.incumbentVersion ?? null
+                        })
+                      }}
+                      onKeep={() => setConfirmingForceId(null)}
+                    />
+                  ) : moveLine ? (
+                    <WslMoveOrchestratorStatusLine distro={distro} />
+                  ) : undefined
+                }
+                stackPrimaryActionOnNarrow={notWslHost}
                 primaryAction={
-                  // A newer Orca's host refuses Update; Force stays in the menu.
+                  notWslHost ? (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      disabled={connectingId !== null}
+                      onClick={() => setRestarting(environment)}
+                    >
+                      {t(
+                        'auto.components.settings.wslHosts.restartAsWslHost.button',
+                        'Restart as WSL host'
+                      )}
+                    </Button>
+                  ) : // A newer Orca's host refuses Update; Force stays in the menu.
                   deferred && deferred.code !== ORCAD_HOST_NEWER_DEFERRAL_CODE ? (
                     <Button
                       type="button"
@@ -241,10 +305,16 @@ export function WslHostsSection({
                 }
                 menuItems={
                   <>
-                    {deferred?.forceable ? (
+                    {deferred?.forceable &&
+                    (!isOrcadUncountedTerminalsDeferral(deferred.code) ||
+                      deferred.incumbentVersion !== undefined) ? (
                       <DropdownMenuItem
                         disabled={connectingId !== null}
-                        onSelect={() => void connect(environment.id, 'force')}
+                        onSelect={() =>
+                          isOrcadUncountedTerminalsDeferral(deferred.code)
+                            ? setConfirmingForceId(environment.id)
+                            : void connect(environment.id, 'force')
+                        }
                       >
                         {t('auto.components.settings.wslHosts.forceUpdate', 'Force update')}
                       </DropdownMenuItem>
@@ -283,6 +353,21 @@ export function WslHostsSection({
         </div>
       ) : null}
       {enabled && !serverFilesMissing ? <WslMoveUnfinishedNotice /> : null}
+      <WslHostRestartAsWslHostDialog
+        hostName={restarting?.name ?? null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRestarting(null)
+          }
+        }}
+        onConfirm={() => {
+          const environmentId = restarting?.id
+          setRestarting(null)
+          if (environmentId) {
+            void connect(environmentId, 'restart-as-wsl-host')
+          }
+        }}
+      />
       {removing ? (
         <HostRemoveDialog
           open

@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
 import { hookRowAgentPhase } from '../../agent-status/lifecycle/agent-transitions'
-import { parseNativeChatApprovalEnvelope } from '../../native-chat/input/native-chat-approval-envelope'
+import { parseNativeChatApprovalEnvelope } from '../../native-chat/input/approvals/native-chat-approval-envelope'
 import { parseAskFromStatus } from '../../native-chat/input/native-chat-ask'
 import { resolveNativeChatTranscriptAgent } from '../../native-chat/native-chat-agent-support'
 

@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
-import { applyBackgroundActivationPolicy } from '../../../../src/main/window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../../../src/main/window/activation/foreground-activation-policy'
 
 if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
   throw new Error('Spinner measurements require ORCA_BACKGROUND_LAUNCH=1')

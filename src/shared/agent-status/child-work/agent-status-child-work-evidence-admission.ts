@@ -31,6 +31,7 @@ export type AgentChildWorkReconcileOutcome = {
   removed: number
   /** Refusals are facts about one child, never a reason to drop the rest of the evidence. */
   rejected: { handleId: string; reason: string }[]
+  failures?: { child: AgentChildWorkRecord; providerId: string }[]
 }
 
 export type AgentChildWorkEvidenceContext = AgentChildWorkEvidenceScope & {
@@ -101,6 +102,8 @@ function liveFields(
     ...(child.name !== undefined ? { name: child.name } : {}),
     ...(child.description !== undefined ? { description: child.description } : {}),
     ...(child.agentType !== undefined ? { agentType: child.agentType } : {}),
+    ...(child.model !== undefined ? { model: child.model } : {}),
+    ...(child.effort !== undefined ? { effort: child.effort } : {}),
     ...(child.totalTokens !== undefined ? { totalTokens: child.totalTokens } : {}),
     ...(owner !== undefined ? { parentChildWorkId: owner } : {}),
     residency: child.residency,
@@ -217,4 +220,10 @@ export function settleAgentChildWork(
     lifetime: 'current'
   })
   counted(ctx, handleId, result, 'settled')
+  if (result.accepted && outcome === 'failed') {
+    const child = ctx.store.getChild(result.childWorkId)
+    if (child?.outcome === 'failed') {
+      ;(ctx.outcome.failures ??= []).push({ child, providerId: handleId })
+    }
+  }
 }

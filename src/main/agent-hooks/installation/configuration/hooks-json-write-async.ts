@@ -12,6 +12,7 @@ import {
   rm
 } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { isReplaceableReadOnlyBackup } from '../../../filesystem/rolling-file-backup'
 
 export async function writeHooksJsonAsync(
   configPath: string,
@@ -56,6 +57,13 @@ export async function writeHooksJsonAsync(
         throw new Error(`Refusing to overwrite symlinked backup: ${backup}`)
       }
       await copyFile(writePath, backupTmp)
+      if (process.platform === 'win32') {
+        // Why: copyFile keeps a read-only attribute, and Windows refuses to rename over a read-only file.
+        await chmod(backupTmp, 0o666)
+        if (isReplaceableReadOnlyBackup(backupLink)) {
+          await chmod(backup, 0o666)
+        }
+      }
       await rename(backupTmp, backup)
     }
     await rename(tmp, writePath)

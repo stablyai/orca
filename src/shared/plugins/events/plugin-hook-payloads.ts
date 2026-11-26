@@ -164,7 +164,7 @@ export const PLUGIN_HOOK_SPECS = {
     mutable: ['prompt'],
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
-      'Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or `orca terminal send` to an agent. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.'
+      'Orca is about to submit a prompt to an agent in a terminal: a launch prompt, an orchestration dispatch, an issue or task prompt, or a prompt sent with `orca terminal send`. A prompt a person submits is never hooked, and writes to one terminal stay in order while it decides. Rewrite `prompt` with `next`, or return `{ deny }` to refuse it.'
   },
   'agent.tool.before': {
     payload: agentToolBeforeHookPayloadSchema,

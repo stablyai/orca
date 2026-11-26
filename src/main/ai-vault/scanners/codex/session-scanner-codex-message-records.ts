@@ -3,13 +3,13 @@ import {
   publishCodexCompletedTool
 } from './session-scanner-codex-tool-records'
 import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
-import { addSessionContent } from '../../session-scanner-messages'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import type { SessionAccumulator } from '../../session-scanner-types'
-import { asRecord } from '../../session-scanner-record-value'
+import { asRecord } from '../../parsing/session-record-fields'
 import {
   extractContentText,
   extractPreviewContentText
-} from '../../session-scanner-text-normalization'
+} from '../../parsing/session-scanner-text-normalization'
 
 export function consumeCodexResponseMessage(
   accumulator: SessionAccumulator,

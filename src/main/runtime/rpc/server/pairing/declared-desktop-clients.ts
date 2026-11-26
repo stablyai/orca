@@ -1,12 +1,17 @@
-import type { OrcadPeerDesktopsResult } from '../../../../../shared/orcad-peer-desktops-contract'
+import type { OrcadPeerDesktopsResult } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { sanitizeDeviceLabel } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
-import type { DeviceEntry } from './device-entry'
+import type { DeviceEntry, DeviceOrcaAccount } from './device-entry'
 
 const UNNAMED_DESKTOP = 'another Orca'
 // Lost contact isn't proof an Orca left: a closed control socket still counts while it reconnects.
 export const DECLARED_CLIENT_RECONNECT_GRACE_MS = 60_000
 
 type Declaration = { clientInstanceId: string; deviceId: string }
+type AccountDeclaration = {
+  deviceId: string
+  account: DeviceOrcaAccount | null
+  clientInstanceId?: string
+}
 
 /**
  * R39: which desktop installation each authenticated control socket belongs to. A desktop declares
@@ -15,6 +20,8 @@ type Declaration = { clientInstanceId: string; deviceId: string }
  */
 export class DeclaredDesktopClients {
   private readonly byConnection = new Map<string, Declaration>()
+  // The Orca account each desktop socket last declared (null: none), with its row and installation.
+  private readonly accounts = new Map<string, AccountDeclaration>()
   // Installations whose last declared socket closed recently, by id, until their grace ends.
   private readonly reconnecting = new Map<string, { deviceId: string; until: number }>()
 
@@ -26,7 +33,38 @@ export class DeclaredDesktopClients {
     this.reconnecting.delete(clientInstanceId)
   }
 
+  declareAccount(connectionId: string, declaration: AccountDeclaration): void {
+    this.accounts.set(connectionId, declaration)
+  }
+
+  accountOf(connectionId: string): DeviceOrcaAccount | null {
+    return this.accounts.get(connectionId)?.account ?? null
+  }
+
+  instanceOf(connectionId: string): string | undefined {
+    return (
+      this.accounts.get(connectionId)?.clientInstanceId ??
+      this.byConnection.get(connectionId)?.clientInstanceId
+    )
+  }
+
+  /** What an installation on this paired row declares now: how a phone it relays or paired is
+   *  named. Scoped to the row, so installations elsewhere that chose the same id never match. */
+  accountOfInstance(deviceId: string, clientInstanceId: string): DeviceOrcaAccount | null {
+    for (const declaration of this.accounts.values()) {
+      if (
+        declaration.deviceId === deviceId &&
+        declaration.clientInstanceId === clientInstanceId &&
+        declaration.account
+      ) {
+        return declaration.account
+      }
+    }
+    return null
+  }
+
   forget(connectionId: string): void {
+    this.accounts.delete(connectionId)
     this.sweepExpired()
     const declaration = this.byConnection.get(connectionId)
     this.byConnection.delete(connectionId)

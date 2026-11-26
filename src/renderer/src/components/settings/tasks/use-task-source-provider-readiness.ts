@@ -4,7 +4,7 @@ import {
   useInstalledAgentSkillNames
 } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
-import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearProviderConnected'
 import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/skills/installation/agent-feature-skill-names'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'

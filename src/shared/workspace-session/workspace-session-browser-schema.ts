@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import type { BrowserWorkspace } from '../browser-workspace-types'
+import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
 import { isDocPreviewUrl } from '../document-preview/doc-preview-scheme'
-import { salvagingArray } from '../zod-salvage'
+import { salvagingArray } from '../validation/zod-salvage'
 import { browserPageAnnotationSchema } from '../browser/annotations/browser-page-annotation-schema'
 
 const browserLoadErrorSchema = z.object({
@@ -83,6 +83,7 @@ export const browserPageSchema = z.object({
   // Both remote page identity fields must survive restore to reclaim a client-hosted page; older sessions may omit them.
   remoteBrowserPageId: z.string().nullable().optional(),
   remoteBrowserPageClientHosted: z.boolean().optional(),
+  remoteBrowserPagePlacedHere: z.boolean().optional(),
   // Preserve the viewport preset across restart while accepting older sessions.
   viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
   // Without docLocation, a workspace document’s blank URL restores as New Tab.

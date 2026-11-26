@@ -1,6 +1,7 @@
 import type { CodexAppServerNotificationMethod } from '../../../codex/app-server/codex-app-server-notification-schema'
 import { CODEX_SUBAGENT_ITEM_TYPE } from '../../../codex/structured/background-work/codex-subagent-activity'
 import { isProviderRecord } from '../../../provider-process/provider-json-record'
+import { readCodexAutoReviewDenial } from '../../../../shared/agent-session/requests/approvals/codex-auto-review-denial'
 import type { ClaudeStreamJsonFrameKind } from './claude-stream-json-frame-schema'
 
 export type ProviderFrameClassification =
@@ -217,6 +218,19 @@ const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
         return CODEX_ITEM_CLASSIFICATIONS[item]
       }
       const method = notificationKind(kind)
+      // A denial is the chat's row, where the person may approve a retry; Codex's matching
+      // warning would say it twice. Approvals stay chrome, as in Codex's own UI.
+      if (method === 'item/autoApprovalReview/completed') {
+        return readCodexAutoReviewDenial(payload) ? 'error-surface' : 'status-chrome'
+      }
+      if (
+        method === 'guardianWarning' &&
+        isProviderRecord(payload) &&
+        typeof payload.message === 'string' &&
+        payload.message.startsWith('Automatic approval review denied (')
+      ) {
+        return 'suppressed-benign'
+      }
       if (method === 'hook/completed') {
         const run = isProviderRecord(payload) && isProviderRecord(payload.run) ? payload.run : null
         return run?.status === 'failed' ? 'error-surface' : 'suppressed-benign'

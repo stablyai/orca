@@ -74,6 +74,12 @@ export const SEND_FAILURE_COPY = {
       AGENT_SESSION_FAILURE_COPY.providerResponseFailed,
       values
     ),
+  providerResponseFailedQuoted: (values) =>
+    translate(
+      'session.failure.providerResponseFailedQuoted',
+      AGENT_SESSION_FAILURE_COPY.providerResponseFailedQuoted,
+      values
+    ),
   providerRejected: (values) =>
     translate('session.failure.providerRejected', "{{agent}} didn't accept this message.", values),
   providerRejectedQuoted: (values) =>

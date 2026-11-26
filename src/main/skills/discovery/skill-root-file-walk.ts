@@ -1,7 +1,10 @@
 import type { Dirent } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
-import { isSkillStagingEntryName } from '../filesystem/skill-transaction-staging-names'
+import {
+  isClaudeSyncScratchDirectory,
+  isSkillStagingEntryName
+} from '../filesystem/skill-transaction-staging-names'
 import { createDirectoryReadAhead, type WalkOrder } from './skill-directory-read-ahead'
 
 export const SKILL_FILE_NAME = 'SKILL.md'
@@ -22,12 +25,15 @@ function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): b
 export type SkillFileWalkOptions = {
   skipHiddenDirectories?: boolean
   stopAtSkillDirectories?: boolean
+  /** Reject with SkillRootUnreadableError when the root fails to list for any reason but absence. */
+  rejectUnreadableRoot?: boolean
 }
 
 function entersDirectory(name: string, options: SkillFileWalkOptions): boolean {
   return (
     name !== SKILL_FILE_NAME &&
     !isSkillStagingEntryName(name) &&
+    !isClaudeSyncScratchDirectory(name) &&
     !(options.skipHiddenDirectories && name.startsWith('.'))
   )
 }
@@ -72,6 +78,7 @@ export async function findSkillFiles(
   const visitedDirectoryPaths = new Set<string>()
   const readAhead = createDirectoryReadAhead({
     signal,
+    rejectUnreadableRoot: options.rejectUnreadableRoot,
     enteredChildIndexes: (dirPath, entries) =>
       enteredChildIndexes(rootPath, maxDepth, dirPath, entries, options)
   })

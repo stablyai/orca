@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useEditor } from '@tiptap/react'
-import type { Editor } from '@tiptap/react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEditor, type Editor } from '@tiptap/react'
+
 import Placeholder from '@tiptap/extension-placeholder'
 import { Paperclip } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -14,8 +14,11 @@ import {
 } from '@/components/editor/rich-markdown/links/RichMarkdownLinkBubble'
 import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/rich-markdown/raw-source/raw-markdown-html'
 import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
-import { createEditableMarkdownLinkBubble } from '@/components/editor/rich-markdown/links/rich-markdown-selected-link-actions'
-import { copyRichMarkdownLink } from '@/components/editor/rich-markdown/links/rich-markdown-link-clipboard'
+import {
+  createEditableMarkdownLinkBubble,
+  getRichMarkdownSelectionLinkBubble
+} from '@/components/editor/rich-markdown/links/rich-markdown-selected-link-actions'
+import { useLinkBubble } from '@/components/editor/rich-markdown/links/useLinkBubble'
 import { normalizeSoftBreaks } from '@/components/editor/rich-markdown/schema/rich-markdown-normalize'
 import { GitHubMarkdownComposerPreviewPane } from '@/components/github/github-markdown-composer-preview-pane'
 import { GitHubMarkdownComposerEditorPane } from '@/components/github/GitHubMarkdownComposerEditorPane'
@@ -25,14 +28,14 @@ import {
 } from '@/components/github/github-markdown-composer-tabbar'
 import { GitHubMarkdownImageInput } from './github-markdown-image-input'
 import { useImageInput } from '@/components/github/use-image-input'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { createGitHubComposerLinkEventHandlers } from './github-markdown-composer-link-events'
 import { useGitHubImagePaste } from './use-github-image-paste'
 import type { GitHubImageUploadAddress } from './github-image-upload'
 
@@ -100,10 +103,12 @@ export function GitHubMarkdownComposer({
     insertImageUrl
   } = useImageInput(editorRef, disabledRef, () => setActiveTab('write'))
 
-  onChangeRef.current = onChange
-  onSubmitShortcutRef.current = onSubmitShortcut
-  disabledRef.current = disabled
-  isEditingLinkRef.current = isEditingLink
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange
+    onSubmitShortcutRef.current = onSubmitShortcut
+    disabledRef.current = disabled
+    isEditingLinkRef.current = isEditingLink
+  }, [disabled, isEditingLink, onChange, onSubmitShortcut])
 
   const extensions = useMemo(
     () => [
@@ -117,20 +122,35 @@ export function GitHubMarkdownComposer({
     [codec, placeholder, images.extension]
   )
 
+  const cancelHoverBubbleRef = useRef<() => void>(() => {})
+  const closeLinkBubble = useCallback(() => {
+    cancelHoverBubbleRef.current()
+    setIsEditingLink(false)
+    setLinkBubble(null)
+  }, [])
   const openLinkEditor = useCallback(() => {
-    const editor = editorRef.current
-    if (!editor || disabledRef.current) {
+    const currentEditor = editorRef.current
+    if (!currentEditor || disabledRef.current) {
       return
     }
-    const position = getLinkBubblePosition(editor, rootRef.current)
+    const selectionBubble = getRichMarkdownSelectionLinkBubble(currentEditor, rootRef.current)
+    if (selectionBubble && selectionBubble.kind === 'markdown') {
+      cancelHoverBubbleRef.current()
+      setLinkBubble(selectionBubble)
+      setIsEditingLink(true)
+      return
+    }
+    const position = getLinkBubblePosition(currentEditor, rootRef.current)
     if (!position) {
-      editor.commands.focus()
+      currentEditor.commands.focus()
       return
     }
-    const href = editor.isActive('link') ? String(editor.getAttributes('link').href ?? '') : ''
-    setLinkBubble(createEditableMarkdownLinkBubble(href, position))
+    cancelHoverBubbleRef.current()
+    setLinkBubble(createEditableMarkdownLinkBubble('', position))
     setIsEditingLink(true)
   }, [])
+
+  const [linkEvents] = useState(() => createGitHubComposerLinkEventHandlers(closeLinkBubble))
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -139,7 +159,11 @@ export function GitHubMarkdownComposer({
     content: encodeRawMarkdownHtmlForRichEditor(value, codec),
     contentType: 'markdown',
     editorProps: {
-      handleDOMEvents: { paste: images.handlePaste },
+      handleDOMEvents: {
+        paste: images.handlePaste,
+        ...linkEvents.domEvents
+      },
+      handleClick: linkEvents.handleProseMirrorClick,
       transformPastedHTML: images.transformPastedHTML,
       attributes: {
         class: cn('rich-markdown-editor github-markdown-composer-editor', minHeightClassName),
@@ -193,25 +217,25 @@ export function GitHubMarkdownComposer({
       lastSyncedMarkdownRef.current = markdown
       onChangeRef.current(markdown)
     },
-    onSelectionUpdate: ({ editor: nextEditor }) => {
+    onSelectionUpdate: () => {
       if (isEditingLinkRef.current) {
-        return
+        setIsEditingLink(false)
+        setLinkBubble(null)
       }
-      if (nextEditor.isActive('link')) {
-        const position = getLinkBubblePosition(nextEditor, rootRef.current)
-        if (position) {
-          setLinkBubble(
-            createEditableMarkdownLinkBubble(
-              String(nextEditor.getAttributes('link').href ?? ''),
-              position
-            )
-          )
-          return
-        }
-      }
-      setLinkBubble(null)
     }
   })
+  const {
+    handleLinkSave,
+    handleLinkRemove,
+    handleLinkEditCancel,
+    handleLinkCopy,
+    cancelHoverBubble,
+    onBubblePointerEnter,
+    onBubblePointerLeave
+  } = useLinkBubble(editor, rootRef, linkBubble, isEditingLink, setLinkBubble, setIsEditingLink)
+  useEffect(() => {
+    cancelHoverBubbleRef.current = cancelHoverBubble
+  }, [cancelHoverBubble])
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   useEffect(() => {
@@ -258,49 +282,6 @@ export function GitHubMarkdownComposer({
       applyingExternalValueRef.current = false
     }
   }, [codec, editor, value])
-
-  const handleLinkSave = useCallback((href: string) => {
-    const editor = editorRef.current
-    if (!editor) {
-      return
-    }
-    if (href) {
-      if (editor.isActive('link')) {
-        editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
-      } else if (editor.state.selection.empty) {
-        editor
-          .chain()
-          .focus()
-          .insertContent({
-            type: 'text',
-            text: href,
-            marks: [{ type: 'link', attrs: { href } }]
-          })
-          .run()
-      } else {
-        editor.chain().focus().setLink({ href }).run()
-      }
-    } else if (editor.isActive('link')) {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run()
-    }
-    setIsEditingLink(false)
-  }, [])
-
-  const handleLinkRemove = useCallback(() => {
-    const editor = editorRef.current
-    if (!editor) {
-      return
-    }
-    editor.chain().focus().extendMarkRange('link').unsetLink().run()
-    setLinkBubble(null)
-    setIsEditingLink(false)
-  }, [])
-
-  const handleLinkOpen = useCallback(() => {
-    if (linkBubble?.href) {
-      openAppHttpLink(linkBubble.href)
-    }
-  }, [linkBubble?.href])
 
   const toolbar = (
     <RichMarkdownToolbar
@@ -369,22 +350,23 @@ export function GitHubMarkdownComposer({
           anchorElement={rootRef.current}
           linkBubble={linkBubble}
           isEditing={isEditingLink}
+          readOnly={disabled}
           onDismiss={() => {
+            cancelHoverBubble()
             setLinkBubble(null)
             setIsEditingLink(false)
           }}
           onSave={handleLinkSave}
           onRemove={handleLinkRemove}
-          onEditStart={() => setIsEditingLink(true)}
-          onEditCancel={() => {
-            setIsEditingLink(false)
-            if (!linkBubble.href) {
-              setLinkBubble(null)
-            }
-            editorRef.current?.commands.focus()
+          onEditStart={() => {
+            cancelHoverBubble()
+            setIsEditingLink(true)
           }}
-          onOpen={handleLinkOpen}
-          onCopy={() => void copyRichMarkdownLink(linkBubble.href)}
+          onEditCancel={handleLinkEditCancel}
+          onCopy={handleLinkCopy}
+          onPointerEnter={onBubblePointerEnter}
+          onPointerLeave={onBubblePointerLeave}
+          portalToDocument
         />
       ) : null}
     </div>

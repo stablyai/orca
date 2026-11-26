@@ -10,7 +10,7 @@ import {
   type HostTurnEndFacts
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   ptyStatusEvidenceAt,
   renewRuntimeMobileAgentStatusFromPtyTitle,
@@ -22,6 +22,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { restatedShownDone } from './restated-shown-done'
 import {
   classifyAgentTitle,
   getLatestAgentCandidate,
@@ -56,9 +57,15 @@ export function buildRuntimeMobileAgentStatus(
     return {}
   }
   const providerSession = hookRow.providerSession
-    ? { providerSession: hookRow.providerSession }
+    ? {
+        providerSession: hookRow.providerSession,
+        ...(hookRow.orcaSessionId !== undefined ? { orcaSessionId: hookRow.orcaSessionId } : {})
+      }
     : retained?.providerSession
-      ? { providerSession: retained.providerSession }
+      ? {
+          providerSession: retained.providerSession,
+          ...(retained.orcaSessionId !== undefined ? { orcaSessionId: retained.orcaSessionId } : {})
+        }
       : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
@@ -199,11 +206,15 @@ export function buildRuntimeMobileAgentStatus(
         tabId: tab.parentTabId,
         terminalTitle,
         ...providerSession,
-        ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {})
+        ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {}),
+        ...(liveRow.paneSleep ? { paneSleep: liveRow.paneSleep } : {})
       },
       ownerAgent,
       ownerOptions
     )
+    if (liveRow.paneSleep) {
+      return { agentStatus: liveStatus }
+    }
     // A live question outranks only the shell title that currently obscures it.
     const renewedStatus = renewRuntimeMobileAgentStatusFromPtyTitle(liveStatus, pty, {
       preserveQuestionUnderShellTitle: true
@@ -254,17 +265,35 @@ export function buildRuntimeMobileAgentStatus(
   // Date it by title evidence, not lastOutputAt, or every output byte outranks clients' live status.
   const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
   const agentType = ownerAgent ?? undefined
+  const state =
+    pty?.lastAgentStatus === 'working'
+      ? 'working'
+      : pty?.lastAgentStatus === 'permission'
+        ? 'blocked'
+        : 'done'
+  // Why: with no working title since the shown Done, this Done is the agent quitting or
+  // relaunching, not a new turn end (#46569); restate it so clients don't announce it again.
+  const restatedDone =
+    state === 'done'
+      ? restatedShownDone(shownSegment, pty?.lastAgentStatusWorkingStartedAtEpochMs ?? null)
+      : null
+  // Why: a title Done that no working status ended, title or hook, is an agent starting or leaving at rest; clients never announce a boundary.
+  // A stale-spinner clear is no turn end either, as host push already treats it.
+  const shownState =
+    shownSegment && ('payload' in shownSegment ? shownSegment.payload.state : shownSegment.state)
+  const atRest =
+    state === 'done' &&
+    !restatedDone &&
+    pty?.lastAgentStatusEndedTurn !== true &&
+    (!shownState || shownState === 'done')
   return {
     agentStatus: {
-      state:
-        pty?.lastAgentStatus === 'working'
-          ? 'working'
-          : pty?.lastAgentStatus === 'permission'
-            ? 'blocked'
-            : 'done',
+      state,
       prompt: '',
       updatedAt: pty ? ptyStatusEvidenceAt(pty, evidenceAt) : evidenceAt,
       stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? evidenceAt,
+      ...restatedDone,
+      ...(atRest ? { sessionBoundary: true } : {}),
       paneKey,
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(agentType ? { agentType } : {}),

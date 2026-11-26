@@ -2,7 +2,7 @@ import { useLayoutEffect, useState, type RefObject } from 'react'
 import {
   measureVirtualizedListScrollMargin,
   observeVirtualizedListScrollMargin
-} from '../../../virtualized-list'
+} from '../../../ui/virtualized-list'
 
 export function useMarkdownPreviewBodyLayout(
   bodyRef: RefObject<HTMLDivElement | null>,

@@ -1,5 +1,5 @@
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
-import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import {
   captureHttpLinkIntent,
   openOwnedHttpLink
@@ -44,9 +44,7 @@ export function subscribeDocPreviewExternalLinkConfirmation(
         modifiers ?? { metaKey: false, ctrlKey: false, shiftKey: false },
         navigator.userAgent.includes('Mac'),
         source.worktreeId,
-        source.owner.kind === 'ssh'
-          ? source.owner
-          : { kind: 'runtime', runtimeEnvironmentId: source.owner.environmentId }
+        { kind: 'runtime', runtimeEnvironmentId: source.owner.environmentId }
       ),
       allowRemoteInApp: true,
       allowClientBrowserFallback: true,

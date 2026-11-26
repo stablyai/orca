@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ActiveSurfaceSourceState } from '../../tabs/tabs-surface'
 import { deriveActiveSurfaceForWorktree } from '../../tabs/tabs-surface'
 

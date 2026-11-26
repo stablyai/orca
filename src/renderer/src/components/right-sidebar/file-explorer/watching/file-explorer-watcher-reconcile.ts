@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { DirCache } from '../tree/file-explorer-types'
 import { isPathEqualOrDescendant } from '../navigation/file-explorer-paths'
 import { useAppStore } from '@/store/index'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 
 // dirCache is component-local; accept its setter without coupling the watch effect to Zustand (design §5.2).
 

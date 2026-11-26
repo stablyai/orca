@@ -50,7 +50,9 @@ export function resolveDefaultHermesHome(input: DefaultHermesHomeInput = {}): st
     : localAppDataHome
 }
 
-export function getHermesHome(env: NodeJS.ProcessEnv = process.env): string {
+export function getHermesHome(env: NodeJS.ProcessEnv = process.env, homeDir?: string): string {
   const explicit = env.HERMES_HOME?.trim()
-  return explicit ? explicit : resolveDefaultHermesHome({ env })
+  return explicit ? explicit : resolveDefaultHermesHome({ env, homeDir })
 }
+
+export { resolveHermesActiveProfileHome } from '../../shared/hermes/hermes-active-profile-home'

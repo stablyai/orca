@@ -1,8 +1,14 @@
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 export type StructuredAgentSessionWorkEvidence = {
-  record: Pick<AgentSessionConversationView, 'ownerObservation' | 'currentFence'> | null
+  record: {
+    currentFence: AgentSessionConversationView['currentFence']
+    ownerObservation: Pick<
+      AgentSessionConversationView['ownerObservation'],
+      'claimStatus' | 'unreconciled' | 'handoffStage'
+    >
+  } | null
   ended?: StructuredAgentSessionSeenEnd
   revision?: number
   replaced?: StructuredAgentSessionReplacedEnd | undefined
@@ -19,10 +25,4 @@ export type StructuredAgentSessionSeenEnd = {
   cause?: string
 }
 
-export type StructuredAgentSessionCurrentWorkJournal = Pick<
-  AgentSessionJournal,
-  'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
-> &
-  Partial<Pick<AgentSessionJournal, 'readSince'>> & {
-    inputOrder: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
-  }
+export type StructuredAgentSessionCurrentWorkJournal = Pick<AgentSessionJournal, 'cursor'>

@@ -1,12 +1,12 @@
-import { isAuthError as isLinearAuthError } from '../../../linear/client'
-import { getIssueCommentThreadRoot as getLinearIssueCommentThreadRoot } from '../../../linear/linear-issue-lookups'
+import { isAuthError as isLinearAuthError } from '../../../linear/accounts/linear-account-client'
+import { getIssueCommentThreadRoot as getLinearIssueCommentThreadRoot } from '../../../linear/issues/linear-issue-lookups'
 import {
   LinearAgentAccessError,
   linearError,
   toLinearAccessError
-} from '../../../linear/issue-context/errors'
+} from '../../../linear/issues/context/linear-access-errors'
 import { runLinearWriteAction } from './runtime-linear-write-action'
-import type { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
+import type { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
 import { RuntimeLinearWriteResultCommands } from './runtime-linear-write-result-commands'
 
 export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResultCommands {

@@ -10,11 +10,6 @@ export function isRuntimeCatalogListingStale(): boolean {
   return Date.now() - lastCatalogListedAt > RUNTIME_CATALOG_STALE_MS
 }
 
-/** Reset module timestamp so one test’s clock cannot affect later list-count assertions. */
-export function resetRuntimeCatalogListingForTests(): void {
-  lastCatalogListedAt = 0
-}
-
 type RuntimeStatusHydrationDependencies = {
   listEnvironments: () => Promise<PublicKnownRuntimeEnvironment[]>
   getCurrentEnvironments: () => readonly PublicKnownRuntimeEnvironment[]

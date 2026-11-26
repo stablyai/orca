@@ -2,9 +2,8 @@
 
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX,
   type AgentSessionExpiredAttachment
@@ -13,7 +12,8 @@ import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,
   agentSessionAttachmentReferenceNames,
   agentSessionAttachmentReferences,
-  agentSessionAttachmentStoreRoot
+  agentSessionAttachmentStoreRoot,
+  type AgentSessionAttachmentReferrer
 } from './agent-session-attachment-references'
 
 const CLAIM_SAVEPOINT = 'agent_session_attachment_claims'
@@ -89,11 +89,11 @@ function insertClaims(
 export type AgentSessionAttachmentClaim = {
   stateDirectory: string
   sessionId: string
-  body: AgentJournalMessageItem
+  body: AgentSessionAttachmentReferrer
   /** New client references must exist; host carries/drafts claim best effort. */
   required: boolean
   /** Existing references remain best effort when replacing a message. */
-  previous?: AgentJournalMessageItem
+  previous?: AgentSessionAttachmentReferrer
   now: number
 }
 
@@ -181,21 +181,27 @@ export function finishUploadSweep(db: Database.Database, uploadId: string): void
 /** Recheck chat and disk facts on each sweep so orphan claims cannot preserve unused uploads. */
 export function pruneAgentSessionAttachmentClaims(
   db: Database.Database,
-  facts: { root: string; recordedSessionIds: Pick<ReadonlySet<string>, 'has'> | null }
+  facts: {
+    root: string
+    recordedSessionIds: Pick<ReadonlySet<string>, 'has'> | null
+    pairs?: readonly { uploadId: string; sessionId: string }[]
+  }
 ): number {
-  const rows = db
-    .prepare('SELECT upload_id, session_id FROM agent_session_attachment_claims')
-    .all()
-    .flatMap((row) =>
-      typeof row === 'object' &&
-      row !== null &&
-      'upload_id' in row &&
-      'session_id' in row &&
-      typeof row.upload_id === 'string' &&
-      typeof row.session_id === 'string'
-        ? [{ uploadId: row.upload_id, sessionId: row.session_id }]
-        : []
-    )
+  const rows =
+    facts.pairs ??
+    db
+      .prepare('SELECT upload_id, session_id FROM agent_session_attachment_claims')
+      .all()
+      .flatMap((row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        'upload_id' in row &&
+        'session_id' in row &&
+        typeof row.upload_id === 'string' &&
+        typeof row.session_id === 'string'
+          ? [{ uploadId: row.upload_id, sessionId: row.session_id }]
+          : []
+      )
   const remove = db.prepare(
     'DELETE FROM agent_session_attachment_claims WHERE upload_id = ? AND session_id = ?'
   )

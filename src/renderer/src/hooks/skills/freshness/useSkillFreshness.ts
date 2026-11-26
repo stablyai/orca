@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from 'react'
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
-import { summarizeBundledSkillPlan } from '../../../../../shared/bundled-skill-summary'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import { summarizeBundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import {
   bundledSkillTargetKey,
   type BundledSkillTarget
@@ -265,22 +265,5 @@ export function useSkillFreshness(target: BundledSkillTarget | null): SkillFresh
   return {
     ...(reenabled || (target && current.targetKey !== targetKey) ? REENABLING_SNAPSHOT : current),
     refresh: target ? refreshSkillFreshness : skipSkillFreshnessRefresh
-  }
-}
-
-export const _skillFreshnessCacheForTests = {
-  reset(): void {
-    activeTarget = null
-    cachedPlan = null
-    pendingPlan = null
-    invalidationRevision = 0
-    lastCompletedScanAt = 0
-    refreshSequence = 0
-    pendingReenableRefresh = null
-    if (scheduledFocusRescan !== null) {
-      window.clearTimeout(scheduledFocusRescan)
-      scheduledFocusRescan = null
-    }
-    snapshot = { ...IDLE, targetKey: null }
   }
 }

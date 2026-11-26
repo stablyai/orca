@@ -1,7 +1,8 @@
 import { parseAgentHookJson } from './request-body'
 import {
   readLastAssistantFromTranscriptOnce,
-  readLastTextFromTranscriptOnce
+  readLastTextFromTranscriptOnce,
+  type AssistantTranscriptFormat
 } from './transcript-reader'
 
 export function extractAntigravityUserRequest(content: string): string | undefined {
@@ -36,11 +37,46 @@ export function extractUserPromptTextFromLine(line: string): string | undefined 
   return undefined
 }
 
-export function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
-  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
+let skippedStopTranscripts: string[] | null = null
+
+/**
+ * Runs one synchronous normalize with the Stop-text transcript fallback skipped and returns the
+ * transcripts it skipped, so a host on the event loop can read them asynchronously afterwards.
+ */
+export function withStopTranscriptReadsSkipped<T>(normalize: () => T): {
+  value: T
+  skipped: readonly string[]
+} {
+  const outer = skippedStopTranscripts
+  const skipped: string[] = []
+  skippedStopTranscripts = skipped
+  try {
+    return { value: normalize(), skipped }
+  } finally {
+    skippedStopTranscripts = outer
+  }
+}
+
+/** Stop-text fallback when the hook carries none; skipped inside withStopTranscriptReadsSkipped. */
+export function readLastAssistantFromTranscript(
+  transcriptPath: unknown,
+  format: AssistantTranscriptFormat = 'shared'
+): string | undefined {
+  if (skippedStopTranscripts && typeof transcriptPath === 'string' && transcriptPath.length > 0) {
+    skippedStopTranscripts.push(transcriptPath)
     return undefined
   }
-  return readLastAssistantFromTranscriptOnce(transcriptPath)
+  return readLastAssistantFromTranscriptInline(transcriptPath, format)
+}
+
+/** Always reads now; for fallbacks whose order against other sources must not change. */
+export function readLastAssistantFromTranscriptInline(
+  transcriptPath: unknown,
+  format: AssistantTranscriptFormat = 'shared'
+): string | undefined {
+  return typeof transcriptPath === 'string' && transcriptPath.length > 0
+    ? readLastAssistantFromTranscriptOnce(transcriptPath, format)
+    : undefined
 }
 
 export function readLastUserPromptFromTranscript(transcriptPath: unknown): string | undefined {

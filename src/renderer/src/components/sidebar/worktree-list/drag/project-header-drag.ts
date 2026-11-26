@@ -1,3 +1,7 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
@@ -18,7 +22,7 @@ import { createProjectHeaderDragSession } from './project-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 // Virtualized rows can unmount during drag; pointer events and cached header geometry avoid stale drop targets.
 
@@ -189,7 +193,9 @@ export function useRepoHeaderDrag({
         elapsedMs: frameTime - previousFrameTime
       })
       if (autoscroll) {
+        supersedeVirtualizedScrollAnchorRestore(container, autoscroll.scrollTop)
         container.scrollTop = autoscroll.scrollTop
+        requestVirtualizedScrollAnchorRecord(container)
         refreshHeaderRects()
       }
 
@@ -290,8 +296,7 @@ export function useRepoHeaderDrag({
       return
     }
     const body = document.body
-    const prevCursor = body.style.cursor
-    const prevUserSelect = body.style.userSelect
+    const { cursor: prevCursor, userSelect: prevUserSelect } = body.style
     body.style.cursor = 'grabbing'
     body.style.userSelect = 'none'
     return () => {

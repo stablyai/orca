@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import {
   folderWorkspaceToWorktree,
@@ -8,20 +8,20 @@ import {
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folders/folder-workspace-lanes'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/sidebar-list/folder-workspace-host-id'
-import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/sidebar-list/hosts/folder-workspace-host-id'
+import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/hosts/host-section-collapse'
 
 function findFolderWorkspaceByKey(
   worktreeId: string,

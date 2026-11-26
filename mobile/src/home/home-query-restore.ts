@@ -5,16 +5,18 @@ import {
   HOST_LIST_TARGET,
   homeWorktreeCountsKey,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { hostObserverOptions } from '../query/host-query'
 import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import { persistedHostQueryKey } from '../query/host-query-persistence'
 import { keepNativeHostQueries, nativeQueryStoreReady } from '../query/native-query-persistence'
 import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
+import { hostQueryKey } from '../query/host-query-key'
+import { homeRelayedServersQuery } from './home-relayed-server-queries'
 import {
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
-} from '../worktree/home-host-worktree-fetch'
+} from '../worktree/catalog/home-host-worktree-fetch'
 
 // Where Home kept its counts before the device store: read once to seed the store, then removed.
 const LEGACY_SNAPSHOT_KEY = 'orca:home-snapshot:v1'
@@ -107,6 +109,16 @@ export async function restoreHomeQueries(
           [
             persistedHostQueryKey(homeStatsQuery, homeStatsKey(hostId)),
             persistedHostQueryKey(homeWorktreeCountsQuery, homeWorktreeCountsKey(hostId)),
+            // Which server each desktop is, so an offline direct pairing still claims its relayed copy.
+            persistedHostQueryKey(
+              homeRelayedServersQuery,
+              hostQueryKey(
+                hostId,
+                homeRelayedServersQuery.family,
+                HOST_LIST_TARGET,
+                NO_HOST_LIST_INPUT
+              )
+            ),
             // Stored for the Accounts page; read here so Home's own observer doesn't read it alone.
             persistedHostQueryKey(accountsSnapshotFamily, accountsSnapshotKey(hostId))
           ].filter((key) => key !== null)

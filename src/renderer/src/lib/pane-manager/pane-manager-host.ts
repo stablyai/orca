@@ -4,7 +4,7 @@ import type {
   PaneManagerOptions,
   PaneStyleOptions
 } from './pane-manager-types'
-import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
+import type { DragReorderCallbacks, DragReorderState } from './pane-layout/pane-drag-reorder'
 import type { PaneIdentityRegistry } from './pane-identity-registry'
 
 /** Collaborator callbacks use getters for mutable activePaneId/styleOptions so they never capture stale manager state. */

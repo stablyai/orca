@@ -2,9 +2,9 @@ import type { HostedReviewProvider } from '../../shared/source-control/hosted-re
 import type { PullRequestLinkedIssue } from '../../shared/source-control/ai/generation/pull-request-generation'
 import { isLinkedIssueNumber } from '../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { WorkspaceLinkedItem } from '../../shared/worktree/types'
-import type { GitRuntimeOptions } from '../git/git-runtime-options'
-import { getIssue as getGitHubIssue } from '../github/issues'
-import { getIssue as getGitLabIssue } from '../gitlab/issues'
+import type { GitRuntimeOptions } from '../git/command-runner/git-runtime-options'
+import { getIssue as getGitHubIssue } from '../github/issues/issues'
+import { getIssue as getGitLabIssue } from '../gitlab/issues/gitlab-issue-queries'
 
 export type PullRequestLinkedIssueMeta = {
   linkedIssue?: number | null

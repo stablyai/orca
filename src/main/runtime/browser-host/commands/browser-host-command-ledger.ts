@@ -9,26 +9,29 @@ import {
   assertBrowserHostCommandResultAuthority,
   assertBrowserHostCommandOrder,
   createBrowserHostCommandRecord,
-  DEFAULT_MAX_OUTSTANDING_COMMANDS,
-  DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE,
+  createBrowserHostCommandPageState,
   DEFAULT_MAX_PAGES,
   type BrowserHostCommandInput,
   type BrowserHostCommandLedgerOptions,
   type BrowserHostCommandPageState,
+  type BrowserHostCommandResultChunkParams,
   type BrowserHostCommandResultParams,
   positiveBrowserHostCommandLimit,
   recordBrowserHostCommandOrder,
   resolveBrowserHostCommandCacheLimits,
+  resolveBrowserHostOutstandingCommandLimits,
   snapshotBrowserHostPageCommand
 } from './browser-host-command-state'
 import { replayOutstandingBrowserHostCommands } from './browser-host-command-replay'
 import {
   hasOutstandingBrowserHostReconciliation,
+  hasOutstandingBrowserHostPageCreation,
   isBrowserHostReconciliationResult,
   isBrowserHostUnplacedPageResult,
   replaySettledBrowserHostCommand
 } from './browser-host-command-result-replay'
 import { BrowserHostCommandResultCache } from './browser-host-command-result-cache'
+import { BrowserHostCommandResultStaging } from './browser-host-command-result-staging'
 
 export class BrowserHostCommandLedger {
   private readonly authority: BrowserClientHostLeaseAuthority
@@ -38,6 +41,7 @@ export class BrowserHostCommandLedger {
   private readonly maxPages: number
   private readonly pages = new Map<string, BrowserHostCommandPageState>()
   private readonly resultCache: BrowserHostCommandResultCache
+  private readonly staging = new BrowserHostCommandResultStaging()
   private delivery: ((event: BrowserClientHostCommandEvent) => void) | undefined
   private outstandingCommands = 0
   private activePages = 0
@@ -49,14 +53,9 @@ export class BrowserHostCommandLedger {
     }
     this.authority = Object.freeze({ ...options.authority })
     this.createCommandId = options.createCommandId ?? (() => randomUUID())
-    this.maxOutstandingCommands = positiveBrowserHostCommandLimit(
-      options.maxOutstandingCommands,
-      DEFAULT_MAX_OUTSTANDING_COMMANDS
-    )
-    this.maxOutstandingCommandsPerPage = positiveBrowserHostCommandLimit(
-      options.maxOutstandingCommandsPerPage,
-      DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE
-    )
+    const limits = resolveBrowserHostOutstandingCommandLimits(options)
+    this.maxOutstandingCommands = limits.maxOutstandingCommands
+    this.maxOutstandingCommandsPerPage = limits.maxOutstandingCommandsPerPage
     this.resultCache = new BrowserHostCommandResultCache(
       resolveBrowserHostCommandCacheLimits(options),
       (browserPageId) => this.pages.delete(browserPageId)
@@ -89,7 +88,10 @@ export class BrowserHostCommandLedger {
     this.delivery = undefined
   }
 
-  issue(input: BrowserHostCommandInput): {
+  issue(
+    input: BrowserHostCommandInput,
+    onAdmitted?: () => void
+  ): {
     event: BrowserClientHostCommandEvent
     result: Promise<BrowserClientHostCommandResult>
   } {
@@ -136,6 +138,7 @@ export class BrowserHostCommandLedger {
     page.nextIssueSequence += 1
     page.outstanding += 1
     this.outstandingCommands += 1
+    onAdmitted?.()
     try {
       this.delivery(event)
     } catch {
@@ -155,6 +158,22 @@ export class BrowserHostCommandLedger {
 
   hasOutstandingReconciliation(): boolean {
     return hasOutstandingBrowserHostReconciliation(this.pages)
+  }
+
+  isClosed(): boolean {
+    return this.closed
+  }
+
+  hasOutstandingPageCreation(browserPageId: string, generation: number): boolean {
+    return hasOutstandingBrowserHostPageCreation(this.pages.get(browserPageId), generation)
+  }
+
+  stageResultChunk(params: BrowserHostCommandResultChunkParams): void {
+    if (this.closed) {
+      throw new Error('browser_host_command_ledger_closed')
+    }
+    assertBrowserHostCommandResultAuthority(this.authority, params)
+    this.staging.append(this.pages.get(params.browserPageId), params)
   }
 
   settle(params: BrowserHostCommandResultParams): boolean {
@@ -186,7 +205,7 @@ export class BrowserHostCommandLedger {
     if (!record || record.event.commandId !== params.commandId || record.settled) {
       throw new Error('browser_host_command_result_conflict')
     }
-    const result = Object.freeze({ ...params.result })
+    const result = Object.freeze({ ...this.staging.take(record, params.result) })
     record.settled = result
     record.resolve(result)
     page.nextSettlementSequence += 1
@@ -230,6 +249,7 @@ export class BrowserHostCommandLedger {
     }
     this.pages.clear()
     this.resultCache.clear()
+    this.staging.clear()
     this.outstandingCommands = 0
     this.activePages = 0
   }
@@ -243,6 +263,7 @@ export class BrowserHostCommandLedger {
       throw new Error('browser_host_command_page_stale')
     }
     for (const record of page.records.values()) {
+      this.staging.release(record)
       if (!record.settled) {
         record.reject(new Error('browser_host_command_outcome_unknown'))
       }
@@ -274,16 +295,7 @@ export class BrowserHostCommandLedger {
     if (claimsActivePage && this.activePages >= this.maxPages) {
       throw new Error('browser_host_command_page_capacity')
     }
-    const page: BrowserHostCommandPageState = {
-      generation: input.pageHostGeneration,
-      nextIssueSequence: 1,
-      nextSettlementSequence: 1,
-      records: new Map(),
-      outstanding: 0,
-      settledSequences: [],
-      terminalCommandIssued: false,
-      activeCapacityReleased: false
-    }
+    const page = createBrowserHostCommandPageState(input.pageHostGeneration)
     return {
       page,
       commit: () => {

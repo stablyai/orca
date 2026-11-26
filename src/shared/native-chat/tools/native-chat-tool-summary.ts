@@ -5,7 +5,7 @@ import {
 } from './native-chat-tool-preview-prefix'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
-import { sliceAtCodeUnitLimit } from '../../surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
 
 const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8

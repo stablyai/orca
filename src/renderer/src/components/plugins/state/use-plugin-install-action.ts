@@ -3,12 +3,12 @@ import { toast } from 'sonner'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
 import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
-import { confirmPluginInstallTrust } from '@/store/plugins/installation/plugin-install-trust-request'
+import { usePluginInstallTrust } from './use-plugin-install-trust'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { applyPluginThemesNow } from './plugin-theme-apply'
 import { pluginTryAction } from './plugin-try-action'
@@ -59,8 +59,8 @@ export function usePluginInstallAction({
   applyThemes = applyPluginThemesNow
 }: {
   fetchPreview: (listing: PluginMarketplaceHostListing) => Promise<PluginPagePreview>
-  /** Reloads the list; opens review on the page for any plugin still waiting for it. */
-  onInstalled: (pluginKey: string) => Promise<void>
+  /** Reloads installed content; true means this surface already handled success feedback. */
+  onInstalled: (pluginKey: string) => Promise<void | boolean>
   /** Whether this install is on the page an install link opened; only labels telemetry. */
   isFromInstallLink?: (pluginKey: string) => boolean
   /** Shows an installed theme plugin at once; true when it did. Defaults to all of its themes. */
@@ -76,6 +76,7 @@ export function usePluginInstallAction({
 } {
   const [phases, setPhases] = useState<Readonly<Record<string, PluginInstallPhase>>>({})
   const mountedRef = useRef(true)
+  const confirmTrust = usePluginInstallTrust()
 
   useEffect(() => {
     mountedRef.current = true
@@ -117,6 +118,9 @@ export function usePluginInstallAction({
         return
       }
       const { preview } = read
+      if (!mountedRef.current) {
+        return
+      }
       // Why: preview reads the current catalog; never install a release other than the one shown.
       if (!previewMatchesListing(preview, listing)) {
         setPhase(pluginKey, {
@@ -129,7 +133,8 @@ export function usePluginInstallAction({
       const trustPrompt = catalogInstallTrustPrompt(listing, preview)
       if (trustPrompt) {
         setPhase(pluginKey, null)
-        if (!(await confirmPluginInstallTrust(trustPrompt))) {
+        const confirmed = await confirmTrust(trustPrompt)
+        if (!confirmed || !mountedRef.current) {
           return
         }
         setPhase(pluginKey, { kind: 'installing' })
@@ -171,7 +176,7 @@ export function usePluginInstallAction({
               console.warn('[plugins] approval after install was refused:', cause)
             })
         }
-        await onInstalled(pluginKey)
+        const handled = await onInstalled(pluginKey)
         setPhase(pluginKey, null)
         if (moved) {
           toast.warning(
@@ -188,6 +193,9 @@ export function usePluginInstallAction({
               )
             }
           )
+          return
+        }
+        if (handled) {
           return
         }
         const { themes, iconThemes, terminalThemes } = preview.manifest.contributes
@@ -221,7 +229,7 @@ export function usePluginInstallAction({
         setPhase(pluginKey, { kind: 'error', message: catalogInstallErrorMessage(cause) })
       }
     },
-    [applyThemes, dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
+    [applyThemes, confirmTrust, dismiss, fetchPreview, isFromInstallLink, onInstalled, setPhase]
   )
 
   const phaseOf = useCallback(

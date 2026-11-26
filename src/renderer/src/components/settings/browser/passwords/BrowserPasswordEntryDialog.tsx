@@ -17,7 +17,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordEntryEditResult,
   BrowserPasswordEntryInput
-} from '../../../../../../shared/browser-passwords-types'
+} from '../../../../../../shared/browser/passwords/browser-passwords-types'
 
 /** Editing starts from what the user unlocked with Touch ID; adding starts empty. */
 export type BrowserPasswordEntryFormStart =

@@ -5,7 +5,7 @@ import {
 } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { AppState } from '../../../types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { NativeChatComposerDraftOwner } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   deleteNativeChatComposerDraft,

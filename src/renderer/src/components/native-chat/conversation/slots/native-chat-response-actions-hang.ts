@@ -1,5 +1,6 @@
-// Response controls sit on the left. They may hang into the gap below only when nothing else on the
-// left starts there; otherwise they would touch the next item, so they keep their own height.
+// Response controls sit on the left, close under their response. Above the row opening the next turn
+// (the person's bubble or an agent's card) they hang a little into the gap, so the turns stay close
+// while the controls keep clear of it; elsewhere, the transcript's last row included, they keep their height.
 
 import {
   type NativeChatRowTypography,
@@ -11,17 +12,15 @@ import type {
   NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
 
-/** The person's own right-aligned bubble, with nothing of the row drawn on the left above it. */
-function slotOpensWithPersonBubble(slot: NativeChatTranscriptSlot): boolean {
+/** A user-role row opening the next turn, with nothing of the row drawn above it: the person's own
+ *  bubble or an agent's message card. */
+function slotOpensTurn(slot: NativeChatTranscriptSlot): boolean {
   return (
     slot.kind === 'message' &&
-    slot.depth === 0 &&
     slot.drawsMessage &&
     slot.receipt === undefined &&
     slot.statusAbove !== true &&
     slot.message.role === 'user' &&
-    // Agent-authored input draws a left-aligned sender card instead of a bubble.
-    slot.message.from === undefined &&
     !slot.message.blocks.some((block) => block.type === 'text' && block.providerFrame)
   )
 }
@@ -64,8 +63,6 @@ function slotHoldsControls(
  *  controls stay in flow. Runs after `endsResponse` and `continuesTurn` are known. */
 export function markNativeChatResponseActionsHang(
   drawn: readonly NativeChatTranscriptSlot[],
-  /** A left-side row draws under the last slot (the live activity line, the awaiting-input row). */
-  tailRowBelow: boolean,
   typography?: NativeChatRowTypography
 ): void {
   // Newest first, carrying what draws next: a send that never reached the journal draws after the
@@ -77,18 +74,14 @@ export function markNativeChatResponseActionsHang(
     if (!slotDrawsAfterTranscript(slot)) {
       following = slot
     }
-    // A subagent's section keeps its controls inside its border, so they never hang there.
-    if (
-      slot.kind !== 'message' ||
-      slot.depth !== 0 ||
-      !slot.drawsMessage ||
-      slot.message.role !== 'assistant'
-    ) {
+    if (slot.kind !== 'message' || !slot.drawsMessage || slot.message.role !== 'assistant') {
       continue
     }
     if (
       !slotDrawsAfterMessage(slot) &&
-      (next === undefined ? !tailRowBelow : slotOpensWithPersonBubble(next))
+      // The last row never hangs, so the gap to the composer is the same whatever the turn ends on.
+      next !== undefined &&
+      slotOpensTurn(next)
     ) {
       slot.actionsHang = true
     } else if (slotHoldsControls(slot, typography)) {

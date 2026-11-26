@@ -6,18 +6,18 @@ import {
   _resetSecretStoreForTests,
   getSecretStore,
   setSecretStore
-} from '../../shared/secret-store'
+} from '../../shared/secure-storage/secret-store'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { AntigravityAccountService } from './native-account-service'
 import type { AntigravityCredentialIdentity } from './native-credential-codec'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { createAntigravityWindowsCredentialBackend } from './native-windows-credentials'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
-import { createFakeWindowsSecurity } from '../../shared/windows-security-addon.test-fixture'
+import { createFakeWindowsSecurity } from '../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
-} from '../../shared/windows-security-addon'
+} from '../../shared/secure-storage/windows-security-addon'
 
 let dir: string
 beforeEach(() => {
@@ -45,19 +45,11 @@ afterEach(() => {
 describe('protected Antigravity account snapshots', () => {
   it.skipIf(process.platform === 'win32').each([
     [
-      '{"auth_method":"consumer","token":{"ACCESS_TOKEN":"fixture-access","refresh_token":"typed-grant"}}',
-      'consumer'
-    ],
-    [
-      '{"auth_method":"consumer","token":{"access_token":"fixture-access","access_token":null,"refresh_token":"typed-grant"}}',
-      'consumer'
-    ],
-    [
       '{"auth_method":"consumer","access_token":"fixture-access","refresh_token":"typed-grant"}',
       ''
     ],
     [
-      '{"auth_method":"old","AUTH_METHOD":"consumer","token":{"access_token":"fixture-access","refresh_token":"typed-grant"}}',
+      '{"auth_method":"old","AUTH_METHOD":"consumer","token":{"ACCESS_TOKEN":"fixture-access","access_token":null,"refresh_token":"typed-grant"}}',
       'consumer'
     ]
   ])(
@@ -95,11 +87,10 @@ describe('protected Antigravity account snapshots', () => {
       native(raw)
       const typed = (await service.addCurrentAccount()).activeAccountId!
       expect(typed).not.toBe(prior)
-      expect(
-        store()
-          .read()
-          .accounts.map((account) => account.credentials)
-      ).toEqual([credential('prior'), raw])
+      expect((await store().read()).accounts.map((account) => account.credentials)).toEqual([
+        credential('prior'),
+        raw
+      ])
       service = reopen()
       expect(await service.listAccounts()).toMatchObject({
         activeAccountId: typed,
@@ -127,11 +118,10 @@ describe('protected Antigravity account snapshots', () => {
         : '{"ACCESS_TOKEN":"rotated","REFRESH_TOKEN":"typed-grant"}'
       native(refreshed)
       expect((await service.listAccounts()).activeAccountId).toBe(typed)
-      expect(
-        store()
-          .read()
-          .accounts.map((account) => account.credentials)
-      ).toEqual([credential('prior'), refreshed])
+      expect((await store().read()).accounts.map((account) => account.credentials)).toEqual([
+        credential('prior'),
+        refreshed
+      ])
       service = reopen()
       expect(await service.listAccounts()).toMatchObject({
         activeAccountId: typed,
@@ -149,11 +139,9 @@ describe('protected Antigravity account snapshots', () => {
         selectedAccountId: prior,
         accounts: [{ id: prior, subject: 'prior' }]
       })
-      expect(
-        store()
-          .read()
-          .accounts.map((account) => account.credentials)
-      ).toEqual([credential('prior')])
+      expect((await store().read()).accounts.map((account) => account.credentials)).toEqual([
+        credential('prior')
+      ])
     }
   )
 
@@ -187,17 +175,17 @@ describe('protected Antigravity account snapshots', () => {
     expect(cap - encryptedSize()).toBeLessThan(2000)
     const path = join(dir, 'vault')
     const store = createEncryptedAntigravityAccountStore(path)
-    store.write(vault)
+    await store.write(vault)
     const before = readFileSync(path)
     const service = new AntigravityAccountService(store, h.backend)
     h.setNative(paddedCredential('new-account', 60000))
     await expect(service.addCurrentAccount()).rejects.toThrow('could not be saved')
     expect(readFileSync(path).equals(before)).toBe(true)
-    expect(store.read().accounts).toHaveLength(52)
+    expect((await store.read()).accounts).toHaveLength(52)
     h.setNative(paddedCredential('large-51', 65000))
     await expect(service.listAccounts()).rejects.toThrow('could not be saved')
     expect(readFileSync(path).equals(before)).toBe(true)
-    expect(store.read().accounts).toHaveLength(52)
+    expect((await store.read()).accounts).toHaveLength(52)
   })
 
   it('persists a selected account with exact provider fields and private permissions across restart', async () => {
@@ -206,24 +194,24 @@ describe('protected Antigravity account snapshots', () => {
     const vault = h.getVault()
     vault.selectedAccountId = state.activeAccountId
     const path = join(dir, 'accounts', 'vault')
-    createEncryptedAntigravityAccountStore(path).write(vault)
+    await createEncryptedAntigravityAccountStore(path).write(vault)
     expect(readFileSync(path, 'utf8')).not.toContain('synthetic-1')
     if (process.platform !== 'win32') {
       expect(statSync(path).mode & 0o077).toBe(0)
     }
-    expect(createEncryptedAntigravityAccountStore(path).read()).toEqual(vault)
-    expect(createEncryptedAntigravityAccountStore(path).read().accounts[0].credentials).toBe(
-      credential('a')
-    )
+    expect(await createEncryptedAntigravityAccountStore(path).read()).toEqual(vault)
+    expect(
+      (await createEncryptedAntigravityAccountStore(path).read()).accounts[0].credentials
+    ).toBe(credential('a'))
     const typedStore = createEncryptedAntigravityAccountStore(path, parseAntigravityWindowsSnapshot)
-    expect(typedStore.read()).toEqual(vault)
+    expect(await typedStore.read()).toEqual(vault)
     for (const mismatch of [{ authMethod: 'inconsistent' }, { subject: 'inconsistent' }]) {
-      typedStore.write({
+      await typedStore.write({
         ...vault,
         accounts: vault.accounts.map((account) => ({ ...account, ...mismatch }))
       })
       const before = readFileSync(path)
-      expect(() => typedStore.read()).toThrow('preserved')
+      await expect(typedStore.read()).rejects.toThrow('preserved')
       expect(readFileSync(path)).toEqual(before)
     }
   })
@@ -235,7 +223,7 @@ describe('protected Antigravity account snapshots', () => {
       await h.service.addCurrentAccount()
       const path = join(dir, 'vault')
       const store = createEncryptedAntigravityAccountStore(path)
-      store.write(h.getVault())
+      await store.write(h.getVault())
       const before = readFileSync(path)
       setSecretStore({
         isEncryptionAvailable: () => available,
@@ -247,15 +235,15 @@ describe('protected Antigravity account snapshots', () => {
           throw new Error('must not decrypt')
         }
       })
-      expect(() => store.write({ accounts: [], selectedAccountId: null })).toThrow(
+      await expect(store.write({ accounts: [], selectedAccountId: null })).rejects.toThrow(
         'Protected secret storage'
       )
-      expect(() => store.read()).toThrow('Protected secret storage')
+      await expect(store.read()).rejects.toThrow('Protected secret storage')
       expect(readFileSync(path).equals(before)).toBe(true)
     }
   )
 
-  it('keeps the selected account launchable after agy refreshes its token without an id_token', async () => {
+  it('keeps the selected account launchable across refreshes and a verified grant rotation', async () => {
     const h = harness()
     const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
     const service = new AntigravityAccountService(store, h.backend)
@@ -263,7 +251,7 @@ describe('protected Antigravity account snapshots', () => {
     await service.selectAccount(id)
     h.setNative(refreshedWithoutIdToken(2))
     await service.prepareForLaunch()
-    const restarted = new AntigravityAccountService(store, h.backend)
+    const restarted = new AntigravityAccountService(store, h.backend, Date.now, h.lookupIdentity)
     h.setNative(refreshedWithoutIdToken(3))
     expect(await restarted.listAccounts()).toMatchObject({
       activeAccountId: id,
@@ -271,10 +259,48 @@ describe('protected Antigravity account snapshots', () => {
       currentAccount: { subject: 'a', identityKnown: true }
     })
     await restarted.prepareForLaunch()
-    expect(store.read().accounts[0].credentials).toBe(refreshedWithoutIdToken(3))
+    expect((await store.read()).accounts[0].credentials).toBe(refreshedWithoutIdToken(3))
     h.setNative(refreshedWithoutIdToken(4, 'refresh-other-grant'))
     await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    h.lookupIdentity.mockClear()
+
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'a',
+      email: 'a@example.invalid'
+    })
+    h.setNative(refreshedWithoutIdToken(5, 'refresh-rotated'))
+    await restarted.prepareForLaunch()
+    expect((await store.read()).accounts[0].credentials).toBe(
+      refreshedWithoutIdToken(5, 'refresh-rotated')
+    )
+    await restarted.prepareForLaunch()
+    expect(h.lookupIdentity).toHaveBeenCalledTimes(1)
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'someone-else',
+      email: null
+    })
+    h.setNative(refreshedWithoutIdToken(6, 'refresh-other-grant'))
+    await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
     expect(h.backend.write).not.toHaveBeenCalled()
+  })
+
+  it('removes the selected account after agy signs in to another one, unblocking launches', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    await h.service.selectAccount(id)
+    await expect(h.service.removeAccount(id)).rejects.toThrow('Switch agy to another account')
+    h.setNative(credential('b'))
+    await expect(h.service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    expect(await h.service.removeAccount(id)).toMatchObject({
+      accounts: [],
+      activeAccountId: null,
+      selectedAccountId: null,
+      currentAccount: { subject: 'b' }
+    })
+    await h.service.prepareForLaunch()
+    expect(h.getNative()).toBe(credential('b'))
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -284,9 +310,9 @@ describe('protected Antigravity account snapshots', () => {
       await h.service.addCurrentAccount()
       const path = join(dir, 'vault')
       const store = createEncryptedAntigravityAccountStore(path)
-      store.write(h.getVault())
+      await store.write(h.getVault())
       chmodSync(path, 0o644)
-      expect(() => store.read()).toThrow('preserved')
+      await expect(store.read()).rejects.toThrow('preserved')
     }
   )
 })

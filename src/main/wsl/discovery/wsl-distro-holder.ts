@@ -1,4 +1,4 @@
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
 import { queryWindowsProcess } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import {
@@ -156,12 +156,21 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
         creationTimeMs: evidence.status === 'present' ? evidence.startedAtMs : null,
         startedAtMs: now()
       }
-      await writeWslDistroHolderRecord(userDataPath, record)
+      let published = false
       try {
+        await writeWslDistroHolderRecord(userDataPath, record)
+        published = true
         await waitForDistroRunning(distro, () => observed.exit)
       } catch (error) {
-        // This process spawned it moments ago, so its pid is ours even without a start time.
-        await stopRecordedHolder(record, { spawnedHere: true })
+        // Our own handle proves identity even when the process table can't; it refuses after exit.
+        if (!observed.exit) {
+          child.kill()
+        }
+        // Unpublished, the record on disk is the previous holder's; spawned here proves the pid ours.
+        if (published) {
+          // Best effort: the caller needs the failure that caused the cleanup.
+          await stopRecordedHolder(record, { spawnedHere: true }).catch(() => {})
+        }
         throw error
       }
       const { onHolderExit } = dependencies

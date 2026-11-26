@@ -1,8 +1,8 @@
 import { lstat, mkdtemp, readdir, rename, stat } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
-import { isDefinitiveAbsence } from '../../definitive-filesystem-absence'
-import { removeTree } from '../../windows-transient-lock-removal'
+import { isWindowsAbsolutePathLike } from '../../file-access/cross-platform-path'
+import { isDefinitiveAbsence } from '../../errors/definitive-filesystem-absence'
+import { removeTree } from '../../file-write/windows-transient-lock-removal'
 
 /** Run throwaway merge-tree object writes in a scratch store; alternates retain access to real objects without leaving unreachable loose objects. */
 

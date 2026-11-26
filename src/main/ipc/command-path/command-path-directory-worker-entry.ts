@@ -4,6 +4,9 @@ import type {
   DetectionDirectoryRequest,
   DetectionDirectoryResponse
 } from './command-path-directory-worker-protocol'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-command-path-directory')
 
 if (!parentPort) {
   throw new Error('Detection directory worker must run with a parent port.')

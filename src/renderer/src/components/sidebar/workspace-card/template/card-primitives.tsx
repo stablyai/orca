@@ -22,7 +22,8 @@ const JUSTIFY: Readonly<Record<string, string>> = {
   between: 'justify-between'
 }
 const OVERFLOW: Readonly<Record<string, string>> = {
-  clip: 'overflow-hidden',
+  // Why: `clip` clips only the x axis for every template box, so a dense label's taller line box can paint past its row instead of cropping CJK glyphs.
+  clip: 'overflow-x-clip',
   visible: 'overflow-visible'
 }
 // Markers Orca's own code and tests select on; a template may only reuse these.
@@ -69,6 +70,8 @@ function boxAttrs(
       props.keep === true && 'shrink-0',
       props.push === true && 'ml-auto',
       props.inset === 'end' && 'pr-1.5',
+      props.inset === 'start' && 'pl-1',
+      props.inset === 'hair' && 'pr-px',
       pick(OVERFLOW, props.overflow),
       props.hoverGroup === true && 'group/worktree-card'
     ),

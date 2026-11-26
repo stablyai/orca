@@ -1,4 +1,4 @@
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 
 /** Per-side diff rows: del lacks new number, add lacks old. gap marks skipped regions so concatenated snippets do not imply continuity. */
 export type NativeChatEditLineKind = 'context' | 'add' | 'del' | 'gap'

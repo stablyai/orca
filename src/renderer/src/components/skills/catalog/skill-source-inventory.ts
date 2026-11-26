@@ -2,7 +2,7 @@ import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
   SkillDiscoverySource
-} from '../../../../../shared/skills'
+} from '../../../../../shared/skills/discovery/skills'
 
 export type SkillSourceStatus = 'scanned' | 'missing' | 'remote-repo' | 'unavailable'
 

@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -52,11 +52,7 @@ function renderTriggerLabel(
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
       {first ? (
-        <RepoBadgeLabel
-          name={first.displayName}
-          color={first.badgeColor}
-          badgeClassName="size-1.5"
-        />
+        <RepoBadgeLabel name={first.displayName} color={first.badgeColor} repo={first} />
       ) : null}
       {second ? <span className="text-muted-foreground">, {second.displayName}</span> : null}
       {rest.length > 0 ? <span className="text-muted-foreground">+{rest.length}</span> : null}
@@ -203,6 +199,7 @@ export default function RepoMultiCombobox({
                       <RepoBadgeLabel
                         name={repo.displayName}
                         color={repo.badgeColor}
+                        repo={repo}
                         className="max-w-full"
                       />
                     </span>

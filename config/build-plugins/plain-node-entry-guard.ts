@@ -15,11 +15,13 @@ type OutputChunk = Rollup.OutputChunk
 
 // Plain-Node processes and CLI modules cannot load Electron's API.
 const PLAIN_NODE_ENTRY_NAMES = [
+  'backend-entry',
   'browser-extension-native-host-supervisor-entry',
   'daemon-entry',
   'parcel-watcher-process-entry',
   // Utility process on desktop, forked child in orcad.
   'stt-worker',
+  'utility-worker-host-entry',
   'session-scanner-service-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',

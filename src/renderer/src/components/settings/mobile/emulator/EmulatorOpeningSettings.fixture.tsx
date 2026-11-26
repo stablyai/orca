@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { EmulatorOpeningSettings } from './EmulatorOpeningSettings'
 const devices = [
   { name: 'Pixel9_API36', udid: 'Pixel9_API36', runtime: 'Android' },

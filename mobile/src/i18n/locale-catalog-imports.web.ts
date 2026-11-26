@@ -1,4 +1,4 @@
-import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
+import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import { importBundledLocaleCatalog, type LocaleCatalog } from './bundled-locale-catalogs'
 
 // A shell that skips the catalog chunks has page-locale-catalog-source.ts read them from the desktop

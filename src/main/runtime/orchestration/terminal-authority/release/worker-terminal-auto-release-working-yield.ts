@@ -2,7 +2,7 @@ import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-run
 import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
 
 /** An automatic close yields to an agent working again, as after a follow-up; its countdown restarts when it rests.
- *  Checked just before the close, after the output archive committed. */
+ *  Checked just before the close, after the output reference committed. */
 export function yieldAutoReleaseToWorkingAgent(
   runtime: WorkerTerminalReleaseRuntime,
   resource: WorkerTerminalResourceRow

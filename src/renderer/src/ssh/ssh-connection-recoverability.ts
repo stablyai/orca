@@ -1,4 +1,4 @@
-import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 // Total Record makes new statuses typecheck failures; includes() would silently leave new recoverable states with dead controls.
 const CONNECTING_BY_STATUS: Record<SshConnectionStatus, boolean> = {

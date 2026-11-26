@@ -1,5 +1,5 @@
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { redactString } from '../../../observability/redactor'
+import { redactString } from '../../../../shared/observability/redactor'
 import { startSpan } from '../../../observability/tracer'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
@@ -23,7 +23,10 @@ export function logProviderChildExit(
     sessionId,
     generation: child.generation,
     // A close Orca made after its own failure still reads as unexpected to the turn.
-    endedBy: end.expected || close || end.exit.closedByOrca ? 'orca' : 'agent',
+    endedBy:
+      end.expected || close || end.exit.closedByOrca || end.failure?.kind === 'hostFault'
+        ? 'orca'
+        : 'agent',
     // The reason can carry the agent's stderr tail; the console line is not redacted downstream.
     reason: redactString(end.exit.reason),
     duringStartup: end.duringStartup,

@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 import { buildThemeLooks, type ThemeLook, type ThemeLookBase } from './onboarding-theme-looks'
 import { selectedThemeLookId } from './onboarding-theme-look-settings'
@@ -77,9 +77,24 @@ export function ThemeSlotControl({
       onChange={onChange}
       equalWidth
       size="sm"
+      overlayTooltip
       options={[
-        { value: 'dark', label: label('dark') },
-        { value: 'light', label: label('light') }
+        {
+          value: 'dark',
+          label: label('dark'),
+          tooltip: t(
+            'components.onboarding.theme.looks.showsWhenDark',
+            'Shows when your system is dark'
+          )
+        },
+        {
+          value: 'light',
+          label: label('light'),
+          tooltip: t(
+            'components.onboarding.theme.looks.showsWhenLight',
+            'Shows when your system is light'
+          )
+        }
       ]}
     />
   )

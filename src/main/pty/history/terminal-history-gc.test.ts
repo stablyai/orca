@@ -3,8 +3,11 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,12 +24,17 @@ vi.mock('../../filesystem/host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
 
-import * as eventLoopYield from '../../../shared/event-loop-yield'
+import * as eventLoopYield from '../../../shared/concurrency/event-loop-yield'
 import {
   cancelPendingHistoryTreeRemovalRetries,
   flushPendingWorktreeHistoryDeletions
 } from './terminal-history-deletion'
-import { cancelHistoryGc, runHistoryGc, scheduleHistoryGc } from './terminal-history-gc'
+import {
+  cancelHistoryGc,
+  runHistoryGc,
+  scheduleHistoryGc,
+  type HistoryGcOwners
+} from './terminal-history-gc'
 
 const GC_MIN_AGE_MS = 5 * 60 * 1000
 const PENDING_DELETE_DIR_NAME = '.pending-delete'
@@ -163,6 +171,61 @@ describe('history GC prune decisions', () => {
   })
 })
 
+describe('history GC daemon session folders', () => {
+  it('prunes only stopped sessions of forgotten worktrees whose folder is gone', async () => {
+    const workspaces = join(userDataDir, 'workspaces')
+    const repoPath = join(userDataDir, 'repo')
+    mkdirSync(join(workspaces, 'kept-on-disk'), { recursive: true })
+    mkdirSync(join(workspaces, 'live'))
+    mkdirSync(join(userDataDir, 'unmounted-mount-point'))
+    writeFileSync(join(userDataDir, 'unmounted-mount-point', '.keep'), '')
+    mkdirSync(repoPath)
+    writeFileSync(join(repoPath, 'README'), 'x')
+    symlinkSync(join(userDataDir, 'ejected-volume', 'wt'), join(workspaces, 'linked'), 'junction')
+    const sessionFolder = (name: string, worktreeId: string, suffix = 'abcd1234'): void => {
+      const dir = seedDir(encodeURIComponent(`${worktreeId}@@${suffix}`), {
+        'meta.json': JSON.stringify({ cwd: '/', cols: 80, rows: 24, startedAt: 'x' }),
+        'scrollback.bin': name
+      })
+      const old = new Date(Date.now() - OLD)
+      utimesSync(dir, old, old)
+    }
+    const deleted = `repo-1::${join(workspaces, 'deleted')}`
+    sessionFolder('deleted', deleted)
+    sessionFolder('deleted-running', deleted, 'running1')
+    sessionFolder('forgotten-on-disk', `repo-1::${join(workspaces, 'kept-on-disk')}`)
+    sessionFolder('live-missing', `repo-1::${join(workspaces, 'live-missing')}`)
+    sessionFolder('unmounted', `repo-1::${join(userDataDir, 'unmounted-volume', 'wt')}`)
+    sessionFolder('mount-point', `repo-1::${join(userDataDir, 'unmounted-mount-point', 'wt')}`)
+    sessionFolder('dangling-link', `repo-1::${join(workspaces, 'linked')}`)
+    sessionFolder('saved-tab', `repo-1::${join(workspaces, 'saved-tab')}`)
+    sessionFolder('remote-repo', `ssh-repo::${join(workspaces, 'deleted')}`)
+    sessionFolder('folder-workspace', 'folder:gone-folder')
+
+    const live = ['live', 'live-missing'].map((name) => `repo-1::${join(workspaces, name)}`)
+    await runHistoryGc(new Set(live), {
+      localRepoPaths: new Map([['repo-1', repoPath]]),
+      liveSessionIds: new Set([`${deleted}@@running1`]),
+      referencedSessionIds: () => new Set([`repo-1::${join(workspaces, 'saved-tab')}@@abcd1234`])
+    })
+
+    const kept = [...survivingDirs()].map((name) =>
+      readFileSync(join(historyRoot, name, 'scrollback.bin'), 'utf8')
+    )
+    expect(kept.sort()).toEqual([
+      'dangling-link',
+      'deleted-running',
+      'folder-workspace',
+      'forgotten-on-disk',
+      'live-missing',
+      'mount-point',
+      'remote-repo',
+      'saved-tab',
+      'unmounted'
+    ])
+  })
+})
+
 describe('history GC concurrency behaviour', () => {
   it('joins a second call to the in-flight pass instead of walking twice', async () => {
     seedDecisionMatrix()
@@ -201,17 +264,21 @@ describe('history GC concurrency behaviour', () => {
   it('does not run a scheduled pass that was cancelled while resolving live worktrees', async () => {
     seedDecisionMatrix()
     vi.useFakeTimers()
-    let resolveLiveIds: (ids: Set<string>) => void = () => {}
+    let resolveLiveIds: (owners: HistoryGcOwners) => void = () => {}
     scheduleHistoryGc(
       () =>
-        new Promise<Set<string>>((resolve) => {
+        new Promise<HistoryGcOwners>((resolve) => {
           resolveLiveIds = resolve
         })
     )
 
     await vi.advanceTimersByTimeAsync(10_000)
     cancelHistoryGc()
-    resolveLiveIds(new Set([LIVE_WORKTREE_ID]))
+    resolveLiveIds({
+      liveWorktreeIds: new Set([LIVE_WORKTREE_ID]),
+      localRepoPaths: new Map(),
+      referencedSessionIds: () => new Set()
+    })
     await vi.advanceTimersByTimeAsync(0)
 
     expect(survivingDirs().has('orphan-old')).toBe(true)

@@ -1,4 +1,7 @@
-import type { CheckStatus, ProviderCheckSummary } from '../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../shared/github/pull-requests/pull-request-types'
 import {
   deriveBitbucketBuildStatus,
   summarizeBitbucketBuildStatuses,
@@ -19,9 +22,8 @@ import { authHeaders, getEnvAuthConfig, hasAuth } from './bitbucket-auth-config'
 import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   getStoredBitbucketCredentialError,
-  getStoredBitbucketMetadata,
   hasStoredBitbucketCredential,
-  loadStoredBitbucketSecret
+  loadStoredBitbucketCredential
 } from './credential-store'
 import { resolveBitbucketAuthConfig, storedAuthConfig } from './resolve-auth'
 
@@ -72,7 +74,7 @@ async function requestJson<T>(
   // A stale linked PR may 404 while the branch still has a review.
   notFoundIsNull = false
 ): Promise<T | null> {
-  const config = resolveBitbucketAuthConfig()
+  const config = await resolveBitbucketAuthConfig()
   // Anonymous private-repo 404s must not be mistaken for an absent PR.
   if (!hasAuth(config)) {
     if (throwOnFailure) {
@@ -130,7 +132,7 @@ async function getBuildStatus(
     return { status: 'neutral' }
   }
   const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: string }>(
-    `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
+    `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses`,
     { searchParams: { pagelen: '100' } }
   )
   const statuses = data?.values ?? []
@@ -163,12 +165,11 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
       account: result.ok ? accountNameFromUser(result.user) : null
     }
   }
-  const metadata = getStoredBitbucketMetadata()
-  if (metadata && hasStoredBitbucketCredential()) {
+  const { metadata, secret: cached } = await loadStoredBitbucketCredential()
+  if (metadata && (await hasStoredBitbucketCredential())) {
     if (getStoredBitbucketCredentialError()) {
       return { configured: true, authenticated: false, account: metadata.account }
     }
-    const cached = loadStoredBitbucketSecret()
     if (!cached) {
       return { configured: true, authenticated: true, account: metadata.account }
     }

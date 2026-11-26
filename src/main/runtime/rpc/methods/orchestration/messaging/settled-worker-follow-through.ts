@@ -1,4 +1,4 @@
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
@@ -25,8 +25,9 @@ import {
   startWorkerFollowUp,
   type WorkerFollowUpOutcome
 } from './worker-follow-up'
-import { captureReportedWorkerResumeSession } from '../worker/worker-resume-session-capture'
-import { reportedWorkerOutcome } from '../worker/worker-start-receipt'
+import { captureReportedWorkerResumeSession } from '../worker/follow-up/worker-resume-session-capture'
+import { reportedWorkerOutcome } from '../worker/start/worker-start-receipt'
+import { afterWorkerStartWait } from '../worker/start/readiness/worker-start-waits'
 
 /** After a report settles (or replays): save the worker's conversation, then continue mail it never read. */
 export function followThroughWorkerReport(
@@ -190,6 +191,8 @@ export function passHeldWorkerMail(
   const custody = custodyOf(db, followUpId)
   if (custody === 'starting') {
     runtime.withdrawStaleChatMail(lineageMailboxes)
+    // A start still waiting on its agent settles later, in the background: pass the mail on then.
+    afterWorkerStartWait(followUpId, 'held-mail', () => passHeldWorkerMail(runtime, db, followUpId))
     return
   }
   const worker = db.getWorkerDispatch(followUpId)

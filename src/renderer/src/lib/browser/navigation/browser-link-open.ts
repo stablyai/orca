@@ -1,5 +1,5 @@
 import { focusOpenedBrowserLink } from './browser-link-focus'
-import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
 import { createBrowserLinkHostMatcher } from './browser-link-owner'
 import { useAppStore } from '@/store/index'
 import { activateBrowserWorkspaceTab } from '../workspace/browser-workspace-tab-activation'
@@ -98,6 +98,7 @@ export async function openLocalBrowserLink(params: {
   let createdTabId: string | undefined
   let createdPageId: string | undefined
   let retainCreatedTab = false
+  let createRejected = false
   try {
     validate(state)
     let result = selection.match
@@ -113,6 +114,7 @@ export async function openLocalBrowserLink(params: {
         return { status: 'refused' }
       }
     } else {
+      createRejected = true
       const created = state.createBrowserTab(destination.worktreeId, params.url, {
         ...params.options,
         targetGroupId: selection.groupId,
@@ -125,6 +127,7 @@ export async function openLocalBrowserLink(params: {
         focusAddressBar: false,
         validateLinkPlacement: validate
       })
+      createRejected = false
       createdTabId = created.id
       createdPageId = created.activePageId ?? undefined
       if (hasPendingEntityTab(destination.worktreeId, created.id)) {
@@ -187,7 +190,9 @@ export async function openLocalBrowserLink(params: {
     if (error instanceof BrowserLinkPlacementRefused) {
       return { status: 'refused' }
     }
-    return { status: 'failed' }
+    return createRejected
+      ? { status: 'failed', cause: 'client-create-rejected' }
+      : { status: 'failed' }
   } finally {
     reveal.dispose()
     if (createdTabId && !retainCreatedTab) {

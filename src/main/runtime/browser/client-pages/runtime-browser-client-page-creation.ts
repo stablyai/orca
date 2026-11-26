@@ -3,7 +3,7 @@ import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../../shared/br
 import '../../../browser/network/execution-routes/browser-network-execution-route'
 import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 type RuntimeBrowserClientPageAuthority = Pick<
   BrowserHostLeaseRegistry,
@@ -17,6 +17,8 @@ type RuntimeBrowserClientPageCreation = {
   browserProfileId: string
   executionHost: BrowserNetworkExecutionHost
   workspaceId?: string
+  signal?: AbortSignal
+  committed?(placement: RuntimeBrowserClientPlacement): void
 }
 
 type RuntimeBrowserClientPageNavigation = {
@@ -41,6 +43,8 @@ export async function createRuntimeBrowserClientPage(
     browserProfileId: input.browserProfileId,
     executionHostKey: browserNetworkExecutionHostKey(input.executionHost),
     requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY],
+    ...(input.signal ? { signal: input.signal } : {}),
+    ...(input.committed ? { committed: input.committed } : {}),
     ...(input.workspaceId ? { workspaceId: input.workspaceId } : {})
   })
   return { browserPageId: input.browserPageId, placement }

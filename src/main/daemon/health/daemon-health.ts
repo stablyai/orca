@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
-import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../shared/json-stream/main-process-ndjson-framer'
 import { ptySpawnHealthPlatformCoverage } from './daemon-health-identity'
 import { daemonSocketDirIsTrusted } from '../endpoint/publication/daemon-socket-endpoint-path'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'

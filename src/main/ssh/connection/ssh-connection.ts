@@ -18,7 +18,11 @@ import type {
   SFTPWrapper,
   ShellOptions
 } from 'ssh2'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   getOrcaControlSocketPath,
   isOpenSshConfigBackedTarget,
@@ -56,12 +60,13 @@ import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
 } from '../system-transport/ssh-transport-selection'
-import type { FileUploadSession } from '../../providers/filesystem-provider-contract'
+import type { FileUploadSession } from '../../providers/filesystem/provider-contract'
 import {
   openSshExecChannel,
   openSshSftpChannel,
   openSshShellChannel,
   spawnTrackedSystemSshChannel,
+  type SshExecChannelOptions,
   type SshSessionChannelHost
 } from './channels/ssh-connection-session-channels'
 import {
@@ -214,8 +219,12 @@ export class SshConnection {
     return { password: this.cachedPassword, passphrase: this.cachedPassphrase }
   }
 
-  exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
+  exec(cmd: string, options?: SshExecChannelOptions): Promise<ClientChannel> {
     return openSshExecChannel(this.sessionChannelHost(), cmd, options)
+  }
+
+  execWithClosedStdin(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
+    return this.exec(cmd, { ...options, closeStdin: true })
   }
 
   /** Interactive login shell over a session channel with pty-req; ssh2 transport only. */
@@ -564,7 +573,8 @@ export class SshConnection {
       this.sessionChannelHost(),
       'echo ORCA-SYSTEM-SSH-OK',
       {
-        wrapCommand: false
+        wrapCommand: false,
+        closeStdin: true
       }
     )
     try {

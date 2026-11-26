@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagingArray } from '../../../../src/shared/zod-salvage'
+import { salvagingArray } from '../../../../src/shared/validation/zod-salvage'
 
 // Repo lookup needs only id; preserve remaining fields for each consumer’s own projection.
 export const runtimeRepoListSchema = z

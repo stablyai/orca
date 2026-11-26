@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { CODEX_SLASH_COMMAND_DESCRIPTIONS } from './native-chat-codex-slash-command-descriptions'
 import { OMP_SLASH_COMMAND_DESCRIPTIONS } from './native-chat-omp-slash-command-descriptions'
+import { OPENCODE_SLASH_COMMAND_DESCRIPTIONS } from './native-chat-opencode-slash-command-descriptions'
 
 /** Command name -> curated English description -> localized copy. */
 export type SlashCommandDescriptionCopy = Record<string, Record<string, () => string>>
@@ -64,13 +65,18 @@ const SHARED_SLASH_COMMAND_DESCRIPTIONS: SlashCommandDescriptionCopy = {
   effort: {
     'Choose reasoning effort': () =>
       translate('components.native-chat.slashCommandDescriptions.effort', 'Choose reasoning effort')
+  },
+  mcp: {
+    'Manage MCP servers': () =>
+      translate('components.native-chat.slashCommandDescriptions.mcpManage', 'Manage MCP servers')
   }
 }
 
 const SLASH_COMMAND_DESCRIPTION_TABLES = [
   SHARED_SLASH_COMMAND_DESCRIPTIONS,
   CODEX_SLASH_COMMAND_DESCRIPTIONS,
-  OMP_SLASH_COMMAND_DESCRIPTIONS
+  OMP_SLASH_COMMAND_DESCRIPTIONS,
+  OPENCODE_SLASH_COMMAND_DESCRIPTIONS
 ]
 
 /** Localize curated descriptions by command name; agent-reported or older-host text passes through. */

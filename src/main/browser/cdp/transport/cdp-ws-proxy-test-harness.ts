@@ -114,14 +114,19 @@ export function connect(endpoint: string): Promise<WebSocket> {
   })
 }
 
+export function nextMessage(ws: WebSocket): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    ws.once('message', (data) => resolve(JSON.parse(data.toString())))
+  })
+}
+
 export function sendAndReceive(
   ws: WebSocket,
   msg: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  return new Promise((resolve) => {
-    ws.once('message', (data) => resolve(JSON.parse(data.toString())))
-    ws.send(JSON.stringify(msg))
-  })
+  const reply = nextMessage(ws)
+  ws.send(JSON.stringify(msg))
+  return reply
 }
 
 const PAINT_PROBE_EXPRESSION =

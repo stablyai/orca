@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   pickSpaceWindowState,
   spaceWindowStateChanged,
   type SpaceWindowState
 } from './space-window-state'
-import { revealWorkspaceSpaceChange } from '../status-bar/workspace-space-open-change'
+import { revealWorkspaceSpaceChange } from '../status-bar/workspace-storage/table/workspace-space-open-change'
+import { refreshLinkedIssueForWorktree } from '../status-bar/workspace-storage/decisions/workspace-space-issue-freshness'
 
 export function SpaceWindowStatePublisher(): null {
   useEffect(() => {
@@ -70,6 +71,9 @@ export function SpaceWindowStatePublisher(): null {
     const offRefresh = api.onWorktreeRefreshRequested?.(() => {
       void useAppStore.getState().fetchAllWorktrees()
     })
+    const offIssueRefresh = api.onIssueRefreshRequested?.((worktreeId, executionHostId) => {
+      refreshLinkedIssueForWorktree(worktreeId, executionHostId)
+    })
     const offAnalysis = api.onWindowAnalysis?.((analysis) => {
       if (typeof analysis.scannedAt === 'number') {
         useAppStore.setState({ workspaceSpaceAnalysis: analysis })
@@ -84,6 +88,7 @@ export function SpaceWindowStatePublisher(): null {
       offClose?.()
       offReveal?.()
       offRefresh?.()
+      offIssueRefresh?.()
       offAnalysis?.()
     }
   }, [])

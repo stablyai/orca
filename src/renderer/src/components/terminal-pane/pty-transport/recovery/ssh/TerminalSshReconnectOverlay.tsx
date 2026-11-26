@@ -6,11 +6,11 @@ import { SshHostNodeMirrorAction } from '@/components/ssh-host-recovery/SshHostN
 import { SshHostMoveAnywayButton } from '@/components/ssh-host-recovery/SshHostMoveAnywayAction'
 import { OpenPlainSshTerminalButton } from '@/components/plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { useAppStore } from '@/store/index'
-import type { SshConnectionStatus } from '../../../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../../../shared/remote-runtime/ssh/ssh-types'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../../../shared/execution-host'
+} from '../../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { runWorktreeDelete } from '../../../../sidebar/workspace-actions/deletion/delete-worktree-flow'

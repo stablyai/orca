@@ -1,33 +1,59 @@
-import { waitForPromiseWithSignal } from '../../../../../shared/abort-signal-reason'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
-import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/runtime-rpc-feature-interaction-source'
+import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
+import type {
+  RuntimeRpcResponse,
+  RuntimeRpcSuccess
+} from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { hasRecentUserGestureFor, isBackgroundRuntimeCall } from './runtime-rpc-background-read'
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureRuntimeEnvironmentCompatible } from '../compatibility/runtime-compatibility-probe'
+
+type RuntimeRpcCallOptions = {
+  timeoutMs?: number
+  suppressFeatureInteraction?: boolean
+  reuseRecentCompatibilityFailure?: boolean
+  skipCompatibilityCheck?: boolean
+  signal?: AbortSignal
+  /** Stops waiting for compatibility without changing how the admitted RPC is transported. */
+  admissionSignal?: AbortSignal
+  expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentRuntimeId?: string
+  beforeSend?: () => void
+  paramsForStatus?: (status: RuntimeStatus | null) => unknown
+  /** A poll or refresh the user didn't ask for: no use of an idle WSL host (#46567). */
+  background?: boolean
+  /** The user asked for it: it may wake a WSL host Orca stopped idle. Defaults to a recent gesture. */
+  wake?: boolean
+}
 
 export async function callRuntimeRpc<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options: {
-    timeoutMs?: number
-    suppressFeatureInteraction?: boolean
-    reuseRecentCompatibilityFailure?: boolean
-    skipCompatibilityCheck?: boolean
-    signal?: AbortSignal
-    expectedEnvironmentPairingRevision?: number
-    expectedEnvironmentRuntimeId?: string
-    beforeSend?: () => void
-    paramsForStatus?: (status: RuntimeStatus | null) => unknown
-  } = {}
+  options: RuntimeRpcCallOptions = {}
 ): Promise<TResult> {
-  if (options.signal?.aborted) {
+  return (await callRuntimeRpcResponse<TResult>(target, method, params, options)).result
+}
+
+export async function callRuntimeRpcResponse<TResult>(
+  target: RuntimeClientTarget,
+  method: string,
+  params?: unknown,
+  options: RuntimeRpcCallOptions = {}
+): Promise<RuntimeRpcSuccess<TResult>> {
+  if (options.signal?.aborted || options.admissionSignal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
+  const background = isBackgroundRuntimeCall(options.background, params)
+  // Captured before any await: only a call made while the user acts may boot a stopped host.
+  const wake =
+    options.wake ??
+    (!background && target.kind === 'environment' && hasRecentUserGestureFor(target.environmentId))
   const expectedEnvironmentPairingRevision =
     target.kind === 'environment'
       ? captureRuntimeEnvironmentRequestRevision(
@@ -42,12 +68,13 @@ export async function callRuntimeRpc<TResult>(
       ? await waitForPromiseWithSignal(
           ensureRuntimeEnvironmentCompatible(target.environmentId, {
             ...options,
-            expectedEnvironmentPairingRevision
+            expectedEnvironmentPairingRevision,
+            wake
           }),
-          options.signal
+          options.admissionSignal ?? options.signal
         )
       : null
-  if (options.signal?.aborted) {
+  if (options.signal?.aborted || options.admissionSignal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
   const selectedParams = options.paramsForStatus
@@ -69,7 +96,13 @@ export async function callRuntimeRpc<TResult>(
           expectedEnvironmentPairingRevision,
           expectedEnvironmentRuntimeId:
             options.expectedEnvironmentRuntimeId ??
-            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined)
+            (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined),
+          background,
+          wake
         })
-  return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  const envelope = response as RuntimeRpcResponse<TResult>
+  if (!envelope.ok) {
+    throw new RuntimeRpcCallError(envelope, target)
+  }
+  return envelope
 }

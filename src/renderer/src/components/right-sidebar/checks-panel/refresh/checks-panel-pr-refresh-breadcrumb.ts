@@ -7,7 +7,7 @@ import {
 import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
-} from '../../../../../../shared/crash-reporting'
+} from '../../../../../../shared/crash-reporting/crash-reporting'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 type ChecksPanelPRRefreshBreadcrumbEvent = 'start' | 'done' | 'stale_cleared'

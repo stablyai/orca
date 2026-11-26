@@ -1,19 +1,26 @@
+import {
+  NativeChatHeldTextSessionContext,
+  NativeChatReplyRevealsContext,
+  NativeChatSaveFallbackContext,
+  useNativeChatHeldReveals
+} from '../../markdown/native-chat-reply-reveals'
+import type { NativeChatTranscriptRowContext } from '../rows/NativeChatTranscriptRow'
 import { useId } from 'react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { NativeChatLiveLine } from '../../../../../../shared/native-chat/transcript/native-chat-live-line'
-import { nativeChatReasoningDisclosureKey } from '../../../../../../shared/native-chat/transcript/native-chat-reasoning-row'
+import type { NativeChatLiveLine } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-live-line'
+import { nativeChatReasoningDisclosureKey } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import {
   describeNativeChatActiveTurnLabel,
   type NativeChatActiveTurnLabel
-} from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
   NativeChatReasoningBody,
   NativeChatReasoningChevron
 } from './NativeChatReasoningDisclosure'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 // Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
 function statusLabel(
@@ -32,9 +39,12 @@ function statusLabel(
 
 /** Keep the clock in the turn bar; this tail shows activity or discloses open reasoning. */
 export function NativeChatTurnActivityLine({
-  line
+  line,
+  context
 }: {
   line: NativeChatLiveLine
+  /** The transcript's, so reasoning held while the window was hidden is drawn at once too. */
+  context?: Pick<NativeChatTranscriptRowContext, 'heldTextSession' | 'savesAsRepliesGrow'>
 }): React.JSX.Element {
   const t = useTranslate()
   const resolved = describeNativeChatActiveTurnLabel(line)
@@ -47,6 +57,8 @@ export function NativeChatTurnActivityLine({
   const disclosure = useNativeChatDisclosure(disclosureKey, false)
   const open = reasoning !== null && disclosure.open
   const labelId = useId()
+  // The body unmounts when collapsed; this line outlives it, so its reveal resumes on reopening.
+  const heldReveals = useNativeChatHeldReveals(disclosureKey)
 
   return (
     <Collapsible open={open} onOpenChange={disclosure.setOpen}>
@@ -77,7 +89,18 @@ export function NativeChatTurnActivityLine({
       </div>
       {reasoning ? (
         <CollapsibleContent>
-          <NativeChatReasoningBody rowKey={disclosureKey} markdown={reasoning.markdown} streaming />
+          <NativeChatReplyRevealsContext.Provider value={heldReveals}>
+            <NativeChatHeldTextSessionContext.Provider value={context?.heldTextSession}>
+              <NativeChatSaveFallbackContext.Provider value={context?.savesAsRepliesGrow ?? false}>
+                <NativeChatReasoningBody
+                  rowKey={disclosureKey}
+                  markdown={reasoning.markdown}
+                  streaming
+                  savedRevision={reasoning.message.journalRevision}
+                />
+              </NativeChatSaveFallbackContext.Provider>
+            </NativeChatHeldTextSessionContext.Provider>
+          </NativeChatReplyRevealsContext.Provider>
         </CollapsibleContent>
       ) : null}
     </Collapsible>

@@ -6,7 +6,7 @@ import {
   recordingDifferences,
   type DecodedGolden,
   type GroupedDifference
-} from '../src/test-support/rpc-recording/golden-difference'
+} from '../src/test-support/rpc-recording/goldens/golden-difference'
 
 export type GoldenChange = {
   id: string

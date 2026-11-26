@@ -1,75 +1,76 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../../orca-runtime'
-import * as workerTranscriptRead from '../transcripts/worker-transcript-read'
-import { captureWorkerOutputArchive } from './worker-output-archive'
+import { describe, expect, it } from 'vitest'
+import { deriveWorkerOutputReferenceFromSavedState } from './worker-output-archive'
 
-function codexMessage(id: string, text: string): string {
+function savedSession(transcriptPath?: string): string {
   return JSON.stringify({
-    type: 'event_msg',
-    payload: { id, type: 'agent_message', message: text }
+    agent: 'claude',
+    providerSession: {
+      key: 'session_id',
+      id: 'claude-session-1',
+      ...(transcriptPath ? { transcriptPath } : {})
+    },
+    connectionId: null
   })
 }
 
-describe('worker output archive WSL routing', () => {
-  let directory: string
-  let transcriptPath: string
-  let transcriptReadSpy: { mockRestore: () => void } | undefined
+const wsl = JSON.stringify({ kind: 'wsl', hostId: 'local', distro: 'Ubuntu-B' })
+const local = JSON.stringify({ kind: 'local', hostId: 'local' })
 
-  beforeEach(async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-worker-archive-'))
-    transcriptPath = join(directory, 'session.jsonl')
-    await writeFile(transcriptPath, `${codexMessage('wsl', 'WSL archive output')}\n`)
-  })
-
-  afterEach(async () => {
-    transcriptReadSpy?.mockRestore()
-    await rm(directory, { recursive: true, force: true })
-  })
-
-  it('does not resolve an SSH transcript locally', async () => {
-    transcriptReadSpy = vi.spyOn(workerTranscriptRead, 'readWorkerTranscript')
-    const runtime = {
-      getExactWorkerProviderSession: vi.fn(() => ({
-        paneKey: 'tab:ssh-worker',
-        processIncarnation: 'pty:ssh-incarnation',
-        connectionId: 'ssh:remote-host',
-        agent: 'codex' as const,
-        providerSession: {
-          key: 'session_id',
-          id: 'ssh-session',
-          transcriptPath: '/home/ada/.codex/sessions/rollout-ssh.jsonl'
+describe('output reference for a worker whose process is gone', () => {
+  it('pins a WSL transcript to the distro the pane recorded', () => {
+    expect(
+      deriveWorkerOutputReferenceFromSavedState({
+        resource: {
+          host_scope: wsl,
+          resume_session: savedSession('/home/u/.claude/projects/p/claude-session-1.jsonl')
         },
-        observedAt: Date.now()
-      })),
-      readTerminal: vi.fn().mockResolvedValue({
-        tail: ['remote worker terminal fallback'],
-        truncated: false,
-        status: 'live'
+        platform: 'win32'
       })
-    } as unknown as OrcaRuntimeService
-
-    const result = await captureWorkerOutputArchive({
-      runtime,
-      dispatchId: 'dispatch-ssh',
-      terminalHandle: 'term-ssh',
-      attachedAtMs: Date.now() - 1
-    })
-
-    expect(workerTranscriptRead.readWorkerTranscript).not.toHaveBeenCalled()
-    expect(result).toMatchObject({
-      kind: 'terminal_tail',
+    ).toMatchObject({
+      kind: 'transcript_pin',
       status: 'captured',
-      content: {
-        lines: ['remote worker terminal fallback'],
-        fallbackReason: 'remote_capability_unavailable',
-        warnings: expect.arrayContaining([
-          'The terminal read did not identify an authoritative screen; available terminal output was preserved.',
-          'Terminal wrap information was unavailable; capability masking used complete lines.'
-        ])
-      }
+      content: { sessionId: 'claude-session-1', wslDistro: 'Ubuntu-B' }
+    })
+  })
+
+  it.each([
+    ['a WSL session saved without its transcript path', wsl, undefined],
+    ['a guest path saved against a native Windows pane', local, '/home/u/.claude/p/s.jsonl'],
+    ['a native Windows session saved without its transcript path', local, undefined]
+  ])(
+    'records %s as unavailable instead of a reference no reader can open',
+    (_case, scope, saved) => {
+      expect(
+        deriveWorkerOutputReferenceFromSavedState({
+          resource: { host_scope: scope, resume_session: savedSession(saved) },
+          platform: 'win32'
+        })
+      ).toEqual({
+        kind: 'terminal_tail',
+        status: 'unavailable',
+        content: { version: 3, fallbackReason: 'remote_capability_unavailable' }
+      })
+    }
+  )
+
+  it('points a stopped chat worker at its journal, not at terminal output', () => {
+    expect(
+      deriveWorkerOutputReferenceFromSavedState({
+        resource: { host_scope: local, resume_session: null },
+        structuredWorker: {
+          handle: 'structured-worker-1',
+          sessionId: 'chat-session-1',
+          agent: 'codex',
+          paneKey: 'tab_chat:leaf',
+          processIncarnation: 'structured:chat-session-1',
+          worktreeId: 'repo::wt',
+          hostScope: { kind: 'local', hostId: 'local' }
+        }
+      })
+    ).toEqual({
+      kind: 'structured_journal',
+      status: 'captured',
+      content: { version: 3, agent: 'codex', processIncarnation: 'structured:chat-session-1' }
     })
   })
 })

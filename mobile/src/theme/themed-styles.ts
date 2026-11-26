@@ -1,6 +1,9 @@
 import { StyleSheet, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native'
 import { getMobileColorScheme, radii, type MobileColorScheme } from './mobile-theme'
 
+// RN 0.88's generated types dropped StyleSheet.NamedStyles; this mapped constraint keeps literal inference.
+type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle }
+
 // Module-scope styles that read `colors`: built once per scheme, and every key reads the current scheme's copy.
 export function themedStyles<T extends Record<string, unknown>>(create: () => T): T {
   const built = new Map<MobileColorScheme, T>()
@@ -69,7 +72,7 @@ function keepsCircularCurve(style: CornerStyle): boolean {
 
 // Every rounded style asks for Apple's continuous corner curve; iOS draws it, Android and the web ignore the key.
 // Mutates the fresh objects `create()` just built.
-function withContinuousCorners<T extends StyleSheet.NamedStyles<T>>(styles: T): T {
+function withContinuousCorners<T extends NamedStyles<T>>(styles: T): T {
   for (const style of Object.values<ViewStyle | TextStyle | ImageStyle>(styles)) {
     if (
       style &&
@@ -85,6 +88,6 @@ function withContinuousCorners<T extends StyleSheet.NamedStyles<T>>(styles: T): 
 }
 
 // Drop-in for a module-scope `StyleSheet.create` that reads `colors`.
-export function themedStyleSheet<T extends StyleSheet.NamedStyles<T>>(create: () => T): T {
+export function themedStyleSheet<T extends NamedStyles<T>>(create: () => T): T {
   return themedStyles(() => StyleSheet.create(withContinuousCorners(create())))
 }

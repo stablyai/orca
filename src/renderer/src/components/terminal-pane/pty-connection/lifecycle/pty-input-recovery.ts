@@ -1,8 +1,8 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
-import { registerUndeliverableWriteHandler } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { registerUndeliverableWriteHandler } from '@/lib/pane-manager/terminal-output/terminal-write-pipeline-health'
 import { requestTerminalPaneRecovery } from '../../render-health/recovery/terminal-pane-recovery'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
+import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 // Bound connect grace so wedged RPCs cannot suppress input recovery forever; late reattach does not authorize killing pre-existing sessions.

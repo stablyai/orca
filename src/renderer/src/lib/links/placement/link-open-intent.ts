@@ -1,7 +1,7 @@
-import { collectTabGroupLayoutGroupIds } from '../../../../../shared/workspace-layout/tab-group-moves'
+import { collectTabGroupLayoutGroupIds } from '../../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import { resolveLinkOpenSidePlacement } from './adjacent-link-open-group'
 import type { AppState } from '@/store/types'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { EditorOpenLinkIntent } from '@/store/slices/editor/types/editor-open-link-intent'
 
 export type LinkOpenIntent = EditorOpenLinkIntent & { initialGroupId?: string }

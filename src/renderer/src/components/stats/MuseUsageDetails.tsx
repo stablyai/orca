@@ -3,7 +3,7 @@ import type {
   MuseUsageDailyPoint,
   MuseUsageSessionRow,
   MuseUsageSummary
-} from '../../../../shared/muse-usage-types'
+} from '../../../../shared/agent-usage/analytics/muse-usage-types'
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection, type UsageBreakdownRow } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'
@@ -37,7 +37,7 @@ export function MuseUsageDetails({
   const t = useTranslate()
   return (
     <>
-      <CodexUsageDailyChart daily={daily} />
+      <CodexUsageDailyChart daily={daily} reasoningIncludedInOutput />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <UsageBreakdownSection

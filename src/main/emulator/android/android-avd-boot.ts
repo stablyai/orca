@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { EmulatorError } from '../emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { bootCompletedArgs, isBootCompleted } from './adb-devices'

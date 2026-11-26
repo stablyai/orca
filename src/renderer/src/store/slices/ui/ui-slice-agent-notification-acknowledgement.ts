@@ -1,9 +1,9 @@
 import type { AppState } from '../../types'
-import { buildAgentNotificationId } from '../../../../../shared/agent-notification-id'
+import { buildAgentNotificationId } from '../../../../../shared/agent-status/presentation/agent-notification-id'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
-import { notificationExecutionHostForOwner } from '../../../../../shared/notification-source'
-import { notificationDeliveryId } from '../../../../../shared/notification-delivery-id'
+import { notificationExecutionHostForOwner } from '../../../../../shared/notifications/notification-source'
+import { notificationDeliveryId } from '../../../../../shared/notifications/notification-delivery-id'
 
 export function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)

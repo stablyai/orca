@@ -1,11 +1,11 @@
 import { ServerOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { openWslHostsExperimentalSetting } from '../../../../sidebar/use-wsl-hosts-enabled'
+import { openWslHostsExperimentalSetting } from '../../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   getWslHostServerFilesMissingLabel,
   getWslHostsTurnedOffLabel,
   getWslHostsTurnOnLabel
-} from '../../../../sidebar/wsl-host-row-status'
+} from '../../../../sidebar/host-admission/wsl/wsl-host-row-status'
 import type { WslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
 import { useTranslate } from '@/i18n/use-translate'
 

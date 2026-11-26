@@ -1,7 +1,7 @@
 import type {
   ProviderRateLimits,
   UsageRateLimitMetadata
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export function abortedClaudeRateLimitResult(): ProviderRateLimits {
   return {
@@ -28,6 +28,14 @@ export function makeClaudeUsageResult(
     status,
     usageMetadata: metadata
   }
+}
+
+// Not idle: the meter draws idle as pending, and nothing here will settle it.
+export function claudeOAuthUsageDisabledResult(): ProviderRateLimits {
+  return makeClaudeUsageResult('unavailable', 'Usage appears when a Claude session runs.', {
+    failureKind: 'usage-unavailable',
+    attemptedSources: []
+  })
 }
 
 // Account rows explain host/profile failures; usage keeps its generic message.

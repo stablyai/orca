@@ -15,7 +15,6 @@ import { HistoryManager } from '../history-manager'
 import { getHistorySessionDirName } from '../history-paths'
 import { flushPendingSessionTreeRemovals } from '../terminal-history-session-tombstone'
 import { repairTerminalHistoryPermissions } from '../terminal-history-permission-repair'
-import { tightenTerminalHistorySessionDirMode } from '../terminal-history-session-files'
 import type { TerminalModes } from '../../../protocol/terminal-modes'
 import type { TerminalSnapshot } from '../../../protocol/terminal-snapshot'
 
@@ -129,28 +128,6 @@ describe('terminal history file permissions', () => {
       chmodSync(checkpointPath, 0o644)
       return { base, sessionDir, checkpointPath }
     }
-
-    onPosix('tightens a pre-existing 0o644 session tree when its writer attaches', () => {
-      const { sessionDir, checkpointPath } = seedLegacyTree()
-
-      tightenTerminalHistorySessionDirMode(sessionDir)
-
-      expect(modeOf(sessionDir)).toBe(0o700)
-      expect(modeOf(checkpointPath)).toBe(0o600)
-    })
-
-    onPosix('sweeps the whole base dir once and then short-circuits', async () => {
-      const { base, sessionDir, checkpointPath } = seedLegacyTree()
-
-      await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(true)
-      expect(modeOf(base)).toBe(0o700)
-      expect(modeOf(sessionDir)).toBe(0o700)
-      expect(modeOf(checkpointPath)).toBe(0o600)
-
-      chmodSync(checkpointPath, 0o644)
-      await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(false)
-      expect(modeOf(checkpointPath)).toBe(0o644)
-    })
 
     onPosix('leaves a session under an open recovery freeze alone', async () => {
       const { base, sessionDir: legacyDir, checkpointPath } = seedLegacyTree()

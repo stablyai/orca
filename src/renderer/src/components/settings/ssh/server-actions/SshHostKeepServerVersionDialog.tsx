@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { SshTarget } from '../../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
@@ -80,7 +80,7 @@ export function SshHostKeepServerVersionDialog({
             {t('auto.components.settings.keepServer.cancel', 'Cancel')}
           </Button>
           <Button onClick={() => void keepServerVersion()} disabled={busy}>
-            {t('auto.components.settings.keepServer.confirm', 'Keep the server’s version')}
+            {t('auto.components.settings.keepServer.confirm', 'Keep server version')}
           </Button>
         </DialogFooter>
       </DialogContent>

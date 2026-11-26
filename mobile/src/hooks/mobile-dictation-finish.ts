@@ -1,5 +1,5 @@
 import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
-import type { DictationCapture } from '../platform/dictation-capture-contract'
+import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 import { isCurrentMobileDictationFinish } from './mobile-dictation-session-state'
 import { finishDesktopDictation } from './mobile-dictation-desktop-start'
 import {

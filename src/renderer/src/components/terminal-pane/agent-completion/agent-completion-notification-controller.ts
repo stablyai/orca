@@ -7,7 +7,7 @@ import type {
   AgentCompletionIdentityScope,
   LastCompletionIdentity
 } from './agent-completion-identity-store'
-import { isPiCompatibleAgentType } from '../../../../../shared/pi-agent-kind'
+import { isPiCompatibleAgentType } from '../../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
@@ -140,7 +140,8 @@ export function createAgentCompletionNotificationController({
     return (
       previous.agentIdentity !== null &&
       completionIdentity.agentIdentity !== null &&
-      previous.agentIdentity === completionIdentity.agentIdentity
+      previous.agentIdentity === completionIdentity.agentIdentity &&
+      !identityScope.previousTurnRetired()
     )
   }
 

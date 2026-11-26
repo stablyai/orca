@@ -1,5 +1,7 @@
+import { pluginBlockCopy } from '../presentation/plugin-block-copy'
+import { managedCatalogLabel } from '../presentation/plugin-author'
 import { AlertTriangle, CircleAlert } from 'lucide-react'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
@@ -18,6 +20,9 @@ import type { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import type { usePluginInstallAction } from '../state/use-plugin-install-action'
 
 function sourceDetail(source: PluginMarketplaceHostSourceState, t: Translate = translate): string {
+  if (source.managed) {
+    return `${managedCatalogLabel(source.managedByTeams ?? [], t)} · ${source.source.url}`
+  }
   const trust = source.official
     ? t('auto.components.settings.PluginManager.verified', 'verified')
     : t('auto.components.settings.PluginManager.unverified', 'unverified')
@@ -70,10 +75,12 @@ export type CatalogCardHandlers = {
 
 export function CatalogCard({
   entry,
-  handlers
+  handlers,
+  metaDetail
 }: {
   entry: PluginListEntry
   handlers: CatalogCardHandlers
+  metaDetail?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const palettes = usePluginArtPalettes(entry.pluginKey, entry.listing?.release?.themePreview)
@@ -105,16 +112,13 @@ export function CatalogCard({
       entry={entry}
       statusText={controls?.statusText}
       palettes={palettes}
+      metaDetail={metaDetail}
       notice={
         phase?.kind === 'error'
           ? { text: phase.message, tone: 'destructive' }
           : listing?.blockedByKillList && !entry.installed
             ? {
-                text: t(
-                  'auto.components.settings.PluginMarketplaceListingRow.blocked',
-                  "Blocked by Orca's safety list: {{value0}}",
-                  { value0: listing.blockedByKillList.reason }
-                ),
+                text: pluginBlockCopy(listing.blockedByKillList, t),
                 tone: 'destructive'
               }
             : installError

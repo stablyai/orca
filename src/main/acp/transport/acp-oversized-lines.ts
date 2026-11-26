@@ -1,5 +1,5 @@
-import { classifyJsonRpcPrefix } from '../../../shared/json-rpc-record-prefix'
-import type { NdjsonRejectedRecord } from '../../../shared/main-process-ndjson-framer'
+import { classifyJsonRpcPrefix } from '../../../shared/json-stream/json-rpc-record-prefix'
+import type { NdjsonRejectedRecord } from '../../../shared/json-stream/main-process-ndjson-framer'
 import { AcpFrameTooLargeError, AcpRpcError } from './acp-errors'
 
 export type AcpOversizedLineTarget = {

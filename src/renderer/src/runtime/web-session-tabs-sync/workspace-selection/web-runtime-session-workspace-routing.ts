@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** Only undefined permits focused-host fallback. Explicit null/blank means resolved without a runtime owner; collapsing these routes local/SSH workspaces to the focused remote (#16444). */
 export function resolveWebRuntimeSessionEnvironmentId(

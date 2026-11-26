@@ -5,8 +5,8 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_PANE_ROOT_METHOD
 } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { wslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
-import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../../../shared/claude-agent-view'
+import { wslHookRelayConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import type { WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 
 export type WslRelayLinkOptions = {

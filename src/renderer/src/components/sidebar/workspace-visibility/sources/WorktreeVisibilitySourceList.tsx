@@ -9,10 +9,10 @@ import type {
   BuiltInWorktreeVisibilitySourceId,
   CustomWorktreeVisibilitySource,
   ExternalWorktreeVisibility,
-  Repo
-} from '../../../../../../shared/repo-types'
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import {
   createWorktreeVisibilitySourceMatcher,
   effectiveDefaultBuiltInWorktreeSourceVisibility,
@@ -22,13 +22,13 @@ import {
   normalizeWorktreeVisibilitySourcePreferences,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatch
-} from '../../../../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../../../shared/worktree/configured-worktree-base-path'
+} from '../../../../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/external-worktree-visibility'
-import { getRuntimePathBasename } from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
+import { getRuntimePathBasename } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   getWorktreeVisibilityOverrideNotice,
   getWorktreeVisibilitySourceNote,

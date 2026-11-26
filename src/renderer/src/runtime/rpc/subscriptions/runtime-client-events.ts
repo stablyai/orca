@@ -1,14 +1,15 @@
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
-} from '../../../../../shared/runtime-client-events'
-import { isNotificationAttentionAcknowledgement } from '../../../../../shared/notification-settings-types'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import { isRuntimeSubscriptionReplayResponse } from '../../../../../shared/runtime-subscription-replay'
-import { admitSshConnectionState } from '../../../../../shared/ssh-retained-payload-admission'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import { isNotificationAttentionAcknowledgement } from '../../../../../shared/notifications/notification-settings-types'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { isRuntimeSubscriptionReplayResponse } from '../../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
+import { admitSshConnectionState } from '../../../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
+import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -21,7 +22,7 @@ export async function subscribeRuntimeClientEvents(
   // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
   onReplayedAfterReconnect?: () => void,
   // Managed SSH hosts reach this desktop's browser through the desktop browser bridge instead.
-  options: { hostsBrowserPages: boolean } = { hostsBrowserPages: false }
+  options: { hostsBrowserPages: boolean; onClose?: () => void } = { hostsBrowserPages: false }
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await subscribeRuntimeEnvironment(
     {
@@ -42,7 +43,8 @@ export async function subscribeRuntimeClientEvents(
           onReplayedAfterReconnect
         )
       },
-      onError
+      onError,
+      onClose: options.onClose
     }
   )
   return { unsubscribe: handle.unsubscribe }
@@ -81,6 +83,13 @@ function handleRuntimeClientEventResponse(
     void answerBrowserClientHostRequest(environmentId, message.requestId)
     return
   }
+  // The host's own PR auto-refresh setting governs this client's timers for that host's workspaces.
+  if (message.type === 'settingsChanged') {
+    if (Array.isArray(message.keys) && message.keys.includes('prAutoRefresh')) {
+      void readHostPRAutoRefreshCadence(environmentId)
+    }
+    return
+  }
   if (message.type === 'sshStateChanged') {
     const state = admitSshConnectionState(message.state, message.targetId)
     if (state) {
@@ -103,6 +112,7 @@ function isRuntimeClientEvent(
       isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
+    message.type === 'workspaceMetadataSet' ||
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||
     message.type === 'sshStateChanged' ||
@@ -111,6 +121,13 @@ function isRuntimeClientEvent(
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
     message.type === 'worktreeTerminalSleepState' ||
-    message.type === 'workspaceViewChanged'
+    message.type === 'workspaceViewChanged' ||
+    message.type === 'botsChanged' ||
+    message.type === 'orchestrationSessionWorkersChanged' ||
+    message.type === 'agentOrchestrationChanged' ||
+    message.type === 'peerMailReturned' ||
+    message.type === 'mcpServersChanged' ||
+    message.type === 'workspaceCleanupRunFinished' ||
+    (message.type === 'agentCliUpdateFinished' && typeof message.agent === 'string')
   )
 }

@@ -1,5 +1,5 @@
 import { formatAgentTypeLabel } from '../../../../../src/shared/agent-status/presentation/agent-type-label'
-import type { StructuredSessionOpenFailure } from '../../../../../src/shared/open-structured-agent-session'
+import type { StructuredSessionOpenFailure } from '../../../../../src/shared/agent-session/view/open-structured-agent-session'
 import { translate } from '../../../i18n/mobile-i18n'
 
 export function mobileStructuredSessionOpenMessage(
@@ -15,6 +15,12 @@ export function mobileStructuredSessionOpenMessage(
     )
   }
   if (reason === 'workspace-missing') {
+    if (workspaceKind === 'project') {
+      return translate(
+        'session.structuredOpen.projectRemoved',
+        'The project was removed from Orca.'
+      )
+    }
     return workspaceKind === 'folder'
       ? translate(
           'session.structuredOpen.folderWorkspaceRemoved',

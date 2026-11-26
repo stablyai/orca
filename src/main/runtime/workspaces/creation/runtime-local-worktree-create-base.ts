@@ -1,4 +1,4 @@
-import type { LocalGitExecOptions } from '../../../git/repo-default-base-ref'
+import type { LocalGitExecOptions } from '../../../git/refs/resolution/repo-default-base-ref'
 import type { WorktreeCreateBaseFallback } from '../../../../shared/worktree/create-types'
 import { hasLocalWorktreeBaseRef } from '../../../git/worktrees/creation/worktree-base-ref-probe'
 import type { WorktreeCreateTimingRecorder } from '../../../workspaces/creation/worktree-create-timing'

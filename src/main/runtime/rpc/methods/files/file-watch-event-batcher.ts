@@ -1,7 +1,7 @@
 import { watchBatchFlushDelayMs } from '../../../../../shared/file-watch/filesystem-watch-batch-window'
 import type { FsChangeEvent } from '../../../../../shared/file-watch/filesystem-change-event'
 import { FileWatchEventBuffer } from '../../../../../shared/file-watch/filesystem-watch-event-buffer'
-import type { FileWatchBatchCadence } from '../../../../../shared/rpc-contract/files-target-params'
+import type { FileWatchBatchCadence } from '../../../../../shared/rpc-contract/filesystem/files-target-params'
 
 // Older clients discard superseded reads; 100ms batches starve slow links, so preserve their trailing window unless opted in.
 const LEGACY_WATCH_BATCH_TRAILING_MS = 150

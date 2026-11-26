@@ -5,6 +5,9 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 export const COMPOSER_CONTROL_SIZE = 38
 /** Grows a round control to a 44 pt touch box without crossing the action row's 8 pt gap. */
 export const COMPOSER_CONTROL_HIT_SLOP = (44 - COMPOSER_CONTROL_SIZE) / 2
+/** A round control in a one-line box: one 20pt text line plus its 4pt insets. */
+export const COMPOSER_COMPACT_CONTROL_SIZE = 28
+export const COMPOSER_COMPACT_CONTROL_HIT_SLOP = (44 - COMPOSER_COMPACT_CONTROL_SIZE) / 2
 // Every input uses the composer's size, which also keeps the page above iOS's 16px focus-zoom floor.
 export const COMPOSER_TEXT_SIZE = 16
 export const COMPOSER_LINE_HEIGHT = 22
@@ -115,20 +118,16 @@ export const composerInputStyles = themedStyleSheet(() => ({
     ...roundControl,
     backgroundColor: colors.surfaceBright
   },
+  compactSendButton: {
+    width: COMPOSER_COMPACT_CONTROL_SIZE,
+    height: COMPOSER_COMPACT_CONTROL_SIZE
+  },
   sendButtonDisabled: {
     backgroundColor: colors.composerControl
   },
   // Save and Cancel hug their translated label and truncate only when the row runs out.
   sendLabelButton: {
     ...labelControl,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surfaceBright
-  },
-  // Send while Cmd/Ctrl is held: desktop's icon-and-label pill.
-  sendPreviewButton: {
-    ...labelControl,
-    flexDirection: 'row',
-    gap: spacing.xs,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surfaceBright
   },
@@ -151,6 +150,8 @@ export const composerInputStyles = themedStyleSheet(() => ({
   },
   fieldText: {
     ...noOwnRing,
+    // On web an unpositioned input paints under TextField's absolute focus backdrop.
+    position: 'relative',
     flex: 1,
     minWidth: 0,
     alignSelf: 'stretch',

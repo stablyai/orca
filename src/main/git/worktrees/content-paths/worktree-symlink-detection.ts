@@ -1,7 +1,7 @@
 import { lstat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 
 // Keep read-only symlink detection independent of APFS materialization and child-process imports.
 

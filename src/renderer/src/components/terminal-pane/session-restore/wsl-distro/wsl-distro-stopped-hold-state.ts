@@ -1,6 +1,6 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
-import type { WslDistroHoldState } from '../../../../../../shared/wsl-distro-stopped-hold'
+import type { WslDistroHoldState } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 
 type HeldPane = {
   distro: string

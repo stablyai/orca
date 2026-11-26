@@ -5,7 +5,7 @@ import {
   type PRCommentGroup
 } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { isPRCommentGroupQueueableForAI } from '@/lib/source-control/review/comments/pr-comment-action-state'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 
 export type PRCommentsListSelection = {
   isSelectingForAI: boolean
@@ -88,27 +88,6 @@ export function clearPRCommentsListSelection(contextKey: string | undefined): vo
   if (contextKey) {
     persistedSelectionByContextKey.delete(contextKey)
   }
-}
-
-export function clearPRCommentsListSelectionsForTests(): void {
-  persistedSelectionByContextKey.clear()
-}
-
-export function getPRCommentsListSelectionCountForTests(): number {
-  return persistedSelectionByContextKey.size
-}
-
-// Seed LRU tests without 1024 React mounts per case.
-export function seedPRCommentsListSelectionForTests(
-  contextKey: string,
-  selectedGroupIds: Iterable<string>,
-  isSelectingForAI = true
-): void {
-  persistSelectionState({
-    contextKey,
-    isSelectingForAI,
-    selectedGroupIds: new Set(selectedGroupIds)
-  })
 }
 
 export function usePRCommentsListSelection(

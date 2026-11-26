@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
-import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
@@ -14,6 +14,7 @@ import {
 } from '../../ui/dialog'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
+import { managedCatalogLabel } from '../presentation/plugin-author'
 
 type PluginMarketplaceSourceDialogProps = {
   open: boolean
@@ -222,7 +223,11 @@ export function PluginMarketplaceSourceDialog({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">
                         {source.marketplace?.name ?? source.source.url}
-                        {source.official ? (
+                        {source.managed ? (
+                          <Badge variant="outline" className="ml-2 align-middle">
+                            {managedCatalogLabel(source.managedByTeams ?? [], t)}
+                          </Badge>
+                        ) : source.official ? (
                           <Badge variant="outline" className="ml-2 align-middle">
                             {t(
                               'auto.components.settings.PluginMarketplaceSourceDialog.official',
@@ -277,7 +282,7 @@ export function PluginMarketplaceSourceDialog({
                     >
                       <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
                     </Button>
-                    {!source.official ? (
+                    {!source.official && !source.managed ? (
                       <Button
                         variant="ghost"
                         size="icon-xs"

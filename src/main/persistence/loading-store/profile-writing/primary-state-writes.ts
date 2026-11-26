@@ -1,0 +1,304 @@
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import {
+  parseCodexResetCreditAttemptLedger,
+  type CodexResetCreditAttemptLedger
+} from '../../../../shared/agent-accounts/codex/codex-reset-credit-attempt-ledger'
+import {
+  stopAfterFailedPrimaryStateMutation,
+  type PrimaryStateWriteOperationsRuntime
+} from './primary-state-write-runtime'
+import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
+import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
+import { writeToDiskSync } from './primary-state-write-sync'
+import { writeProfileStateInWorker } from './primary-state-write-worker'
+import type { DurableProfileStateMutation } from '../store-runtime-state'
+import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
+import { notifyWorkspaceSessionOperationEnded } from '../workspace-sessions/workspace-session-write-listeners'
+
+const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
+export class PrimaryStateWriteOperations {
+  readonly [primaryStateWriteOperationsContext]: PrimaryStateWriteOperationsContext
+
+  constructor(
+    runtime: PrimaryStateWriteOperationsRuntime,
+    serialization: StateSerializationSecretHandlingOperations
+  ) {
+    this[primaryStateWriteOperationsContext] = { runtime, serialization }
+  }
+
+  flushOrThrow(): void {
+    const context = this[primaryStateWriteOperationsContext]
+    const { runtime } = context
+    if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
+      throw new Error('Cannot synchronously flush after final persistence has started')
+    }
+    if (runtime.profileStateAuthority?.asynchronous) {
+      throw new Error('Live profile persistence requires an awaited flush')
+    }
+    if (runtime.writeTimer) {
+      clearTimeout(runtime.writeTimer)
+      runtime.writeTimer = null
+    }
+    runtime.firstPendingSaveAt = null
+    runtime.writeGeneration++
+    writeToDiskSync(context)
+  }
+
+  flushActiveViewPreferenceOrThrow(): void {
+    if (this[primaryStateWriteOperationsContext].runtime.profileMaintenancePending) {
+      throw new Error('Cannot flush active-view persistence during profile maintenance')
+    }
+    this[primaryStateWriteOperationsContext].runtime.activeViewPreference.flushOrThrow()
+  }
+
+  /** Use persist:false for expected refusal; thrown mutations freeze saving to protect partial state. */
+  runDurableMutation<T>(mutate: () => DurableProfileStateMutation<T>): Promise<T> {
+    const { runtime } = this[primaryStateWriteOperationsContext]
+    if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {
+      return Promise.reject(new Error('Cannot mutate finalized profile persistence'))
+    }
+    return enqueuePrimaryStateOperation(this, async () => {
+      if (runtime.profileStateAuthority?.asynchronous) {
+        runtime.profileStateAuthority.assertWritable()
+      }
+      let mutation: DurableProfileStateMutation<T>
+      try {
+        mutation = this.runAdmittedMutationCallback('mutate', mutate, (result) => result)
+      } catch (error) {
+        await stopAfterFailedPrimaryStateMutation(runtime, error)
+        throw error
+      }
+      if (
+        mutation.persist === false ||
+        (mutation.persist === 'if-dirty' &&
+          runtime.lastDurableWriteGeneration >= runtime.writeGeneration)
+      ) {
+        return mutation.value
+      }
+      runtime.writeGeneration++
+      const requiredGeneration = runtime.writeGeneration
+      try {
+        const captured = runtime.profileStateAuthority?.asynchronous
+          ? await writeToDiskAsync(this)
+          : writeToDiskSync(this[primaryStateWriteOperationsContext], {
+              expectedGeneration: requiredGeneration
+            })
+        if (!captured || runtime.lastDurableWriteGeneration < requiredGeneration) {
+          throw new Error('Profile mutation changed while preparing its durable snapshot')
+        }
+      } catch (error) {
+        if (profileStateWriterFailureOutcome(error) !== 'indeterminate') {
+          if (mutation.rollback) {
+            try {
+              this.runAdmittedMutationCallback('rollback', mutation.rollback)
+            } catch (rollbackError) {
+              await stopAfterFailedPrimaryStateMutation(runtime, rollbackError)
+              throw rollbackError
+            }
+          }
+        }
+        throw error
+      }
+      return mutation.value
+    })
+  }
+
+  private runAdmittedMutationCallback<T>(
+    phase: 'mutate' | 'rollback',
+    callback: () => T,
+    /** Rollback may write any partition; normal mutation reports its written hosts. */
+    writtenOf: (
+      result: T
+    ) => Pick<
+      DurableProfileStateMutation<unknown>,
+      'writtenHostIds' | 'writtenWorkspaces'
+    > = () => ({})
+  ): T {
+    const { runtime } = this[primaryStateWriteOperationsContext]
+    // Finalization drains admitted mutations; the disk wait must not admit new snapshots.
+    runtime.durableMutationPhase = phase
+    let result: T | undefined
+    try {
+      result = callback()
+      return result
+    } finally {
+      runtime.durableMutationPhase = null
+      // Durable writers may edit sessions without scheduling a save; a rollback republishes.
+      const written = result === undefined ? {} : writtenOf(result)
+      notifyWorkspaceSessionOperationEnded(
+        runtime,
+        written.writtenHostIds ?? null,
+        written.writtenWorkspaces
+      )
+    }
+  }
+
+  getCodexResetCreditAttemptLedger(): CodexResetCreditAttemptLedger {
+    return parseCodexResetCreditAttemptLedger(
+      this[primaryStateWriteOperationsContext].runtime.state.codexResetCreditAttemptLedger
+    )
+  }
+
+  replaceCodexResetCreditAttemptLedgerAndFlush(
+    ledger: CodexResetCreditAttemptLedger
+  ): Promise<void> {
+    const { runtime } = this[primaryStateWriteOperationsContext]
+    const next = parseCodexResetCreditAttemptLedger(ledger)
+    return this.runDurableMutation(() => {
+      const previous = runtime.state.codexResetCreditAttemptLedger
+      runtime.state.codexResetCreditAttemptLedger = next
+      runtime.dirtyProfileStateDomains?.add('codexResetCreditAttemptLedger')
+      return {
+        value: undefined,
+        rollback: () => {
+          if (runtime.state.codexResetCreditAttemptLedger === next) {
+            runtime.state.codexResetCreditAttemptLedger = previous
+          }
+        }
+      }
+    })
+  }
+}
+
+export function enqueueWrite(
+  owner: PrimaryStateWriteOperations,
+  options: { fullCheckpoint?: boolean; skipIfClean?: boolean; signal?: AbortSignal } = {}
+): Promise<void> {
+  const context = owner[primaryStateWriteOperationsContext]
+  const { runtime } = context
+  const batchable =
+    runtime.profileStateAuthority?.asynchronous && !options.fullCheckpoint && !options.signal
+  const queued = context.queuedSnapshot
+  if (batchable && queued) {
+    queued.capture.skipIfClean &&= options.skipIfClean === true
+    // Explicit flushes must still save every domain for getter edits outside tracked domains.
+    queued.capture.allDomains ||= !queued.capture.skipIfClean
+    queued.capture.pendingSnapshotFileWork = runtime.pendingSnapshotFileWork
+    return queued.completion
+  }
+  const capture = {
+    skipIfClean: options.skipIfClean === true,
+    allDomains: options.fullCheckpoint === true,
+    pendingSnapshotFileWork: runtime.pendingSnapshotFileWork
+  }
+  const completion = enqueuePrimaryStateOperation(owner, async () => {
+    // Once batching starts, later flushes need fresh captures even without generation changes.
+    if (context.queuedSnapshot?.capture === capture) {
+      context.queuedSnapshot = undefined
+    }
+    if (batchable) {
+      await capture.pendingSnapshotFileWork
+    }
+    const { signal } = options
+    if (signal?.aborted) {
+      throw new Error('Persistence flush aborted')
+    }
+    if (
+      capture.skipIfClean &&
+      runtime.dirtyProfileStateDomains?.size === 0 &&
+      runtime.pendingAutomationRunsAfter === undefined &&
+      runtime.lastDurableWriteGeneration >= runtime.writeGeneration
+    ) {
+      return
+    }
+    // Earlier writes may clear dirty domains before this full checkpoint runs.
+    if (capture.allDomains) {
+      runtime.dirtyProfileStateDomains = null
+    }
+    await writeToDiskAsync(owner, { wholeSessions: options.fullCheckpoint === true })
+  })
+  if (batchable) {
+    context.queuedSnapshot = { completion, capture }
+  }
+  // Caller cancellation must not discard an admitted write or its acknowledgement/order.
+  return waitForPromiseWithSignal(completion, options.signal)
+}
+
+export function enqueuePrimaryStateOperation<T>(
+  owner: PrimaryStateWriteOperations,
+  operation: () => Promise<T>
+): Promise<T> {
+  const context = owner[primaryStateWriteOperationsContext]
+  const { runtime } = context
+  // Independent operations separate adjacent snapshot batches.
+  context.queuedSnapshot = undefined
+  const previousWrite = Promise.all([
+    runtime.pendingWrite,
+    runtime.pendingSnapshotFileWork ?? Promise.resolve()
+  ]).then(() => {})
+  const write = previousWrite.then(operation).finally(() => {
+    if (context.queuedSnapshot?.completion === write) {
+      context.queuedSnapshot = undefined
+    }
+  })
+  const trackedWrite = write
+    .then(() => {})
+    .catch((err) => {
+      console.error('[persistence] Failed to write state:', err)
+    })
+    .finally(() => {
+      if (runtime.pendingWrite === trackedWrite) {
+        runtime.pendingWrite = null
+      }
+    })
+  runtime.pendingWrite = trackedWrite
+  return write
+}
+
+/** wholeSessions re-serializes session entries instead of patching from the acknowledged baseline,
+ *  catching in-place edits below entry depth; checkpoints and exports need it. */
+export async function writeToDiskAsync(
+  owner: PrimaryStateWriteOperations,
+  { wholeSessions = false }: { wholeSessions?: boolean } = {}
+): Promise<boolean> {
+  const { runtime } = owner[primaryStateWriteOperationsContext]
+  if (runtime.fatalMutationError) {
+    throw runtime.fatalMutationError
+  }
+  if (runtime.writesFrozen) {
+    return false
+  }
+  const gen = runtime.writeGeneration
+  if (runtime.profileStateAuthority?.asynchronous) {
+    try {
+      if (!(await sealProtectedSecretsBeforeCapture(owner))) {
+        return false
+      }
+      return await writeProfileStateInWorker(
+        owner[primaryStateWriteOperationsContext],
+        runtime.profileStateAuthority,
+        wholeSessions
+      )
+    } finally {
+      // A failure belongs to this save only; exports and later saves seal it afresh.
+      runtime.protectedSecrets.forgetFailedSeals()
+    }
+  }
+  return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
+}
+
+// A secret edited while its seal ran is sealed again; past the bound, capture seals as it always has.
+const SEAL_AHEAD_ROUNDS = 3
+
+/** Seal changed secrets before capture so the snapshot never seals synchronously or misses a seal. */
+async function sealProtectedSecretsBeforeCapture(
+  owner: PrimaryStateWriteOperations
+): Promise<boolean> {
+  const { runtime, serialization } = owner[primaryStateWriteOperationsContext]
+  for (let round = 0; round < SEAL_AHEAD_ROUNDS; round++) {
+    const sealing = runtime.protectedSecrets.sealAhead(
+      serialization.protectedPlaintexts(runtime.dirtyProfileStateDomains)
+    )
+    if (!sealing) {
+      return true
+    }
+    await sealing
+    if (runtime.fatalMutationError) {
+      throw runtime.fatalMutationError
+    }
+    if (runtime.writesFrozen) {
+      return false
+    }
+  }
+  return true
+}

@@ -92,7 +92,7 @@ jobs:
           ORCA_CLI_BUILD_COMPILER: ${{ inputs.dev_build && 'tsrs' || 'bun' }}
           ORCA_BUILD_IDENTITY: ${{ steps.identity.outputs.value }}
           ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: ${{ inputs.dev_build && 'dev' || '' }}
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ !inputs.dev_build && secrets.ORCA_POSTHOG_WRITE_KEY || '' }}
         run: |
           pnpm run "$JAVASCRIPT_BUILD_SCRIPT"

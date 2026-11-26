@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toast } from 'sonner'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { readGitCommandFailureMessage } from './git-command-failure-message'
 import {
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
@@ -30,7 +30,7 @@ function reportBulkMutationFailure(error: unknown): void {
       'auto.components.right.sidebar.use.source.control.bulk.actions.2f67630884',
       'Bulk stage/unstage failed'
     ),
-    { description: readIpcErrorMessage(error) }
+    { description: readGitCommandFailureMessage(error) }
   )
 }
 

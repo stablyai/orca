@@ -1,11 +1,11 @@
 // Apply spinner-rate live title frames to individual tabs, avoiding workspace rebuilds.
 
 import { shownLiveTitle } from '@/store/workspace-layout/frames/workspace-layout-frame-slices'
-import type { TerminalTabTitleUpdate } from '@/store/terminals/terminal-tab-title-batch'
+import type { TerminalTabTitleUpdate } from '@/store/terminals/tabs/presentation/terminal-tab-title-batch'
 import type {
   PublishedTab,
   PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 /** Each retitled tab's change for the pane it shows, against the tab as the store showed it. */
 export function liveTitleUpdates(

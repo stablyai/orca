@@ -3,15 +3,15 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../../provider-process/provider-acquisition-starts'
-import { removeAntigravitySignInSessionFiles } from '../../antigravity/antigravity-sign-in-session-files'
-import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/source-control-generation-limits'
+import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/execution/source-control-generation-limits'
 import { resolveAcpLaunchInvocation } from '../launch/acp-structured-launch-resolution'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { prepareAcpLaunch } from '../launch/acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from '../launch/acp-private-temp'
+import { acpClientInfo } from '../launch/acp-client-info'
 import {
   acpTextTaskCompletion,
   acpTextTaskArgs,
@@ -27,6 +27,8 @@ import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-
 import { grokTextTaskPreservesAccount, runGrokTextTask } from '../../grok/grok-text-task'
 
 type TextInput = Parameters<NonNullable<StructuredAgentSessionAdapter['generateText']>>[0]
+
+const NAMING_CLIENT_INFO = { name: 'orca-chat-naming', version: '1' }
 
 /** Disposable native tasks belong to the adapter so shutdown also owns uncertain closes. */
 export class AcpTextTasks {
@@ -86,7 +88,6 @@ export class AcpTextTasks {
     }
     let connection: AcpStructuredConnection | undefined
     let cwd: string | undefined
-    let home = ''
     let sessionId = ''
     let modeConfigId = 'mode'
     let completed = false
@@ -101,9 +102,6 @@ export class AcpTextTasks {
       }
       disposed = true
       try {
-        if (spec.agent === 'antigravity') {
-          await removeAntigravitySignInSessionFiles(home, sessionId, cwd)
-        }
         await rm(cwd, { recursive: true, force: true })
       } catch (error) {
         this.deps.logger?.warn('Naming helper files could not be removed', {
@@ -129,7 +127,6 @@ export class AcpTextTasks {
         ),
         signal
       )
-      home = launch.env.GEMINI_HOME ?? ''
       cwd = await mkdtemp(join(tmpdir(), 'orca-chat-name-'))
       if (spec.agent === 'grok') {
         cwd = await realpath(cwd)
@@ -156,7 +153,7 @@ export class AcpTextTasks {
             envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
           },
           {
-            clientInfo: { name: 'orca-chat-naming', version: '1' },
+            clientInfo: acpClientInfo(launch.spec, launch.version ?? null, NAMING_CLIENT_INFO),
             signIn: spec.signIn,
             onPermission: (request) =>
               spec.agent === 'antigravity' ? denyAcpTextTaskPermission(request) : reject(),

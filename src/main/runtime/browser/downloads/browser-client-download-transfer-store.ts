@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { BrowserClientDownloadTransferStore } from './browser-client-download-transfers'
 import {
   captureRuntimeFileMutationExpectation,
@@ -30,11 +30,6 @@ type RuntimeFileChannelHost = {
     worktree: string,
     relativePath: string,
     recursive: boolean,
-    ...expectation: ExpectationArgs
-  ): Promise<unknown>
-  createFileExplorerDir(
-    worktree: string,
-    relativePath: string,
     ...expectation: ExpectationArgs
   ): Promise<unknown>
   statRuntimeFile(worktree: string, relativePath: string): Promise<unknown>
@@ -69,17 +64,10 @@ export function getBrowserClientDownloadTransferStore(
   if (!store) {
     store = new BrowserClientDownloadTransferStore({
       // The server is the writer: pin the workspace's current host for the whole transfer.
-      prepareDirectory: async (workspaceId, relativePath) => {
-        const expectation = captureRuntimeFileMutationExpectation(
+      pinWorkspaceHost: async (workspaceId) =>
+        captureRuntimeFileMutationExpectation(
           (await runtime.resolveRuntimeFileTarget(workspaceId)).executionHostId
-        )
-        await runtime.createFileExplorerDir(
-          workspaceId,
-          relativePath,
-          ...expectationArgs(expectation)
-        )
-        return expectation
-      },
+        ),
       writeChunk: async ({ workspaceId, expectation, relativePath, contentBase64, append }) => {
         await runtime.writeFileExplorerFileBase64Chunk(
           workspaceId,

@@ -3,7 +3,8 @@ const { withPodfile } = require('expo/config-plugins')
 // Why: Xcode 27 rejects deployment targets below iOS 15.0, and some pods (and their
 // resource-bundle targets) still declare 9.0–13.4, which fails the build. The iOS 27 SDK
 // is what lets the app resize on iPhone Duo, so raise those targets to the app's own.
-const DEPLOYMENT_TARGET_FLOOR = '15.1'
+// Expo SDK 58 and React Native 0.88 require iOS 16.4.
+const DEPLOYMENT_TARGET_FLOOR = '16.4'
 const MARKER = '# orca: pod deployment target floor'
 const POST_INSTALL = 'post_install do |installer|'
 

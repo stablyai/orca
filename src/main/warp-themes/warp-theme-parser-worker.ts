@@ -1,6 +1,9 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { parseWarpThemeYaml } from './parser'
 import type { ParseWarpThemeOptions } from './parser'
+import { installWorkerSendLedger } from '../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-warp-theme-parser')
 
 const data = workerData as {
   content?: unknown

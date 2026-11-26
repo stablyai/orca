@@ -2,8 +2,8 @@ import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot,
   normalizeRelativePath
-} from '../../../../shared/cross-platform-path'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+} from '../../../../shared/file-access/cross-platform-path'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { chatScratchFileAddress } from './addressing/runtime-chat-scratch-file-address'
@@ -69,6 +69,18 @@ export function canReadRelativeRuntimeFile(
   relativePath: string | undefined
 ): relativePath is string {
   return Boolean(relativePath && relativePath.trim() && !isAbsolutePathLike(relativePath))
+}
+
+/** A workspace file by its relative path, else a chat's scratch file by its absolute path. */
+export function workspaceOrScratchFileAddress(
+  worktreeId: string,
+  relativePath: string | undefined,
+  filePath: string
+): { worktreeSelector: string; relativePath: string } | null {
+  if (canReadRelativeRuntimeFile(relativePath)) {
+    return { worktreeSelector: toRuntimeWorktreeSelector(worktreeId), relativePath }
+  }
+  return chatScratchFileAddress(filePath)
 }
 
 function isAbsolutePathLike(value: string): boolean {

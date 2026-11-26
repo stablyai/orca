@@ -3,7 +3,7 @@
 import { logOrcadActivationOutcome } from '../activation/orcad-activation-outcome-log'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { OrcadActivationVerdict } from '../activation/orcad-activation-gate'
 import type { OrcadDaemonProtocolFacts } from '../activation/orcad-daemon-protocol-crossing'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
@@ -14,7 +14,7 @@ import {
   withOrcadActivationLock
 } from '../activation/orcad-activation-lock'
 import { orcadActivationFenceRefusal } from '../activation/orcad-activation-fence-hold'
-import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/orcad-profile-preflight'
+import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import { rollbackOrcadLocked } from '../lifecycle/orcad-rollback-transition'
 
 export type OrcadRollbackOptions = {

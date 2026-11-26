@@ -1,6 +1,6 @@
 import { TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../../shared/secure-storage/secret-at-rest-protection'
 
 /** Warn visibly about stored plaintext (#21827); current keyring capability cannot protect bytes saved before a keyring existed without resaving. */
 export function UnsealedCredentialNotice({

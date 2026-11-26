@@ -18,7 +18,7 @@ import {
   composeJournalOperationReceipts,
   type JournalOperationReceipt
 } from '../../agent-session-journal/writing/journal-row-writer'
-import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
+import type { JournalReceiptRowBinding } from '../../agent-session-journal/journal-writer-effects'
 import type {
   MutationCommandReceipt,
   MutationPlan
@@ -46,23 +46,23 @@ export async function runCommandReceiptMutation<TValue>(
   let acceptedReceipt: CommandReceipt | undefined
   let submissionWritten = false
   let committed = false
-  const accepting = (result: (row?: JournalRow) => CommandReceiptResult) => {
-    const receipt = acceptanceReceipt(input, (row) => {
-      acceptedReceipt = acceptedCommandReceipt(input, result(row))
-      return acceptedReceipt
-    })
-    return {
-      write: receipt.write,
-      committed: () => {
+  const accepting = (result: CommandReceiptResult, binding?: JournalReceiptRowBinding) => {
+    const receipt = acceptanceReceipt(
+      input,
+      acceptedCommandReceipt(input, result),
+      binding,
+      (actual, row) => {
+        acceptedReceipt = actual
+        submissionWritten = row === 'submission'
         committed = true
-        receipt.committed()
       }
-    }
+    )
+    return receipt
   }
-  const receipt = accepting((row) => {
-    submissionWritten = row?.kind === 'submission'
-    return commandReceipt.result(row)
-  })
+  const receipt = accepting(
+    commandReceipt.binding.absent ?? { kind: 'stop' },
+    commandReceipt.binding
+  )
   const commitAlone = async (alone: JournalOperationReceipt): Promise<void> => {
     if (!committed) {
       await input.store.commitOperationReceipt(alone)
@@ -79,8 +79,7 @@ export async function runCommandReceiptMutation<TValue>(
     })
     if (!committed) {
       const unwritten = ran.ok ? commandReceipt.unwritten?.(ran.value, context) : null
-      return unwritten &&
-        !(await commitNoOpReceipt(input, () => commitAlone(accepting(() => unwritten))))
+      return unwritten && !(await commitNoOpReceipt(input, () => commitAlone(accepting(unwritten))))
         ? unknownOutcome(input)
         : ran
     }
@@ -144,13 +143,17 @@ function acceptedCommandReceipt(
 
 function acceptanceReceipt(
   input: CommandReceiptIdentity,
-  receipt: (row?: JournalRow) => CommandReceipt
+  receipt: CommandReceipt,
+  binding: JournalReceiptRowBinding | undefined,
+  accepted: NonNullable<Parameters<typeof buildCommandReceiptTransaction>[3]>
 ): JournalOperationReceipt {
   const { store, operationCallerKey, envelope, plan, fingerprint, context } = input
   return composeJournalOperationReceipts(
     buildCommandReceiptTransaction(
       commandReceiptScope(operationCallerKey, plan.operationIdScope),
-      receipt
+      receipt,
+      binding,
+      accepted
     ),
     // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
     store.operationOutcomeReceipt({
@@ -158,7 +161,7 @@ function acceptanceReceipt(
       operationId: envelope.clientOperationId,
       fingerprint,
       ...(plan.acceptanceRecord
-        ? { record: { sessionId: envelope.sessionId, update: plan.acceptanceRecord } }
+        ? { record: { sessionId: envelope.sessionId, action: plan.acceptanceRecord } }
         : {}),
       now: context.now(),
       ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {}),
@@ -207,11 +210,9 @@ export function openingMessageReceipt(
 ): JournalOperationReceipt {
   return composeJournalOperationReceipts(
     store.founding.receipt(request),
-    buildCommandReceiptTransaction({ kind: 'global' }, (row) => {
-      if (row?.kind !== 'submission') {
-        throw new Error('opening message requires a submission receipt')
-      }
-      return {
+    buildCommandReceiptTransaction(
+      { kind: 'global' },
+      {
         operationId: clientMessageId,
         sessionId: request.sessionId,
         callerKey: request.operation.callerKey,
@@ -219,9 +220,10 @@ export function openingMessageReceipt(
         fingerprint: request.operation.fingerprint,
         status: 'accepted',
         acceptedAt: request.now,
-        result: { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
-      }
-    })
+        result: { kind: 'journal-row', epoch: '', sequence: 0 }
+      },
+      { at: 'first', kinds: ['submission'], answer: 'journal-row' }
+    )
   )
 }
 

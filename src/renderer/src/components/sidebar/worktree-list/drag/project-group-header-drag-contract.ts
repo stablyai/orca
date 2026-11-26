@@ -3,15 +3,17 @@ import type { PointerEvent } from 'react'
 
 import type {
   ProjectGroupHeaderDragBucketKey,
+  ProjectGroupHeaderDragItem,
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
 import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 
 export type ProjectGroupDragState = {
   draggingGroupId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  /** How far each other row slides to open the drop gap; only with a floating preview. */
+  previewOffsetsById?: ReadonlyMap<string, number>
 }
 
 export const INITIAL_PROJECT_GROUP_DRAG_STATE: ProjectGroupDragState = {
@@ -25,9 +27,11 @@ export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
-  projectGroupById: ReadonlyMap<string, ProjectGroup>
+  projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
   onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
   getScrollContainer: () => HTMLElement | null
+  /** Drag a floating copy of the row, as workspace rows do, rather than lifting it in place. */
+  floatingPreview?: boolean
 }
 
 export type ProjectGroupHeaderDragController = {

@@ -8,7 +8,7 @@ import {
   parseAgentSessionResumeMarker,
   type AgentSessionResumeFailureOutcome,
   type AgentSessionResumeMarker
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 
 const RESUME_ACTION_LEASE_TTL_MS = 10 * 60 * 1000
 export const MAX_FAILURE_FIELD_LENGTH = 512
@@ -201,12 +201,82 @@ export type KeepRecord = (marker: AgentSessionResumeMarker) => boolean
 export function splitDismissedAll(
   state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
   keep: KeepRecord
-): { kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>; dismissedPending: number } {
+): { kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>; dismissal: RecoveryDismissal } {
   const entries = state.entries.filter((entry) => keep(entry.marker))
+  const dismissal = abandonedBy(state, (marker) => !keep(marker))
   return {
     kept: { entries, failed: state.failed.filter((failure) => keep(failure.marker)) },
-    dismissedPending: state.entries.filter(
-      (entry) => entry.state === 'pending' && !keep(entry.marker)
-    ).length
+    dismissal: {
+      ...dismissal,
+      count: state.entries.filter((entry) => entry.state === 'pending' && !keep(entry.marker))
+        .length
+    }
   }
 }
+
+/** Removes every record of each session `removed` names. `recorded` keeps each removed marker, a
+ *  reservation's replacement too, so the same cut read again stays dismissed. */
+export function removeOffers(
+  state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
+  removed: KeepRecord
+): {
+  kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>
+  recorded: AgentSessionResumeMarker[]
+  dismissal: RecoveryDismissal
+} {
+  const records = [...state.entries, ...state.failed].filter(({ marker }) => removed(marker))
+  const sessions = new Set(records.map(({ marker }) => marker.sessionId))
+  return {
+    kept: {
+      entries: state.entries.filter((entry) => !sessions.has(entry.marker.sessionId)),
+      failed: state.failed.filter((failure) => !sessions.has(failure.marker.sessionId))
+    },
+    recorded: records.flatMap((record) =>
+      'replacement' in record && record.replacement
+        ? [record.marker, record.replacement]
+        : [record.marker]
+    ),
+    dismissal: abandonedBy(state, removed)
+  }
+}
+
+/** The offers a removal abandons: pending ones and failures, never one being continued or retried. */
+function abandonedBy(
+  state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
+  removed: KeepRecord
+): RecoveryDismissal {
+  const continuing = new Set(
+    state.entries.flatMap((entry) =>
+      entry.state === 'in-progress' ? [entry.marker.sessionId] : []
+    )
+  )
+  const abandoned: AbandonedOffer[] = [
+    ...state.entries.flatMap((entry) =>
+      entry.state === 'pending' && removed(entry.marker) ? [{ marker: entry.marker }] : []
+    ),
+    ...state.failed.flatMap((failure) =>
+      removed(failure.marker) && !continuing.has(failure.marker.sessionId)
+        ? [
+            {
+              marker: failure.marker,
+              // A handoff the agent never confirmed may still be running.
+              ...(failure.outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
+            }
+          ]
+        : []
+    )
+  ]
+  const sessions = [...state.entries, ...state.failed].filter(({ marker }) => removed(marker))
+  return {
+    count: new Set(sessions.map(({ marker }) => marker.sessionId)).size,
+    abandoned
+  }
+}
+
+/** What a dismissal removed. `abandoned` holds only offers nothing was continuing: one being
+ *  continued is removed too, but its work goes on. */
+export type AbandonedOffer = { marker: AgentSessionResumeMarker; unconfirmed?: true }
+
+export type RecoveryDismissal = { count: number; abandoned: AbandonedOffer[] }
+
+export const NO_RECOVERY_DISMISSAL: RecoveryDismissal = { count: 0, abandoned: [] }

@@ -1,11 +1,11 @@
 import { writeFileSync } from 'node:fs'
 import { reportSecurePathHardening as report } from './secure-path-hardening-report'
-import { loadWindowsSecurity, type WindowsSecurity } from '../windows-security-addon'
+import { loadWindowsSecurity, type WindowsSecurity } from './windows-security-addon'
 import {
   findPrivateDaclViolation,
   findSecureDaclViolation,
   hardenedDaclSddl
-} from '../windows-secure-dacl'
+} from './windows-secure-dacl'
 
 /** Restrict directories off-thread because propagation walks all descendants; report failures and resolve false for retry. */
 export function restrictWindowsDirectory(dirPath: string): Promise<boolean> {
@@ -64,24 +64,35 @@ export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean
 export function writeRestrictedWindowsFile(
   targetPath: string,
   contents: string | Buffer,
-  strict = false
+  strict = false,
+  // ownerOnly: nothing without the addon, and the contents only into a file whose DACL is verified.
+  options: { ownerOnly?: boolean } = {}
 ): boolean {
   const security = securityFor(targetPath)
   if (!security) {
     if (strict) {
       throw new Error('Private Windows credential-file protection is unavailable.')
     }
-    writeFileSync(targetPath, contents, { encoding: 'utf-8', mode: 0o600 })
+    if (!options.ownerOnly) {
+      writeFileSync(targetPath, contents, { encoding: 'utf-8', mode: 0o600 })
+    }
     return false
   }
-  security.addon.createFileWithDacl(
-    targetPath,
-    hardenedDaclSddl(security.userSid, false),
-    typeof contents === 'string' ? Buffer.from(contents, 'utf-8') : contents,
-    strict
-  )
-  // Why read it back: FAT32 and some shares accept the descriptor and silently drop it.
-  return verifyAfterApply(security, targetPath, false)
+  const data = typeof contents === 'string' ? Buffer.from(contents, 'utf-8') : contents
+  const sddl = hardenedDaclSddl(security.userSid, false)
+  if (!options.ownerOnly) {
+    security.addon.createFileWithDacl(targetPath, sddl, data, strict)
+    // Why read it back: FAT32 and some shares accept the descriptor and silently drop it.
+    return verifyAfterApply(security, targetPath, false)
+  }
+  // Empty until verified: on a filesystem that drops the descriptor, no reader ever sees the contents.
+  security.addon.createFileWithDacl(targetPath, sddl, Buffer.alloc(0), strict)
+  if (!verifyAfterApply(security, targetPath, false)) {
+    return false
+  }
+  // r+ opens the verified file as is, keeping its DACL.
+  writeFileSync(targetPath, data, { flag: 'r+' })
+  return true
 }
 
 export function readPrivateWindowsFile(path: string, maxBytes: number): Buffer | null {

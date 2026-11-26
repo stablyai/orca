@@ -95,7 +95,7 @@ function StarNagToast({
     : 'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
 
   return (
-    <div className="relative w-[340px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border bg-popover p-3.5 text-popover-foreground shadow-xs">
+    <div className="relative w-[340px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-(--notice-border) bg-popover p-3.5 text-popover-foreground shadow-notice">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <div className="flex items-center gap-2">

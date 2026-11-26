@@ -1,4 +1,4 @@
-import type { NativeChatUsageLimitAutoContinueState } from '../../usage/NativeChatUsageLimitAutoContinue'
+import type { NativeChatUsageLimitAutoContinueState } from '../../usage/native-chat-usage-limit-auto-continue-setting'
 import { createContext, useContext } from 'react'
 
 /** Host stop details; only hosts known not to support continuation suppress Continue. */
@@ -12,6 +12,10 @@ export type NativeChatOrcaStopView = {
   continueNow: () => void
   usageLimitTurnItemId: string | null
   usageLimitAutoContinue?: NativeChatUsageLimitAutoContinueState | null
+  /** Settled: this host can't auto-continue by this machine's setting, so offer no control for it. */
+  usageLimitAutoContinueUnavailable?: boolean
+  /** When Continue past the usage limit applies; earlier than its reset after an account switch. */
+  usageLimitContinueAt?: number
   onUsageLimitHandOffStarted?: () => void
   usageLimitContinueDisabled?: boolean
   continueUsageLimit: (hadFocus?: boolean) => void

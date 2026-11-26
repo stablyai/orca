@@ -69,7 +69,7 @@
     ; WSL host sees nothing here. These are the folders Electron's userData (app.getName()) can be, as the
     ; deleteAppData step lists them; a custom --user-data-dir can't be known here.
     ; Sync the flags with WSL_HOLDER_UNINSTALL_FLAG and WSL_SERVER_UNINSTALL_FLAG in
-    ; src/main/startup/wsl-holder-uninstall-preflight.ts.
+    ; src/main/startup/uninstall/wsl-holder-uninstall-preflight.ts.
     ${if} $installMode == "all"
       SetShellVarContext current
     ${endIf}
@@ -114,7 +114,7 @@
     ; app, but once that folder is removed every agent fails a hook per event, so the last Orca for
     ; this user takes the entries out. Another install, or an unreadable registry, keeps them.
     ; Best effort: the exit code never blocks uninstall.
-    ; Sync the flag with AGENT_HOOKS_UNINSTALL_FLAG in src/main/startup/agent-hooks-uninstall-preflight.ts.
+    ; Sync the flag with AGENT_HOOKS_UNINSTALL_FLAG in src/main/startup/uninstall/agent-hooks-uninstall-preflight.ts.
     !insertmacro ORCA_OTHER_INSTALL_STATE $1
     ${if} $1 == "none"
       nsExec::Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --orca-uninstall-remove-agent-hooks'

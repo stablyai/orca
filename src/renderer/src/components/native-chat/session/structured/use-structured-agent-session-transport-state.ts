@@ -5,13 +5,14 @@ import {
   structuredAgentSessionQueueSendsNext
 } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
-import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSubagentRoster } from '../../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
-import { selectStructuredAgentTurnActivity } from '../../../../../../shared/native-chat/transcript/native-chat-turn-activity'
-import { structuredSessionBackgroundTasksView } from '../../../../../../shared/structured-session-background-tasks-view'
-import { structuredSessionForegroundCommands } from '../../../../../../shared/structured-session-foreground-commands'
+import { selectStructuredAgentTurnActivity } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
+import { structuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
+import { structuredSessionForegroundCommands } from '../../../../../../shared/agent-session/view/structured-session-foreground-commands'
 import { useStructuredAgentTurnTiming } from '../../conversation/turns/use-structured-agent-turn-timing'
-import { agentSessionCurrentContextRows } from '../../../../../../shared/agent-session/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []
 const NO_SUBMISSIONS: StructuredAgentSessionState['submissions'] = []
@@ -33,12 +34,14 @@ export function useStructuredAgentSessionTransportState(
   const fence = enabled ? state.fence : null
   const latestTurn = enabled ? state.latestTurn : undefined
   const actionablePromptIds = enabled ? state.actionablePromptIds : undefined
+  // These projections never read reply text, so a streaming reply keeps their memos.
+  const rows = rowsBesideStreamedText(journalItems)
   const current = useMemo(
-    () => agentSessionCurrentContextRows(journalItems, submissions),
-    [journalItems, submissions]
+    () => agentSessionCurrentContextRows(rows, submissions),
+    [rows, submissions]
   )
   // A long turn’s record may be off-page; prefer the host’s whole-journal answer.
-  const turnId = runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn })
+  const turnId = runningStructuredAgentSessionTurnId({ items: rows, latestTurn })
   // Prefer current-provider host evidence; older hosts use the same projection as session lists so chat and sidebar agree.
   const hostWorking = enabled ? state.working : undefined
   const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () =>
@@ -49,8 +52,8 @@ export function useStructuredAgentSessionTransportState(
     isWorking
   )
   const turnActivity = useMemo(
-    () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
-    [enabled, journalItems, state.activity, turnId]
+    () => selectStructuredAgentTurnActivity(rows, turnId, enabled ? state.activity : null),
+    [enabled, rows, state.activity, turnId]
   )
   const turnTiming = useStructuredAgentTurnTiming(
     {
@@ -66,9 +69,9 @@ export function useStructuredAgentSessionTransportState(
     return structuredSessionBackgroundTasksView(
       roster,
       turnId,
-      structuredSessionForegroundCommands(roster, { items: journalItems, latestTurn })
+      structuredSessionForegroundCommands(roster, { items: rows, latestTurn })
     )
-  }, [enabled, journalItems, latestTurn, state.backgroundTasks, turnId])
+  }, [enabled, rows, latestTurn, state.backgroundTasks, turnId])
   const hostWork = useMemo<StructuredAgentSessionHostWork>(
     () => ({
       ...(actionablePromptIds ? { actionablePromptIds } : {}),
@@ -88,6 +91,9 @@ export function useStructuredAgentSessionTransportState(
     turnId,
     isWorking,
     turnActivity,
+    // A queued message is the next prompt already; a guess beside it would mislead.
+    promptSuggestion:
+      enabled && !state.queuedMessages?.length ? (state.promptSuggestion ?? null) : null,
     turnTiming,
     // null = no drafts or no claim; the projection treats both as an empty list.
     queuedMessages: (enabled ? state.queuedMessages : null) ?? null,

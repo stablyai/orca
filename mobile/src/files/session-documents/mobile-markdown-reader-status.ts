@@ -1,5 +1,5 @@
 import { translate } from '../../i18n/mobile-i18n'
-import { formatPreviewByteLength } from '../mobile-file-preview-response'
+import { formatPreviewByteLength } from '../preview/mobile-file-preview-response'
 import type { MarkdownDocState } from './session-document-state'
 
 export function markdownReaderStatusText(

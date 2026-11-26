@@ -15,8 +15,8 @@ import { logSleepFolderRead, readDaemonWslSleepCwdWithFacts } from '../wsl/daemo
 import * as unlistedSession from '../routing/daemon-unlisted-session'
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
-import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 

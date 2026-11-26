@@ -1,49 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import { BrowserPageInputCredit } from './browser-page-input-credit'
-import { LOCAL_CLI_RPC_CALLER } from '../../../runtime/rpc/rpc-caller-identity'
 
-const desktop = { kind: 'paired-device', deviceId: 'desk-1' } as const
+const viewer = { kind: 'paired-device', deviceId: 'desk-a' } as const
+const agent = { kind: 'local-cli' } as const
 
-function setup() {
-  let now = 1_000
-  const credit = new BrowserPageInputCredit(() => now)
-  // A command that delivers activating input to the page while it runs, as a click does.
-  const click = (caller: typeof desktop | typeof LOCAL_CLI_RPC_CALLER, page = 'page-1') =>
-    credit.during(page, caller, async () => credit.creditInput('tab-1', page))
-  return { credit, click, advance: (ms: number) => (now += ms) }
-}
+describe('BrowserPageInputCredit print attribution', () => {
+  it('credits a print only to a viewer input no agent command has followed', async () => {
+    let now = 1_000
+    const credit = new BrowserPageInputCredit(() => now)
 
-describe('BrowserPageInputCredit', () => {
-  it('credits the paired client whose command delivered the input, once', async () => {
-    const { credit, click } = setup()
-    await click(desktop)
+    await credit.during('tab', viewer, async () => credit.creditInput('tab', 'tab'))
+    // The click also opened a tab; the print it makes is still the viewer's.
+    expect(credit.consume('tab')).toBe('desk-a')
+    expect(credit.printer('tab')).toBe('desk-a')
 
-    expect(credit.consume('tab-2')).toBeNull()
-    expect(credit.consume('tab-1')).toBe('desk-1')
-    expect(credit.consume('tab-1')).toBeNull()
-  })
+    // An agent command taking the tab withdraws it.
+    credit.withdraw('tab')
+    expect(credit.printer('tab')).toBeNull()
 
-  it('leaves the credit alone for commands that deliver no activating input', async () => {
-    const { credit, click } = setup()
-    await click(desktop)
-    await credit.during('page-1', LOCAL_CLI_RPC_CALLER, async () => undefined)
+    // An agent's own input credits no one.
+    await credit.during('tab', agent, async () => credit.creditInput('tab', 'tab'))
+    expect(credit.printer('tab')).toBeNull()
 
-    expect(credit.consume('tab-1')).toBe('desk-1')
-  })
+    // A viewer's input while an agent command runs in the tab can't authorize a print.
+    await credit.during('tab', viewer, async () =>
+      credit.creditInput('tab', 'tab', { printable: false })
+    )
+    expect(credit.printer('tab')).toBeNull()
+    expect(credit.consume('tab')).toBe('desk-a')
 
-  it('credits no client for an agent click, input outside any command, or after the window', async () => {
-    const { credit, click, advance } = setup()
-    await click(desktop)
-    await click(LOCAL_CLI_RPC_CALLER)
-    expect(credit.consume('tab-1')).toBeNull()
-
-    await click(desktop)
-    credit.creditInput('tab-1', 'page-1')
-    expect(credit.consume('tab-1')).toBeNull()
-
-    await click(desktop)
-    advance(BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS + 1)
-    expect(credit.consume('tab-1')).toBeNull()
+    // A viewer's credit lapses with the input gesture.
+    await credit.during('tab', viewer, async () => credit.creditInput('tab', 'tab'))
+    now += 5_000
+    expect(credit.printer('tab')).toBeNull()
   })
 })

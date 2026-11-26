@@ -1,19 +1,19 @@
 // Which live workspace owns a saved session's cwd, on the host that recorded it; shared by desktop and mobile.
 
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import {
   createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import type { AiVaultSession } from '../contracts/ai-vault-types'
 import type { Worktree } from '../../worktree/types'
 import { matchAiVaultSessionCwdCandidates } from '../scanning/ai-vault-session-cwd-candidates'
@@ -84,15 +84,28 @@ function resolveWorktreeInfoFromCandidates(
   session: AiVaultSession,
   candidates: readonly WorktreeCandidate[]
 ): AiVaultSessionWorktreeInfo | null {
+  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
+  const hostCandidates = candidates.filter(
+    (candidate) => !sessionHostId || candidate.hostId === sessionHostId
+  )
+  // A live recorded workspace beats cwd because folder workspaces can share one path.
+  const recorded = hostCandidates.find(
+    (candidate) =>
+      candidate.worktree.id === session.structuredSession?.workspaceId &&
+      !candidate.worktree.isArchived
+  )
+  if (recorded) {
+    return worktreeInfoFromCandidate(recorded)
+  }
+
   if (!session.cwd) {
     return null
   }
 
-  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const matched = matchAiVaultSessionCwdCandidates(
     session,
     session.cwd,
-    candidates.filter((candidate) => !sessionHostId || candidate.hostId === sessionHostId),
+    hostCandidates,
     compareWorktreeCandidates
   )
 
@@ -105,11 +118,15 @@ function resolveWorktreeInfoFromCandidates(
     }
   }
 
+  return worktreeInfoFromCandidate(best)
+}
+
+function worktreeInfoFromCandidate(candidate: WorktreeCandidate): AiVaultSessionWorktreeInfo {
   return {
-    status: best.status,
-    label: best.worktree.displayName || aiVaultWorktreeCompactPath(best.path),
-    path: best.path,
-    worktreeId: best.worktree.id
+    status: candidate.status,
+    label: candidate.worktree.displayName || aiVaultWorktreeCompactPath(candidate.path),
+    path: candidate.path,
+    worktreeId: candidate.worktree.id
   }
 }
 

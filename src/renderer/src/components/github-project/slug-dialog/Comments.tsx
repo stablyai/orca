@@ -1,17 +1,17 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import React, { useState } from 'react'
 import { Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { projectViewErrorMessage } from '../project-view-error-copy'
+import { projectViewErrorMessage } from '../auth-errors/project-view-error-copy'
 
 export function CommentsList({
   owner,

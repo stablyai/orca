@@ -1,19 +1,19 @@
 import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
-import { addIssueComment as addLinearIssueComment } from '../../../linear/linear-issue-comments'
+import { addIssueComment as addLinearIssueComment } from '../../../linear/issues/linear-issue-comments'
 import {
   createIssue as createLinearIssue,
   updateIssue as updateLinearIssue
-} from '../../../linear/linear-issue-mutations'
-import { getIssue as getLinearIssue } from '../../../linear/linear-issue-lookups'
-import { listIssues as listLinearIssues } from '../../../linear/linear-issue-listing'
-import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
+} from '../../../linear/issues/linear-issue-mutations'
+import { getIssue as getLinearIssue } from '../../../linear/issues/linear-issue-lookups'
+import { listIssues as listLinearIssues } from '../../../linear/issues/linear-issue-listing'
+import type { LinearIssueUpdate } from '../../../../shared/work-items/issue-mutation-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
-import type { LinearListFilter } from '../../../linear/linear-issue-listing'
-import type { LinearIssueListOptions } from '../../../linear/linear-issue-query-documents'
+import type { LinearListFilter } from '../../../linear/issues/linear-issue-listing'
+import type { LinearIssueListOptions } from '../../../linear/issues/linear-issue-query-documents'
 import { RuntimeLinearStateCommands } from './runtime-linear-state-commands'
 
 export class RuntimeLinearContextCommands extends RuntimeLinearStateCommands {
-  linearListIssues(
+  async linearListIssues(
     filter?: LinearListFilter,
     limit = 20,
     workspaceId?: LinearWorkspaceSelection,
@@ -22,7 +22,7 @@ export class RuntimeLinearContextCommands extends RuntimeLinearStateCommands {
     return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId, options)
   }
 
-  linearCreateIssue(
+  async linearCreateIssue(
     teamId: string,
     title: string,
     description?: string,
@@ -49,7 +49,7 @@ export class RuntimeLinearContextCommands extends RuntimeLinearStateCommands {
     return getLinearIssue(id, workspaceId)
   }
 
-  linearUpdateIssue(
+  async linearUpdateIssue(
     id: string,
     updates: LinearIssueUpdate,
     workspaceId?: string
@@ -57,7 +57,7 @@ export class RuntimeLinearContextCommands extends RuntimeLinearStateCommands {
     return updateLinearIssue(id, updates, workspaceId)
   }
 
-  linearAddIssueComment(
+  async linearAddIssueComment(
     issueId: string,
     body: string,
     workspaceId?: string

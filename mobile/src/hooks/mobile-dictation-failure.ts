@@ -1,4 +1,4 @@
-import { errorMessage } from '../../../src/shared/error-message'
+import { errorMessage } from '../../../src/shared/errors/error-message'
 import {
   isDictationSetupRequiredError,
   isSpeechlessServerError

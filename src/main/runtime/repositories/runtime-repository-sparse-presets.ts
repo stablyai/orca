@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   normalizeSparsePresetDirectories,
   normalizeSparsePresetName
 } from '../../ipc/repos/sparse-preset-validation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 type RuntimeRepositorySparsePresetDependencies = {
   getStore: () => RuntimeStore | null
@@ -45,5 +45,15 @@ export class RuntimeRepositorySparsePresets {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     })
+  }
+
+  async remove(repoSelector: string, presetId: string): Promise<void> {
+    const store = this.deps.getStore()
+    if (!store?.removeSparsePreset) {
+      throw new Error('runtime_unavailable')
+    }
+    const repo = await this.deps.resolveRepo(repoSelector)
+    assertWslMoveRepoWritable(store, repo)
+    store.removeSparsePreset(repo.id, presetId)
   }
 }

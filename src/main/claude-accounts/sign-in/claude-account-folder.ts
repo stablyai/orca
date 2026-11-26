@@ -1,0 +1,252 @@
+import { fileStatSignature } from '../../filesystem/file-stat-signature'
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  rmdirSync,
+  rmSync,
+  statSync,
+  unlinkSync
+} from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { z } from 'zod'
+import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
+import { execSecurityCommand } from '../../macos-keychain/generic-password'
+import { describeClaudeProfile, readClaudeProfileObject } from '../profiles/claude-profile-paths'
+import { claudeConfigDirSpellings, claudeKeychainService } from '../runtime-auth/keychain'
+
+export type ClaudeFolderLogin = {
+  email: string
+  organizationUuid: string | null
+  organizationName: string | null
+}
+
+const text = z
+  .string()
+  .transform((value) => value.trim() || null)
+  .nullish()
+  .catch(null)
+const oauthAccount = z.object({
+  emailAddress: text,
+  organizationUuid: text,
+  organizationName: text
+})
+
+export function claudeStateFile(
+  configDir: string | undefined,
+  userHome = homedir(),
+  exists: (path: string) => boolean = existsSync
+): string {
+  return resolveClaudeGlobalConfigFile({
+    env: { CLAUDE_CONFIG_DIR: configDir },
+    homeDir: userHome,
+    style: process.platform === 'win32' ? 'win32' : 'posix',
+    exists
+  })
+}
+
+/** Same file as claudeStateFile, without blocking main on the legacy-file check. */
+export async function claudeStateFileAsync(
+  configDir: string | undefined,
+  userHome = homedir()
+): Promise<string> {
+  const legacy = claudeStateFile(configDir, userHome, () => true)
+  return (await stat(legacy).catch(() => null))
+    ? legacy
+    : claudeStateFile(configDir, userHome, () => false)
+}
+
+// Cache large, frequently rewritten state files across account-list refreshes.
+const logins = new Map<
+  string,
+  { signature: string; readAt: number; login: ClaudeFolderLogin | null }
+>()
+const loginObservations = new Map<string, { generation: number; readers: number }>()
+let loginObservationSequence = 0
+
+/** Missing organization IDs permit an email-only match. */
+export function isSameClaudeLogin(
+  left: { email: string; organizationUuid?: string | null },
+  right: { email: string; organizationUuid?: string | null }
+): boolean {
+  return (
+    left.email.trim().toLowerCase() === right.email.trim().toLowerCase() &&
+    (!left.organizationUuid ||
+      !right.organizationUuid ||
+      left.organizationUuid === right.organizationUuid)
+  )
+}
+
+export function claudeStateLogin(state: Record<string, unknown>): ClaudeFolderLogin | null {
+  const parsed = oauthAccount.safeParse(state.oauthAccount)
+  const email = parsed.success ? parsed.data.emailAddress : null
+  return parsed.success && email
+    ? {
+        email,
+        organizationUuid: parsed.data.organizationUuid ?? null,
+        organizationName: parsed.data.organizationName ?? null
+      }
+    : null
+}
+
+/** `maxAgeMs` also skips stat calls while the cached login is fresh. */
+export function readClaudeFolderLogin(stateFile: string, maxAgeMs = 0): ClaudeFolderLogin | null {
+  const recent = logins.get(stateFile)
+  if (recent && Date.now() - recent.readAt < maxAgeMs) {
+    return recent.login
+  }
+  const observation = loginObservations.get(stateFile)
+  if (observation) {
+    observation.generation = ++loginObservationSequence
+  }
+  pendingLogins.delete(stateFile)
+  let signature: string
+  try {
+    signature = fileStatSignature(statSync(stateFile, { bigint: true }))
+  } catch {
+    logins.delete(stateFile)
+    return null
+  }
+  if (recent?.signature === signature) {
+    recent.readAt = Date.now()
+    return recent.login
+  }
+  const read = readClaudeProfileObject(stateFile)
+  const login = read.kind === 'present' ? claudeStateLogin(read.value) : null
+  logins.set(stateFile, { signature, readAt: Date.now(), login })
+  return login
+}
+
+// Concurrent chat reads of one state-file revision share a single read and parse.
+const pendingLogins = new Map<
+  string,
+  { signature: string; generation: number; login: Promise<ClaudeFolderLogin | null> }
+>()
+
+/** Avoid blocking main on state files across WSL shares. */
+export async function readClaudeFolderLoginAsync(
+  stateFile: string
+): Promise<ClaudeFolderLogin | null> {
+  const observation = loginObservations.get(stateFile) ?? { generation: 0, readers: 0 }
+  loginObservations.set(stateFile, observation)
+  observation.readers += 1
+  try {
+    return await readObservedLogin(stateFile, observation, ++loginObservationSequence)
+  } finally {
+    observation.readers -= 1
+    if (observation.readers === 0) {
+      loginObservations.delete(stateFile)
+    }
+  }
+}
+
+async function readObservedLogin(
+  stateFile: string,
+  observation: { generation: number; readers: number },
+  generation: number
+): Promise<ClaudeFolderLogin | null> {
+  const current = await stat(stateFile, { bigint: true }).catch(() => null)
+  if (observation.generation > generation) {
+    return pendingLogins.get(stateFile)?.login ?? logins.get(stateFile)?.login ?? null
+  }
+  observation.generation = generation
+  if (!current) {
+    logins.delete(stateFile)
+    pendingLogins.delete(stateFile)
+    return null
+  }
+  const signature = fileStatSignature(current)
+  const recent = logins.get(stateFile)
+  if (recent?.signature === signature) {
+    pendingLogins.delete(stateFile)
+    return recent.login
+  }
+  const pending = pendingLogins.get(stateFile)
+  if (pending?.signature === signature) {
+    pending.generation = generation
+    return pending.login
+  }
+  const read = { signature, generation, login: readStateLogin(stateFile) }
+  pendingLogins.set(stateFile, read)
+  const login = await read.login
+  // A read superseded by a newer revision (or a deleted file) must not repopulate the cache.
+  if (observation.generation === read.generation && pendingLogins.get(stateFile) === read) {
+    pendingLogins.delete(stateFile)
+    logins.set(stateFile, { signature: read.signature, readAt: Date.now(), login })
+  }
+  return login
+}
+
+async function readStateLogin(stateFile: string): Promise<ClaudeFolderLogin | null> {
+  try {
+    const state: unknown = JSON.parse(await readFile(stateFile, 'utf8'))
+    if (state && typeof state === 'object' && !Array.isArray(state)) {
+      return claudeStateLogin(Object.fromEntries(Object.entries(state)))
+    }
+  } catch {
+    // Treat unreadable state as signed out.
+  }
+  return null
+}
+
+/** Removes current profiles only; legacy `claude-accounts/` folders stay untouched. */
+export async function removeClaudeAccountFolder(
+  dataRoot: string,
+  accountId: string
+): Promise<void> {
+  const { home } = describeClaudeProfile(dataRoot, accountId, {
+    executionHostId: 'local',
+    runtime: 'host'
+  })
+  if (process.platform === 'darwin') {
+    for (const spelling of claudeConfigDirSpellings(home, homedir())) {
+      // Each delete removes only one Keychain item for this service.
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const deleted = await execSecurityCommand([
+          'delete-generic-password',
+          '-s',
+          claudeKeychainService(spelling)
+        ]).then(
+          () => true,
+          () => false
+        )
+        if (!deleted) {
+          break
+        }
+      }
+    }
+  }
+  const folder = dirname(home)
+  unlinkLinks(folder)
+  rmSync(folder, { recursive: true, force: true })
+}
+
+// Unlink shared history before recursive deletion can follow Windows junctions.
+function unlinkLinks(dir: string): void {
+  let names: string[]
+  try {
+    names = readdirSync(dir)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    const path = join(dir, name)
+    // Entries may vanish after listing.
+    const stat = lstatSync(path, { throwIfNoEntry: false })
+    if (!stat) {
+      continue
+    }
+    if (stat.isSymbolicLink()) {
+      try {
+        unlinkSync(path)
+      } catch {
+        // A Windows directory link is removed as a directory.
+        rmdirSync(path)
+      }
+    } else if (stat.isDirectory()) {
+      unlinkLinks(path)
+    }
+  }
+}

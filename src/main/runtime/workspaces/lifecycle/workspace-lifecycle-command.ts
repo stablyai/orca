@@ -1,4 +1,4 @@
-import type { WorkspaceLifecycleKind } from '../../../../shared/sidebar-list/workspace-lifecycle-hints'
+import type { WorkspaceLifecycleKind } from '../../../../shared/sidebar-list/feed-facts/workspace-lifecycle-hints'
 
 export const WORKSPACE_DELETED_ERROR = 'workspace_deleted'
 

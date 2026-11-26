@@ -1,0 +1,48 @@
+import { z } from 'zod'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../file-content/file-range-read'
+import {
+  AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES
+} from '../../agent-session/agent-session-attachments'
+import { isValidBase64 } from '../clipboard/clipboard-params'
+import { Identifier, SessionId } from './structured-agent-session-identifiers'
+
+const UploadId = Identifier('Invalid upload id', 128)
+
+const AttachmentUploadFile = {
+  name: z.string().min(1).max(1024),
+  byteLength: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large')
+}
+
+export const AttachmentUploadStartParams = z.union([
+  z.strictObject({ sessionId: SessionId, ...AttachmentUploadFile }),
+  z.strictObject({ item: z.uuid(), ...AttachmentUploadFile })
+])
+
+export const AttachmentUploadAppendParams = z
+  .object({
+    uploadId: UploadId,
+    offset: z.number().int().nonnegative(),
+    contentBase64: z
+      .string()
+      .max(AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS, 'Attachment chunk is too large')
+      .refine(isValidBase64, 'Attachment chunk must be base64')
+  })
+  .strict()
+
+export const AttachmentUploadIdParams = z.object({ uploadId: UploadId }).strict()
+
+export const AttachmentReadParams = z.object({ path: z.string().min(1).max(4096) }).strict()
+
+export const AttachmentTextReadParams = AttachmentReadParams.extend({
+  offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  length: z.number().int().positive().max(MAX_FILE_RANGE_READ_BYTES),
+  expectedSnapshot: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional()
+}).strict()

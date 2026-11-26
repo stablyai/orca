@@ -42,7 +42,7 @@ export async function loadBrowserExtensionIntoSession(
     return known
   }
   const store = getBrowserExtensionInstallStore()
-  const generation = store.removalGenerations().get(extension.id) ?? 0
+  const generation = store.removalGeneration(extension.id)
   if (
     getBrowserExtensionProfileStateStore().read(profileId, extension.id).removalGeneration !==
     generation

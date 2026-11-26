@@ -6,19 +6,19 @@ import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../../session-scanner-accumulator'
-import { addPreviewMessage } from '../../../session-scanner-messages'
+} from '../../../parsing/session-scanner-accumulator'
+import { addPreviewMessage } from '../../../parsing/session-scanner-messages'
 import {
   normalizeFullFirstUserPromptText,
   shouldCaptureFullFirstUserPrompt
-} from '../../../session-scanner-first-user-prompt'
+} from '../../../prompts/session-scanner-first-user-prompt'
 import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
 import { readPartDataRow, readSessionRow } from './session-scanner-opencode-sqlite-rows'
 import {
   canCountOpenCodeMessages,
   canReadOpenCodeMessageParts
 } from './session-scanner-opencode-sqlite-schema'
-import { normalizeTitleText } from '../../../session-scanner-text-normalization'
+import { normalizeTitleText } from '../../../parsing/session-scanner-text-normalization'
 import { zcodeVisibleMessageFilter } from '../../zcode/session-scanner-zcode-visibility'
 import { zcodeTranscriptOrder } from '../../zcode/session-scanner-zcode-order'
 import type SyncDatabase from '../../../../sqlite/sync-database'
@@ -29,10 +29,15 @@ const OPENCODE_SQLITE_PREVIEW_LIMIT = 5
 const OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW = 100
 // Bounds a pathological single message; a real typed prompt is a handful of parts.
 const FIRST_USER_PROMPT_PART_LIMIT = 512
+// Previews skip hidden blocks of up to 256K chars; reading more of a part only costs worker heap.
+const OPENCODE_SQLITE_PREVIEW_TEXT_CHARS = 512 * 1024
+// The longest JSON string escape, `\uXXXX`.
+const MAX_JSON_ESCAPE_CHARS = 6
 
 type PreviewRow = {
   role: string | null
-  part_data: string
+  // Quoted before the cut: substr and the driver both stop at a raw NUL.
+  part_text_json: string | null
   time_created: number
   summary_title: string | null
   summary_body: string | null
@@ -129,6 +134,23 @@ export function extractPartText(partData: string): string | null {
   }
 }
 
+// The cut can end a long text mid-escape: drop that escape and close the string.
+function previewTextFromJson(json: string | null): string | null {
+  if (json === null) {
+    return null
+  }
+  for (let dropped = -1; dropped <= MAX_JSON_ESCAPE_CHARS; dropped++) {
+    const candidate = dropped === -1 ? json : `${json.slice(0, json.length - dropped)}"`
+    try {
+      const text: unknown = JSON.parse(candidate)
+      return typeof text === 'string' ? text : null
+    } catch {
+      // Try a shorter cut.
+    }
+  }
+  return null
+}
+
 function readFirstUserPromptFromOpenCodeDb(
   db: SyncDatabase,
   sessionId: string,
@@ -184,7 +206,9 @@ function buildPreviewQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): strin
     return null
   }
   return `SELECT json_extract(m.data, '$.role') AS role,
-                 p.data AS part_data,
+                 CASE WHEN json_type(p.data, '$.text') = 'text'
+                   THEN substr(json_quote(json_extract(p.data, '$.text')), 1, ${OPENCODE_SQLITE_PREVIEW_TEXT_CHARS})
+                 END AS part_text_json,
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
                  json_extract(m.data, '$.summary.body') AS summary_body
@@ -273,7 +297,7 @@ export function readOpenCodeSqliteSession(args: {
       if (!previewRow) {
         continue
       }
-      const text = extractPartText(previewRow.part_data)
+      const text = previewTextFromJson(previewRow.part_text_json)
       if (!text) {
         continue
       }

@@ -1,4 +1,4 @@
-import { SearchSubprocessLineAccumulator } from '../../../../../shared/search-subprocess-lines'
+import { SearchSubprocessLineAccumulator } from '../../../../../shared/process-streams/search-subprocess-lines'
 
 export const OPENCODE_SQLITE_REQUEST_MAX_BYTES = 1024 * 1024
 export const OPENCODE_SQLITE_RESPONSE_MAX_BYTES = 32 * 1024 * 1024

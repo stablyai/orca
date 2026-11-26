@@ -2,7 +2,7 @@ import {
   getPRCommentGroupRoot,
   type PRCommentGroup
 } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 
 /** How a comment group should read in the PR sidebar triage UI. */
 export type PRCommentGroupActionState = 'open' | 'conversation' | 'resolved'

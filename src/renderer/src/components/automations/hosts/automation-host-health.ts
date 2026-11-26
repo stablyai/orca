@@ -1,4 +1,4 @@
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   AutomationAuthorityHealth,
   AutomationExecutionHealth,

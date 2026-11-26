@@ -4,6 +4,14 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 
+export const ACCOUNTS_SECTION_IDS = {
+  codex: 'accounts-codex',
+  minimax: 'accounts-minimax',
+  grok: 'accounts-grok',
+  antigravity: 'accounts-antigravity',
+  cursor: 'accounts-cursor'
+} as const
+
 export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.accounts.search.5e2101f61f', 'Account location'),
@@ -55,6 +63,7 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: ACCOUNTS_SECTION_IDS.codex,
     title: translate('auto.components.settings.accounts.search.4518496456', 'Active Codex account'),
     description: translate(
       'auto.components.settings.accounts.search.87a4a8584e',
@@ -71,37 +80,6 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.35b461d817', 'sign in')
-    ]
-  }
-])
-
-export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate(
-      'auto.components.settings.accounts.search.d819755b02',
-      'Use Gemini CLI credentials'
-    ),
-    description: translate(
-      'auto.components.settings.accounts.search.bada4a3218',
-      'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.accounts.search.e8e1ff3887', 'gemini'),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.8630464352', 'cli'),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.933deaf732', 'oauth'),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.7118d2f908',
-        'credentials'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.b7c2cee442',
-        'experimental'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.e949b08ffb',
-        'rate limit'
-      ),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
     ]
   }
 ])
@@ -153,6 +131,7 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: ACCOUNTS_SECTION_IDS.minimax,
     title: translate('auto.components.settings.accounts.search.9b6ce52c36', 'MiniMax usage'),
     description: translate(
       'auto.components.settings.accounts.search.f8374c3151',
@@ -177,6 +156,7 @@ export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: ACCOUNTS_SECTION_IDS.grok,
     title: translate('auto.components.settings.accounts.search.f4a8c2e1b7', 'Grok (xAI) Usage'),
     description: translate(
       'auto.components.settings.accounts.search.e3b7d1f9a2',
@@ -198,6 +178,7 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: ACCOUNTS_SECTION_IDS.antigravity,
     title: translate('accounts.antigravity.fd47b5a5dd', 'Antigravity accounts'),
     description: translate(
       'accounts.antigravity.searchDescription',
@@ -209,13 +190,19 @@ export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => 
       ...translateSearchKeyword('accounts.antigravity.keyword.google', 'google'),
       ...translateSearchKeyword('accounts.antigravity.keyword.accounts', 'accounts'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login'),
-      ...translateSearchKeyword('auto.components.settings.accounts.search.cursor.kw.usage', 'usage')
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.cursor.kw.usage',
+        'usage'
+      ),
+      ...translateSearchKeyword('accounts.antigravity.chatTitle', 'Antigravity Chat'),
+      ...translateSearchKeyword('accounts.antigravity.terminalTitle', 'agy in the terminal')
     ]
   }
 ])
 
 export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: ACCOUNTS_SECTION_IDS.cursor,
     title: translate('auto.components.settings.accounts.search.cursor.39bbdebe13', 'Cursor usage'),
     description: translate(
       'auto.components.settings.accounts.search.cursor.description',
@@ -283,7 +270,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
-  ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries(),

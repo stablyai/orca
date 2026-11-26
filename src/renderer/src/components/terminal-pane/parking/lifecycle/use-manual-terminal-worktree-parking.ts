@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { isTerminalActivationSpawnSettled } from '../retention/settled-activation-spawn'
 import {
   MANUAL_TERMINAL_WORKTREE_PARK_EVENT,
   takeAllPendingManualTerminalWorktreeParks,
@@ -56,7 +56,7 @@ export function useManualTerminalWorktreeParking(args: {
         terminalTabs,
         pendingStartupByTabId: state.pendingStartupByTabId,
         parkingEnabled: state.settings?.terminalHiddenViewParking !== false,
-        hasLivePty: (tabId) => tabHasLivePty(state.ptyIdsByTabId, tabId)
+        isActivationSpawnSettled: (tabId) => isTerminalActivationSpawnSettled(state, tabId)
       }) && terminalTabs.every((tab) => canWatcherCoverParkedTerminalTab(worktreeId, tab))
     if (!canPark) {
       toast.warning(

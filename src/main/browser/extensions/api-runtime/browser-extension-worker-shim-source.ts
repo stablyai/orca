@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { findBundledMainFile } from '../../bundled-main-file-path'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
@@ -7,13 +7,10 @@ import {
 
 const scripts = new Map<string, string>()
 
-/** The build emits these beside the main bundle; this module can sit one level down in chunks/. */
 function readBundledScript(fileName: string): string {
   let script = scripts.get(fileName)
   if (script === undefined) {
-    const path = [join(__dirname, fileName), join(__dirname, '..', fileName)].find((candidate) =>
-      existsSync(candidate)
-    )
+    const path = findBundledMainFile(fileName)
     if (!path) {
       throw new Error(`Orca’s ${fileName} is missing from this build`)
     }

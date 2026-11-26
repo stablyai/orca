@@ -1,4 +1,4 @@
-import type { SourceControlGroupOrder } from '../../ui-chrome-types'
+import type { SourceControlGroupOrder } from '../../ui-chrome/ui-chrome-types'
 
 export const DEFAULT_SOURCE_CONTROL_GROUP_ORDER = 'changes-first' satisfies SourceControlGroupOrder
 

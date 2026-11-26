@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import {
   Clipboard,
   Copy,
@@ -27,19 +27,21 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   formatOptionalPrimaryShortcutLabel,
   formatPrimaryShortcutLabel
-} from '@/hooks/useShortcutLabel'
+} from '@/lib/keyboard/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentSessionContinuationMenuItem } from '../../agent-session-continuation/AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from '../clipboard/AgentSessionContextCopyMenuItem'
 import { ClearPaneTitleMenuItem } from '../titles/ClearPaneTitleMenuItem'
-import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
+import type { TerminalQuickCommandMenuHost } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from '../quick-commands/TerminalQuickCommandsSubmenu'
 import { AddToChatSubmenu } from '../../native-chat/selection-quotes/AddToChatMenu'
+import type { TerminalPaneAgentIdCopy } from './terminal-pane-context-menu-types'
+import { CopyOrcaIdMenuItem } from '../../native-chat/pane/actions/NativeChatCopyOrcaSessionIdMenuItem'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -86,10 +88,14 @@ type TerminalContextMenuProps = {
   onCopyPaneId: () => void
   canCopyAgentSessionId: boolean
   onCopyAgentSessionId: () => void
+  /** Copies `orca_session_id:<id>` from the pane's host; absent where the menu has no agent. */
+  agentIdCopy?: TerminalPaneAgentIdCopy
+  onRestoreTerminalFocus: () => void
 }
 
 export default function TerminalContextMenu(props: TerminalContextMenuProps): React.JSX.Element {
-  const { open, onOpenChange, menuPoint, menuOpenedAtRef } = props
+  const { open, onOpenChange, menuPoint, menuOpenedAtRef, onRestoreTerminalFocus } = props
+  const outsideDismissAtRef = useRef(0)
   return (
     <DropdownMenu
       open={open}
@@ -116,6 +122,10 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         onCloseAutoFocus={(e) => {
           // Keep xterm focused instead of Radix's hidden trigger.
           e.preventDefault()
+          // Outside clicks release terminal focus; only reclaim after Escape or item selection.
+          if (outsideDismissAtRef.current <= menuOpenedAtRef.current) {
+            onRestoreTerminalFocus()
+          }
         }}
         onFocusOutside={(e) => {
           // xterm reclaiming focus after contextmenu is not an outside dismissal.
@@ -129,7 +139,9 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
             })
           ) {
             e.preventDefault()
+            return
           }
+          outsideDismissAtRef.current = Date.now()
         }}
       >
         <TerminalContextMenuItems {...props} />
@@ -177,7 +189,8 @@ function TerminalContextMenuItems({
   onCopyTerminalId,
   onCopyPaneId,
   canCopyAgentSessionId,
-  onCopyAgentSessionId
+  onCopyAgentSessionId,
+  agentIdCopy
 }: TerminalContextMenuProps): React.JSX.Element {
   const t = useTranslate()
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
@@ -192,6 +205,7 @@ function TerminalContextMenuItems({
       expand: formatPrimaryShortcutLabel('terminal.expandPane', keybindings),
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
+      copySessionId: formatOptionalPrimaryShortcutLabel('terminal.copySessionId', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
       nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
     }),
@@ -248,12 +262,9 @@ function TerminalContextMenuItems({
           {isNativeChatView
             ? t(
                 'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                'Continue with Terminal Agent'
+                'Continue in terminal'
               )
-            : t(
-                'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Continue in Chat UI'
-              )}
+            : t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')}
           {shortcuts.nativeChat ? (
             <DropdownMenuShortcut>{shortcuts.nativeChat}</DropdownMenuShortcut>
           ) : null}
@@ -312,7 +323,34 @@ function TerminalContextMenuItems({
         <DropdownMenuItem onSelect={onCopyAgentSessionId}>
           <Copy />
           {t('components.terminalPane.TerminalContextMenu.copySessionId', 'Copy Session ID')}
+          {shortcuts.copySessionId ? (
+            <DropdownMenuShortcut>{shortcuts.copySessionId}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
+      ) : null}
+      {agentIdCopy ? (
+        <CopyOrcaIdMenuItem
+          resolveOrcaSessionId={agentIdCopy.resolve}
+          onSettled={agentIdCopy.focusPane}
+          copy={{
+            label: t(
+              'components.terminalPane.TerminalContextMenu.copyOrcaSessionId',
+              'Copy Orca Session ID'
+            ),
+            tooltip: t(
+              'components.terminalPane.TerminalContextMenu.orcaSessionIdTooltip',
+              "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
+            ),
+            copied: t(
+              'components.terminalPane.TerminalContextMenu.orcaSessionIdCopied',
+              'Orca session ID copied'
+            ),
+            failed: t(
+              'components.terminalPane.TerminalContextMenu.orcaSessionIdCopyFailed',
+              'Unable to copy Orca session ID'
+            )
+          }}
+        />
       ) : null}
       <DropdownMenuItem onSelect={onCopyTerminalId}>
         <Copy />

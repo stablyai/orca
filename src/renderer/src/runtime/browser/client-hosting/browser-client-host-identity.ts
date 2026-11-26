@@ -17,7 +17,3 @@ export function readBrowserClientHostId(): string | null {
   }
   return cachedBrowserClientHostId
 }
-
-export function resetBrowserClientHostIdForTests(): void {
-  cachedBrowserClientHostId = null
-}

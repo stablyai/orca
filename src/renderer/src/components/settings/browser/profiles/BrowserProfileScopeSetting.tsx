@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { getBrowserProfileScopeSearchEntry } from './browser-profile-scope-search'

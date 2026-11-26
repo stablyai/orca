@@ -4,7 +4,7 @@ import type {
   KeybindingActionId,
   KeybindingOverrides
 } from '../../../../../shared/keybindings/types'
-import type { WindowShortcutInput } from '../../../../../shared/window-shortcut-policy'
+import type { WindowShortcutInput } from '../../../../../shared/keybindings/window-shortcut-policy'
 
 // Why: neither acts on a page (open-markdown has no app-wide owner, rename only renames terminal and
 // chat tabs), so claiming them would only take the chord from the page.

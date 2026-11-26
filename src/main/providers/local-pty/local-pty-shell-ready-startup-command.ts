@@ -1,5 +1,5 @@
 import type * as pty from 'node-pty'
-import { buildStartupCommandSubmission } from '../../../shared/startup-command-submission'
+import { buildStartupCommandSubmission } from '../../../shared/shell/launch/startup-command-submission'
 
 export const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
 const POST_SHELL_READY_STARTUP_COMMAND_DELAY_MS = 30

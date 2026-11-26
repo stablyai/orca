@@ -2,7 +2,7 @@ import {
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
-import { getLinearIssueWorkspaceName } from '../../../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {
@@ -27,10 +27,6 @@ export function getLinearLinkedWorkItemBranchName(
     : undefined
 }
 
-export function buildLinearIssueLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
-  return buildLinearWorkspaceSource(issue)
-}
-
 export function buildLinearIssueComposerData(issue: LinearIssue, source: TaskSourceContext | null) {
   const sourceContext = source
     ? normalizeTaskSourceContext({
@@ -47,7 +43,7 @@ export function buildLinearIssueComposerData(issue: LinearIssue, source: TaskSou
     : null
   return {
     prefilledName: getLinearIssueWorkspaceName(issue),
-    linkedWorkItem: buildLinearIssueLinkedWorkItem(issue),
+    linkedWorkItem: buildLinearWorkspaceSource(issue),
     ...(sourceContext ? { taskSourceContext: sourceContext } : {})
   }
 }

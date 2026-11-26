@@ -1,10 +1,10 @@
 import { translate } from '@/i18n/i18n'
-import {
-  sanitizeCrashReportString,
-  type CrashReportCopySubmissionFailure,
-  type CrashReportDiagnosticBundle,
-  type CrashReportSubmitResult
-} from '../../../../shared/crash-reporting'
+import { sanitizeCrashReportString } from '../../../../shared/crash-reporting/crash-report-redaction'
+import type {
+  CrashReportCopySubmissionFailure,
+  CrashReportSubmitResult
+} from '../../../../shared/crash-reporting/crash-reporting'
+import type { CrashReportDiagnosticBundle } from '../../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 
 export const CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID = 'crash-report-submit-failure'
 
@@ -63,7 +63,8 @@ export function getCrashReportCopySubmissionFailure(
 
 export function getCrashReportSubmitFailureNotice(
   failure: CrashReportSubmitFailureLike,
-  includeDiagnosticLogs: boolean
+  includeDiagnosticLogs: boolean,
+  isFreezeReport = false
 ): CrashReportSubmitFailureNotice {
   const ticketDetail =
     failure.diagnosticBundle?.status === 'uploaded'
@@ -76,30 +77,40 @@ export function getCrashReportSubmitFailureNotice(
   const omittedDetail =
     failure.diagnosticBundle?.status === 'not_uploaded'
       ? asSentence(
-          translate(
-            'auto.components.crash.report.submit.notice.diagnosticsReason',
-            'Diagnostic logs were not attached: {{value0}}',
-            { value0: normalizedFailureMessage(failure.diagnosticBundle.reason) }
-          )
+          isFreezeReport
+            ? translate(
+                'crashReport.freeze.attachmentsOmitted',
+                'The saved freeze report and diagnostic logs were not attached: {{value0}}',
+                { value0: normalizedFailureMessage(failure.diagnosticBundle.reason) }
+              )
+            : translate(
+                'auto.components.crash.report.submit.notice.diagnosticsReason',
+                'Diagnostic logs were not attached: {{value0}}',
+                { value0: normalizedFailureMessage(failure.diagnosticBundle.reason) }
+              )
         )
       : null
   const attachmentAlreadyOmitted = failure.diagnosticBundle?.status === 'not_uploaded'
   const recovery =
     includeDiagnosticLogs && !attachmentAlreadyOmitted
-      ? translate(
-          'auto.components.crash.report.submit.notice.uncheckDiagnostics',
-          'Uncheck "Attach recent diagnostic logs" and try again, or copy the details.'
-        )
+      ? isFreezeReport
+        ? translate(
+            'crashReport.freeze.uncheckAttachments',
+            'Uncheck "Include the saved freeze report and recent logs (redacted)" and try again, or copy the details.'
+          )
+        : translate(
+            'auto.components.crash.report.submit.notice.uncheckDiagnostics',
+            'Uncheck "Attach recent diagnostic logs" and try again, or copy the details.'
+          )
       : translate(
           'auto.components.crash.report.submit.notice.checkConnection',
           'Check your connection and try again, or copy the details.'
         )
 
   return {
-    title: translate(
-      'auto.components.crash.report.submit.notice.notSent',
-      "Crash report wasn't sent"
-    ),
+    title: isFreezeReport
+      ? translate('crashReport.freeze.notSent', "Freeze report wasn't sent")
+      : translate('auto.components.crash.report.submit.notice.notSent', "Crash report wasn't sent"),
     description: [
       asSentence(normalizedFailureMessage(failure.error)),
       ticketDetail,
@@ -114,21 +125,33 @@ export function getCrashReportSubmitFailureNotice(
 
 export function getCrashReportSubmitWarningNotice(
   result: Extract<CrashReportSubmitResult, { ok: true }>,
-  includeDiagnosticLogs: boolean
+  includeDiagnosticLogs: boolean,
+  isFreezeReport = false
 ): CrashReportSubmitWarningNotice | null {
   if (!includeDiagnosticLogs || result.diagnosticBundle?.status !== 'not_uploaded') {
     return null
   }
 
   return {
-    title: translate(
-      'auto.components.crash.report.submit.notice.sentWithoutDiagnostics',
-      'Crash report sent without diagnostic logs'
-    ),
-    description: translate(
-      'auto.components.crash.report.submit.notice.diagnosticsReason',
-      'Diagnostic logs were not attached: {{value0}}',
-      { value0: normalizedFailureMessage(result.diagnosticBundle.reason) }
-    )
+    title: isFreezeReport
+      ? translate(
+          'crashReport.freeze.sentWithoutAttachments',
+          'Details sent without the saved freeze report or diagnostic logs'
+        )
+      : translate(
+          'auto.components.crash.report.submit.notice.sentWithoutDiagnostics',
+          'Crash report sent without diagnostic logs'
+        ),
+    description: isFreezeReport
+      ? translate(
+          'crashReport.freeze.attachmentsOmitted',
+          'The saved freeze report and diagnostic logs were not attached: {{value0}}',
+          { value0: normalizedFailureMessage(result.diagnosticBundle.reason) }
+        )
+      : translate(
+          'auto.components.crash.report.submit.notice.diagnosticsReason',
+          'Diagnostic logs were not attached: {{value0}}',
+          { value0: normalizedFailureMessage(result.diagnosticBundle.reason) }
+        )
   }
 }

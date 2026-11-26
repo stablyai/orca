@@ -1,13 +1,16 @@
 // Hosts may have routes/proxies the desktop lacks; archive and executable hashes still enforce the pin.
 import { copyFile, link, mkdtemp } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { nodeDistMirrorUrl, type NodeDistMirrorAttempt } from '../../../shared/node-dist-mirror'
+import {
+  nodeDistMirrorUrl,
+  type NodeDistMirrorAttempt
+} from '../../../shared/node-runtime/node-dist-mirror'
 import {
   NODE_RUNTIME_PIN,
   nodeRuntimeReleaseUrl,
   pinnedNodeRuntimeAsset,
   type NodeRuntimeTarget
-} from '../../../shared/node-runtime-pin'
+} from '../../../shared/node-runtime/node-runtime-pin'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,

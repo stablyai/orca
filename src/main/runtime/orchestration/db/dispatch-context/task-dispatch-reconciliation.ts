@@ -13,6 +13,20 @@ export function getActiveDispatchForTask(
     .get(taskId) as DispatchContextRow | undefined
 }
 
+/** A start proven after it was left unknown lifts the block the unknown start put on its Task. */
+export function resumeTaskBlockedByUnknownStart(db: OrchestrationDb, taskId: string): void {
+  if (db.getTask(taskId)?.status !== 'blocked') {
+    return
+  }
+  transitionLifecycleWithDb(db.db, {
+    entity: 'task',
+    id: taskId,
+    from: 'blocked',
+    to: 'dispatched',
+    projection: { completed_at: null }
+  })
+}
+
 export function reconcileTaskAfterDispatchInterruption(
   db: OrchestrationDb,
   taskId: string,
@@ -37,5 +51,31 @@ export function reconcileTaskAfterDispatchInterruption(
     id: taskId,
     from: task.status,
     to: next
+  })
+}
+
+/**
+ * A worker lost with its runtime (restart recovery) leaves its Task ready for a fresh start, or
+ * failed once its retries broke the circuit, while no other attempt runs for it.
+ */
+export function settleTaskAfterLostWorker(
+  db: OrchestrationDb,
+  taskId: string,
+  to: 'ready' | 'failed'
+): void {
+  const task = db.getTask(taskId)
+  if (
+    !task ||
+    !['dispatched', 'blocked'].includes(task.status) ||
+    getActiveDispatchForTask(db, taskId)
+  ) {
+    return
+  }
+  transitionLifecycleWithDb(db.db, {
+    entity: 'task',
+    id: taskId,
+    from: task.status,
+    to,
+    projection: { completed_at: to === 'failed' ? new Date().toISOString() : null }
   })
 }

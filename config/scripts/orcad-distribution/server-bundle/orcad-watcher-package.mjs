@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { x as extractTar } from 'tar'
 import { parseAllDocuments } from 'yaml'
-import { SERVER_TARGETS } from '../../../../src/shared/node-runtime-pin.ts'
+import { SERVER_TARGETS } from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 
 const root = resolve(import.meta.dirname, '../../../..')
 const require = createRequire(import.meta.url)

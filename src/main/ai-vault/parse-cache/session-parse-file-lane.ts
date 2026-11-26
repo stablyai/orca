@@ -1,7 +1,7 @@
 import {
   abandonRemoteSessionScanOnCancel,
   throwIfAiVaultScanCancelled
-} from '../ai-vault-scan-cancellation'
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 
 const pending = new Map<string, Promise<unknown>>()
 

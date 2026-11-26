@@ -5,7 +5,7 @@ import {
   isProvenLivePtyRemovalError,
   isProvenLiveStructuredSessionRemovalError,
   type WorktreeForceDeleteReason
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string

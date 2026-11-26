@@ -9,11 +9,15 @@
     "spike": "tsx spike/run-all.ts",
     "test": "vitest run",
     "test:schema": "tsx test/apply-schema.ts",
-    "test:mvp": "tsx test/mvp.ts"
+    "test:mvp": "tsx test/mvp.ts",
+    "ingress-cidrs": "tsx scripts/ingress-source-cidrs.ts",
+    "test:g1": "tsx test/g1-front-door.ts",
+    "test:g1-local": "tsx test/g1-local.ts",
+    "test:ingress-e2e": "tsx test/ingress-e2e.ts"
   },
   "dependencies": {
     "@types/pg": "^8.23.1",
-    "jose": "^6.2.13",
+    "jose": "^6.2.16",
     "pg": "^8.23.1",
     "tweetnacl": "^1.0.3",
     "zod": "^4.6.7"
@@ -26,7 +30,7 @@
     "typescript": "^5.9.3",
     "vitest": "^5.0.5",
     "wrangler": "^4.157.0",
-    "ws": "^8.22.0"
+    "ws": "^8.22.2"
   },
   "allowScripts": {
     "workerd@1.20261103.1": true,

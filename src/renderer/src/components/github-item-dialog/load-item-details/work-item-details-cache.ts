@@ -1,15 +1,15 @@
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import type {
   GitHubAssignableUser,
-  GitHubOwnerRepo,
   GitHubPRFileViewedState
-} from '../../../../../shared/github/pull-request-types'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+} from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/github-work-item-details-cache-events'
 

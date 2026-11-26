@@ -1,7 +1,7 @@
 import {
   parseOrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { structuredWorkerOrcaSessionIdForIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 

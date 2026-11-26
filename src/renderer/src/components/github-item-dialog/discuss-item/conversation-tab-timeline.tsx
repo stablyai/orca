@@ -4,7 +4,7 @@ import { formatRelativeTime } from '@/components/github/work-item-state-presenta
 import type {
   GitHubIssueTimelineItem,
   GitHubIssueTimelineTarget
-} from '../../../../../shared/github/comment-types'
+} from '../../../../../shared/github/comments/comment-types'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'

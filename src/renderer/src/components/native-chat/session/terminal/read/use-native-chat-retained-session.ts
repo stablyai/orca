@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { boundNativeChatWindow } from '../../../../../../../shared/native-chat/native-chat-merge'
+import { boundNativeChatWindow } from '../../../../../../../shared/native-chat/transcript/streaming/native-chat-merge'
 import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../viewport/history/native-chat-pagination'
 import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
-} from '../../../../../../../shared/native-chat/transcript/native-chat-transcript-retention'
+} from '../../../../../../../shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import { useNativeChatLiveSession } from './use-native-chat-live-session'
 import type {
   UseNativeChatLiveSessionArgs,

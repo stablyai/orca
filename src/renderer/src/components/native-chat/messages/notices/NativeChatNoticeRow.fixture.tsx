@@ -92,3 +92,27 @@ export const guardianReviewsExpanded = defineFixture({
     frame.querySelectorAll('summary').forEach((summary) => summary.click())
   }
 })
+
+function ContextNotes(): React.JSX.Element {
+  const at = Date.parse('2026-11-14T17:55:00Z')
+  const notes: NativeChatTextBlock[] = [
+    { type: 'text', text: '', botContext: { botId: 'b1', changed: ['memory'] } },
+    { type: 'text', text: '', botContext: { botId: 'b1', changed: ['soul'] } },
+    { type: 'text', text: '', botContext: { botId: 'b1', changed: ['soul', 'memory'] } }
+  ]
+  return (
+    <div className="flex flex-col gap-1 bg-chat-pane p-4">
+      {notes.map((block, index) => (
+        <NativeChatNoticeRow
+          key={block.botContext?.changed.join()}
+          block={block}
+          timestamp={at + index * 60_000}
+        />
+      ))}
+    </div>
+  )
+}
+
+export const contextNotes = defineFixture({ width: 600, render: () => <ContextNotes /> })
+
+export const contextNotesNarrow = defineFixture({ width: 340, render: () => <ContextNotes /> })

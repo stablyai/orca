@@ -1,4 +1,5 @@
 import { isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import { getPiStateTitleBrand } from './providers/pi-state-title-marker'
 import {
   AGY_AGENT_NAME_RE,
@@ -7,12 +8,7 @@ import {
   titleHasAgentName
 } from './agent-name-token-match'
 import { CLAUDE_IDLE, containsAgentSpinnerGlyph } from './agent-title-glyphs'
-import {
-  isClaudeManagementTitle,
-  isCursorAgentTitle,
-  isGeminiTerminalTitle,
-  isPiAgentTitle
-} from './agent-title-core'
+import { isClaudeManagementTitle, isCursorAgentTitle, isPiAgentTitle } from './agent-title-core'
 import { isDeepSeekBuildTerminalTitle } from './providers/dsb-terminal-title'
 import { isOpenCodeNativeTitle } from './providers/opencode-terminal-title'
 import {
@@ -83,9 +79,6 @@ function computeAgentLabel(title: string): string | null {
   if (isDeepSeekBuildTerminalTitle(title)) {
     return 'DeepSeek Build'
   }
-  if (isGeminiTerminalTitle(title)) {
-    return 'Gemini CLI'
-  }
   // Resolve Pi-compatible synthetic titles before generic braille identity heuristics.
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
   if (piCompatibleSyntheticAgentLabel) {
@@ -110,7 +103,7 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
-  if (titleHasAgentName(title, 'jcode')) {
+  if (titleHasAgentName(title, 'jcode') || isJcodeIdentityTerminalTitle(title)) {
     return 'Jcode'
   }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {

@@ -11,7 +11,7 @@ import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
 } from './claude-agent-teams-shim-env'
-import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
+import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { splitPanePendingError } from './terminal-split-retry'
 import {
@@ -129,6 +129,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
   ): Promise<AgentTeamsTmuxCompatResponse> {
     return await this.claudeAgentTeams.handleTmuxCompat(request, {
       splitTerminal: (handle, opts) => this.splitTerminal(handle, opts),
+      allocateTerminalHandle: () => this.createPreAllocatedTerminalHandle(),
       readTerminal: (handle, opts) => this.readTerminal(handle, opts),
       sendTerminal: (handle, action, options) => this.sendTerminal(handle, action, options),
       focusTerminal: (handle) => this.focusTerminal(handle),
@@ -176,6 +177,10 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     })
     const env = auth ? { ...auth.envPatch, ...launch.env } : launch.env
     return { env }
+  }
+
+  shareClaudeAgentTeamsLeadMcpEnv(leadEnv: Readonly<Record<string, string>>): void {
+    this.claudeAgentTeams.shareLeadMcpRelayEnv(leadEnv)
   }
 
   // Why: a leader handle that never binds to a PTY (lost pane race) has no exit

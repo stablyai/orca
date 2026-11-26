@@ -11,12 +11,13 @@ import {
 } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
-import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/sleeping-agent-launch-config'
+import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { argvPromptSeparator } from './argv-prompt-separator'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
 
 export type AgentStartupPlan = {
@@ -108,7 +109,7 @@ export function buildAgentStartupPlan(args: {
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
-    const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
+    const promptSeparator = argvPromptSeparator(agent, baseCommand.command, args.agentArgs, shell)
     return {
       agent,
       launchCommand:

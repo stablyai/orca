@@ -1,8 +1,8 @@
 import type { OrchestrationEntryCaller } from '../addressing/orchestration-caller-identity'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import type { WorkerStartInput } from '../../rpc/methods/orchestration/worker/worker-start-schema'
-import type { WorkerStartMutation } from '../../rpc/methods/orchestration/worker/worker-start-mutation'
+import type { WorkerStartInput } from '../../rpc/methods/orchestration/worker/start/worker-start-input'
+import type { WorkerStartMutation } from '../../rpc/methods/orchestration/worker/start/worker-start-mutation'
 
 export type FederatedWorkerStartRequest = {
   params: WorkerStartInput

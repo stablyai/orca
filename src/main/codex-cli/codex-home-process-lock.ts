@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 
 // Serialize Orca-owned spawns per home to prevent refresh-token rotation races; terminals are exempt.
 const lockTails = new Map<string, Promise<unknown>>()

@@ -9,8 +9,9 @@ import {
   isRootAgentJournalItem,
   namesAgentJournalProducer
 } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
+import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 
 export function statedOrDerivedTurnScope(
   state: JournalReducerState,
@@ -43,26 +44,32 @@ export function upsertJournalItem(
     state.items.set(itemId, next)
     state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
-    return
+  } else {
+    state.items.set(itemId, journalItemRevisionValue(existing, next))
+    state.tombstones.delete(itemId)
   }
-  // Pin creation position/time so provider echoes cannot move submitted bubbles below later messages.
+  getJournalInputOrder(state)?.noteItem(state, itemId)
+}
+
+/** Revisions preserve the current placement, including a handover or rejection's later move. */
+export function journalItemRevisionValue(
+  existing: AgentJournalRenderItem,
+  next: AgentJournalRenderItem
+): AgentJournalRenderItem {
   const submitted =
     existing.body.kind === 'message' &&
     existing.body.role === 'user' &&
-    parseAgentJournalItemKey(itemId)?.provider === 'orca'
+    parseAgentJournalItemKey(existing.itemId)?.provider === 'orca'
   const { sequenceIndex: _revisedAt, ...revised } = next
-  state.items.set(itemId, {
+  return {
     ...revised,
-    // Host bookkeeping without explicit producer must retain subagent linkage.
     ...(namesAgentJournalProducer(next) ? {} : agentJournalLinkageFields(existing)),
-    // Provider history may normalize text or omit local attachments from the original send.
     body: submitted ? existing.body : next.body,
     sequence: existing.sequence,
     ...(existing.sequenceIndex !== undefined ? { sequenceIndex: existing.sequenceIndex } : {}),
     observedAt: existing.observedAt,
     turnScope: existing.turnScope ?? next.turnScope
-  })
-  state.tombstones.delete(itemId)
+  }
 }
 
 export function removeJournalItem(
@@ -94,4 +101,5 @@ export function removeJournalItem(
   state.items.delete(itemId)
   state.itemFences.delete(itemId)
   state.itemExecutionOwners.delete(itemId)
+  getJournalInputOrder(state)?.noteItem(state, itemId)
 }

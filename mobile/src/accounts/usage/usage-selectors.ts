@@ -1,6 +1,7 @@
 // Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
-import { formatResetCountdown } from '../../../../src/shared/rate-limit-reset-format'
-import { hasUsageData } from '../../../../src/shared/usage-provider-windows'
+import { formatResetCountdown } from '../../../../src/shared/agent-usage/rate-limits/rate-limit-reset-format'
+import { hasUsageData } from '../../../../src/shared/agent-usage/display/usage-provider-windows'
+import { hostSystemDefaultUsageId } from '../../../../src/shared/agent-accounts/host-system-default-usage'
 import {
   ProviderRateLimitsSchema,
   type AccountsSnapshot,
@@ -34,6 +35,26 @@ export function getInactiveProviderUsage(
       ? snapshot.rateLimits.inactiveClaudeAccounts
       : snapshot.rateLimits.inactiveCodexAccounts
   return list.find((u) => u.accountId === accountId) ?? null
+}
+
+/** System default's reading: live while it is selected, else the one the host keeps under its usage key. */
+export function getSystemDefaultProviderUsage(
+  snapshot: AccountsSnapshot,
+  provider: ProviderKey,
+  activeAccountId: string | null
+): { limits: ProviderRateLimits | null; isFetching: boolean } {
+  if (activeAccountId === null) {
+    const limits = getActiveProviderRateLimits(snapshot, provider)
+    return { limits, isFetching: limits?.status === 'fetching' }
+  }
+  // A Codex target in WSL selects that distro's own login, which the host keeps no reading for.
+  const usageId = hostSystemDefaultUsageId(
+    provider,
+    provider === 'codex' ? snapshot.rateLimits.codexTarget : undefined
+  )
+  // A host re-reading an unselected login flags the entry, not the reading's status.
+  const entry = usageId ? getInactiveProviderUsage(snapshot, provider, usageId) : null
+  return { limits: entry?.rateLimits ?? null, isFetching: entry?.isFetching === true }
 }
 
 // System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.

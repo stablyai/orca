@@ -1,6 +1,6 @@
 import type { ConnectConfig } from 'ssh2'
-import type { SshTarget } from '../../../shared/ssh-types'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import {
   createHostKeyVerifier,
   getDefaultServerHostKeyAlgorithms,

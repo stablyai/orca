@@ -1,14 +1,15 @@
-import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import {
   closeTerminalTabInWorkspaceSession,
   workspaceSessionListsTerminalTab
 } from '../../shared/workspace-session/workspace-session-terminal-tab-close'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
-/** Suppress recorded closes across all writers until TTL expiry; failed-close rollback bypasses the fence. */
+/** Suppress recorded closes across all writers until TTL expiry; failed-close rollback bypasses the fence. `closedIn` collects the workspaces it closed a tab in. */
 export function dropClosedTerminalTabs(
   session: WorkspaceSessionState,
-  now = Date.now()
+  now = Date.now(),
+  closedIn?: Set<string>
 ): WorkspaceSessionState {
   const records = session.closedTerminalTabTombstonesByTabId
   if (!records) {
@@ -27,6 +28,7 @@ export function dropClosedTerminalTabs(
       workspaceSessionListsTerminalTab(next, worktreeId, tabId)
     ) {
       next = closeTerminalTabInWorkspaceSession(next, worktreeId, tabId, { force: true }).session
+      closedIn?.add(worktreeId)
     }
   }
   // Keep sparse slices sparse when no tabs were dropped.

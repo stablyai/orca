@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type Ref } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
 import { CircleAlert, Laptop, Mic, RotateCcw, Smartphone, Square, X } from 'lucide-react-native'
 import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
@@ -32,7 +32,7 @@ export function MobileDictationCancelButton({
   discards = false
 }: {
   onCancel: () => void
-  targetRef?: Ref<View>
+  targetRef?: Ref<HostInstance>
   compact?: boolean
   // After a failure, ✕ throws the kept recording away.
   discards?: boolean

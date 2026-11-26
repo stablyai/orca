@@ -3,7 +3,7 @@ import { ChevronDown, GitBranch, GitPullRequest } from 'lucide-react'
 import type {
   GitHubPRStack,
   GitHubPRStackEntry
-} from '../../../../../../shared/github/pull-request-types'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
 import { cn } from '@/lib/class-names'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'

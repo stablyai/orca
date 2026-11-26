@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
-/** Provisional schema floor for the appearance capability; not a stock-release claim. */
-export const PLUGIN_APPEARANCE_SINCE = '1.4.249'
+/** First release with the appearance methods (v1.4.251), the floor for `appearance:write`. */
+export const PLUGIN_APPEARANCE_SINCE = '1.4.251'
 const revision = z.string().regex(/^[a-f0-9]{64}$/)
 const artifact = z
   .string()

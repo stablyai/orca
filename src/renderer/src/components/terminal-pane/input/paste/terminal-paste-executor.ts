@@ -1,4 +1,4 @@
-import { yieldToEventLoop as yieldToEventLoopTask } from '../../../../../../shared/event-loop-yield'
+import { yieldToEventLoop as yieldToEventLoopTask } from '../../../../../../shared/concurrency/event-loop-yield'
 import './terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,

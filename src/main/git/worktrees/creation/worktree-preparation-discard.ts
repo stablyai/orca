@@ -2,7 +2,7 @@ import { bumpWorktreeScanGeneration } from '../catalog/worktree-scan-cache'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { lstat, readFile, realpath } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
 import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
 import {
@@ -10,9 +10,10 @@ import {
   resolveWorktreeHostPath
 } from '../../../../shared/git/metadata/git-metadata-path'
 import { findLinkedWorktreeGitDirectory } from '../../../../shared/git/worktrees/git-worktree-admin'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { getGitCurrentBranchName } from '../../../../shared/git/refs/git-current-branch'
 import {
   getErrorCode,
   gitExecOptions,
@@ -26,7 +27,8 @@ import {
   verifyWorktreePreparationLockAtPath,
   WorktreePreparationLockOwnershipError
 } from './worktree-preparation-lock'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { restoreMissingGitlink } from './worktree-preparation-gitlink'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 export function gitCleanupOptions(
   cwd: string,
@@ -63,23 +65,18 @@ async function verifyDiscardPreparationOwner(
       throw error
     }
     const signal = AbortSignal.timeout(options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS)
-    const absent = await waitForPromiseWithSignal(
-      lstat(toHostFilesystemPath(hostPath)),
-      signal
-    ).then(
-      () => false,
-      (failure: unknown) => {
-        if (getErrorCode(failure) === 'ENOENT') {
-          return true
-        }
-        throw failure
-      }
-    )
-    if (!absent) {
+    const absent = (path: string): Promise<boolean> =>
+      waitForPromiseWithSignal(pathAbsent(path), signal)
+    const checkoutAbsent = await absent(hostPath)
+    // A crash can leave the checkout without its gitlink; only the admin backlink can prove ownership.
+    if (!checkoutAbsent && !(await absent(join(hostPath, '.git')))) {
       throw error
     }
     const gitDir = await findLinkedWorktreeGitDirectory(hostRepo, hostPath, { ...options, signal })
     if (!gitDir) {
+      if (!checkoutAbsent) {
+        throw error
+      }
       if (
         originalLockPath === null ||
         (originalLockPath && (await pathAbsent(dirname(originalLockPath))))
@@ -104,6 +101,9 @@ async function verifyDiscardPreparationOwner(
       verifyWorktreePreparationLockAtPath(lockPath, expectedLockReason, signal),
       signal
     )
+    if (!checkoutAbsent) {
+      await restoreMissingGitlink(hostPath, gitDir, signal)
+    }
     return gitDir
   }
 }
@@ -256,15 +256,10 @@ export async function removeFailedFinalization(
 ): Promise<boolean> {
   let branchAttached = false
   if (moved) {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['symbolic-ref', '--short', 'HEAD'],
-        gitCleanupOptions(cleanupPath, options)
-      )
-      branchAttached = stdout.trim() === branch
-    } catch {
-      // Detached or no longer readable.
-    }
+    branchAttached =
+      (await getGitCurrentBranchName((args) =>
+        gitExecFileAsync(args, gitCleanupOptions(cleanupPath, options))
+      )) === branch
   }
   const removed = await performDiscardPreparedWorktree(
     repoPath,

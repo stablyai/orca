@@ -6,14 +6,22 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject
 } from 'react'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { DICTATION_FOCUS_INPUT_EVENT } from '../../../dictation/dictation-control-events'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { registerDictationInputOwner } from '../../../dictation/dictation-insertion-target'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
 import {
   useNativeChatComposerRevealFocus,
   type NativeChatComposerRevealFocusArgs
 } from './use-native-chat-composer-reveal-focus'
+import { NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE } from '../../subagents/native-chat-open-subagent'
+
+const SHEET_SELECTOR = `[${NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE}]`
+
+/** A subagent sheet covers the composer, so typing must not reach it. */
+function sheetCoversComposer(root: HTMLElement | null): boolean {
+  return root?.querySelector(SHEET_SELECTOR) != null
+}
 
 // Floating panels can reveal a chat beside the workspace’s chat.
 const revealedChatRoots = new Set<HTMLElement>()
@@ -42,7 +50,11 @@ export function useNativeChatRootInputRouting(
       revealedChatRoots.size === 1 &&
       !hasVisibleOverlay({ ignoreDismissed: true })
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.target !== root && ownsUnfocusedInput(event.target)) {
+      if (
+        event.target !== root &&
+        ownsUnfocusedInput(event.target) &&
+        !sheetCoversComposer(rootRef.current)
+      ) {
         routeNativeChatRootKeyToInput(
           event,
           nativeChatComposerDestination(rootRef.current, composerRef.current),
@@ -50,28 +62,31 @@ export function useNativeChatRootInputRouting(
         )
       }
     }
-    const onDictationFocusInput = (): void => {
-      const active = root.ownerDocument.activeElement
-      if (root.contains(active) || ownsUnfocusedInput(active)) {
-        nativeChatComposerDestination(rootRef.current, composerRef.current)?.focus()
-      }
-    }
     revealedChatRoots.add(root)
     root.ownerDocument.addEventListener('keydown', onKeyDown)
-    root.ownerDocument.addEventListener(DICTATION_FOCUS_INPUT_EVENT, onDictationFocusInput)
+    const releaseDictation = registerDictationInputOwner(root, {
+      focusInput: () =>
+        void nativeChatComposerDestination(rootRef.current, composerRef.current)?.focus(),
+      ownsOutsideFocus: ownsUnfocusedInput
+    })
     return () => {
       revealedChatRoots.delete(root)
       root.ownerDocument.removeEventListener('keydown', onKeyDown)
-      root.ownerDocument.removeEventListener(DICTATION_FOCUS_INPUT_EVENT, onDictationFocusInput)
+      releaseDictation()
     }
   }, [composerRef, questionAnswerInputRef, revealed, rootRef])
 
   const onPointerDownCapture = useCallback(
     (event: ReactPointerEvent) => {
+      // Portaled popovers bubble through React too; focusing the root would close them.
+      // A press inside the sheet keeps focus in it rather than on the pane behind.
       if (
         !event.defaultPrevented &&
         event.button === 0 &&
-        shouldFocusNativeChatPaneFromPointerTarget(event.target)
+        event.target instanceof Node &&
+        rootRef.current?.contains(event.target) &&
+        shouldFocusNativeChatPaneFromPointerTarget(event.target) &&
+        !(event.target instanceof Element && event.target.closest(SHEET_SELECTOR))
       ) {
         rootRef.current?.focus({ preventScroll: true })
       }
@@ -81,7 +96,11 @@ export function useNativeChatRootInputRouting(
   const onKeyDownCapture = useCallback(
     (event: ReactKeyboardEvent) => {
       // Portaled menus/dialogs still bubble through React; require a target inside this DOM root.
-      if (event.target instanceof Node && rootRef.current?.contains(event.target)) {
+      if (
+        event.target instanceof Node &&
+        rootRef.current?.contains(event.target) &&
+        !sheetCoversComposer(rootRef.current)
+      ) {
         routeNativeChatRootKeyToInput(
           event,
           nativeChatComposerDestination(rootRef.current, composerRef.current),

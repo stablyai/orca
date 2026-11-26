@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { SlugRepo } from '../../../../../../shared/rpc-contract/github-repo-target-params'
+import { SlugRepo } from '../../../../../../shared/rpc-contract/github/github-repo-target-params'
 import {
   ClearProjectItemField,
   GithubProjectListAccessibleParams,
@@ -15,7 +15,7 @@ import {
   SlugIssueTypeUpdate,
   SlugIssueUpdate,
   SlugPullRequestUpdate
-} from '../../../../../../shared/rpc-contract/github-project-params'
+} from '../../../../../../shared/rpc-contract/github/github-project-params'
 
 export const GITHUB_PROJECT_METHODS = [
   defineMethod({

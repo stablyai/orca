@@ -1,6 +1,10 @@
 import type { OptionalProjectItemField } from './project-view-cache'
-import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
+import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
+import {
+  ghAuthLoginCommand,
+  ghAuthRefreshCommand
+} from '../../../shared/github/projects/project-gh-auth-commands'
 
 export type GhGraphqlError = {
   type?: string
@@ -67,6 +71,15 @@ export function unsupportedItemFieldsFromErrors(
   return [...unsupported]
 }
 
+export function projectAuthErrorMessage(
+  type: 'auth_required' | 'scope_missing',
+  host: string | undefined
+): string {
+  return type === 'auth_required'
+    ? `Sign in to GitHub to load project tasks. Run \`${ghAuthLoginCommand(host)}\`.`
+    : `GitHub project access needs additional scopes. Run \`${ghAuthRefreshCommand(host)}\`.`
+}
+
 export function classifyProjectError(
   stderr: string,
   stdout: string,
@@ -83,7 +96,7 @@ export function classifyProjectError(
   ) {
     return {
       type: 'auth_required',
-      message: `Sign in to GitHub to load project tasks. Run \`gh auth login --hostname ${selectedHost}\`.`,
+      message: projectAuthErrorMessage('auth_required', selectedHost),
       host: selectedHost
     }
   }
@@ -94,7 +107,7 @@ export function classifyProjectError(
   ) {
     return {
       type: 'scope_missing',
-      message: `GitHub project access needs additional scopes. Run \`gh auth refresh --hostname ${selectedHost} -s project -s read:org -s repo\`.`,
+      message: projectAuthErrorMessage('scope_missing', selectedHost),
       host: selectedHost
     }
   }

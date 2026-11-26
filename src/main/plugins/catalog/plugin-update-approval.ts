@@ -4,13 +4,16 @@ import {
   type PluginUpdateAccessGrowth,
   type PluginVmRecipeIdentities
 } from '../../../shared/plugins/approval/plugin-update-access-growth'
-import { readPluginVmRecipeIdentities } from '../plugin-vm-recipe-identities'
-import { livePluginActivationState, type PluginPolicySource } from '../plugin-activation-policy'
+import { readPluginVmRecipeIdentities } from '../contributions/plugin-vm-recipe-identities'
+import {
+  livePluginActivationState,
+  type PluginPolicySource
+} from '../activation/plugin-activation-policy'
 import type {
   PluginMarketplaceInstallPreview,
   PluginMarketplaceInstallResult
 } from './plugin-marketplace-installer'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { enableIfDataPlugin } from './plugin-one-click-enable'
 
 /** The installed plugin an update would replace, when it is running under a user approval. */

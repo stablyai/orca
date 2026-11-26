@@ -47,9 +47,13 @@ export type RemoteDropdownCopy = {
   useForcePushToSync: string
   branchUpToDate: string
   rebaseFromNamedBase: (baseRef: string) => string
+  // Desktop label; mobile keeps "Rebase from".
+  rebaseOntoNamedBase?: (baseRef: string) => string
   rebaseFromBase: string
   rebaseChooseRemoteBase: string
   rebaseDirtyHint: string
+  // Desktop reason when Git would refuse (no rebase.autoStash).
+  rebaseCommitOrStashFirst?: string
   rebaseWithLatestFrom: (baseRef: string) => string
   fetch: string
   fetchTitle: string
@@ -64,6 +68,14 @@ export type RemoteDropdownCopy = {
   forcePushWithLease: (branchCommitsAhead: number | undefined, upstreamName?: string) => string
   manualForcePush: (ahead: number, behind: number, upstreamName?: string) => string
   unpublishedForcePush: (branchCommitsAhead: number | undefined) => string
+  statusUpToDate: string
+  statusSetsUpstream: string
+  statusNotPublished: string
+  statusNoBranch: string
+  statusMayFail: string
+  statusPublished: string
+  statusStashFirst: string
+  statusReplaces: (behind: number) => string
 }
 
 export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
@@ -105,9 +117,11 @@ export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
   useForcePushToSync: 'Use Force Push — remote only has older copies of local commits',
   branchUpToDate: 'Branch is up to date',
   rebaseFromNamedBase: (baseRef) => `Rebase from ${baseRef}`,
+  rebaseOntoNamedBase: (baseRef) => `Rebase onto ${baseRef}`,
   rebaseFromBase: 'Rebase from Base',
   rebaseChooseRemoteBase: 'Choose a remote base branch to rebase from',
   rebaseDirtyHint: 'Try rebasing; git may require committing or stashing local changes first',
+  rebaseCommitOrStashFirst: 'Commit or stash changes first',
   rebaseWithLatestFrom: (baseRef) => `Rebase current branch with latest commits from ${baseRef}`,
   fetch: 'Fetch',
   fetchTitle: 'Fetch from remote without merging',
@@ -121,5 +135,13 @@ export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
   syncCounts: describeSyncCounts,
   forcePushWithLease: formatForcePushTitle,
   manualForcePush: formatManualForcePushTitle,
-  unpublishedForcePush: formatUnpublishedForcePushTitle
+  unpublishedForcePush: formatUnpublishedForcePushTitle,
+  statusUpToDate: 'Up to date',
+  statusSetsUpstream: 'Sets upstream',
+  statusNotPublished: 'Not published',
+  statusNoBranch: 'No branch',
+  statusMayFail: 'May fail',
+  statusPublished: 'Published',
+  statusStashFirst: 'Stash first',
+  statusReplaces: (behind) => `Replaces ↓${behind}`
 }

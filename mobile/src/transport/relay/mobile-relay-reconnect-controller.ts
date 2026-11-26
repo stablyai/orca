@@ -1,13 +1,13 @@
-import {
-  isMobileRelayCloseCode,
-  mobileRelayRecoveryFor
-} from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
-import { RelayCredentialEligibility } from './relay-credential-eligibility'
+import {
+  isExplicitCredentialRejection,
+  RelayCredentialEligibility
+} from './relay-credential-eligibility'
 import type { RelayHostReachability } from './relay-host-reachability'
 import { RelayRecoveryEvidence, type RelayRecoveryReporter } from './relay-recovery-evidence'
 import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
@@ -33,6 +33,8 @@ export class RelayReconnectController {
   private activeRelayConnectedAt: number | null = null
   private nextAttemptAt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
+  // Due time of a gate reprobe tick (the only timer that runs under a gate); 0 when none is armed.
+  private timerDueAt = 0
   private activeSession: RetainableRelaySession | null = null
   private recoveryGate: RecoveryGate | null = null
   private gateReprobePending = false
@@ -177,7 +179,7 @@ export class RelayReconnectController {
       return
     }
     if (this.recoveryGate) {
-      // Mint a gated tick’s pass token or shouldDefer would double the intended cadence.
+      // Mint a gated tick’s pass token or deferral() would double the intended cadence.
       this.holdGate(true)
       return
     }
@@ -212,21 +214,23 @@ export class RelayReconnectController {
     return failure ?? null
   }
 
-  shouldDefer(): boolean {
+  // Null lets recovery dial now; otherwise the pending timer retries at remainingMs (diagnostics).
+  deferral(): { reason: RecoveryGate | 'cooldown'; remainingMs: number } | null {
     if (this.recoveryGate) {
       if (this.gateReprobePending) {
         // Why: the slow reprobe tick gets exactly one attempt through the gate.
         this.gateReprobePending = false
-        return false
+        return null
       }
       this.scheduleGateReprobe()
-      return true
+      const remainingMs = Math.max(0, this.timerDueAt - this.dependencies.now())
+      return { reason: this.recoveryGate, remainingMs }
     }
     if (this.dependencies.now() < this.nextAttemptAt) {
       this.scheduleRetry()
-      return true
+      return { reason: 'cooldown', remainingMs: this.nextAttemptAt - this.dependencies.now() }
     }
-    return false
+    return null
   }
 
   registerFailure(error: Error | null, scheduleRetry = true): void {
@@ -234,13 +238,12 @@ export class RelayReconnectController {
     if (!this.activeSession) {
       this.evidence.record(error)
     }
-    const recovery =
-      error instanceof RelayOuterError && isMobileRelayCloseCode(error.code)
-        ? mobileRelayRecoveryFor(error.code, 'phone-resume')
-        : null
+    const hostOffline =
+      error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
+    const credentialRejected = isExplicitCredentialRejection(error)
     if (
       this.recoveryGate === 'fresh-credential' ||
-      (this.recoveryGate === 'external-signal' && recovery?.kind !== 'disable-relay-credential')
+      (this.recoveryGate === 'external-signal' && !credentialRejected)
     ) {
       // Keep slow gated reprobes running only while active; foreground restores cadence.
       this.holdGate(scheduleRetry)
@@ -251,22 +254,21 @@ export class RelayReconnectController {
     // Why: only a stable authenticated Relay resets the failure streak.
     this.activeRelayConnectedAt = null
     // Director Retry-After paces overload; HTTP failures carry no relay close code.
-    const delay =
-      recovery?.kind === 'retry-after-host-offline'
-        ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
-        : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
+    const delay = hostOffline
+      ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
+      : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
       // E2EE rejection can be transient during credential commit; gate slow reprobes instead of waiting forever for a nudge.
       this.holdGate(scheduleRetry, 'external-signal')
       return
     }
-    if (recovery?.kind === 'disable-relay-credential') {
+    if (credentialRejected) {
       // Never retry rejected credentials fast; each slow attempt re-reads durable state.
       this.holdGate(scheduleRetry, 'fresh-credential')
       return
     }
-    if (recovery?.kind === 'retry-after-host-offline') {
+    if (hostOffline) {
       // A prior transport timer must not bypass the slower known-offline retry.
       this.clearTimer()
     }
@@ -300,6 +302,7 @@ export class RelayReconnectController {
   }
 
   private clearTimer(): void {
+    this.timerDueAt = 0
     if (this.timer) {
       this.dependencies.clearTimer(this.timer)
       this.timer = null
@@ -325,6 +328,7 @@ export class RelayReconnectController {
     if (this.timer) {
       return
     }
+    this.timerDueAt = this.dependencies.now() + delay
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
       // Advance cadence once per fired tick, not on repeated arm attempts.

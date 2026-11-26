@@ -3,7 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import React, { useState } from 'react'
 import { Link2 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {

@@ -1,3 +1,4 @@
+import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
@@ -38,8 +39,11 @@ import {
   type WslHostDeployments,
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
-import { isWslHostsServing } from '../../wsl-host-internal-gate'
 import { createSecureFileContentCache } from './runtime-environment-store-read-cache'
+import {
+  invalidateEnvironmentStoreObservation,
+  environmentStoreServesWsl
+} from './runtime-environment-store-observation'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
@@ -72,7 +76,7 @@ function persistedStoreFromRecords(
 function readWslHostDeploymentsForRegistry(
   readDeployments: () => WslHostDeployments
 ): WslHostDeployments {
-  const gateOpen = isWslHostsServing(process.env)
+  const gateOpen = environmentStoreServesWsl()
   try {
     const read = readDeployments()
     return gateOpen ? read : { deployments: read.deployments, unreadableEnvironmentIds: new Set() }
@@ -96,15 +100,23 @@ export function readEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
 ): MergedEnvironmentStore {
-  // Windows hits must re-verify ACLs anyway, which costs as much as the read it would skip (measured).
-  if (options.requireStoreFile || options.recoverBlankStore || process.platform === 'win32') {
-    return readEnvironmentStoreUncached(userDataPath, options)
+  return readEnvironmentStoreSelection(userDataPath, options, (store) => store)
+}
+
+/** Copy only the selected output while the owner retains its parsed store. */
+export function readEnvironmentStoreSelection<T>(
+  userDataPath: string,
+  options: EnvironmentStoreRecordsReadOptions,
+  select: (store: MergedEnvironmentStore) => T
+): T {
+  if (options.requireStoreFile || options.recoverBlankStore) {
+    return select(readEnvironmentStoreUncached(userDataPath, options))
   }
   const storePath = getEnvironmentStorePath(userDataPath)
   const sidecarPath = getRuntimeEnvironmentSidecarPath(userDataPath)
   const wslPath = getWslHostDeploymentStorePath(userDataPath)
   return mergedStoreCache.read(
-    `${userDataPath}\0${isWslHostsServing(process.env)}`,
+    `${userDataPath}\0${environmentStoreServesWsl()}`,
     userDataPath,
     [
       { path: storePath, maxBytes: MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES },
@@ -126,7 +138,8 @@ export function readEnvironmentStore(
             ? { deployments: [], unreadableEnvironmentIds: new Set() }
             : parseWslHostDeploymentsText(wslPath, wslText)
       }),
-    () => readEnvironmentStoreUncached(userDataPath, options)
+    () => readEnvironmentStoreUncached(userDataPath, options),
+    select
   )
 }
 
@@ -193,6 +206,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   const path = getEnvironmentStorePath(userDataPath)
   const environments = RuntimeEnvironmentStoreSchema.parse(store).environments
   // The new registry replaces a blank file in one atomic write, so no reader sees it emptied early.
+  invalidateEnvironmentStoreObservation(path)
   const onDisk = readEnvironmentStoreRecords(userDataPath, { recoverBlankStore: true })
   const readableIds = new Set(onDisk.environments.map((environment) => environment.id))
   const unreadableIds = new Set(onDisk.unreadable.map((record) => record.id))
@@ -223,12 +237,8 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
     backUpBlankEnvironmentStore(userDataPath)
   }
   // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
-  writeSecureFile(path, serialized, { durable: true })
-  environmentStoreWrites++
+  invalidateEnvironmentStoreObservation(path)
+  writeSecureFile(path, serialized, { durable: true, onPublished: noteEnvironmentStoreWrite })
 }
 
-let environmentStoreWrites = 0
-/** Registry writes this process made; what is derived from pairings is stale only after one. */
-export function environmentStoreWriteCount(): number {
-  return environmentStoreWrites
-}
+export { environmentStoreWriteCount } from './runtime-environment-store-write-generation'

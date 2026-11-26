@@ -1,20 +1,43 @@
+import { abortSignalReason } from '../../../../../shared/concurrency/abort-signal-reason'
 import {
   CLIPBOARD_IMAGE_MAX_PIXELS,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
   encodeClipboardImageWithinLimit,
   type ClipboardImageDimensions
-} from '../../../../../shared/clipboard-image'
+} from '../../../../../shared/clipboard/clipboard-image'
 
-export function blobToBase64(blob: Blob): Promise<string> {
+export function blobToBase64(blob: Blob, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortSignalReason(signal))
+      return
+    }
     const reader = new FileReader()
+    const finish = (complete: () => void) => {
+      signal?.removeEventListener('abort', onAbort)
+      reader.onload = reader.onerror = reader.onabort = null
+      complete()
+    }
+    const rejectAbort = () =>
+      finish(() =>
+        reject(
+          signal ? abortSignalReason(signal) : new DOMException('Image read aborted', 'AbortError')
+        )
+      )
+    const onAbort = () => {
+      reader.abort()
+      rejectAbort()
+    }
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : ''
       const commaIndex = result.indexOf(',')
-      resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1))
+      finish(() => resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1)))
     }
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read clipboard image'))
+    reader.onerror = () =>
+      finish(() => reject(reader.error ?? new Error('Failed to read clipboard image')))
+    reader.onabort = rejectAbort
+    signal?.addEventListener('abort', onAbort, { once: true })
     reader.readAsDataURL(blob)
   })
 }

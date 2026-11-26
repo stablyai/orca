@@ -1,4 +1,4 @@
-import type { SkillInstallResult } from '../../../../../shared/skill-install-contract'
+import type { SkillInstallResult } from '../../../../../shared/skills/installation/skill-install-contract'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

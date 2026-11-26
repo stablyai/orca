@@ -13,12 +13,12 @@ import {
   loadHostSidebarWidth,
   saveHostSidebarWidth
 } from '../../src/storage/preferences'
-import { HostProtocolGate } from '../../src/components/HostProtocolGate'
+import { HostProtocolGate } from '../../src/components/host-connection/HostProtocolGate'
 import { HostScreen } from '../../src/host-screen/HostScreen'
 import { HostStack } from '../../src/navigation/host-stack'
 import { HostSidebarRevealContext } from '../../src/layout/host-sidebar-reveal'
-import { HostAreaServingContext } from '../../src/mobile-web-shell/host-area-serving'
-import { usePageOwnsHostArea } from '../../src/mobile-web-shell/page-owns-host-area'
+import { HostAreaServingContext } from '../../src/mobile-web-shell/host-gates/host-area-serving'
+import { usePageOwnsHostArea } from '../../src/mobile-web-shell/routing/page-owns-host-area'
 import { isOverlayPageRoute } from '../../src/new-workspace/overlay-page-route'
 import { MobileDictationHostProvider } from '../../src/dictation/mobile-dictation-host'
 import { MobileDictationPillLayer } from '../../src/dictation/MobileDictationPill'

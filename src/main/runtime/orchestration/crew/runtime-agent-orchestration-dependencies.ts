@@ -1,15 +1,20 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { captureOrchestrationTerminalCandidates } from './orchestration-terminal-candidates'
 import {
   mintAgentStatusFleetEvidence,
   type ObservedAgentStatusPaneIdentity
-} from '../../../ipc/agent-status-ipc-boundary'
+} from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 import { readAgentOrchestrationProjectionRecords } from '../addressing/orchestration-fleet-agent-status-snapshot'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithRuntimeId {
+  abstract retrySleptMailboxWakes(): void
+  protected abstract requestSleptMailboxWake(
+    mailbox: string,
+    reservedTypes?: ReadonlySet<string>
+  ): void
   abstract getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined
   abstract getAgentStatusOrchestrationContextForPaneKey(
     paneKey: string

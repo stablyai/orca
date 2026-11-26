@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'

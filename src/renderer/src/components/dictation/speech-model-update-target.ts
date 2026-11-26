@@ -2,7 +2,7 @@ import type {
   SpeechModelManifest,
   SpeechModelState,
   VoiceSettings
-} from '../../../../shared/speech-types'
+} from '../../../../shared/speech/speech-types'
 
 export type SpeechModelUpdateTarget = {
   /** The model to download: the selection itself. */

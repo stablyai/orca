@@ -1,6 +1,6 @@
 /** End messages with : <code> so owner conflicts survive Electron IPC wrapping and old runtime_error flattening. hasRuntimeRpcErrorCode reads the token; strip it before display. */
 
-import { hasRuntimeRpcErrorCode } from '../../runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../remote-runtime/rpc/runtime-rpc-error-code'
 import { AUTOMATION_ORPHAN_ISSUES, type AutomationCapturedHostIssue } from './automation-list-scope'
 import { AUTOMATION_RUN_FAILURE_COPY } from '../history/automation-run-failure-copy'
 

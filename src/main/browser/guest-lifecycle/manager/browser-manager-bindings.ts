@@ -1,3 +1,4 @@
+import { isTrustedBrowserRenderer } from '../../../ipc/browser/browser-renderer-trust'
 import { resolveRendererWebContents } from '../browser-guest-renderer-target'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { setupGuestContextMenu } from '../input/browser-guest-context-menu'
@@ -53,6 +54,7 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
         guest,
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+        isLocalRenderer: isTrustedBrowserRenderer,
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
         isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
         getKeybindings: () => this.settingsResolver?.().keybindings,

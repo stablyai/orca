@@ -5,10 +5,10 @@ import type {
   StructuredChatStartTelemetryEvent,
   StructuredChatPromptTelemetryEvent,
   StructuredChatTelemetryEvent
-} from '../../shared/structured-chat-dispatch-telemetry'
-import { agentKindSchema } from '../../shared/telemetry-property-schemas'
+} from '../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
+import { agentKindSchema } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import { isTelemetryInitialized, track } from './client'
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 
 type TelemetryListener = (event: StructuredChatTelemetryEvent, callerKey: string) => void
 const remoteListeners = new Set<TelemetryListener>()

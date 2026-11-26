@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, statSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from '../system-ssh-args'
 import { findSystemSsh } from '../system-ssh-binary'
 import {

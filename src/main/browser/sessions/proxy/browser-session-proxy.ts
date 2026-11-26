@@ -1,10 +1,10 @@
 import { session, type Session } from 'electron'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   applyProxySettingsToSession,
   awaitProxySessionApplication
 } from '../../../network/proxy-settings'
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import {
   readNetworkProxySettings,
   setNetworkProxySettingsSource

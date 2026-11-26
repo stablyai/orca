@@ -1,5 +1,8 @@
-import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor } from 'monaco-editor'
+// Why: a value import of 'monaco-editor' here would evaluate Monaco ahead of its NLS pack
+// (see monaco-nls-import-order.test.ts); these two modules carry no localized labels.
+import { Range } from 'monaco-editor/esm/vs/editor/common/core/range.js'
+import { MouseTargetType } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js'
 import { getDragAutoScrollStepPx, REFERENCE_FRAME_MS } from './diff-comment-drag-auto-scroll'
 import {
   areLineRangesEqual,
@@ -7,6 +10,7 @@ import {
   orderLineRange,
   type DiffCommentLineRange
 } from './diff-comment-line-range'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 // Capture pointerdown before Monaco’s bubble handler on the same view node so gutter selection cannot compete with the drag.
 
@@ -43,7 +47,7 @@ export type DiffCommentRangeDragHandle = {
 
 // Claim line numbers only: decoration presses toggle folds. The external add button resolves separately.
 const GUTTER_PRESS_TARGET_TYPES: ReadonlySet<monacoEditor.MouseTargetType> = new Set([
-  monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+  MouseTargetType.GUTTER_LINE_NUMBERS
 ])
 
 // Far enough into the text column to clear the gutter, close enough to stay on every line.
@@ -93,7 +97,7 @@ export function installDiffCommentRangeDrag({
     }
     decorations.set([
       {
-        range: new monaco.Range(range.startLine, 1, range.endLine, 1),
+        range: new Range(range.startLine, 1, range.endLine, 1),
         options: {
           isWholeLine: true,
           className: 'orca-diff-comment-range-highlight',
@@ -283,7 +287,8 @@ export function installDiffCommentRangeDrag({
     document.addEventListener('pointerup', handlePointerUp)
     document.addEventListener('pointercancel', handlePointerCancel)
     document.addEventListener('lostpointercapture', handlePointerCancel)
-    document.addEventListener('keydown', handleKeyDown, true)
+    // Why: first app owner, so page Esc owners (Tasks detail) see defaultPrevented and stay put.
+    addAppKeyListener('keydown', handleKeyDown, { first: true })
   }
 
   function detachDragListeners(): void {
@@ -291,7 +296,7 @@ export function installDiffCommentRangeDrag({
     document.removeEventListener('pointerup', handlePointerUp)
     document.removeEventListener('pointercancel', handlePointerCancel)
     document.removeEventListener('lostpointercapture', handlePointerCancel)
-    document.removeEventListener('keydown', handleKeyDown, true)
+    removeAppKeyListener('keydown', handleKeyDown)
   }
 
   editorDomNode.addEventListener('pointerdown', handlePointerDown, true)

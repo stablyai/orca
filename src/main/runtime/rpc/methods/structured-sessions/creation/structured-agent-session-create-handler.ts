@@ -1,9 +1,9 @@
-import type { StructuredSessionSurface } from '../../../../agent-session/structured-agent-session-close'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { agentSessionFingerprintConflict } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
+import { agentSessionFingerprintConflict } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import type { RpcContext } from '../../../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
@@ -17,14 +17,14 @@ import type {
   AttachParams,
   CreateSupportParams,
   CreateParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import {
   commitStructuredAgentSessionCreate,
   prepareStructuredAgentSessionCreateForWorktree,
   structuredAgentSessionCreateIntentFingerprint
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { projectReceiptDeviceAttach } from '../subscriptions/structured-agent-session-receipt-devices'
 import {
   structuredAgentSessionClosedBeforeCreate,
@@ -128,27 +128,31 @@ async function resolveAndCommitStructuredAgentSessionCreate(
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
-  // Nothing is created yet, so a close that came first refuses the create outright.
-  if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
-  ) {
-    return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+  try {
+    // Nothing is created yet, so a close that came first refuses the create outright.
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
+    ) {
+      return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+    }
+    return projectReceiptDeviceAttach(
+      await commitStructuredAgentSessionCreate({
+        runtime: ctx.runtime,
+        caller: callerFor(ctx),
+        prepared,
+        activate: true,
+        placedByWindow: ctx.caller?.kind === 'desktop',
+        ...(capture ? { capture } : {}),
+        ...('tabPlacement' in params && params.tabPlacement
+          ? { tabPlacement: params.tabPlacement }
+          : {})
+      }),
+      ctx
+    )
+  } finally {
+    await prepared.attachParams.fork?.prepared.close()
   }
-  return projectReceiptDeviceAttach(
-    await commitStructuredAgentSessionCreate({
-      runtime: ctx.runtime,
-      caller: callerFor(ctx),
-      prepared,
-      activate: true,
-      placedByWindow: ctx.caller?.kind === 'desktop',
-      ...(capture ? { capture } : {}),
-      ...('tabPlacement' in params && params.tabPlacement
-        ? { tabPlacement: params.tabPlacement }
-        : {})
-    }),
-    ctx
-  )
 }
 
 export async function handleStructuredAgentSessionCreateSupport(
@@ -156,17 +160,23 @@ export async function handleStructuredAgentSessionCreateSupport(
   ctx: RpcContext
 ) {
   requireStructuredCreateSupportAdmission(ctx, params.agent)
-  const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
-    params.worktree,
-    params.agent
-  )
+  // The installed release stays host-side: the reply keeps its released shape.
+  const { installation: _installation, ...support } =
+    await ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
   if (support.supported && params.resumeFrom) {
-    // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
-    await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
-      params.agent,
-      params.resumeFrom.providerSessionId,
-      params.resumeFrom.closingPaneKeys
-    )
+    // Create refuses the same writer and folder; asked here, the client refuses before it closes or opens anything.
+    await Promise.all([
+      ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+        params.agent,
+        params.resumeFrom.providerSessionId,
+        params.resumeFrom.closingPaneKeys
+      ),
+      ctx.runtime.assertStructuredAdoptionFolder(
+        params.worktree,
+        params.agent,
+        params.resumeFrom.providerSessionId
+      )
+    ])
   }
   // Optional: older clients ignore it, and a client seeds its picker with what create will use.
   const seedOptions = support.supported

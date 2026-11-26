@@ -1,4 +1,4 @@
-import { voiceModelUnloadDelayMs } from '../../shared/voice-model-unload'
+import { voiceModelUnloadDelayMs } from '../../shared/speech/models/voice-model-unload'
 import type { ModelManager } from './model-manager'
 import type { OpenAiTranscriptionSession } from './openai-transcription-client'
 import type { SttEventSink } from './stt-service'

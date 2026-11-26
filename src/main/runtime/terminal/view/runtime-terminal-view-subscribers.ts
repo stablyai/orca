@@ -13,6 +13,9 @@ export class RuntimeTerminalViewSubscribers {
   private readonly silenceableRemoteViews = new Map<string, Set<SilenceableRemoteView>>()
   private readonly rawCounts = new Map<string, number>()
   private readonly paneReportingRemoteViews = new Map<string, Set<PaneReportingRemoteView>>()
+  /** Remote views whose client would show a dead pane if the host replaced its terminal; a token
+   *  per view, so a release from before `clearSubscribers` cannot drop a later view. */
+  private readonly respawnBlindViews = new Map<string, Set<symbol>>()
 
   constructor(private readonly deps: RuntimeTerminalViewSubscriberDependencies) {}
 
@@ -21,10 +24,22 @@ export class RuntimeTerminalViewSubscribers {
     this.silenceableRemoteViews.delete(ptyId)
     this.rawCounts.delete(ptyId)
     this.paneReportingRemoteViews.delete(ptyId)
+    this.respawnBlindViews.delete(ptyId)
   }
 
-  registerRemote(ptyId: string, isSilent?: () => boolean, isHidden?: () => boolean): () => void {
+  registerRemote(
+    ptyId: string,
+    isSilent?: () => boolean,
+    isHidden?: () => boolean,
+    followsHostRespawn = false
+  ): () => void {
     this.remoteCounts.set(ptyId, (this.remoteCounts.get(ptyId) ?? 0) + 1)
+    const blindView = followsHostRespawn ? null : Symbol(ptyId)
+    if (blindView) {
+      const views = this.respawnBlindViews.get(ptyId) ?? new Set()
+      views.add(blindView)
+      this.respawnBlindViews.set(ptyId, views)
+    }
     const view = isSilent ? { isSilent } : null
     if (view) {
       const views = this.silenceableRemoteViews.get(ptyId) ?? new Set()
@@ -41,6 +56,10 @@ export class RuntimeTerminalViewSubscribers {
     this.deps.notifyPresenceChanged(ptyId)
     return this.releaseOnce(() => {
       this.decrement(this.remoteCounts, ptyId)
+      const blindViews = this.respawnBlindViews.get(ptyId)
+      if (blindView && blindViews?.delete(blindView) && blindViews.size === 0) {
+        this.respawnBlindViews.delete(ptyId)
+      }
       const views = this.silenceableRemoteViews.get(ptyId)
       if (view && views?.delete(view) && views.size === 0) {
         this.silenceableRemoteViews.delete(ptyId)
@@ -51,6 +70,11 @@ export class RuntimeTerminalViewSubscribers {
       }
       this.deps.notifyPresenceChanged(ptyId)
     })
+  }
+
+  /** No remote view of this PTY would be left on a dead pane if the host replaced its terminal. */
+  everyRemoteViewFollowsHostRespawn(ptyId: string): boolean {
+    return !this.respawnBlindViews.has(ptyId)
   }
 
   /** A remote client is displaying this PTY's pane right now. */

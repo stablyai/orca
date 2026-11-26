@@ -1,24 +1,27 @@
 import {
+  pendingSelectionHandle,
   pendingSelectionTabId,
   withoutPendingHandle,
   withoutPendingTabId
 } from './pending-session-selection'
 import { sessionTabClose } from './mobile-session-tab-write-operations'
+import { createClosingTerminalTab } from './closing-terminal-tab-handles'
 import {
   sessionTerminalClose,
   sessionTerminalRename
 } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileSessionTab } from './mobile-session-tabs'
-import type { Terminal } from '../../terminal/session/mobile-terminal-model'
+import type { TerminalRecord as Terminal } from '../../terminal/session/inventory/mobile-terminal-records'
 import type { MobileSessionContentCreateActionsModel } from '../use-mobile-session-content-create-actions'
-import { mobileNativeChatScopeKey } from '../native-chat/mobile-native-chat-scope-key'
-import { closeMobileNativeChatTabDraft } from '../native-chat/composer/mobile-native-chat-draft-store'
+import { mobileNativeChatScopeKey } from '../native-chat/conversation/mobile-native-chat-scope-key'
+import { closeMobileNativeChatTabDraft } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
 import {
   defineHostMutation,
   useHostMutation,
   type HostMutationPhase
 } from '../../query/host-mutation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { translate } from '../../i18n/mobile-i18n'
 
 async function sendTerminalRename(
   client: RpcClient,
@@ -50,6 +53,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     sessionTabsRef,
     forgetLastSessionTab,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
+    terminalRowHandlesRef,
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
@@ -64,9 +69,22 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     scheduleDelayedAction,
     unsubscribeTerminal,
     subscribeToTerminal,
-    fetchTerminals
+    fetchTerminals,
+    showToast
   } = scope
   const terminalRenameWrite = useHostMutation(terminalRename, { hostId, client })
+  // A refused or lost close keeps the tab, so say so rather than leave the tap unanswered.
+  function showCloseFailed(code?: string) {
+    showToast(
+      code === 'runtime_unavailable'
+        ? translate(
+            'session.useCloseActions.closeFailedDesktopNotReady',
+            "Couldn't close the tab. Orca on your computer is still loading. Try again in a moment."
+          )
+        : translate('session.useCloseActions.closeFailed', "Couldn't close the tab. Try again."),
+      2400
+    )
+  }
   // Throws on refusal so the sheet keeps the typed name and offers Retry.
   async function handleRenameTerminal(
     value: string,
@@ -96,10 +114,11 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     }
 
     try {
-      const response = sessionTerminalClose.interpret(
-        await sessionTerminalClose.request(client, { terminal: target.handle })
-      )
-      if (response.accepted) {
+      const reply = await sessionTerminalClose.request(client, { terminal: target.handle })
+      const response = sessionTerminalClose.interpret(reply)
+      if (!response.accepted) {
+        showCloseFailed(reply.ok ? undefined : reply.error.code)
+      } else {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
@@ -121,24 +140,32 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           }
         }
       }
-    } catch {}
+    } catch {
+      showCloseFailed()
+    }
   }
 
   async function handleCloseSessionTab(tab: MobileSessionTab) {
     if (!client) {
       return
     }
+    const closingTerminal =
+      tab.type === 'terminal' ? createClosingTerminalTab(tab, terminalRowHandlesRef.current) : null
+    if (closingTerminal) {
+      closingTerminalTabsRef.current.add(closingTerminal)
+    }
     try {
-      const response = sessionTabClose.interpret(
-        await sessionTabClose.request(client, {
-          worktree: `id:${worktreeId}`,
-          tabId: tab.id,
-          // Why: a tapped tab close is explicit user intent; older hosts strip
-          // the unknown field and keep their legacy behavior.
-          reason: 'user'
-        })
-      )
-      if (response.accepted && !response.value.refused) {
+      const reply = await sessionTabClose.request(client, {
+        worktree: `id:${worktreeId}`,
+        tabId: tab.id,
+        // Why: a tapped tab close is explicit user intent; older hosts strip
+        // the unknown field and keep their legacy behavior.
+        reason: 'user'
+      })
+      const response = sessionTabClose.interpret(reply)
+      if (!response.accepted || response.value.refused) {
+        showCloseFailed(reply.ok ? undefined : reply.error.code)
+      } else {
         const chatScope = mobileNativeChatScopeKey(hostId, worktreeId, tab.id)
         if (chatScope && response.value.retirementConfirmed) {
           closeMobileNativeChatTabDraft(chatScope)
@@ -168,10 +195,12 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
-        if (tab.type === 'terminal' && typeof tab.terminal === 'string') {
-          const terminalHandle = tab.terminal
-          unsubscribeTerminal(terminalHandle)
-          terminalRefs.current.delete(terminalHandle)
+        for (const handle of closingTerminal?.handles ?? []) {
+          unsubscribeTerminal(handle)
+          terminalRefs.current.delete(handle)
+          if (pendingSelectionHandle(pendingSelectionRef.current) === handle) {
+            pendingSelectionRef.current = withoutPendingHandle(pendingSelectionRef.current)
+          }
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
@@ -187,7 +216,15 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           pendingSelectionRef.current = withoutPendingTabId(pendingSelectionRef.current)
         }
         // Read active identity live: bulk close can reactivate its anchor while an older close closure still names another tab.
-        if (activeSessionTabIdRef.current === tab.id) {
+        // An empty snapshot published before this reply can leave the ID null or set to the closed terminal's handle.
+        const activeTabId = activeSessionTabIdRef.current
+        const activeHandle = activeHandleRef.current
+        if (
+          activeTabId === tab.id ||
+          ((activeTabId === null || activeTabId === activeHandle) &&
+            activeHandle !== null &&
+            closingTerminal?.handles.has(activeHandle))
+        ) {
           activeSessionTabTypeRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
@@ -195,7 +232,13 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           setActiveHandle(null)
         }
       }
-    } catch {}
+    } catch {
+      showCloseFailed()
+    } finally {
+      if (closingTerminal) {
+        closingTerminalTabsRef.current.delete(closingTerminal)
+      }
+    }
   }
   return {
     handleRenameTerminal,

@@ -5,7 +5,7 @@ import { readWorkerTerminalHostScope } from '../../../shared/orchestration/worke
 import 'zod'
 import '../../../shared/agent-session/view/structured-agent-session-projection'
 import '../orchestration/addressing/session-lineage/structured-session-lineage'
-import '../../../shared/execution-host'
+import '../../../shared/execution-host/execution-host'
 import type { AgentSenderPane } from './agent-sender-live-panes'
 
 export function agentSenderExecutionKey(

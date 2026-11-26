@@ -5,7 +5,7 @@ import type {
   DaemonProcessGoneReason,
   DaemonProcessPresentReason,
   DaemonProcessUnknownReason
-} from '../../../../shared/daemon-audit-eligibility'
+} from '../../../../shared/terminal/daemon/daemon-audit-eligibility'
 
 export const WINDOWS_CREATION_TIME_TOLERANCE_MS = 10_000
 

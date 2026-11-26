@@ -33,6 +33,64 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:120364513935:android:7653382286f468dd664efa",
+        "android_client_info": {
+          "package_name": "com.stably.orca.mobile.four"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "120364513935-evfa8502bp5r9hn7afhd9i03oibs8223.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmT_w0OUQSiVfxblx-F0qlRvGkBBkTNQU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "120364513935-evfa8502bp5r9hn7afhd9i03oibs8223.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:120364513935:android:78bd38b4b38892c7664efa",
+        "android_client_info": {
+          "package_name": "dev.orca.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "120364513935-evfa8502bp5r9hn7afhd9i03oibs8223.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmT_w0OUQSiVfxblx-F0qlRvGkBBkTNQU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "120364513935-evfa8502bp5r9hn7afhd9i03oibs8223.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

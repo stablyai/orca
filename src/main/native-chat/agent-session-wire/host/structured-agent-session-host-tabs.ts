@@ -3,6 +3,7 @@ import { seedSavedStructuredSessionTabs } from '../observations/structured-agent
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+import type { AgentSessionTabVisibilityOptions } from '../../../runtime/agent-session/records/agent-session-tab-table'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Retire durable tabs/restart offers together; advisory recovery bookkeeping must never block chat close. */
@@ -15,8 +16,7 @@ export async function setStructuredAgentSessionTabVisibility(
           sessionId: string,
           visible: boolean,
           tabId?: string,
-          check?: () => void,
-          capture?: (tabId: string | null) => void
+          options?: AgentSessionTabVisibilityOptions
         ) => Promise<void>
       }
       onSessionTabHidden?: (sessionId: string, tabId?: string) => void
@@ -26,11 +26,10 @@ export async function setStructuredAgentSessionTabVisibility(
   sessionId: string,
   visible: boolean,
   tabId?: string,
-  check?: () => void,
-  capture?: (tabId: string | null) => void
+  options?: AgentSessionTabVisibilityOptions
 ): Promise<void> {
-  await (check || capture
-    ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, check, capture)
+  await (options
+    ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, options)
     : host.deps.store.setSessionTabVisibility(sessionId, visible, tabId))
   if (!visible) {
     void host.restartResume.dismiss([sessionId]).catch(() => {
@@ -117,21 +116,22 @@ export function createStructuredAgentSessionTabSurface(
       options?: {
         deferHiddenNotice?: boolean
         check?: () => void
+        writerFence?: Int32Array
         capture?: (tabId: string | null) => void
+        /** Hide the tab but keep the chat open: it works on with no tab. */
+        background?: boolean
       }
     ): Promise<void> => {
       let actualId: string | null = null
-      await setStructuredAgentSessionTabVisibility(
-        host,
-        sessionId,
-        visible,
-        tabId,
-        options?.check,
-        (id) => {
+      await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId, {
+        check: options?.check,
+        writerFence: options?.writerFence,
+        capture: (id) => {
           actualId = id
           options?.capture?.(id)
-        }
-      )
+        },
+        background: options?.background
+      })
       if (!visible) {
         if (!options?.deferHiddenNotice) {
           notifyTabHidden(host, sessionId, actualId ?? undefined)

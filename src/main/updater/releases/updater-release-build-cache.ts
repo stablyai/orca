@@ -1,4 +1,4 @@
-import type { ReleaseBuild, ReleaseChannel } from '../../../shared/release-channel'
+import type { ReleaseBuild, ReleaseChannel } from '../../../shared/updater/release-channel'
 
 const DEFAULT_TTL_MS = 5 * 60_000
 

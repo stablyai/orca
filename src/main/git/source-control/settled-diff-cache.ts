@@ -1,11 +1,11 @@
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitLineStats } from '../../../shared/git/status/git-uncommitted-line-stats'
 import {
   canProveUnchangedByStamp,
   isDiffStampClockSkewed,
   type WorktreeDiffStamp
-} from './worktree-diff-stamp'
+} from './input-stamps/worktree-diff-stamp'
 
 /** Reuse diffs only with matching input stamps; decline unknown, recent, failed or mutation-overlapped reads. */
 
@@ -21,9 +21,9 @@ export type SettledDiffCacheStats = {
   /** No stamp could be taken, so the read could never be cached. */
   unprovable: number
   stores: number
-  /** Store declined because a write was too recent for its mtime to be conclusive. */
+  /** Store declined because a write was too recent for its timestamp (mtime or ctime) to be conclusive. */
   racyWrites: number
-  /** Future mtimes also increment racyWrites; count them separately to expose clock skew. */
+  /** Future timestamps (mtime or ctime) also increment racyWrites; count them separately to expose clock skew. */
   clockSkewedWrites: number
   /** Store declined because a mutation invalidated the cache while the read ran. */
   invalidatedDuringRead: number

@@ -10,7 +10,7 @@ import {
   type ActiveRateLimitProvider,
   type ActiveWindowRefreshPlan
 } from './service-types'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue {
   setPollingInterval(ms: number): void {
@@ -73,7 +73,6 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
       claude: this.state.claude,
       codex: this.state.codex,
-      gemini: this.state.gemini,
       'opencode-go': this.state.opencodeGo,
       kimi: this.state.kimi,
       minimax: this.state.minimax,
@@ -87,10 +86,31 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     const museEnabled = this.museUsageEnabledResolver?.() ?? true
     return Object.entries(byProvider)
       .filter(([provider]) => provider !== 'muse' || museEnabled)
+      .filter(([provider]) => provider !== 'claude' || this.isClaudeOAuthUsageEnabled())
       .map(([provider, limits]) => ({
         provider: provider as ActiveRateLimitProvider,
         limits
       }))
+  }
+
+  /** When a provider's reading was last checked; Claude counts its last completed check. */
+  protected providerCheckedAt(
+    provider: ActiveRateLimitProvider,
+    limits: ProviderRateLimits
+  ): number | null {
+    return provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
+  }
+
+  /** Whether a failing provider's backoff allows another automatic read now. */
+  protected failureRetryDue(provider: ActiveRateLimitProvider, now: number): boolean {
+    const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+      ? Math.min(
+          ACTIVE_FAILURE_REFETCH_MS *
+            2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
+          MAX_ACTIVE_FAILURE_REFETCH_MS
+        )
+      : MIN_REFETCH_MS
+    return now - this.lastActiveFailureRetryAtByProvider[provider] >= throttleMs
   }
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
@@ -103,7 +123,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         if (this.shouldSkipAutomatedFetch(provider, limits)) {
           continue
         }
-        const checkedAt = provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
+        const checkedAt = this.providerCheckedAt(provider, limits)
         if (checkedAt === null || now - checkedAt >= MIN_REFETCH_MS) {
           return { kind: 'full' }
         }
@@ -115,15 +135,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         if (this.isRetryAfterActive(limits)) {
           continue
         }
-        const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
-        const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
-          ? Math.min(
-              ACTIVE_FAILURE_REFETCH_MS *
-                2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
-              MAX_ACTIVE_FAILURE_REFETCH_MS
-            )
-          : MIN_REFETCH_MS
-        if (now - lastRetryAt >= throttleMs) {
+        if (this.failureRetryDue(provider, now)) {
           retryableFailures.push(provider)
         }
       }

@@ -7,7 +7,7 @@ import { restorePersistedStructuredLaunchState } from './structured-agent-sessio
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 /** A tab proves the chat exists; its journal must also confirm the immutable opening message. */
 export function confirmStructuredLaunchFirstMessagePublication(

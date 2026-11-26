@@ -1,4 +1,4 @@
-import { createGitOperationExecutor } from '../../command-runner/git-operation-executor'
+import { createGitOperationExecutor } from '../../command-runner/admission/git-operation-executor'
 
 export const worktreeCreateGit = createGitOperationExecutor('interactive')
 

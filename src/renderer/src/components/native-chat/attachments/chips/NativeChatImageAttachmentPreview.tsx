@@ -4,17 +4,17 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
-import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
+import { PanZoomImageDialog } from '@/components/editor/document-images/PanZoomImageDialog'
 import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
 } from '../../media/images/native-chat-image-copy'
-import { isImageDropPath } from '../../../../../../shared/image-path-paste'
-import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
+import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
+import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/attachments/native-chat-image-label'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 import { isAgentSessionAttachmentStorePath } from '../../../../../../shared/agent-session/agent-session-attachments'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { nativeChatImageNumberLabel } from '../../composer/editor/NativeChatImageReferencePill'
 
@@ -24,7 +24,8 @@ type Props = {
   number?: number
   /** The paired server the chat runs on; a file stored there is read back through it. */
   hostEnvironmentId?: string
-  onRemove: (id: string) => void
+  /** Absent where the image only shows, as an answer held to send later does. */
+  onRemove?: (id: string) => void
 }
 
 export function NativeChatImageAttachmentPreview({
@@ -101,7 +102,7 @@ function NativeChatUnavailableImageChip({
   id: string
   name: string
   number?: number
-  onRemove: (id: string) => void
+  onRemove?: (id: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const pasted = isNativeChatPastedImagePath(name)
@@ -134,7 +135,7 @@ function NativeChatUnavailableImageChip({
         </div>
         <ImageNumberBadge number={number} />
       </div>
-      <RemoveAttachmentButton onRemove={() => onRemove(id)} />
+      {onRemove ? <RemoveAttachmentButton onRemove={() => onRemove(id)} /> : null}
     </div>
   )
 }
@@ -206,7 +207,8 @@ function NativeChatImageThumbnail({
     : t('components.native-chat.composer.imageSaving', 'Saving pasted image…')
   const label = isPending ? (attachment.pendingName ?? pendingLabel) : filename
   // A dropped document uploads as a chip too, and becomes an `@` reference once stored.
-  const isFile = attachment.pendingName !== undefined && !isImageDropPath(attachment.pendingName)
+  const isFile =
+    attachment.pendingName !== undefined && !isAgentInlineImagePath(attachment.pendingName)
   const KindIcon = isFile ? FileText : ImageIcon
   // The thumbnail may be the downscaled clipboard preview; copy only the file.
   const copySrc = copyableNativeChatImageSrc(localSrc)
@@ -254,7 +256,7 @@ function NativeChatImageThumbnail({
           </span>
         ) : null}
         <ImageNumberBadge number={number} />
-        <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
+        {onRemove ? <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} /> : null}
       </div>
       <PanZoomImageDialog
         open={isOpen}

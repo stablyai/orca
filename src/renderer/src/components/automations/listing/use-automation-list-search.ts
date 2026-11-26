@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { resolveAutomationListSearchQuery } from './automation-list-search-query'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {

@@ -1,0 +1,138 @@
+{
+  "about": "Trigger deliveries the cloud and the desktop must read alike. A case overrides the base delivery's fields and its event's; null removes one.",
+  "base": {
+    "deliveryId": "trigger:abc",
+    "seq": 7,
+    "expiresAt": 1800000060000,
+    "conversation": { "source": "webhook", "externalId": "trigger:abc" },
+    "kind": "trigger",
+    "automationId": "auto-1",
+    "triggerId": "wh-wh_7Kx2pQ9mZbV4tL1r",
+    "botId": "bot-1",
+    "event": {
+      "key": "call_0123456789abcdefABCD",
+      "actorId": "webhook:wh_7Kx2pQ9mZbV4tL1r",
+      "occurredAt": 1800000000000,
+      "webhook": {
+        "callId": "call_0123456789abcdefABCD",
+        "epoch": 2,
+        "hostGen": 1
+      }
+    }
+  },
+  "cases": [
+    { "name": "a hook's call", "readable": true },
+    {
+      "name": "a sample call with a subject",
+      "event": {
+        "subject": "4512",
+        "webhook": {
+          "callId": "call_0123456789abcdefABCD",
+          "epoch": 2,
+          "hostGen": 1,
+          "sample": true
+        }
+      },
+      "readable": true
+    },
+    {
+      "name": "a key other than the call id",
+      "event": { "key": "call_99999999999999999999" },
+      "readable": false
+    },
+    {
+      "name": "a malformed call id",
+      "event": {
+        "key": "call_1",
+        "webhook": { "callId": "call_1", "epoch": 2, "hostGen": 1 }
+      },
+      "readable": false
+    },
+    {
+      "name": "a person as actor",
+      "event": { "actorId": "U0MEMBER" },
+      "readable": false
+    },
+    {
+      "name": "another hook as actor",
+      "event": { "actorId": "webhook:wh_0000000000000000" },
+      "readable": false
+    },
+    {
+      "name": "a rule id naming no hook",
+      "delivery": { "triggerId": "t1" },
+      "readable": false
+    },
+    {
+      "name": "the owner mark",
+      "event": { "fromOwner": true },
+      "readable": false
+    },
+    {
+      "name": "quoted text carrying the key",
+      "event": { "text": "orcawh_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk" },
+      "readable": false
+    },
+    {
+      "name": "a display name carrying the key",
+      "event": {
+        "actor": "orcawh_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+      },
+      "readable": false
+    },
+    {
+      "name": "a place carrying a signing secret",
+      "event": { "place": "whsec_c2VjcmV0" },
+      "readable": false
+    },
+    {
+      "name": "a URL carrying the key",
+      "event": {
+        "url": "https://example.test/hooks/wh_7Kx2pQ9mZbV4tL1r/orcawh_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+      },
+      "readable": false
+    },
+    {
+      "name": "a webhook conversation without call fields",
+      "event": { "webhook": null },
+      "readable": false
+    },
+    {
+      "name": "call fields in a Slack conversation",
+      "delivery": {
+        "conversation": { "source": "slack", "externalId": "trigger:abc" },
+        "triggerId": "t1"
+      },
+      "readable": false
+    },
+    {
+      "name": "a Slack event",
+      "delivery": {
+        "conversation": { "source": "slack", "externalId": "trigger:abc" },
+        "triggerId": "t1"
+      },
+      "event": {
+        "key": "T:C:1",
+        "actorId": "U0MEMBER",
+        "text": "hi",
+        "webhook": null
+      },
+      "readable": true
+    },
+    {
+      "name": "a Slack event naming a hook's rule",
+      "delivery": { "conversation": { "source": "slack", "externalId": "trigger:abc" } },
+      "event": { "key": "T:C:1", "actorId": "U0MEMBER", "fromOwner": true, "webhook": null },
+      "readable": false
+    },
+    {
+      "name": "a Slack event done by a hook",
+      "delivery": {
+        "conversation": { "source": "slack", "externalId": "trigger:abc" },
+        "triggerId": "t1"
+      },
+      "event": { "key": "T:C:1", "webhook": null },
+      "readable": false
+    }
+  ]
+}

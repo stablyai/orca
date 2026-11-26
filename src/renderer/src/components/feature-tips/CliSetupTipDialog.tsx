@@ -1,5 +1,5 @@
 import type { JSX, ReactNode } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

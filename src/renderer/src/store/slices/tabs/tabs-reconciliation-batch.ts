@@ -1,5 +1,9 @@
 import type { AppState } from '../../types'
-import { recordDraft, tabBucketDraft, type RecordDraft } from '../../keyed-record-transitions'
+import {
+  recordDraft,
+  tabBucketDraft,
+  type RecordDraft
+} from '../../record-transitions/keyed-record-transitions'
 
 type ReconciledRecords = Pick<
   AppState,

@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
+import { focusNativeChatPromptCard } from '../../prompts/use-native-chat-prompt-card-focus'
 import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
 import { scheduleNextFrame } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import { getOverlayFocusOwners } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import { registerNativeChatPane } from './native-chat-composer-mount'
 import {
+  type ComposerFocusText,
   getNativeChatComposerFocusRequestGeneration,
   registerNativeChatComposerReclaim
 } from './native-chat-composer-focus-intent'
@@ -56,6 +58,15 @@ export function useNativeChatComposerRevealFocus({
   const sourceOverlaysRef = useRef<readonly HTMLElement[]>([])
   const [reclaimCount, setReclaimCount] = useState(0)
 
+  useLayoutEffect(
+    () => () => {
+      claimedRef.current = false
+      explicitRef.current = false
+      sourceOverlaysRef.current = []
+    },
+    []
+  )
+
   useLayoutEffect(() => {
     mountedComposers.add(composerRef)
     return () => {
@@ -64,17 +75,37 @@ export function useNativeChatComposerRevealFocus({
   }, [composerRef])
 
   useLayoutEffect(() => {
-    if (!revealed || !composerReady) {
+    if (!revealed || (!composerReady && !surfaceReady)) {
       return
     }
     const reclaim = (
       onlyIfFocusUnclaimed = false,
-      sourceOverlays: readonly HTMLElement[] = []
+      sourceOverlays: readonly HTMLElement[] = [],
+      text?: ComposerFocusText
     ): void => {
+      if (text && 'append' in text) {
+        composerRef.current?.appendText(text.append, { glow: true })
+      } else if (text?.revealDraft) {
+        composerRef.current?.focus({ caretAtEnd: true, glow: true })
+      }
       if (getOverlayFocusOwners(rootRef.current ?? undefined).length > 0) {
         claimedRef.current = true
         explicitRef.current = false
         setReclaimCount((count) => count + 1)
+        return
+      }
+      if (!composerReady) {
+        const root = rootRef.current
+        const active = root?.ownerDocument.activeElement ?? null
+        if (
+          root &&
+          (!onlyIfFocusUnclaimed || active === root.ownerDocument.body) &&
+          !shouldPreserveEditableFocus(active)
+        ) {
+          if (!focusNativeChatPromptCard(root, null)) {
+            root.focus({ preventScroll: true })
+          }
+        }
         return
       }
       if (onlyIfFocusUnclaimed) {
@@ -103,7 +134,7 @@ export function useNativeChatComposerRevealFocus({
       setReclaimCount((count) => count + 1)
     }
     return registerNativeChatComposerReclaim(tabId, reclaim, rootRef.current)
-  }, [composerReady, composerRef, revealed, rootRef, tabId])
+  }, [composerReady, composerRef, revealed, rootRef, surfaceReady, tabId])
 
   useEffect(() => {
     if (!revealed || !composerReady) {

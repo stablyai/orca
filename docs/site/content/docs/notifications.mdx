@@ -29,3 +29,24 @@ Pick a custom desktop notification sound per category under [Settings → Notifi
 Supported formats: MP3, WAV, OGG, M4A, AAC, FLAC. One file applies to all delivered desktop notifications.
 
 When you use a custom sound, set its playback volume from the same settings pane.
+
+## Disable mobile push from a host
+
+Set `ORCA_MOBILE_PUSH_MODE` in the environment of each desktop or remote runtime
+that sends mobile push, then restart that host:
+
+- `full` (default): existing notification titles, bodies and navigation identifiers.
+- `disabled`: no alert or test sends and no new push registration from that host.
+  Existing registration deletion and queued cleanup still run. This does not
+  itself erase historical gateway/provider records or disable live in-app events.
+
+An unrecognized nonempty value disables push delivery. This is a host configuration,
+not a centrally enforced organization policy. Users who control the host environment
+can change it. It applies to that host's push gateway traffic, not local desktop
+notifications or direct/Relay application content. Every sending host needs the
+setting; older Orca versions do not implement it. OS notification permissions and
+lock-screen preview settings are separate controls.
+
+There is no generic-content mode: enabled push may include project/agent text and
+identifiers. Disabling phone lock-screen previews does not stop that content from
+reaching the push gateway and APNs/FCM.

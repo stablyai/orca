@@ -1,12 +1,12 @@
-import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { writeRuntimeMetadata } from './runtime-metadata'
 import type { RpcMessageContext } from '../transport'
 import type { PairingOffersRpcContext, RpcRequest, RpcResponse } from '../core'
-import { errorResponse } from '../errors'
+import { errorResponse } from '../responses/rpc-response'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
-import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../rpc-caller-scope'
-import { LOCAL_CLI_RPC_CALLER } from '../rpc-caller-identity'
+import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../callers/rpc-caller-scope'
+import { LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
 
 // Short calls that stop on disconnect without long-poll keepalives or admission slots.
 const DISCONNECT_FORWARDED_METHODS = new Set([
@@ -21,6 +21,9 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     rawMessage: string,
     context?: RpcMessageContext
   ): Promise<RpcResponse> {
+    if (this.idleStopFenced) {
+      return this.idleStopRefusal(rawMessage)
+    }
     // Oversized clients arrive as empty messages before transport closes them.
     if (!rawMessage) {
       return this.buildError('unknown', 'request_too_large', 'RPC request exceeds the maximum size')

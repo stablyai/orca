@@ -1,7 +1,7 @@
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { memo } from 'react'
 import { shallow } from 'zustand/shallow'
-import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type {
   AiVaultScope,
   AiVaultSession
@@ -28,7 +28,7 @@ import {
   canOpenAiVaultSessionLogInOrca,
   canUseLocalAiVaultSessionPathActions
 } from '../session-actions/ai-vault-session-path-actions'
-import { canContinueAiVaultSessionInNewSession } from '../session-actions/ai-vault-session-continuation'
+import { canContinueAiVaultSessionInNewSession } from '../../../../../../shared/ai-vault/resume/ai-vault-session-continuation'
 import { resolveAiVaultSessionRowChatActions } from '../session-actions/ai-vault-session-chat-action'
 import type { AiVaultResumeInChatEligibility } from '../session-actions/ai-vault-session-resume-in-chat'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
@@ -253,6 +253,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
                 }
               : undefined
           }
+          originalPaneTarget={originalPaneTarget}
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }

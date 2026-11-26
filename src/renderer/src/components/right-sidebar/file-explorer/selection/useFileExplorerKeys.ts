@@ -18,7 +18,7 @@ import {
   applyFileExplorerNavigation,
   type SelectionMode
 } from './file-explorer-keyboard-navigation'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'

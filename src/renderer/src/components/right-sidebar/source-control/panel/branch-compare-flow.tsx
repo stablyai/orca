@@ -1,7 +1,10 @@
 import type React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
+import { cn } from '@/lib/class-names'
 import { HeadIdentity } from './head-identity'
+
+export type BaseLineTone = 'warning'
 
 function BaseRefButton({
   baseRef,
@@ -39,6 +42,7 @@ function BaseLine({
   onChangeBaseRef,
   changeBaseTitle,
   showArrow,
+  tone,
   leading,
   trailing
 }: {
@@ -47,12 +51,18 @@ function BaseLine({
   onChangeBaseRef: () => void
   changeBaseTitle: string
   showArrow: boolean
+  tone?: BaseLineTone
   leading?: React.ReactNode
   trailing?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div
+      className={cn(
+        '@container flex min-w-0 items-center gap-1.5',
+        tone === 'warning' && '-mx-1 min-h-7 rounded-md bg-status-warning-background px-1 py-0.5'
+      )}
+    >
       {leading}
       {showArrow ? (
         <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
@@ -86,7 +96,9 @@ export function StackedCompareFlow({
   changeBaseTitle,
   leading,
   trailing,
-  headTrailing
+  headTrailing,
+  baseTone,
+  baseLineOverride
 }: {
   headDisplay: WorktreeGitIdentityDisplay | null
   headControl?: React.ReactNode
@@ -97,10 +109,17 @@ export function StackedCompareFlow({
   leading?: React.ReactNode
   trailing?: React.ReactNode
   headTrailing?: React.ReactNode
+  baseTone?: BaseLineTone
+  // Replaces the base line, e.g. with the paused-rebase strip.
+  baseLineOverride?: React.ReactNode
 }): React.JSX.Element {
   if (!headDisplay) {
+    if (baseLineOverride) {
+      return <>{baseLineOverride}</>
+    }
     return (
       <BaseLine
+        tone={baseTone}
         baseRef={baseRef}
         baseLabel={baseLabel}
         onChangeBaseRef={onChangeBaseRef}
@@ -129,15 +148,18 @@ export function StackedCompareFlow({
         {headTrailing}
       </div>
       {/* Why: spinner/actions sit on the base line — they describe compare state, not HEAD. */}
-      <BaseLine
-        baseRef={baseRef}
-        baseLabel={baseLabel}
-        onChangeBaseRef={onChangeBaseRef}
-        changeBaseTitle={changeBaseTitle}
-        showArrow
-        leading={leading}
-        trailing={trailing}
-      />
+      {baseLineOverride ?? (
+        <BaseLine
+          tone={baseTone}
+          baseRef={baseRef}
+          baseLabel={baseLabel}
+          onChangeBaseRef={onChangeBaseRef}
+          changeBaseTitle={changeBaseTitle}
+          showArrow
+          leading={leading}
+          trailing={trailing}
+        />
+      )}
     </div>
   )
 }

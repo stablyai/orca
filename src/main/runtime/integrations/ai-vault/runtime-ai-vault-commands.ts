@@ -10,8 +10,8 @@ import type {
   AiVaultListArgs,
   AiVaultListResult
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { listAiVaultSessions } from '../../../ai-vault/cached-session-list'
-import { deleteAiVaultSessionForRemoteClient } from '../../../ai-vault/host-session-delete'
+import { listAiVaultSessions } from '../../../ai-vault/listing/cached-session-list'
+import { deleteAiVaultSessionForRemoteClient } from '../../../ai-vault/deletion/host-session-delete'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult

@@ -1,7 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { formatResetDuration } from '../../../../../../shared/rate-limit-reset-format'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../../shared/rate-limit-types'
+import { formatResetDuration } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { Badge } from '../../../ui/badge'
 
 export type ZcodeUsageWindowKind = 'session' | 'weekly' | 'monthly'

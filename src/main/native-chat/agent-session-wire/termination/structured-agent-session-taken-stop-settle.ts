@@ -1,5 +1,3 @@
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { runningTurnLifecycleRevisions } from './structured-agent-session-stale-turn-verdict'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 
 /**
@@ -15,24 +13,7 @@ export async function settleTakenStop(
 ): Promise<boolean> {
   let opened = false
   try {
-    const records = ctx.journal
-      .itemsRead()
-      .items.filter((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
-    opened = records.length > 0
-    if (!opened) {
-      return false
-    }
-    const mutations = runningTurnLifecycleRevisions(records, {
-      state: 'interrupted',
-      completedAt: ctx.now()
-    })
-    if (mutations.length > 0) {
-      await ctx.journal.appendLifecycleBatch({
-        settlementId: `stop-settled:${turnId}`,
-        mutations,
-        fence: ctx.fence
-      })
-    }
+    opened = await ctx.journal.settleTakenStop(turnId, ctx.fence, ctx.now())
   } catch (error) {
     ctx.logger.warn('settling what a Stop took at its settle failed', {
       scope: 'stop-settle',

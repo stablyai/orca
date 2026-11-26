@@ -69,13 +69,4 @@ function installObserverOnHook(hook: ReactDevtoolsCommitHook): void {
   }
 }
 
-export function resetReactCommitCascadeObserverForTests(): void {
-  installed = false
-  commitsSeen = 0
-  if (installCheckTimer !== undefined) {
-    clearTimeout(installCheckTimer)
-    installCheckTimer = undefined
-  }
-}
-
 installReactCommitCascadeObserver()

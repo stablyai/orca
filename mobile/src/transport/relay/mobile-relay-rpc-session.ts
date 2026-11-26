@@ -2,8 +2,8 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../src/shared/abort-signal-reason'
-import { sharedPromiseSettlementWaiters } from '../../../../src/shared/promise-settlement-waiters'
+} from '../../../../src/shared/concurrency/abort-signal-reason'
+import { sharedPromiseSettlementWaiters } from '../../../../src/shared/concurrency/promise-settlement-waiters'
 import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
@@ -29,7 +29,7 @@ import {
   RpcSessionLivenessWatchdog
 } from '../rpc/rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from '../connection/mobile-runtime-capability-negotiation'
-import type { RelayHostCloseReason } from '../../../../src/shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
 import type { ConnectionLogSink } from '../../diagnostics/connection/connection-log-types'
 import type { ConnectionState } from '../connection/connection-state'
@@ -48,6 +48,8 @@ export function connectMobileRelayRpcSession(args: {
   createSocket?: (url: string) => WebSocket
   onHostCloseReason?: (reason: RelayHostCloseReason) => void
   onLog?: ConnectionLogSink
+  /** The paired host, so the capabilities its loaded page declares are advertised too. */
+  hostId?: string
 }): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
   const pending = new RelayPendingRequests()
@@ -214,8 +216,9 @@ export function connectMobileRelayRpcSession(args: {
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
       // Why: an unanswered advisory must not keep a slow relay from ever reaching connected.
-      await settleMobileRuntimeCapabilities((method, params) =>
-        sendRpc(method, params, requestTimeoutMs, true)
+      await settleMobileRuntimeCapabilities(
+        (method, params) => sendRpc(method, params, requestTimeoutMs, true),
+        args.hostId
       )
       livenessWatchdog.start(livenessIdentity)
       publishState('connected')

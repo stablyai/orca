@@ -16,6 +16,7 @@ export const SOURCE_CONTROL_ACTION_VARIABLES: Record<AiActionId, SourceControlAc
   ],
   branchName: ['basePrompt', 'firstPrompt', 'assistantMessage'],
   conversationName: ['basePrompt', 'firstPrompt'],
+  dictationCleanup: ['basePrompt'],
   fixCommitFailure: ['basePrompt'],
   fixPushFailure: ['basePrompt'],
   fixChecks: ['basePrompt'],

@@ -2,7 +2,7 @@ import { getProviderChecksOutcome } from '../../../../../../shared/source-contro
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-review-checks'
+import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { ReviewIcon } from '../../workspace-card/review/worktree-review-presentation'
 import { reviewStateLabel } from '../../workspace-card/metadata/WorktreeCardMetadataStatusBadges'
 

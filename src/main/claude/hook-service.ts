@@ -1,9 +1,9 @@
 import { rmSync } from 'node:fs'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import {
   listClaudeProfileHomes,
   listClaudeProfileHomesAsync
-} from '../claude-accounts/claude-profile-homes'
+} from '../claude-accounts/profiles/claude-profile-homes'
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type {
@@ -20,7 +20,7 @@ import {
 } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
-import { getManagedScript } from './hook-script'
+import { getManagedScript } from './hooks/hook-script'
 import {
   removeClaudeAgentViewRemote,
   refreshClaudeAgentView,
@@ -32,18 +32,18 @@ import {
   installWindowsClaudeHookExecutable,
   installWindowsClaudeHookFiles,
   refreshWindowsClaudeHookFiles
-} from './windows-hook-files'
+} from './hooks/windows-hook-files'
 
-export { getManagedScript }
-import { getManagedStatusLineScript } from './statusline-script'
-import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './statusline-install'
-import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
+import { getManagedStatusLineScript } from './hooks/statusline-script'
+// oxfmt-ignore
+import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './hooks/statusline-install'
+import { refuseProfileAtDefaultHome } from './hooks/claude-profile-hook-target'
+import { publishClaudeHookPlugin, removeClaudeHookPlugin } from './hooks/claude-hook-plugin'
 import {
   applyManagedHooks,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
-  getManagedEventHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -55,13 +55,14 @@ import {
   removeManagedHooks,
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
-} from './hook-settings'
-import { claudeAcceptsExecFormHooks } from './claude-hook-event-versions'
+} from './hooks/hook-settings'
+import { claudeAcceptsExecFormHooks } from './cli-capabilities/claude-hook-event-versions'
+import { getManagedEventHook } from './hooks/claude-managed-event-hook'
 import {
   getClaudeManagedHookPlan,
   OPENCLAUDE_MANAGED_HOOK_PLAN,
   type ClaudeManagedHookPlan
-} from './claude-managed-hook-events'
+} from './hooks/claude-managed-hook-events'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -113,6 +114,16 @@ export class ClaudeHookService {
       : (this.options.hookPlan ?? OPENCLAUDE_MANAGED_HOOK_PLAN)
   }
 
+  private unparsableSettings(configPath: string): AgentHookInstallStatus {
+    return {
+      agent: this.options.agent,
+      state: 'error',
+      configPath,
+      managedHooksPresent: false,
+      detail: `Could not parse ${this.options.displayName} settings.json`
+    }
+  }
+
   getStatus(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
     const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
     if (refused) {
@@ -122,13 +133,7 @@ export class ClaudeHookService {
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
-      }
+      return this.unparsableSettings(configPath)
     }
 
     // Count either Windows launcher form: installation falls back to .cmd when the exe cannot be placed.
@@ -192,13 +197,7 @@ export class ClaudeHookService {
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
-      }
+      return this.unparsableSettings(configPath)
     }
 
     const plan = this.managedHookPlan(options)
@@ -209,13 +208,23 @@ export class ClaudeHookService {
       (eventName) =>
         getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
       getManagedScriptFileName(this.options.settings),
-      plan
+      plan,
+      process.platform !== 'win32'
     )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
       installWindowsClaudeHookFiles(scriptPath, payload)
     } else {
       writeManagedScript(scriptPath, payload)
+    }
+    if (options.configDir === undefined) {
+      const merged = nextConfig.hooks ?? {}
+      // applyManagedHooks appends Orca's entry last per event; reuse it so a user's async choice carries over.
+      publishClaudeHookPlugin(this.options.agent, () =>
+        Object.fromEntries(
+          plan.install.map(({ eventName }) => [eventName, merged[eventName].slice(-1)])
+        )
+      )
     }
     // Profiles inherit statusLine from the default-home settings copy.
     if (options.configDir === undefined && plan.statusLine === 'install') {
@@ -254,7 +263,8 @@ export class ClaudeHookService {
         (eventName) =>
           buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
         remoteScriptFileName,
-        this.managedHookPlan(options)
+        this.managedHookPlan(options),
+        true
       )
 
       // Publish scripts before settings can reference them.
@@ -286,16 +296,11 @@ export class ClaudeHookService {
   }
 
   remove(): AgentHookInstallStatus {
+    removeClaudeHookPlugin(this.options.agent)
     const configPath = getConfigPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
-      }
+      return this.unparsableSettings(configPath)
     }
     const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
       config,

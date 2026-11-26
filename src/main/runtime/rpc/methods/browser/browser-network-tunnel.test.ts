@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
@@ -38,6 +38,7 @@ function request(lease?: BrowserHostLease, overrides: Record<string, unknown> = 
 }
 
 function runtime(cleanups = new Map<string, () => void>()): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tunnel methods and lease registry read only these three accessors; OrcaRuntimeService is a class, so a structural double cannot satisfy it without the cast.
   return {
     getRuntimeId: () => 'runtime-a',
     getStartedAt: () => 1,

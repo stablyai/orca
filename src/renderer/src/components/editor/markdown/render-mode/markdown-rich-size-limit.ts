@@ -1,4 +1,4 @@
-import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../../../shared/constants'
+import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../../../shared/editor/markdown/rich-markdown-size-limit'
 
 // Even overrides build whole documents synchronously; larger previews previously blocked for seconds and retained gigabytes.
 export const MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES = 1024 * 1024

@@ -1,4 +1,4 @@
-import type { Tab } from '../tab-types'
+import type { Tab } from '../workspace-layout/tab-groups/tab-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import {

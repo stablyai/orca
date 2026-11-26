@@ -1,7 +1,7 @@
 // Stage pinned Node and a content-addressed host script so Windows operations share verified bytes without replacing running clients' code.
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from '../install/orcad-remote-node-runtime'
 import {
   installOrcadWindowsHostScript,

@@ -8,7 +8,7 @@ import {
   nodeRuntimeExecutablePath,
   nodeRuntimeHeadersUrl,
   nodeRuntimeReleaseUrl
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import {
   download,

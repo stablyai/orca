@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace/ports/workspace-ports'
 import {
   publishWorkspacePortScanForHost,
   scanWorkspacePortsForTarget,

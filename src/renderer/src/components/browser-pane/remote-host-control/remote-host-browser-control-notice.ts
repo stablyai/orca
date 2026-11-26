@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { DesktopBrowserBridgeHostNotice } from '../../../../../shared/desktop-browser-bridge-host-control-contract'
+import type { DesktopBrowserBridgeHostNotice } from '../../../../../shared/browser/client-hosting/desktop-browser-bridge-host-control-contract'
 import { translate } from '@/i18n/i18n'
 
 export type RemoteHostBrowserControlActions = {

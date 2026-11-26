@@ -7,7 +7,7 @@ import {
   verifyDeviceProof
 } from '../../../../shared/remote-runtime/pairing/device-key-proof'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { AuthenticatedMobileSocket } from '../mobile-socket-wiring'
+import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 
 /** Fork the installation's token row; possession proof binds to this socket's v2 transcript and cannot be replayed elsewhere. */
 export function registerSocketDeviceKey(

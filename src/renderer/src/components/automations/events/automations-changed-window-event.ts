@@ -1,5 +1,5 @@
 /** Fan out authority changes within the renderer without coupling every publisher to the Automations page. */
-import type { AutomationsChangedPayload } from '../../../../../shared/runtime-client-events'
+import type { AutomationsChangedPayload } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 export const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 

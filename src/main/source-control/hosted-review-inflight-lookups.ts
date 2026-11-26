@@ -80,9 +80,3 @@ export function trackInflight(key: string, record: InflightRecord): void {
     inflight.delete(oldest)
   }
 }
-
-/** @internal - exposed for tests only */
-export function __resetHostedReviewInflightLookupsForTests(): void {
-  inflight.clear()
-  retired.clear()
-}

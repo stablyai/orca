@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { WorkspaceCleanupUIState } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { UiUpdateFieldsSchema } from './client-ui-schemas'
 import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-schema-parity'
@@ -11,6 +11,7 @@ type MainOwnedUIState =
   | '_explorerDisplayRootMigrated'
   | 'trayMinimizeNoticeShown'
   | 'dashboardPopoutBounds'
+  | 'windowFullScreen'
   | '_expandedWorktreeCardPropertiesDefaulted'
   | '_jiraIssueWorktreeCardPropertyDefaulted'
   | '_hostWorktreeCardPropertyDefaulted'
@@ -22,6 +23,9 @@ type MainOwnedUIState =
   | 'starNagAgentValueMomentAppVersion'
   // Desktop-local replay queue: a paired client must not overwrite it.
   | 'pendingRuntimeRepoRemovals'
+  // The moved-to-WSL list exists only on the desktop that moved the projects.
+  | 'wslMovedSectionCollapsed'
+  | 'hiddenWslMovedProjectKeys'
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.infer<UiUpdateFieldsSchema>

@@ -1,7 +1,9 @@
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
 export type CodexAppServerSpawn = (
@@ -14,29 +16,33 @@ export const spawnCodexAppServerProcess: CodexAppServerSpawn = (program, args, o
   spawnProcess({ program, args, ...options } as ProcessSpec)
 
 export function killCodexAppServerProcessTree(
-  child: Pick<ChildProcess, 'pid' | 'kill'>,
+  child: Pick<ChildProcess, 'pid' | 'kill' | 'exitCode' | 'signalCode'>,
   options: { platform?: NodeJS.Platform; spawnImpl?: CodexAppServerSpawn } = {}
 ): void {
   const platform = options.platform ?? process.platform
   const spawnImpl = options.spawnImpl ?? spawnCodexAppServerProcess
   if (platform === 'win32' && child.pid) {
     if (
+      childProcessHasExited(child) ||
       !admitProcessTreeKill({
         pid: child.pid,
         site: 'codex-app-server-session-deadline',
         scope: 'win-taskkill-tree'
       })
     ) {
-      // A handle-addressed root kill cannot target the recycled PID refused by the tree gate.
       child.kill('SIGKILL')
       return
     }
     try {
       // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
-      const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
+      const killer = spawnImpl(
+        windowsSystem32Binary('taskkill.exe'),
+        ['/pid', String(child.pid), '/t', '/f'],
+        {
+          stdio: 'ignore',
+          windowsHide: true
+        }
+      )
       let fellBack = false
       const killDirectChild = (): void => {
         if (!fellBack) {

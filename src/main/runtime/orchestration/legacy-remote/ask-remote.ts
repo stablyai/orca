@@ -3,7 +3,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorkerDispatchState } from '../db/orchestration-records'
 import { OrchestrationError } from '../orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
-import type { AskParams } from '../../../../shared/rpc-contract/orchestration-params'
+import type { AskParams } from '../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { assertWorkerCanReport } from '../workers/reports/worker-report-admission'
 import {
   askedQuestionReceipt,
@@ -20,6 +20,10 @@ export async function askRemoteRunHome(args: {
   dispatchId: string
   taskId: string
   workerState: WorkerDispatchState
+  /** Re-read at admission; for a restart-reissued handle it comes from the recovered incarnation. */
+  processIncarnation: () => string | null
+  /** A restart-recovered asker, re-proved before a wait takes its answer. */
+  callerCurrent?: () => boolean
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
   const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
@@ -30,7 +34,7 @@ export async function askRemoteRunHome(args: {
     processCurrent: db.isRemoteAttachmentProcessCurrent({
       dispatchId: args.dispatchId,
       paneKey: args.paneKey,
-      processIncarnation: args.runtime.getTerminalProcessIncarnation(args.from)
+      processIncarnation: args.processIncarnation()
     })
   })
   const options =
@@ -80,6 +84,7 @@ export async function askRemoteRunHome(args: {
     closedMessage: `Question ${questionId} closed because its remote Dispatch is inactive.`,
     timeoutMs,
     signal: args.signal,
-    recordMutationReceipt: args.recordMutationReceipt
+    recordMutationReceipt: args.recordMutationReceipt,
+    callerCurrent: args.callerCurrent
   })
 }

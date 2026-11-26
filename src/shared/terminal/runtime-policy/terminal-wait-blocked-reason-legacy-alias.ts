@@ -1,4 +1,4 @@
-import type { RuntimeTerminalWaitBlockedReason } from '../../runtime-terminal-contracts'
+import type { RuntimeTerminalWaitBlockedReason } from '../runtime/runtime-terminal-contracts'
 
 // Older hosts mislabeled generic dialogs codex-*; render neutral equivalents for other agents.
 // Use Map for unvalidated wire keys so constructor/toString cannot print inherited functions.

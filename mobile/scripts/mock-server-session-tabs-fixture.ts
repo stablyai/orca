@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 
 // Publisher epoch must be stable until restart and change on restart: use UUID, not clock. Never use reserved phone-local mobile-local: prefix.

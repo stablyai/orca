@@ -1,5 +1,6 @@
-import { flattenRetainedSlice } from '../../../lib/flatten-retained-slice'
+import { flattenRetainedSlice } from '../../../lib/terminal/output/flatten-retained-slice'
 import { isTerminalResourceLimitError } from '../../../../../shared/terminal/pty/lifecycle/terminal-spawn-resource-error'
+import { withoutTerminalHostCapCounts } from '../../../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 
 // Legacy tab messages render as newline-joined text and need whole-run dedup; pane errors stay separate until render.
 function containsWholeLineRun(accumulated: string, message: string): boolean {
@@ -46,7 +47,8 @@ export function appendPaneTerminalError(
   message: string
 ): TerminalErrorsByPaneId {
   const resourceLimit = isTerminalResourceLimitError(message)
-  const boundedMessage = boundTerminalErrorSurface(message)
+  // Refusals differing only in the cap's counts are one error.
+  const boundedMessage = boundTerminalErrorSurface(withoutTerminalHostCapCounts(message))
   const current = errorsByPaneId[paneId] ?? []
   if (
     current.some(
@@ -76,7 +78,10 @@ export function clearPaneTerminalError(
   if (!current) {
     return errorsByPaneId
   }
-  const boundedMessage = message === undefined ? undefined : boundTerminalErrorSurface(message)
+  const boundedMessage =
+    message === undefined
+      ? undefined
+      : boundTerminalErrorSurface(withoutTerminalHostCapCounts(message))
   const resourceLimit = message === undefined ? undefined : isTerminalResourceLimitError(message)
   const kept =
     boundedMessage === undefined

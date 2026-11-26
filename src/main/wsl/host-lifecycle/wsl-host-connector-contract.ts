@@ -1,8 +1,14 @@
 /** What the WSL host service drives (the C3 holder, C5 connections and C6 liveness, or an e2e fake), and its dependencies. */
-import type { WslHostServerStop, WslHostStatus } from '../../../shared/wsl-host-types'
+import type {
+  WslHostServerStop,
+  WslHostStatus
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
-import type { WslOrcadConnectIntent } from '../orcad/wsl-orcad-connection-status'
+import type {
+  WslOrcadConnectIntent,
+  WslOrcadConnectionStatus
+} from '../orcad/wsl-orcad-connection-status'
 
 /** `stopped` and `unreachable` rest on a confirmed running list; `unavailable` could not read it. */
 export type WslHostReachability = 'available' | 'unreachable' | 'stopped' | 'unavailable'
@@ -30,7 +36,7 @@ export type WslHostConnector = {
   resolveDistroName(distro: string, distroId?: string): Promise<string | false | null>
   releaseHolder(distro: string): Promise<void>
   /** Startup: keeps the holders an earlier run left and releases those `isWanted` refuses. */
-  adoptHolders(isWanted: (distro: string) => boolean): Promise<void>
+  adoptHolders(isWanted: (distro: string) => boolean | Promise<boolean>): Promise<void>
   dispose(): Promise<void>
 }
 
@@ -40,10 +46,12 @@ export type WslHostServiceDependencies = {
   /** Whether this build ships the orcad template a WSL host deploys from. */
   hasServerFiles: () => boolean
   publish: (status: WslHostStatus) => void
+  /** Every connection change, for an Add dialog whose distro has no host status yet. */
+  publishAddProgress?: (distro: string, status: WslOrcadConnectionStatus) => void
   /** The environment's pairing changed: transports that authenticate with the old one retire. */
   pairingChanged: (environmentId: string) => void
   /** A connection came up: verify the server now rather than on the status owner's backoff. */
-  ready: (environmentId: string) => void
+  ready: (environmentId: string, distro: string) => void
   removed: (environmentId: string) => Promise<void> | void
   /** Test seam; production runs the task once a running list confirms the distro runs again. */
   deferUntilRunning?: (distro: string, key: string, task: () => unknown) => void

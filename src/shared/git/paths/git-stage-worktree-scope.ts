@@ -32,7 +32,7 @@ export function requireGitStageWorktreeScopeReceipt(
 type GitStageRunner = (args: string[], stdin?: string) => Promise<{ stdout: string }>
 
 export type StageGitWorktreeScopeOptions = {
-  /** Untracked paths `all` must skip: Orca's shared symlinks, already verified as symlinks. */
+  /** Untracked paths `all` must skip: verified Orca shared symlinks that Git does not ignore. */
   excludedUntrackedPaths?: readonly string[]
 }
 

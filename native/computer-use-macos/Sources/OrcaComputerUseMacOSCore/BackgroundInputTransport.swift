@@ -31,8 +31,6 @@ public enum BackgroundInputTransport {
     public enum PointerHit: Equatable, Sendable {
         /// WebKit content (Safari, WKWebView): drops clicks into a window that is not key.
         case webKitContent
-        /// A popup menu or web `<select>`: a background click opens menu tracking off screen or wedges Chromium input.
-        case popupMenu
         case other
     }
 
@@ -131,29 +129,64 @@ public enum BackgroundInputTransport {
 
     public static func classifyPointerHit(_ element: AXUIElement) -> PointerHit {
         var current = element
-        for depth in 0..<48 {
+        for _ in 0..<48 {
             let role = stringAttribute(current, kAXRoleAttribute as String)
-            // Why: the hit lands on a popup's label or the popup itself, never deeper than its parent.
-            if depth < 2, role == kAXPopUpButtonRole as String || role == kAXMenuButtonRole as String {
-                return .popupMenu
-            }
             if role == "AXWebArea" {
                 // Why: Chromium accepts window-stamped clicks as is; only WebKit needs the key-window scope,
                 // which fires the app's own did-become-active code (Slack, for one, marks messages read).
                 return isChromiumNode(current) ? .other : .webKitContent
             }
             if role == kAXWindowRole as String { return .other }
-            var parent: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(current, kAXParentAttribute as CFString, &parent) == .success,
-                  let parent,
-                  CFGetTypeID(parent) == AXUIElementGetTypeID()
-            else {
-                return .other
-            }
-            // SAFETY: the CFTypeID check above proves this is an AXUIElement.
-            current = parent as! AXUIElement
+            guard let next = parent(of: current) else { return .other }
+            current = next
         }
         return .other
+    }
+
+    /// The element and its parent as `ForegroundEffect` reads them.
+    public static func pressTarget(_ element: AXUIElement) -> [ForegroundEffect.Node] {
+        var chain: [ForegroundEffect.Node] = []
+        var current: AXUIElement? = element
+        while let node = current, chain.count < 2 {
+            var roleValue: CFTypeRef?
+            // Why: a hung app answers each read only after the messaging timeout; the action that follows reports it.
+            guard AXUIElementCopyAttributeValue(node, kAXRoleAttribute as CFString, &roleValue) != .cannotComplete else { break }
+            let role = roleValue as? String
+            // Why: only a button's labels and a combobox's page matter, so other presses cost one read per node.
+            chain.append(ForegroundEffect.Node(
+                role: role,
+                labels: role == kAXButtonRole as String
+                    ? [stringAttribute(node, kAXTitleAttribute as String), stringAttribute(node, kAXDescriptionAttribute as String)]
+                    : [],
+                inWebContent: role == kAXComboBoxRole as String && isInWebArea(node)
+            ))
+            current = chain.count < 2 ? parent(of: node) : nil
+        }
+        return chain
+    }
+
+    private static func isInWebArea(_ element: AXUIElement) -> Bool {
+        var current: AXUIElement? = element
+        for _ in 0..<48 {
+            guard let node = current else { return false }
+            let role = stringAttribute(node, kAXRoleAttribute as String)
+            if role == "AXWebArea" { return true }
+            if role == kAXWindowRole as String { return false }
+            current = parent(of: node)
+        }
+        return false
+    }
+
+    private static func parent(of element: AXUIElement) -> AXUIElement? {
+        var parent: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXParentAttribute as CFString, &parent) == .success,
+              let parent,
+              CFGetTypeID(parent) == AXUIElementGetTypeID()
+        else {
+            return nil
+        }
+        // SAFETY: the CFTypeID check above proves this is an AXUIElement.
+        return (parent as! AXUIElement)
     }
 
     // MARK: Keys
@@ -326,7 +359,7 @@ public enum BackgroundInputTransport {
         }
     }
 
-    private static func isChromiumNode(_ element: AXUIElement) -> Bool {
+    public static func isChromiumNode(_ element: AXUIElement) -> Bool {
         var names: CFArray?
         guard AXUIElementCopyAttributeNames(element, &names) == .success, let names = names as? [String] else {
             return false

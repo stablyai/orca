@@ -3,8 +3,8 @@ import {
   EPHEMERAL_VM_FAILURE_COPY as EN,
   type EphemeralVmFailure,
   type EphemeralVmFailureCode
-} from '../../../../shared/ephemeral-vm-failure-copy'
-import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
+} from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 type Params = Record<string, string | number>
 

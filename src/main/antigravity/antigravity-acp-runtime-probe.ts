@@ -1,4 +1,4 @@
-// Initialize under a disposable home to verify the pinned server without signing in.
+// Initialize agy from a disposable folder, to ask what it can serve without starting a chat.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,33 +8,11 @@ import {
   type AcpAgentConnection
 } from '../acp/process/acp-agent-connection'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import {
-  AgentModelCatalogProbeError,
-  runAgentModelCatalogSession
-} from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
-import {
-  ManagedRuntimeStartError,
-  type ManagedRuntimeStartFailure
-} from '../node-runtime/managed-runtime-release'
-import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
-import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
-import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
-import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
+import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { waitForProviderExitUntil } from '../provider-process/provider-process-exit-deadline'
 
-const PROBE_TIMEOUT_MS = 90_000
-
-function isPinnedServer(initialized: InitializeResponse, version: string): boolean {
-  const capabilities = initialized.agentCapabilities
-  return (
-    initialized.agentInfo?.name === 'antigravity-acp' &&
-    initialized.agentInfo.version === version &&
-    initialized.protocolVersion === 1 &&
-    capabilities?.loadSession === true &&
-    Boolean(capabilities.sessionCapabilities?.resume) &&
-    Boolean(capabilities.auth?.logout) &&
-    (initialized.authMethods ?? []).some((method) => method.id === 'oauth-personal')
-  )
-}
+// A close can return before agy's exit is seen; a check that answered still waits for that proof.
+const EXIT_PROOF_WAIT_MS = 5_000
 
 type ProbeLaunch = {
   command: string
@@ -43,15 +21,12 @@ type ProbeLaunch = {
   envToDelete: string[]
 }
 
-/** What one initialize from a disposable folder settled with; `observed` only when requested. */
+/** What one initialize from a disposable folder settled with. */
 type InitializeOutcome = {
   initialized: InitializeResponse | null
   failed: boolean
   failure: unknown
-  observed: ManagedRuntimeStartFailure | null
 }
-
-type ProbeConnection = { connection?: AcpAgentConnection; exit?: ProviderProcessExit }
 
 type InitializeCheck = (
   connection: AcpAgentConnection,
@@ -63,35 +38,16 @@ async function initializeFromDisposableFolder(
   launch: (folder: string) => ProbeLaunch,
   timeoutMs: number,
   signal: AbortSignal | undefined,
-  options: { observe: boolean; check?: InitializeCheck }
+  check: InitializeCheck | undefined
 ): Promise<InitializeOutcome> {
-  const { observe, check } = options
-  // Keep the server's working folder, and any home inside it, together for cleanup.
   const folder = await mkdtemp(join(tmpdir(), 'orca-antigravity-probe-'))
-  const probe: ProbeConnection = {}
-  const outcome: InitializeOutcome = {
-    initialized: null,
-    failed: false,
-    failure: null,
-    observed: null
-  }
+  let connection: AcpAgentConnection | undefined
+  const outcome: InitializeOutcome = { initialized: null, failed: false, failure: null }
   try {
     outcome.initialized = await runAgentModelCatalogSession(
       () => {
-        probe.connection = createAcpAgentConnection(
-          { ...launch(folder), cwd: folder },
-          observe
-            ? {
-                onExit: (_error, { expected, exit }) => {
-                  // Orca closing the check, or a spawn that never ran, says nothing about the runtime.
-                  if (!expected && !exit.processless) {
-                    probe.exit = exit
-                  }
-                }
-              }
-            : {}
-        )
-        return probe.connection
+        connection = createAcpAgentConnection({ ...launch(folder), cwd: folder })
+        return connection
       },
       async (started) => {
         const response = await started.initialize()
@@ -103,94 +59,33 @@ async function initializeFromDisposableFolder(
   } catch (error) {
     outcome.failed = true
     outcome.failure = error
-    if (observe) {
-      outcome.observed = await observedStartFailure(error, probe, timeoutMs)
-    }
   }
-  if (probe.connection && !probe.connection.exited) {
+  if (connection && !connection.exited) {
+    await waitForProviderExitUntil(connection, EXIT_PROOF_WAIT_MS)
+  }
+  if (connection && !connection.exited) {
     outcome.failure = new Error(
       'Its exit was not proven after the check',
       outcome.failed ? { cause: outcome.failure } : undefined
     )
     outcome.failed = true
   }
-  await rm(folder, { recursive: true, force: true })
+  // Windows single-file runtimes can briefly retain DLLs they unpacked into this folder.
+  await rm(folder, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   return outcome
 }
 
-async function observedStartFailure(
-  error: unknown,
-  probe: ProbeConnection,
-  timeoutMs: number
-): Promise<ManagedRuntimeStartFailure | null> {
-  // The initialize request's own deadline usually fires before the check's.
-  const requestTimeout = providerRequestTimeoutOf(error)
-  if (requestTimeout) {
-    return { kind: 'timeout', timeoutMs: requestTimeout.timeoutMs }
-  }
-  if (error instanceof AgentModelCatalogProbeError && error.reason === 'timeout') {
-    return { kind: 'timeout', timeoutMs }
-  }
-  if (!probe.exit || !probe.connection) {
-    return null
-  }
-  const stderr = await probe.connection.stderrTailAfterExit()
-  // A supervisor's spawn report is a missing launch, not the runtime's own exit.
-  return supervisedProviderSpawnFailure(probe.exit.code, stderr)
-    ? null
-    : { kind: 'exit', exit: probe.exit, stderr }
-}
-
 /** Initializes from a disposable folder, then runs `check` there within the same deadline; rejects
- *  unless the server's exit is proven afterwards. */
+ *  unless agy's exit is proven afterwards. */
 export async function initializeAntigravityAcp(
   launch: (folder: string) => ProbeLaunch,
   timeoutMs: number,
   signal?: AbortSignal,
   check?: InitializeCheck
 ): Promise<InitializeResponse> {
-  const outcome = await initializeFromDisposableFolder(launch, timeoutMs, signal, {
-    observe: false,
-    ...(check ? { check } : {})
-  })
+  const outcome = await initializeFromDisposableFolder(launch, timeoutMs, signal, check)
   if (outcome.failed || !outcome.initialized) {
     throw outcome.failure
   }
   return outcome.initialized
-}
-
-/** Require the pinned initialize response and proven exit before accepting an installation. */
-export async function probeAntigravityAcpServer(
-  command: string,
-  version: string,
-  signal: AbortSignal
-): Promise<void> {
-  const outcome = await initializeFromDisposableFolder(
-    (home) => ({
-      command,
-      args: process.platform === 'linux' ? ['--uid='] : [],
-      env: { ...ANTIGRAVITY_ACP_ENV, GEMINI_HOME: home, TMPDIR: home, TEMP: home, TMP: home },
-      envToDelete: scrubAntigravityAcpEnvironment({}, process.env)
-    }),
-    PROBE_TIMEOUT_MS,
-    signal,
-    { observe: true }
-  )
-  let { failed, failure, observed } = outcome
-  const { initialized } = outcome
-  if (initialized && !isPinnedServer(initialized, version)) {
-    const answered = initialized.agentInfo?.version
-    if (typeof answered === 'string' && answered !== version) {
-      observed = { kind: 'version', answered, expected: version }
-    }
-    if (!failed) {
-      failed = true
-      failure = new Error(`It did not answer as Antigravity ${version}`)
-    }
-  }
-  if (failed) {
-    throw new ManagedRuntimeStartError('Antigravity could not start on this host.', observed, {
-      cause: failure
-    })
-  }
 }

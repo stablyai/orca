@@ -1,7 +1,7 @@
 import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { homedir, hostname, userInfo } from 'node:os'
 import { posix, win32 } from 'node:path'
-import { compareCodePoints } from '../../../shared/sidebar-list/text-order'
+import { compareCodePoints } from '../../../shared/sidebar-list/sorting/text-order'
 
 type PathApi = typeof posix | typeof win32
 

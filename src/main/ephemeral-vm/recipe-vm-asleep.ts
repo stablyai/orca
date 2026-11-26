@@ -1,10 +1,10 @@
 import {
   findEnvironmentEphemeralVmRuntime,
   isEphemeralVmSuspended
-} from '../../shared/ephemeral-vm-environment-sleep'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-environment-sleep'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host/execution-host'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
@@ -27,14 +27,30 @@ function isVmAsleep(vm: EphemeralVmRuntimeRecord & { workspaceId: string }): boo
 
 /** Whether the server behind this environment is a recipe VM that is asleep. Never throws: an
  *  unknown environment or unreadable VM record must not strand a server that may be up. */
-export function isRecipeVmEnvironmentAsleep(userDataPath: string, environmentId: string): boolean {
+export async function prepareRecipeVmEnvironmentSleepCheck(
+  userDataPath: string,
+  environmentId: string
+): Promise<() => boolean> {
   try {
-    const environment = resolveEnvironment(userDataPath, environmentId)
-    const vm = findEnvironmentEphemeralVmRuntime(userDataPath, environment)
-    return vm ? isVmAsleep(vm) : false
+    const environment = await resolveEnvironment(userDataPath, environmentId)
+    return () => {
+      try {
+        const vm = findEnvironmentEphemeralVmRuntime(userDataPath, environment)
+        return vm ? isVmAsleep(vm) : false
+      } catch {
+        return false
+      }
+    }
   } catch {
-    return false
+    return () => false
   }
+}
+
+export async function isRecipeVmEnvironmentAsleep(
+  userDataPath: string,
+  environmentId: string
+): Promise<boolean> {
+  return (await prepareRecipeVmEnvironmentSleepCheck(userDataPath, environmentId))()
 }
 
 /** Where desktop main keeps its VM and environment stores; unset on a host that holds no VMs. */
@@ -45,17 +61,19 @@ export function setRecipeVmAsleepStoreRoot(root: (() => string) | null): void {
 }
 
 /** `isRecipeVmEnvironmentAsleep` for transports that do not know the store root. */
-export function isRecipeVmServerAsleep(environmentId: string): boolean {
+export async function prepareRecipeVmServerSleepCheck(
+  environmentId: string
+): Promise<() => boolean> {
   let root: string
   try {
     if (!storeRoot) {
-      return false
+      return () => false
     }
     root = storeRoot()
   } catch {
-    return false
+    return () => false
   }
-  return isRecipeVmEnvironmentAsleep(root, environmentId)
+  return prepareRecipeVmEnvironmentSleepCheck(root, environmentId)
 }
 
 /** Whether this Orca-owned SSH host is the host of a recipe VM that is asleep. */

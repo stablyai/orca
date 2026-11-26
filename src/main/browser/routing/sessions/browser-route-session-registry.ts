@@ -73,6 +73,11 @@ export class BrowserRouteSessionRegistry {
     return this.partitionBySession.get(session) ?? null
   }
 
+  /** The browser profile id the server named for a live route session. */
+  getBrowserProfileIdForSession(session: BrowserRouteElectronSession): string | null {
+    return this.live.get(this.partitionBySession.get(session) ?? '')?.browserProfileId ?? null
+  }
+
   getPreparedPageAuthority(input: BrowserRoutePageOwnerIdentity): symbol | null {
     return getBrowserRoutePreparedPageAuthority(this.live, input)
   }

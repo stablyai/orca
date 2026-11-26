@@ -1,4 +1,4 @@
-import { MARINE_CREATURES } from '../../../marine-creatures'
+import { MARINE_CREATURES } from '../../../worktree/naming/marine-creatures'
 
 // Bound generated leaves after generation; leave prompts general so user naming instructions own style.
 export const MAX_BRANCH_NAME_WORDS = 4
@@ -67,12 +67,34 @@ export function humanizeBranchSlug(slug: string): string {
   return joined.charAt(0).toUpperCase() + joined.slice(1)
 }
 
+/** Bounded local Git evidence of the work so far, when no first message is readable. */
+export type BranchNameChanges = {
+  commitSubjects: string
+  workingStat: string
+  stagedStat: string
+  untracked: string
+}
+
 export type BranchNameWorkContext = {
-  /** The user's first prompt to the agent in this workspace. */
+  /** The user's first prompt to the agent in this workspace, or the rendered changes. */
   firstPrompt: string
   /** The agent's first response, when it has already arrived. Optional because
    *  the rename fires as soon as work begins, before a reply may exist. */
   assistantMessage?: string
+  /** Set when naming from the branch's changes instead of a message. */
+  fromChanges?: true
+}
+
+export function branchNameContextFromChanges(changes: BranchNameChanges): BranchNameWorkContext {
+  const sections = [
+    ['Commits:', changes.commitSubjects],
+    ['Changed files:', changes.workingStat],
+    ['Staged changes:', changes.stagedStat],
+    ['New files:', changes.untracked]
+  ]
+    .filter(([, body]) => body.trim())
+    .map(([title, body]) => `${title}\n${body.trim()}`)
+  return { firstPrompt: sections.join('\n\n'), fromChanges: true }
 }
 
 /** Share naming prompts across local/SSH. Keep defaults general for user Source Control AI/template guidance; enforce Git safety/length after generation via sanitizeBranchSlug. */
@@ -83,14 +105,18 @@ export function buildBranchNamePrompt(context: BranchNameWorkContext, customProm
   if (prompt) {
     sections.push(prompt, '')
   }
+  const subject = context.fromChanges ? 'the code changes' : 'the coding task'
   sections.push(
     prompt
-      ? 'Generate a git branch name that summarizes the coding task described below.'
-      : 'Generate a short git branch name that summarizes the coding task described below.',
+      ? `Generate a git branch name that summarizes ${subject} described below.`
+      : `Generate a short git branch name that summarizes ${subject} described below.`,
     'Output ONLY the branch name on a single line, nothing else.',
     ''
   )
-  sections.push('User request:', context.firstPrompt.trim())
+  sections.push(
+    context.fromChanges ? 'Changes so far:' : 'User request:',
+    context.firstPrompt.trim()
+  )
   const assistant = context.assistantMessage?.trim()
   if (assistant) {
     sections.push('', "Agent's initial response:", assistant)

@@ -1,5 +1,5 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { AppState } from '@/store/types'

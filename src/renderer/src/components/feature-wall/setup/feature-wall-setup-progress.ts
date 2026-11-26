@@ -1,0 +1,120 @@
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { hasFeatureInteraction } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import {
+  FEATURE_WALL_SETUP_STEPS,
+  type FeatureWallSetupStepId
+} from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import { selectWorktreesByRepo } from '../../../store/workspaces/catalog/workspace-record-fields'
+
+export type FeatureWallSetupProgressInput = {
+  ready?: boolean
+  settings: GlobalSettings | null
+  featureInteractions: FeatureInteractionState
+  hasConnectedTaskSource: boolean
+  browserUseSkillInstalled: boolean
+  computerUseBlocked?: boolean
+  computerUseSkillInstalled: boolean
+  computerUsePermissionsReady: boolean
+  computerUseUnavailable?: boolean
+  orchestrationSkillInstalled: boolean
+  gitRepoCount: number
+  worktreesByRepo: Record<string, Worktree[]>
+  hasSetupScript: boolean
+}
+
+export type FeatureWallSetupProgress = {
+  ready: boolean
+  stepDone: Record<FeatureWallSetupStepId, boolean>
+  coreDoneCount: number
+  coreTotal: number
+}
+
+function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree[]>): number {
+  // Count imported worktrees, but exclude unhydrated placeholders without paths.
+  return Object.values(worktreesByRepo).reduce(
+    (sum, worktrees) =>
+      sum +
+      worktrees.filter(
+        (worktree) => !worktree.isMainWorktree && typeof worktree.path === 'string' && worktree.path
+      ).length,
+    0
+  )
+}
+
+export type AgentCapabilitiesState = {
+  browserUseSkillInstalled: boolean
+  computerUseBlocked?: boolean | undefined
+  computerUseSkillInstalled: boolean
+  computerUseReady: boolean
+  computerUseUnavailable: boolean
+  orchestrationSkillInstalled: boolean
+}
+
+export function isAgentCapabilitiesDone(state: AgentCapabilitiesState): boolean {
+  return (
+    state.browserUseSkillInstalled &&
+    (state.computerUseBlocked ||
+      (state.computerUseSkillInstalled &&
+        (state.computerUseReady || state.computerUseUnavailable))) &&
+    state.orchestrationSkillInstalled
+  )
+}
+
+// Upgrade eligibility keeps the pre-browser rules as the live checklist evolves.
+export function hasCompletedPreBrowserSetup(input: FeatureWallSetupProgressInput): boolean {
+  return (
+    Boolean(input.settings?.defaultTuiAgent) &&
+    input.settings?.defaultTuiAgent !== 'blank' &&
+    input.gitRepoCount >= 2 &&
+    input.settings?.notifications.enabled === true &&
+    input.settings.notifications.agentTaskComplete === true &&
+    hasFeatureInteraction(input.featureInteractions, 'terminal-pane-split') &&
+    countAvailableNonMainWorktrees(selectWorktreesByRepo(input)) >= 1 &&
+    input.hasConnectedTaskSource &&
+    setupGuideAgentCapabilitiesDone(input) &&
+    input.hasSetupScript
+  )
+}
+
+function setupGuideAgentCapabilitiesDone(input: FeatureWallSetupProgressInput): boolean {
+  return isAgentCapabilitiesDone({
+    ...input,
+    computerUseReady: input.computerUsePermissionsReady,
+    computerUseUnavailable: input.computerUseUnavailable === true
+  })
+}
+
+export function getFeatureWallSetupProgress(
+  input: FeatureWallSetupProgressInput
+): FeatureWallSetupProgress {
+  const stepDone: Record<FeatureWallSetupStepId, boolean> = {
+    'default-agent': Boolean(input.settings?.defaultTuiAgent),
+    'add-two-repos': input.gitRepoCount >= 2,
+    notifications:
+      input.settings?.notifications.enabled === true &&
+      input.settings.notifications.agentTaskComplete === true,
+    'two-worktrees': countAvailableNonMainWorktrees(selectWorktreesByRepo(input)) >= 1,
+    browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
+    'task-sources': input.hasConnectedTaskSource,
+    'agent-capabilities': setupGuideAgentCapabilitiesDone(input),
+    'setup-script': input.hasSetupScript
+  }
+  return {
+    ready: input.ready ?? true,
+    stepDone,
+    coreDoneCount: FEATURE_WALL_SETUP_STEPS.filter((step) => stepDone[step.id]).length,
+    coreTotal: FEATURE_WALL_SETUP_STEPS.length
+  }
+}
+
+export function getSetupGuideProgressSnapshot(input: FeatureWallSetupProgressInput): {
+  rawProgress: FeatureWallSetupProgress
+  preBrowserSetupComplete: boolean
+} {
+  return {
+    rawProgress: getFeatureWallSetupProgress(input),
+    preBrowserSetupComplete: hasCompletedPreBrowserSetup(input)
+  }
+}

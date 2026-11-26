@@ -6,8 +6,8 @@ import {
 import {
   listWslMoveCutovers,
   writeWslMoveCutover
-} from '../../moving-wsl-projects/wsl-move-cutover-journal'
-import { setWslMoveDesktopRewriteRegistryCompleteForTests } from '../../moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+} from '../../moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
+import { setWslMoveDesktopRewriteRegistryCompleteForTests } from '../../moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 
 export function seedWslMoveCutover(userDataPath: string, cutover: WslMoveCutover): void {
   const existing = listWslMoveCutovers(userDataPath).find(

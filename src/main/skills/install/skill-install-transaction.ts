@@ -5,8 +5,8 @@ import {
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { SkillInstallResult } from '../../../shared/skill-install-contract'
-import type { SkillPackageManifestV1 } from '../../../shared/skill-package-manifest'
+import type { SkillInstallResult } from '../../../shared/skills/installation/skill-install-contract'
+import type { SkillPackageManifestV1 } from '../../../shared/skills/packages/skill-package-manifest'
 import {
   acquireSkillInstallLock,
   skillInstallLockPath
@@ -38,7 +38,7 @@ import {
   beginSkillExtractionRecovery,
   finishSkillExtractionRecovery
 } from '../transaction-state/skill-extraction-recovery'
-import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skill-install-failure'
+import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skills/installation/skill-install-failure'
 import { SkillInstallOperationError } from './skill-install-operation-error'
 import {
   createSkillInstallReceipt,

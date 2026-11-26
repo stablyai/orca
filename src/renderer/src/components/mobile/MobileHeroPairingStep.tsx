@@ -3,7 +3,7 @@ import { Trans } from 'react-i18next'
 import { ChevronDown, CircleAlert, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/class-names'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
-import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
+import type { PairingNetworkInterface } from '../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 import { MobilePairingConnectionOptions } from './pairing/MobilePairingConnectionOptions'
 import { MobileRelayBetaNotice } from './pairing/MobileRelayBetaNotice'
@@ -289,10 +289,7 @@ export function MobileHeroPairingStep({
           >
             <CollapsibleTrigger asChild>
               <button type="button" className="mp-disclosure-trigger">
-                {t(
-                  'auto.components.mobile.MobileHero.directAddressDisclosure',
-                  'Also use a faster local path'
-                )}
+                {t('auto.components.mobile.MobileHero.directAddressDisclosure', 'Local connection')}
                 <ChevronDown
                   className={cn(
                     'size-3.5 transition-transform',

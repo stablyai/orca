@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { triggerEdgeBump, triggerSelection } from '../platform/haptics'
+import { triggerEdgeBump, triggerSelection } from '../platform/haptics/haptics'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 
 /** Taps when recording begins and returns a stop that ticks. */

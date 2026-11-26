@@ -1,6 +1,6 @@
 import { hasShedSubagentsField } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { readAgentPaneRootBinding } from '../../../shared/agent-status/process/agent-process-presence'
-import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex-state'
+import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 
 // One binding per pane a relay asked about; a link restart drops them all.

@@ -1,5 +1,5 @@
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { isChromiumErrorPage } from '../describe-page/browser-page-url-display'
 
 /** Retained guests can navigate while their pane is unmounted; drop failures they have moved past. */

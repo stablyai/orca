@@ -14,6 +14,14 @@ import {
 } from '../../coordinator/dispatch/task-dispatch-refusal'
 import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
 import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
+import {
+  DISPATCH_LINK_COLUMNS,
+  DISPATCH_LINK_JOINS,
+  dispatchLinkRows,
+  type DispatchCreatorLink
+} from './dispatch-links-by-id'
+import { retireRemotePlacement } from '../remote-owned/remote-placement-hold'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -97,11 +105,17 @@ export function createDispatchContext(
       from: 'ready',
       to: 'dispatched'
     })
-    const dispatch = this.db
-      .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
-      .get(id) as DispatchContextRow
+    // The Task runs here now; an earlier attempt on a paired server no longer speaks for it.
+    retireRemotePlacement(this, taskId)
+    const row = this.db
+      .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
+      .get(id)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation; the row was just claimed in this savepoint.
+    const dispatch = row as DispatchContextRow
     this.db.exec('RELEASE create_dispatch_context')
     this.hasAnyDispatchContextsCache = true
+    this.workerDockSources?.rememberDispatch(dispatch)
+    this.workerDockSources?.changedDispatch(dispatch.id)
     return dispatch
   } catch (error) {
     this.db.exec('ROLLBACK TO create_dispatch_context')
@@ -114,18 +128,111 @@ export function getDispatchContext(
   this: OrchestrationDb,
   taskId: string
 ): DispatchContextRow | undefined {
-  return this.db
+  const row = this.db
     .prepare('SELECT * FROM dispatch_contexts WHERE task_id = ? ORDER BY rowid DESC LIMIT 1')
     .get(taskId) as DispatchContextRow | undefined
+  this.workerDockSources?.rememberDispatch(row)
+  return row
 }
 
 export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
 ): DispatchContextRow | undefined {
-  return this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(dispatchId) as
-    | DispatchContextRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  const row = this.db
+    .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
+    .get(dispatchId) as DispatchContextRow | undefined
+  this.workerDockSources?.rememberDispatch(row)
+  return row
+}
+
+/** The newest Dispatches a chat created, by the Orca session id it is addressed by. */
+export function listDispatchIdsCreatedBySession(
+  this: OrchestrationDb,
+  orcaSessionId: string,
+  limit: number
+): string[] {
+  const rows = this.db
+    .prepare(
+      'SELECT id FROM dispatch_contexts WHERE creator_orca_session_id = ? ORDER BY rowid DESC LIMIT ?'
+    )
+    .all(orcaSessionId, limit)
+  return rows.flatMap((row) =>
+    typeof row === 'object' && row !== null && 'id' in row && typeof row.id === 'string'
+      ? [row.id]
+      : []
+  )
+}
+
+/** A Dispatch and the chat or pane that created it. */
+export type CreatedDispatch = {
+  id: string
+  creatorOrcaSessionId: string | null
+  creatorPaneKey: string | null
+}
+
+// Each creator column is matched through its own index; ids arrive as one JSON array, so no variable limit.
+export const DISPATCHES_CREATED_BY_ANY_SQL = `
+  WITH created AS (
+    SELECT rowid AS seq, id, status, creator_orca_session_id, creator_pane_key FROM dispatch_contexts
+    WHERE creator_orca_session_id IN (SELECT value FROM json_each(?1))
+    UNION
+    SELECT rowid AS seq, id, status, creator_orca_session_id, creator_pane_key FROM dispatch_contexts
+    WHERE creator_pane_key IN (SELECT value FROM json_each(?2))
+  )
+  SELECT id, creator_orca_session_id, creator_pane_key FROM created
+  WHERE status IN ('pending', 'dispatched')
+  UNION
+  SELECT id, creator_orca_session_id, creator_pane_key FROM (
+    SELECT * FROM created ORDER BY seq DESC LIMIT ?3
+  )`
+
+/** In one query: every unsettled Dispatch these chats or panes created, and their newest `recentLimit` of any status. */
+export function listDispatchesCreatedByAny(
+  this: OrchestrationDb,
+  creators: { orcaSessionIds: readonly string[]; paneKeys: readonly string[] },
+  recentLimit: number
+): CreatedDispatch[] {
+  const rows = this.db
+    .prepare(DISPATCHES_CREATED_BY_ANY_SQL)
+    .all(JSON.stringify(creators.orcaSessionIds), JSON.stringify(creators.paneKeys), recentLimit)
+  return rows.flatMap((row) =>
+    typeof row === 'object' && row !== null && 'id' in row && typeof row.id === 'string'
+      ? [
+          {
+            id: row.id,
+            creatorOrcaSessionId:
+              'creator_orca_session_id' in row && typeof row.creator_orca_session_id === 'string'
+                ? row.creator_orca_session_id
+                : null,
+            creatorPaneKey:
+              'creator_pane_key' in row && typeof row.creator_pane_key === 'string'
+                ? row.creator_pane_key
+                : null
+          }
+        ]
+      : []
+  )
+}
+
+export const DISPATCH_LINKS_CREATED_BY_ANY_SQL = `
+  SELECT ${DISPATCH_LINK_COLUMNS} FROM dispatch_contexts d ${DISPATCH_LINK_JOINS}
+  WHERE d.creator_orca_session_id IN (SELECT value FROM json_each(?1))
+  UNION
+  SELECT ${DISPATCH_LINK_COLUMNS} FROM dispatch_contexts d ${DISPATCH_LINK_JOINS}
+  WHERE d.creator_pane_key IN (SELECT value FROM json_each(?2))`
+
+/** Every Dispatch these chats or panes created, of any age, with only the columns that place it. */
+export function listDispatchLinksCreatedByAny(
+  this: OrchestrationDb,
+  creators: { orcaSessionIds: readonly string[]; paneKeys: readonly string[] }
+): DispatchCreatorLink[] {
+  return dispatchLinkRows(
+    this.db
+      .prepare(DISPATCH_LINKS_CREATED_BY_ANY_SQL)
+      .all(JSON.stringify(creators.orcaSessionIds), JSON.stringify(creators.paneKeys))
+  )
 }
 
 export function commitDispatchLaunchTokenHash(
@@ -163,6 +270,9 @@ export type DispatchContextStoreMethods = {
   createDispatchContext: typeof createDispatchContext
   getDispatchContext: typeof getDispatchContext
   getDispatchContextById: typeof getDispatchContextById
+  listDispatchIdsCreatedBySession: typeof listDispatchIdsCreatedBySession
+  listDispatchesCreatedByAny: typeof listDispatchesCreatedByAny
+  listDispatchLinksCreatedByAny: typeof listDispatchLinksCreatedByAny
   commitDispatchLaunchTokenHash: typeof commitDispatchLaunchTokenHash
 }
 
@@ -171,6 +281,9 @@ export function attachDispatchContextStore(ctor: { prototype: object }): void {
     createDispatchContext,
     getDispatchContext,
     getDispatchContextById,
+    listDispatchIdsCreatedBySession,
+    listDispatchesCreatedByAny,
+    listDispatchLinksCreatedByAny,
     commitDispatchLaunchTokenHash
   })
 }

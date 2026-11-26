@@ -5,7 +5,7 @@ import {
   isPluginRepositoryPath,
   pluginRelativePathError
 } from '../../../shared/plugins/installation/plugin-path-safety'
-import { MAX_PLUGIN_FILES, MAX_PLUGIN_TOTAL_BYTES } from '../plugin-content-hash'
+import { MAX_PLUGIN_FILES, MAX_PLUGIN_TOTAL_BYTES } from '../artifacts/plugin-content-hash'
 
 const MAX_PATH_BYTES = 1024
 const MAX_PATH_DEPTH = 64
