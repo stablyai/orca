@@ -389,3 +389,18 @@ it('tells an authored "Other…" from the card\'s own free-text action before ei
   expect(tree!.root.findAll((node) => isHost(node, 'MessageBox'))).toHaveLength(1)
   expect(sent).toEqual([])
 })
+
+it("tells an authored option in the action's very words from the action itself", async () => {
+  vi.useFakeTimers()
+  const { typeAnswerAuthored } = RECOMMENDED_ASKS
+  mount(typeAnswerAuthored.stored)
+  // Same words, told apart by what each is: the authored one has no pencil and is not an action.
+  expect(shown()).toEqual(['Type your answer', 'Wait  Recommended'])
+  expect(rows()[0]!.props.action).toBeFalsy()
+  expect(rows()[0]!.findAll((node) => isHost(node, 'Pencil'))).toHaveLength(0)
+  expect(freeText().props).toMatchObject({ label: 'Type your answer', action: true })
+  expect(freeText().findAll((node) => isHost(node, 'Pencil'))).toHaveLength(1)
+  expect(await posts(typeAnswerAuthored.stored, ['Type your answer'], false)).toBe(
+    RECOMMENDED_ASK_ANSWERS.typeAnswerAuthored
+  )
+})

@@ -59,7 +59,15 @@ async function choices() {
     buttons.map((button) => {
       const copy = button.cloneNode(true)
       copy.querySelectorAll('.sr-only, [aria-hidden="true"]').forEach((node) => node.remove())
+      // As painted, line breaks and all: hidden parts measure no text.
+      const hidden = [...button.querySelectorAll('.sr-only, [aria-hidden="true"]')]
+      hidden.forEach((node) => node.setAttribute('data-check-hidden', node.style.display))
+      hidden.forEach((node) => (node.style.display = 'none'))
+      const rendered = button.innerText.trim()
+      hidden.forEach((node) => (node.style.display = node.getAttribute('data-check-hidden') ?? ''))
+      hidden.forEach((node) => node.removeAttribute('data-check-hidden'))
       return {
+        rendered,
         words: copy.textContent.trim(),
         star: (button.textContent.match(/★/g) ?? []).length
       }
@@ -237,9 +245,10 @@ try {
   // A label of several lines stays as written, so the stepped answer is told from it.
   await open('multiline')
   const lines = await choices()
+  // Painted on two lines, not only kept in the text.
   assert.ok(
-    lines.shown.some((at) => at.words === 'A\nSecond? → B (Recommended)'),
-    `multiline: the label keeps its words; got ${JSON.stringify(lines.shown)}`
+    lines.shown.some((at) => at.rendered === 'A\nSecond? → B (Recommended)'),
+    `multiline: the label shows its two lines; got ${JSON.stringify(lines.shown)}`
   )
   await chip('A').click()
   await chip('B').click()

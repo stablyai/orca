@@ -109,7 +109,9 @@ export const RECOMMENDED_ASKS = {
   otherAuthored: {
     written: ask(question('Go?', ['Other… [recommended]', 'Wait'])),
     stored: ask(question('Go?', ['Other…', 'Wait'], { recommended: 0 }))
-  }
+  },
+  // An authored option in the very words of the phone's free-text action.
+  typeAnswerAuthored: kept(question('Go?', ['Type your answer', 'Wait'], { recommended: 1 }))
 } satisfies Record<string, { written: BotItemAsk; stored: BotItemAsk }>
 
 /** The comment each surface posts for these asks: the desktop browser check and the phone card test
@@ -146,5 +148,6 @@ export const RECOMMENDED_ASK_ANSWERS = {
   severalFoldedOne: 'Scope? → Audit, Notify (Recommended)\nShip? → Yes',
   // Stepped: A for the first question, B for the second.
   multilineStepped: 'First? → A\nSecond? → B',
-  otherAuthored: 'Other…'
+  otherAuthored: 'Other…',
+  typeAnswerAuthored: 'Type your answer'
 } as const
