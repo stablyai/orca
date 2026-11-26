@@ -6,7 +6,7 @@ export type DetectionDirectoryRequest = {
   mode: 'path' | 'inventory' | 'install'
 }
 
-export type DetectionDirectoryListing = Map<string, string> | null | 'unverified'
+export type DetectionDirectoryListing = Map<string, string> | null
 export type DirectoryWorkerListing = DetectionDirectoryListing | InstallDirectoryListing
 
 export type DetectionDirectoryResponse = {

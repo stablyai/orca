@@ -17,7 +17,7 @@ port.on('message', async (request: DetectionDirectoryRequest) => {
   const listing =
     request.mode === 'install'
       ? readInstallSubdirectories(request.dir)
-      : await readDetectionDirectory(request.dir, request.mode === 'inventory')
+      : await readDetectionDirectory(request.dir)
   const response: DetectionDirectoryResponse = { id: request.id, listing }
   port.postMessage(response)
 })

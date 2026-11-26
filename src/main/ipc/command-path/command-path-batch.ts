@@ -169,10 +169,7 @@ export async function findCommandsOnLocalPath(
     if (!isWin && pendingCount <= DIRECT_DETECTION_COMMAND_LIMIT) {
       return null
     }
-    const read = async (): Promise<Listing | null> => {
-      const names = await readDetectionDirectoryViaWorker(dir.dir, probes !== undefined)
-      return names === 'unverified' ? UNVERIFIED_FS_PROBE : names
-    }
+    const read = () => readDetectionDirectoryViaWorker(dir.dir, probes !== undefined)
     return probes ? probes.read(dir.dir, 'listing', read) : read()
   }
   const probeCommand = async (
@@ -183,7 +180,7 @@ export async function findCommandsOnLocalPath(
   ): Promise<DirectoryCandidate> => {
     const names = listing === UNVERIFIED_FS_PROBE ? null : listing
     const checked = new Set<string>()
-    let uncertain = listing === UNVERIFIED_FS_PROBE
+    let uncertain = false
     for (const ext of extensions.get(command) ?? []) {
       const wanted = command + ext
       const listed = names?.get(directoryNameKey(wanted))

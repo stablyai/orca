@@ -39,10 +39,7 @@ export async function checkExecutableFile(
   return result === UNVERIFIED_FS_PROBE ? 'unknown' : result ? 'executable' : 'missing'
 }
 
-export async function readDetectionDirectory(
-  dir: string,
-  inventory = false
-): Promise<DetectionDirectoryListing> {
+export async function readDetectionDirectory(dir: string): Promise<DetectionDirectoryListing> {
   let directory: Dir
   try {
     directory = await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
@@ -51,7 +48,7 @@ export async function readDetectionDirectory(
       return new Map()
     }
     // Searchable-but-unreadable directories still admit stat on known names.
-    return !inventory || isPathPermissionError(error) ? null : 'unverified'
+    return null
   }
   try {
     const names = new Map<string, string>()
@@ -68,10 +65,8 @@ export async function readDetectionDirectory(
       names.set(directoryNameKey(entry.name), entry.name)
     }
     return names
-  } catch (error) {
-    return !inventory || isDirentLookupError(error) || isPathPermissionError(error)
-      ? null
-      : 'unverified'
+  } catch {
+    return null
   }
 }
 

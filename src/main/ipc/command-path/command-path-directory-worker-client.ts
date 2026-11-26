@@ -75,7 +75,7 @@ export class DetectionDirectoryWorkerClient {
     }
     const worker = this.host.ensure()
     if (!worker) {
-      return Promise.resolve('unverified')
+      return Promise.resolve(null)
     }
     this.host.clearIdleTimer()
     const id = this.nextId++
@@ -100,7 +100,7 @@ export class DetectionDirectoryWorkerClient {
     this.host.destroy()
     for (const { resolve, timer } of this.pending.values()) {
       clearTimeout(timer)
-      resolve('unverified')
+      resolve(null)
     }
     this.pending.clear()
   }
@@ -134,5 +134,5 @@ export async function readDetectionDirectoryViaWorker(
     ? (inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, 'inventory'))
     : (client ??= new DetectionDirectoryWorkerClient())
   const listing = await workerClient.read(dir)
-  return listing instanceof Map || listing === 'unverified' ? listing : null
+  return listing instanceof Map ? listing : null
 }
