@@ -57,19 +57,20 @@ export function settlePeerQuestionsOut(
       )
       .run(conversationId, named)
   } else if (reply.threadId) {
-    db.db
-      .prepare(
-        `UPDATE peer_questions_out SET awaiting = NULL
-         WHERE rowid = (
-           SELECT rowid FROM peer_questions_out
-           WHERE conversation_id = ?1 AND awaiting = 1 AND (message_id = ?2 OR thread_id = ?2)
-           -- +rowid keeps the plan on the awaiting index; a bare rowid order scans settled history.
-           ORDER BY +rowid LIMIT 1
-         )`
-      )
-      .run(conversationId, reply.threadId)
+    db.db.prepare(SETTLE_OLDEST_IN_THREAD_SQL).run(conversationId, reply.threadId)
   }
 }
+
+// awaiting: 1 while open, NULL once settled, 0 once a reply that named no question settled it.
+// idx_peer_questions_out_thread keys (conversation_id, thread key, awaiting), so both read one seek.
+export const SETTLE_OLDEST_IN_THREAD_SQL = `UPDATE peer_questions_out SET awaiting = 0
+  WHERE rowid = (
+    SELECT rowid FROM peer_questions_out
+    WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2 AND awaiting = 1
+    ORDER BY rowid LIMIT 1
+  )`
+export const THREAD_SETTLED_UNNAMED_SQL = `SELECT 1 FROM peer_questions_out
+  WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2 AND awaiting = 0 LIMIT 1`
 
 /** Tells each asker still waiting on that computer that no answer will come: it was removed (no
  *  `server`), or re-paired, so questions sent under an older pairing are lost with it. */
@@ -135,15 +136,8 @@ export function tellUnpairedPeerQuestions(
   }
 }
 
-/** An older Orca's reply, which names no question, landed in this thread: it settled the oldest open
- *  question there, so it may have answered this one instead. */
+/** A reply that named no question settled the oldest open one in this thread, so it may have
+ *  answered this one instead. */
 function maybeAnswered(db: OrchestrationDb, conversationId: string, threadKey: string): boolean {
-  return (
-    db.db
-      .prepare(
-        `SELECT 1 FROM messages m JOIN peer_mail_messages p ON p.message_id = m.id
-         WHERE m.thread_id = ? AND m.reply_to IS NULL AND p.conversation_id = ? LIMIT 1`
-      )
-      .get(threadKey, conversationId) !== undefined
-  )
+  return db.db.prepare(THREAD_SETTLED_UNNAMED_SQL).get(conversationId, threadKey) !== undefined
 }
