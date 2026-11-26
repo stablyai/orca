@@ -358,6 +358,7 @@ import {
   SaveImageAsTempFile,
   StartImageUpload
 } from './clipboard/clipboard-params'
+import { CollectionCreate, CollectionSelector, CollectionUpdate } from './collection-params'
 import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
@@ -1543,6 +1544,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.commitImageUpload': CommitImageUpload,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
+  'collection.create': CollectionCreate,
+  'collection.delete': CollectionSelector,
+  'collection.list': null,
+  'collection.update': CollectionUpdate,
   'computer.capabilities': ComputerCapabilitiesParams,
   'computer.click': Click,
   'computer.drag': DragOfComputerSchemasParams,

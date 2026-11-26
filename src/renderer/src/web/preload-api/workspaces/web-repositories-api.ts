@@ -3,6 +3,7 @@ import { legacyBaseRefSearchResult } from '../../../../../shared/worktree/base-r
 import type { CloneTargetCheck } from '../../../../../shared/git/clone/clone-target-check'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRuntimeDefaultCreateProjectParent } from '@/components/sidebar/project-admission/create/runtime-create-project-parent'
+import type { Collection } from '../../../../../shared/collection-types'
 import {
   callRuntimeResult,
   callRuntimeResultWithOwner,
@@ -99,5 +100,32 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       return result.refDetails ?? result.refs.map(legacyBaseRefSearchResult)
     },
     onChanged: () => noopUnsubscribe
+  }
+}
+
+export function createCollectionsApi(): NonNullable<Partial<PreloadApi>['collections']> {
+  return {
+    list: async () =>
+      (await callRuntimeResult<{ collections: Collection[] }>('collection.list')).collections,
+    create: async ({ name, color }) =>
+      (
+        await callRuntimeResult<{ collection: Collection }>('collection.create', {
+          name,
+          color
+        })
+      ).collection,
+    update: async ({ collectionId, updates }) =>
+      (
+        await callRuntimeResult<{ collection: Collection | null }>('collection.update', {
+          collectionId,
+          updates
+        })
+      ).collection,
+    delete: async ({ collectionId }) =>
+      (
+        await callRuntimeResult<{ deleted: boolean }>('collection.delete', {
+          collectionId
+        })
+      ).deleted
   }
 }

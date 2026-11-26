@@ -3,6 +3,7 @@ import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
+import { isCollectionSectionKey } from '../../worktree-list-collections'
 import { WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP } from '../viewport/virtual-rows'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatusGroupKey } from '../../../../../../shared/workspace/status/workspace-statuses'
@@ -60,10 +61,12 @@ export function useWorktreeDragSession(args: {
     () =>
       rows
         .filter((row): row is WorktreeItemRow => row.type === 'item')
+        // Why: collection duplicates would repeat ids in the expanded lineage drag set.
         .filter(
           (row) =>
-            row.sectionKey !== PINNED_GROUP_KEY ||
-            !naturalDragWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))
+            !isCollectionSectionKey(row.sectionKey) &&
+            (row.sectionKey !== PINNED_GROUP_KEY ||
+              !naturalDragWorktreeKeys.has(getWorktreeHostIdentity(row.worktree)))
         )
         .map((row) => ({
           worktreeId: row.worktree.id,

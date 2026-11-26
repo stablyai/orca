@@ -18,6 +18,8 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
+import { insertCollectionRowsAfterPinned } from '../../worktree-list-collections'
+import { useCollectionRows } from './use-collection-rows'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
@@ -226,9 +228,15 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         : effectiveCollapsedGroups,
     [effectiveCollapsedGroups, hostScopedGroups]
   )
+  const collectionRows = useCollectionRows({
+    worktrees,
+    repoMap,
+    collapsedGroups: effectiveCollapsedGroups,
+    repoOrder
+  })
   const rows: Row[] = useMemo(
-    () => rowPlan.render(rowCollapsedGroups),
-    [rowPlan, rowCollapsedGroups]
+    () => insertCollectionRowsAfterPinned(rowPlan.render(rowCollapsedGroups), collectionRows),
+    [rowPlan, rowCollapsedGroups, collectionRows]
   )
   const orderedHostOptions = useMemo(
     () => orderHostSectionOptions(hostOptions, workspaceHostOrder),

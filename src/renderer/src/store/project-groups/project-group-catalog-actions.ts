@@ -67,6 +67,7 @@ export function createProjectGroupCatalogActions(
           throw err
         }
       }
+      void get().fetchCollections()
     },
 
     // Why: startup renders an all-host sidebar; replacing groups with only the active host leaves other hosts' repos visible but ungrouped.
@@ -78,6 +79,7 @@ export function createProjectGroupCatalogActions(
       } catch (err) {
         console.error('Failed to fetch local project groups for all-host load:', err)
       }
+      void get().fetchCollections()
       if (options?.remoteHosts === 'skip') {
         return
       }

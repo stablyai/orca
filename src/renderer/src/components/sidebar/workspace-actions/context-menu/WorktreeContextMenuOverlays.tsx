@@ -2,8 +2,15 @@ import { ProjectGroupNameDialog } from '../../worktree-list/rows/ProjectGroupNam
 import { WorktreeParentPickerPopover } from '../parenting/WorktreeParentPickerPopover'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import type { useWorktreeCollectionActions } from '../../use-worktree-collection-actions'
 
-export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextMenuModel }) {
+export function WorktreeContextMenuOverlays({
+  model,
+  collections
+}: {
+  model: WorktreeContextMenuModel
+  collections: ReturnType<typeof useWorktreeCollectionActions>
+}) {
   const t = useTranslate()
   return (
     <>
@@ -26,6 +33,21 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
         confirmLabel={t('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')}
         onOpenChange={model.handleCreateGroupDialogOpenChange}
         onSubmit={model.handleSubmitNewProjectGroup}
+      />
+      <ProjectGroupNameDialog
+        open={collections.createCollectionDialogOpen}
+        title={t(
+          'auto.components.sidebar.WorktreeContextMenu.newCollectionTitle',
+          'New Collection'
+        )}
+        description={t(
+          'auto.components.sidebar.WorktreeContextMenu.newCollectionDescription',
+          'Create a collection and add this worktree to it.'
+        )}
+        initialName=""
+        confirmLabel="Create"
+        onOpenChange={collections.setCreateCollectionDialogOpen}
+        onSubmit={collections.handleSubmitNewCollection}
       />
       {model.parentPicker ? (
         <WorktreeParentPickerPopover

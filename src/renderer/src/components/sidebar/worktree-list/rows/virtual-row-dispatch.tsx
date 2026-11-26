@@ -32,6 +32,10 @@ import { renderWorktreeItemRow, type WorktreeItemRowContext } from './item-row'
 import { LineageGuides } from './lineage-guides'
 import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
+import {
+  renderCollectionSectionHeaderRow,
+  type CollectionSectionHeaderContext
+} from './CollectionSectionHeader'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -53,6 +57,7 @@ export type WorktreeVirtualRowContext = {
   hostDrag: ReturnType<typeof useHostHeaderDrag>
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   header: SectionHeaderRowContext
+  collectionHeader: CollectionSectionHeaderContext
   item: WorktreeItemRowContext
   folderWorkspace: FolderWorkspaceRowContext
   importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
@@ -127,6 +132,20 @@ export function renderWorktreeVirtualRow(
 ): React.JSX.Element | null {
   if (row.type === 'host-header') {
     return renderHostHeaderVirtualRow(ctx, row, vItem)
+  }
+
+  if (row.type === 'header' && row.collection) {
+    return renderCollectionSectionHeaderRow({
+      ctx: ctx.collectionHeader,
+      row,
+      vItem,
+      hasHeaderTopSpacing: shouldUseHeaderTopSpacing({
+        rows: ctx.renderRows,
+        index: vItem.index,
+        firstHeaderIndex: ctx.firstHeaderIndex
+      }),
+      measureVirtualRowElement: ctx.measureVirtualRowElement
+    })
   }
 
   if (row.type === 'header') {

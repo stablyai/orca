@@ -9,7 +9,7 @@ import {
   isHostIdentityFenceCurrent
 } from '../../runtime/rpc/environment-revisions/host-identity-fence'
 
-export type HostCatalogKind = 'repos' | 'project-groups' | 'folder-workspaces'
+export type HostCatalogKind = 'repos' | 'project-groups' | 'folder-workspaces' | 'collections'
 
 export type HostCatalogIdentity = {
   target: RuntimeClientTarget

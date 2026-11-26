@@ -6,6 +6,7 @@ import type { WslHostWindowsDriveRefusal } from '../../../../shared/remote-runti
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import type { Collection } from '../../../../shared/collection-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
   NestedRepoScanResult,
@@ -188,6 +189,7 @@ export type RepoSlice = {
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
+  collections: readonly Collection[]
   folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspaceCatalogByHost: Partial<Record<ExecutionHostId, HostCatalogIdentity>>
   /** Local projects a WSL host now owns: never in `repos`/`folderWorkspaces`, read-only, chats only. */
@@ -210,6 +212,7 @@ export type RepoSlice = {
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: (options: RuntimeCatalogFetchOptions) => Promise<void>
   fetchProjectGroupsForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
+  fetchCollections: () => Promise<void>
   fetchFolderWorkspaces: (options: RuntimeCatalogFetchOptions) => Promise<void>
   fetchFolderWorkspacesForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   addRepo: () => Promise<Repo | null>
@@ -249,6 +252,12 @@ export type RepoSlice = {
   }) => Promise<ProjectGroupImportResult | null>
   /** `hostId` is the host of the project that seeds the group. */
   createProjectGroup: (name: string, hostId: ExecutionHostId) => Promise<ProjectGroup | null>
+  createCollection: (name: string) => Promise<Collection | null>
+  updateCollection: (
+    collectionId: string,
+    updates: Partial<Pick<Collection, 'name' | 'isCollapsed' | 'order' | 'color'>>
+  ) => Promise<Collection | null>
+  deleteCollection: (collectionId: string) => Promise<boolean>
   createFolderWorkspace: (
     args: FolderWorkspaceCreateInput,
     options: FolderWorkspacePathStatusRouteOptions & { signal?: AbortSignal }

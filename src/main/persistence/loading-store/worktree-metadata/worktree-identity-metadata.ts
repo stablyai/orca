@@ -23,6 +23,7 @@ import {
 } from '../profile-writing/write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
+import { normalizeWrittenCollectionIds } from '../worktree-collection-membership'
 import {
   isLocalOnlyWorktreeMetaId,
   worktreeMetaHostFor
@@ -261,6 +262,7 @@ export function setWorktreeMetaForHost(
     instanceId,
     hostId: executionHostId
   })
+  normalizeWrittenCollectionIds(state, updated)
   state.worktreeMetaByIdentity ??= {}
   state.worktreeIdentityAliases ??= {}
   if (existingIdentityKey && existingIdentityKey !== identityKey) {

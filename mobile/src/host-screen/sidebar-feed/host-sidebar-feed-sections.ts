@@ -51,6 +51,7 @@ function headerTitle(row: GroupHeaderRow): string {
     case 'pr-status':
       return row.label ?? PR_GROUP_LABELS[row.icon.prGroup]
     case 'project':
+    case 'collection':
     case 'workspace-status':
       return row.label ?? ''
   }

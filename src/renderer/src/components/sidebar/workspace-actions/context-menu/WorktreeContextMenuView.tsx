@@ -18,6 +18,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
+import { useWorktreeCollectionActions } from '../../use-worktree-collection-actions'
+import { WorktreeCollectionMenuItems } from '../../WorktreeCollectionMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
 import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
@@ -41,6 +43,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-a
 import { WorktreeHandToBotMenuItem } from '@/components/bots/hand-to-bot/WorktreeHandToBotMenuItem'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
+  const collections = useWorktreeCollectionActions(model.worktree)
   const {
     children,
     contentClassName,
@@ -245,6 +248,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               {folderWorkspaceId ? (
                 <WslMoveFolderWorkspaceMenuItem folderWorkspaceId={folderWorkspaceId} />
               ) : null}
+              {folderWorkspaceId ? null : (
+                <WorktreeCollectionMenuItems actions={collections} isDeleting={isDeleting} />
+              )}
               <WslMovedWorkspaceUseHereMenuItem worktree={worktree} />
             </>
           )}
@@ -265,7 +271,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      <WorktreeContextMenuOverlays model={model} />
+      <WorktreeContextMenuOverlays model={model} collections={collections} />
     </div>
   )
 }

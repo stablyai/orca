@@ -55,7 +55,12 @@ import type { PluginsApi } from './api/plugins/plugin-host-api'
 import type { PreflightApi } from './api/preflight/preflight-api'
 import type { BackgroundWorkerApi } from './api/diagnostics/background-worker-api'
 import type { PtyApi } from './api/terminal/pty-api'
-import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/projects/repository-api'
+import type {
+  CollectionsApi,
+  ProjectGroupsApi,
+  ProjectsApi,
+  RepositoryApi
+} from './api/projects/repository-api'
 import type { RuntimeApi } from './api/runtime/runtime-api'
 import type { WslMoveApi } from './api/wsl/wsl-move-bridge'
 import type { WslDriveProjectApi } from './api/wsl/wsl-drive-project-bridge'
@@ -104,6 +109,7 @@ export type PreloadApi = {
   repos: RepositoryApi
   projects: ProjectsApi
   projectGroups: ProjectGroupsApi
+  collections: CollectionsApi
   folderWorkspaces: FolderWorkspacesApi
   sparsePresets: SparsePresetsApi
   worktrees: WorktreeApi

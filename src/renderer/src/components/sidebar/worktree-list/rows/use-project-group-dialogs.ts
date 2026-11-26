@@ -7,6 +7,8 @@ import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/project-groups/project-group-removal-targets'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { useCollectionDialogs } from './use-collection-dialogs'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
@@ -26,6 +28,7 @@ export type ProjectGroupNameDialogState =
       currentName: string
       hostId?: ExecutionHostId
     }
+  | { type: 'collection-rename'; collectionId: string; currentName: string }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -81,14 +84,18 @@ export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
   projectGroups: readonly ProjectGroup[]
+  worktreeMap: Map<string, Worktree>
 }) {
-  const { repos, repoMap, projectGroups } = args
+  const { repos, repoMap, projectGroups, worktreeMap } = args
+  // Why: collection rename reuses this name dialog, so the collection dialogs live beside it.
+  const collections = useCollectionDialogs({ worktreeMap })
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
+  const updateCollection = useAppStore((s) => s.updateCollection)
   const refreshingGroupIds = useRef(new Set<string>())
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
@@ -160,6 +167,10 @@ export function useProjectGroupDialogs(args: {
     []
   )
 
+  const handleRenameCollection = useCallback((collectionId: string, currentName: string) => {
+    setNameDialog({ type: 'collection-rename', collectionId, currentName })
+  }, [])
+
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!nameDialog) {
@@ -170,6 +181,10 @@ export function useProjectGroupDialogs(args: {
         if (group) {
           await moveProjectToGroup(nameDialog.repo, group.id)
         }
+        return
+      }
+      if (nameDialog.type === 'collection-rename') {
+        await updateCollection(nameDialog.collectionId, { name })
         return
       }
       const renamed = await updateProjectGroup(
@@ -193,7 +208,7 @@ export function useProjectGroupDialogs(args: {
         )
       }
     },
-    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
+    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup, updateCollection]
   )
 
   const deleteTargets = useMemo(() => {
@@ -278,6 +293,14 @@ export function useProjectGroupDialogs(args: {
     handleRemoveProjectFromGroup,
     handleRefreshProjectGroup,
     handleRenameProjectGroup,
+    handleRenameCollection,
+    collections,
+    collectionViewportProps: {
+      handleRenameCollection,
+      handleDeleteCollection: collections.handleDeleteCollection,
+      handleAddWorktreesToCollection: collections.handleAddWorktreesToCollection,
+      onDropWorktreesOnCollection: collections.handleDropWorktreesOnCollection
+    },
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
     handleConfirmDeleteProjectGroup

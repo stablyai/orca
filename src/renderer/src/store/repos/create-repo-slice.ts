@@ -5,10 +5,12 @@ import { createRepoCatalogActions } from './repo-catalog-actions'
 import { createRuntimeRepoCatalogActions } from './runtime-repo-catalog-actions'
 import { createAllHostRepoCatalogActions } from './all-host-repo-catalog-actions'
 import { createProjectGroupCatalogActions } from '../project-groups/project-group-catalog-actions'
+import { createCollectionCatalogActions } from '../collections/collection-catalog-actions'
 import { createFolderWorkspaceCatalogActions } from '../folder-workspaces/folder-workspace-catalog-actions'
 import { createFolderPathStatusActions } from '../folder-workspaces/folder-path-status-actions'
 import { createNestedRepositoryActions } from '../project-groups/nested-repository-operations'
 import { createProjectGroupMutationActions } from '../project-groups/project-group-mutations'
+import { createCollectionMutationActions } from '../collections/collection-mutations'
 import { createProjectGroupBatchUpdateAction } from '../project-groups/project-group-batch-update'
 import { createFolderWorkspaceMutationActions } from '../folder-workspaces/folder-workspace-mutations'
 import { createRepoAddActions } from './repo-add-actions'
@@ -25,10 +27,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   const runtimeRepoCatalogActions = createRuntimeRepoCatalogActions(set, get)
   const allHostRepoCatalogActions = createAllHostRepoCatalogActions(set, get)
   const projectGroupCatalogActions = createProjectGroupCatalogActions(set, get)
+  const collectionCatalogActions = createCollectionCatalogActions(set, get)
   const folderWorkspaceCatalogActions = createFolderWorkspaceCatalogActions(set, get)
   const folderPathStatusActions = createFolderPathStatusActions(set, get)
   const nestedRepositoryOperations = createNestedRepositoryActions(set, get)
   const projectGroupMutations = createProjectGroupMutationActions(set, get)
+  const collectionMutations = createCollectionMutationActions(set, get)
   const folderWorkspaceMutations = createFolderWorkspaceMutationActions(set, get)
   const repoAddActions = createRepoAddActions(set, get)
   const projectHostSetupActions = createProjectHostSetupActions(set, get)
@@ -41,6 +45,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     projects: [],
     projectHostSetups: [],
     projectGroups: [],
+    collections: [],
     folderWorkspaces: [],
     folderWorkspaceCatalogByHost: {},
     wslMovedProjects: [],
@@ -60,6 +65,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     awaitLocalRepoCatalogSettlement: repoCatalogActions.awaitLocalRepoCatalogSettlement,
     fetchProjectGroups: projectGroupCatalogActions.fetchProjectGroups,
     fetchProjectGroupsForAllHosts: projectGroupCatalogActions.fetchProjectGroupsForAllHosts,
+    fetchCollections: collectionCatalogActions.fetchCollections,
     fetchFolderWorkspaces: folderWorkspaceCatalogActions.fetchFolderWorkspaces,
     fetchFolderWorkspacesForAllHosts:
       folderWorkspaceCatalogActions.fetchFolderWorkspacesForAllHosts,
@@ -71,6 +77,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     cancelNestedRepoScan: nestedRepositoryOperations.cancelNestedRepoScan,
     importNestedRepos: nestedRepositoryOperations.importNestedRepos,
     createProjectGroup: projectGroupMutations.createProjectGroup,
+    createCollection: collectionMutations.createCollection,
+    updateCollection: collectionMutations.updateCollection,
+    deleteCollection: collectionMutations.deleteCollection,
     createFolderWorkspace: folderWorkspaceMutations.createFolderWorkspace,
     updateFolderWorkspace: folderWorkspaceMutations.updateFolderWorkspace,
     deleteFolderWorkspace: folderWorkspaceMutations.deleteFolderWorkspace,

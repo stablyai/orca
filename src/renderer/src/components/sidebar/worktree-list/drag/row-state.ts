@@ -94,7 +94,7 @@ export function updateLatestWorktreeStatusDropTarget(
   preview: WorktreeSidebarDropPreview | null
 ): void {
   drag.latestStatusDropTarget =
-    target.status || target.isPinDrop || target.lineageParentIdentity
+    target.status || target.isPinDrop || target.lineageParentIdentity || target.collectionId
       ? {
           target,
           preview,

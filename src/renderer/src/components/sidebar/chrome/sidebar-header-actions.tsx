@@ -1,5 +1,5 @@
-import React, { useCallback, useRef } from 'react'
-import { FolderPlus, Plus } from 'lucide-react'
+import React, { useCallback, useRef, useState } from 'react'
+import { FolderPlus, Layers, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -9,6 +9,7 @@ import { openWorkspaceCreationComposerWithTourHandoff } from '../../contextual-t
 import type { AddRepoDialogEntryRequest } from '../project-admission/dialog/add-repo-dialog-types'
 import { AddProjectMenu } from '../project-admission/menu/AddProjectMenu'
 import SidebarWorkspaceOptionsMenu from '../worktree-list/controls/SidebarWorkspaceOptionsMenu'
+import { AddCollectionDialog } from '../AddCollectionDialog'
 
 function AddProjectButton({
   preserveWorkspaceBoardOpen,
@@ -48,6 +49,40 @@ function AddProjectButton({
         <FolderPlus className="size-3.5" strokeWidth={2.25} />
       </Button>
     </AddProjectMenu>
+  )
+}
+
+function AddCollectionButton({
+  preserveWorkspaceBoardOpen
+}: {
+  preserveWorkspaceBoardOpen: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const label = t('auto.components.sidebar.SidebarHeader.newCollection', 'Add Collection')
+
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            type="button"
+            className="text-muted-foreground"
+            aria-label={label}
+            data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+            onClick={() => setOpen(true)}
+          >
+            <Layers className="size-3.5" strokeWidth={2.25} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
+      <AddCollectionDialog open={open} onOpenChange={setOpen} />
+    </>
   )
 }
 
@@ -120,6 +155,7 @@ export function SidebarHeaderActions({
           />
         )}
       </div>
+      <AddCollectionButton preserveWorkspaceBoardOpen />
       <AddProjectButton
         preserveWorkspaceBoardOpen
         onMenuOpenChange={(open) => updateMenuOpen('addProject', open)}

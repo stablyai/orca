@@ -21,6 +21,7 @@ import { ProjectCollectionOperations } from './project-catalog/project-collectio
 import { AutomationPersistence } from './automation-state/automation-persistence'
 import { MobileTabSelectionPersistence } from './profile-preferences/mobile-tab-selection-persistence'
 import { BotPersistence } from './bot-state/bot-persistence'
+import { CollectionOperations } from './collection-operations'
 import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot/remote-layout-snapshot-persistence'
 import { HostRepoCatalogSnapshotPersistence } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-persistence'
 import { PairedPortForwardPersistence } from '../../ports/paired-forwards/paired-port-forward-persistence'
@@ -37,6 +38,7 @@ import { OrcadMigrationBlobInstallPersistence } from '../migrating-orcad-catalog
 export type StoreDomainOperations = WriteSchedulingOperations &
   PrimaryStateWriteOperations &
   ProjectCollectionOperations &
+  CollectionOperations &
   RepoLifecycleOperations &
   MobileTabSelectionPersistence &
   BotPersistence &
@@ -78,6 +80,7 @@ export type StoreDomains = {
   crossStoreLineage: CrossStoreLineagePersistence
   folderParentLineage: FolderParentLineagePersistence
   projects: ProjectCollectionOperations
+  collections: CollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
   bots: BotPersistence
@@ -99,6 +102,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   WriteSchedulingOperations,
   PrimaryStateWriteOperations,
   ProjectCollectionOperations,
+  CollectionOperations,
   RepoLifecycleOperations,
   MobileTabSelectionPersistence,
   BotPersistence,
@@ -154,6 +158,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   )
   const metadata = new MetadataLineageOperations(runtime, scheduling, sessions)
   const projects = new ProjectCollectionOperations(runtime, repos, scheduling, metadata)
+  const collections = new CollectionOperations(runtime, scheduling)
   const automations = new AutomationPersistence(runtime, flushBarriers, preferences)
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const remoteLayoutSnapshots = new RemoteLayoutSnapshotPersistence(runtime, scheduling)
@@ -187,6 +192,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     crossStoreLineage: new CrossStoreLineagePersistence(runtime, scheduling),
     folderParentLineage: new FolderParentLineagePersistence(runtime, scheduling),
     projects,
+    collections,
     automations,
     mobileTabSelections,
     bots: new BotPersistence(runtime, scheduling),

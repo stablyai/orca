@@ -2,6 +2,7 @@ import type { WorktreeOccurrencePlan } from '../../../../../../shared/sidebar-li
 import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import type { Collection } from '../../../../../../shared/collection-types'
 import type {
   PendingSidebarRowReveal,
   PendingSidebarWorktreeReveal
@@ -62,6 +63,9 @@ export type VirtualizedWorktreeViewportProps = {
   handleRemoveProjectFromGroup: (repo: Repo) => void
   handleRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  handleRenameCollection: (collectionId: string, currentName: string) => void
+  handleDeleteCollection: (collectionId: string, name: string) => void
+  handleAddWorktreesToCollection: (collection: Collection) => void
   handleRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
@@ -105,6 +109,7 @@ export type VirtualizedWorktreeViewportProps = {
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
   onPinWorktree: (worktreeId: string) => void
   onPinWorktrees: WorktreeDropCommitContext['onPinWorktrees']
+  onDropWorktreesOnCollection: WorktreeDropCommitContext['onDropWorktreesOnCollection']
   onDropWorktreesOnWorkspaceBoard: (args: WorktreeStatusDropAtIndexArgs) => void
   workspaceBoardOpen: boolean
   onWorktreeCardClick?: () => void

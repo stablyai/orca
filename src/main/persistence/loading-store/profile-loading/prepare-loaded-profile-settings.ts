@@ -21,6 +21,7 @@ import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/i18n/portu
 import { migrateAgentYoloDefaults } from '../../applying-settings/terminal-settings-migrations'
 import { hasTypedAgentPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
+import { normalizeCollections } from '../../../../shared/collections'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -65,6 +66,7 @@ export type PreparedLoadedProfileSettings = {
   normalizedSourceControlGroupOrder: GlobalSettings['sourceControlGroupOrder']
   normalizedOnboarding: PersistedState['onboarding']
   normalizedProjectGroups: ProjectGroup[]
+  normalizedCollections: ReturnType<typeof normalizeCollections>
 }
 
 export function prepareLoadedProfileSettings(
@@ -299,6 +301,7 @@ export function prepareLoadedProfileSettings(
     normalizedNotifications,
     normalizedSourceControlGroupOrder,
     normalizedOnboarding,
-    normalizedProjectGroups
+    normalizedProjectGroups,
+    normalizedCollections: normalizeCollections(parsed.collections)
   }
 }

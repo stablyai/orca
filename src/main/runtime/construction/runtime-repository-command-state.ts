@@ -11,6 +11,7 @@ import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtim
 import { RuntimeGitHubProjectCommands } from '../integrations/github/runtime-github-project-commands'
 import { RuntimeRepositoryHooksCommands } from '../repositories/runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repository-issue-command'
+import { RuntimeCollectionController } from '../runtime-collection-controller'
 import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
@@ -172,6 +173,12 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo),
     getStore: () => this.store
+  })
+
+  // Read off the runtime by the repository command surface, like repositoryForkBackfill.
+  readonly collections = new RuntimeCollectionController({
+    getStore: () => this.store,
+    notifyReposChanged: () => this.notifyReposChanged()
   })
 
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({

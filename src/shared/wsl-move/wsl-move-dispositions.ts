@@ -43,6 +43,10 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   projectHostSetups: { disposition: 'rederive', item: 4 },
   projectGroups: moveDisposition(5),
   folderWorkspaces: moveDisposition(6),
+  collections: notApplicableDisposition(
+    62,
+    'Desktop-global catalog; memberships ride in worktreeMeta.collectionIds.'
+  ),
   folderWorkspaceDiffComments: moveDisposition(7, {
     note: 'Rides in folderWorkspaces[].diffComments, its in-memory home (verified).'
   }),

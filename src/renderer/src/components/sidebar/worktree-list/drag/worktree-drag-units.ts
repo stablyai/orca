@@ -7,6 +7,7 @@ import {
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { isCollectionSectionKey } from '../../worktree-list-collections'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -59,6 +60,10 @@ export function getWorktreeDragUnitGroups(
       if (row.type === 'folder-workspace') {
         folderChildUnit = { units: [], depth: Number.POSITIVE_INFINITY }
       }
+      continue
+    }
+    // Why: collection rows are duplicates of project-list rows.
+    if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }
     const worktreeKey = composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)

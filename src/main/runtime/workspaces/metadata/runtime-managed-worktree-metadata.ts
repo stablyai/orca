@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
+import { clampExclusiveCollectionMembership } from '../../../../shared/collections'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
@@ -106,6 +107,13 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   )
   if (clearPushTarget) {
     persisted.pushTarget = undefined
+  }
+  if (persisted.collectionIds !== undefined) {
+    // Why: no RPC/CLI/web caller may file a feature worktree into several collections.
+    persisted.collectionIds = clampExclusiveCollectionMembership(
+      persisted.collectionIds,
+      worktree.isMainWorktree
+    )
   }
   // Checked just before each write, with no await between, so nothing moves it in between.
   const assertParentUnchanged = (): void => {

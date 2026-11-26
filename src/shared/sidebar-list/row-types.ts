@@ -1,5 +1,6 @@
 import type { WorktreeLineageSource } from './worktree-lineage-range'
 import type { WorktreeOccurrence } from './lineage/worktree-occurrence-plan'
+import type { Collection } from '../collection-types'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project/groups/project-group-types'
 import type { Repo } from '../repository/repo-types'
@@ -23,6 +24,7 @@ export type SidebarHeaderIcon =
   | { kind: 'pinned' }
   | { kind: 'all' }
   | { kind: 'project' }
+  | { kind: 'collection' }
   | { kind: 'pr-status'; prGroup: PRGroupKey }
   | { kind: 'workspace-status'; status: WorkspaceStatus }
 
@@ -38,6 +40,8 @@ export type GroupHeaderRow = {
   count: number
   icon: SidebarHeaderIcon
   repo?: Repo
+  /** Set on collection section headers (and their repo sub-headers, together with `repo`). */
+  collection?: Collection
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId

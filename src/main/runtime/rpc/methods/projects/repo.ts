@@ -5,6 +5,7 @@ import { resolveReplySnapshot } from '../../workspace-client-views/content-snaps
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from '../workspaces/folder-workspace'
+import { COLLECTION_METHODS } from '../collection'
 import {
   projectRepoSearchRefsForClient,
   repoSearchRefSelectorForm
@@ -57,6 +58,7 @@ export const REPO_METHODS = [
   }),
   ...PROJECT_RUNTIME_METHODS,
   ...PROJECT_GROUP_METHODS,
+  ...COLLECTION_METHODS,
   ...FOLDER_WORKSPACE_METHODS,
   defineMethod({
     name: 'repo.sparsePresets',

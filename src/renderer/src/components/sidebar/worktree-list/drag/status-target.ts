@@ -21,6 +21,15 @@ export function getPointerDropStatusTarget(args: {
   if (pinTarget && args.container.contains(pinTarget)) {
     return { status: null, isPinDrop: true, lineageParentIdentity: null }
   }
+  const collectionTarget = target.closest<HTMLElement>('[data-collection-drop-id]')
+  if (collectionTarget && args.container.contains(collectionTarget)) {
+    return {
+      status: null,
+      isPinDrop: false,
+      lineageParentIdentity: null,
+      collectionId: collectionTarget.dataset.collectionDropId ?? null
+    }
+  }
   const lineageParentIdentity = getWorktreeLineageDropTargetIdentity({
     container: args.container,
     target,
@@ -42,7 +51,7 @@ export function shouldPreferSidebarStatusDropTarget(args: {
   target: WorktreeSidebarStatusDropTarget
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }): boolean {
-  if (args.target.isPinDrop) {
+  if (args.target.isPinDrop || args.target.collectionId) {
     return true
   }
   if (!args.target.status) {

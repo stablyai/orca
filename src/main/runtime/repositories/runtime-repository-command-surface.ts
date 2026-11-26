@@ -1,6 +1,7 @@
 import type { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import type { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import type { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
+import type { RuntimeCollectionController } from '../runtime-collection-controller'
 import type { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import type { RuntimeRepositoryForkBackfill } from './runtime-repository-fork-backfill'
@@ -55,6 +56,10 @@ export type RuntimeRepositoryCommandSurface = {
   updateProjectGroups: RuntimeProjectGroupController['updateGroups']
   deleteProjectGroup: RuntimeProjectGroupController['deleteGroup']
   moveProjectToGroup: RuntimeProjectGroupController['moveProject']
+  listCollections: RuntimeCollectionController['listCollections']
+  createCollection: RuntimeCollectionController['createCollection']
+  updateCollection: RuntimeCollectionController['updateCollection']
+  deleteCollection: RuntimeCollectionController['deleteCollection']
   createFolderWorkspace: RuntimeProjectGroupController['createFolderWorkspace']
   getFolderWorkspacePathStatus: RuntimeProjectGroupController['getFolderPathStatus']
   updateFolderWorkspace: RuntimeProjectGroupController['updateFolderWorkspace']
@@ -105,11 +110,13 @@ type RuntimeRepositoryCommandOwners = {
 export function installRuntimeRepositoryCommandSurface(
   target: RuntimeRepositoryCommandSurface & {
     readonly repositoryForkBackfill: RuntimeRepositoryForkBackfill
+    readonly collections: RuntimeCollectionController
   },
   owners: RuntimeRepositoryCommandOwners
 ): void {
   const host = owners.projectHostSetups
   const groups = owners.projectGroups
+  const collections = target.collections
   const nested = owners.nestedRepoImport
   const server = owners.serverEnvironment
   const sparse = owners.repositorySparsePresets
@@ -141,6 +148,10 @@ export function installRuntimeRepositoryCommandSurface(
     updateProjectGroups: groups.updateGroups.bind(groups),
     deleteProjectGroup: groups.deleteGroup.bind(groups),
     moveProjectToGroup: groups.moveProject.bind(groups),
+    listCollections: collections.listCollections.bind(collections),
+    createCollection: collections.createCollection.bind(collections),
+    updateCollection: collections.updateCollection.bind(collections),
+    deleteCollection: collections.deleteCollection.bind(collections),
     createFolderWorkspace: groups.createFolderWorkspace.bind(groups),
     getFolderWorkspacePathStatus: groups.getFolderPathStatus.bind(groups),
     updateFolderWorkspace: groups.updateFolderWorkspace.bind(groups),

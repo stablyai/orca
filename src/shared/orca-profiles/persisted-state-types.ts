@@ -1,3 +1,4 @@
+import type { Collection } from '../collection-types'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -66,6 +67,8 @@ export type PersistedState = {
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
+  /** Worktree collections (cross-repo workstream sections). Absent on pre-collection files. */
+  collections?: Collection[]
   folderWorkspaces: FolderWorkspace[]
   /** Keep folder review notes top-level: older normalizers strip nested fields but round-trip unknown top-level keys.
    * Write-only projection: load hydrates FolderWorkspace.diffComments and deletes this key from Store state;

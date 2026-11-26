@@ -19,6 +19,8 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   projects: 'rewrite',
   projectHostSetups: 'rewrite',
   projectGroups: 'rewrite',
+  // Names and ordering only; membership lives on worktreeMeta.collectionIds, so no path to rewrite.
+  collections: 'keep',
   folderWorkspaces: 'rewrite',
   folderWorkspaceDiffComments: 'rewrite',
   sparsePresetsByRepo: 'rewrite',

@@ -1,0 +1,190 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { PersistedState } from '../shared/orca-profiles/persisted-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host/execution-host'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../shared/worktree/host-qualified-identity'
+import {
+  createStore,
+  makeRepo,
+  readDataFile as readDataFileUntyped,
+  testState,
+  writeDataFile
+} from './persistence/persistence-test-harness'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
+import { mergeWorktree } from './ipc/worktrees/metadata/worktree-metadata-merge'
+
+function localTarget(id: string): HostWorktreeTarget {
+  return hostWorktreeTarget({ id, hostId: LOCAL_EXECUTION_HOST_ID })
+}
+
+function readDataFile(): PersistedState {
+  return readDataFileUntyped() as PersistedState
+}
+
+describe('Store collections', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-collections-test-'))
+    // Why: load sweeps worktree rows owned by a deregistered repo (#17776), so
+    // membership only survives a reload when its repo is actually registered.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: 'repo-api', path: '/repo-api' })],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} }
+    })
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('creates collections with appended order and lists them sorted', async () => {
+    const store = await createStore()
+    const approvals = store.createCollection({ name: '  Approve PRs ' })
+    const billing = store.createCollection({ name: 'Billing migration' })
+    expect(approvals.name).toBe('Approve PRs')
+    expect(approvals.order).toBe(0)
+    expect(billing.order).toBe(1)
+    expect(store.getCollections().map((collection) => collection.id)).toEqual([
+      approvals.id,
+      billing.id
+    ])
+  })
+
+  it('updates name, color, collapse, and order', async () => {
+    const store = await createStore()
+    const collection = store.createCollection({ name: 'Approve PRs' })
+    const updated = store.updateCollection(collection.id, {
+      name: 'Approvals',
+      color: '#ff0000',
+      isCollapsed: true,
+      order: 5
+    })
+    expect(updated).toMatchObject({
+      name: 'Approvals',
+      color: '#ff0000',
+      isCollapsed: true,
+      order: 5
+    })
+    expect(store.updateCollection('missing', { name: 'x' })).toBeNull()
+    // Blank rename keeps the current name rather than falling back to Untitled.
+    expect(store.updateCollection(collection.id, { name: '   ' })?.name).toBe('Approvals')
+  })
+
+  it('sets worktree membership with dedupe and unknown-id pruning', async () => {
+    const store = await createStore()
+    const approvals = store.createCollection({ name: 'Approve PRs' })
+    const meta = store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), {
+      collectionIds: [approvals.id, approvals.id, 'not-a-collection']
+    })
+    expect(meta.collectionIds).toEqual([approvals.id])
+  })
+
+  it('clears membership to undefined, never []', async () => {
+    const store = await createStore()
+    const approvals = store.createCollection({ name: 'Approve PRs' })
+    store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [approvals.id] })
+    const cleared = store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [] })
+    expect(cleared.collectionIds).toBeUndefined()
+    expect('collectionIds' in cleared).toBe(false)
+  })
+
+  it('supports the same worktree in several collections and survives reload', async () => {
+    const store = await createStore()
+    const approvals = store.createCollection({ name: 'Approve PRs' })
+    const billing = store.createCollection({ name: 'Billing migration' })
+    store.setWorktreeMeta(localTarget('repo-api::/wt/shared'), {
+      collectionIds: [approvals.id, billing.id]
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getCollections()).toHaveLength(2)
+    expect(reloaded.getWorktreeMeta('repo-api::/wt/shared')?.collectionIds).toEqual([
+      approvals.id,
+      billing.id
+    ])
+  })
+
+  it('deleting a collection strips memberships but keeps other collections', async () => {
+    const store = await createStore()
+    const approvals = store.createCollection({ name: 'Approve PRs' })
+    const billing = store.createCollection({ name: 'Billing migration' })
+    store.setWorktreeMeta(localTarget('repo-api::/wt/both'), {
+      collectionIds: [approvals.id, billing.id]
+    })
+    store.setWorktreeMeta(localTarget('repo-api::/wt/only-approvals'), {
+      collectionIds: [approvals.id]
+    })
+
+    expect(store.deleteCollection(approvals.id)).toBe(true)
+    expect(store.deleteCollection(approvals.id)).toBe(false)
+    expect(store.getWorktreeMeta('repo-api::/wt/both')?.collectionIds).toEqual([billing.id])
+    const orphan = store.getWorktreeMeta('repo-api::/wt/only-approvals')
+    expect(orphan?.collectionIds).toBeUndefined()
+  })
+
+  it('prunes dangling membership ids on load', async () => {
+    const store = await createStore()
+    const approvals = store.createCollection({ name: 'Approve PRs' })
+    store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [approvals.id] })
+    store.flush()
+
+    const raw = readDataFile()
+    raw.worktreeMeta['repo-api::/wt/ptal'].collectionIds = [approvals.id, 'deleted-elsewhere']
+    writeDataFile(raw)
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorktreeMeta('repo-api::/wt/ptal')?.collectionIds).toEqual([approvals.id])
+  })
+
+  it('removes an on-disk empty membership array on load', async () => {
+    const store = await createStore()
+    const approvals = store.createCollection({ name: 'Approve PRs' })
+    store.setWorktreeMeta(localTarget('repo-api::/wt/ptal'), { collectionIds: [approvals.id] })
+    store.flush()
+
+    const raw = readDataFile()
+    raw.worktreeMeta['repo-api::/wt/ptal'].collectionIds = []
+    writeDataFile(raw)
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorktreeMeta('repo-api::/wt/ptal')?.collectionIds).toBeUndefined()
+    reloaded.flush()
+    expect('collectionIds' in readDataFile().worktreeMeta['repo-api::/wt/ptal']).toBe(false)
+  })
+})
+
+describe('mergeWorktree collection projection', () => {
+  it('carries collection membership onto the merged worktree', () => {
+    const git: GitWorktreeInfo = {
+      path: '/workspace/feature',
+      head: 'abc123',
+      branch: 'refs/heads/feature',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      collectionIds: ['c1', 'c2']
+    })
+
+    expect(worktree.collectionIds).toEqual(['c1', 'c2'])
+  })
+})

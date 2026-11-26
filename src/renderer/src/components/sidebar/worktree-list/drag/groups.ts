@@ -5,6 +5,7 @@ import {
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { isCollectionSectionKey } from '../../worktree-list-collections'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folders/folder-workspace-occurrences'
 
@@ -30,6 +31,10 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'
     ) {
+      continue
+    }
+    // Why: reordering collection duplicates would write manualOrder against the wrong neighbors.
+    if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }
     const worktreeKey = getWorktreeHostIdentity(row.worktree)
@@ -70,6 +75,10 @@ export function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
       continue
     }
     if (row.type !== 'item') {
+      continue
+    }
+    // Why: no groupKeyByRowKey entry means collection rows never arm reorder drag.
+    if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }
     if (

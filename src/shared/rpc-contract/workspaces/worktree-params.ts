@@ -194,6 +194,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   sparsePresetId: OptionalString,
   baseRef: OptionalString,
   workspaceStatus: OptionalString,
+  // Why: [] blanks membership ("remove from every collection"); the store drops the key.
+  collectionIds: z.array(z.string()).optional(),
   pushTarget: z
     .object({
       remoteName: z.string(),

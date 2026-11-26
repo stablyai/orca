@@ -5,6 +5,8 @@ import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
+import { CollectionDeleteDialog } from '../../CollectionDeleteDialog'
+import { AddCollectionDialog } from '../../AddCollectionDialog'
 import SuppressExternalWorktreeInboxDialog from '../listing/SuppressExternalWorktreeInboxDialog'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { ProjectGroupDialogs } from './use-project-group-dialogs'
@@ -30,28 +32,36 @@ export function SidebarWorktreeListDialogs({
 }): React.JSX.Element {
   const t = useTranslate()
   const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+  const collectionDialogs = dialogs.collections
   return (
     <>
       <ProjectGroupNameDialog
         open={nameDialog !== null}
         title={
-          nameDialog?.type === 'rename'
-            ? t('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
-            : t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
+          nameDialog?.type === 'collection-rename'
+            ? t('auto.components.sidebar.WorktreeList.collectionRenameTitle', 'Rename Collection')
+            : nameDialog?.type === 'rename'
+              ? t('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
+              : t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
         }
         description={
-          nameDialog?.type === 'rename'
+          nameDialog?.type === 'collection-rename'
             ? t(
-                'auto.components.sidebar.WorktreeList.bc1460beb3',
-                'Update the group name shown in the sidebar.'
+                'auto.components.sidebar.WorktreeList.collectionRenameDescription',
+                'Update the collection name shown in the sidebar.'
               )
-            : t(
-                'auto.components.sidebar.WorktreeList.d880ea0744',
-                'Create a group and move this project into it.'
-              )
+            : nameDialog?.type === 'rename'
+              ? t(
+                  'auto.components.sidebar.WorktreeList.bc1460beb3',
+                  'Update the group name shown in the sidebar.'
+                )
+              : t(
+                  'auto.components.sidebar.WorktreeList.d880ea0744',
+                  'Create a group and move this project into it.'
+                )
         }
         initialName={
-          nameDialog?.type === 'rename'
+          nameDialog?.type === 'rename' || nameDialog?.type === 'collection-rename'
             ? nameDialog.currentName
             : nameDialog
               ? t(
@@ -62,7 +72,7 @@ export function SidebarWorktreeListDialogs({
               : ''
         }
         confirmLabel={
-          nameDialog?.type === 'rename'
+          nameDialog?.type === 'rename' || nameDialog?.type === 'collection-rename'
             ? t('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')
             : t('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')
         }
@@ -72,6 +82,25 @@ export function SidebarWorktreeListDialogs({
           }
         }}
         onSubmit={dialogs.handleSubmitProjectGroupName}
+      />
+      <CollectionDeleteDialog
+        open={collectionDialogs.collectionDeleteDialog !== null}
+        collectionName={collectionDialogs.collectionDeleteDialog?.name ?? ''}
+        onOpenChange={(open) => {
+          if (!open) {
+            collectionDialogs.setCollectionDeleteDialog(null)
+          }
+        }}
+        onConfirm={collectionDialogs.handleConfirmDeleteCollection}
+      />
+      <AddCollectionDialog
+        open={collectionDialogs.addWorktreesCollection !== null}
+        collection={collectionDialogs.addWorktreesCollection}
+        onOpenChange={(open) => {
+          if (!open) {
+            collectionDialogs.setAddWorktreesCollection(null)
+          }
+        }}
       />
       <SuppressExternalWorktreeInboxDialog
         open={suppressExternalWorktreeInboxRepoId !== null}

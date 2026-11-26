@@ -11,6 +11,7 @@ import {
   ConductorReviewIcon
 } from '../../workspace-status/presentation/workspace-status-icons'
 import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'
+import { COLLECTION_GROUP_META } from '../../worktree-list-collections'
 
 const PR_GROUP_META: Record<
   PRGroupKey,
@@ -91,6 +92,8 @@ export function getSidebarHeaderVisual(
       return ALL_GROUP_META
     case 'project':
       return PROJECT_GROUP_META
+    case 'collection':
+      return COLLECTION_GROUP_META
     case 'pr-status':
       return PR_GROUP_META[icon.prGroup]
     case 'workspace-status': {

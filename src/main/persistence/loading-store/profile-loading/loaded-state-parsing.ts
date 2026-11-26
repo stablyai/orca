@@ -10,6 +10,7 @@ import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspac
 import { clearMissingProjectGroupMemberships } from '../../../../shared/project/groups/project-groups'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../../pty/scrollback/terminal-scrollback-snapshots'
 import { logStartupMilestone } from '../../../startup/diagnostics/startup-diagnostics'
+import { pruneCollectionMemberships } from '../worktree-collection-membership'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
@@ -213,6 +214,9 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    if (pruneCollectionMemberships(result)) {
+      this.runtime.loadNeedsSave = true
+    }
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.runtime.loadNeedsSave = true

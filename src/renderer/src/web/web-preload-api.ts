@@ -40,7 +40,7 @@ import { createWebOrcaProfilesApi } from './preload-api/app/web-orca-profiles-ap
 import { createWebPlatformApi } from './preload-api/host-capabilities/web-platform-api'
 import { createWebPluginsApi } from './preload-api/host-capabilities/web-plugins-api'
 import { createRateLimitsApi } from './preload-api/agents/web-rate-limits-api'
-import { createReposApi } from './preload-api/workspaces/web-repositories-api'
+import { createCollectionsApi, createReposApi } from './preload-api/workspaces/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
 import { createWebJiraApi } from './preload-api/jira/web-jira-api'
 import { callRuntimeResult } from './runtime/client/web-runtime-calls'
@@ -94,6 +94,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     speech: createWebSpeechApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
+    collections: createCollectionsApi(),
     worktrees: createWorktreesApi(),
     fs: createFileApi(),
     git: createGitApi(),

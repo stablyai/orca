@@ -48,7 +48,12 @@ export function normalizeLoadedProfileState(
   markNeedsSave: () => void
 ): PersistedState {
   const { defaults, migratedExternalVisibility, osc52ClipboardNoticePending } = terminal
-  const { normalizedOnboarding, normalizedProjectGroups, loadedCompactWorktreeCards } = profile
+  const {
+    normalizedOnboarding,
+    normalizedProjectGroups,
+    normalizedCollections,
+    loadedCompactWorktreeCards
+  } = profile
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
   // Normalize local first; host partitions drop global fields already owned here.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
@@ -133,6 +138,7 @@ export function normalizeLoadedProfileState(
       parsed.featureInteractionTelemetryBuckets
     ),
     projectGroups: normalizedProjectGroups,
+    collections: normalizedCollections,
     repos: migrateExistingReposAgentWorkspaceTrust(
       migratedExternalVisibility.repos,
       parsed.settings,
