@@ -241,7 +241,7 @@ export function AddProjectHostSubmenu({
                     <span className="text-[11px] text-muted-foreground">
                       {t(
                         'auto.components.sidebar.AddRepoHostSelector.addSshHostDetail',
-                        'A machine you can reach over SSH. Orca sets itself up there.'
+                        'Connect to a machine over SSH.'
                       )}
                     </span>
                   </span>
@@ -257,7 +257,7 @@ export function AddProjectHostSubmenu({
                     <span className="text-[11px] text-muted-foreground">
                       {t(
                         'auto.components.sidebar.AddRepoHostSelector.addRemoteServerDetail',
-                        'Another computer running Orca. Pair with its access link; no SSH needed.'
+                        'Orca on another computer, no SSH needed.'
                       )}
                     </span>
                   </span>
