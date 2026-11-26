@@ -286,9 +286,12 @@ export function renderClaudeAccountsSection(
             recordFeatureInteraction={recordFeatureInteraction}
           />
         )}
-        {isRemoteAccountScope ? null : (
-          <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
-        )}
+        {/* The switch decides what happens to this host's terminals, so it belongs to the host the pane lists. */}
+        <ClaudeRunningSessionSwitchSetting
+          owner={accountOwner}
+          settings={settings}
+          updateSettings={updateSettings}
+        />
       </SettingsGroup>
     </div>
   )

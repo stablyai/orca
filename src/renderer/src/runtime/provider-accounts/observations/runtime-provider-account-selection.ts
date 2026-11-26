@@ -5,7 +5,6 @@ import type {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
-import { readClaudeRunningSessionsPolicy } from '@/lib/provider-accounts/claude-account-switch-sessions'
 import { REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS } from './runtime-provider-accounts-client'
 
 export type ProviderAccountSelection = {
@@ -33,8 +32,8 @@ export async function selectClaudeProviderAccount(
     return callRuntimeRpc<ClaudeAccountSelectResult>(
       target,
       'accounts.selectClaude',
-      // Why the policy: the server's own setting is not the one this app's Settings edits.
-      { accountId: selection.accountId, runningSessions: readClaudeRunningSessionsPolicy() },
+      // Why no policy: the server acts on its own setting, which its Accounts pane now reads and writes.
+      { accountId: selection.accountId },
       { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
     )
   }

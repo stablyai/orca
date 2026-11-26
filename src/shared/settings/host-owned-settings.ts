@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import type { GlobalSettings } from './global-settings-types'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
+import { CLAUDE_ACCOUNT_SWITCH_RUNNING_SESSIONS } from '../agent-accounts/claude/claude-account-switch-settings'
 
 /** Settings a host reads for its own work, so Settings edits them on the host its picker names. */
 const HostOwnedSettingsSchema = z.object({
@@ -18,6 +19,8 @@ const HostOwnedSettingsSchema = z.object({
   nativeChatShellEnvironmentVariables: z.array(z.string()),
   // Launches the host starts itself (CLI, orchestration workers); desktop launches send their own.
   agentDefaultSurface: z.enum(['chat', 'terminal']),
+  // Decides what a host does with its own running Claude terminals when its account switches.
+  claudeAccountSwitchRunningSessions: z.enum(CLAUDE_ACCOUNT_SWITCH_RUNNING_SESSIONS),
   // Retired with Orca's Antigravity server; still accepted so older clients' updates don't fail.
   antigravityGoogleSignIn: z.enum(['auto', 'agy', 'orca']),
   antigravityServerAutoUpdateEnabled: z.boolean()
@@ -40,6 +43,7 @@ const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   nativeChatInheritShellEnvironment: true,
   nativeChatShellEnvironmentVariables: [],
   agentDefaultSurface: 'terminal',
+  claudeAccountSwitchRunningSessions: 'ask',
   antigravityGoogleSignIn: 'auto',
   antigravityServerAutoUpdateEnabled: true
 }
