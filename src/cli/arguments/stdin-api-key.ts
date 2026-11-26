@@ -1,4 +1,5 @@
 import { RuntimeClientError } from '../runtime/connection/types'
+import { validateApiKey } from '../../shared/validation/api-key'
 
 /** Reads an API key piped on stdin, keeping it out of argv, shell history and process listings. */
 export async function readApiKeyFromStdin(
@@ -25,15 +26,12 @@ export async function readApiKeyFromStdin(
   if (!value) {
     throw new RuntimeClientError('invalid_argument', 'No key on stdin')
   }
-  if (value.length > key.maxLength) {
-    throw new RuntimeClientError('invalid_argument', `That is too long to be ${key.name}`)
-  }
-  // Keys have no inner whitespace; a provider would echo such a value back in its header error.
-  if (/[\s\p{Cc}]/u.test(value)) {
+  try {
+    return validateApiKey(value, { name: key.name, maxLength: key.maxLength })
+  } catch (error) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `That is not ${key.name}: it has spaces or line breaks inside`
+      error instanceof Error ? error.message : String(error)
     )
   }
-  return value
 }

@@ -102,6 +102,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
 
   const { claude, codex, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } = rateLimits
+  const commandCode = rateLimits.commandCode
   const muse = rateLimits.muse
 
   // Antigravity has no saved credential; the checked item and detected CLI establish setup.
@@ -118,7 +119,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
     cursorAuthConfigured: rateLimits.cursorAuthConfigured,
-    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured
+    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured,
+    commandCodeApiKeyConfigured: rateLimits.commandCodeApiKeyConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -129,6 +131,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const visibleZcode = getVisibleUsageProvider('zcode', zcode, usageSettings)
   const visibleMuse = getVisibleUsageProvider('muse', muse, usageSettings)
+  const visibleCommandCode = getVisibleUsageProvider('command-code', commandCode, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -165,6 +168,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // OpenCode Go usage can use web credentials independently of CLI detection.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
+  // Default-on, but hidden until a key is saved or a reading exists.
+  const showCommandCode = visibleCommandCode !== null && statusBarItems.includes('command-code')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
@@ -182,7 +187,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ||
     showCursor ||
     showZcode ||
-    showMuse
+    showMuse ||
+    showCommandCode
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
@@ -198,7 +204,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     grok?.status === 'fetching' ||
     cursor?.status === 'fetching' ||
     zcode?.status === 'fetching' ||
-    muse?.status === 'fetching'
+    muse?.status === 'fetching' ||
+    commandCode?.status === 'fetching'
 
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? t('auto.components.status.bar.floatingWorkspace.minimize', 'Minimize Floating Workspace')
@@ -216,7 +223,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
     showZcode ? visibleZcode : null,
-    showMuse ? visibleMuse : null
+    showMuse ? visibleMuse : null,
+    showCommandCode ? visibleCommandCode : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
     // Why: the usage row clips from the end, so placeholders give way first.

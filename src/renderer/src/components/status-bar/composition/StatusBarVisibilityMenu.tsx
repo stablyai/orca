@@ -85,6 +85,15 @@ export function StatusBarVisibilityMenu({
           <OpenCodeGoIcon size={14} />
           {t('auto.components.status.bar.StatusBar.8c86cd77b0', 'OpenCode Go Usage')}
         </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('command-code')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('command-code')
+          }}
+        >
+          {t('auto.components.status.bar.StatusBar.commandCodeUsage', 'Command Code Usage')}
+        </DropdownMenuCheckboxItem>
         {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('kimi')}

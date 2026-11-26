@@ -78,6 +78,33 @@ export const getStatusBarToggles = createLocalizedCatalog(
     },
     getAntigravityStatusBarToggleSearchEntry(),
     {
+      id: 'command-code',
+      title: translate(
+        'auto.components.settings.appearance.search.commandCode.title',
+        'Command Code usage'
+      ),
+      description: translate(
+        'auto.components.settings.appearance.search.commandCode.description',
+        'Show Command Code plan usage and credits in the status bar.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.896eb53fd4',
+          'status bar'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.commandCode.kw.name',
+          'command code'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.edbf0f63a0', 'cost')
+      ],
+      toggleDescription: translate(
+        'auto.components.settings.appearance.statusBar.commandCodeToggleDescription',
+        'Show Command Code plan usage and credits for the active workspace.'
+      )
+    },
+    {
       id: 'opencode-go',
       title: translate(
         'auto.components.settings.appearance.search.20e7d30150',

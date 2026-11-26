@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
-import { Badge } from '../../../ui/badge'
-import { Button } from '../../../ui/button'
-import { Input } from '../../../ui/input'
-import { Label } from '../../../ui/label'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { UsageApiKeyField } from './UsageApiKeyField'
 
 type CredentialStatus = boolean | 'loading' | 'unavailable'
 
@@ -68,15 +65,18 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
       keywords={['opencode', 'go', 'api', 'key', 'connect', 'rate limit', 'status bar']}
       className="space-y-2 py-3"
     >
-      <div className="flex items-center gap-2">
-        <Label htmlFor="opencode-go-api-key">
-          {t(
-            'auto.components.settings.AccountsPane.opencodeGo.apiKey.label',
-            'OpenCode Go API key'
-          )}
-        </Label>
-        <Badge variant={configured ? 'secondary' : 'outline'}>
-          {credentialStatus === 'loading'
+      <UsageApiKeyField
+        inputId="opencode-go-api-key"
+        label={t(
+          'auto.components.settings.AccountsPane.opencodeGo.apiKey.label',
+          'OpenCode Go API key'
+        )}
+        placeholder={t(
+          'auto.components.settings.AccountsPane.opencodeGo.apiKey.placeholder',
+          'Leave blank to use the key saved by /connect or OPENCODE_API_KEY'
+        )}
+        badgeLabel={
+          credentialStatus === 'loading'
             ? t('auto.components.settings.AccountsPane.opencodeGo.apiKey.checking', 'Checking…')
             : credentialStatus === 'unavailable'
               ? t(
@@ -85,43 +85,15 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
                 )
               : configured
                 ? t('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
-                : t('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
-        </Badge>
-      </div>
-      <div className="flex gap-2">
-        <Input
-          id="opencode-go-api-key"
-          type="password"
-          value={draft}
-          disabled={busy}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder={t(
-            'auto.components.settings.AccountsPane.opencodeGo.apiKey.placeholder',
-            'Leave blank to use the key saved by /connect or OPENCODE_API_KEY'
-          )}
-          spellCheck={false}
-          className="flex-1"
-        />
-        <Button
-          size="xs"
-          disabled={busy || !draft.trim()}
-          onClick={() => void updateCredential(false)}
-        >
-          {configured
-            ? t('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
-            : t('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
-        </Button>
-        {configured && (
-          <Button
-            variant="ghost"
-            size="xs"
-            disabled={busy}
-            onClick={() => void updateCredential(true)}
-          >
-            {t('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
-          </Button>
-        )}
-      </div>
+                : t('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')
+        }
+        configured={configured}
+        draft={draft}
+        onDraftChange={setDraft}
+        disabled={busy}
+        onSave={() => void updateCredential(false)}
+        onClear={() => void updateCredential(true)}
+      />
       <p className="text-xs text-muted-foreground">
         {t(
           'auto.components.settings.AccountsPane.opencodeGo.apiKey.help',

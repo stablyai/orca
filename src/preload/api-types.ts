@@ -86,6 +86,7 @@ import type {
   WorkspacePortsApi
 } from './api/workspaces/workspace-port-api'
 import type { LinkPreviewApi } from './api/link-preview/link-preview-api'
+import type { CommandCodeCredentialsStatus } from '../shared/agent-accounts/usage-credentials/command-code-credentials'
 import type { WorkspaceSessionApi } from './api/workspaces/workspace-session-api'
 import type {
   FolderWorkspacesApi,
@@ -184,6 +185,11 @@ export type PreloadApi = {
   }
   minimaxCredentials: MinimaxCredentialsApi
   zcodePlanCredentials: ZcodePlanCredentialsApi
+  commandCodeCredentials: {
+    getStatus: () => Promise<CommandCodeCredentialsStatus>
+    saveApiKey: (key: string) => Promise<CommandCodeCredentialsStatus>
+    clearApiKey: () => Promise<CommandCodeCredentialsStatus>
+  }
   grokAccounts: GrokAccountsApi
   cursorAccounts: CursorAccountsApi
   ssh: SshApi

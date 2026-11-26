@@ -2045,7 +2045,7 @@
     },
     "navigation": {
       "accounts": {
-        "description": "Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, MiniMax, and Grok."
+        "description": "Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, Command Code, MiniMax, and Grok."
       }
     },
     "mcpServers": {
@@ -6034,7 +6034,8 @@
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
             "windowWeeks": "{{value0}}wk",
-            "museUsageMenu": "Muse Usage"
+            "museUsageMenu": "Muse Usage",
+            "commandCodeUsage": "Command Code Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -9069,7 +9070,27 @@
           "4d274a02f0": "OpenCode Go session cookie",
           "4d41177f74": "MiniMax session cookie",
           "7e9977b560": "Add account",
-          "109431f707": "OpenCode Go workspace id"
+          "109431f707": "OpenCode Go workspace id",
+          "commandCode": {
+            "title": "Command Code",
+            "apiKey": {
+              "title": "Command Code API key",
+              "description": "Save a Command Code API key to see plan usage and credits for it below.",
+              "label": "API key",
+              "placeholder": "Paste your Command Code API key"
+            },
+            "checking": "Checking…",
+            "unavailable": "Status unavailable",
+            "retry": "Retry",
+            "credits": "Credits remaining: {{credits}}",
+            "plan": "Plan: {{plan}}",
+            "clearFailed": "Could not clear the Command Code key",
+            "clearFailedDescription": "Orca could not confirm the key was cleared. The status will refresh; check it before trying again.",
+            "saveFailed": "Could not save the Command Code key",
+            "saveFailedDescription": "Check the key and try again.",
+            "session": "5-hour window: {{percent}}% used",
+            "weekly": "Weekly window: {{percent}}% used"
+          }
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -11135,7 +11156,17 @@
             "54c541fc6e": "Codex accounts",
             "4518496456": "Active Codex account",
             "be3a748ebb": "Claude accounts",
-            "9b6ce52c36": "MiniMax usage"
+            "9b6ce52c36": "MiniMax usage",
+            "commandCode": {
+              "title": "Command Code",
+              "description": "Save a Command Code API key to see plan usage and credits.",
+              "kw": {
+                "name": "command code",
+                "key": "api key",
+                "usage": "usage",
+                "credits": "credits"
+              }
+            }
           }
         },
         "advanced": {
@@ -11416,7 +11447,17 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "commandCode": {
+              "title": "Command Code usage",
+              "description": "Show Command Code plan usage and credits in the status bar.",
+              "kw": {
+                "name": "command code"
+              }
+            }
+          },
+          "statusBar": {
+            "commandCodeToggleDescription": "Show Command Code plan usage and credits for the active workspace."
           }
         },
         "auto": {

@@ -5,6 +5,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { Command } from 'lucide-react'
 import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -91,6 +92,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'muse') {
     return <AgentIcon agent="muse" size={13} />
+  }
+  if (provider === 'command-code') {
+    return <Command size={13} aria-hidden />
   }
   if (provider === 'cursor') {
     return <AgentIcon agent="cursor" size={13} />
