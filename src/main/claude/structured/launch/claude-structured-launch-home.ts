@@ -1,3 +1,4 @@
+import { moveClaudeSessionIntoAccountHome } from '../../transcripts/claude-session-account-move'
 import { join } from 'node:path'
 import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-router'
 import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
@@ -44,14 +45,24 @@ export async function claudeLaunchResumesTranscript(input: {
   if (await hasTranscript({ providerSessionId, claudeConfigDir, cwd })) {
     return true
   }
-  if (input.leafUuid === null) {
-    return false
-  }
   const otherHomes = router
     ? [input.recordHome, ...router.accountHomes(), router.systemDefaultHome()]
     : []
   for (const home of otherHomes.filter((home) => home !== claudeConfigDir)) {
     if (await hasTranscript({ providerSessionId, claudeConfigDir: home, cwd })) {
+      try {
+        await moveClaudeSessionIntoAccountHome({
+          providerSessionId,
+          fromHome: home,
+          toHome: claudeConfigDir,
+          cwd
+        })
+        if (await hasTranscript({ providerSessionId, claudeConfigDir, cwd })) {
+          return true
+        }
+      } catch (error) {
+        throw new AgentSessionPreSpawnError(error, { reason: 'historyInOtherAccount' })
+      }
       throw new AgentSessionPreSpawnError(
         new Error('claude transcript is not in the selected account'),
         { reason: 'historyInOtherAccount' }
@@ -59,5 +70,5 @@ export async function claudeLaunchResumesTranscript(input: {
     }
   }
   // A stored leaf still requires resume when its transcript folder is no longer known.
-  return true
+  return input.leafUuid !== null
 }
