@@ -45,4 +45,16 @@ describe('nativeChatTurnFold', () => {
       ])
     ).toEqual([1, 2, 3, 5, 6, 7])
   })
+
+  it('keeps both halves of one reply a provider split with thinking', () => {
+    expect(
+      foldedRows([
+        ['user', [text('Fix it.')]],
+        ['reasoning', [text('checking the tab schema')]],
+        ['assistant', [text('## Tab')]],
+        ['reasoning', [text(' and the pane schema.')]],
+        ['assistant', [text('Here is the model.')]]
+      ])
+    ).toEqual([1, 3])
+  })
 })
