@@ -1349,7 +1349,8 @@
     },
     "agentSpinner": {
       "monitoring": "Arka plan görevleri izleniyor",
-      "unconfirmed": "Doğrulanamadı"
+      "unconfirmed": "Doğrulanamadı",
+      "sleeping": "Uyku modunda"
     },
     "agentStateDot": {
       "monitoring": "Arka plan görevleri izleniyor",

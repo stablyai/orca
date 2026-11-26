@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity } from 'lucide-react-native'
+import { Activity, Moon } from 'lucide-react-native'
 import { View } from 'react-native'
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { WorktreeStatus } from '../../../../src/shared/worktree/row-display/worktree-status-rollup'
@@ -28,32 +28,43 @@ const agentStatusColors = (): Record<Exclude<WorktreeStatus, 'permission'>, stri
   inactive: 'rgba(115,115,115,0.4)'
 })
 
+// Sleeping replaces quiet states only; attention/running states keep their own glyph.
+const QUIET_SLEEP_REPLACEABLE_STATUSES: ReadonlySet<WorktreeStatus> = new Set([
+  'active',
+  'done',
+  'inactive'
+])
+
 /** `status` null is a state not known yet (rows from the phone's store): the slot keeps its width, empty. */
 export function AgentSpinner({
   status,
-  workingMode
+  workingMode,
+  sleeping = false
 }: {
   status: AgentSpinnerStatus | null
   workingMode?: AgentWorkingMode
+  sleeping?: boolean
 }) {
   const [startedEmpty] = useState(status === null)
   if (startedEmpty) {
-    return <ArrivingAgentStatus status={status} workingMode={workingMode} />
+    return <ArrivingAgentStatus status={status} workingMode={workingMode} sleeping={sleeping} />
   }
   return status === null ? (
     <View style={styles.wrapper} />
   ) : (
-    <AgentStatusGlyph status={status} workingMode={workingMode} />
+    <AgentStatusGlyph status={status} workingMode={workingMode} sleeping={sleeping} />
   )
 }
 
 // Mounted with the empty slot, so the motion preference is read before the dot arrives and fades in.
 function ArrivingAgentStatus({
   status,
-  workingMode
+  workingMode,
+  sleeping
 }: {
   status: AgentSpinnerStatus | null
   workingMode?: AgentWorkingMode
+  sleeping: boolean
 }) {
   const reducedMotion = useReducedMotionEnabled()
   if (status === null) {
@@ -61,17 +72,19 @@ function ArrivingAgentStatus({
   }
   return (
     <ArrivalFade animate={reducedMotion === false}>
-      <AgentStatusGlyph status={status} workingMode={workingMode} />
+      <AgentStatusGlyph status={status} workingMode={workingMode} sleeping={sleeping} />
     </ArrivalFade>
   )
 }
 
 function AgentStatusGlyph({
   status,
-  workingMode
+  workingMode,
+  sleeping
 }: {
   status: AgentSpinnerStatus
   workingMode?: AgentWorkingMode
+  sleeping: boolean
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -116,6 +129,17 @@ function AgentStatusGlyph({
     return (
       <View style={styles.wrapper}>
         <WorkingRing color={color} style={styles.spinner} />
+      </View>
+    )
+  }
+
+  if (sleeping && QUIET_SLEEP_REPLACEABLE_STATUSES.has(status)) {
+    return (
+      <View
+        style={styles.wrapper}
+        accessibilityLabel={t('components.agentSpinner.sleeping', 'Sleeping')}
+      >
+        <Moon size={12} color={colors.textMuted} />
       </View>
     )
   }

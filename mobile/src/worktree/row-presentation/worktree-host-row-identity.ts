@@ -51,7 +51,10 @@ export function retainLiveSleptWorktreeIdentities(
   const still = new Set<string>()
   for (const id of previous) {
     const wt = confirmedByIdentity.get(id)
-    if (id.startsWith('runtime:') !== listsServerRows || (wt && wt.liveTerminalCount > 0)) {
+    if (
+      id.startsWith('runtime:') !== listsServerRows ||
+      (wt && (wt.liveTerminalCount > 0 || wt.hasHostSidebarActivity === true))
+    ) {
       still.add(id)
     }
   }
@@ -68,7 +71,13 @@ export function applyWorktreeRowDisplayState(
   }
   return base.map((w) => {
     const slept = sleptIds.has(getWorktreeRowIdentity(w))
-      ? { liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
+      ? {
+          liveTerminalCount: 0,
+          hasAttachedPty: false,
+          hasHostSidebarActivity: false,
+          status: 'inactive' as const,
+          sidebarStatus: 'inactive' as const
+        }
       : null
     const active =
       optimisticActiveIdentity !== null
