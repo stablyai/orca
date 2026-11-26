@@ -85,7 +85,8 @@ class OrchestrationDbCore {
     refreshOutstandingDeliveryTrigger(this.db)
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
-      ['messages', ['answer_sender_snapshot']],
+      // reply_to: the message a reply answers, when its sender named one.
+      ['messages', ['answer_sender_snapshot', 'reply_to']],
       ['federation_relay_items', ['answer_sender_report']],
       ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {

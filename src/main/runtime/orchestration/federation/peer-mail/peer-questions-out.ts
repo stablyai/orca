@@ -40,27 +40,31 @@ export function forgetPeerQuestionOut(db: OrchestrationDb, messageId: string): v
   db.db.prepare('DELETE FROM peer_questions_out WHERE message_id = ?').run(messageId)
 }
 
-/** A reply came back on this conversation: the question it answers, or is a notice for, is settled.
- *  An older paired Orca names no request, so its reply settles the questions of its thread. Runs
- *  before the reply is stored: a crash between leaves it unacknowledged, so it is pulled again. */
+/** A reply came back on this conversation: the question it names, by its answer, notice or reply,
+ *  is settled, and no other. An older paired Orca names none, so its reply settles the oldest
+ *  question still open in its thread. Call it once per stored reply, so a replay settles nothing. */
 export function settlePeerQuestionsOut(
   db: OrchestrationDb,
   conversationId: string,
-  reply: Pick<z.infer<typeof PeerMailRelayPayload>, 'botAnswer' | 'notice' | 'threadId'>
+  reply: Pick<z.infer<typeof PeerMailRelayPayload>, 'botAnswer' | 'notice' | 'replyTo' | 'threadId'>
 ): void {
-  const requestId = reply.botAnswer?.requestId ?? reply.notice?.requestId
-  if (requestId) {
+  const named = reply.botAnswer?.requestId ?? reply.notice?.requestId ?? reply.replyTo
+  if (named) {
     db.db
       .prepare(
         `UPDATE peer_questions_out SET awaiting = NULL
          WHERE conversation_id = ? AND message_id = ? AND awaiting = 1`
       )
-      .run(conversationId, requestId)
+      .run(conversationId, named)
   } else if (reply.threadId) {
     db.db
       .prepare(
         `UPDATE peer_questions_out SET awaiting = NULL
-         WHERE conversation_id = ?1 AND awaiting = 1 AND (message_id = ?2 OR thread_id = ?2)`
+         WHERE rowid = (
+           SELECT rowid FROM peer_questions_out
+           WHERE conversation_id = ?1 AND awaiting = 1 AND (message_id = ?2 OR thread_id = ?2)
+           ORDER BY rowid LIMIT 1
+         )`
       )
       .run(conversationId, reply.threadId)
   }

@@ -32,6 +32,8 @@ export const PeerMailDeliverParams = z.object({
   type: PeerMailMessageType.optional(),
   priority: z.enum(['normal', 'high', 'urgent']).optional(),
   threadId: OptionalString,
+  /** The message this replies to; an older Orca omits it. */
+  replyTo: OptionalString,
   /** With a `bot:` address: one of that bot's chats, or `new`; resolved by the receiving Orca. */
   chat: OptionalString,
   /** With a `bot:` address: an item number of that bot's. */
@@ -95,6 +97,8 @@ export const PeerMailRelayPayload = z.object({
   subject: z.string(),
   body: z.string(),
   threadId: z.string().nullable(),
+  /** The message this answers. Every reply an Orca sends names it; an older Orca omits it. */
+  replyTo: LINE.optional(),
   sender: PeerMailSender.optional(),
   /** A bot's answer to a request the opening Orca sent, and what the asker does with it. */
   botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional(),
@@ -120,5 +124,7 @@ export const ClientReplyPayload = z.object({
   subject: z.string(),
   body: z.string(),
   threadId: z.string().nullable(),
+  /** The message this answers; an older Orca omits it. */
+  replyTo: LINE.optional(),
   sender: PeerMailSender.optional()
 })
