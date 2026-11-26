@@ -20,10 +20,12 @@ async function requestConversation(
   runtime: OrcaRuntimeService,
   bot: Bot,
   record: BotRequestRecord,
-  subject: string
+  subject: string,
+  launchOptions: Readonly<Record<string, string>> | undefined
 ): Promise<string> {
   const sessionId = await startBotSession(runtime, bot, {
     background: true,
+    launchOptions,
     actsFor: {
       actsFor: record.askers,
       ...(record.triggeredBy ? { triggeredBy: record.triggeredBy } : {})
@@ -46,6 +48,7 @@ export async function admitInNewChat(
   bot: Bot,
   record: BotRequestRecord,
   subject: string,
+  launchOptions: Readonly<Record<string, string>> | undefined,
   reservation: {
     admit: (address: string) => { sent: boolean; receipt: unknown }
     release: () => void
@@ -53,7 +56,7 @@ export async function admitInNewChat(
 ): Promise<unknown> {
   let sessionId: string
   try {
-    sessionId = await requestConversation(runtime, bot, record, subject)
+    sessionId = await requestConversation(runtime, bot, record, subject, launchOptions)
   } catch (error) {
     reservation.release()
     throw error

@@ -10,6 +10,7 @@ import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../shared/orchestratio
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { isOrchestrationMutation } from '../../../../../shared/orchestration/orchestration-rpc-contract'
+import { BOT_HANDOFF_LAUNCH_RELAY_REFUSAL } from '../../../../../shared/orchestration/bot-handoff-launch-options'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
@@ -78,6 +79,9 @@ export async function routeRemoteOwnedCall(
     return on === undefined ? LOCAL : routeServerCall(runtime, request, access, values, ctx, on)
   }
   checkDeclaredOrchestrationAccess(access, params, ctx)
+  if (request.method === 'orchestration.send' && values.model !== undefined) {
+    throw new OrchestrationError('capability_unsupported', BOT_HANDOFF_LAUNCH_RELAY_REFUSAL)
+  }
   // The forward carries the ordinary contract, so the server would run a missing receipt anew.
   refuseReplayOnly(request)
   const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined

@@ -3,6 +3,7 @@
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  */
 import { CLI_BOOLEAN_FLAGS } from '../../../../shared/cli/cli-argument-boundary'
+import { BOT_HANDOFF_LAUNCH_RELAY_REFUSAL } from '../../../../shared/orchestration/bot-handoff-launch-options'
 import {
   isOrchestrationRetryRequestId,
   RETRY_REQUEST_ID_GUIDANCE
@@ -33,7 +34,15 @@ export function parseLegacyRelayCliArgs(argv: readonly string[]): LegacyRelayCli
       flags.set(assignment, true)
     }
   }
-  return { command: commandPath.join(' '), flags }
+  const command = commandPath.join(' ')
+  if (
+    command === 'orchestration send' &&
+    (flags.has('model') || flags.has('effort')) &&
+    !flags.has('help')
+  ) {
+    throw new Error(BOT_HANDOFF_LAUNCH_RELAY_REFUSAL)
+  }
+  return { command, flags }
 }
 
 /** A valued flag the shell emptied parses as `true`; dropping it would change the command. */

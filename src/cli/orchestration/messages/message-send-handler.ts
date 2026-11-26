@@ -11,12 +11,17 @@ import { withResolvedNextCommands } from '../recovery/orchestration-mutation-rec
 import { resolve } from 'node:path'
 import {
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
+  getPresentStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { botHandoffLaunchRouteError } from '../../../shared/orchestration/bot-handoff-launch-options'
+import { ORCHESTRATION_BOT_HANDOFF_LAUNCH_OPTIONS_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeRequestSelection } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
@@ -82,10 +87,29 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
 export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
   'orchestration send': async (ctx) => {
     const { flags, client, cwd, json } = ctx
-    await refuseAgentServerRoute('send', ctx)
-    await requirePeerMailCarrier(ctx)
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
+    const chat = getOptionalStringFlag(flags, 'chat')
+    const item = getOptionalStringFlag(flags, 'item')
+    const on = getOptionalStringFlagAllowingEmpty(flags, 'on')
+    const onClient = getOptionalStringFlagAllowingEmpty(flags, 'on-client')
+    const model = getPresentStringFlag(flags, 'model')
+    const effort = getPresentStringFlag(flags, 'effort')
+    const routeError = botHandoffLaunchRouteError({
+      to,
+      type,
+      chat,
+      item,
+      on,
+      onClient,
+      model,
+      effort
+    })
+    if (routeError) {
+      throw new RuntimeClientError('invalid_argument', routeError)
+    }
+    await refuseAgentServerRoute('send', ctx)
+    await requirePeerMailCarrier(ctx)
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
     }
@@ -111,12 +135,13 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     const sendParams = {
       from,
       to,
-      chat: getOptionalStringFlag(flags, 'chat'),
-      item: getOptionalStringFlag(flags, 'item'),
+      chat,
+      item,
+      ...(model === undefined ? {} : { model, effort }),
       ...attachedFiles(flags, cwd),
       run: getOptionalStringFlag(flags, 'run'),
-      on: getOptionalStringFlag(flags, 'on'),
-      onClient: getOptionalStringFlag(flags, 'on-client'),
+      on: on || undefined,
+      onClient: onClient || undefined,
       subject: getRequiredStringFlag(flags, 'subject'),
       body: await readTextOrFileFlag(flags, cwd, 'body', false),
       type,
@@ -132,12 +157,16 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       devMode: isDevCliInvocation()
     }
     const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
+    const requestSelection =
+      model === undefined ? undefined : requireHandoffLaunchCapability(sendParams)
     const result = await callOrchestrationMutation<OrchestrationSendResult>(
       client,
       flags,
       'orchestration.send',
       sendParams,
-      dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined,
+      dispatchCapability || requestSelection
+        ? { orchestrationCapability: dispatchCapability, requestSelection }
+        : undefined,
       // Workers report once before ending their turn; retry outages and timeouts so worker_done is not lost.
       // The 120 s budget bounds retry starts: a backoff must fit inside it, and a retry starts only if
       // it is still open after the backoff. Each attempt can then wait out the send's own inactivity
@@ -202,6 +231,28 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
         `Sent ${value.messages.length} messages to ${value.recipients} recipients`
       )
     })
+  }
+}
+
+function requireHandoffLaunchCapability(params: unknown): RuntimeRequestSelection {
+  return {
+    paramsForStatus: (status) => {
+      const capabilities =
+        status && typeof status === 'object' && 'capabilities' in status
+          ? status.capabilities
+          : undefined
+      if (
+        Array.isArray(capabilities) &&
+        capabilities.includes(ORCHESTRATION_BOT_HANDOFF_LAUNCH_OPTIONS_RUNTIME_CAPABILITY)
+      ) {
+        return params
+      }
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'The connected Orca runtime does not support bot handoff model or effort overrides. Update or restart Orca and try again. Nothing was sent.',
+        { requestSent: false, effectsApplied: false }
+      )
+    }
   }
 }
 
