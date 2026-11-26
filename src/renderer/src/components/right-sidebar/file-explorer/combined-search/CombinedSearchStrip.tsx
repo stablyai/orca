@@ -43,7 +43,8 @@ export function CombinedSearchStrip({
       data-ignore-file-explorer-keys="true"
       onFocus={() => setFocused(true)}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        const next = event.relatedTarget
+        if (!(next instanceof Node && event.currentTarget.contains(next))) {
           setFocused(false)
         }
       }}

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   WORKSPACE_FILE_PATH_MIME,
@@ -70,26 +70,26 @@ export function useNameMatchRowActions({
   requestDelete: (node: TreeNode) => void
 }): NameMatchRowActions {
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
-  const [pendingTreeAction, setPendingTreeAction] = useState<PendingTreeAction | null>(null)
-
-  // A query typed after the reveal replaces it, so its inline edit must not start later.
+  // A ref, not state: the action runs once its row appears and never needs to render.
+  const pendingTreeActionRef = useRef<PendingTreeAction | null>(null)
   const wasSearchActiveRef = useRef(searchActive)
   useEffect(() => {
     const startedNewSearch = searchActive && !wasSearchActiveRef.current
     wasSearchActiveRef.current = searchActive
-    if (startedNewSearch && pendingTreeAction) {
-      setPendingTreeAction(null)
+    const pending = pendingTreeActionRef.current
+    // A query typed after the reveal replaces it, so its inline edit must not start later.
+    if (startedNewSearch || !pending || searchActive) {
+      if (startedNewSearch) {
+        pendingTreeActionRef.current = null
+      }
       return
     }
-    if (!pendingTreeAction || searchActive) {
-      return
-    }
-    const row = rowProjection.getRowByPath(pendingTreeAction.path)
+    const row = rowProjection.getRowByPath(pending.path)
     if (row) {
-      setPendingTreeAction(null)
-      pendingTreeAction.run(row)
+      pendingTreeActionRef.current = null
+      pending.run(row)
     }
-  }, [pendingTreeAction, rowProjection, searchActive])
+  }, [rowProjection, searchActive])
 
   const revealThen = useCallback(
     (path: string, run: (row: TreeNode) => void) => {
@@ -98,7 +98,7 @@ export function useNameMatchRowActions({
       }
       clearSearch()
       revealInExplorer(activeWorktreeId, path)
-      setPendingTreeAction({ path, run })
+      pendingTreeActionRef.current = { path, run }
     },
     [activeWorktreeId, clearSearch, revealInExplorer]
   )
@@ -126,7 +126,7 @@ export function useNameMatchRowActions({
       // The display root has no row of its own, so its inline input starts as soon as the tree shows.
       if (dir === displayRootPath) {
         clearSearch()
-        setPendingTreeAction(null)
+        pendingTreeActionRef.current = null
         startNewInTree(type, dir, depth)
         return
       }

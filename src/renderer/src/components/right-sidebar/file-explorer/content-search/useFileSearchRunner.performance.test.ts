@@ -38,13 +38,13 @@ function renderRunner() {
 }
 
 function countSearchStatePublications(): { count: number; stop: () => void } {
-  const counter = { count: 0, stop: () => undefined as void }
-  counter.stop = useAppStore.subscribe((state, previous) => {
+  const counter = { count: 0 }
+  const stop = useAppStore.subscribe((state, previous) => {
     if (state.fileSearchStateByWorktree !== previous.fileSearchStateByWorktree) {
       counter.count += 1
     }
   })
-  return counter
+  return Object.assign(counter, { stop })
 }
 
 describe('combined search text runner work per keystroke', () => {
