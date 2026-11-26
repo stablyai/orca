@@ -3,7 +3,7 @@ import { MobileBotGroupTranscript } from './MobileBotGroupTranscript'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileBotGroupReader } from './MobileBotGroupTurns'
 import { useCallback, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Keyboard, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, Ellipsis, ListChecks } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileSessionKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
@@ -298,7 +298,11 @@ export function MobileBotGroupRoom({
                     value0: audience
                   })}
                   disabled={!group || !connected}
-                  onPress={() => setMenu('replies')}
+                  onPress={() => {
+                    setMenu('replies')
+                    // The tap kept the field focused, so the sheet closes the keyboard itself.
+                    Keyboard.dismiss()
+                  }}
                 />
               </View>
             }

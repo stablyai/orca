@@ -5,9 +5,10 @@ import type { NativeChatContextUsageSummary } from '../../../../../../src/shared
 import type { MobileNativeChatSessionOptionsController } from '../../input/session-options/use-mobile-native-chat-session-options'
 import type { MobileNativeChatContext } from './MobileNativeChatContextUsage'
 import type { MobileNativeChatSendIntent } from '../delivery/mobile-native-chat-send'
+import type { MobileNativeChatPlanSwitch } from '../attachments/MobileNativeChatComposerAttachButton'
 import { createNonSecureContextUuid } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 
-/** What the + sheet offers while plan or goal mode is off, and the context line's /compact where the chat has it. */
+/** The + sheet's Plan first switch and Set a goal (while goal mode is off), and the context line's /compact where the chat has it. */
 export function mobileNativeChatComposerModes(args: {
   options: MobileNativeChatSessionOptionsController | undefined
   structured: boolean
@@ -20,16 +21,15 @@ export function mobileNativeChatComposerModes(args: {
   contextUsage: NativeChatContextUsageSummary | null
   onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
   fieldRef: RefObject<TextInputInstance | null>
-}): { onPlan?: () => void; onGoal?: () => void; context: MobileNativeChatContext } {
+}): { plan?: MobileNativeChatPlanSwitch; onGoal?: () => void; context: MobileNativeChatContext } {
   const { options, goalMenu, fieldRef } = args
   const mode = options?.snapshot.find((entry) => entry.id === 'interactionMode')
+  const planOn = mode?.kind.type === 'select' && mode.kind.currentValue === 'plan'
   const offersPlan =
     !args.editing &&
     options !== undefined &&
     mode?.kind.type === 'select' &&
-    mode.settable &&
-    mode.kind.currentValue !== 'plan' &&
-    options.optionSurface?.admits?.('interactionMode', 'plan') === true
+    (planOn || options.optionSurface?.admits?.('interactionMode', 'plan') === true)
   // As picking /goal would: the agent's own /goal only where the host sets goals.
   const goalCommand = args.commands.find((command) => command.name === 'goal')
   const enterGoal =
@@ -48,9 +48,10 @@ export function mobileNativeChatComposerModes(args: {
   return {
     ...(offersPlan
       ? {
-          onPlan: () => {
-            void options.setOption('interactionMode', 'plan')
-            fieldRef.current?.focus()
+          plan: {
+            on: planOn,
+            disabled: !mode.settable,
+            set: (on) => options.setOption('interactionMode', on ? 'plan' : 'default')
           }
         }
       : {}),

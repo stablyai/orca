@@ -2987,9 +2987,7 @@
       "loading": "Cargando documento…"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Disponibles: {{count}}",
       "commands": "Comandos",
-      "fileTypes": "PDF, texto, código…",
       "files": "Archivos",
       "photos": "Fotos",
       "skills": "Habilidades",

@@ -2885,9 +2885,7 @@
       "readOnly": "Schreibgeschützt"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}} verfügbar",
       "commands": "Befehle",
-      "fileTypes": "PDF, Text, Code…",
       "files": "Dateien",
       "photos": "Fotos",
       "skills": "Skills",

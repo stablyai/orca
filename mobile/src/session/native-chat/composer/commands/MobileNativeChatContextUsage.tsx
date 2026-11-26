@@ -24,6 +24,13 @@ export type MobileNativeChatContext = {
   onCompact?: () => void
 }
 
+/** The context line is showing, which keeps the composer whole so its warning and Compact stay in view. */
+export function mobileNativeChatContextNearLimit(
+  usage: NativeChatContextUsageSummary | null
+): boolean {
+  return usage !== null && usage.percentage >= NEAR_LIMIT_PERCENTAGE
+}
+
 function contextTint(percentage: number): string {
   return percentage >= NEAR_LIMIT_PERCENTAGE + 10
     ? colors.statusRed
@@ -39,7 +46,7 @@ export const MobileNativeChatContextLimitLine = memo(function MobileNativeChatCo
 }: MobileNativeChatContext): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  if (!usage || usage.percentage < NEAR_LIMIT_PERCENTAGE) {
+  if (!usage || !mobileNativeChatContextNearLimit(usage)) {
     return null
   }
   const { filled } = contextUsageRingReadout(usage)

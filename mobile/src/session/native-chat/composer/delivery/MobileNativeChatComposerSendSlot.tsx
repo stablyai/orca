@@ -1,5 +1,6 @@
 import type { ReactNode, RefObject } from 'react'
-import type { TextInputInstance } from 'react-native'
+import { View, type TextInputInstance } from 'react-native'
+import { mobileNativeChatComposerStyles as styles } from '../field/mobile-native-chat-composer-styles'
 import { isStructuredAgentSessionHostCommand } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { agentSessionInteractionCommand } from '../../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { NativeChatSendFollowUp } from '../../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
@@ -38,7 +39,8 @@ export function MobileNativeChatComposerSendSlot({
   stop,
   mic,
   micLive,
-  onSend
+  onSend,
+  onWidth
 }: {
   fieldRef: RefObject<TextInputInstance | null>
   value: string
@@ -61,6 +63,8 @@ export function MobileNativeChatComposerSendSlot({
   /** Dictation is starting, recording or transcribing: the mic keeps the slot. */
   micLive: boolean
   onSend: (intent?: MobileNativeChatSendIntent, keepFocus?: boolean) => void
+  /** The slot's width, which the idle pill's field stops short of. */
+  onWidth: (width: number) => void
 }): React.JSX.Element | null {
   const dictationFailed = useMobileNativeChatDictationFailed()
   const steerChord = useMobileNativeChatSteerChordPreview({
@@ -103,7 +107,10 @@ export function MobileNativeChatComposerSendSlot({
   const preview = steerChord.preview && (steerChord.preview === 'steer-queued' || canSend)
   const control = stopping ? 'stop' : mic !== null && micHoldsSlot ? null : 'send'
   return (
-    <>
+    <View
+      style={styles.trailingControls}
+      onLayout={(event) => onWidth(event.nativeEvent.layout.width)}
+    >
       {/* Always first, so a held mic is never remounted when Stop or a preview comes or goes mid-hold. */}
       {mic !== null && (stopping || micHoldsSlot) ? mic : null}
       {preview && steerChord.preview ? (
@@ -127,6 +134,6 @@ export function MobileNativeChatComposerSendSlot({
           )}
         </MobileNativeChatControlSwap>
       ) : null}
-    </>
+    </View>
   )
 }
