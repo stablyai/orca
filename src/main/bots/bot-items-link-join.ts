@@ -5,6 +5,7 @@ import {
   botItemPrRefOfUrl,
   botItemPrUrl,
   type BotItemIssue,
+  type BotItemLinkedItem,
   type BotItemLinkView,
   type BotItemPullRequest,
   type BotItemWorkerState
@@ -182,7 +183,12 @@ export class BotItemLinkJoin {
     return entry ? { title: entry.data.title, state: entry.data.state } : null
   }
 
-  linkView(link: BotItemLinkRecord, read: WorkerRead | undefined): BotItemLinkView {
+  /** `linked`: what an `item:` link points at, read with the item; null when it can't be read. */
+  linkView(
+    link: BotItemLinkRecord,
+    read: WorkerRead | undefined,
+    linked: BotItemLinkedItem | null = null
+  ): BotItemLinkView {
     switch (link.kind) {
       case 'dispatch': {
         const worker = read?.worker ?? null
@@ -227,6 +233,8 @@ export class BotItemLinkJoin {
           active: automation?.enabled === true
         }
       }
+      case 'item':
+        return { kind: 'item', ref: link.ref, item: linked }
     }
   }
 }

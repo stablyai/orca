@@ -1,5 +1,5 @@
 // An item's links, one row layout for all: workers as the Chats tab draws them, then PRs and issues with
-// live state, other links, files. Every link opens on click or Enter: web links as the workspace card's
+// live state, other items, other links, files. Every link opens on click or Enter: web links as the workspace card's
 // linked PR does (the link setting's popover or browser), files in Orca's editor, only from the bot's folder.
 import {
   Check,
@@ -33,6 +33,7 @@ import {
 } from '@/components/task-page/github/listing/task-page-github-work-item-status'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemLinkView } from '../../../../../shared/bots/bot-items'
+import { botItemLinkedItemName } from '../../../../../shared/bots/bot-item-link-names'
 import { ActivityRowButton } from '../ActivityRowButton'
 import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import { BotChatTreeWorkerRow } from '../BotChatTreeWorkerRow'
@@ -45,6 +46,8 @@ import {
   type BotItemLinkRow
 } from '../../../../../shared/bots/bot-item-link-rows'
 import { openBotItemFile, type BotItemFileContext } from './bot-item-file-open'
+import { openLinkedBotItem } from './bot-item-open'
+import { BotItemLinkedItemIcon } from './BotItemLinkedItemIcon'
 import { useBotItemLivePr } from './use-bot-item-live-pr'
 import {
   checksLabel,
@@ -355,6 +358,26 @@ function Row({
           disabled={!row.active}
         />
       )
+    case 'item': {
+      // Unreadable, or its bot gone from this host: said so, and nothing to open it in.
+      const { item } = row
+      return (
+        <LinkRow
+          icon={<BotItemLinkedItemIcon item={item} />}
+          title={
+            item ? (
+              <TitleWithLabel title={item.title} label={botItemLinkedItemName(item)} />
+            ) : (
+              <span className="text-muted-foreground">
+                {t('bots.items.link.itemMissing', 'Item not found')}
+              </span>
+            )
+          }
+          disabled={!item?.owner.name}
+          onClick={item ? () => openLinkedBotItem(bot, item.owner.botId, row.uid) : undefined}
+        />
+      )
+    }
   }
 }
 

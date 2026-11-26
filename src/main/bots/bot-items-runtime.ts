@@ -3,7 +3,12 @@
 // workers started for an item linked from orchestration's record. Changes owed to an item's chat go out
 // as orchestration mail; startup sends any a crash left owed.
 import type { Bot } from '../../shared/bot-types'
-import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
+import {
+  botItemEventId,
+  type BotItem,
+  type BotItemEvent,
+  type BotItemLinkedItem
+} from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
 import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
 import {
@@ -270,6 +275,17 @@ export class BotItemsHost {
     const byUid = new Map(rows.items.map((item) => [item.uid, item]))
     const bots = this.deps.bots()
     const nameOf = (botId: string) => bots.find((bot) => bot.id === botId)?.name ?? null
+    const linkedItem = (uid: string): BotItemLinkedItem | null => {
+      const row = rows.linked[uid]
+      return row
+        ? {
+            number: row.number,
+            owner: { botId: row.ownerBotId, name: nameOf(row.ownerBotId) },
+            title: row.title,
+            status: row.status
+          }
+        : null
+    }
     return items.map((given): BotItem => {
       const item = byUid.get(given.uid) ?? given
       const question = rows.questions[item.uid]
@@ -293,7 +309,7 @@ export class BotItemsHost {
         closeNote: summary ? null : item.closeNote,
         wait: wait && waitText !== null ? { text: waitText, at: wait.createdAt } : null,
         links: (rows.links[item.uid] ?? []).map((link) =>
-          this.join.linkView(link, workers.get(link.ref))
+          this.join.linkView(link, workers.get(link.ref), linkedItem(link.ref))
         ),
         version: item.version,
         lastEventId: botItemEventId(item.lastEventId),

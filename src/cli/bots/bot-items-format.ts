@@ -9,6 +9,7 @@ import {
   type BotItemLinkView,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
+import { botItemLinkedItemName } from '../../shared/bots/bot-item-link-names'
 
 export type BotItemWriteView = {
   item: BotItem
@@ -158,6 +159,10 @@ function linkLine(link: BotItemLinkView): string {
       return `${link.kind}:${link.ref}`
     case 'automation':
       return `automation:${link.ref} · ${link.name ?? 'automation'} · ${link.active ? 'on' : 'gone or off'}`
+    case 'item':
+      return link.item
+        ? `item:${link.ref} · ${botItemLinkedItemName(link.item)} · ${link.item.title} · ${STATUS_WORDS[link.item.status]}`
+        : `item:${link.ref} · not found`
   }
 }
 

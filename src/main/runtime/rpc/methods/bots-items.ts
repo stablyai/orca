@@ -13,7 +13,13 @@ import { defineMethod } from '../core'
 import { itemsReader, itemsWriter } from './bots-items-caller'
 import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
 import { BOT_ITEMS_WRITE_METHODS } from './bots-items-write-methods'
-import { pageSize, parseCursor, parseItemLink, resolveItem } from './bots-items-write-support'
+import {
+  itemLinksByUid,
+  pageSize,
+  parseCursor,
+  parseItemLink,
+  resolveItem
+} from './bots-items-write-support'
 import {
   botItemCountsForClient,
   botItemEventsForClient,
@@ -40,8 +46,10 @@ const LIST = defineMethod({
       : params.chat?.replace(/^chat:/, '')
     const limit = pageSize(params.limit, BOT_ITEM_LIMITS.listPage, BOT_ITEM_LIMITS.listPageMax)
     const cursor = parseCursor(params.cursor)
-    const link = params.link !== undefined ? parseItemLink(params.link) : undefined
-    const page = await runtime.botItems.store().list({
+    const store = runtime.botItems.store()
+    const [link] =
+      params.link !== undefined ? await itemLinksByUid(store, [parseItemLink(params.link)]) : []
+    const page = await store.list({
       botId: bot.id,
       statuses,
       ...(chatId !== undefined ? { chatIds: [chatId] } : {}),

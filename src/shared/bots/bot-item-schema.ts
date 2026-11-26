@@ -101,6 +101,20 @@ const linkSchema: z.ZodType<BotItemLinkView, unknown> = z.discriminatedUnion('ki
     ref: z.string(),
     name: z.string().nullable(),
     active: z.boolean()
+  }),
+  z.looseObject({
+    kind: z.literal('item'),
+    ref: z.string(),
+    // Unreadable (a newer status, say) shows as an item that can't be read, still opened by uid.
+    item: z
+      .looseObject({
+        number: z.number(),
+        owner: z.looseObject({ botId: z.string(), name: z.string().nullable() }),
+        title: z.string(),
+        status: statusSchema
+      })
+      .nullable()
+      .catch(null)
   })
 ])
 

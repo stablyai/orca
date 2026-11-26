@@ -126,6 +126,20 @@ export const BOT_ITEMS_MIGRATIONS: readonly string[] = [
   DROP TABLE item_links;
   ALTER TABLE item_links_next RENAME TO item_links;
   CREATE INDEX idx_item_links_ref ON item_links(kind, ref);
+  `,
+  // Links to other items (`item:<uid>`).
+  `
+  CREATE TABLE item_links_next (
+    item_uid TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('dispatch','pr','url','file','automation','item')),
+    ref TEXT NOT NULL,
+    added_event INTEGER NOT NULL,
+    PRIMARY KEY (item_uid, kind, ref)
+  );
+  INSERT INTO item_links_next SELECT item_uid, kind, ref, added_event FROM item_links;
+  DROP TABLE item_links;
+  ALTER TABLE item_links_next RENAME TO item_links;
+  CREATE INDEX idx_item_links_ref ON item_links(kind, ref);
   `
 ]
 

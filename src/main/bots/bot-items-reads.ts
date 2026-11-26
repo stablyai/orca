@@ -20,6 +20,14 @@ import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 import { BotItemsTables } from './bot-items-tables'
 
+/** An item an `item:` link points at, as the link shows it. */
+export type BotItemLinkedRow = {
+  number: number
+  ownerBotId: string
+  title: string
+  status: BotItemStatus
+}
+
 export type BotItemListQuery = {
   botId: string
   statuses: readonly BotItemStatus[]
@@ -191,6 +199,8 @@ export class BotItemsReads extends BotItemsTables {
     waits: Record<string, BotItemEventRecord>
     othersLast: Record<string, number>
     waitingAsks: Record<string, string>
+    /** The items `item:` links point at, by uid; one gone or never made is left out. */
+    linked: Record<string, BotItemLinkedRow>
   } {
     const ids = JSON.stringify(uids)
     const rows = this.db
@@ -235,6 +245,24 @@ export class BotItemsReads extends BotItemsTables {
         waitingAsks[item.uid] = botItemEventId(ask)
       }
     }
-    return { items, links, questions, waits, othersLast, waitingAsks }
+    const linked: Record<string, BotItemLinkedRow> = {}
+    const linkedUids = Object.values(links)
+      .flat()
+      .flatMap((link) => (link.kind === 'item' ? [link.ref] : []))
+    for (const row of linkedUids.length === 0
+      ? []
+      : this.db
+          .prepare(
+            'SELECT uid, number, owner_bot_id, title, status FROM items WHERE uid IN (SELECT value FROM json_each(?))'
+          )
+          .all(JSON.stringify([...new Set(linkedUids)]))) {
+      linked[text(row, 'uid')] = {
+        number: integer(row, 'number'),
+        ownerBotId: text(row, 'owner_bot_id'),
+        title: text(row, 'title'),
+        status: statusOf(row.status)
+      }
+    }
+    return { items, links, questions, waits, othersLast, waitingAsks, linked }
   }
 }

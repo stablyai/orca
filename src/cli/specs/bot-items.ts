@@ -120,7 +120,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     variadicPositional: true,
     notes: [
       ...ITEM_NOTES,
-      '<ref> is dispatch:<ctx_id>, automation:<id>, pr:<owner/repo#n> (or the PR URL), a URL or a file path. Workers started with `worker-start --item` link themselves. Items of other bots take your own workers, PRs, URLs and files too; their status stays with their bot.'
+      "<ref> is dispatch:<ctx_id>, automation:<id>, item:<n or uid> (another item, any bot's: link it rather than naming it in the title), pr:<owner/repo#n> (or the PR URL), a URL or a file path. Workers started with `worker-start --item` link themselves. Items of other bots take your own workers, PRs, URLs and files too; their status stays with their bot."
     ]
   },
   {
@@ -142,7 +142,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Open items (Needs you, In progress, Waiting, Planned) by default; --all adds closed ones; --status picks exact statuses and wins over --all.',
-      '--link <ref> lists only items linking that PR, URL or file; a PR URL and pr:<owner/repo#n> match.',
+      '--link <ref> lists only items linking that PR, URL, file or item; a PR URL and pr:<owner/repo#n> match.',
       '50 a page (at most 100 with --limit); pass the printed --cursor for the next page.'
     ]
   },

@@ -1,5 +1,5 @@
 // An item's Links on the phone, in the desktop's rows (shared botItemLinkRows): workers as the chats tree
-// draws them, PRs and issues with live state, web links, files. What the desktop's hover tooltip says
+// draws them, PRs and issues with live state, other items, web links, files. What the desktop's hover tooltip says
 // (state, checks, repo) is the row's accessibility label and its long-press sheet's message.
 import { useState } from 'react'
 import {
@@ -13,6 +13,7 @@ import {
   GitPullRequestDraft,
   Hourglass,
   Link2,
+  ListTodo,
   X
 } from 'lucide-react-native'
 import { Text, View } from 'react-native'
@@ -25,6 +26,7 @@ import {
 } from '../../../../src/shared/bots/bot-item-link-rows'
 import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
 import type { BotItemLinkView } from '../../../../src/shared/bots/bot-items'
+import { botItemLinkedItemName } from '../../../../src/shared/bots/bot-item-link-names'
 import { ListGroup, ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -37,6 +39,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { MobileBotWorkerRow } from '../MobileBotWorkerRow'
+import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 
 const ICON = 15
 
@@ -242,6 +245,29 @@ export function MobileBotItemLinks({
             subtitle={line}
             leading={<Hourglass size={ICON} color={colors.textMuted} />}
             disabled={!entry.active}
+          />
+        )
+      }
+      case 'item': {
+        // Shown, not opened: the phone's panel shows one bot's items at a time.
+        if (!entry.item) {
+          return (
+            <ListRow
+              key={entry.key}
+              title={t('bots.items.link.itemMissing', 'Item not found')}
+              leading={<ListTodo size={ICON} color={colors.textMuted} />}
+              disabled
+            />
+          )
+        }
+        const name = botItemLinkedItemName(entry.item)
+        return (
+          <ListRow
+            key={entry.key}
+            title={entry.item.title}
+            leading={<MobileBotItemStatusIcon status={entry.item.status} />}
+            accessory={<Text style={styles.label}>{name}</Text>}
+            accessibilityLabel={`${entry.item.title}, ${name}`}
           />
         )
       }
