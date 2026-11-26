@@ -18,7 +18,7 @@ import { defineMethod, InvalidArgumentError } from '../core'
 import { namedOrCallerBot } from './bots-caller-bot'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { createCanonicalOrcaSessionResolver } from '../../orchestration/addressing/session-lineage/canonical-orca-session-id'
-import { readBotChats } from './bots-chats'
+import { readBotChat } from './bots-chats'
 
 /** Brings a closed chat back as a tab in the bot's home, so it takes mail again; its history is kept. */
 export const BOT_CHATS_REOPEN_METHOD = defineMethod({
@@ -27,6 +27,8 @@ export const BOT_CHATS_REOPEN_METHOD = defineMethod({
   params: BotChatReopen,
   handler: async (params, context) => {
     const { runtime } = context
+    // The records live in the chat host, which opens lazily: after a restart, open it first.
+    await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
     const named = params.chatId.startsWith(BOT_CHAT_ID_PREFIX)
       ? params.chatId.slice(BOT_CHAT_ID_PREFIX.length)
       : params.chatId
@@ -37,7 +39,7 @@ export const BOT_CHATS_REOPEN_METHOD = defineMethod({
     // The chat's own bot, so another bot's chat reopens without --bot.
     const bot =
       (!params.botId && botOfSession(runtime.bots, id)) || namedOrCallerBot(params, context).bot
-    const row = (await readBotChats(runtime, bot, null, true)).find((chat) => chat.id === id)
+    const row = await readBotChat(runtime, bot, id)
     if (!row) {
       throw new InvalidArgumentError(
         `${bot.name} has no chat ${params.chatId}. orca bot chats --all lists its chats.`
@@ -57,7 +59,7 @@ export const BOT_CHATS_REOPEN_METHOD = defineMethod({
     const provider = live?.provider
     const agent = provider && isBotAgent(provider) ? provider : bot.agent
     await showBotSessionTab(runtime, { ...bot, agent }, live?.sessionId ?? row.id)
-    const after = (await readBotChats(runtime, bot, null, true)).find((chat) => chat.id === row.id)
+    const after = await readBotChat(runtime, bot, row.id)
     if (!after || after.closed) {
       throw new InvalidArgumentError('That chat could not be reopened, so it still takes no mail.')
     }

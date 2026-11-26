@@ -90,6 +90,53 @@ export async function readBotChats(
   return all ? rows : rows.filter((row) => !row.closed)
 }
 
+/** One of a bot's chats, by the id `orca bot chats` prints (its /clear root), as `readBotChats` would
+ *  list it, reading only that chat's records: its cost doesn't grow with the bot's history. */
+export async function readBotChat(
+  runtime: Pick<
+    OrcaRuntimeService,
+    'ensureStructuredAgentSessionHost' | 'getOrchestrationDb' | 'lookAround'
+  >,
+  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
+  id: string
+): Promise<BotChatRow | null> {
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const store = readAgentSessionRecordStore()
+  // The list shows a /clear chain by its newest session, so follow it there from the first.
+  let record = store?.getRecord(id) ?? null
+  const seen = new Set<string>()
+  for (let next = record && clearedInto(record); store && next && !seen.has(next);) {
+    seen.add(next)
+    record = store.getRecord(next) ?? null
+    next = record && clearedInto(record)
+  }
+  if (!store || !record || !isOrcaSessionId(record.sessionId)) {
+    return null
+  }
+  const root = createCanonicalOrcaSessionResolver(store)
+  const rootOf = (chat: string | null) => (chat && isOrcaSessionId(chat) ? root(chat) : null)
+  const row =
+    botOfHomeWorkspace([bot], record.location.workspaceId) &&
+    !isBotBackgroundRun(runtime.lookAround, record)
+      ? botChatRecordRow(record, (chat) => rootOf(chat) ?? chat, rootOf(bot.chatSessionId))
+      : null
+  if (!row || row.id !== id) {
+    return null
+  }
+  const recipient = {
+    sessionId: record.sessionId,
+    address: formatOrcaSessionAddress(record.sessionId)
+  }
+  const context = createStructuredSessionReachContext(store, runtime.getOrchestrationDb())
+  const refusal = refuseUndeliverableSessionRecipientWith(context, recipient, store)
+  return {
+    ...row,
+    self: false,
+    closed: refusal !== null,
+    ...(refusal ? { reason: refusal.unreachable ?? 'unverifiable' } : {})
+  }
+}
+
 /** One of a bot's chats that takes mail, by the id `orca bot chats` prints, with the session running
  *  it now (a /clear moves it on); null when the bot has no such chat or it was closed. */
 export async function botChatTakingMail(

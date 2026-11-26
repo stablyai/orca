@@ -51,6 +51,18 @@ export function failedBeforeSending(error: unknown): boolean {
   )
 }
 
+/** Whether a call that failed may still have taken effect there: the server never answered, or said
+ *  it can't tell, and nothing shows the call stopped before reaching it. */
+export function callOutcomeUnknown(error: unknown): boolean {
+  if (failedBeforeSending(error)) {
+    return false
+  }
+  return (
+    (error instanceof OrchestrationError && error.code === 'operation_unknown') ||
+    (serverNeverAnswered(error) && errorData(error)?.effectsApplied !== false)
+  )
+}
+
 export function errorData(error: unknown): Record<string, unknown> | undefined {
   const data = error instanceof Error && 'data' in error ? error.data : undefined
   return data && typeof data === 'object' && !Array.isArray(data)
