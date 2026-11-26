@@ -18,6 +18,7 @@ describe('spawnWithSystemConptyFallback', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('uses the bundled ConPTY when it starts', () => {
@@ -39,6 +40,41 @@ describe('spawnWithSystemConptyFallback', () => {
     expect(spawn.mock.calls).toEqual([[true], [false], [false]])
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toContain('HRESULT 0x80070005')
+  })
+
+  it('retries the bundled ConPTY after the spawn budget and clears the memo when it works', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { BUNDLED_CONPTY_RETRY_AFTER_SPAWNS } = await import('./bundled-conpty-fallback')
+    let bundledBroken = true
+    const spawn = vi.fn((useConptyDll: boolean) => {
+      if (useConptyDll && bundledBroken) {
+        throw new Error(LAUNCH_FAILURE)
+      }
+      return { useConptyDll }
+    })
+    spawnWithSystemConptyFallback(spawn, 'pwsh.exe')
+    for (let i = 0; i < BUNDLED_CONPTY_RETRY_AFTER_SPAWNS; i++) {
+      expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: false })
+    }
+    bundledBroken = false
+    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: true })
+    expect(spawnWithSystemConptyFallback(spawn, 'pwsh.exe')).toEqual({ useConptyDll: true })
+  })
+
+  it('retries the bundled ConPTY once the memo has aged out', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.useFakeTimers()
+    const { BUNDLED_CONPTY_RETRY_AFTER_MS } = await import('./bundled-conpty-fallback')
+    const spawn = vi.fn((useConptyDll: boolean) => {
+      if (useConptyDll) {
+        throw new Error(LAUNCH_FAILURE)
+      }
+      return { useConptyDll }
+    })
+    spawnWithSystemConptyFallback(spawn, 'pwsh.exe')
+    vi.advanceTimersByTime(BUNDLED_CONPTY_RETRY_AFTER_MS)
+    spawnWithSystemConptyFallback(spawn, 'pwsh.exe')
+    expect(spawn.mock.calls).toEqual([[true], [false], [true], [false]])
   })
 
   it('reports both failures and keeps trying the bundled ConPTY when the system one also fails', () => {

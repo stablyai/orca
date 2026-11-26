@@ -7,8 +7,23 @@ const BUNDLED_CONPTY_FAILURE_PREFIXES = [
   'Failed to get conpty.node module'
 ]
 
-// Set once the system ConPTY has replaced a failed bundled one; later spawns skip the bundled attempt.
-let bundledConptyFailure: string | null = null
+// Re-try the bundled ConPTY after this long or this many system spawns, so a one-off failure cannot pin a long-lived daemon.
+export const BUNDLED_CONPTY_RETRY_AFTER_MS = 10 * 60_000
+export const BUNDLED_CONPTY_RETRY_AFTER_SPAWNS = 20
+
+type BundledConptyMemo = { message: string; at: number; systemSpawns: number }
+
+// Set once the system ConPTY has replaced a failed bundled one; later spawns skip the bundled attempt until it expires.
+let bundledConptyFailure: BundledConptyMemo | null = null
+// Why separate from the memo: re-pinning after an expiry retry must not repeat the warning.
+let fallbackLogged = false
+
+function memoActive(memo: BundledConptyMemo): boolean {
+  return (
+    Date.now() - memo.at < BUNDLED_CONPTY_RETRY_AFTER_MS &&
+    memo.systemSpawns < BUNDLED_CONPTY_RETRY_AFTER_SPAWNS
+  )
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -30,11 +45,17 @@ export function spawnWithSystemConptyFallback<T>(
   if (process.platform !== 'win32') {
     return spawn(false)
   }
-  if (bundledConptyFailure !== null) {
+  if (bundledConptyFailure !== null && memoActive(bundledConptyFailure)) {
+    bundledConptyFailure.systemSpawns += 1
     return spawn(false)
   }
   try {
-    return spawn(true)
+    const proc = spawn(true)
+    if (bundledConptyFailure !== null) {
+      bundledConptyFailure = null
+      console.warn(`[pty] Bundled ConPTY works again for "${label}"; leaving the system ConPTY`)
+    }
+    return proc
   } catch (bundledError) {
     if (!isBundledConptyFailure(bundledError)) {
       throw bundledError
@@ -49,10 +70,13 @@ export function spawnWithSystemConptyFallback<T>(
       )
     }
     // Why memo only on success: if both failed, the cause may be transient and not bundled-specific.
-    bundledConptyFailure = errorMessage(bundledError)
-    console.warn(
-      `[pty] Bundled ConPTY failed for "${label}" (${bundledConptyFailure}); using the system ConPTY for this process`
-    )
+    bundledConptyFailure = { message: errorMessage(bundledError), at: Date.now(), systemSpawns: 0 }
+    if (!fallbackLogged) {
+      fallbackLogged = true
+      console.warn(
+        `[pty] Bundled ConPTY failed for "${label}" (${bundledConptyFailure.message}); using the system ConPTY and retrying the bundled one periodically`
+      )
+    }
     return proc
   }
 }
