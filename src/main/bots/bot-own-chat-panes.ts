@@ -9,10 +9,12 @@ import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-sessio
 import { readSessionParties } from '../runtime/orchestration/addressing/session-party-reader'
 import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 
-/** Bot id to its open side chats, Home and threads left out (the line names those its own way). */
+/** Bot id to its open side chats, Home and threads left out (the line names those its own way);
+ *  `listed` narrows them to the chats the asker may see. */
 export async function readBotOwnChatPanes(
   host: BotChatTreeHost,
-  botIds?: readonly string[]
+  botIds?: readonly string[],
+  listed: (chatId: string) => boolean = () => true
 ): Promise<Record<string, BotRowLineChat[]>> {
   const store = await host.sessionRecords()
   if (!store) {
@@ -37,7 +39,11 @@ export async function readBotOwnChatPanes(
     const threads = new Set(inputs.links.map((link) => build.rootOf(link.sessionId)))
     const sides = [...build.chats.values()].flatMap((chat) => {
       const record = store.getRecord(build.sessionOfChat.get(chat.chatId) ?? chat.chatId)
-      return chat.origin === 'side' && !chat.closed && !threads.has(chat.chatId) && record
+      return chat.origin === 'side' &&
+        !chat.closed &&
+        !threads.has(chat.chatId) &&
+        listed(chat.chatId) &&
+        record
         ? [{ chat, record }]
         : []
     })

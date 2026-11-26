@@ -25,6 +25,7 @@ import {
 } from '../orchestration/callers/orchestration-session-caller'
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
+import { refuseBotShareCall } from './bot-share-call-admission'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -83,7 +84,15 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
         )
       )
     }
-    return { method, request, caller, params: parsedParams.value }
+    const admitted = { method, request, caller, params: parsedParams.value }
+    if (callerScope.kind !== 'bot-share') {
+      return admitted
+    }
+    return refuseBotShareCall(runtime, callerScope, request.method, admitted.params).then(
+      (refusal) =>
+        refusal ? reject(errorResponse(request.id, meta, 'not_found', refusal)) : admitted,
+      (error) => reject(mapDispatcherError(request, meta, error))
+    )
   }
   if (peer) {
     return admitResolved(peer)

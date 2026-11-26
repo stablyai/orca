@@ -1,10 +1,15 @@
 import type { RuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
-import type { DeviceEntry } from '../server/pairing/device-entry'
 import type { DeviceRegistry } from '../server/pairing/device-registry'
 import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from '../server/pairing/ephemeral-device-rows'
-import { devicePrincipalOf } from '../server/pairing/device-principal'
+import type { BotShareDeviceStore } from '../server/pairing/bot-share-device-store'
+import {
+  resolveSocketDeviceKey,
+  socketStillAuthenticated,
+  toAuthenticatedDevice,
+  type SocketDeviceStores
+} from './mobile-socket-device-key'
 import type { E2EEKeypair } from '../server/pairing/e2ee-keypair'
 import { E2EEChannel } from './e2ee/e2ee-channel'
 import type { E2EEAuthenticatedDevice } from '../server/mobile-e2ee-authenticated-device'
@@ -54,6 +59,8 @@ export type AuthenticatedMobileSocket = {
 
 type MobileSocketWiringOptions = {
   deviceRegistry: DeviceRegistry
+  // Teammates' one-bot devices; absent, none sign in.
+  botShareDevices?: BotShareDeviceStore
   e2eeKeypair: E2EEKeypair
   onText: (
     socket: AuthenticatedMobileSocket,
@@ -68,16 +75,10 @@ type MobileSocketWiringOptions = {
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
 }
 
-function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
-  return {
-    ...devicePrincipalOf(device),
-    ...(device.token !== undefined ? { deviceToken: device.token } : {})
-  }
-}
-
 export class MobileSocketWiring {
   private closedWith: { code: number; reason: string } | null = null
   private readonly deviceRegistry: DeviceRegistry
+  private readonly deviceStores: SocketDeviceStores
   private readonly e2eeKeypair: E2EEKeypair
   private readonly onText: MobileSocketWiringOptions['onText']
   private readonly onBinary: MobileSocketWiringOptions['onBinary']
@@ -93,6 +94,7 @@ export class MobileSocketWiring {
 
   constructor(options: MobileSocketWiringOptions) {
     this.deviceRegistry = options.deviceRegistry
+    this.deviceStores = { registry: options.deviceRegistry, shares: options.botShareDevices }
     this.e2eeKeypair = options.e2eeKeypair
     this.onText = options.onText
     this.onBinary = options.onBinary
@@ -205,7 +207,7 @@ export class MobileSocketWiring {
       return
     }
     const socket = this.authenticatedSockets.get(ws)
-    if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
+    if (socket && !socketStillAuthenticated(this.deviceStores, socket.device)) {
       ws.close(4001, 'Unauthorized')
       this.handleClose(ws)
       return
@@ -233,25 +235,8 @@ export class MobileSocketWiring {
           }
           return toAuthenticatedDevice(device)
         },
-        resolveAuthenticatedDeviceKey: (deviceId) => {
-          const lookup = this.deviceRegistry.lookupDeviceKey(deviceId)
-          if (lookup.kind !== 'found') {
-            return lookup
-          }
-          // Enforce token auth's Relay binding; forks inherit it. Never answer unknown for an existing device or the client deletes its key.
-          if (
-            metadata.transport === 'relay' &&
-            metadata.relayDeviceId !== lookup.device.deviceId &&
-            metadata.relayDeviceId !== lookup.device.forkedFrom
-          ) {
-            return { kind: 'refused' }
-          }
-          return {
-            kind: 'found',
-            device: toAuthenticatedDevice(lookup.device),
-            devicePublicKeyB64: lookup.device.devicePublicKeyB64
-          }
-        },
+        resolveAuthenticatedDeviceKey: (deviceId) =>
+          resolveSocketDeviceKey(this.deviceStores, deviceId, metadata),
         onReady: (channel, device) => {
           const socket = {
             ws,
@@ -270,14 +255,17 @@ export class MobileSocketWiring {
           }
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceId)
-          // Do not delay e2ee_authenticated for the secure-file rewrite.
-          this.deviceRegistry.updateLastSeenDeferred(
-            device.deviceId,
-            metadata.transport === 'direct' ? metadata.sourceClass : undefined,
-            channel.transcriptHashB64 ? 'v2' : 'legacy'
-          )
-          if (device.deviceToken === undefined) {
-            this.deviceRegistry.retireForkedTicket(device.deviceId)
+          // Share devices keep no registry row to update.
+          if (!device.botShare) {
+            // Do not delay e2ee_authenticated for the secure-file rewrite.
+            this.deviceRegistry.updateLastSeenDeferred(
+              device.deviceId,
+              metadata.transport === 'direct' ? metadata.sourceClass : undefined,
+              channel.transcriptHashB64 ? 'v2' : 'legacy'
+            )
+            if (device.deviceToken === undefined) {
+              this.deviceRegistry.retireForkedTicket(device.deviceId)
+            }
           }
           this.onReady?.(socket)
         },
@@ -325,7 +313,12 @@ export class MobileSocketWiring {
         (candidate) => candidate.device.deviceId === socket.device.deviceId
       )
     // Session-only idle time starts at disconnect, not connection.
-    if (socket && !hasOtherConnections && socket.device.deviceToken === undefined) {
+    if (
+      socket &&
+      !hasOtherConnections &&
+      socket.device.deviceToken === undefined &&
+      !socket.device.botShare
+    ) {
       this.deviceRegistry.updateLastSeenDeferred(socket.device.deviceId)
     }
     this.onClose(socket, hasOtherConnections)

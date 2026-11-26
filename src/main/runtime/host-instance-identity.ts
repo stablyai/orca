@@ -9,7 +9,10 @@ import {
 } from '../../shared/secure-storage/secure-file'
 import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 import { writeNewE2EEKeypair } from './rpc/server/pairing/e2ee-keypair'
-import { DEVICE_REGISTRY_FILENAME } from './rpc/server/pairing/mobile-pairing-files'
+import {
+  BOT_SHARE_DEVICES_FILENAME,
+  DEVICE_REGISTRY_FILENAME
+} from './rpc/server/pairing/mobile-pairing-files'
 import { HOST_INSTALLATION_FILENAME } from './hosts/platform-probe/host-descriptor'
 
 export const HOST_INSTANCE_FILENAME = 'orca-host-instance.json'
@@ -18,6 +21,7 @@ const MAX_HOST_INSTANCE_FILE_BYTES = 4 * 1024
 const IDENTITY_FILENAMES = [
   E2EE_KEYPAIR_FILENAME,
   DEVICE_REGISTRY_FILENAME,
+  BOT_SHARE_DEVICES_FILENAME,
   HOST_INSTALLATION_FILENAME
 ] as const
 const STAGED_SUFFIX = '.next'
@@ -116,6 +120,7 @@ function stageNewIdentity(userDataPath: string, write: HostIdentityWrite): void 
   const stage: HostIdentityWrite = (path, value) => write(`${path}${STAGED_SUFFIX}`, value)
   writeNewE2EEKeypair(userDataPath, stage)
   stage(join(userDataPath, DEVICE_REGISTRY_FILENAME), [])
+  stage(join(userDataPath, BOT_SHARE_DEVICES_FILENAME), { v: 1, devices: [] })
   stage(join(userDataPath, HOST_INSTALLATION_FILENAME), { installationId: randomUUID() })
 }
 

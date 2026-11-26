@@ -6,7 +6,8 @@ import type { ConnectorAskerPlaceKind } from '../connectors/connector-cloud-cont
 /** A person a request is for; `workspaceId` is null when Orca doesn't know which workspace they asked in. */
 export type BotRequestPerson = {
   kind: 'person'
-  source: ConnectorSource
+  /** `orca`: a teammate the owner shared the bot with, by their Orca account id. */
+  source: ConnectorSource | 'orca'
   userId: string
   name?: string
   workspaceId: string | null
@@ -14,6 +15,8 @@ export type BotRequestPerson = {
   role: 'owner' | 'member' | null
   /** Where they asked (a channel, a DM, an issue); absent for an automation's event. */
   placeKind?: ConnectorAskerPlaceKind
+  /** The Orca account their connector login is linked to, as the cloud stamped it. */
+  viaAccount?: string
 }
 
 export type BotRequestAsker = { kind: 'owner' } | BotRequestPerson | { kind: 'unknown' }
@@ -26,6 +29,20 @@ export function actsForOwner(askers: readonly BotRequestAsker[]): boolean {
     askers.length > 0 &&
     askers.every(
       (asker) => asker.kind === 'owner' || (asker.kind === 'person' && asker.role === 'owner')
+    )
+  )
+}
+
+/** Whether a chat is a shared teammate's own: every person it acts for is that Orca account, in
+ *  Orca or through their linked Slack login. A chat that also acts for anyone else is not theirs. */
+export function shareOwnsChat(askers: readonly BotRequestAsker[], accountId: string): boolean {
+  return (
+    askers.length > 0 &&
+    askers.every(
+      (asker) =>
+        asker.kind === 'person' &&
+        ((asker.source === 'orca' && asker.userId === accountId) ||
+          (asker.source === 'slack' && asker.viaAccount === accountId))
     )
   )
 }

@@ -1,29 +1,22 @@
 import type { WebSocket } from 'ws'
-import type {
-  PairingGetEndpointsParams,
-  PairingProvisionRelayParams
-} from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
-import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
-import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
+import {
+  botShareCallerScopeOf,
+  botSharePrincipalOf,
+  callerScopeOf,
+  devicePrincipalOf
+} from './pairing/device-principal'
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 import type { RpcRequest } from '../core'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
-import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
-import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
+import { RuntimeRpcDeviceDispatch } from './runtime-rpc-device-dispatch'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
-import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
-import { injectDeviceScope } from './runtime-rpc-device-scope-stamp'
-import { RuntimeRpcStagedReplies } from './runtime-rpc-staged-replies'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { isUntaggedTrackerCall, withDefaultScopeServer } from './runtime-rpc-mobile-tracker-methods'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
 
-export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
-  private readonly stagedReplies = new RuntimeRpcStagedReplies(() => this.runtime.getRuntimeId())
-
+export class RuntimeRpcWebSocketDispatch extends RuntimeRpcDeviceDispatch {
   // Relay only to configured execution hosts; unreachable targets fail, never run locally. Return null after relay/reply.
   private relayMobileRequest(
     request: RpcRequest,
@@ -154,6 +147,29 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Device token mismatch')))
       return
     }
+    const share = authenticatedSocket?.device.botShare
+    if (authenticatedSocket && share) {
+      // A share socket is checked against its own store only, and gets none of a pairing's powers.
+      const shareDevice = this.botShareDevices?.resolveAuthenticatedPrincipal(
+        authenticatedSocket.device.deviceId,
+        share
+      )
+      if (!shareDevice) {
+        reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device')))
+        return
+      }
+      if (this.stagedReplies.answerRead(request, shareDevice.deviceId, reply)) {
+        return
+      }
+      await this.dispatchForDevice(request, reply, sendBinary, ws, authenticatedSocket, {
+        deviceId: shareDevice.deviceId,
+        parentDeviceId: shareDevice.parentDeviceId,
+        scope: shareDevice.scope,
+        principal: botSharePrincipalOf(shareDevice),
+        callerScope: botShareCallerScopeOf(shareDevice)
+      })
+      return
+    }
     // E2EE already proves channel identity; request fields cannot substitute credentials.
     const token = boundToken ?? requestToken
     if (!token && !authenticatedSocket) {
@@ -205,123 +221,20 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     if (wsTransport && ws) {
       wsTransport.setClientId(ws, principal.deviceId)
     }
-
-    const longPoll = classifyRuntimeLongPoll(request)
-    const rejection = this.admitLongPoll(longPoll, device.deviceId)
-    if (rejection) {
-      reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
-      return
-    }
-
-    const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
-
-    // Older pairings lack scope metadata; stamp authenticated scope on status.get.
-    const boundedReply = limitRuntimeRpcReplySize(
-      request.id,
+    await this.dispatchForDevice(
+      request,
       reply,
-      (id, code, message) => this.buildError(id, code, message),
-      this.stagedReplies.stagerFor(
-        authenticatedSocket?.clientCapabilities,
-        request.id,
-        device.deviceId,
-        abortRegistration?.signal
-      )
+      sendBinary,
+      ws,
+      authenticatedSocket,
+      {
+        deviceId: device.deviceId,
+        parentDeviceId: device.parentDeviceId,
+        scope: device.scope,
+        principal,
+        callerScope
+      },
+      this.pairedDeviceContext(device, authenticatedSocket, ws)
     )
-    const replyForRequest =
-      request.method === 'status.get'
-        ? (response: string): void => boundedReply(injectDeviceScope(response, device.scope))
-        : boundedReply
-
-    const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
-    const pairingProvider = this.mobileRelayPairingProvider
-    const pairingContext =
-      pairingProvider && authenticatedSocket
-        ? {
-            getEndpoints: (params: PairingGetEndpointsParams) =>
-              pairingProvider.getEndpoints(
-                {
-                  deviceId: authenticatedSocket.device.deviceId,
-                  connectionId: authenticatedSocket.connectionId,
-                  transport: authenticatedSocket.transport
-                },
-                params
-              ),
-            provisionRelay: (params: PairingProvisionRelayParams) =>
-              pairingProvider.provisionRelay(
-                {
-                  deviceId: authenticatedSocket.device.deviceId,
-                  connectionId: authenticatedSocket.connectionId,
-                  transport: authenticatedSocket.transport
-                },
-                params
-              )
-          }
-        : undefined
-    try {
-      await this.dispatcher.dispatchStreaming(request, replyForRequest, {
-        // Validated credentials preserve federation ownership without trusting request fields.
-        authenticatedCallerFingerprint: principal.callerFingerprint,
-        connectionId,
-        clientId: principal.clientId,
-        pairedDeviceId: device.deviceId,
-        pairedDeviceParentId: device.parentDeviceId,
-        // Diet only mobile payloads; retain full web/desktop replies.
-        clientKind: device.scope,
-        callerScope,
-        clientCapabilities: authenticatedSocket?.clientCapabilities,
-        capabilitySource: authenticatedSocket?.capabilitySource,
-        updateClientCapabilities:
-          authenticatedSocket && device.scope === 'mobile'
-            ? (clientCapabilities) => {
-                authenticatedSocket.clientCapabilities = clientCapabilities
-              }
-            : undefined,
-        pairing: pairingContext,
-        deviceSelf:
-          authenticatedSocket && this.deviceRegistry
-            ? {
-                registerDeviceKey: (params) =>
-                  registerSocketDeviceKey(this.deviceRegistry!, authenticatedSocket, params),
-                exchangePairingTicket: (params) =>
-                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params),
-                ...this.desktopAccountSelf(device, authenticatedSocket.connectionId)
-              }
-            : undefined,
-        mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
-        // Only an authenticated desktop socket can say which installation it is.
-        peerDesktops:
-          device.scope === 'runtime' && authenticatedSocket
-            ? {
-                list: (clientInstanceId) =>
-                  this.declaredDesktopClients.peers(
-                    { connectionId: authenticatedSocket.connectionId, clientInstanceId },
-                    (deviceId) => this.deviceRegistry?.getDevice(deviceId) ?? null
-                  ),
-                declare: (clientInstanceId) =>
-                  this.declaredDesktopClients.declare(
-                    authenticatedSocket.connectionId,
-                    device.deviceId,
-                    clientInstanceId
-                  )
-              }
-            : undefined,
-        delegatedMobileDevices:
-          device.scope === 'runtime'
-            ? {
-                sync: (phones) =>
-                  this.syncDelegatedMobileDevices(device.deviceId, phones, connectionId)
-              }
-            : undefined,
-        signal: abortRegistration?.signal,
-        sendBinary,
-        registerBinaryStreamHandler: (streamId, handler) =>
-          this.registerBinaryStreamHandler(connectionId, streamId, handler),
-        registerBinaryMessageHandler: (handler) =>
-          this.registerBinaryMessageHandler(connectionId, handler)
-      })
-    } finally {
-      abortRegistration?.dispose()
-      this.releaseLongPoll(longPoll, device.deviceId)
-    }
   }
 }

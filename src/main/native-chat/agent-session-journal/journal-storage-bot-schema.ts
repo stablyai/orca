@@ -192,7 +192,8 @@ export const storedAutomationRunNotStarted = {
       name: text,
       workspaceId: z.string().nullable().optional(),
       role: z.string().nullable().optional(),
-      placeKind: text
+      placeKind: text,
+      viaAccount: text
     })
   ),
   error: z.string(),

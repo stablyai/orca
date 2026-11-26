@@ -58,6 +58,7 @@ export class DesktopRelayService {
     this.revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
     this.demandLedger = new RelayDemandLedger({
       deviceRegistry: options.runtimeRpc.getDeviceRegistry()!,
+      botShareDevices: () => options.runtimeRpc.getBotShareDevices()?.list() ?? [],
       revokeOutbox: this.revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey)
     })
@@ -208,11 +209,11 @@ export class DesktopRelayService {
         throw new Error('relay_provision_authorization_unavailable')
       }
       if (
-        !this.runtimeRpc.setMobileRelayBinding(context.deviceId, {
+        !(await this.runtimeRpc.setRelayDeviceBinding(context.deviceId, {
           relayHostId: broker.hostId,
           relayDeviceId: context.deviceId,
           ownerIdentityKey: broker.ownerIdentityKey
-        })
+        }))
       ) {
         throw new Error('mobile_device_not_found')
       }
@@ -245,7 +246,7 @@ export class DesktopRelayService {
   }
 
   private requireMobileDevice(deviceId: string): void {
-    if (this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)?.scope !== 'mobile') {
+    if (!this.runtimeRpc.isRelayClientDevice(deviceId)) {
       throw new Error('mobile_device_not_found')
     }
   }

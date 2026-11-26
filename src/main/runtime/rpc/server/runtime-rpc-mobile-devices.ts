@@ -30,6 +30,42 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     return device?.scope === 'runtime' && this.revokeDevicesNow([device])
   }
 
+  /** Ends a shared bot's teammate devices (one teammate's with `accountId`), each with the phones
+   *  provisioned under it: Relay credential queued for revoke, row removed, sockets closed now. */
+  async revokeBotShareDevices(botId: string, accountId?: string): Promise<boolean> {
+    const store = this.botShareDevices
+    if (!store) {
+      return false
+    }
+    const plan = store.withChildren(
+      store
+        .list()
+        .filter(
+          (device) =>
+            device.botId === botId && (accountId === undefined || device.accountId === accountId)
+        )
+    )
+    try {
+      for (const device of plan) {
+        // Keep the row until its Relay cleanup is durable, so a retry finds it again.
+        if (device.relayBinding && !this.queueRelayDeviceRevoke(device.relayBinding)) {
+          return false
+        }
+        await store.remove(device.deviceId)
+        this.runtime.forgetClientNavigationState(device.deviceId)
+      }
+      return true
+    } finally {
+      // A row kept for a retry still loses its live sockets now.
+      for (const device of plan) {
+        this.mobileSocketWiring?.terminateDeviceConnections(device.deviceId)
+      }
+      if (plan.length > 0) {
+        this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+      }
+    }
+  }
+
   private revokeDevicesNow(roots: readonly DeviceEntry[]): boolean {
     const registry = this.deviceRegistry
     if (!registry) {
