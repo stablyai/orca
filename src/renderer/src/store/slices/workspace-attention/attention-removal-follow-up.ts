@@ -7,7 +7,10 @@ import type { AppState } from '../../types'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { settleWorkspaceUnreadFlag } from './workspace-unread-flag'
 import { markerTabAddressId, paneKeyTabId, workspaceMarkerTabs } from './workspace-live-markers'
-import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  chatPaneKey,
+  chatPaneKeySessionId
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** The state a marker removal is diffed against; any earlier `get()` satisfies it. */
 export type AttentionRemovalSnapshot = Pick<
@@ -42,15 +45,19 @@ export function sameMarkers(
 
 function findTabOwner(
   state: AttentionRemovalSnapshot,
-  tabId: string
+  tabId: string,
+  paneKey?: string
 ): { workspaceId: string; structuredPaneKey: string | null } | null {
+  const sessionId = paneKey === undefined ? null : chatPaneKeySessionId(paneKey)
   const workspaceIds = new Set([
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.unifiedTabsByWorktree)
   ])
   for (const workspaceId of workspaceIds) {
-    const tab = workspaceMarkerTabs(state, workspaceId).find(
-      (candidate) => candidate.id === tabId || markerTabAddressId(candidate) === tabId
+    const tab = workspaceMarkerTabs(state, workspaceId).find((candidate) =>
+      sessionId === null
+        ? candidate.id === tabId || markerTabAddressId(candidate) === tabId
+        : candidate.sessionId === sessionId
     )
     if (tab) {
       return {
@@ -102,7 +109,7 @@ export function collectRemovedAttention(
   ]) {
     removed.paneKeys.add(paneKey)
     const tabId = paneKeyTabId(paneKey)
-    const owner = tabId === null ? null : findTabOwner(before, tabId)
+    const owner = tabId === null ? null : findTabOwner(before, tabId, paneKey)
     if (owner) {
       removed.workspaceIds.add(owner.workspaceId)
     }

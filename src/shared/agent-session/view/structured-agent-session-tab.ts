@@ -1,5 +1,9 @@
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { structuredAgentSessionTabId } from './structured-agent-session-projection'
+import {
+  chatPaneKeySessionId,
+  structuredAgentSessionTabId
+} from './structured-agent-session-projection'
+import { parsePaneKey } from '../../workspace-layout/stable-pane-id'
 import {
   isStructuredAgentSessionHostTabId,
   structuredAgentSessionHostTabId
@@ -20,7 +24,7 @@ export function structuredAgentSessionIdOfTab(tabId: string): string | null {
     : null
 }
 
-/** The tab `id` names: a chat whose session a legacy-derived id names, else that tab itself. */
+/** The tab `id` names: that tab itself, else the chat tab whose session a legacy-derived id names. */
 export function findTabByIdOrChatAlias<
   T extends { id: string; contentType?: string; entityId?: string | null }
 >(tabs: readonly T[] | undefined, id: string): T | undefined {
@@ -29,14 +33,27 @@ export function findTabByIdOrChatAlias<
     (isStructuredAgentSessionHostTabId(id)
       ? id.slice(structuredAgentSessionHostTabId('').length)
       : null)
-  let exact: T | undefined
   for (const tab of tabs ?? []) {
     if (tab.id === id) {
-      exact = tab
-    }
-    if (sessionId && tab.contentType === 'agent-session' && tab.entityId === sessionId) {
       return tab
     }
+    if (!chat && sessionId && tab.contentType === 'agent-session' && tab.entityId === sessionId) {
+      chat = tab
+    }
   }
-  return exact
+  return chat
+}
+
+/** A canonical chat pane key addresses its conversation before the tab id embedded in that key. */
+export function findTabByChatPaneKey<
+  T extends { id: string; contentType?: string; entityId?: string | null }
+>(tabs: readonly T[] | undefined, paneKey: string): T | undefined {
+  const sessionId = chatPaneKeySessionId(paneKey)
+  if (sessionId) {
+    return (tabs ?? []).find(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+    )
+  }
+  const tabId = parsePaneKey(paneKey)?.tabId
+  return tabId === undefined ? undefined : (tabs ?? []).find((tab) => tab.id === tabId)
 }
