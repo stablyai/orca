@@ -27,6 +27,18 @@
   WriteRegStr SHELL_CONTEXT "Software\Classes\${PROGID}\shell\open\command" "" '"$appExe" "%1"'
 !macroend
 
+; keepShortcuts leaves the first install's .lnk untouched on update. If the shell resolved it while the
+; old uninstaller had moved Orca.exe to $PLUGINSDIR\old-install, link tracking retargeted it there.
+; Rewrite only shortcuts that still exist (a deleted one stays deleted), with the same args and AUMI
+; as electron-builder's addStartMenuLink/addDesktopLink, so pins and taskbar grouping are kept.
+!macro ORCA_REWRITE_SHORTCUT LINK
+  ${if} ${FileExists} "${LINK}"
+    CreateShortCut "${LINK}" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+    ClearErrors
+    WinShell::SetLnkAUMI "${LINK}" "${APP_ID}"
+  ${endIf}
+!macroend
+
 !macro customInstall
   !insertmacro ORCA_REGISTER_DOCUMENT_PROGID "${MARKDOWN_PROGID}" "Markdown Document"
   !insertmacro ORCA_REGISTER_DOCUMENT_PROGID "${TABULAR_PROGID}" "Tabular Document"
@@ -35,6 +47,8 @@
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".mdx" "${MARKDOWN_PROGID}"
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".csv" "${TABULAR_PROGID}"
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".tsv" "${TABULAR_PROGID}"
+  !insertmacro ORCA_REWRITE_SHORTCUT "$newStartMenuLink"
+  !insertmacro ORCA_REWRITE_SHORTCUT "$newDesktopLink"
   ; Why: Explorer caches the association list until told otherwise.
   System::Call "shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)"
 !macroend
