@@ -7,6 +7,7 @@ import {
 import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { INVENTORY_WAIT_MS } from '../../shared/agent-launch/installation/agent-inventory-deadline'
 import {
   isAbortSignalReason,
   throwIfSignalAborted,
@@ -14,11 +15,11 @@ import {
 } from '../../shared/concurrency/abort-signal-reason'
 import {
   currentInventoryPublication,
-  INVENTORY_WAIT_MS,
   readInventory,
   type InventorySlot
 } from './agent-command-inventory'
 import { getLocalInventory, wslInventory } from './agent-command-inventory-host'
+import { isInventoryListCommandSettled } from './agent-command-inventory-publication'
 
 export const INVENTORY_COMPLETION_WAIT_MS = 60_000
 
@@ -200,7 +201,7 @@ function completeInventoryAfter(
   return latest &&
     latest.sequence > sequence &&
     !latest.inventory.incomplete &&
-    commands.every((command) => latest.inventory.probed.has(command))
+    commands.every((command) => isInventoryListCommandSettled(latest.inventory, command))
     ? latest
     : undefined
 }
@@ -282,7 +283,8 @@ export async function detectAgentCommandInventoryOnHost(
   }
   const { inventory } = publication
   const incomplete =
-    inventory.incomplete || commands.some((command) => !inventory.probed.has(command))
+    inventory.incomplete ||
+    commands.some((command) => !isInventoryListCommandSettled(inventory, command))
   const afterPublication = publication.partial ? publication.sequence : undefined
   if (incomplete && options.waitForCompletion && (!wslTarget || options.refresh)) {
     throw new AgentInventoryDeadlineError(afterPublication)

@@ -5,6 +5,7 @@ import {
 } from '../wsl/execution/wsl-guest-environment'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import {
+  isInventoryListCommandSettled,
   publishInventory,
   type CommandInventory,
   type InventoryPublication,
@@ -21,8 +22,8 @@ import {
   scanLocalAgentCommandInventory,
   type LocalInventoryScan
 } from './local-agent-command-inventory'
+import { INVENTORY_WAIT_MS } from '../../shared/agent-launch/installation/agent-inventory-deadline'
 
-export const INVENTORY_WAIT_MS = 10_000
 const INVENTORY_RETRY_MS = 5_000
 
 type InventoryMode = 'read' | 'detect' | 'revalidate' | 'refresh'
@@ -224,10 +225,8 @@ export function readInventory(
     current &&
     (afterPublication === undefined || published.sequence > afterPublication) &&
     ((acceptAnyMatch && hasMatch) ||
-      requested.every(
-        (cmd) =>
-          current.probed.has(cmd) &&
-          (acceptAnyMatch || !current.incomplete || current.found.has(cmd))
+      requested.every((cmd) =>
+        acceptAnyMatch ? current.probed.has(cmd) : isInventoryListCommandSettled(current, cmd)
       ))
   const revalidateMiss = settled && revalidateUnavailable && !hasMatch
   const readPublished = (): InventoryRead => ({

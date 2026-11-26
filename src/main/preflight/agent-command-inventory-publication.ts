@@ -5,7 +5,18 @@ export type CommandInventory = {
   matches: Map<string, AgentPathMatch>
   // An incomplete WSL probe only settles commands it actually found.
   probed: ReadonlySet<string>
+  fallbackMisses?: ReadonlySet<string>
   incomplete?: boolean
+}
+
+export function isInventoryListCommandSettled(
+  inventory: CommandInventory,
+  command: string
+): boolean {
+  return (
+    (inventory.probed.has(command) && (!inventory.incomplete || inventory.found.has(command))) ||
+    (!inventory.incomplete && inventory.fallbackMisses?.has(command) === true)
+  )
 }
 
 export type InventoryPublication = {
@@ -40,7 +51,13 @@ export function mergeInventory(
               pinPrevious ? { user: match.user } : match
             ])
         ]),
-        probed: new Set([...result.probed, ...[...previous.probed].filter(keep)])
+        probed: new Set([...result.probed, ...[...previous.probed].filter(keep)]),
+        fallbackMisses: previous.fallbackMisses
+          ? new Set([
+              ...(result.fallbackMisses ?? []),
+              ...[...previous.fallbackMisses].filter(keep)
+            ])
+          : result.fallbackMisses
       }
     : result
 }

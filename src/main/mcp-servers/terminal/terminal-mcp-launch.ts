@@ -50,6 +50,7 @@ export type TerminalMcpLaunchInput = {
   worktreeId: string | undefined
   connectionId: string | undefined
   isFreshLaunch: boolean
+  executableUnverified?: boolean
   /** Set for a launch in a WSL distro. */
   wsl?: { distro: string | null }
   codexHome: string | null
@@ -233,6 +234,7 @@ export async function withTerminalMcpServers(
         env: input.env,
         envToDelete: input.envToDelete,
         cwd: input.cwd,
+        executableUnverified: input.executableUnverified,
         ...(input.wsl
           ? {
               wsl: {

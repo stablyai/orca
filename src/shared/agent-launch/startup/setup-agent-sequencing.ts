@@ -11,14 +11,19 @@ import {
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 import { setupCompletionMarkerPrefix } from './setup-completion-marker'
-import { SETUP_AGENT_EXECUTABLE_ENV, SETUP_AGENT_RESOLVER_ENV } from './setup-agent-program'
+import {
+  SETUP_AGENT_BLOCKED_MESSAGE,
+  SETUP_AGENT_EXECUTABLE_ENV,
+  SETUP_AGENT_RESOLVER_ENV
+} from './setup-agent-program'
+import { INVENTORY_WAIT_MS } from '../installation/agent-inventory-deadline'
 
 export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
 export const SETUP_FAILED_MESSAGE_PREFIX = 'Setup failed (exit '
 export const SETUP_WAIT_TIMEOUT_MESSAGE = 'Timed out waiting for setup before starting agent.'
-export const SETUP_AGENT_BLOCKED_MESSAGE = 'Agent startup is blocked.'
+export { SETUP_AGENT_BLOCKED_MESSAGE }
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
@@ -137,6 +142,24 @@ function buildPosixStartupScript(
   const blocked = `${SETUP_AGENT_BLOCKED_MESSAGE} Try again.`
   // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
   const script = [
+    'orca_resolve_setup_agent() (',
+    '  command -p -v sleep >/dev/null || exit 1;',
+    '  output=$(command -p mktemp) || exit 1;',
+    '  resolver_pid=;',
+    '  trap \'if [ -n "$resolver_pid" ]; then kill -KILL -- "-$resolver_pid" 2>/dev/null || :; fi; command -p rm -f -- "$output"\' EXIT;',
+    "  trap 'exit 1' HUP INT TERM;",
+    // Give the lookup its own process group so a timed-out login shell is stopped with it.
+    '  set -m || exit 1;',
+    `  (set +m; eval "$${SETUP_AGENT_RESOLVER_ENV}") >"$output" 2>/dev/null &`,
+    '  resolver_pid=$!;',
+    `  resolve_deadline=$((SECONDS + ${INVENTORY_WAIT_MS / 1_000}));`,
+    '  while kill -0 "$resolver_pid" 2>/dev/null; do',
+    '    [ "$SECONDS" -lt "$resolve_deadline" ] || exit 1;',
+    '    command -p sleep 0.2 || exit 1;',
+    '  done;',
+    '  wait "$resolver_pid"; result=$?; resolver_pid=;',
+    '  [ "$result" = 0 ] && [ -s "$output" ] && command -p cat -- "$output";',
+    ');',
     `deadline=$((SECONDS + ${timeout}));`,
     `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_MESSAGE)} >&2;`,
     'while :; do',
@@ -146,7 +169,7 @@ function buildPosixStartupScript(
     'if [ "$status" = "0" ]; then',
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
     `if [ -n "$${SETUP_AGENT_RESOLVER_ENV}" ]; then`,
-    `  ${SETUP_AGENT_EXECUTABLE_ENV}=$(eval "$${SETUP_AGENT_RESOLVER_ENV}") || { echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; };`,
+    `  ${SETUP_AGENT_EXECUTABLE_ENV}=$(orca_resolve_setup_agent) || { echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; };`,
     `  export ${SETUP_AGENT_EXECUTABLE_ENV};`,
     `else\n${shellFunctions}fi;`,
     `if [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; fi;`,

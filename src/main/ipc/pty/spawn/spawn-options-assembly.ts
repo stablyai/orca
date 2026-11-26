@@ -89,7 +89,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     isFreshLaunch:
       !input.preAdoptedStablePane &&
       selection.startupCommand !== undefined &&
-      !selection.postSetupProgram,
+      (!selection.postSetupProgram || selection.postSetupProgram.path !== undefined),
     shell: selection.shell,
     ...(input.codexRuntime === 'wsl'
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }

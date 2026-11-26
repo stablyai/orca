@@ -9,7 +9,10 @@ import {
   stockProgramKey
 } from '../../shared/agent-launch/startup/managed-agent-launch-program'
 import { nativeWindowsPathToPosixShellPath } from '../../shared/agent-launch/startup/setup-runner-command'
-import { setupAgentProgramExpression } from '../../shared/agent-launch/startup/setup-agent-program'
+import {
+  setupAgentProgramExpression,
+  type SetupAgentProgram
+} from '../../shared/agent-launch/startup/setup-agent-program'
 import { readLaunchPosition } from '../../shared/agent-launch/startup/launch-position'
 import {
   buildHermesQueryCommand,
@@ -57,7 +60,7 @@ export type AlignedLaunch = {
   launchConfig?: SleepingAgentLaunchConfig
   blocked?: 'unknown' | 'unavailable'
   rebuiltHermesQuery?: true
-  postSetupProgram?: string
+  postSetupProgram?: SetupAgentProgram
 }
 
 export async function rewriteLaunchExecutable(
@@ -152,7 +155,7 @@ export async function rewriteLaunchExecutable(
   let executable = originalExecutable
   let launchConfig = config
   const setupGate = spawn.setupGate && generated && shell !== 'cmd'
-  let postSetupProgram: string | undefined
+  let postSetupProgram: SetupAgentProgram | undefined
   if (agent) {
     const primary = stock(agent)
     const recordedName = nameFor(agent, recorded?.executable) ?? nameFor(agent, pinName)
@@ -179,11 +182,11 @@ export async function rewriteLaunchExecutable(
       ) {
         selected = { kind: 'full-path', path: selected.path }
       } else {
-        postSetupProgram = preferred
+        postSetupProgram = { name: preferred }
         selected = { kind: 'by-name', path: preferred }
       }
     }
-    const program = postSetupProgram ?? selection.program
+    const program = postSetupProgram?.name ?? selection.program
     if (!('path' in selected)) {
       return { command: undefined, launchConfig: config, blocked: selected.kind }
     }
@@ -196,6 +199,9 @@ export async function rewriteLaunchExecutable(
       !guest
         ? nativeWindowsPathToPosixShellPath(selectedHead)
         : selectedHead
+    if (setupGate && selected.kind === 'full-path') {
+      postSetupProgram = { name: program, path: launchHead }
+    }
     const replaceable =
       executable &&
       (nameFor(agent, executable) || (sourceProgram && isAbsoluteProgram(sourceProgram)))

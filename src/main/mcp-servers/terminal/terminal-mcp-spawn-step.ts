@@ -21,6 +21,7 @@ export async function withSpawnTerminalMcpServers(
     env: Record<string, string>
     shell: AgentStartupShell
     connectionId: string | undefined
+    executableUnverified: boolean
   }
 ): Promise<{ command: string | undefined; pane: TerminalMcpPaneLaunch | null }> {
   return withTerminalMcpServers({
@@ -32,6 +33,7 @@ export async function withSpawnTerminalMcpServers(
     cwd: spawn.cwd,
     worktreeId: spawn.args.worktreeId,
     connectionId: launch.connectionId,
+    executableUnverified: launch.executableUnverified,
     isFreshLaunch: !spawn.preAdoptedStablePane && spawn.launchCommand !== undefined,
     ...(spawn.codexRuntime === 'wsl' ? { wsl: { distro: spawn.expectedWslDistro } } : {}),
     codexHome: spawn.selectedCodexHomePath

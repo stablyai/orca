@@ -24,7 +24,8 @@ import {
   buildSetupAgentResolver,
   setupAgentProgramExpression,
   SETUP_AGENT_RESOLVER_ENV,
-  SETUP_AGENT_RUNTIME_ROOT_ENV
+  SETUP_AGENT_RUNTIME_ROOT_ENV,
+  type SetupAgentProgram
 } from '../../../../shared/agent-launch/startup/setup-agent-program'
 import { nativeWindowsPathToPosixShellPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import {
@@ -35,6 +36,7 @@ import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/termi
 import { getOrcaAgentRuntimeRoot } from '../../../managed-agent-cli/managed-agent-cli-path'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
+import { addSetupAgentWslInteropEnv } from '../../../pty/shell-startup/wsl-orca-env'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
 import type { selectPtyAgentLaunch } from './select-pty-agent-launch'
 import { applyTerminalImageEnvironment } from './terminal-image-environment'
@@ -130,7 +132,8 @@ export async function preparePtyAgentLaunch(
     command: teamsCommand,
     env,
     shell,
-    connectionId
+    connectionId,
+    executableUnverified: postSetupProgram !== undefined && postSetupProgram.path === undefined
   })
   const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const viewedCommand =
@@ -158,6 +161,9 @@ export async function preparePtyAgentLaunch(
         ? nativeWindowsPathToPosixShellPath(runtimeRoot)
         : (runtimeRoot ?? '')
     env[SETUP_AGENT_RESOLVER_ENV] = buildSetupAgentResolver(postSetupProgram, shell)
+    if (input.codexRuntime === 'wsl') {
+      addSetupAgentWslInteropEnv(env)
+    }
     if (prepared && !rebuiltHermesQuery) {
       prepared = await preparePostSetupCommand(prepared, postSetupProgram, shell, images)
     }
@@ -215,14 +221,17 @@ export async function preparePtyAgentLaunch(
 
 async function preparePostSetupCommand(
   command: string,
-  program: string,
+  program: SetupAgentProgram,
   shell: 'posix' | 'powershell',
   images: boolean
 ): Promise<string | undefined> {
   const programExpression = setupAgentProgramExpression(shell)
   const render = (inner: string): string => {
     const launch = readLaunchPosition(inner, shell)
-    if (!launch || !matchesStockLaunchProgram(launch.executable, program, process.platform)) {
+    if (
+      !launch ||
+      !matchesStockLaunchProgram(launch.executable, program.path ?? program.name, process.platform)
+    ) {
       return inner
     }
     const codex = withCodexDirectLaunchCommand(

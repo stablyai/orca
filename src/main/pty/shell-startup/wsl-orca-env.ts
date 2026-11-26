@@ -32,6 +32,7 @@ import {
 import { PI_CLIPBOARD_OSC52_ENV } from '../../ipc/pty/host-env/remote-viewer-clipboard-env'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
+const SETUP_AGENT_WSLENV_ENTRIES = [SETUP_AGENT_RESOLVER_ENV, `${SETUP_AGENT_RUNTIME_ROOT_ENV}/p`]
 
 function parseWslenvEntries(value: string | undefined): string[] {
   return value ? value.split(WSLENV_ENTRY_SEPARATOR).filter(Boolean) : []
@@ -73,6 +74,12 @@ function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): st
   ]
 }
 
+export function addSetupAgentWslInteropEnv(env: Record<string, string>): void {
+  // Why: a retained same-protocol daemon may lack the resolver's passthrough entries.
+  env.WSLENV ??= process.env.WSLENV ?? ''
+  applyWslenvPassthrough(env, SETUP_AGENT_WSLENV_ENTRIES)
+}
+
 /** Adds the host environment values required by a WSL PTY and its guest relay. */
 export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // Local and daemon WSL spawns resolve the same content-addressed host wrapper tree.
@@ -104,8 +111,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `${ORCA_SCRUB_SAFE_LAUNCH_ENV}/u`,
     // Select the pane-owning OpenCode variant when native and WSL installs coexist.
     'ORCA_OPENCODE_AGENT/u',
-    SETUP_AGENT_RESOLVER_ENV,
-    `${SETUP_AGENT_RUNTIME_ROOT_ENV}/p`,
+    ...SETUP_AGENT_WSLENV_ENTRIES,
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`,

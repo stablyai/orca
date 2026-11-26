@@ -1,9 +1,13 @@
 import { quotePosixShell } from '../../shell/launch/shell-argument-quoting'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
+import { INVENTORY_WAIT_MS } from '../installation/agent-inventory-deadline'
 
+export const SETUP_AGENT_BLOCKED_MESSAGE = 'Agent startup is blocked.'
 export const SETUP_AGENT_RESOLVER_ENV = 'ORCA_SEQUENCED_AGENT_RESOLVER'
 export const SETUP_AGENT_RUNTIME_ROOT_ENV = 'ORCA_SEQUENCED_AGENT_RUNTIME_ROOT'
 export const SETUP_AGENT_EXECUTABLE_ENV = 'ORCA_SEQUENCED_AGENT_EXECUTABLE'
+
+export type SetupAgentProgram = { name: string; path?: string }
 
 export function setupAgentProgramExpression(shell: 'posix' | 'powershell'): string {
   return shell === 'posix'
@@ -11,11 +15,14 @@ export function setupAgentProgramExpression(shell: 'posix' | 'powershell'): stri
     : `$env:${SETUP_AGENT_EXECUTABLE_ENV}`
 }
 
-export function buildSetupAgentResolver(program: string, shell: 'posix' | 'powershell'): string {
+export function buildSetupAgentResolver(
+  program: SetupAgentProgram,
+  shell: 'posix' | 'powershell'
+): string {
   return shell === 'posix' ? buildPosixResolver(program) : buildPowerShellResolver(program)
 }
 
-function buildPosixResolver(program: string): string {
+function buildPosixResolver({ name, path }: SetupAgentProgram): string {
   return [
     'orca_setup_realpath() (',
     '  path=$1; links=0',
@@ -24,66 +31,142 @@ function buildPosixResolver(program: string): string {
     '    dir=$(CDPATH= cd -P -- "${path%/*}/" && pwd -P) || return 1',
     '    path="${dir%/}/${path##*/}"',
     '    if [ ! -L "$path" ]; then printf "%s" "$path"; return 0; fi',
-    '    link=$(readlink "$path" && printf .) || return 1',
+    '    link=$(command -p readlink "$path" && printf .) || return 1',
     '    link=${link%??}',
     '    case "$link" in /*) path=$link ;; *) path="$dir/$link" ;; esac',
     '    links=$((links + 1))',
     '  done',
     '  return 1',
     ')',
-    `path=$(command -v ${quotePosixShell(program)}) || exit 1`,
-    'case "$path" in "alias "*) exit 1 ;; /*) ;; */*) path="$PWD/$path" ;; *) exit 1 ;; esac',
-    'path=$(orca_setup_realpath "$path") || exit 1',
-    'if [ ! -f "$path" ] || [ ! -x "$path" ]; then exit 1; fi',
+    'orca_setup_user_program() {',
+    '  local path=$1 ancestor',
+    '  case "$path" in /*) ;; *) path="$PWD/$path" ;; esac',
+    '  path=$(orca_setup_realpath "$path") || return 1',
+    '  if [ ! -f "$path" ] || [ ! -x "$path" ]; then return 1; fi',
+    '  case "$path" in "$root"|"$root"/*) return 1 ;; esac',
+    '  if [ "$root_exists" = 1 ]; then',
+    '    ancestor=$path',
+    '    while [ -n "$ancestor" ]; do',
+    '      if [ "$ancestor" -ef "$root" ]; then return 1; fi',
+    '      ancestor=${ancestor%/*}',
+    '    done',
+    '  fi',
+    '  printf "%s" "$path"',
+    '}',
     `root=$${SETUP_AGENT_RUNTIME_ROOT_ENV}`,
     'case "$root" in /*) ;; *) exit 1 ;; esac',
-    'if [ -e "$root" ] || [ -L "$root" ]; then root=$(orca_setup_realpath "$root") || exit 1; fi',
-    'if [ "$OSTYPE" = msys ]; then shopt -s nocasematch; fi',
+    'root_exists=0',
+    'if [ -e "$root" ] || [ -L "$root" ]; then',
+    '  root=$(orca_setup_realpath "$root") || exit 1',
+    '  root_exists=1',
+    'fi',
     'root=${root%/}',
-    'case "$path" in "$root"|"$root"/*) exit 1 ;; esac',
-    'printf "%s" "$path"'
+    ...(path !== undefined
+      ? [`orca_setup_user_program ${quotePosixShell(path)}; exit "$?"`]
+      : [
+          'login_shell=${SHELL:-/bin/bash}',
+          'case "$login_shell" in /*) ;; *) exit 1 ;; esac',
+          String.raw`captured=$("$login_shell" -lc 'printf "\nORCA_SETUP_PATH=%s." "$PATH"' </dev/null 2>/dev/null) || exit 1`,
+          'case "$captured" in *$\'\\n\'ORCA_SETUP_PATH=*.) ;; *) exit 1 ;; esac',
+          "PATH=${captured##*$'\\n'ORCA_SETUP_PATH=}",
+          'PATH=${PATH%.}',
+          `candidates=$(builtin type -ap -- ${quotePosixShell(name)}) || exit 1`,
+          'while IFS= read -r candidate; do',
+          '  if orca_setup_user_program "$candidate"; then exit 0; fi',
+          'done <<< "$candidates"',
+          'exit 1'
+        ])
   ].join('\n')
 }
 
-function buildPowerShellResolver(program: string): string {
+// Why: DOS-device aliases survive GetFullPath, so compare the normalized NT paths from open handles.
+const windowsFinalPathType = String.raw`using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+public static class OrcaSetupPath {
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+  private static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+  private static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle, StringBuilder path, uint size, uint flags);
+  public static SafeFileHandle Open(string path) {
+    return CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero);
+  }
+  public static string Final(SafeFileHandle handle, uint volume) {
+    var path = new StringBuilder(32768);
+    uint size = GetFinalPathNameByHandleW(handle, path, (uint)path.Capacity, volume);
+    if (size == 0 || size >= path.Capacity) throw new Win32Exception();
+    return path.ToString();
+  }
+}`
+
+function buildPowerShellResolver({ name, path }: SetupAgentProgram): string {
   return [
-    'function Resolve-OrcaSetupPath([string]$path) {',
-    '  for ($links = 0; $links -lt 40; $links++) {',
-    '    $path = [IO.Path]::GetFullPath($path)',
-    '    $prefix = [IO.Path]::GetPathRoot($path)',
-    "    $parts = $path.Substring($prefix.Length).Split([char[]]'\\', [StringSplitOptions]::RemoveEmptyEntries)",
-    '    $redirected = $false',
-    '    for ($i = 0; $i -lt $parts.Length; $i++) {',
-    '      $prefix = [IO.Path]::Combine($prefix, $parts[$i])',
-    '      $item = Get-Item -LiteralPath $prefix -Force -ErrorAction Stop',
-    '      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {',
-    '        $target = if ($item.LinkTarget) { $item.LinkTarget } else { $item.Target }',
-    '        $target = @($target)[0]',
-    '        if (!$target) { return }',
-    "        if ($target.StartsWith('\\??\\') -or $target.StartsWith('\\\\?\\')) {",
-    '          $target = $target.Substring(4)',
-    "          if ($target.StartsWith('UNC\\')) { $target = '\\\\' + $target.Substring(4) }",
-    '        }',
-    '        $path = [IO.Path]::Combine([IO.Path]::GetDirectoryName($prefix), $target)',
-    '        for ($j = $i + 1; $j -lt $parts.Length; $j++) { $path = [IO.Path]::Combine($path, $parts[$j]) }',
-    '        $redirected = $true',
-    '        break',
-    '      }',
-    '    }',
-    '    if (!$redirected) { return $prefix }',
-    '  }',
-    '}',
+    '$resolver = [PowerShell]::Create()',
     'try {',
-    `  $app = Get-Command -Name ${quotePowerShellLiteral(program)} -CommandType Application -TotalCount 1 -ErrorAction Stop`,
-    `  $root = $env:${SETUP_AGENT_RUNTIME_ROOT_ENV}`,
-    '  if (!$app.Path -or !$root) { return }',
-    '  $path = Resolve-OrcaSetupPath $app.Path',
-    '  if (!$path -or !(Test-Path -LiteralPath $path -PathType Leaf)) { return }',
-    '  if (Test-Path -LiteralPath $root -ErrorAction Stop) { $root = Resolve-OrcaSetupPath $root }',
-    '  if (!$root) { return }',
-    "  $root = $root.TrimEnd('\\')",
-    '  $compare = [StringComparison]::OrdinalIgnoreCase',
-    "  if (!$path.Equals($root, $compare) -and !$path.StartsWith($root + '\\', $compare)) { $path }",
-    '} catch { return }'
+    '  [void]$resolver.AddScript({',
+    ...powerShellProgramLookup({ name, path }),
+    '  }.ToString())',
+    '  $pending = $resolver.BeginInvoke()',
+    `  if (!$pending.AsyncWaitHandle.WaitOne(${INVENTORY_WAIT_MS})) {`,
+    `    [Console]::Error.WriteLine(${quotePowerShellLiteral(`${SETUP_AGENT_BLOCKED_MESSAGE} Try again.`)})`,
+    // Exit the gate without waiting for a blocked native call to leave the runspace.
+    '    [Environment]::Exit(1)',
+    '  }',
+    '  $resolved = $resolver.EndInvoke($pending)',
+    '  if ($resolved.Count -eq 1) { [string]$resolved[0] }',
+    '} catch { return } finally { $resolver.Dispose() }'
   ].join('\n')
+}
+
+function powerShellProgramLookup({ name, path }: SetupAgentProgram): string[] {
+  return [
+    'try {',
+    '  $ErrorActionPreference = "Stop"',
+    `  $root = $env:${SETUP_AGENT_RUNTIME_ROOT_ENV}`,
+    '  if (!$root -or ![IO.Path]::IsPathRooted($root)) { return }',
+    ...(path !== undefined
+      ? [`  $candidates = @(${quotePowerShellLiteral(path)})`]
+      : [
+          '  $persisted = ([Environment]::GetEnvironmentVariable("Path", "Machine"), [Environment]::GetEnvironmentVariable("Path", "User")) -join ";"',
+          '  $persistedEntries = $persisted -split ";" | Where-Object { $_ }',
+          '  $processEntries = $env:Path -split ";" | Where-Object { $_ -and $_ -notin $persistedEntries }',
+          '  $originalPath = $env:Path',
+          '  try {',
+          '    $env:Path = (@($processEntries) + @($persistedEntries)) -join ";"',
+          `    $candidates = (Get-Command -Name ${quotePowerShellLiteral(name)} -CommandType Application -All).Path`,
+          '  } finally { $env:Path = $originalPath }'
+        ]),
+    '  if (!$candidates) { return }',
+    "  Add-Type -TypeDefinition @'",
+    windowsFinalPathType,
+    "'@",
+    '  $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction SilentlyContinue -ErrorVariable rootError',
+    '  if (!$rootItem -and $rootError[0].Exception -isnot [System.Management.Automation.ItemNotFoundException]) { return }',
+    '  $rootPath = $null',
+    '  if ($rootItem) {',
+    '    $handle = [OrcaSetupPath]::Open($rootItem.FullName)',
+    '    try {',
+    '      if ($handle.IsInvalid) { return }',
+    "      $rootPath = [OrcaSetupPath]::Final($handle, 2).TrimEnd('\\')",
+    '    } finally { $handle.Dispose() }',
+    '  }',
+    '  $compare = [StringComparison]::OrdinalIgnoreCase',
+    '  foreach ($candidate in $candidates) {',
+    '    if (!(Test-Path -LiteralPath $candidate -PathType Leaf)) { return }',
+    '    $handle = [OrcaSetupPath]::Open([IO.Path]::GetFullPath($candidate))',
+    '    try {',
+    '      if ($handle.IsInvalid) { return }',
+    '      if ($rootPath) {',
+    '        $devicePath = [OrcaSetupPath]::Final($handle, 2)',
+    "        if ($devicePath.Equals($rootPath, $compare) -or $devicePath.StartsWith($rootPath + '\\', $compare)) { continue }",
+    '      }',
+    '      $launchPath = [OrcaSetupPath]::Final($handle, 0)',
+    "      if ($launchPath.StartsWith('\\\\?\\UNC\\', $compare)) { return '\\\\' + $launchPath.Substring(8) }",
+    "      if ($launchPath.StartsWith('\\\\?\\', $compare)) { return $launchPath.Substring(4) }",
+    '    } finally { $handle.Dispose() }',
+    '  }',
+    '} catch { return }'
+  ]
 }

@@ -113,6 +113,7 @@ export async function scanLocalAgentCommandInventory(
         )
       : undefined
   const captureFailed = captured?.status === 'fallback'
+  const fallbackMisses = captureFailed ? new Set<string>() : undefined
   const env =
     (captured?.status === 'captured' ? captured.env : undefined) ??
     (await waitForPromiseWithSignal(buildLocalPreflightEnvAsync(), signal)) ??
@@ -198,9 +199,13 @@ export async function scanLocalAgentCommandInventory(
           matches.set(name, { ...matches.get(name), user })
           found.add(name)
         }
-        resolveCommand(name, captureFailed || installerUncertain || unverifiedPath.has(name))
+        const uncertain = installerUncertain || unverifiedPath.has(name)
+        if (!uncertain && !found.has(name)) {
+          fallbackMisses?.add(name)
+        }
+        resolveCommand(name, captureFailed || uncertain)
       }
     })
   }
-  return { matches, found, probed }
+  return { matches, found, probed, fallbackMisses }
 }
