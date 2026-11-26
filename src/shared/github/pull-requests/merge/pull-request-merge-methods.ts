@@ -79,3 +79,28 @@ export function resolveGitHubPRMergeMethods(
     methods: orderedMethods.length > 0 ? orderedMethods : [...GITHUB_PR_MERGE_METHODS]
   }
 }
+
+// Maps GitLab project settings (`squash_option`, `merge_method`) onto the shared merge-method shape.
+export function normalizeGitLabMergeMethodSettings(args: {
+  squashOption: unknown
+  mergeMethod: unknown
+}): GitHubPRMergeMethodSettings | undefined {
+  const squashOption = typeof args.squashOption === 'string' ? args.squashOption : ''
+  if (!['always', 'default_on', 'default_off', 'never'].includes(squashOption)) {
+    return undefined
+  }
+  const defaultMethod =
+    squashOption === 'always' || squashOption === 'default_on'
+      ? 'squash'
+      : args.mergeMethod === 'merge'
+        ? 'merge'
+        : args.mergeMethod === 'rebase_merge' || args.mergeMethod === 'ff'
+          ? 'rebase'
+          : null
+  return normalizeGitHubPRMergeMethodSettings({
+    defaultMethod,
+    mergeCommitAllowed: true,
+    rebaseMergeAllowed: true,
+    squashMergeAllowed: squashOption !== 'never'
+  })
+}

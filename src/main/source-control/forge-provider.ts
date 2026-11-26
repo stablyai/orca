@@ -32,13 +32,13 @@ import {
   getMergeRequestForBranchOrThrow,
   getProjectSlug
 } from '../gitlab/merge-requests/merge-request-lookup'
+import { withGitLabMergeMethodSettings } from './gitlab-review-merge-settings'
 import { createGitLabMergeRequest } from '../gitlab/merge-requests/merge-request-creation'
 import {
   mapAzureDevOpsReview,
   mapBitbucketReview,
   mapGiteaReview,
-  mapGitHubReview,
-  mapGitLabReview
+  mapGitHubReview
 } from './forge-review-mappers'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {
@@ -113,7 +113,7 @@ const gitLabForgeProvider = {
       forgeConnectionId(input),
       { ...input, currentHeadOid: input.currentHeadOid }
     )
-    return mr ? mapGitLabReview(mr) : null
+    return mr ? withGitLabMergeMethodSettings(mr, input) : null
   },
   async getReviewByNumber(input) {
     const mr = await getMergeRequest(
@@ -122,7 +122,7 @@ const gitLabForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
-    return mr ? mapGitLabReview(mr) : null
+    return mr ? withGitLabMergeMethodSettings(mr, input) : null
   },
   createReview: createGitLabMergeRequest
 } satisfies ForgeProvider
