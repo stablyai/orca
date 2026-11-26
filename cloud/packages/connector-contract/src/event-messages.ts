@@ -8,7 +8,7 @@ import {
   ConnectorTurnForSchema
 } from './connector-wire-scalars.js'
 import { OptionalConnectorFailureSchema } from './failure-messages.js'
-import { SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
+import { SLACK_PRESENTATION_EVENT_VERSION, SLACK_PRESENTATION_POST_VERSION, SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
 
 const PromptOptionSchema = z.object({
   id: OpaqueIdSchema,
@@ -274,14 +274,14 @@ export const CONNECTOR_AUDIENCE_EVENTS_VERSION = 2
 
 export const ConnectorEventsRequestSchema = z
   .object({
-    v: z.union([z.literal(1), z.literal(CONNECTOR_AUDIENCE_EVENTS_VERSION)]),
+    v: z.union([z.literal(1), z.literal(CONNECTOR_AUDIENCE_EVENTS_VERSION), z.literal(SLACK_PRESENTATION_EVENT_VERSION)]),
     helloRev: SequenceSchema,
     seq: SequenceSchema,
     events: z.array(ConnectorEventSchema.refine(fitsOneEvent)).min(1)
   })
   .refine(
     ({ v, events }) =>
-      v === CONNECTOR_AUDIENCE_EVENTS_VERSION ||
+      v !== 1 ||
       events.every((event) =>
         event.kind === 'prompt'
           ? event.prompt.raisedBy !== 'orca'
@@ -290,6 +290,8 @@ export const ConnectorEventsRequestSchema = z
       ),
     { message: 'Private prompts require audience-aware event requests' }
   )
+  .refine(({ v, events }) => (v === SLACK_PRESENTATION_EVENT_VERSION) ===
+    events.some((event) => event.kind === 'reply' && event.presentation))
 
 // One inline note on a pull request's diff: a file, a line in its new version (LEFT: the old one),
 // and what it says.
@@ -306,7 +308,7 @@ export const ConnectorReviewCommentSchema = z.object({
 // answerDeliveryId: the delivery whose answer this is (a reply event's answerDeliveryId), so the
 // reply and that answer share one key; left out when the turn can't be named.
 export const ConnectorReplyRequestSchema = z.object({
-  v: z.literal(1),
+  v: z.union([z.literal(1), z.literal(SLACK_PRESENTATION_POST_VERSION)]),
   replyId: OpaqueIdSchema,
   conversation: ConnectorConversationSchema,
   turnId: EpochMsSchema,
@@ -320,8 +322,8 @@ export const ConnectorReplyRequestSchema = z.object({
       comments: z.array(ConnectorReviewCommentSchema).min(1).max(CONNECTOR_LIMITS.maxReviewComments)
     })
     .optional()
-}).refine(({ conversation, review, text, presentation }) =>
-  !presentation || (conversation.source === 'slack' && !review && text === slackAnswerText(presentation))
+}).refine(({ v, conversation, review, text, presentation }) =>
+  v === 1 ? !presentation : Boolean(presentation && conversation.source === 'slack' && !review && text === slackAnswerText(presentation))
 )
 
 // notices: why the reply can't wake an Orca bot it mentions; an older machine drops them.

@@ -5,6 +5,7 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import {
   fillJournalConnectorReplies,
+  sentJournalConnectorReplies,
   recordJournalConnectorReplies
 } from './journal-connector-replies'
 import {
@@ -15,11 +16,12 @@ import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies
 import { JOURNAL_DOMAIN_SCHEMA_001 } from '../database/journal-domain-schema-001'
 import {
   SlackAnswerPresentationSchema,
-  slackAnswerText
+  SLACK_PRESENTATION_UNCONFIRMED
 } from '../../../../shared/connectors/slack-answer-presentation'
 import {
   journalSlackAnswerPresentation,
-  prepareSlackAnswerPresentation
+  prepareSlackAnswerPresentation,
+  pruneSlackAnswerPresentations
 } from './journal-slack-answer-presentation'
 
 let dir = ''
@@ -80,7 +82,7 @@ it('binds preparation to a running root turn and keeps the first filled presenta
     }
   })
   expect(prepareSlackAnswerPresentation(db, { ...turn, epoch: 'older' }, presentation)).toBe(false)
-  expect(prepareSlackAnswerPresentation(db, turn, presentation)).toBe(true)
+  expect(prepareSlackAnswerPresentation(db, turn, presentation, 1)).toBe(true)
   db.exec(`UPDATE journal_items SET lifecycle_state='completed' WHERE item_id='turn-1'`)
   expect(
     prepareSlackAnswerPresentation(db, turn, { ...presentation, text: 'A later answer.' })
@@ -101,14 +103,14 @@ it('binds preparation to a running root turn and keeps the first filled presenta
     answerDeliveryId: 'd',
     turnItemId: turn.turnItemId,
     outcome: 'answered' as const,
-    prose: slackAnswerText(presentation),
-    presentation
+    prose: SLACK_PRESENTATION_UNCONFIRMED,
+    hasPresentation: true as const
   }
   expect(fillJournalConnectorReplies(db, [first], 10)).toBe(1)
   expect(
     fillJournalConnectorReplies(
       db,
-      [{ ...first, outcome: 'quiet', prose: undefined, presentation: undefined }],
+      [{ ...first, outcome: 'quiet', prose: undefined, hasPresentation: undefined }],
       11
     )
   ).toBe(0)
@@ -117,15 +119,20 @@ it('binds preparation to a running root turn and keeps the first filled presenta
   const reopened = new Database(file)
   try {
     expect(journalSlackAnswerPresentation(reopened, turn)).toEqual(presentation)
-    expect(readOwedJournalConnectorReplies(reopened, 'a', null, 1)[0]?.fill).toEqual({
+    expect(readJournalConnectorReplies(reopened, 'chat-1')[0]?.fill?.presentation).toBeUndefined()
+    expect(readOwedJournalConnectorReplies(reopened, 'a', null, 1, true)[0]?.fill).toEqual({
       outcome: 'answered',
       answerDeliveryId: 'd',
       turnItemId: 'turn-1',
-      prose:
-        'Compile took longest.\n\nBuild stages\nSource: Build report\nStage: Install, Time: 14 s\nStage: Compile, Time: 87 s',
+      prose: SLACK_PRESENTATION_UNCONFIRMED,
       presentation,
       filledAt: 10
     })
+    expect(pruneSlackAnswerPresentations(reopened, 100, 50)).toEqual({ deleted: 0, more: false })
+    expect(journalSlackAnswerPresentation(reopened, turn)).toEqual(presentation)
+    sentJournalConnectorReplies(reopened, [{ account: 'a', deliveryId: 'd' }], 101)
+    expect(pruneSlackAnswerPresentations(reopened, 150, 50)).toEqual({ deleted: 1, more: false })
+    expect(journalSlackAnswerPresentation(reopened, turn)).toBeUndefined()
   } finally {
     reopened.close()
   }

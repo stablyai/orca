@@ -82,13 +82,15 @@ export class JournalSqlConnectorReplies {
   async readOwed(
     account: string,
     after: string | null,
-    limit: number
+    limit: number,
+    includePresentations?: boolean
   ): Promise<JournalConnectorReplyRow[]> {
     const result = await this.db.readers.database({
       kind: 'connector-replies-owed',
       account,
       after,
-      limit
+      limit,
+      includePresentations
     })
     if (result.kind !== 'connector-replies') {
       throw new Error('journal reader returned no connector replies')

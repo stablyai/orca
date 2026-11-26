@@ -1,7 +1,7 @@
 import { OpaqueIdSchema } from '@orca-cloud/push-contract'
 import { z } from 'zod'
 import { ConnectorTurnForSchema } from './connector-wire-scalars.js'
-import { SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
+import { SLACK_PRESENTATION_POST_VERSION, SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
 
 // The workspace whose config grant creates the bot's app.
 export const ConnectorBotSlackAppRequestSchema = z.object({
@@ -77,7 +77,7 @@ export const ConnectorBotSlackMembersResponseSchema = z.object({
 // A message the bot posts in a channel on its own, such as an automation's result. Retries with one
 // postId post once.
 export const ConnectorBotPostRequestSchema = z.object({
-  v: z.literal(1),
+  v: z.union([z.literal(1), z.literal(SLACK_PRESENTATION_POST_VERSION)]),
   postId: OpaqueIdSchema,
   channelId: z.string().min(1),
   text: z.string().min(1),
@@ -86,7 +86,7 @@ export const ConnectorBotPostRequestSchema = z.object({
   teamId: z.string().min(1).optional(),
   // Whom the run behind it acts for (see ConnectorTurnForSchema).
   turnFor: ConnectorTurnForSchema.optional()
-}).refine(({ text, presentation }) => !presentation || text === slackAnswerText(presentation))
+}).refine(({ v, text, presentation }) => v === 1 ? !presentation : Boolean(presentation && text === slackAnswerText(presentation)))
 
 // Orca's mascots, by the id a bot's picture names; the connector holds each one's image.
 export const CONNECTOR_BOT_MASCOT_IDS = [

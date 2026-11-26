@@ -63,7 +63,13 @@ export type JournalSqlDatabaseRead =
   | { kind: 'forgotten-chats'; after: string | null }
   | { kind: 'deleted-chats' }
   | { kind: 'connector-replies'; sessionId?: string }
-  | { kind: 'connector-replies-owed'; account: string; after: string | null; limit: number }
+  | {
+      kind: 'connector-replies-owed'
+      account: string
+      after: string | null
+      limit: number
+      includePresentations?: boolean
+    }
   | { kind: 'slack-answer-presentation'; turn: JournalSlackAnswerTurn }
   | {
       kind: 'connector-reply-unsent'
@@ -158,7 +164,8 @@ function read(
           db,
           operation.account,
           operation.after,
-          operation.limit
+          operation.limit,
+          operation.includePresentations
         )
       }
     case 'epoch':

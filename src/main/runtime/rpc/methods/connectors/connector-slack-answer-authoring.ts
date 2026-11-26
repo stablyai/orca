@@ -4,9 +4,9 @@ import {
   slackAnswerText
 } from '../../../../../shared/connectors/slack-answer-presentation'
 import { isQuietBotResult } from '../../../../../shared/bot-quiet-result'
+import { slackAnswerRoute } from '../../../../bots/bot-slack-answer-guidance'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import { matchingSlackPresentation } from '../../../../connector-cloud/connector-slack-text'
 import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { defineMethod, type RpcContext } from '../../core'
@@ -40,23 +40,8 @@ export const CONNECTOR_PREPARE_SLACK_ANSWER_METHOD = defineMethod({
     if (!turn || opener?.kind !== 'message') {
       throw new Error('no_current_turn')
     }
-    const target = context.runtime
-      .getExternalConversationSeam()
-      ?.replyTarget(chatPaneKey(sessionId))
-    const toSlack =
-      opener.connectorDelivery?.conversation.source === 'slack' ||
-      opener.connectorClaim?.origin.some(({ conversation }) => conversation.source === 'slack') ||
-      (opener.automationRun?.toConversation && target?.key.source === 'slack')
-    if (!toSlack) {
-      const run = opener.automationRun
-      const destination = run && context.runtime.showAutomation(run.automation.id).bot?.resultsTo
-      if (
-        !destination ||
-        (!(typeof destination === 'object' && 'channel' in destination) &&
-          !(destination === 'thread' && run?.event?.source === 'slack'))
-      ) {
-        throw new Error('not_a_cloud_conversation')
-      }
+    if (!slackAnswerRoute(opener)) {
+      throw new Error('not_a_cloud_conversation')
     }
     const text = slackAnswerText(presentation)
     if (!matchingSlackPresentation(presentation, text) || isQuietBotResult(text)) {

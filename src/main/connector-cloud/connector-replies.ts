@@ -20,6 +20,8 @@ import { connectorRetryDelayMs } from './connector-outbox'
 import { matchingSlackPresentation, slackBotPostBody, slackReplyBody } from './connector-slack-text'
 import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  SLACK_PRESENTATION_POST_VERSION,
+  SLACK_PRESENTATION_UNCONFIRMED,
   type SlackAnswerPresentation
 } from '../../shared/connectors/slack-answer-presentation'
 import { isRefOf } from '../../shared/connector-place-names'
@@ -60,7 +62,9 @@ export function replyPresentationFor(
       !matchingSlackPresentation(body.presentation, body.text))
   ) {
     const { presentation: _, ...plain } = body
-    return plain
+    return body.conversation.source === 'slack'
+      ? { ...plain, text: SLACK_PRESENTATION_UNCONFIRMED }
+      : plain
   }
   return body
 }
@@ -103,7 +107,7 @@ export function postConnectorReply(
     transport,
     {
       path: CONNECTOR_PATHS.replies,
-      body: { v: 1, ...slackReplyBody(body) },
+      body: { v: body.presentation ? SLACK_PRESENTATION_POST_VERSION : 1, ...slackReplyBody(body) },
       schema: ConnectorReplyResponse
     },
     signal,
@@ -153,7 +157,9 @@ export function botPostPresentationFor(
       !matchingSlackPresentation(body.presentation, body.text))
   ) {
     const { presentation: _, ...plain } = body
-    return plain
+    return 'ref' in plain && !isRefOf('slack', plain.ref)
+      ? plain
+      : { ...plain, text: SLACK_PRESENTATION_UNCONFIRMED }
   }
   return body
 }
@@ -174,7 +180,7 @@ export async function postConnectorBotMessage(
       {
         path: CONNECTOR_ACTIONS_PATH,
         body: {
-          v: 1,
+          v: presentation ? SLACK_PRESENTATION_POST_VERSION : 1,
           botId,
           verb: 'post',
           ref,
@@ -199,7 +205,10 @@ export async function postConnectorBotMessage(
     transport,
     {
       path: `${CONNECTOR_PATHS.bots}/${encodeURIComponent(botId)}/${'issue' in body ? 'linear/comments' : 'posts'}`,
-      body: { v: 1, ...body },
+      body: {
+        v: 'presentation' in body && body.presentation ? SLACK_PRESENTATION_POST_VERSION : 1,
+        ...body
+      },
       schema: ConnectorBotPostResponse
     },
     signal,

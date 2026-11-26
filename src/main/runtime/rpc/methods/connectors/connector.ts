@@ -53,7 +53,8 @@ async function replyToConversation(
 ) {
   const { replyId, text, review } = params
   const paneKey = 'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
-  const target = requireSeam(context.runtime).replyTarget(paneKey)
+  const seam = requireSeam(context.runtime)
+  const target = seam.replyTarget(paneKey)
   if (!target) {
     throw new Error('not_a_cloud_conversation')
   }
@@ -111,8 +112,21 @@ async function replyToConversation(
   ) {
     throw new Error('slack_presentation_unavailable')
   }
+  const stillAnswering = presentation
+    ? () => {
+        const current = seam.replyTarget(paneKey)
+        return (
+          current?.turnId === target.turnId &&
+          current.answerDeliveryId === target.answerDeliveryId &&
+          current.key.externalId === target.key.externalId
+        )
+      }
+    : undefined
+  if (stillAnswering && !stillAnswering()) {
+    throw new Error('no_current_turn')
+  }
   const refused = connectorPostAttempts.attempted(paneKey, replyId, target.key.externalId)
-  const sent = await cloud?.reply({
+  const body = {
     replyId,
     conversation,
     turnId: target.turnId,
@@ -121,7 +135,8 @@ async function replyToConversation(
     ...(review ? { review } : {}),
     ...(presentation ? { presentation } : {}),
     ...keyed
-  })
+  }
+  const sent = await (stillAnswering ? cloud?.reply(body, stillAnswering) : cloud?.reply(body))
   // Never sent, or refused outright: nothing reached the thread. A lost answer may have posted.
   if (
     !sent ||

@@ -5,6 +5,7 @@ import { capAnswer } from './connector-snapshot'
 import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
   SlackAnswerPresentationSchema,
+  SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
 } from '../../shared/connectors/slack-answer-presentation'
 
@@ -62,7 +63,7 @@ describe('answerFor', () => {
     )
   })
 
-  it('keeps complete answer text when Slack capability disappears during an outbox retry', () => {
+  it('does not pass unchecked values to an older Slack service after renegotiation', () => {
     const presentation = SlackAnswerPresentationSchema.parse({
       v: 1,
       text: 'Compile took longest.',
@@ -81,8 +82,7 @@ describe('answerFor', () => {
     expect(answerFor(rich, new Set([CONNECTOR_SLACK_PRESENTATION_FEATURE]))).toBe(rich)
     expect(answerFor(rich, new Set())).toEqual({
       ...reply,
-      prose:
-        'Compile took longest.\n\nBuild stages\nSource: Build report\nStage: Install, Time: 14 s\nStage: Compile, Time: 87 s'
+      prose: SLACK_PRESENTATION_UNCONFIRMED
     })
   })
 })

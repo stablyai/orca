@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as cloud from '../../../cloud/packages/connector-contract/src/slack-answer-presentation'
 import * as host from '../../shared/connectors/slack-answer-presentation'
+import { matchingSlackPresentation } from './connector-slack-text'
 
 const trend = {
   v: 1,
@@ -27,7 +28,7 @@ describe.each([host, cloud])('Slack answer presentation', (contract) => {
   it('keeps every value and its unit in the text projection', () => {
     expect(contract.slackAnswerText(contract.SlackAnswerPresentationSchema.parse(trend))).toBe(
       'Builds took less time this week.\n\nDaily median build time\nSource: Build report\n' +
-        '2026-11-20T00:00:00Z to 2026-11-22T00:00:00Z\n' +
+        '2026-11-20T00:00:00Z to 2026-11-22T00:00:00Z\nCategories: Day\n' +
         'Nov 20: Median 6.2 min\nNov 21: Median 5.1 min\nNov 22: Median 3.7 min'
     )
   })
@@ -107,4 +108,12 @@ describe.each([host, cloud])('Slack answer presentation', (contract) => {
       }).success
     ).toBe(false)
   })
+})
+
+it('checks chart axes under the Slack path redaction policy as well as prose', () => {
+  const candidate = host.SlackAnswerPresentationSchema.parse({
+    ...trend,
+    visual: { ...trend.visual, axis: 'C:\\Users\\me\\private' }
+  })
+  expect(matchingSlackPresentation(candidate, host.slackAnswerText(candidate))).toBe(false)
 })

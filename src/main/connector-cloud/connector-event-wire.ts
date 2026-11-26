@@ -19,6 +19,7 @@ import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
 import { isSlackConversation } from './connector-slack-text'
 import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
 } from '../../shared/connectors/slack-answer-presentation'
 
@@ -170,7 +171,7 @@ export function answerFor(
         prose !== slackAnswerText(event.presentation))
     ) {
       const { presentation: _, ...plain } = event
-      return { ...plain, prose }
+      return { ...plain, prose: SLACK_PRESENTATION_UNCONFIRMED }
     }
     return prose === event.prose ? event : { ...event, prose }
   }

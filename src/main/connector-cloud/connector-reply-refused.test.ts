@@ -76,3 +76,51 @@ it('holds a reply refused as invalid until the next hello, and keeps sending one
     postedNext: 1
   })
 })
+
+it('loads the next journal page only once the outbox accepts the current page', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-reply-pages-'))
+  dirs.push(dir)
+  const rows = Array.from({ length: 201 }, (_, index): JournalConnectorReplyRow => {
+    const deliveryId = `d${String(index).padStart(3, '0')}`
+    return {
+      ...row,
+      deliveryId,
+      fill: { ...row.fill!, answerDeliveryId: deliveryId }
+    }
+  })
+  const sent = new Set<string>()
+  let reads = 0
+  const events = new ConnectorTurnEvents(dir, 'ada', undefined, {
+    journal: () => ({
+      read: async () => rows,
+      readOwed: async (_account, after, limit) => {
+        reads += 1
+        return rows
+          .filter(({ deliveryId }) => !sent.has(deliveryId) && (!after || deliveryId > after))
+          .slice(0, limit)
+      },
+      fillOutcomes: async () => false,
+      sent: async (keys) => keys.forEach(({ deliveryId }) => sent.add(deliveryId))
+    }),
+    onOwed: () => {},
+    post: async () => ({ ok: true, value: {} }),
+    hostName: () => 'laptop'
+  })
+  try {
+    events.useCloudFeatures(new Set([CONNECTOR_REPLIES_OUTBOX_FEATURE]))
+    events.useReplyFlush(() => {})
+    await events.drainReplies()
+    await events.drainReplies()
+    expect(reads).toBe(1)
+    while (sent.size < 200) {
+      const head = events.next(1)
+      expect(head).not.toBeNull()
+      events.accepted(head!.stamp)
+      await events.drainReplies()
+    }
+    expect(reads).toBe(2)
+    expect(events.next(1)?.batch).toMatchObject([{ kind: 'reply', answerDeliveryId: 'd200' }])
+  } finally {
+    events.clear()
+  }
+})

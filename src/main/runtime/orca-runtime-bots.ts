@@ -1,3 +1,5 @@
+import { CONNECTOR_SLACK_PRESENTATION_FEATURE } from '../../shared/connectors/slack-answer-presentation'
+import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
@@ -243,6 +245,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return this.store?.getBots?.() ?? []
   }
 
+  protected connectorCloud: ConnectorCloud | null = null
+
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
   protected botStructuredSessionHostDeps(store: () => RuntimeStore) {
     return {
@@ -250,6 +254,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         this.botItems.owedCommentAttachmentUploads(stateDirectory, root),
       ...botStructuredSessionWiring({
         store,
+        slackAnswersAvailable: () =>
+          this.connectorCloud?.cloudFeatures()?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE) === true,
         botsAtInstall: this.store?.getBots?.() ?? [],
         bots: this.bots,
         chats: botChatJournal(),

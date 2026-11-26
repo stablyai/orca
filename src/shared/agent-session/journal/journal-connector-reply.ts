@@ -45,7 +45,7 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   answerDeliveryId: string
   turnItemId?: string
   prose?: string
-  presentation?: SlackAnswerPresentation
+  hasPresentation?: true
   failure?: ConnectorFailure
   links?: ConnectorWorkLink[]
   /** How long the answered turn ran, on the machine's own clock. */
@@ -70,7 +70,10 @@ export type JournalConnectorReplyRow = JournalConnectorReplyKey & {
   cutFailure?: ConnectorFailure
   /** Its turn ended with no answer and was asked once more; never asked again. */
   emptyRetried?: true
-  fill?: Omit<JournalConnectorReplyFill, keyof JournalConnectorReplyKey> & { filledAt: number }
+  fill?: Omit<JournalConnectorReplyFill, keyof JournalConnectorReplyKey> & {
+    filledAt: number
+    presentation?: SlackAnswerPresentation
+  }
   /** The quiet-marker rule in effect when it was admitted: 'trailing' drops only the trailing
    *  marker. Absent (admitted by an older build): the marker silences the whole reply, except an
    *  owner's own DM. */

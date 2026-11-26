@@ -4,7 +4,6 @@ import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_PATHS,
   ConnectorPollResponse,
-  type ConnectorCloudFeature,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
@@ -14,15 +13,7 @@ import { ConnectorActiveConversations } from './connector-active-conversations'
 import { ConnectorDeliveryAcks } from './connector-delivery-acks'
 import { connectorHelloSaid, sayConnectorHello } from './connector-hello'
 import type { ConnectorPollClientOptions, ConnectorTransport } from './connector-machine'
-import {
-  foldConnectorReview,
-  replyPresentationFor,
-  botPostPresentationFor,
-  postConnectorBotMessage,
-  postConnectorReply,
-  type ConnectorBotPostBody,
-  type ConnectorReplyBody
-} from './connector-replies'
+import { ConnectorPostRequests } from './connector-post-requests'
 import * as pollControl from './connector-poll-control'
 import { ConnectorOutboxSender } from './connector-outbox'
 import { ConnectorEventRequests } from './connector-event-requests'
@@ -32,7 +23,6 @@ import { ConnectorWakePolls } from './connector-wake-channel'
 // The cloud forgets a machine's running workers once it has been silent 15 minutes (its last-seen is
 // a minute coarse); back from a silence near that, a fresh hello's snapshot restates them.
 const HELLO_AFTER_SILENCE_MS = 10 * 60_000
-const REVIEW_FEATURE: ConnectorCloudFeature = 'review'
 
 export type { ConnectorPollClientOptions } from './connector-machine'
 
@@ -63,8 +53,6 @@ export class ConnectorPollClient {
   private heardAt: number | null = null
   private warnedTrimmed = false
   private stopReason: string | null = null
-  // Replies and bot posts still in flight.
-  private posting = 0
   private readonly active = new ConnectorActiveConversations()
   // Why each snapshot this client takes was taken, for its trace.
   private readonly snapshots = new ConnectorClientSnapshots(() => this.options.events)
@@ -140,21 +128,24 @@ export class ConnectorPollClient {
     this.respread.cut()
   }
 
-  /** Posts an agent's reply to its conversation's thread while this client runs. */
-  reply(body: ConnectorReplyBody, proceed?: () => boolean) {
-    const eligible = replyPresentationFor(body, this.features)
-    const sent = this.features?.has(REVIEW_FEATURE) ? eligible : foldConnectorReview(eligible)
-    const { transport, stopped, random } = this
-    return this.posted(postConnectorReply(transport, sent, stopped.signal, random, proceed))
-  }
+  /** Replies and configured results share this client's negotiated protocol. */
+  readonly postRequests = new ConnectorPostRequests({
+    transport: () => this.transport,
+    signal: this.stopped.signal,
+    random: () => this.random(),
+    features: () => this.features,
+    helloRev: () => this.helloRev,
+    refresh: async (helloRev) => {
+      if (this.helloRev === helloRev) {
+        this.helloRev = this.snapshots.drop('post-409')
+        this.wake.helloDropped()
+      }
+      return await this.sayHello()
+    }
+  })
 
-  /** Posts as a bot in one of its app's channels while this client runs. */
-  postAsBot(botId: string, body: ConnectorBotPostBody) {
-    const eligible = botPostPresentationFor(body, this.features)
-    return this.posted(
-      postConnectorBotMessage(this.transport, botId, eligible, this.stopped.signal, this.random)
-    )
-  }
+  reply = this.postRequests.reply
+  postAsBot = this.postRequests.postAsBot
 
   /** Resolves once the cloud took a hello from this client, once it stops, or once `signal` aborts. */
   helloTaken(signal: AbortSignal): Promise<void> {
@@ -176,14 +167,9 @@ export class ConnectorPollClient {
       JSON.stringify(connectorHelloSaid(this.options.machine, this.features)) === this.helloSaid &&
       this.deliveries.settled &&
       this.options.events.owed === 0 &&
-      this.posting === 0 &&
+      this.postRequests.idle &&
       this.active.idle
     )
-  }
-
-  private posted<T>(post: Promise<T>): Promise<T> {
-    this.posting++
-    return post.finally(() => this.posting--)
   }
 
   stop(): void {

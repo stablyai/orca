@@ -130,15 +130,16 @@ async function readRunTurn(
     return unavailable('shared')
   }
   const message = shared ? '' : structuredAgentSessionTurnAssistantMessage(items, sent.itemId)
-  const presentation =
-    readPresentation &&
-    outcome === 'success' &&
-    message.includes('\nSource: ') &&
-    structuredAgentSessionTurnReply(items, sent.itemId).botProse === message
+  const candidate =
+    readPresentation && outcome === 'success'
       ? await readPresentation(
           { sessionId, epoch: cursor.epoch, turnItemId: sent.itemId },
           message
         ).catch(() => undefined)
+      : undefined
+  const presentation =
+    candidate && structuredAgentSessionTurnReply(items, sent.itemId).botProse === message
+      ? candidate
       : undefined
   return outcome
     ? {

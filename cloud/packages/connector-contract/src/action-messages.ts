@@ -8,7 +8,7 @@ import {
   ConnectorPostNoticesSchema,
   ConnectorTurnForSchema
 } from './connector-wire-scalars.js'
-import { SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
+import { SLACK_PRESENTATION_POST_VERSION, SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
 
 // The shared verbs a bot takes in a source; a source that doesn't take one answers it as unsupported.
 // Reply is `orca bot reply`, listed so capabilities name it; it answers the run's own conversation,
@@ -276,7 +276,7 @@ export const ConnectorActionArgsSchema = z
 export type ConnectorActionArgs = z.infer<typeof ConnectorActionArgsSchema>
 
 export const ConnectorActionRequestSchema = z.object({
-  v: z.literal(1),
+  v: z.union([z.literal(1), z.literal(SLACK_PRESENTATION_POST_VERSION)]),
   botId: z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength),
   // places: sent only to a cloud listing `places`.
   verb: z.enum([...CONNECTOR_ACTION_VERBS, 'capabilities', 'places']),
@@ -289,8 +289,8 @@ export const ConnectorActionRequestSchema = z.object({
   turnId: EpochMsSchema.optional(),
   // Whom the run's turn acts for when no delivery started it (see ConnectorTurnForSchema).
   turnFor: ConnectorTurnForSchema.optional()
-}).refine(({ verb, ref, args }) =>
-  !args.presentation || (
+}).refine(({ v, verb, ref, args }) =>
+  v === 1 ? !args.presentation : Boolean(args.presentation &&
     verb === 'post' && ref?.startsWith('slack:') && args.postAt === undefined &&
     args.title === undefined && args.text === slackAnswerText(args.presentation)
   )

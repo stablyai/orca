@@ -1,5 +1,6 @@
 import type { ConnectorEvent } from '../../shared/connectors/connector-cloud-contract'
 import { CONNECTOR_AUDIENCE_EVENTS_VERSION } from '../../shared/connectors/connector-cloud-contract'
+import { SLACK_PRESENTATION_EVENT_VERSION } from '../../shared/connectors/slack-answer-presentation'
 import type { ConversationWatchListener } from '../external-conversations/external-conversation-events'
 import type { ConnectorFailure } from './connector-cloud-request'
 import type { ConnectorTurnEvents } from './connector-turn-events'
@@ -53,7 +54,12 @@ export class ConnectorEventRequests {
     seq: number
   ): Promise<ConnectorFailure | null> {
     const v = this.deps.events.requestVersion(helloRev)
-    const failure = await this.deps.post({ v, helloRev, seq, events }, helloRev, events)
+    const presented = events.some((event) => event.kind === 'reply' && event.presentation)
+    const failure = await this.deps.post(
+      { v: presented ? SLACK_PRESENTATION_EVENT_VERSION : v, helloRev, seq, events },
+      helloRev,
+      events
+    )
     // A batch with replies is never an audience rejection: the sender splits it down to the one
     // event the cloud can't take, so its siblings still go.
     const replies = events.some((event) => event.kind === 'reply')

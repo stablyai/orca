@@ -94,7 +94,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     path: ['bot', 'reply'],
     summary: 'Answer, as this bot, in the issue, pull request or thread that woke this run',
     usage:
-      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]\n       orca bot reply --leave-thread [--json]\n       orca bot reply --presentation-file <path> [--prepare-final] [--json]',
+      'orca bot reply [--text <text> | --text-file <path|->] [--note <path:line:text>]... [--file <path>]... [--choice <label>]... [--react <emoji>] [--json]\n       orca bot reply --leave-thread [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'text',
@@ -116,8 +116,6 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
       `--choice puts a button under your --text in the Slack thread that woke you (up to ${CONNECTOR_REPLY_MAX_CHOICES}, each up to ${CONNECTOR_REPLY_CHOICE_MAX_CHARS} characters). Repeat it for each option. When someone who can ask you presses one, it comes back to you as their next message in the thread, with the label as its text; the first press is the answer and the buttons close. GitHub and Linear take no buttons.`,
       '--react puts an emoji (👀 ✅, or :shortcode:) on the message that woke you.',
       '--leave-thread stops Orca waking you in the Slack thread that woke you, until someone @mentions you there. Only you and only that thread; Orca posts the confirmation. Use it alone, when the person asking wants you to leave.',
-      '--presentation-file takes a complete Slack answer with one chart or sortable table. Use --prepare-final to print the exact answer to write in your final message without sending it yet.',
-      'Presentation JSON takes v: 1, text (the short answer), and visual with kind, title and source. For a bar, add axis, unit, labels, and series of {label, values}. For a line, replace labels with evenly spaced points of {at, label} and add a window of {from, to} in UTC. For a table, add columns of {label, unit?} and rows with a unique text first cell and numbers in columns with units. A bar or table may add timing of {asOf} or {from, to} in UTC.',
       TEXT_FILE,
       `In Slack: ${SLACK_MENTION} ${SLACK_MARKDOWN}`
     ]

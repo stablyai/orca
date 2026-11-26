@@ -18,7 +18,7 @@ import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-messa
 import type { EmptyTurnRetry } from './external-conversation-reply-empty-retry'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { slackAnswerText } from '../../shared/connectors/slack-answer-presentation'
+import { SLACK_PRESENTATION_UNCONFIRMED } from '../../shared/connectors/slack-answer-presentation'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -199,7 +199,7 @@ export function conversationReplyFill(
         silencedWhole: silencedWhole.get(conversation) === true
       })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
-      const visualAnswer = presentation && prose === turn.prose ? presentation : undefined
+      const visualAnswer = presentation && prose === turn.prose
       fills.push({
         account: row.account,
         deliveryId: row.deliveryId,
@@ -208,7 +208,7 @@ export function conversationReplyFill(
         answerDeliveryId,
         turnItemId: turn.turnItemId,
         ...(visualAnswer
-          ? { prose: slackAnswerText(visualAnswer), presentation: visualAnswer }
+          ? { prose: SLACK_PRESENTATION_UNCONFIRMED, hasPresentation: true }
           : prose
             ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) }
             : {}),

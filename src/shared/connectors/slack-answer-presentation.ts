@@ -1,6 +1,10 @@
 import * as z from 'zod'
 
 export const CONNECTOR_SLACK_PRESENTATION_FEATURE = 'slack.answerPresentation'
+export const SLACK_PRESENTATION_POST_VERSION = 2
+export const SLACK_PRESENTATION_EVENT_VERSION = 3
+export const SLACK_PRESENTATION_UNCONFIRMED =
+  'I couldn’t confirm that the details of this answer can be shared here.'
 export const SLACK_ANSWER_MAX_BYTES = 12 * 1024
 export const SLACK_ANSWER_MAX_TEXT = 3_000
 // Older connector revisions cap ordinary answer prose at 8 KiB.
@@ -9,18 +13,38 @@ const MAX_PROJECTED_BYTES = 8 * 1024
 // A presentation is literal text. An independently authorized source link can be
 // rendered by the posting adapter, but the author cannot supply a URL or Slack markup.
 const UNSAFE_TEXT =
-  /[<>`@]|\p{Cf}|\p{Cs}|\b(?:[a-z][a-z\d+.-]*:\/\/|javascript:|data:|mailto:|www\.)|\b(?:[a-z0-9-]+\.)+[a-z]{2,63}\b|\]\s*\(/iu
+  /[<>`@]|\p{Cf}|\p{Cs}|\b(?:[a-z][a-z\d+.-]*:\/\/|javascript:|data:|mailto:|www\.)|\]\s*\(/iu
 const CONTROL = /\p{Cc}/u
+
+function containsDomain(text: string): boolean {
+  let labelEndsAt = -1
+  let dotEndsAt = -1
+  for (const token of text.matchAll(/[a-z\d-]+|\./giu)) {
+    const word = token[0]
+    if (word === '.') {
+      dotEndsAt = labelEndsAt === token.index ? token.index + 1 : -1
+      continue
+    }
+    if (
+      dotEndsAt === token.index &&
+      /^[a-z]{2,63}\b/iu.test(text.slice(token.index, token.index + 64))
+    ) {
+      return true
+    }
+    labelEndsAt = /[a-z\d]/iu.test(word) ? token.index + word.length : -1
+  }
+  return false
+}
 
 function literal(max: number, multiline = false) {
   return z
     .string()
-    .min(1)
-    .max(max)
+    .refine((text) => text.length > 0 && text.length <= max, { abort: true })
     .refine(
       (text) =>
         text === text.trim() &&
         !UNSAFE_TEXT.test(text) &&
+        !containsDomain(text) &&
         !CONTROL.test(multiline ? text.replaceAll('\n', '') : text) &&
         (multiline || !text.includes('\n')),
       { message: 'Expected literal text without links, mentions, or control characters' }
@@ -172,7 +196,8 @@ export function slackAnswerText({ text, visual }: SlackAnswerPresentation): stri
       ? `As of ${timing.asOf}`
       : `${timing.from} to ${timing.to}`
     : ''
-  return `${text}\n\n${[visual.title, `Source: ${visual.source}`, when, ...valueLines(visual)].filter(Boolean).join('\n')}`
+  const axis = visual.kind === 'table' ? '' : `Categories: ${visual.axis}`
+  return `${text}\n\n${[visual.title, `Source: ${visual.source}`, when, axis, ...valueLines(visual)].filter(Boolean).join('\n')}`
 }
 
 function valueLines(visual: NonNullable<SlackAnswerPresentation['visual']>): string[] {

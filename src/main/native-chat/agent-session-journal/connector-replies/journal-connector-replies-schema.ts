@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   answer_delivery_id TEXT,
   turn_item_id TEXT,
   prose TEXT,
-  presentation_json TEXT,
+  has_presentation INTEGER,
   failure_json TEXT,
   links_json TEXT,
   filled_at INTEGER,
@@ -40,10 +40,11 @@ CREATE TABLE IF NOT EXISTS journal_slack_answer_presentations (
   epoch TEXT NOT NULL,
   turn_item_id TEXT NOT NULL,
   presentation_json TEXT NOT NULL,
-  PRIMARY KEY(session_id, epoch, turn_item_id),
-  FOREIGN KEY(session_id, epoch, turn_item_id) REFERENCES journal_items(session_id, epoch, item_id)
-    ON DELETE CASCADE
+  check_at INTEGER NOT NULL,
+  PRIMARY KEY(session_id, epoch, turn_item_id)
 ) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS journal_slack_answer_check_at
+  ON journal_slack_answer_presentations(check_at);
 `
 
 // Columns later builds added the same way, with no user_version change: an older build never reads
@@ -60,7 +61,7 @@ const ADDED_COLUMNS = [
   ['quiet_rule', 'TEXT'],
   ['tools_ran', 'INTEGER'],
   ['empty_retried', 'INTEGER'],
-  ['presentation_json', 'TEXT']
+  ['has_presentation', 'INTEGER']
 ] as const
 
 /** Creates the table, and adds the columns a table an earlier build made lacks. */
@@ -81,5 +82,7 @@ export function ensureJournalConnectorRepliesSchema(db: {
   db.exec(`CREATE INDEX IF NOT EXISTS journal_connector_replies_message
     ON journal_connector_replies(session_id, epoch, message_id) WHERE outcome IS NULL;
   CREATE INDEX IF NOT EXISTS journal_connector_replies_claim
-    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL`)
+    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS journal_connector_replies_presentation
+    ON journal_connector_replies(session_id,epoch,turn_item_id) WHERE has_presentation=1 AND sent_at IS NULL`)
 }
