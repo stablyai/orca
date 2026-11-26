@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/bots/bot-item-note-runs'
 import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
 import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachment-body'
+import { takeAdmittedCommentClaim } from '../../../bots/bot-item-comment-admitted-claims'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionAttachmentExpiredError } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
 import {
@@ -129,10 +130,14 @@ export async function sendBotItemMail(
     if (!store || !claim) {
       return false
     }
-    if (agentSessionAttachmentReferences(store.rootDir, attachment).size > 0) {
+    const uploadIds = agentSessionAttachmentReferences(store.rootDir, attachment)
+    if (uploadIds.size > 0) {
+      const items = runtime.botItems.store()
       // The outbox keeps the uploads until the actual recipient claims them.
       for (let attempt = 0; ; attempt++) {
-        await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
+        if (attempt > 0 || !takeAdmittedCommentClaim(items, { sessionId, uploadIds })) {
+          await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
+        }
         if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {
           break
         }
