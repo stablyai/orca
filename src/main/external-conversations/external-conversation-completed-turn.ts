@@ -1,6 +1,7 @@
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
+import type { ConversationTurnEnd } from './external-conversation-types'
 import {
   turnFailure,
   type ChatTurnEnd,
@@ -41,7 +42,7 @@ export async function tellCompletedTurn(
   end: ChatTurnEnd,
   link: ExternalConversationLink,
   turn: EndedChatTurn,
-  origin: ChatTurnEnd['ended']['origin'],
+  origin: ConversationTurnEnd['origin'],
   words: string | null,
   links: () => Promise<ConnectorWorkLink[]>,
   mirror: SlackMirrorTurn | null
