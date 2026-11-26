@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useRouter } from 'expo-router'
 import { CircleAlert, SquareTerminal } from 'lucide-react-native'
 import { MobileOfflineState, MobileStateView } from '../components/feedback/MobileStateView'
 import { describeLoadError } from '../components/feedback/load-error-description'
@@ -7,6 +6,7 @@ import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { useLastSessionTabsAt } from './tabs/mobile-session-last-tabs'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { useDesktopLinkPairingCopy } from '../components/host-connection/desktop-link-pairing-copy'
 import { useOptionalHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 
@@ -37,7 +37,7 @@ export function MobileSessionContentState({
   onCreateTab: () => void
 }) {
   const t = useMobileTranslation()
-  const router = useRouter()
+  const router = useRouteHandoff()
   // A phone paired with a desktop link is shown no chats, so an empty workspace may still hold some.
   const chatsHidden = useOptionalHostProtocolGates()?.agentSessionsHidden === true
   const chatsHiddenCopy = useDesktopLinkPairingCopy()
@@ -92,24 +92,28 @@ export function MobileSessionContentState({
   if (creating) {
     return <MobileStateView loading title={t('session.activeContent.creatingTab', 'Creating...')} />
   }
-  if (chatsHidden) {
-    return (
-      <MobileStateView
-        icon={CircleAlert}
-        title={chatsHiddenCopy.title}
-        message={chatsHiddenCopy.message}
-        action={{ label: chatsHiddenCopy.repair, onPress: () => router.push('/pair-scan') }}
-      />
-    )
-  }
   const createFailure = createError ? describeLoadError(createError, t) : null
-  return (
+  const createTab = {
+    label: t('session.activeContent.createTab', 'Create Tab'),
+    onPress: onCreateTab
+  }
+  // Terminals still work over a desktop link, so Create Tab stays beside Pair again.
+  return chatsHidden ? (
+    <MobileStateView
+      icon={CircleAlert}
+      title={chatsHiddenCopy.title}
+      message={createFailure?.message ?? chatsHiddenCopy.message}
+      details={createFailure?.details}
+      action={createTab}
+      secondaryAction={{ label: chatsHiddenCopy.repair, onPress: () => router.push('/pair-scan') }}
+    />
+  ) : (
     <MobileStateView
       icon={SquareTerminal}
       title={t('session.activeContent.noTabs', 'No tabs in this session')}
       message={createFailure?.message}
       details={createFailure?.details}
-      action={{ label: t('session.activeContent.createTab', 'Create Tab'), onPress: onCreateTab }}
+      action={createTab}
     />
   )
 }

@@ -236,11 +236,10 @@ export function HostWorkspaceList({
           />
         )}
       </Presence>
-      <Presence>
-        {chatsHidden && connState === 'connected' && (
-          <DesktopLinkPairingBanner onRepair={() => router.push('/pair-scan')} />
-        )}
-      </Presence>
+      {/* A per-connection fact, not a transient notice: it mounts only when shown, with no animation owners. */}
+      {chatsHidden && connState === 'connected' ? (
+        <DesktopLinkPairingBanner onRepair={() => router.push('/pair-scan')} />
+      ) : null}
 
       {connState !== 'connected' &&
       !relayRecovery.pairingRejected &&
