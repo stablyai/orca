@@ -1,5 +1,5 @@
 // @protected-copy: preserve code controls used by approval prompts.
-import React, { useContext } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { WrapText } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -10,6 +10,8 @@ import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-d
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
 import { isHtmlDocumentCodeBlock } from '../../../../../../shared/markdown/html-document-fences'
+import { hasFinishedSyntax } from '@/lib/syntax-highlighting/use-highlighted-syntax'
+import { observeTranscriptVisibility } from '../../media/images/native-chat-image-visibility'
 
 /** Code fences need their own copy target rather than the whole chat message. */
 export function NativeChatCodeBlock({
@@ -39,6 +41,9 @@ export function NativeChatCodeBlock({
     false
   )
   const previewing = htmlDocument && previewOpen
+  const content = useRef<HTMLPreElement | null>(null)
+  const highlights = Boolean(language && code && !plain)
+  const colored = useSeenOnScreen(content, highlights && !hasFinishedSyntax(code, language ?? ''))
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
@@ -77,6 +82,7 @@ export function NativeChatCodeBlock({
       ) : null}
       {previewing ? <NativeChatHtmlPreview code={code} /> : null}
       <pre
+        ref={content}
         data-native-chat-code-content
         hidden={previewing}
         className={cn(
@@ -85,9 +91,9 @@ export function NativeChatCodeBlock({
           htmlDocument ? 'px-3 pt-0.5 pb-3' : language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-16'
         )}
       >
-        {language && code && !plain ? (
+        {highlights && language ? (
           <code>
-            <NativeChatHighlightedCode code={code} language={language} />
+            {colored ? <NativeChatHighlightedCode code={code} language={language} /> : code}
           </code>
         ) : (
           children
@@ -100,6 +106,19 @@ export function NativeChatCodeBlock({
       ) : null}
     </div>
   )
+}
+
+/** Tokens are a DOM node each: blocks off screen (or cut by a clamp) stay plain until first seen. */
+function useSeenOnScreen(node: React.RefObject<HTMLElement | null>, waits: boolean): boolean {
+  const [seen, setSeen] = useState(false)
+  useEffect(() => {
+    const element = node.current
+    if (!waits || seen || !element) {
+      return
+    }
+    return observeTranscriptVisibility(element, (visible) => visible && setSeen(true))
+  }, [node, waits, seen])
+  return seen || !waits
 }
 
 function NativeChatCodeWrapButton({
