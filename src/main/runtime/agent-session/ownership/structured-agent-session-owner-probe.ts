@@ -13,6 +13,7 @@ import {
   providerRelayInventoryComplete,
   providerRelayMayKeepChat
 } from '../../../provider-relay/app-provider-relays'
+import { providerRelayProviderOpensEnded } from '../../../provider-relay/provider-relay-launch-inventory'
 import {
   providerOwnerHeldElsewhere,
   providerOwnerProcessRows,
@@ -33,13 +34,15 @@ async function keptRunningProbe(
     return null
   }
   await listProviderRelaysAtLaunch()
-  // Until every daemon has answered, the inventory may miss a kept agent; the process tree can't.
+  // Until every daemon has answered, the inventory may miss a kept agent; the process tree can't,
+  // except for an agent that ends with output still to open, which only the listing proves gone.
   const kept =
     keptRunningProviderRelayPid(record.sessionId) === owner.pid ||
     (owner.hostId === hostId &&
       process.platform !== 'win32' &&
       !providerRelayInventoryComplete() &&
-      (await providerOwnerHeldElsewhere(owner.pid, rows)) === true)
+      (providerRelayProviderOpensEnded(record.provider) ||
+        (await providerOwnerHeldElsewhere(owner.pid, rows)) === true))
   return kept
     ? { outcome: 'indeterminate', reason: 'owner kept running under the terminal host' }
     : null

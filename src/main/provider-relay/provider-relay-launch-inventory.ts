@@ -279,8 +279,13 @@ export async function recheckKeptProviderRelay(
 ): Promise<'live' | 'gone' | 'unknown'> {
   const result = await recheckListing(relay.channel)
   if (!result) {
-    // An unreachable daemon with a dead agent is as gone as a daemon that says so.
-    if (relay.info.pid === null || !processProvenGone(relay.info.pid)) {
+    // An unreachable daemon with a dead agent is as gone as a daemon that says so, unless the
+    // ended agent still has output there to open.
+    if (
+      relay.info.pid === null ||
+      providerRelayAgentOpensEnded(relay.info.agent) ||
+      !processProvenGone(relay.info.pid)
+    ) {
       return 'unknown'
     }
     forgetKeptProviderRelay(chatKey, relay)
