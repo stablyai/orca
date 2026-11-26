@@ -194,31 +194,23 @@ async function lookUpName(
   { name, receiver, staticTypes }: JavaNameLookup
 ): Promise<ImportNavigationTarget | null> {
   const enclosing = enclosingJavaTypes(current.outline, offset)
-  // Why: `this.` and `super.` name the innermost type's members; a simple name may be an outer one's.
-  const scopes = receiver ? enclosing.slice(0, 1) : enclosing
   if (!receiver) {
     const local = locateJavaLocal(current.outline, name, offset)
     if (local !== null) {
       return target(current, local)
     }
   }
-  if (receiver !== 'super') {
-    for (const scope of scopes) {
-      const own = locateJavaMember(current.outline, scope, name)
-      if (own !== null) {
-        return target(current, own)
-      }
+  // Why: `this.` and `super.` name the innermost type's members; a simple name may be an outer
+  // one's, but a type's inherited members shadow those of the types around it.
+  for (const scope of receiver ? enclosing.slice(0, 1) : enclosing) {
+    const member = await memberInHierarchy(search, current, scope, name, receiver === 'super', 0)
+    if (member) {
+      return member
     }
   }
   const declared = receiver ? null : javaTypeAt(current.outline, [name], offset)
   if (declared) {
     return target(current, declared.nameOffset)
-  }
-  for (const scope of scopes) {
-    const inherited = await memberInHierarchy(search, current, scope, name, true, 0)
-    if (inherited) {
-      return inherited
-    }
   }
   // Why: members of the file and its supertypes shadow names brought in with `import static`.
   for (const staticType of staticTypes) {

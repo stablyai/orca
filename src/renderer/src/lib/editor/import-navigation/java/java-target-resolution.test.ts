@@ -60,6 +60,12 @@ public class Child extends Base {
     String trim(String value) {
         return value;
     }
+
+    static class Nested extends Base {
+        void check() {
+            reset();
+        }
+    }
 }
 `
 
@@ -89,6 +95,8 @@ public class Base {
     public static class Options {}
 
     protected void inherited() {}
+
+    protected void reset() {}
 }
 `,
   [`${SHOP}/Flags.java`]:
@@ -233,6 +241,12 @@ describe('Java Go to Definition', () => {
       filePath: `${SHOP}/Base.java`,
       line: 8,
       word: 'inherited'
+    })
+    // A nested type's inherited method shadows the outer type's own.
+    expect(await childDefinitionAt('reset', 1)).toEqual({
+      filePath: `${SHOP}/Base.java`,
+      line: 10,
+      word: 'reset'
     })
   })
 })
