@@ -11,21 +11,31 @@ const CLAUDE_EXECUTABLE = /^claude(?:\.(?:exe|cmd|bat))?$/i
 const CLAUDE_DIRECT_POSIX_PREFIX = /* @__PURE__ */ (() =>
   `/bin/sh -c ${quoteStartupArg(getPosixClaudeDirectLaunchScript(), 'posix')} orca-claude `)()
 
-export function withClaudeDirectLaunchCommand(command: string, shell: AgentStartupShell): string {
+export function withClaudeDirectLaunchCommand(
+  command: string,
+  shell: AgentStartupShell,
+  programExpression?: string
+): string {
   if (shell === 'cmd' || !/claude/i.test(command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS))) {
     return command
   }
   const launch = readLaunchPosition(command, shell)
   if (
     !launch ||
-    !/[\\/]/.test(launch.executable) ||
+    (!programExpression && !/[\\/]/.test(launch.executable)) ||
     !launchExecutableIs(launch.executable, CLAUDE_EXECUTABLE)
   ) {
     return command
   }
   if (shell === 'posix') {
-    return command.slice(0, launch.start) + CLAUDE_DIRECT_POSIX_PREFIX + command.slice(launch.start)
+    return (
+      command.slice(0, launch.start) +
+      CLAUDE_DIRECT_POSIX_PREFIX +
+      (programExpression
+        ? programExpression + command.slice(launch.end)
+        : command.slice(launch.start))
+    )
   }
   const { before, after } = getPowerShellClaudeDirectLaunchScope()
-  return powerShellNativeLaunch(command, launch, before, '', after)
+  return powerShellNativeLaunch(command, launch, before, '', after, programExpression)
 }

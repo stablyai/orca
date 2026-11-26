@@ -1,41 +1,10 @@
 import { OrcaRuntimeWithRegisterPty } from '../lifecycle/pty-registration'
-import type {
-  AgentProgramBlockReason,
-  SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
-import { holdLaunch } from './launch-evidence'
+import type { AgentProgramBlockReason } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRegisterPty {
   protected abstract disposeHeadlessTerminal(ptyId: string): void
 
   protected abstract replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void
-
-  noteSequencedAgentLaunch(
-    result: PtySpawnResult,
-    config: SleepingAgentLaunchConfig | undefined,
-    blocked: AgentProgramBlockReason | undefined
-  ): void {
-    const pty = this.ptysById.get(result.id)
-    if (!pty?.connected || pty.incarnationId !== (result.incarnationId ?? null)) {
-      return
-    }
-    if (blocked) {
-      this.noteTerminalSpawnCommand(result.id, null, blocked)
-      this.retireHeldLaunch(result.id)
-      pty.launchAgent = null
-      pty.launchCommandAgent = null
-      this.watchLaunchComposer(result.id, null)
-      return
-    }
-    if (config) {
-      pty.launchConfig = config
-      if (pty.launchEvidence?.kind === 'held') {
-        holdLaunch(pty, pty.incarnationId, { ...pty.launchEvidence, config })
-        this.armDaemonLaunchNote(pty)
-      }
-    }
-  }
 
   readQueuedLaunchPty(ptyId: string) {
     const pty = this.ptysById.get(ptyId)

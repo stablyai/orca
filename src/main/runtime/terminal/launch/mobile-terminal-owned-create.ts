@@ -127,14 +127,22 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           `id:${worktreeId}`,
           opts.createMutation.id,
           opts.historyResume ? 'handle' : true,
-          (_selector, handle) => {
+          async (_selector, handle) => {
             if (
               opts.historyResume &&
               workspace.connectionId &&
               handle &&
               this.ownedMobileDispatchRecipes.get(handle)
             ) {
-              throw new Error('runtime_unavailable')
+              const adopted = await this.reconcileRemoteTerminalCreate(
+                worktreeId,
+                handle,
+                workspace.connectionId
+              )
+              if (adopted) {
+                return adopted
+              }
+              this.ownedMobileDispatchRecipes.delete(handle)
             }
             return create(handle)
           },

@@ -140,9 +140,22 @@ function normalizeHermesArgv(
   ]
 }
 
-export function buildHermesQueryCommand(argv: readonly string[], shell: AgentStartupShell): string {
+export function buildHermesQueryCommand(
+  argv: readonly string[],
+  shell: AgentStartupShell,
+  programExpression?: string
+): string {
+  const render = (syntax: 'powershell' | 'posix'): string => {
+    if (!programExpression) {
+      return buildShellCommandFromArgv(argv, syntax)
+    }
+    const args = argv.slice(1).map((arg) => quoteStartupArg(arg, syntax))
+    return [syntax === 'powershell' ? `& ${programExpression}` : programExpression, ...args].join(
+      ' '
+    )
+  }
   if (!isPosixStartupShell(shell)) {
-    const invocation = buildShellCommandFromArgv(argv, 'powershell').replace(
+    const invocation = render('powershell').replace(
       quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'powershell'),
       `"--query=$${POWERSHELL_NATIVE_QUERY_VARIABLE}"`
     )
@@ -151,7 +164,7 @@ export function buildHermesQueryCommand(argv: readonly string[], shell: AgentSta
     const script = `$${POWERSHELL_QUERY_VARIABLE} = $env:${ORCA_HERMES_STARTUP_QUERY_ENV}; $${POWERSHELL_NATIVE_QUERY_VARIABLE} = $${POWERSHELL_QUERY_VARIABLE} -replace '(\\\\*)"', '$1$1\\"'; Remove-Item Env:${ORCA_HERMES_STARTUP_QUERY_ENV} -ErrorAction SilentlyContinue; ${invocation}`
     return `powershell.exe -NoProfile -EncodedCommand ${encodePowerShellCommand(script)}`
   }
-  const invocation = buildShellCommandFromArgv(argv, 'posix').replace(
+  const invocation = render('posix').replace(
     quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'posix'),
     `"--query=\${${POSIX_QUERY_VARIABLE}}"`
   )

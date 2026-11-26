@@ -1,3 +1,4 @@
+import { savedLaunchProgramHead } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import type * as PreflightRuntimeTarget from '../../../../ipc/preflight/preflight-runtime-target'
 import type * as InstallerDetection from '../../../../../shared/agent-launch/installation/local-agent-install-dir-detection'
 import type * as FileSystem from 'node:fs/promises'
@@ -258,7 +259,7 @@ it('migrates saved Orca and bare Claude heads through the same inventory', async
       command: `${cwdPrefix}${quoted(user)} --verbose --resume session`,
       launchConfig: {
         ...config,
-        agentCommand: head === 'claude' || !windows ? 'claude --verbose' : '& claude --verbose',
+        agentCommand: `${savedLaunchProgramHead(user, shell, ' --verbose')} --verbose`,
         commandProvenance: 'generated',
         selectedExecutable: user
       }

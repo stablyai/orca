@@ -11,6 +11,7 @@ import {
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 import { setupCompletionMarkerPrefix } from './setup-completion-marker'
+import { SETUP_AGENT_EXECUTABLE_ENV, SETUP_AGENT_RESOLVER_ENV } from './setup-agent-program'
 
 export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
@@ -18,12 +19,9 @@ export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
 export const SETUP_FAILED_MESSAGE_PREFIX = 'Setup failed (exit '
 export const SETUP_WAIT_TIMEOUT_MESSAGE = 'Timed out waiting for setup before starting agent.'
 export const SETUP_AGENT_BLOCKED_MESSAGE = 'Agent startup is blocked.'
-export const SETUP_AGENT_SELECTION_TIMEOUT_SECONDS = 10
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
-export const SETUP_AGENT_SEQUENCE_MARKER_ENV = 'ORCA_SEQUENCED_SETUP_MARKER'
-export const SETUP_AGENT_SEQUENCE_SELECTION_ENV = 'ORCA_SEQUENCED_AGENT_SELECTION'
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
@@ -64,7 +62,6 @@ export function createSequencedSetupAgentCommands(args: {
     : resolution.runnerScriptPathForShell
   // Use distinct markers for overlapping launches of one setup runner.
   const markerPath = `${markerBasePath}.${nonce}.done`
-  const hostMarker = `${args.runnerScriptPath}.${nonce}.done`
   const waitTimeoutSeconds = args.waitTimeoutSeconds ?? SETUP_AGENT_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
@@ -77,8 +74,7 @@ export function createSequencedSetupAgentCommands(args: {
       ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
-        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
-        [SETUP_AGENT_SEQUENCE_MARKER_ENV]: hostMarker
+        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
       }
     }
   }
@@ -98,8 +94,7 @@ export function createSequencedSetupAgentCommands(args: {
     startupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`,
     startupEnv: {
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
-      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: startupScript,
-      [SETUP_AGENT_SEQUENCE_MARKER_ENV]: hostMarker
+      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: startupScript
     }
   }
 }
@@ -140,19 +135,6 @@ function buildPosixStartupScript(
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const shellFunctions = getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()
   const blocked = `${SETUP_AGENT_BLOCKED_MESSAGE} Try again.`
-  const selection = [
-    `if [ -n "$${SETUP_AGENT_SEQUENCE_SELECTION_ENV}" ]; then`,
-    `  result="$${SETUP_AGENT_SEQUENCE_SELECTION_ENV}"/ready;`,
-    `  deadline=$((SECONDS + ${SETUP_AGENT_SELECTION_TIMEOUT_SECONDS}));`,
-    '  while [ ! -f "$result" ] && [ "$SECONDS" -lt "$deadline" ]; do sleep 0.2; done;',
-    '  selection=$(cat -- "$result" 2>/dev/null) || selection="";',
-    '  rm -f -- "$result" 2>/dev/null;',
-    '  rmdir -- "${result%/*}" 2>/dev/null;',
-    `  rm -f ${marker} ${tmp} 2>/dev/null;`,
-    `  if [ -z "$selection" ]; then echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; fi;`,
-    `  \n${shellFunctions}eval "$selection"; exit "$?";`,
-    'fi;'
-  ].join(' ')
   // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
   const script = [
     `deadline=$((SECONDS + ${timeout}));`,
@@ -162,10 +144,14 @@ function buildPosixStartupScript(
     `IFS=: read -r seen status < ${marker} || true;`,
     `if [ "$seen" = ${nonceValue} ]; then`,
     'if [ "$status" = "0" ]; then',
-    selection,
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
+    `if [ -n "$${SETUP_AGENT_RESOLVER_ENV}" ]; then`,
+    `  ${SETUP_AGENT_EXECUTABLE_ENV}=$(eval "$${SETUP_AGENT_RESOLVER_ENV}") || { echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; };`,
+    `  export ${SETUP_AGENT_EXECUTABLE_ENV};`,
+    `else\n${shellFunctions}fi;`,
     `if [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; fi;`,
-    `echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${shellFunctions}eval "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; fi;`,
+    `echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;`,
+    `eval "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; fi;`,
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
     `echo "${SETUP_FAILED_MESSAGE_PREFIX}\${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
     'exit "${status:-1}";',
@@ -248,26 +234,16 @@ function buildWindowsStartupCommand(
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
     '    if ($content -match "^([0-9A-Za-z_-]+):([0-9]+)$" -and $Matches[1] -eq $nonce) {',
     '      $setupStatus = [int]$Matches[2]',
+    '      Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '      if ($setupStatus -ne 0) {',
-    '        Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     `        [Console]::Error.WriteLine("${SETUP_FAILED_MESSAGE_PREFIX}$setupStatus); skipping agent startup. See the Setup terminal for details.")`,
     '        exit $setupStatus',
     '      }',
-    `      if ($env:${SETUP_AGENT_SEQUENCE_SELECTION_ENV}) {`,
-    `        $folder = $env:${SETUP_AGENT_SEQUENCE_SELECTION_ENV}`,
-    '        $result = Join-Path $folder ready',
-    `        $deadline = (Get-Date).AddSeconds(${SETUP_AGENT_SELECTION_TIMEOUT_SECONDS})`,
-    '        while (!(Test-Path -LiteralPath $result) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }',
-    '        $selection = Get-Content -LiteralPath $result -Raw -Encoding UTF8 -ErrorAction SilentlyContinue',
-    '        Remove-Item -LiteralPath $result, $folder, $marker, $tmp -Force -ErrorAction SilentlyContinue',
-    `        if (!$selection) { [Console]::Error.WriteLine(${quotePowerShellLiteral(`${SETUP_AGENT_BLOCKED_MESSAGE} Try again.`)}); exit 1 }`,
-    '        Invoke-Expression $selection',
-    '        if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }',
-    '        if (-not $?) { exit 1 }',
-    '        exit 0',
-    '      }',
-    '      Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
+    `      if ($env:${SETUP_AGENT_RESOLVER_ENV}) {`,
+    `        $env:${SETUP_AGENT_EXECUTABLE_ENV} = & ([ScriptBlock]::Create($env:${SETUP_AGENT_RESOLVER_ENV}))`,
+    `        if (!$env:${SETUP_AGENT_EXECUTABLE_ENV} -or [string]::IsNullOrWhiteSpace($startup)) { [Console]::Error.WriteLine(${quotePowerShellLiteral(`${SETUP_AGENT_BLOCKED_MESSAGE} Try again.`)}); exit 1 }`,
+    '      }',
     '      if ([string]::IsNullOrWhiteSpace($startup)) {',
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',
     '        exit 1',

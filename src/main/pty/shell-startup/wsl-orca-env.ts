@@ -1,4 +1,8 @@
 import {
+  SETUP_AGENT_RESOLVER_ENV,
+  SETUP_AGENT_RUNTIME_ROOT_ENV
+} from '../../../shared/agent-launch/startup/setup-agent-program'
+import {
   ORCA_SCRUB_SAFE_PANE_ENV,
   ORCA_SCRUB_SAFE_LAUNCH_ENV
 } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
@@ -9,7 +13,6 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import {
-  SETUP_AGENT_SEQUENCE_SELECTION_ENV,
   SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
@@ -101,7 +104,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `${ORCA_SCRUB_SAFE_LAUNCH_ENV}/u`,
     // Select the pane-owning OpenCode variant when native and WSL installs coexist.
     'ORCA_OPENCODE_AGENT/u',
-    `${SETUP_AGENT_SEQUENCE_SELECTION_ENV}/p`,
+    SETUP_AGENT_RESOLVER_ENV,
+    `${SETUP_AGENT_RUNTIME_ROOT_ENV}/p`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`,

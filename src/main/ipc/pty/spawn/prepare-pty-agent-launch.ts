@@ -7,6 +7,7 @@ import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listene
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
+import { matchesStockLaunchProgram } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import {
   hermesStartupQueryFits,
   ORCA_HERMES_STARTUP_QUERY_ENV
@@ -18,11 +19,20 @@ import {
   withCodexDirectLaunchCommand
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
+import { prepareFreshOmpLaunch } from '../../../../shared/agent-launch/startup/omp-fresh-launch'
+import {
+  buildSetupAgentResolver,
+  setupAgentProgramExpression,
+  SETUP_AGENT_RESOLVER_ENV,
+  SETUP_AGENT_RUNTIME_ROOT_ENV
+} from '../../../../shared/agent-launch/startup/setup-agent-program'
+import { nativeWindowsPathToPosixShellPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
+import { getOrcaAgentRuntimeRoot } from '../../../managed-agent-cli/managed-agent-cli-path'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
@@ -43,7 +53,8 @@ export async function preparePtyAgentLaunch(
     sequenced,
     launchConfig,
     selectionBlocked,
-    rebuiltHermesQuery
+    rebuiltHermesQuery,
+    postSetupProgram
   } = selection
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
@@ -135,13 +146,29 @@ export async function preparePtyAgentLaunch(
   })
   let agentCommand = rootLaunch?.command ?? viewedCommand
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
-  let prepared =
-    connectionId ||
-    args.nativeChatSignIn ||
-    agentCommand === undefined ||
-    launchConfig?.commandProvenance !== 'generated'
-      ? agentCommand
-      : await prepareDirectLaunch(agentCommand, shell, input, env, local, images)
+  let prepared = agentCommand
+  if (sequenced) {
+    delete env[SETUP_AGENT_RESOLVER_ENV]
+    delete env[SETUP_AGENT_RUNTIME_ROOT_ENV]
+  }
+  if (postSetupProgram && shell !== 'cmd') {
+    const runtimeRoot = getOrcaAgentRuntimeRoot()
+    env[SETUP_AGENT_RUNTIME_ROOT_ENV] =
+      runtimeRoot && local && process.platform === 'win32' && shell === 'posix'
+        ? nativeWindowsPathToPosixShellPath(runtimeRoot)
+        : (runtimeRoot ?? '')
+    env[SETUP_AGENT_RESOLVER_ENV] = buildSetupAgentResolver(postSetupProgram, shell)
+    if (prepared && !rebuiltHermesQuery) {
+      prepared = await preparePostSetupCommand(prepared, postSetupProgram, shell, images)
+    }
+  } else if (
+    !connectionId &&
+    !args.nativeChatSignIn &&
+    prepared !== undefined &&
+    launchConfig?.commandProvenance === 'generated'
+  ) {
+    prepared = await prepareDirectLaunch(prepared, shell, input, env, local, images)
+  }
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   // Setup gates carry the wrapper in the environment, where it is counted once.
   const hermesQueryTooLarge =
@@ -184,6 +211,41 @@ export async function preparePtyAgentLaunch(
       : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
     terminalMcp: mcp.pane
   }
+}
+
+async function preparePostSetupCommand(
+  command: string,
+  program: string,
+  shell: 'posix' | 'powershell',
+  images: boolean
+): Promise<string | undefined> {
+  const programExpression = setupAgentProgramExpression(shell)
+  const render = (inner: string): string => {
+    const launch = readLaunchPosition(inner, shell)
+    if (!launch || !matchesStockLaunchProgram(launch.executable, program, process.platform)) {
+      return inner
+    }
+    const codex = withCodexDirectLaunchCommand(
+      inner,
+      shell,
+      { images, probeInShell: true, programExpression },
+      readCodexDirectLaunch(inner, shell, true)
+    )
+    const wrapped =
+      codex === inner ? withClaudeDirectLaunchCommand(inner, shell, programExpression) : codex
+    if (wrapped !== inner) {
+      return wrapped
+    }
+    return shell === 'powershell'
+      ? `${inner.slice(0, launch.invocationStart)}& ${programExpression}${inner.slice(launch.end)}`
+      : inner.slice(0, launch.start) + programExpression + inner.slice(launch.end)
+  }
+  const direct = render(command)
+  const prepared =
+    direct === command
+      ? await prepareFreshOmpLaunch(command, shell, async (inner) => render(inner))
+      : direct
+  return prepared === command ? undefined : prepared
 }
 
 async function prepareDirectLaunch(

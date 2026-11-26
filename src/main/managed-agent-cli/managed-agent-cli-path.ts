@@ -7,16 +7,19 @@ import {
 } from '../../shared/shell/command-resolution/inventory-fs-probes'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 
+export function getOrcaAgentRuntimeRoot(): string | undefined {
+  return hasAppEnvironment() ? join(getProfileUserDataPath(), 'agent-runtimes') : undefined
+}
+
 export function isOrcaAgentRuntimePath(path: string): boolean {
-  return (
-    /(?:^|[\\/])agent-runtimes(?:[\\/]|$)/i.test(path) &&
-    hasAppEnvironment() &&
-    isPathInsideOrEqual(join(getProfileUserDataPath(), 'agent-runtimes'), resolve(path))
-  )
+  const root = /(?:^|[\\/])agent-runtimes(?:[\\/]|$)/i.test(path)
+    ? getOrcaAgentRuntimeRoot()
+    : undefined
+  return root !== undefined && isPathInsideOrEqual(root, resolve(path))
 }
 
 export function createAgentRuntimeTargetCheck(probes: InventoryFsProbes) {
-  const root = hasAppEnvironment() ? join(getProfileUserDataPath(), 'agent-runtimes') : undefined
+  const root = getOrcaAgentRuntimeRoot()
   let canonicalRoot: ReturnType<InventoryFsProbes['realPath']> | undefined
   return async (target: string): Promise<boolean | typeof UNVERIFIED_FS_PROBE> => {
     if (!root) {

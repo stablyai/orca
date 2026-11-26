@@ -303,7 +303,7 @@ describe('win32 PATH lookup', () => {
         first: path.join(quotedBin, 'claude.cmd'),
         user: path.join(quotedBin, 'claude.cmd')
       })
-      expect(listings.mock.calls).toEqual([[quotedBin, false]])
+      expect(listings.mock.calls).toEqual([[quotedBin, true]])
       expect(
         vi.mocked(stat).mock.calls.filter(([file]) => file === path.join(quotedBin, 'claude.cmd'))
       ).toHaveLength(1)

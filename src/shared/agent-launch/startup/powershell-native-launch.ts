@@ -118,7 +118,8 @@ export function powerShellNativeLaunch(
   launch: LaunchPosition,
   before = '',
   prependArgs = '',
-  after = ''
+  after = '',
+  programExpression?: string
 ): string {
   if (hasPowerShellStopParsing(command, launch)) {
     return command
@@ -132,7 +133,7 @@ export function powerShellNativeLaunch(
   }
   const escape = `if (-not (Test-Path Function:__OrcaEscapeNativeArgs)) { ${ESCAPE_FUNCTION} }; $orcaNativeArgs = @(__OrcaEscapeNativeArgs $orcaProgram (${prependArgs}@($args))); `
   // PowerShell consumes the first -- for a script block, preserving later -- and leaving flags unbound.
-  const program = quotePowerShellLiteral(launch.executable)
+  const program = programExpression ?? quotePowerShellLiteral(launch.executable)
   return `${command.slice(0, launch.invocationStart)}& { $orcaProgram = ${program}; ${before}${escape}${INVOCATION}${after}${SCRIPT_END}${suffix}`
 }
 

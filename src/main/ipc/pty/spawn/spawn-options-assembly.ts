@@ -16,15 +16,6 @@ import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
-import { randomUUID } from 'node:crypto'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import {
-  SETUP_AGENT_SEQUENCE_SELECTION_ENV,
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
-} from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
-import { publishSequencedAgentLaunch, type SequencedAgentLaunch } from './sequenced-agent-launch'
-import { nativeWindowsPathToPosixShellPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -82,29 +73,28 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   launchCommand: string | undefined
   launchConfig?: SleepingAgentLaunchConfig
   blocked?: AgentProgramBlockReason
-  sequencedAgentLaunch?: SequencedAgentLaunch
   /** What the host's MCP server list gave the pane; null when it was left as main leaves it. */
   terminalMcp: TerminalMcpPaneLaunch | null
 }> {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const selection = await selectPtyAgentLaunch(input)
-  const prepare = async (selected: typeof selection, launchInput: PtySpawnLaunchOptionsInput) => {
-    const openCodeLaunch = await prepareOpenCodePtyLaunch({
-      command: selected.startupCommand,
-      agent: selected.launchAgent,
-      env: selected.paneEnv,
-      envToDelete: launchInput.envToDelete,
-      cwd: input.cwd,
-      connectionId,
-      isFreshLaunch: !input.preAdoptedStablePane && selected.startupCommand !== undefined,
-      shell: selected.shell,
-      ...(input.codexRuntime === 'wsl'
-        ? { wsl: { distro: launchInput.expectedWslDistro ?? undefined } }
-        : {})
-    })
-    return preparePtyAgentLaunch(launchInput, selected, openCodeLaunch)
-  }
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
+    command: selection.startupCommand,
+    agent: selection.launchAgent,
+    env: selection.paneEnv,
+    envToDelete: input.envToDelete,
+    cwd: input.cwd,
+    connectionId,
+    isFreshLaunch:
+      !input.preAdoptedStablePane &&
+      selection.startupCommand !== undefined &&
+      !selection.postSetupProgram,
+    shell: selection.shell,
+    ...(input.codexRuntime === 'wsl'
+      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
+      : {})
+  })
   const {
     env,
     launchAgent,
@@ -115,43 +105,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     launchConfig,
     blocked,
     startupNotice
-  } = await prepare(selection, input)
-  delete env[SETUP_AGENT_SEQUENCE_SELECTION_ENV]
-  let sequencedAgentLaunch: SequencedAgentLaunch | undefined
-  if (selection.setupMarker) {
-    const marker = selection.setupMarker
-    const folder = join(tmpdir(), `orca-setup-agent-${randomUUID()}`)
-    env[SETUP_AGENT_SEQUENCE_SELECTION_ENV] =
-      process.platform === 'win32' && selection.shell === 'posix' && input.codexRuntime !== 'wsl'
-        ? nativeWindowsPathToPosixShellPath(folder)
-        : folder
-    sequencedAgentLaunch = (provider, result, publish) =>
-      publishSequencedAgentLaunch({
-        provider,
-        result,
-        marker,
-        folder,
-        shell: selection.shell,
-        env,
-        envToDelete: input.envToDelete,
-        publish,
-        prepare: async (signal) => {
-          const launchInput = {
-            ...input,
-            expectedWslDistro: result.wslDistro ?? input.expectedWslDistro,
-            envToDelete: [...input.envToDelete]
-          }
-          const ready = await prepare(await selectPtyAgentLaunch(launchInput, signal), launchInput)
-          const { [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: command, ...agentEnv } = ready.env
-          return {
-            ...ready,
-            command,
-            env: agentEnv,
-            envToDelete: launchInput.envToDelete
-          }
-        }
-      })
-  }
+  } = await preparePtyAgentLaunch(input, selection, openCodeLaunch)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
     rows: args.rows,
@@ -245,8 +199,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     launchCommand,
     terminalMcp,
     launchConfig,
-    blocked,
-    sequencedAgentLaunch
+    blocked
   }
 }
 

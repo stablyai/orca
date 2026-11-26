@@ -40,6 +40,7 @@ export type { AgentPathMatch } from './command-path-inventory-scan'
 type AgentPathInventory = {
   isRuntimePath: (entry: string) => boolean
   isRuntimeTarget?: (entry: string) => Promise<boolean | typeof UNVERIFIED_FS_PROBE>
+  pinPathMatches?: boolean
   matches: Map<string, AgentPathMatch>
 }
 
@@ -231,7 +232,7 @@ export async function findCommandsOnLocalPath(
     readListing,
     probeCommand,
     (command, match) => {
-      inventory?.matches.set(command, match)
+      inventory?.matches.set(command, inventory.pinPathMatches ? { user: match.user } : match)
       if (match.user) {
         found.add(command)
         options.matches?.set(command, match.user)

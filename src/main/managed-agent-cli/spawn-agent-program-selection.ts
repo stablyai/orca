@@ -34,7 +34,6 @@ export type SpawnProgramContext = {
   expectedWslDistro?: string | null
   sshTarget?: boolean
   shellPath?: string
-  refreshAgentProgram?: boolean
   requirePinnedProgram?: boolean
   cwd?: string
   readCwd?: () => Promise<string | undefined>
@@ -110,7 +109,6 @@ async function selectSpawnAgentProgram(
   }
   if (spawn.codexRuntime === 'wsl') {
     return selectTerminalAgentProgram(programs, shell, {
-      afterSetup: spawn.refreshAgentProgram,
       wsl: { distro: spawn.expectedWslDistro ?? undefined },
       revalidateUnavailable: true,
       signal,
@@ -166,7 +164,6 @@ async function selectSpawnAgentProgram(
   }
   selection ??= await selectTerminalAgentProgram(programs, shell, {
     refresh: Boolean(pinned),
-    afterSetup: spawn.refreshAgentProgram,
     shellPath: spawn.shellPath,
     revalidateUnavailable: true,
     signal
@@ -181,7 +178,7 @@ async function selectSpawnAgentProgram(
       : selection
   }
   // Pin the selection when the agent's PATH differs from the host inventory's.
-  if (configuredEnv || spawn.refreshAgentProgram) {
+  if (configuredEnv) {
     return { program, result: { kind: 'full-path', path: selected.path } }
   }
   if (process.platform === 'win32' && shell === 'cmd') {

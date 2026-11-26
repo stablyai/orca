@@ -88,13 +88,12 @@ async function scanInventory(
       incomplete: !probe.environmentResolved
     }
   }
-  const afterSetup = mode === 'refresh' && targeted
-  const readLoginPath = (!targeted && (mode === 'read' || mode === 'revalidate')) || afterSetup
+  const readLoginPath = !targeted && (mode === 'read' || mode === 'revalidate')
   return scanLocalAgentCommandInventory(
     commands,
     readLoginPath,
     slot.shellPath,
-    mode === 'refresh' && (afterSetup || slot.shellPath !== undefined),
+    mode === 'refresh' && slot.shellPath !== undefined,
     progress,
     () => notifyScanChange(scan),
     controller.signal
@@ -257,9 +256,7 @@ export function readInventory(
                 inventory ??
                 partialLocalAgentCommandInventory(
                   current.progress,
-                  mode === 'refresh' && targeted
-                    ? undefined
-                    : currentInventoryPublication(slot)?.inventory
+                  currentInventoryPublication(slot)?.inventory
                 ),
               generation,
               sequence: current.partial?.sequence ?? slot.published?.sequence ?? 0,
@@ -275,7 +272,7 @@ export function readInventory(
       return readScan(active)
     }
     if (
-      (mode === 'refresh' && active.targeted && !targeted) ||
+      mode === 'refresh' ||
       scanPriority[mode] > scanPriority[active.mode] ||
       !commands.every((cmd) => active.commands.has(cmd))
     ) {

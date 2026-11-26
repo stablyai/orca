@@ -110,7 +110,6 @@ export async function selectTerminalAgentProgram(
     wsl?: WslPreflightTarget
     shellPath?: string
     refresh?: boolean
-    afterSetup?: boolean
     revalidateUnavailable?: boolean
     signal?: AbortSignal
     onWslDistroSelected?: (distro: string) => void
@@ -122,20 +121,14 @@ export async function selectTerminalAgentProgram(
     const slot = wsl ? await wslInventory(wsl, waitSignal) : getLocalInventory(shellPath)
     throwIfSignalAborted(waitSignal)
     const read = slot
-      ? readInventory(
-          slot,
-          programs,
-          options.afterSetup ? 'refresh' : refresh ? 'revalidate' : 'read',
-          {
-            targeted: options.afterSetup,
-            acceptAnyMatch: true,
-            qualifiesEarly: wsl
-              ? undefined
-              : (match) => qualifyProgram(match, shell).kind === 'by-name',
-            revalidateUnavailable: options.revalidateUnavailable,
-            waitForCompletion: true
-          }
-        )
+      ? readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
+          acceptAnyMatch: true,
+          qualifiesEarly: wsl
+            ? undefined
+            : (match) => qualifyProgram(match, shell).kind === 'by-name',
+          revalidateUnavailable: options.revalidateUnavailable,
+          waitForCompletion: true
+        })
       : undefined
     const publication = read
       ? await read.wait(waitSignal).catch((error: unknown) => {

@@ -112,6 +112,7 @@ export async function scanLocalAgentCommandInventory(
           signal
         )
       : undefined
+  const captureFailed = captured?.status === 'fallback'
   const env =
     (captured?.status === 'captured' ? captured.env : undefined) ??
     (await waitForPromiseWithSignal(buildLocalPreflightEnvAsync(), signal)) ??
@@ -154,6 +155,7 @@ export async function scanLocalAgentCommandInventory(
       inventory: {
         isRuntimePath: isOrcaAgentRuntimePath,
         isRuntimeTarget: createAgentRuntimeTargetCheck(probes),
+        pinPathMatches: captureFailed,
         matches
       },
       found,
@@ -196,7 +198,7 @@ export async function scanLocalAgentCommandInventory(
           matches.set(name, { ...matches.get(name), user })
           found.add(name)
         }
-        resolveCommand(name, installerUncertain || unverifiedPath.has(name))
+        resolveCommand(name, captureFailed || installerUncertain || unverifiedPath.has(name))
       }
     })
   }

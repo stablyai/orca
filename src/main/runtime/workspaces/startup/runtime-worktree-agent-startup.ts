@@ -84,7 +84,7 @@ export async function resolveWorktreeStartupDraftAgent(
       reuseSettled: true,
       ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
     }
-  ).catch((error: unknown) => {
+  ).catch((error: unknown): string[] => {
     if (error instanceof AgentInventoryDeadlineError) {
       throw error
     }

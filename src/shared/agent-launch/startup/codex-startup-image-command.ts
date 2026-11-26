@@ -83,7 +83,8 @@ const POSIX_WRAPPERS = /* @__PURE__ */ BOTH.flatMap((images) =>
 
 export function readCodexDirectLaunch(
   command: string,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  allowByName = false
 ): {
   launch: LaunchPosition
   args: string[] | null
@@ -96,7 +97,10 @@ export function readCodexDirectLaunch(
   if (
     !launch ||
     !launchExecutableIs(launch.executable, CODEX_EXECUTABLE) ||
-    (shell !== 'cmd' && launch.executable === 'codex' && !launch.bypassesShellFunction)
+    (!allowByName &&
+      shell !== 'cmd' &&
+      launch.executable === 'codex' &&
+      !launch.bypassesShellFunction)
   ) {
     return null
   }
@@ -117,7 +121,7 @@ export function codexSkipsIsolationProbe(args: readonly string[]): boolean {
 export function withCodexDirectLaunchCommand(
   command: string,
   shell: AgentStartupShell,
-  options: { images: boolean; probeInShell?: boolean },
+  options: { images: boolean; probeInShell?: boolean; programExpression?: string },
   invocation = readCodexDirectLaunch(command, shell)
 ): string {
   if (shell === 'cmd' || !invocation) {
@@ -131,14 +135,19 @@ export function withCodexDirectLaunchCommand(
       launch,
       powerShellPrefix(options.images, probe),
       '$orcaCodexIdentity + ',
-      powerShellSuffix(options.images)
+      powerShellSuffix(options.images),
+      options.programExpression
     )
   }
   const wrapper = POSIX_WRAPPERS.find(
     (each) => each.images === options.images && each.probe === probe
   )
   return wrapper
-    ? command.slice(0, launch.start) + wrapper.prefix + command.slice(launch.start)
+    ? command.slice(0, launch.start) +
+        wrapper.prefix +
+        (options.programExpression
+          ? options.programExpression + command.slice(launch.end)
+          : command.slice(launch.start))
     : command
 }
 

@@ -61,7 +61,6 @@ export async function buildPtyIpcSpawnOptions(ctx: PtyIpcSpawnState): Promise<vo
   ctx.launchCommand = launch.launchCommand
   ctx.effectiveLaunchConfig = launch.launchConfig
   ctx.agentProgramBlocked = launch.blocked
-  ctx.sequencedAgentLaunch = launch.sequencedAgentLaunch
   ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.effectiveSessionId,

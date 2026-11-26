@@ -7,17 +7,13 @@ import {
   ORCA_HERMES_STARTUP_QUERY_ENV
 } from '../../../../shared/agent-launch/startup/hermes-startup-query'
 import {
-  SETUP_AGENT_SEQUENCE_MARKER_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
 
-export async function selectPtyAgentLaunch(
-  input: PtySpawnLaunchOptionsInput,
-  setupSignal?: AbortSignal
-) {
+export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
@@ -37,55 +33,40 @@ export async function selectPtyAgentLaunch(
       ? 'posix'
       : 'powershell'
     : paneShell
-  const marker = input.env?.[SETUP_AGENT_SEQUENCE_MARKER_ENV]
-  const setupMarker =
-    sequenced &&
-    marker &&
-    !connectionId &&
-    !input.preAdoptedStablePane &&
-    input.launchConfig?.commandProvenance === 'generated'
-      ? marker
-      : undefined
-  const deferred = setupMarker !== undefined && !setupSignal
   const {
     command: startupCommand,
     launchConfig,
     blocked: selectionBlocked,
-    rebuiltHermesQuery
-  } = deferred
-    ? {
-        command: undefined,
-        launchConfig: input.launchConfig,
-        blocked: undefined,
-        rebuiltHermesQuery: undefined
-      }
-    : await alignManagedAgentLaunchAtSpawn(
-        {
-          ...input,
-          launchCommand: sequenced || input.launchCommand,
-          launchAgent,
-          ...(setupSignal ? { refreshAgentProgram: true, signal: setupSignal } : {}),
-          shellPath: process.platform === 'win32' ? undefined : input.shellOverride,
-          preselectedAgentProgram: setupSignal ? undefined : args.preselectedAgentProgram,
-          restoring: Boolean(args.resumeProviderSession) || args.resumeOrigin === 'saved',
-          nativeChatSignIn: args.nativeChatSignIn,
-          sshTarget: Boolean(connectionId),
-          ...(sequenced ? { sourceShell: paneShell } : {})
-        },
-        shell
-      )
+    rebuiltHermesQuery,
+    postSetupProgram
+  } = await alignManagedAgentLaunchAtSpawn(
+    {
+      ...input,
+      launchCommand: sequenced || input.launchCommand,
+      launchAgent,
+      shellPath: process.platform === 'win32' ? undefined : input.shellOverride,
+      preselectedAgentProgram:
+        !sequenced || args.preselectedAgentProgram?.shell === shell
+          ? args.preselectedAgentProgram
+          : undefined,
+      restoring: Boolean(args.resumeProviderSession) || args.resumeOrigin === 'saved',
+      nativeChatSignIn: args.nativeChatSignIn,
+      sshTarget: Boolean(connectionId),
+      ...(sequenced
+        ? { sourceShell: paneShell, setupGate: !connectionId && !input.preAdoptedStablePane }
+        : {})
+    },
+    shell
+  )
   let paneEnv = input.env
   if (
     paneEnv &&
-    (GENERATED_AGENT_LAUNCH_ENV in paneEnv ||
-      ORCA_HERMES_STARTUP_QUERY_ARGV_ENV in paneEnv ||
-      SETUP_AGENT_SEQUENCE_MARKER_ENV in paneEnv)
+    (GENERATED_AGENT_LAUNCH_ENV in paneEnv || ORCA_HERMES_STARTUP_QUERY_ARGV_ENV in paneEnv)
   ) {
     paneEnv = { ...paneEnv }
     delete paneEnv[GENERATED_AGENT_LAUNCH_ENV]
-    delete paneEnv[SETUP_AGENT_SEQUENCE_MARKER_ENV]
     delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
-    if (selectionBlocked || deferred) {
+    if (selectionBlocked) {
       delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ENV]
     }
   }
@@ -97,7 +78,7 @@ export async function selectPtyAgentLaunch(
     startupCommand,
     launchConfig,
     selectionBlocked,
-    setupMarker,
+    postSetupProgram,
     rebuiltHermesQuery,
     paneEnv
   }

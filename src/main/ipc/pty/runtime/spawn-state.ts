@@ -35,7 +35,6 @@ import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { SequencedAgentLaunch } from '../spawn/sequenced-agent-launch'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -66,7 +65,6 @@ export type RuntimePtySpawnState = {
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
   agentProgramBlocked?: AgentProgramBlockReason
-  sequencedAgentLaunch?: SequencedAgentLaunch
   launchCommand: string | undefined
   /** What the host's MCP server list gave the pane, recorded at commit. */
   terminalMcp?: TerminalMcpPaneLaunch | null
