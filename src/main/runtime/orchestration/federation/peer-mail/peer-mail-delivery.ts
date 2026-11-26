@@ -160,6 +160,7 @@ export async function deliverPeerMail(
     type?: z.infer<typeof PeerMailMessageType>
     priority?: 'normal' | 'high' | 'urgent'
     threadId?: string
+    replyTo?: string
     chat?: string
     item?: string
     attachments?: readonly string[]
@@ -179,6 +180,7 @@ export async function deliverPeerMail(
       ...(message.type ? { type: message.type } : {}),
       ...(message.priority ? { priority: message.priority } : {}),
       ...(message.threadId ? { threadId: message.threadId } : {}),
+      ...(message.replyTo ? { replyTo: message.replyTo } : {}),
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
@@ -192,12 +194,13 @@ export async function deliverPeerMail(
   return warnings.flatMap((warning) => PeerMailDeliveryHeld.safeParse(warning).data ?? [])
 }
 
-/** Queues one reply on a conversation a paired Orca opened here, for it to pull. */
+/** Queues one reply on a conversation a paired Orca opened here, for it to pull. It names the
+ *  message it answers, which is how the opener settles that one ask and no other. */
 export function queuePeerMailReply(
   db: OrchestrationDb,
   conversationId: string,
   messageId: string,
-  reply: z.infer<typeof PeerMailRelayPayload>
+  reply: z.infer<typeof PeerMailRelayPayload> & { replyTo: string }
 ): void {
   db.enqueueFederationRelay({
     dispatchId: conversationId,
