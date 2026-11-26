@@ -81,18 +81,19 @@ it('reads no watched workspace for a status update elsewhere or a redraw, and on
 
 const FLEET = 750
 
-/** Counts every read of a record's entries, by key or by enumeration. */
+/** A copy of a plain record whose own entries count every read of their value. */
 function counted<T extends object>(target: T, onRead: () => void): T {
-  return new Proxy(target, {
-    get(record, key, receiver) {
-      onRead()
-      return Reflect.get(record, key, receiver)
-    },
-    getOwnPropertyDescriptor(record, key) {
-      onRead()
-      return Reflect.getOwnPropertyDescriptor(record, key)
-    }
-  })
+  const copy: T = Object.create(Object.getPrototypeOf(target))
+  for (const [key, value] of Object.entries(target)) {
+    Object.defineProperty(copy, key, {
+      enumerable: true,
+      get: () => {
+        onRead()
+        return value
+      }
+    })
+  }
+  return copy
 }
 
 it('reads no other browser workspace when a page elsewhere navigates (STA-18521)', () => {
