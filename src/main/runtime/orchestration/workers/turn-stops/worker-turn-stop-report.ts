@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
+import { hasOutboundCoordinatorReport } from '../../db/messages/dispatch-outbound-coordinator-report'
 import { rejectedReportInTurn } from '../../db/messages/rejected-worker-report'
 import type {
   DispatchContextRow,
@@ -12,7 +13,6 @@ import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/
 import { describeApprovalClosed } from './worker-approval-text'
 import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 import type { AgentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
-import { workerBackgroundWaitDueAt } from './worker-background-wait-notice'
 import type { UnconfirmedStartEvidence } from './unconfirmed-start-evidence'
 
 export type WorkerTurnStopReason =
@@ -26,7 +26,7 @@ export type WorkerTurnStopReason =
   | 'never-ready'
   /** The start failed before its worker ran, so nothing of it was lost. */
   | 'start-failed'
-  /** The turn ended while background tasks the worker started still run: news only once it outlasts the bound. */
+  /** The turn ended while background tasks the worker started still run: passive presence, not a stop alert. */
   | 'background-wait'
 
 export type WorkerTurnStop = {
@@ -106,41 +106,36 @@ export type WorkerTurnStopReportDeps = {
   coordinatorApprovals?: () => boolean
   /** A chat whose turn ended while its own background tasks run: its background waits own that rest. */
   chatWaitsOnBackground?: (sessionId: string) => boolean
-  /** Whether a recorded background wait's pane still shows it; unknown reads as yes. */
-  backgroundWaitShown?: (wait: { since: number; paneKey?: string; chat?: true }) => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
   return target.kind === 'local' ? target.dispatch.id : target.attachment.dispatch_id
 }
 
-/** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate.
- *  So is waiting on its own background task, until the wait outlasts the bound. A failed request a chat showed never is. */
+/** Waiting on mail or a live background task, or a clean finish that already reported or rests on its
+ *  own question, rejected report or helpers, is deliberate. A failed request a chat showed never is. */
 export function isDeliberateRest(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
-  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError' | 'backgroundWait'>,
-  deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail' | 'backgroundWaitShown'>
+  stop: Pick<
+    WorkerTurnStop,
+    'reason' | 'turnStartedAt' | 'mailTaken' | 'requestError' | 'backgroundWait'
+  >,
+  deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
   if (stop.requestError && !stop.requestError.heldByWaits) {
     return false
   }
-  // Held until its bound; a wait its pane no longer shows waits for its timer to settle it unsent.
-  const wait = stop.reason === 'background-wait' ? stop.backgroundWait : undefined
-  if (
-    wait &&
-    (Date.now() < workerBackgroundWaitDueAt(wait.since) ||
-      deps.backgroundWaitShown?.(wait) === false)
-  ) {
+  if (stop.reason === 'background-wait') {
     return true
   }
-  // Past its bound, a background wait is still deliberate for every reason a clean finish is.
   return (
     deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
-    ((stop.reason === 'finished' || stop.reason === 'background-wait') &&
+    (stop.reason === 'finished' &&
       (db.awaitsAnswerToLatestQuestion(dispatchId) ||
         rejectedReportInTurn(db, dispatchId, stop.turnStartedAt) ||
+        hasOutboundCoordinatorReport(db, target, stop) ||
         (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId))))
   )
 }
