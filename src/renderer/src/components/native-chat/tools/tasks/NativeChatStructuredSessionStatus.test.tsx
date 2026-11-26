@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -9,13 +9,23 @@ import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 
 const hoisted = vi.hoisted(() => {
+  const PERSON = 'orchestration.person-approvals.v1'
   const workers: WorkerDockRowView[] = []
   return {
     rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-    workers
+    workers,
+    pairedDockOwner: false,
+    clientCapabilities: [PERSON]
   }
 })
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
+    capability === 'orchestration.paired-worker-dock-owner.v1' && hoisted.pairedDockOwner
+}))
+vi.mock('@/runtime/rpc/targets/paired-host-client-capabilities', () => ({
+  pairedHostClientCapabilities: () => hoisted.clientCapabilities
+}))
 vi.mock('../../worker-approvals/native-chat-worker-approval-feed', () => ({
   useNativeChatPinnedWorkerApprovals: () => []
 }))
@@ -27,7 +37,8 @@ vi.mock('./dock/worker-dock-feed', () => ({
       available: true,
       rows: new Map(rows.map((row) => [row.id, row])),
       snapshot: { identities: rows },
-      loadWindow: async () => {}
+      loadWindow: async () => {},
+      readLosses: () => 0
     }
   }
 }))
@@ -84,6 +95,8 @@ beforeEach(() => {
   hoisted.rpc.mockReset()
   hoisted.rpc.mockResolvedValue({})
   hoisted.workers = []
+  hoisted.pairedDockOwner = false
+  hoisted.clientCapabilities = ['orchestration.person-approvals.v1']
 })
 afterEach(cleanup)
 
@@ -98,11 +111,24 @@ it.each([
   expect(onStop).toHaveBeenCalledWith('shell-7')
 })
 
-it("keeps a remote chat's orchestration worker Open-only: no Stop that would do nothing", () => {
-  hoisted.workers = [worker]
+const failed: WorkerDockRowView = {
+  ...worker,
+  id: 'home/source/worker/attempt-2',
+  dispatchId: 'attempt-2',
+  name: 'Cleaner',
+  title: 'Clean up journal',
+  state: 'failed',
+  reason: 'Cleanup failed',
+  settlement: 'settlement-2',
+  stoppable: false
+}
+
+it("keeps a remote chat's orchestration worker Open-only on a host that refuses this window's Clear and Stop", () => {
+  hoisted.workers = [worker, failed]
   const onStop = renderStrip(REMOTE)
   expect(screen.queryByRole('button', { name: /^Stop Verifier/ })).toBeNull()
-  const open = screen.getByRole('button', { name: /^Verifier · Review journal/ })
+  expect(screen.queryByRole('button', { name: /^Clear Cleaner/ })).toBeNull()
+  const open = screen.getByRole('button', { name: /^Worker · Review journal/ })
   expect(open).toHaveAccessibleName(/from the computer it runs on/)
   expect(onStop).not.toHaveBeenCalled()
   expect(hoisted.rpc).not.toHaveBeenCalledWith(
@@ -110,4 +136,40 @@ it("keeps a remote chat's orchestration worker Open-only: no Stop that would do 
     'orchestration.workerDockStop',
     expect.anything()
   )
+})
+
+it("clears a paired host's settled failure from this window once the host takes it", async () => {
+  hoisted.pairedDockOwner = true
+  hoisted.workers = [worker, failed]
+  renderStrip(REMOTE)
+  const clear = await screen.findByRole('button', { name: 'Clear Cleaner' })
+  expect(screen.getByRole('button', { name: /^Stop Verifier · Review journal$/ })).toBeVisible()
+  expect(screen.queryByText(/from the computer it runs on/)).toBeNull()
+  fireEvent.click(clear)
+  await waitFor(() =>
+    expect(hoisted.rpc).toHaveBeenCalledWith(REMOTE, 'orchestration.workerDockAcknowledge', {
+      party: 'party-synthetic',
+      settlements: [{ dispatchId: 'attempt-2', settlement: 'settlement-2' }],
+      acknowledged: true
+    })
+  )
+})
+
+it.each([
+  ['a client the host does not count as a person', [], failed],
+  [
+    'a worker running on another computer',
+    ['orchestration.person-approvals.v1'],
+    { ...failed, ownerActionsAvailable: false }
+  ]
+])("keeps a paired host's failure Open-only for %s", async (_name, capabilities, row) => {
+  hoisted.pairedDockOwner = true
+  hoisted.clientCapabilities = capabilities
+  hoisted.workers = [row]
+  renderStrip(REMOTE)
+  const open = screen.getByRole('button', { name: /^Worker · Clean up journal/ })
+  // Let the host's capability answer arrive before checking the row stayed Open-only.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(screen.queryByRole('button', { name: /^Clear Cleaner/ })).toBeNull()
+  expect(open).toHaveAccessibleName(/from the computer it runs on/)
 })

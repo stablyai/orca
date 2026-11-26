@@ -8,6 +8,7 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { BotItemError } from './bot-item-error'
 import type { BotItemMadeBy, BotItemRecord, BotItemSource } from './bot-items-schema'
 
@@ -31,6 +32,8 @@ export type BotItemAddInput = {
   doneMeans?: string
   status: 'planned' | 'working'
   links: BotItemLinkInput[]
+  /** The thread, issue or pull request the adding turn's work started in, kept on its `made` event. */
+  startedIn?: string
 }
 
 export type BotItemSetInput = {
@@ -51,6 +54,9 @@ export type BotItemSetInput = {
   /** Set by the host, never a client: the chat whose conversation's turn asked `ask`, so the
    *  owner's answer goes back to that conversation. */
   askedInConversation?: string
+  /** Set by the host, never a client: whom the chat that closes the item acts for, kept on the
+   *  close so the journal says whose work it was. */
+  closedFor?: readonly BotRequestAsker[]
 }
 
 /** What a write did. */
@@ -141,7 +147,12 @@ export function assertBotItemAddable(input: {
   if (!input.title.trim()) {
     throw new BotItemError('invalid_argument', 'An item needs a title.')
   }
-  if (input.links.length > BOT_ITEM_LIMITS.links) {
+  assertBotItemLinkRoom(0, input.links.length)
+}
+
+/** The one link bound, on every path that adds links: `held` on the item now, `adding` new ones. */
+export function assertBotItemLinkRoom(held: number, adding = 1): void {
+  if (held + adding > BOT_ITEM_LIMITS.links) {
     throw new BotItemError(
       'invalid_argument',
       `An item takes up to ${BOT_ITEM_LIMITS.links} links.`

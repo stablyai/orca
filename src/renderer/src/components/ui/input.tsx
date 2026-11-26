@@ -8,6 +8,7 @@ const inputVariants = cva('', {
   variants: {
     variant: {
       default: '',
+      name: 'h-9.5 font-medium not-focus:text-ellipsis',
       identity:
         'h-8 border-0 bg-transparent px-0 text-xl font-semibold shadow-none md:text-xl dark:bg-transparent',
       code: 'font-mono text-xs md:text-xs',
@@ -34,7 +35,8 @@ const inputVariants = cva('', {
     /** Room for an absolutely positioned icon at the start, such as a search glass. */
     inset: {
       default: '',
-      leadingIcon: 'pl-8'
+      leadingIcon: 'pl-8',
+      wideLeadingIcon: 'pl-11.25'
     },
     // Reserves room for an icon button absolutely positioned inside the field's right edge.
     adornment: {

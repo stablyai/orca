@@ -19,7 +19,7 @@ import type { NativeChatVisualDirective } from '../../../../src/shared/native-ch
 type Props = {
   content?: string
   fallback?: string
-  /** Enables iOS range selection for native-chat transcript prose. */
+  /** Makes paragraphs selectable; on native Android it instead turns block selection off. */
   rangeSelectable?: boolean
   /** Forward long presses from interactive Android transcript spans to the message. */
   onLongPress?: () => void

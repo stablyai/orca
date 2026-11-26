@@ -29,6 +29,7 @@ import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget
 } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import { hostSystemDefaultUsageId } from '../../../shared/agent-accounts/host-system-default-usage'
 
 type CodexAccountSelectionDependencies = {
   store: Store
@@ -183,7 +184,11 @@ export class CodexAccountSelection {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
 
-    this.startQuotaRefresh(outgoingAccountId, effectiveTarget)
+    // Keep System default's last reading on its row, as an outgoing saved account's is kept.
+    this.startQuotaRefresh(
+      outgoingAccountId ?? hostSystemDefaultUsageId('codex', effectiveTarget),
+      effectiveTarget
+    )
     return this.snapshot()
   }
 

@@ -241,3 +241,10 @@ export function botItemWaitEntryKey(
   const last = entries.findLast((entry) => entry.kind === 'event' && entry.event.kind === 'status')
   return last?.kind === 'event' && last.event.data.to === 'waiting' ? last.key : null
 }
+
+/** The ask the item waits on now, as its comment entry: where a replaced ask leads. */
+export function botItemLiveAskKey(entries: readonly BotItemActivityEntry[]): string | null {
+  return (
+    entries.find((entry) => entry.kind === 'comment' && entry.waiting && !entry.onAsk)?.key ?? null
+  )
+}

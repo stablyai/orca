@@ -1,6 +1,7 @@
 // Agent and model: the agents this bot's computer can run; switching asks first, as the desktop does,
 // because the Home Chat starts over on the new agent.
 import { useState, type ReactNode } from 'react'
+import { RotateCcw } from 'lucide-react-native'
 import { isBotAgent, type BotAgent } from '../../../src/shared/bot-types'
 import {
   botLaunchFromChoices,
@@ -17,7 +18,9 @@ import {
 } from '../host-screen/workspace-options/workspace-option-rows'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
+import { SettingsSection } from '../settings/settings-screen-frame'
+import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SheetBot } from './bot-sheet-operations'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
@@ -36,9 +39,10 @@ export function MobileBotAgentPage(props: {
   /** Saves its model and options; null goes back to the chat defaults. */
   onLaunch: (launch: BotLaunch | null) => void
 }) {
+  useMobileColorScheme()
   const t = useMobileTranslation()
   const { bot } = props
-  const choices = useNewBotAgentChoices(props.client)
+  const choices = useNewBotAgentChoices(props.client)?.agents ?? null
   const [switching, setSwitching] = useState<BotAgent | null>(null)
   const [picking, setPicking] = useState<'model' | 'effort' | null>(null)
   const modelChoices = useBotModelChoices(props.client, props.online, bot)
@@ -145,13 +149,7 @@ export function MobileBotAgentPage(props: {
         onBack={props.onBack}
       />
       {props.banner}
-      <SettingsNote>
-        {t(
-          'bots.settings.agentDetail',
-          'Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.'
-        )}
-      </SettingsNote>
-      <SettingsSection title={t('bots.settings.agent', 'Agent')} radioGroup>
+      <SettingsSection title={t('bots.settings.agent', 'Agent')} first radioGroup>
         {agents.map((agent) => (
           <CheckRow
             key={agent}
@@ -171,12 +169,7 @@ export function MobileBotAgentPage(props: {
         <SettingsSection
           title={botAgentLabel(bot.agent)}
           footer={
-            bot.launch
-              ? undefined
-              : t(
-                  'bots.settings.chatDefaultNote',
-                  'Using your chat default. Background runs use your Agents setting.'
-                )
+            bot.launch ? undefined : t('bots.settings.usingChatDefault', 'Using your chat default.')
           }
         >
           <DrillRow
@@ -196,14 +189,16 @@ export function MobileBotAgentPage(props: {
               onPress={() => setPicking('effort')}
             />
           ) : null}
-          {bot.launch ? (
-            <ListRow
-              title={t('bots.settings.useChatDefaults', 'Use chat defaults')}
-              disabled={props.disabled}
-              onPress={() => props.onLaunch(null)}
-              accessibilityRole="button"
-            />
-          ) : null}
+        </SettingsSection>
+      ) : null}
+      {bot.launch ? (
+        <SettingsSection>
+          <ListRow
+            leading={<RotateCcw size={18} color={colors.textPrimary} />}
+            title={t('bots.settings.useChatDefaults', 'Use chat defaults')}
+            disabled={props.disabled}
+            onPress={() => props.onLaunch(null)}
+          />
         </SettingsSection>
       ) : null}
     </>

@@ -46,6 +46,12 @@ export function waitForBrowserGuestLoad(
     if (start) {
       void start().then(loaded, (error: unknown) => {
         if (error && typeof error === 'object' && 'errno' in error && error.errno === -3) {
+          // Aborted: a newer load runs to its stop, while a download or a cancel has already stopped.
+          if (guest.isDestroyed() || guest.isLoadingMainFrame()) {
+            guest.on('did-stop-loading', loaded)
+          } else {
+            loaded()
+          }
           return
         }
         finish(error instanceof Error ? error : new Error('The browser page could not load'))

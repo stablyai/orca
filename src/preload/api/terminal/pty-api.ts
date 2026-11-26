@@ -141,6 +141,12 @@ export type PtyApi = {
   killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   /** `replaced` stops a restarted pane's old PTY without retiring the pane. */
   kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }) => Promise<void>
+  /** Whether Agent Sleep may stop this terminal now (main refuses while orchestration mail or a pending
+   *  Dispatch waits), and the handle its pane answers to, kept on the sleep record across restarts. */
+  sleepAdmitted: (
+    id: string,
+    paneKey: string
+  ) => Promise<{ admitted: boolean; terminalHandle: string | null }>
   /** Acknowledge the pane that actually painted the restored frame. */
   ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
   /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */

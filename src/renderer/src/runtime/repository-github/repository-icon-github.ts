@@ -94,6 +94,9 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
   if (a.type === 'emoji' && b.type === 'emoji') {
     return a.emoji === b.emoji
   }
+  if (a.type === 'letters' && b.type === 'letters') {
+    return a.text === b.text
+  }
   return a.type === 'lucide' && b.type === 'lucide' && a.name === b.name
 }
 
