@@ -83,3 +83,40 @@ describe('a settled worker whose terminal went to its follow-up', () => {
     expect(exposeWorkerTerminalResource(resource).priorOwnerDispatchIds).toEqual([predecessor])
   })
 })
+
+it('asks for action when an open structured worker has a proven, resumable exit', () => {
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'inspect a file' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskId: task.id,
+    startOptions: {}
+  })
+  db.db
+    .prepare("UPDATE dispatch_contexts SET status = 'dispatched', assignee_handle = ? WHERE id = ?")
+    .run('structworker_11111111-1111-4111-8111-111111111111', dispatch.id)
+  db.db
+    .prepare(
+      "UPDATE worker_dispatches SET state = 'ready', stage = 'input_accepted' WHERE dispatch_id = ?"
+    )
+    .run(dispatch.id)
+  const worker = projectWorkerFleet({
+    rows: db.listWorkerTerminalResources({ dispatchIds: [dispatch.id], limit: 1 }),
+    attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatch.id], NOW),
+    statuses: [],
+    observeSession: () => ({ status: 'exited', addressable: true }),
+    limit: 1,
+    now: NOW
+  }).workers[0]
+  expect(worker).toMatchObject({
+    liveness: { verdict: 'exited' },
+    stage: { worker: 'ready', dispatch: 'dispatched' },
+    attention: { requiresAction: true, categories: ['interruption'] }
+  })
+  expect(worker?.nextAction.argv.slice(0, 4)).toEqual([
+    'orchestration',
+    'send',
+    '--to',
+    `dispatch:${dispatch.id}`
+  ])
+})
