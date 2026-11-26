@@ -3,6 +3,7 @@ import type { ProviderRelayInfo } from '../daemon/protocol/daemon-provider-relay
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
+import { isDaemonEndpointGoneError } from '../daemon/protocol/daemon-errors'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 
 const LIST_TIMEOUT_MS = 3_000
@@ -34,6 +35,8 @@ const idleStoppedThisRun = new Set<string>()
 
 /** The kept agent's own spawn token, so its reattach records the identity the process carries. */
 const spawnTokens = new Map<string, string>()
+/** The pid each daemon last listed with; its client forgets it on disconnect. */
+const daemonPids = new WeakMap<DaemonClient, number>()
 
 /** Agent integrations this build can reattach; a relay of any other is ended at launch. */
 const reattachableAgents = new Set<string>()
@@ -143,6 +146,7 @@ async function listOne(client: DaemonClient): Promise<boolean> {
   if (!identity?.providerRelay) {
     return identity !== null
   }
+  daemonPids.set(client, identity.pid)
   const channel = providerRelayChannel(client)
   const result = await withTimeout(
     channel.list(LIST_TIMEOUT_MS).catch(() => null),
@@ -285,14 +289,11 @@ export async function recheckKeptProviderRelay(
   if (!result) {
     // An unreachable daemon with a dead agent is as gone as a daemon that says so, unless the
     // ended agent may still have output there to open: then only the daemon's own end proves it.
-    if (relay.info.pid === null || !processProvenGone(relay.info.pid)) {
+    const proven = providerRelayAgentOpensEnded(relay.info.agent)
+      ? await daemonProvenGone(relay.channel.client, daemons)
+      : relay.info.pid !== null && processProvenGone(relay.info.pid)
+    if (!proven) {
       return 'unknown'
-    }
-    if (providerRelayAgentOpensEnded(relay.info.agent)) {
-      const all = await daemons?.().catch(() => null)
-      if (!all || all.includes(relay.channel.client)) {
-        return 'unknown'
-      }
     }
     forgetKeptProviderRelay(chatKey, relay)
     return 'gone'
@@ -303,6 +304,23 @@ export async function recheckKeptProviderRelay(
   }
   forgetKeptProviderRelay(chatKey, relay)
   return 'gone'
+}
+
+/** Out of the app's daemons, or its socket refused and the pid it last answered with gone. */
+async function daemonProvenGone(
+  client: DaemonClient,
+  daemons?: () => Promise<readonly DaemonClient[]>
+): Promise<boolean> {
+  const all = await daemons?.().catch(() => null)
+  if (all && !all.includes(client)) {
+    return true
+  }
+  const pid = daemonPids.get(client)
+  return client.ensureConnectedWithin(LIST_TIMEOUT_MS).then(
+    () => false,
+    (error: unknown) =>
+      isDaemonEndpointGoneError(error) && pid !== undefined && processProvenGone(pid)
+  )
 }
 
 /** Only ESRCH proves absence; "can't tell" keeps the agent. */
