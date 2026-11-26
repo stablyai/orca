@@ -35,6 +35,8 @@ type PageActivity = {
   commands: number
   /** An agent command is running now; only its pointer input shows the cursor. */
   executing: boolean
+  /** The running command shows its pointer without waiting for the cursor to land. */
+  skipsCursorWait?: boolean
   idleTimer: ReturnType<typeof setTimeout> | null
   /** The SSH host whose command marked the page last, if it came through the desktop bridge. */
   controller: RemoteCliBrowserController | null
@@ -86,7 +88,7 @@ export class BrowserAgentActivity {
   constructor(private readonly deps: BrowserAgentActivityDeps) {}
 
   /** Marks the page as agent-driven for one command; people's relayed input never counts. */
-  beginCommand(browserPageId: string): AgentCommandLease {
+  beginCommand(browserPageId: string, { awaitCursor = true } = {}): AgentCommandLease {
     if (!isAgentRpcCaller(getActiveRpcCaller())) {
       return NOT_AN_AGENT
     }
@@ -127,6 +129,7 @@ export class BrowserAgentActivity {
       agent: true,
       run: async (execute) => {
         owned.executing = true
+        owned.skipsCursorWait = !awaitCursor
         try {
           return await execute()
         } finally {
@@ -269,7 +272,8 @@ export class BrowserAgentActivity {
     }
     // Drag steps and the press after a move follow without waiting; only a fresh move is shown first.
     const watchable = isResourceWindowVisible(BrowserWindow.fromWebContents(renderer))
-    const awaitsArrival = watchable && !press && !input.buttons
+    const awaitsArrival =
+      watchable && !press && !input.buttons && !this.pages.get(browserPageId)?.skipsCursorWait
     const sequence = ++this.sequence
     const event: BrowserAgentCursorEvent = { ...point, browserPageId, sequence, awaitsArrival }
     if (!awaitsArrival) {

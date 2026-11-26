@@ -148,6 +148,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   page: '--page <id>            Stable browser page id from `orca tab list --json`',
   'expect-url':
     '--expect-url <url>     Fail before acting unless the page is at this exact absolute URL',
+  'no-effects':
+    '--no-effects           Skip the post-action settle; the result has no `effects` (wait/snapshot yourself)',
   profile: '--profile <id>        Browser profile id',
   'show-profile': '--show-profile        Include tab profile in text output',
   format: '--format <png|jpeg>    Screenshot image format'

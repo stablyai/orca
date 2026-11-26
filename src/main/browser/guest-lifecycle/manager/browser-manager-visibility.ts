@@ -48,8 +48,8 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   }
 
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
-  beginAgentCommand(browserPageId: string): AgentCommandLease {
-    const lease = this.agentActivity.beginCommand(browserPageId)
+  beginAgentCommand(browserPageId: string, options?: { awaitCursor?: boolean }): AgentCommandLease {
+    const lease = this.agentActivity.beginCommand(browserPageId, options)
     if (!lease.agent) {
       return lease
     }

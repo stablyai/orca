@@ -17,6 +17,7 @@ type BrowserCliTarget = {
   worktree?: string
   page?: string
   expectUrl?: string
+  noEffects?: true
 }
 
 export async function getBrowserCommandTarget(
@@ -26,7 +27,12 @@ export async function getBrowserCommandTarget(
 ): Promise<BrowserCliTarget> {
   const expectUrl = await getEnforceableExpectUrl(flags, client)
   const target = await getBrowserPageTarget(flags, cwd, client)
-  return expectUrl === undefined ? target : { ...target, expectUrl }
+  // Only a speedup: an older host drops it and returns `effects` as before, so no capability check.
+  return {
+    ...target,
+    ...(expectUrl === undefined ? {} : { expectUrl }),
+    ...(flags.get('no-effects') === true ? { noEffects: true as const } : {})
+  }
 }
 
 // Older runtimes drop unknown params and would act unguarded, so refuse before sending.

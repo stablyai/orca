@@ -18,6 +18,18 @@ describe('parseArgs', () => {
     expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).not.toThrow()
   })
 
+  it('reads --no-effects as a boolean on settling browser actions only', () => {
+    const paths = COMMAND_SPECS.map((spec) => spec.path)
+    const click = parseArgs(['click', '--no-effects', '--element', 'e3'], paths, COMMAND_SPECS)
+
+    expect(click.flags.get('no-effects')).toBe(true)
+    expect(click.flags.get('element')).toBe('e3')
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, click)).not.toThrow()
+
+    const evaluate = parseArgs(['eval', '--expression', '1', '--no-effects'], paths, COMMAND_SPECS)
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, evaluate)).toThrow(/no-effects/)
+  })
+
   it('preserves a selector value that is also a registered command', () => {
     const parsed = parseArgs(
       ['--environment', 'status', 'worktree', 'list'],
