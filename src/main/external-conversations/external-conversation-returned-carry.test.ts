@@ -540,7 +540,7 @@ it('a chain of failed starts from one sender keeps one stamp', async () => {
 })
 
 it('a chain of failed starts from two senders keeps one stamp each, newest first', async () => {
-  const stamps = failedChainStamps([person('U_DANA', 'member'), OWNER])
+  const stamps = await failedChainStamps([person('U_DANA', 'member'), OWNER])
   expect(stamps.slice(0, 3)).toEqual([['U_DANA'], ['U_OWNER', 'U_DANA'], ['U_DANA', 'U_OWNER']])
   expect(stamps.every((each) => each.length <= 2)).toBe(true)
 })
