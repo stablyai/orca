@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import {
-  structuredAgentSessionPaneKey,
+  chatPaneKey,
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -25,8 +25,7 @@ const HOST_TAB = 'a6729fc3-0000-4000-8000-00000000000a'
 const MIRRORED_TAB = toWebTerminalSurfaceTabId(HOST_TAB)
 const HOST_TERMINAL = makePaneKey(HOST_TAB, LEAF)
 const MIRRORED_TERMINAL = makePaneKey(MIRRORED_TAB, LEAF)
-const paneKeyOf = (sessionId: string) =>
-  structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
+const paneKeyOf = (sessionId: string) => chatPaneKey(sessionId)
 const ASSISTANT = paneKeyOf('assistant')
 const WORKER = paneKeyOf('worker')
 

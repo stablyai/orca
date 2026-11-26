@@ -29,6 +29,7 @@ import {
 import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { copyWebClientChatReadMarksForTabLists } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
 
 function copyWebClientChatReadMarksForPatch(
   state: AppState,
@@ -36,7 +37,11 @@ function copyWebClientChatReadMarksForPatch(
   verdict: HostSessionMirrorPatchVerdict,
   affectedWorkspaces: readonly string[]
 ): AppState | Partial<AppState> {
-  const complete = verdict.fullInventory !== undefined
+  const complete =
+    verdict.fullInventory !== undefined &&
+    verdict.frames.filter(
+      ({ source, worktreeId }) => source !== undefined && isHostMirroredWorktree(worktreeId)
+    ).length === verdict.fullInventory.publishedSnapshotCount
   const workspaceIds = complete
     ? verdict.frames.map(({ worktreeId }) => worktreeId)
     : affectedWorkspaces
@@ -46,7 +51,7 @@ function copyWebClientChatReadMarksForPatch(
     workspaceIds,
     complete
   )
-  return copied ? { ...patch, ...copied } : patch
+  return copied ? { ...(patch === state ? {} : patch), ...copied } : patch
 }
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */

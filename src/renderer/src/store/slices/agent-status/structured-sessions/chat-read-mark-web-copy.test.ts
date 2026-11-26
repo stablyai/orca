@@ -3,6 +3,7 @@ import {
   copyWebClientChatReadMarksForTabLists,
   copyWebClientChatReadMarksOnce
 } from './chat-read-mark-web-copy'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
 const OLD_TAB_KEY = `agent-chat-tab-v1-abc:${LEAF}`
@@ -90,4 +91,58 @@ it('keeps an active-frame copy when its full inventory later arrives stale', () 
     manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70, [CONVERSATION_KEY]: 70 },
     chatReadMarksCopiedHere: true
   })
+})
+
+it('keeps an incomplete census pending until its missing workspace arrives', () => {
+  let state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
+    chatReadMarksCopiedHere: false
+  }
+  const tabs = { w1: [{ contentType: 'agent-session', entityId: 'sess-2' }] }
+
+  state = {
+    ...state,
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, [], false)
+  }
+  expect(state.chatReadMarksCopiedHere).toBe(false)
+  state = {
+    ...state,
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], false)
+  }
+
+  expect(state.manuallyUnreadTurnsByPaneKey[CONVERSATION_KEY]).toBe(70)
+  expect(state.chatReadMarksCopiedHere).toBe(false)
+})
+
+it('skips repeated partial copies until a new chat or full inventory arrives', () => {
+  const sessionId = 'sess-3'
+  const conversationKey = chatPaneKey(sessionId)
+  const oldKey = `agent-chat-tab-v1-reopened:${conversationKey.slice(conversationKey.lastIndexOf(':') + 1)}`
+  let state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: { [oldKey]: 90 },
+    manuallyUnreadTurnsByPaneKey: {},
+    chatReadMarksCopiedHere: false
+  }
+  const initialTabs = { w1: [{ contentType: 'agent-session', entityId: 'first-session' }] }
+  const tabs = { w1: [{ contentType: 'agent-session', entityId: sessionId }] }
+  expect(copyWebClientChatReadMarksForTabLists(state, () => initialTabs, ['w1'], false)).toBeNull()
+  state = {
+    ...state,
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], false)
+  }
+  const copiedActivity = state.activityClearedAtByPaneKey
+  for (let index = 0; index < 100; index++) {
+    expect(copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], false)).toBeNull()
+  }
+  expect(
+    copyWebClientChatReadMarksForTabLists(state, () => ({}), ['terminal-only'], false)
+  ).toBeNull()
+  expect(state.activityClearedAtByPaneKey).toBe(copiedActivity)
+
+  state = {
+    ...state,
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], true)
+  }
+  expect(state.chatReadMarksCopiedHere).toBe(true)
 })

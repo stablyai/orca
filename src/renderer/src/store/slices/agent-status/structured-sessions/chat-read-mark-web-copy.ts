@@ -59,6 +59,13 @@ export function copyWebClientChatReadMarksForTabLists(
       }
     }
   }
+  if (sessionIds.length === 0) {
+    if (complete) {
+      copiedChatPaneKeys.clear()
+      return { chatReadMarksCopiedHere: true }
+    }
+    return null
+  }
   const copied = copyWebClientChatReadMarksOnce(state, () => sessionIds, complete)
   if (complete) {
     copiedChatPaneKeys.clear()
