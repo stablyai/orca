@@ -13,6 +13,7 @@ import {
 } from './palette-placement'
 import { usePaletteDrag } from './use-palette-drag'
 import { usePaletteFitLevel } from './use-palette-fit-level'
+import { usePaletteHintHeight } from './use-palette-hint-height'
 import type { MarkupPaletteDensity } from './MarkupPaletteTools'
 import {
   setAnnotatePalettePosition,
@@ -183,13 +184,7 @@ export function BrowserAnnotateToolPalette({
   const wrapActions = fitLevel >= FIT_LEVEL_WRAP
   const showHint =
     Boolean(hint) && (fitLevel === 0 || hintKeepsWhenCompact) && !dragging && left !== null
-  // A wrapped hint is taller than one line; its placement needs the real height to stay on the page.
-  useLayoutEffect(() => {
-    const height = hintRef.current?.offsetHeight
-    if (showHint && height) {
-      setHintHeight(height)
-    }
-  }, [showHint, hint, left, top, fitLevel])
+  usePaletteHintHeight(hintRef, showHint, setHintHeight)
   const hasActions =
     activeTool === 'draw' ? drawHasActions : activeTool === 'copy' || annotateActions !== null
   useGrabLabelAvoidArea({

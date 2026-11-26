@@ -126,7 +126,8 @@ export class RuntimeBrowserGrab {
   }
 
   async browserGrabSetMode(
-    params: BrowserCommandTargetParams & { enabled: boolean; requestId?: string }
+    params: BrowserCommandTargetParams & { enabled: boolean; requestId?: string },
+    signal?: AbortSignal
   ): Promise<BrowserSetGrabModeResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
     const key = pendingEnableKey(params)
@@ -138,9 +139,22 @@ export class RuntimeBrowserGrab {
     if (key !== null && pending && this.pendingEnables.get(key) === pending) {
       this.pendingEnables.delete(key)
     }
-    return setBrowserGrabMode(browserPageId, params.enabled, resolveGuest, undefined, {
-      requestId: params.requestId
-    })
+    const result = await setBrowserGrabMode(
+      browserPageId,
+      params.enabled,
+      resolveGuest,
+      undefined,
+      {
+        requestId: params.requestId
+      }
+    )
+    // A viewer that disconnected before its await arrives would leave the page's clicks blocked by a picker
+    // with no wait and no timeout.
+    if (params.enabled && signal?.aborted) {
+      cancelBrowserGrabMode(browserPageId, resolveGuest, params.requestId, 'runtime')
+      return supersededGrabMode()
+    }
+    return result
   }
 
   async browserGrabAwait(

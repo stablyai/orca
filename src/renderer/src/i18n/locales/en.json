@@ -705,7 +705,8 @@
     "grabToast": {
       "noScreenshot": "No screenshot available",
       "hoverReadFailed": "Could not read the hovered element",
-      "noHover": "No element hovered"
+      "noHover": "No element hovered",
+      "copyFailed": "Couldn't copy"
     }
   },
   "editor": {

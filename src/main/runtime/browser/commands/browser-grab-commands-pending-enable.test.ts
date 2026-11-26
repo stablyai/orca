@@ -206,3 +206,28 @@ it('a wait the viewer gave up on while its page resolved retires the armed reque
     'runtime'
   )
 })
+
+it('an enable whose viewer disconnected while it armed retires the picker it armed', async () => {
+  sequencer.cancelBrowserGrabMode.mockClear()
+  const disconnected = new AbortController()
+  sequencer.setBrowserGrabMode.mockImplementationOnce(async () => {
+    disconnected.abort()
+    return { ok: true as const, clean: false }
+  })
+  const commands = new RuntimeBrowserCommands(host)
+  vi.spyOn(RuntimeBrowserCommandTargets.prototype, 'withPageOperation').mockImplementation(
+    async (params, execute) => execute(params)
+  )
+  await expect(
+    commands.browserGrabSetMode(
+      { page: 'page', enabled: true, requestId: 'request' },
+      disconnected.signal
+    )
+  ).resolves.toEqual({ ok: false, reason: 'not-ready' })
+  expect(sequencer.cancelBrowserGrabMode).toHaveBeenCalledWith(
+    'page',
+    expect.any(Function),
+    'request',
+    'runtime'
+  )
+})

@@ -15,7 +15,7 @@ export const BROWSER_GRAB_METHODS = [
     name: 'browser.grab.setMode',
     permission: 'workspace',
     params: GrabSetMode,
-    handler: async (params, { runtime }) => runtime.browserGrabSetMode(params)
+    handler: async (params, { runtime, signal }) => runtime.browserGrabSetMode(params, signal)
   }),
   defineMethod({
     name: 'browser.grab.await',

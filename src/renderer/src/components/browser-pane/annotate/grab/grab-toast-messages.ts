@@ -22,3 +22,5 @@ export const hoverReadFailedGrabToastMessage = (): string =>
   translate('browser.grabToast.hoverReadFailed', 'Could not read the hovered element')
 export const noHoverGrabToastMessage = (): string =>
   translate('browser.grabToast.noHover', 'No element hovered')
+export const copyFailedGrabToastMessage = (): string =>
+  translate('browser.grabToast.copyFailed', "Couldn't copy")

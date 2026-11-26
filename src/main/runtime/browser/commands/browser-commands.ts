@@ -262,7 +262,7 @@ export class RuntimeBrowserCommands {
     admitBrowserPageCommands(this, { host, targets, queries })
     // Outside page admission, so a cancel sent while the enable waits for its page still lands.
     const admittedGrabSetMode = this.browserGrabSetMode
-    this.browserGrabSetMode = (params) =>
-      grab.admitGrabSetMode(params, () => admittedGrabSetMode(params))
+    this.browserGrabSetMode = (params, signal) =>
+      grab.admitGrabSetMode(params, () => admittedGrabSetMode(params, signal))
   }
 }
