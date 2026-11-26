@@ -15,8 +15,8 @@ import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-sc
 import { BotGroupStore } from './bot-group-store'
 import { migrateBotGroupHomes } from './bot-group-home-migration'
 import { settleStoredRoomMail } from './bot-group-remote-answers'
+import { createBotGroupOnce } from './bot-group-from-offer'
 import {
-  createBotGroup,
   createBotGroupThread,
   deleteBotGroup,
   removeBotFromGroups,
@@ -168,7 +168,8 @@ export class BotGroupRuntime {
     return group
   }
 
-  create = (input: z.infer<typeof BotGroupCreate>) => createBotGroup(this, input).then(this.named)
+  create = (input: z.infer<typeof BotGroupCreate>) =>
+    createBotGroupOnce(this, input).then(this.named)
   update = (input: z.infer<typeof BotGroupUpdate>) => updateBotGroup(this, input).then(this.named)
   delete = (groupId: string) => deleteBotGroup(this, groupId)
   removeBot = (botId: string) => removeBotFromGroups(this, botId)

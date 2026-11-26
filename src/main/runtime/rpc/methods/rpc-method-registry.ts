@@ -92,6 +92,7 @@ import { AGENT_CONVERSATION_METHODS } from './agent-conversations/agent-conversa
 import { CONNECTOR_METHODS } from './connectors/connector'
 import { CONNECTOR_SLACK_MIRROR_METHODS } from './connectors/connector-slack-mirror'
 import { BOT_GROUP_METHODS } from './bot-groups'
+import { BOT_GROUP_CREATE_OFFER_METHOD } from './bot-groups-create-offer'
 import { BOT_METHODS } from './bots'
 import { BOT_TAKE_OVER_METHOD } from './bots-take-over'
 import { BOT_RUN_SEND_AGAIN_METHOD } from './bots-run-send-again'
@@ -185,6 +186,7 @@ const BOT_RPC_METHODS = [
   BOT_REQUEST_OUTCOME_METHOD,
   WORKTREE_RELEASE_BOT_HOME_METHOD,
   BOT_CREATE_OFFER_METHOD,
+  BOT_GROUP_CREATE_OFFER_METHOD,
   BOT_OFFER_ANSWER_METHOD,
   ...BOT_TEMPLATE_METHODS,
   ...BOT_IMPORT_METHODS,

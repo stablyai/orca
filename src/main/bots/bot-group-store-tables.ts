@@ -11,6 +11,7 @@ import type { BotGroup } from '../../shared/bots/bot-group'
  */
 const KEPT_FIELDS = [
   ['bot_groups', 'remoteMembers'],
+  ['bot_groups', 'fromOfferId'],
   ['bot_group_messages', 'images'],
   ['bot_group_messages', 'remoteAsks']
 ] as const

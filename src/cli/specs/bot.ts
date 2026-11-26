@@ -36,6 +36,20 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['bot', 'group', 'create'],
+    summary:
+      'Propose a group chat of bots to your owner as a card in your chat; it is created only when they accept',
+    usage:
+      'orca bot group create --offer --name <name> --bot <name>... [--purpose <one sentence>] [--without-me] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'name', 'offer', 'bot', 'purpose', 'without-me'],
+    repeatableFlags: ['bot'],
+    notes: [
+      "Run it from a bot's Home chat when your owner asks for a group of bots. Nothing is created until they press Create group; a Not now comes back as a message.",
+      '--bot takes a name or id as `orca bot list` shows them, for bots on this computer; repeat it for several. You are in the group and answer there by default; --without-me leaves you out, and the first --bot answers.',
+      'A bot that doesn’t exist yet can’t join: propose it with `orca bot create --offer` first, and propose the group once your owner has created it.'
+    ]
+  },
+  {
     path: ['bot', 'list'],
     summary: 'List the bots on this computer, what each is for, and the address that reaches it',
     usage: 'orca bot list [--json]',

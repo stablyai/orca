@@ -116,7 +116,9 @@ const Revision = GroupId.extend({ revision: z.number().int().positive() })
 export const BotGroupCreate = z.object({
   name: BotNameSchema,
   botIds: z.array(z.string().min(1)).min(1).max(32),
-  remoteBots: RemoteBots.optional()
+  remoteBots: RemoteBots.optional(),
+  /** From a bot's offer card: that card. One group is made per card. */
+  fromOffer: z.object({ botId: z.string().min(1), offerId: z.string().min(1) }).optional()
 })
 export const BotGroupRead = Room.extend({
   beforeSequence: z.number().int().positive().optional()

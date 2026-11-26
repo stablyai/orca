@@ -73,6 +73,8 @@ const MOBILE_BOT_CARDS: NativeChatPhoneBotCardRenderers<
       fontScale={fontScale}
     />
   ),
+  // A group offer is the host's line on the phone: it is created from the card on the computer.
+  groupOffer: () => null,
   toolAdded: (added, { timestamp, fontScale }) => (
     <MobileBotToolAddedCard added={added} timestamp={timestamp} fontScale={fontScale} />
   ),

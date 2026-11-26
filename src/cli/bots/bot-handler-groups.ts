@@ -12,6 +12,11 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
     load: async () => (await import('./bot-create.js')).BOT_CREATE_HANDLERS
   },
   {
+    name: 'bot-group-create',
+    keys: ['bot group create'],
+    load: async () => (await import('./bot-group-create.js')).BOT_GROUP_CREATE_HANDLERS
+  },
+  {
     name: 'bot-look-around',
     keys: ['bot suggest', 'bot look-around set'],
     load: async () => (await import('./bot-look-around.js')).BOT_LOOK_AROUND_HANDLERS

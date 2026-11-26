@@ -1,6 +1,7 @@
 import type { BotMemoryUpdatedNote } from '../../bots/bot-memory-updated-note'
 import type { ConnectorOffer } from '../../bots/bot-connector-offer'
 import type { BotCreateOffer } from '../../bots/bot-proposal'
+import type { BotGroupOffer } from '../../bots/bot-group-offer'
 import type { BotImportDone, BotImportPlan } from '../../bots/bot-import-cards'
 import type { BotRequestCard } from '../../bots/bot-request-card'
 import type { GoogleSetupCardRef } from '../../google/google-setup-card'
@@ -24,6 +25,8 @@ export type NativeChatBotCardFieldValues = {
   composioSetup: ComposioSetupCardRef
   /** A bot's proposal for a new bot; read with `botCreateOfferOf`. */
   botCreateOffer: BotCreateOffer
+  /** A bot's proposal for a group chat; read with `botGroupOfferOf`. */
+  botGroupOffer: BotGroupOffer
 }
 
 /** Clients read these only through `nativeChatBotCardOf`, so a new field needs a kind (and a phone

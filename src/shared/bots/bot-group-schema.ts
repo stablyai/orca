@@ -91,6 +91,8 @@ export const BotGroupSchema = z.object({
   formerSessionIds: FormerSessionIds,
   threads: z.array(BotGroupThreadSchema).optional(),
   replyMode: BotGroupReplyMode,
+  /** The bot's offer card it was created from, so the card reads Created and makes no second group. */
+  fromOfferId: z.string().min(1).optional(),
   /** Listed beside the record, never in it: its place in the sidebar, set by a drag. */
   sidebarOrder: z.number().int().nonnegative().optional(),
   /** Listed beside the record, never in it. Older hosts list neither. */
