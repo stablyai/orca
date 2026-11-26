@@ -21,7 +21,10 @@ import { useAppStore } from '@/store/index'
 import { isLinuxUserAgent, isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { getBrowserCookieImportSourceLabels } from '../../../../../../shared/browser/cookies/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
-import { useBrowserPageCookieImport } from './use-browser-page-cookie-import'
+import {
+  useBrowserPageCookieImport,
+  type BrowserClientHostedCookieImportPage
+} from './use-browser-page-cookie-import'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -30,15 +33,18 @@ import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-co
 type BrowserImportHintButtonProps = {
   profileId: string | null
   worktreeId: string
+  /** Set on a server's page this desktop hosts. */
+  clientHostedPage?: BrowserClientHostedCookieImportPage | null
 }
 
 export function BrowserImportHintButton({
   profileId,
-  worktreeId
+  worktreeId,
+  clientHostedPage = null
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
   const t = useTranslate()
-  const { sshRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
-    useBrowserPageCookieImport(worktreeId)
+  const { pageRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(worktreeId, clientHostedPage)
   const [open, setOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
@@ -93,7 +99,7 @@ export function BrowserImportHintButton({
         effectiveProfileId,
         browserFamily,
         browserProfile,
-        sshRoute
+        pageRoute
       )
       if (result.ok) {
         const browser = detectedBrowsers.find((entry) => entry.family === browserFamily)
@@ -114,13 +120,13 @@ export function BrowserImportHintButton({
       }
       toast.error(browserCookieImportFailureText(result))
     },
-    [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser, sshRoute]
+    [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser, pageRoute]
   )
 
   const handleImportFromFile = useCallback(async (): Promise<void> => {
     setOpen(false)
     setImportMenuOpen(false)
-    const result = await importCookiesToProfile(effectiveProfileId, sshRoute)
+    const result = await importCookiesToProfile(effectiveProfileId, pageRoute)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -136,7 +142,7 @@ export function BrowserImportHintButton({
     if (result.reason !== 'canceled') {
       toast.error(browserCookieImportFailureText(result))
     }
-  }, [effectiveProfileId, importCookiesToProfile, sshRoute])
+  }, [effectiveProfileId, importCookiesToProfile, pageRoute])
 
   const handleOpenBrowserSettings = useCallback((): void => {
     openSettingsTarget({ pane: 'browser', repoId: null })
@@ -213,7 +219,7 @@ export function BrowserImportHintButton({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-52">
-                <BrowserCookieImportMachineNotice sshRoute={sshRoute} />
+                <BrowserCookieImportMachineNotice pageRoute={pageRoute} />
                 {detectedBrowsers.map((browser) =>
                   browser.profiles.length > 1 ? (
                     <DropdownMenuSub key={browser.family}>

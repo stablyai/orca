@@ -13,7 +13,11 @@ export async function settleStructuredAgentSessionLateDispatch(
     sessionId: string
     clientMessageId: string
   } & (
-    | { providerIdentity: AgentJournalItemIdentity }
+    | {
+        providerIdentity: AgentJournalItemIdentity
+        /** The running turn it joined, which another send opened. */
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      }
     | ({
         state: 'rejected'
         answeredInTurn?: AgentJournalAnsweredTurnIdentity
@@ -33,6 +37,7 @@ export async function settleStructuredAgentSessionLateDispatch(
           clientMessageId: input.clientMessageId,
           state: 'accepted',
           providerIdentity: input.providerIdentity,
+          ...(input.answeredInTurn ? { answeredInTurn: input.answeredInTurn } : {}),
           fence
         }
       : input.state === 'unknown'

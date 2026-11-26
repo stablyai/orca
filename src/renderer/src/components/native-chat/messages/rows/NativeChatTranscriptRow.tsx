@@ -32,6 +32,10 @@ import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/nativ
 export type NativeChatTranscriptRowContext = {
   turnBot?: BotChatIdentity | null
   agentName?: string
+  /** The chat this transcript shows, so its replies draw at once only text their own chat held. */
+  heldTextSession?: string
+  /** Its agent saves replies as they grow, so a reply that redraws whole may show only saves. */
+  savesAsRepliesGrow?: boolean
   /** The prompts the host says still wait on the person; absent from an older host. */
   actionablePromptIds?: readonly string[] | undefined
   expandSignal: boolean
@@ -184,15 +188,16 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           !(slot.endsResponse && !slot.activeTurnIsWorking) &&
           !newRowsMarkerBelow &&
           '-mb-3',
-        // Into the row gap (gap-5) all but the activity rows' own gap (gap-1).
-        joinsActivityAbove && '-mt-4'
+        // Into the row gap (gap-5) all but the one-line rows' own gap (gap-1.5,
+        // NATIVE_CHAT_ACTIVITY_ROW_GAP_PX).
+        joinsActivityAbove && '-mt-3.5'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : itemNotes ? (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           {itemNotes.map((note) => (
             <MessageRow
               key={note.id}
@@ -218,6 +223,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}
           revealedDiff={
+            context.revealedDiff &&
             (workRun ?? [message]).some((member) => member.id === context.revealedDiff?.messageId)
               ? (context.revealedDiff ?? undefined)
               : undefined

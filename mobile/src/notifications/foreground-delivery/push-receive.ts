@@ -46,10 +46,24 @@ function claimForegroundPush(payload: OrcaPushPayload): boolean {
   return true
 }
 
+const BADGE_ONLY_BEHAVIOR: NotificationBehavior = {
+  shouldShowBanner: false,
+  shouldShowList: false,
+  shouldPlaySound: false,
+  shouldSetBadge: true
+}
+
 export async function foregroundNotificationBehavior(notification: {
-  request: Parameters<typeof readNativeNotificationData>[0]
+  request: Parameters<typeof readNativeNotificationData>[0] & {
+    content: { title?: string | null; body?: string | null }
+  }
 }): Promise<NotificationBehavior> {
-  const data = readNativeNotificationData(notification.request)
+  const { request } = notification
+  // The gateway's icon-count update carries no text and nothing to present.
+  if (isRemotePushTrigger(request.trigger) && !request.content.title && !request.content.body) {
+    return BADGE_ONLY_BEHAVIOR
+  }
+  const data = readNativeNotificationData(request)
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
   // Preserve unknown notifications; recognized pushes fail closed when eligibility/dismissal checks cannot complete.
@@ -61,7 +75,8 @@ export async function foregroundNotificationBehavior(notification: {
     shouldShowBanner: !suppressed,
     shouldShowList: !suppressed,
     shouldPlaySound: !suppressed && preferences.sound,
-    shouldSetBadge: false
+    // The gateway puts the phone's total across hosts on each push.
+    shouldSetBadge: true
   }
 }
 

@@ -15,6 +15,7 @@ import {
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from '../action-contracts/computer-sidecar-paste-validation'
 import { RuntimeClientError } from '../runtime-client-error'
+import { assertTeamAllowsComputerUse } from '../computer-team-policy'
 import { getForkedChildEntryPath } from '../../worker-threads/forked-child-entry-path'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
@@ -104,6 +105,7 @@ export async function callComputerSidecarAction(
 }
 
 function getComputerSidecar(): ComputerSidecarProcess {
+  assertTeamAllowsComputerUse()
   if (!sidecar) {
     sidecar = new ComputerSidecarProcess(getForkedChildEntryPath(COMPUTER_SIDECAR_ENTRY_FILENAME))
   }

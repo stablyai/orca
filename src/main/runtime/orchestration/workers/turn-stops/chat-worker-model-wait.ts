@@ -56,6 +56,8 @@ type Watch = {
   paused: Set<string>
   /** Items whose revisions never matter here (messages, reasoning, the turn row): no read needed. */
   plain: Set<string>
+  /** Items being read; true when a change landed meanwhile and the read must run again. */
+  reading: Map<string, boolean>
   lastRetry?: string
   retried: boolean
   /** Bumped by a journal reset: a read begun before it describes the replaced journal. */
@@ -102,6 +104,7 @@ export class ChatWorkerModelWait {
       activityAt: startedAt,
       paused: new Set(),
       plain: new Set(),
+      reading: new Map(),
       retried: false,
       generation: 0,
       cancelTimer: () => {},
@@ -135,27 +138,47 @@ export class ChatWorkerModelWait {
       watch.generation += 1
       watch.paused.clear()
       watch.plain.clear()
+      watch.reading.clear()
       watch.activityAt = this.now()
       return
     }
-    const { generation } = watch
     for (const itemId of itemIds) {
       if (watch.plain.has(itemId)) {
         watch.activityAt = this.now()
         watch.lastRetry = undefined
-        continue
+      } else if (watch.reading.has(itemId)) {
+        // A tool streaming its output commits often: one read in flight, then one for the latest.
+        watch.reading.set(itemId, true)
+      } else {
+        this.read(sessionId, watch, itemId)
       }
-      void this.journal
-        .item(sessionId, itemId)
-        .then((item) => {
-          if (item && this.watches.get(sessionId) === watch && watch.generation === generation) {
-            this.classify(sessionId, watch, item)
-          }
-        })
-        .catch((error: unknown) => {
-          console.warn('[orchestration] reading a chat model-wait item failed', sessionId, error)
-        })
     }
+  }
+
+  private read(sessionId: string, watch: Watch, itemId: string): void {
+    const { generation } = watch
+    const current = () => this.watches.get(sessionId) === watch && watch.generation === generation
+    watch.reading.set(itemId, false)
+    void this.journal
+      .item(sessionId, itemId)
+      .then((item) => {
+        if (item && current()) {
+          this.classify(sessionId, watch, item)
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('[orchestration] reading a chat model-wait item failed', sessionId, error)
+      })
+      .finally(() => {
+        if (!current()) {
+          return
+        }
+        const again = watch.reading.get(itemId)
+        watch.reading.delete(itemId)
+        if (again) {
+          this.read(sessionId, watch, itemId)
+        }
+      })
   }
 
   private classify(sessionId: string, watch: Watch, item: AgentJournalRenderItem): void {

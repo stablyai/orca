@@ -220,6 +220,8 @@ export class AcpStructuredOptions {
     )
   }
 
+  refusesEffort = (value: string) => this.effortOption() !== null && !this.offersEffort(value)
+
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'fastMode' || key === 'thinking') {
       const option = this.idSelect(

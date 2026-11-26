@@ -2,7 +2,7 @@
 // Cloud involvement, through the same host login refresh Linear uses. Google's refresh needs the
 // client secret, so each saved account keeps its own. A grant Google ended moves the account to
 // Reconnect instead of failing each call.
-import { createHostOAuthRefresher } from '../host-oauth/host-oauth-refresh'
+import { createHostOAuthRefresher, type HostOAuthRefusal } from '../host-oauth/host-oauth-refresh'
 import {
   readGoogleAccount,
   saveGoogleAccount,
@@ -13,13 +13,23 @@ import { defaultGoogleHttp, GOOGLE_TOKEN_URL, type GoogleHttp } from './google-t
 export type GoogleTokenDeps = { http: GoogleHttp; now: () => number }
 export const defaultGoogleTokenDeps: GoogleTokenDeps = { http: defaultGoogleHttp, now: Date.now }
 
-// The grant is gone: revoked, expired (an unpublished External app's 7 days), or its client deleted.
+const CLIENT_GONE = 'The Google client this account signed in with was deleted or changed.'
+// Refusals a retry can't fix, from Google's OAuth error list: revoked or expired (an unpublished
+// External app's 7 days), the client deleted, an admin policy, or an account outside an internal
+// app's organization. Anything else (5xx, rate limits, an unreachable network) stays temporary.
 const GRANT_ENDED: Record<string, string> = {
-  invalid_grant: 'Google access ended (revoked, expired, or the password changed). Reconnect.',
-  invalid_client:
-    'The Google client this account signed in with was deleted or changed. Reconnect.',
-  unauthorized_client:
-    'The Google client this account signed in with was deleted or changed. Reconnect.'
+  invalid_grant: 'Google access ended (revoked, expired, or the password changed).',
+  invalid_client: CLIENT_GONE,
+  unauthorized_client: CLIENT_GONE,
+  deleted_client: CLIENT_GONE,
+  admin_policy_enforced: "Your Google Workspace admin's policy blocked Orca's access.",
+  org_internal: "This account isn't in the organization the Google client is limited to."
+}
+
+/** Google's refusal as one line: its description, then its code and subtype. */
+export function googleRefusalText(refusal: HostOAuthRefusal): string {
+  const code = [refusal.error, refusal.subtype].filter(Boolean).join(', ')
+  return refusal.description ? `${refusal.description} (${code})` : code
 }
 
 export class GoogleAccountUnavailableError extends Error {
@@ -30,11 +40,18 @@ export class GoogleAccountUnavailableError extends Error {
 }
 
 /** Keeps the account listed (and every bot toggle) but drops tokens Google no longer honours. */
-export function markGoogleAccountReconnect(
+function markGoogleAccountReconnect(
   record: GoogleAccountRecord,
-  reason: string
+  refusal: HostOAuthRefusal
 ): GoogleAccountRecord {
-  return { ...record, status: 'reconnect', reason, refreshToken: null, accessToken: null }
+  return {
+    ...record,
+    status: 'reconnect',
+    reason: GRANT_ENDED[refusal.error] ?? GRANT_ENDED.invalid_grant,
+    googleError: refusal,
+    refreshToken: null,
+    accessToken: null
+  }
 }
 
 // Keyed by lower-case email, so two spellings of one account share a refresh.
@@ -65,11 +82,8 @@ const refresher = createHostOAuthRefresher<GoogleAccountRecord>({
       },
       record.refreshToken ?? undefined
     ),
-  ended: (_email, record, error) =>
-    saveGoogleAccount(
-      markGoogleAccountReconnect(record, GRANT_ENDED[error] ?? GRANT_ENDED.invalid_grant),
-      record.refreshToken ?? undefined
-    )
+  ended: (_email, record, refusal) =>
+    saveGoogleAccount(markGoogleAccountReconnect(record, refusal), record.refreshToken ?? undefined)
 })
 
 /** The account after refreshing it when due (or now, when Google refused its token: force). */
@@ -102,7 +116,7 @@ export async function googleAccessToken(
   const record = await refreshGoogleAccount(email, deps)
   if (record.status !== 'connected' || !record.accessToken) {
     throw new GoogleAccountUnavailableError(
-      `${record.reason ?? 'Google access ended.'} Reconnect it in Orca.`
+      `${record.reason ?? 'Google access ended.'} Reconnect ${record.email} in Orca.`
     )
   }
   return record.accessToken

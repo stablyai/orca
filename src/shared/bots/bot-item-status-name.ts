@@ -9,6 +9,8 @@ export function botItemStatusName(status: BotItemStatus, t: Translate): string {
       return t('bots.items.status.planned', 'Planned')
     case 'working':
       return t('bots.items.status.working', 'In progress')
+    case 'waiting':
+      return t('bots.items.status.waiting', 'Waiting')
     case 'needs_you':
       return t('bots.items.status.needsYou', 'Needs you')
     case 'done':

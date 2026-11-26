@@ -19,10 +19,15 @@ export type QuestionPartyReads = {
   /** The chat a structured delivery pass would send this mailbox's mail to now, if it can take it. */
   chatReceiving(mailbox: string): string | null
   chatHandingOver(mailbox: string): boolean
-  /** A live terminal agent: its pty, panes, whether a person is being asked, and its hook phase. */
-  terminal(
-    handle: string
-  ): { ptyId: string; paneKeys: readonly string[]; asking: boolean; working: boolean } | null
+  /** A live terminal agent: its pty, panes, whether a person is being asked, whether delivery would
+   *  type into it now (an agent that exited to its shell would not), and its hook phase. */
+  terminal(handle: string): {
+    ptyId: string
+    paneKeys: readonly string[]
+    asking: boolean
+    takesInput: boolean
+    working: boolean
+  } | null
   terminalHandingOver(ptyId: string): boolean
 }
 
@@ -71,7 +76,7 @@ export async function readQuestionPartyFacts(
       const handle = party.slice('terminal:'.length)
       const terminal = reads.terminal(handle)
       running.set(party, terminal?.working === true)
-      if (terminal && !terminal.asking) {
+      if (terminal && !terminal.asking && terminal.takesInput) {
         ptys.set(party, terminal.ptyId)
         mailboxes.set(party, [
           handle,

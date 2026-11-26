@@ -17,6 +17,8 @@ export type MobilePushFilter = {
   onlyWhenDesktopAway?: boolean
   onlyWhenAgentNeedsInput?: boolean
   sound?: boolean
+  /** The phone app keeps its icon count current, so it can be sent one. */
+  badge?: boolean
 }
 
 export const MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS = 128
@@ -60,7 +62,8 @@ function parseFilter(value: unknown): MobilePushFilter | null {
     (filter.onlyWhenDesktopAway !== undefined && typeof filter.onlyWhenDesktopAway !== 'boolean') ||
     (filter.onlyWhenAgentNeedsInput !== undefined &&
       typeof filter.onlyWhenAgentNeedsInput !== 'boolean') ||
-    (filter.sound !== undefined && typeof filter.sound !== 'boolean')
+    (filter.sound !== undefined && typeof filter.sound !== 'boolean') ||
+    (filter.badge !== undefined && typeof filter.badge !== 'boolean')
   ) {
     return null
   }
@@ -71,7 +74,8 @@ function parseFilter(value: unknown): MobilePushFilter | null {
     ...(typeof filter.onlyWhenAgentNeedsInput === 'boolean'
       ? { onlyWhenAgentNeedsInput: filter.onlyWhenAgentNeedsInput }
       : {}),
-    ...(typeof filter.sound === 'boolean' ? { sound: filter.sound } : {})
+    ...(typeof filter.sound === 'boolean' ? { sound: filter.sound } : {}),
+    ...(typeof filter.badge === 'boolean' ? { badge: filter.badge } : {})
   }
 }
 
@@ -105,4 +109,9 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
 
 export type MobilePushTestResult =
   | { accepted: true }
-  | { accepted: false; reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected' }
+  | {
+      accepted: false
+      reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected'
+      /** Push sign-in was refused because this host's clock is this far ahead (negative: behind). Older phones ignore it. */
+      clockSkewSeconds?: number
+    }

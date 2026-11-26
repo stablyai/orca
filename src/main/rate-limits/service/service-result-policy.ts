@@ -2,6 +2,11 @@ import type {
   RateLimitWindow,
   ProviderRateLimits
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isCodexUsageSignInRequired } from '../../../shared/agent-accounts/codex/codex-auth-errors'
+import {
+  isClaudeUsageWaitingForClaude,
+  isCodexUsageWaitingForCodex
+} from '../../../shared/agent-usage/status-copy/usage-waiting-for-cli'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
   LONG_STALE_THRESHOLD_MS,
@@ -52,8 +57,8 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       }
     }
 
-    // Explicit unavailability clears stale usage, including removed settings.
-    if (fresh.status === 'unavailable') {
+    // Unavailability and a rejected Codex login clear the prior reading and its provenance.
+    if (fresh.status === 'unavailable' || isCodexUsageSignInRequired(fresh)) {
       return fresh
     }
 
@@ -62,10 +67,11 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     }
 
     const failureKind = fresh.usageMetadata?.failureKind
-    // Only Claude's lapsed token renews itself when its CLI next runs; others may be a real expiry.
+    // Only these lapsed tokens renew themselves when their CLI next runs; others may be a real expiry.
     const staleThresholdMs =
       failureKind === 'rate-limited' ||
-      (failureKind === 'stale-token' && fresh.provider === 'claude')
+      isClaudeUsageWaitingForClaude(fresh) ||
+      isCodexUsageWaitingForCodex(fresh)
         ? LONG_STALE_THRESHOLD_MS
         : STALE_THRESHOLD_MS
     const now = Date.now()

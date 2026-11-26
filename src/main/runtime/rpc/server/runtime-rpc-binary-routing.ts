@@ -27,7 +27,12 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     return this.binaryMessageRouter.registerRawMessage(connectionId, handler)
   }
 
+  /** Binary frames are client data (terminal input, uploads), so they are use on every socket. */
   protected handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
+    if (this.idleStopFenced) {
+      return
+    }
+    this.lastClientRequestAt = Date.now()
     this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
   }
 

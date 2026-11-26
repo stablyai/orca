@@ -8,7 +8,8 @@ import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import type { HomeBotRow, HomeBots, HomeBotsUnavailable } from '../bots/home-bot-rows'
 import { translate } from '../../i18n/mobile-i18n'
-import { MobileHomeBotRows } from '../bots/MobileHomeBotRow'
+import { homeBotRowsByComputer, MobileHomeBotRows } from '../bots/MobileHomeBotRow'
+import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
@@ -38,8 +39,8 @@ export function MobileHomeBotsTab(props: {
       }
     />
   )
-  const canCreate = props.onNewBot !== undefined
-  const notice = useMemo(() => homeBotsNotice(data.bots, canCreate), [data.bots, canCreate])
+  const notice = useMemo(() => homeBotsNotice(data.bots), [data.bots])
+  const computers = useMemo(() => homeBotRowsByComputer(data.bots.rows), [data.bots.rows])
   if (!data.hostCatalogLoaded) {
     return header
   }
@@ -68,7 +69,22 @@ export function MobileHomeBotsTab(props: {
             isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
         >
-          <MobileHomeBotRows rows={rows} onOpen={props.onOpenBot} />
+          {computers.length > 1 ? (
+            computers.map((computer, index) => (
+              <View key={computer.placeKey}>
+                <View style={styles.computer}>
+                  <MobileHomeSectionHeading
+                    title={computer.label}
+                    count={computer.rows.length}
+                    first={index === 0}
+                  />
+                </View>
+                <MobileHomeBotRows rows={computer.rows} onOpen={props.onOpenBot} />
+              </View>
+            ))
+          ) : (
+            <MobileHomeBotRows rows={rows} onOpen={props.onOpenBot} />
+          )}
           {notice.kind === 'waiting' ? (
             <View style={styles.connecting}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -90,13 +106,12 @@ type HomeBotsNotice =
 /** What the tab says beside its rows: a wait for a first answer, one empty state when every computer
  *  is too old or switched off, else a quiet line per computer it can't list. */
 export function homeBotsNotice(
-  bots: Pick<HomeBots, 'rows' | 'unavailable' | 'listable' | 'awaiting'>,
-  canCreate: boolean
+  bots: Pick<HomeBots, 'rows' | 'unavailable' | 'listable' | 'awaiting'>
 ): HomeBotsNotice {
-  const reasons = bots.unavailable.filter((entry) => entry.reason !== 'no-create')
   if (bots.rows.length === 0 && bots.awaiting) {
     return { kind: 'waiting' }
   }
+  const reasons = bots.unavailable
   const only = reasons[0]?.reason
   if (
     bots.rows.length === 0 &&
@@ -110,13 +125,7 @@ export function homeBotsNotice(
     ...(bots.rows.length === 0
       ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
       : []),
-    ...reasons.map((entry) => ({ key: `${entry.reason}:${entry.key}`, text: endLine(entry) })),
-    // + is hidden when nothing takes a bot, so the line says why.
-    ...(canCreate
-      ? []
-      : bots.unavailable
-          .filter((entry) => entry.reason === 'no-create')
-          .map((entry) => ({ key: `no-create:${entry.key}`, text: endLine(entry) })))
+    ...reasons.map((entry) => ({ key: `${entry.reason}:${entry.key}`, text: endLine(entry) }))
   ]
   return { kind: 'lines', lines }
 }
@@ -137,12 +146,6 @@ function endLine(entry: HomeBotsUnavailable): string {
         {
           host
         }
-      )
-    case 'no-create':
-      return translate(
-        'bots.list.updateToCreate',
-        'Update Orca on {{host}} to make bots from your phone.',
-        { host }
       )
   }
 }
@@ -203,5 +206,7 @@ function emptyNotice(
 }
 
 const styles = themedStyleSheet(() => ({
+  // Headings start where the rows' pictures do: the heading's own 4 pt inset plus this.
+  computer: { paddingHorizontal: spacing.md },
   connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 }
 }))

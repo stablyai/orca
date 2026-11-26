@@ -21,7 +21,7 @@ export const NATIVE_CHAT_EVENT_ROW_REVEAL = `${REVEAL_OPACITY} ${REVEAL_POINTER}
 export type NativeChatEventBadge = 'running' | 'failed'
 
 /** The row's 14px mark with its state in a badge at the bottom right: a spinner while it runs, a red ✕ when it failed. */
-function NativeChatEventIcon({
+export function NativeChatEventIcon({
   children,
   badge
 }: {
@@ -47,7 +47,7 @@ function NativeChatEventIcon({
 }
 
 /** Details cut at about four lines, with Show more, in the quiet fill comments use. */
-function EventDetails({
+export function NativeChatEventDetails({
   id,
   clamp,
   findActive,
@@ -290,14 +290,14 @@ export function NativeChatEventRow({
         ) : null}
       </div>
       {toggles && shown ? (
-        <EventDetails
+        <NativeChatEventDetails
           id={detailsId}
           clamp={clampDetails}
           findActive={findActive}
           rows={detailsAreRows}
         >
           {details}
-        </EventDetails>
+        </NativeChatEventDetails>
       ) : null}
     </div>
   )

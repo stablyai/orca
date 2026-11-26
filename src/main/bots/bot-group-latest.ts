@@ -65,7 +65,7 @@ export async function noteBotGroupMemberReply(
     { after, reply }
   )
   if (kept) {
-    groups.changed()
+    groups.changed(owner.group.id)
   }
   await handOffGroupMentions(groups, message, turn, { full: finished.full, saved: finished.text })
 }

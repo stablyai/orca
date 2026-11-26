@@ -1,8 +1,14 @@
+import { useRef } from 'react'
 import { AlertCircle, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { AgentCommandFailedDialog } from '@/components/agent-command-failure/AgentCommandFailedDialog'
+import {
+  chatNamingSettingsTarget,
+  canOpenNamingSettings,
+  isTransientNamingFailure,
+  openNamingSettings
+} from '@/components/agent-command-failure/naming-settings-link'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { NativeChatNamingFailureControls } from './use-native-chat-naming-failure'
@@ -58,16 +64,15 @@ export function NativeChatNamingErrorBlock({
             {regenerateLabel(naming, t)}
           </Button>
         ) : null}
-        {isWebClientLocation() ? null : (
+        {!canOpenNamingSettings(naming.executionHostId) ||
+        isTransientNamingFailure(naming.message) ? null : (
           <Button
             type="button"
             variant="ghost"
             size="chip"
             onClick={() => {
               onDismiss?.()
-              const store = useAppStore.getState()
-              store.openSettingsPage()
-              store.openSettingsTarget({ pane: 'chat', repoId: null, sectionId: 'chat-names' })
+              openNamingSettings(chatNamingSettingsTarget(useAppStore.getState().settings))
             }}
           >
             <Settings aria-hidden />
@@ -87,6 +92,10 @@ export function NativeChatNamingFailedDialog({
   chatName: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const showOpenSettings =
+    canOpenNamingSettings(naming.executionHostId) && !isTransientNamingFailure(naming.message)
+  // Settings takes focus after the hand-off; the closing dialog must not pull it back to the tab.
+  const settingsHandoffRef = useRef(false)
   return (
     <AgentCommandFailedDialog
       open={naming.dialogOpen}
@@ -104,20 +113,42 @@ export function NativeChatNamingFailedDialog({
       }
       error={naming.message}
       readFullOutput={naming.readFullOutput}
+      onCloseAutoFocus={(event) => {
+        if (settingsHandoffRef.current) {
+          settingsHandoffRef.current = false
+          event.preventDefault()
+        }
+      }}
       action={
-        naming.canRegenerate ? (
-          <Button
-            type="button"
-            size="sm"
-            disabled={naming.regenerating}
-            onClick={() => {
-              naming.regenerate()
-              naming.setDialogOpen(false)
-            }}
-          >
-            {regenerateLabel(naming, t)}
-          </Button>
-        ) : undefined
+        <>
+          {showOpenSettings ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                settingsHandoffRef.current = true
+                naming.setDialogOpen(false)
+                openNamingSettings(chatNamingSettingsTarget(useAppStore.getState().settings))
+              }}
+            >
+              {t('components.native-chat.install.openAgentSettings', 'Open Settings')}
+            </Button>
+          ) : null}
+          {naming.canRegenerate ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={naming.regenerating}
+              onClick={() => {
+                naming.regenerate()
+                naming.setDialogOpen(false)
+              }}
+            >
+              {regenerateLabel(naming, t)}
+            </Button>
+          ) : null}
+        </>
       }
     />
   )

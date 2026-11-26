@@ -92,10 +92,12 @@ export function useNativeChatReaderReturn(
     },
     [followingRef, scrollRef]
   )
+  const isFollowingEnd = useCallback(() => followingRef.current, [followingRef])
   return {
     recordReaderScroll,
     readerReturned,
     readerAtEnd,
+    isFollowingEnd,
     observeVisibility,
     observeResize,
     performApplicationScroll

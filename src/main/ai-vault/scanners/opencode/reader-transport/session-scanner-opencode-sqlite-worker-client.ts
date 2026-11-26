@@ -20,7 +20,7 @@ import type { SessionFileCandidate } from '../../../session-scanner-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import { runOpenCodeSqliteScanRequest } from '../sqlite/session-scanner-opencode-sqlite-scan-scope'
 
-// Adapt OpenCode reads to the shared worker queue and lazy host; spawning is wired in worker-spawn.
+// Adapt OpenCode reads to the shared worker queue and lazy host; spawning is wired in sqlite-shared-client.
 
 export const LIST_TIMEOUT_MS = 30_000
 export const PARSE_TIMEOUT_MS = 15_000

@@ -18,7 +18,12 @@ import {
   type BrowserExtensionCaller,
   type BrowserExtensionNamespace
 } from '../api-runtime/browser-extension-namespace-registry'
-import { requireCallerTab } from '../tabs-and-windows/browser-extension-tab-model'
+import {
+  getActiveBrowserTabId,
+  listBrowserExtensionTabs,
+  requireCallerTab,
+  requireCallerWindow
+} from '../tabs-and-windows/browser-extension-tab-model'
 import { getPinnedBrowserExtensionIds } from '../actions/browser-extension-toolbar-pins'
 import { requestBrowserExtensionPopup } from '../actions/browser-extension-popup-request'
 import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
@@ -78,7 +83,7 @@ function normalizePopupPath(caller: BrowserExtensionCaller, popup: string): stri
   return url.pathname.slice(1) + url.search + url.hash
 }
 
-/** The calling page, or the worker script (Orca's wrapper sits beside the original). */
+/** The calling page, or the worker script at its declared path. */
 function callerBaseUrl(caller: BrowserExtensionCaller, origin: string): string {
   const background: { service_worker?: unknown } = caller.extension.manifest?.background ?? {}
   const worker = background.service_worker
@@ -201,14 +206,25 @@ function createActionNamespace(): BrowserExtensionNamespace {
       })),
       openPopup: defineBrowserExtensionMethod(
         z.tuple([z.object({ windowId: z.number().int().optional() }).loose().optional()]),
-        (caller) => {
+        (caller, options) => {
           // Why: the popup opens focused on the user's own tab, and an agent's call never takes it over.
           if (findBrowserExtensionCallerAgentPage(caller)) {
             throw new BrowserExtensionApiError(
               'An agent is using this browser profile, so the popup was not opened'
             )
           }
-          return requestBrowserExtensionPopup(caller.session, caller.extension.id)
+          const windowId =
+            options?.windowId === undefined
+              ? null
+              : requireCallerWindow(caller, options.windowId).window.id
+          // Why the tab model: a popout's page is its active tab, which the popup request refuses (no toolbar).
+          const tabId =
+            windowId === null
+              ? getActiveBrowserTabId()
+              : (listBrowserExtensionTabs(caller.session).find(
+                  (entry) => entry.active && entry.windowId === windowId
+                )?.contents.id ?? null)
+          return requestBrowserExtensionPopup(caller.session, caller.extension.id, tabId)
         }
       )
     },

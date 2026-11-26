@@ -55,6 +55,13 @@ export function latchHostToE2EEV2(hostPublicKeyB64: string): void {
   persist()
 }
 
+export function resetE2EEV2HostLatchForTests(): void {
+  latched = null
+  pendingLatches.clear()
+  hydration = null
+  writeChain = Promise.resolve()
+}
+
 function persist(): void {
   const snapshot = [...(latched ?? [])].slice(-MAX_LATCHED_HOSTS)
   writeChain = writeChain

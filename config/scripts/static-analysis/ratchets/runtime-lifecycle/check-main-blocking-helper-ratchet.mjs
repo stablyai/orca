@@ -36,13 +36,15 @@ export function collectDirectBlockingSites(sources) {
   return sites
 }
 
-export async function collectMainBlockingHelperUses(root, depth) {
-  const sources = await readEventLoopSources(root, ['src/main', 'src/shared', 'src/preload'])
-  return collectBlockingHelperUses(sources, collectDirectBlockingSites(sources), { depth }).uses
+export async function collectMainBlockingHelperUses(root, depth, sources = undefined) {
+  const eventLoopSources = sources ?? (await readEventLoopSources(root))
+  return collectBlockingHelperUses(eventLoopSources, collectDirectBlockingSites(eventLoopSources), {
+    depth
+  }).uses
 }
 
-export async function main(root = process.cwd(), arg = undefined) {
-  const uses = await collectMainBlockingHelperUses(root, HELPER_DEPTH)
+export async function main(root = process.cwd(), arg = undefined, sources = undefined) {
+  const uses = await collectMainBlockingHelperUses(root, HELPER_DEPTH, sources)
   const counts = new Map([...uses].map(([file, { count }]) => [file, count]))
   return runCountRatchet(
     {

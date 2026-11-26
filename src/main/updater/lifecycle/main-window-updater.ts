@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { join } from 'node:path'
 import type {
   ReleaseBuildListResult,
   UpdateCheckOptions
@@ -13,6 +14,12 @@ import { updaterErrorMessage } from './updater-coded-error'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { normalizeUpdateDelayDays } from '../../../shared/updater/update-delay'
 import {
+  getActiveTeamCapabilities,
+  getActiveTeamProfileScope,
+  onTeamCapabilitiesInvalidated
+} from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { getOrcaProfileDirectory } from '../../orca-profiles/profile-storage-paths'
+import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
   dismissNudge,
@@ -22,10 +29,18 @@ import {
   listAvailableReleaseBuilds,
   quitAndInstall,
   setupAutoUpdater,
-  showLinuxPackage
+  showLinuxPackage,
+  snoozeRequiredUpdate
 } from '../updater-service'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 import type { UpdaterSetupOptions } from './updater-setup'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { hasWorkingUpdateAgents } from './update-agent-activity'
+import {
+  getEmergencyUpdateFloor,
+  watchEmergencyUpdateFloor
+} from '../releases/updater-emergency-policy'
+import { applyEmergencyUpdateFloor } from '../releases/updater-release-policy'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -40,6 +55,7 @@ type UpdaterSetupHooks = {
   onBeforeUpdateQuit?: () => void | Promise<void>
   onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
   updateInstallMode?: UpdateInstallMode
+  hasWorkingAgents?: () => boolean
 }
 
 function buildUpdaterSetupOptions(
@@ -82,6 +98,40 @@ function buildUpdaterSetupOptions(
       void nativeSettings.requestCoreWrite({ kind: 'ui', updates: { dismissedUpdateNudgeId: id } })
     },
     getReleaseChannelOverride: () => nativeSettings.getUI().releaseChannelOverride ?? null,
+    getTeamUpdatePolicy: () =>
+      applyEmergencyUpdateFloor(
+        getActiveTeamCapabilities()?.teamPolicy,
+        getEmergencyUpdateFloor(),
+        app.getVersion()
+      ),
+    onTeamUpdatePolicyChanged: (listener) => {
+      const syncEmergencyFloor = watchEmergencyUpdateFloor(listener)
+      const syncPolicies = (): void => {
+        syncEmergencyFloor(getActiveTeamCapabilities() !== undefined)
+        listener()
+      }
+      const unsubscribe = onTeamCapabilitiesInvalidated(syncPolicies)
+      syncPolicies()
+      app.once('will-quit', () => {
+        unsubscribe()
+        syncEmergencyFloor(false)
+      })
+    },
+    teamRestart: {
+      scope: () => {
+        const scope = getActiveTeamProfileScope()
+        return (
+          scope && {
+            file: join(
+              getOrcaProfileDirectory(scope.profileId, scope.root),
+              'required-orca-update.json'
+            ),
+            accountId: scope.userId
+          }
+        )
+      },
+      hasWorkingAgents: options?.hasWorkingAgents ?? (() => false)
+    },
     getUpdateDelayDays: () =>
       normalizeUpdateDelayDays(nativeSettings.getSettings().updateDelayDays),
     getAutomaticUpdates: () => nativeSettings.getSettings().automaticUpdates === true,
@@ -103,11 +153,15 @@ function setupAutoUpdaterWithAppProxy(
 /** Headless serve has no window-driven setup; defer the slow require past readiness so remote updater support becomes available (#22261). */
 export function setupHeadlessServeAutoUpdater(
   nativeSettings: NativeSettingsProjection,
+  runtime: Pick<OrcaRuntimeService, 'getAgentStatusSnapshotFn'>,
   options: UpdaterSetupHooks
 ): void {
   setImmediate(() => {
     try {
-      setupAutoUpdaterWithAppProxy(null, nativeSettings, options)
+      setupAutoUpdaterWithAppProxy(null, nativeSettings, {
+        ...options,
+        hasWorkingAgents: () => hasWorkingUpdateAgents(runtime.getAgentStatusSnapshotFn?.() ?? [])
+      })
       logStartupMilestone('updater-setup-done')
     } catch (error) {
       console.warn(
@@ -167,6 +221,7 @@ export function registerUpdaterHandlers(): void {
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
+  ipcMain.removeHandler('updater:snoozeRequiredUpdate')
   ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
   ipcMain.removeHandler('updater:showLinuxPackage')
   ipcMain.removeHandler('updater:listBuilds')
@@ -181,6 +236,10 @@ export function registerUpdaterHandlers(): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  ipcMain.handle('updater:snoozeRequiredUpdate', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return snoozeRequiredUpdate()
+  })
   // Package paths/native reveal belong only to the current trusted main renderer; refuse guests, popouts and stale/utility windows.
   ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
     assertTrustedUpdaterRecoverySender(event)

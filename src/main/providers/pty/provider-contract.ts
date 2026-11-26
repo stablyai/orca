@@ -21,9 +21,17 @@ import type { PtyProcessInfo } from './process-info'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { RuntimeTerminalProjection } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+
+export type PtyProviderBufferSnapshotOptions = {
+  scrollbackRows?: number
+  visibleProjection?: true
+}
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Screen rows returned in place of ANSI for a visible projection request. */
+  visibleProjection?: RuntimeTerminalProjection
   /** Live state that can be restored without an alternate-screen frame. */
   frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
@@ -157,8 +165,9 @@ export type IPtyProvider = {
   /** Authoritative provider model snapshot after monitoring-stream gaps; optional for other providers. */
   getBufferSnapshot?: (
     id: string,
-    opts?: { scrollbackRows?: number }
+    opts?: PtyProviderBufferSnapshotOptions
   ) => Promise<PtyProviderBufferSnapshot | null>
+  supportsVisibleProjectionSnapshot?(id: string): boolean
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /** Applied size readback detects dropped/clamped remote resize requests.
@@ -216,7 +225,9 @@ export type IPtyProvider = {
     /** Foreground proof and root-PID lookups only: read `ptyIds` from their established owner.
      *  Never a census or an exit proof that reads a PTY's absence as its end. */
     targetOwnerOnly?: boolean
-    /** Diagnostic display only: include generations whose routing owner is unverifiable. */
+    /** Every listed generation, including those whose routing owner is unverifiable: for diagnostic
+     *  display, and for exit proof, where a live unrouted generation must not read as gone. Never for
+     *  routing input. Still requires a complete inventory. */
     includeUnrouted?: boolean
   }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>

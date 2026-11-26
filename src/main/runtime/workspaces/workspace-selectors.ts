@@ -18,6 +18,7 @@ import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
+import type { ScopedWorktreeReads } from './catalog/scoped-worktree-row-resolution'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
 import { resolvedWorktreeForHost, resolvedWorktreeRow } from './catalog/resolved-worktree-row'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
@@ -53,14 +54,18 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
   /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
   protected async resolveGitWorktreeSelector(
     selector: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    /** One batch's owner-repo reads, shared by its lookups. */
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     // Only id selectors name a repo; scoping other selectors would hide fleet-wide ambiguity.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
-      const scoped = await (requiredHostId === undefined
-        ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
-        : this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId))
+      const scoped = await (reads
+        ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId, reads)
+        : requiredHostId === undefined
+          ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+          : this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId))
       if (scoped) {
         return scoped
       }

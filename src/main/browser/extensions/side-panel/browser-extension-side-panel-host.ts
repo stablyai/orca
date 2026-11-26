@@ -16,8 +16,10 @@ import {
   getBrowserExtensionProfile,
   getBrowserExtensionSessionForProfile
 } from '../profile-sessions/browser-extension-session-loader'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 import { getBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
 import { listSidePanelTabsWithOwnOptions } from './browser-extension-side-panel-options'
+import { browserExtensionSidePanelWorkspaceForPage } from './browser-extension-side-panel-workspace'
 
 export type BrowserExtensionSidePanelRecord = {
   id: string
@@ -83,6 +85,7 @@ function describePanel(panel: BrowserExtensionSidePanelRecord): BrowserExtension
     ...(browserPageId === undefined ? {} : { browserPageId }),
     ...(hiddenOnPageIds.length > 0 ? { hiddenOnPageIds } : {}),
     profileId: panel.profileId,
+    browserProfileId: browserExtensionSourceProfileId(panel.profileId),
     partition: panel.partition,
     extensionId: panel.extensionId,
     name: panel.name,
@@ -317,7 +320,7 @@ export function applyBrowserExtensionSidePanelOptions(
 /** The renderer showed the panel beside this page of its workspace. */
 export function noteBrowserExtensionSidePanelShown(panelId: string, browserPageId: string): void {
   const panel = panels.get(panelId)
-  if (panel && browserManager.getWorkspaceIdForPage(browserPageId) === panel.workspaceId) {
+  if (panel && browserExtensionSidePanelWorkspaceForPage(browserPageId) === panel.workspaceId) {
     panel.besidePageId = browserPageId
   }
 }

@@ -32,7 +32,6 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
 import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/observations/restored-status-dead-terminal-sweep'
-import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
@@ -107,12 +106,8 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       },
       { consumesTerminalSideEffects: true }
     )
-    // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
-    this.store?.onStateWritten?.((domains) => {
-      if (domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))) {
-        this.sortStamps.noteRecordsWritten()
-      }
-    })
+    // A Done may re-tier.
+    this.onWorkspaceRecordsWritten(() => this.sortStamps.noteRecordsWritten())
   }
 
   getSidebarTemporalSnapshot(): SidebarTemporalSnapshot {

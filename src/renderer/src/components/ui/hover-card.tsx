@@ -54,6 +54,7 @@ function HoverCardTrigger({
   onPointerDown,
   onPointerLeave,
   onContextMenu,
+  onFocus,
   onBlur,
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Trigger>) {
@@ -73,6 +74,13 @@ function HoverCardTrigger({
       onPointerLeave={(event) => {
         onPointerLeave?.(event)
         reset()
+      }}
+      onFocus={(event) => {
+        onFocus?.(event)
+        // Only keyboard focus previews: a click, or focus put back after a pointer-driven Back, must not.
+        if (!(event.target instanceof Element && event.target.matches(':focus-visible'))) {
+          event.preventDefault()
+        }
       }}
       onBlur={(event) => {
         onBlur?.(event)

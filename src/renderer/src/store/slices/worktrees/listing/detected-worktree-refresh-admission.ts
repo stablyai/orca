@@ -3,7 +3,10 @@ import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/
 import type { AppState } from '../../../types'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import type { AdmittedDetectedWorktreeRefresh } from './worktree-slice-types'
+import type {
+  AdmittedDetectedWorktreeRefresh,
+  WorktreeCatalogAuthority
+} from './worktree-slice-types'
 import { directSshAuthoritiesEqual, getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import { repoHasExactlyOneExecutionHostOwner } from './worktree-host-ownership'
@@ -14,7 +17,7 @@ export type WorktreeListingMergeOutcome = 'applied' | WorktreeListingRefusal
 
 export function isCurrentDetectedWorktreeRefresh(
   state: Pick<AppState, 'sshConnectionStates'>,
-  refresh: AdmittedDetectedWorktreeRefresh
+  refresh: WorktreeCatalogAuthority
 ): boolean {
   if (refresh.directSshAuthority) {
     return directSshAuthoritiesEqual(

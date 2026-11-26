@@ -178,14 +178,19 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
       spawnDetachedIsolated: (file, commandLine, cwd, environmentBlock, onExit) =>
         raw.spawnDetachedIsolated(file, commandLine, cwd, environmentBlock, onExit),
       isolatedSpawnBreaksAwayFromJob: () => raw.isolatedSpawnBreaksAwayFromJob(),
+      tcpClientOwnerAsync: (clientHost, clientPort, serverHost, serverPort) =>
+        raw.tcpClientOwnerAsync(clientHost, clientPort, serverHost, serverPort),
       hasNativeExport: (name) => raw.hasNativeExport(name)
     }
   }
 }
 
-/** Wrap fake addons identically to production; null simulates load failure. */
-export function setWindowsSecurityForTests(addon: WindowsSecurityAddon | null): void {
-  loaded = addon ? prepare(addon) : { error: 'disabled for tests' }
+/** Wrap fake addons identically to production; null simulates a load failure with `loadError`. */
+export function setWindowsSecurityForTests(
+  addon: WindowsSecurityAddon | null,
+  loadError = 'disabled for tests'
+): void {
+  loaded = addon ? prepare(addon) : { error: loadError }
 }
 
 export function resetWindowsSecurityLoadForTests(): void {

@@ -14,6 +14,7 @@ import {
 } from '../browser/guest-lifecycle/manager/browser-manager'
 import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import { initializeTeamCapabilities } from '../orca-profiles/cloud-auth/initialize-team-capabilities'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { loadWslMappedDriveAnswers } from '../wsl/filesystem/wsl-mapped-drive-answers-file'
@@ -144,6 +145,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   )
   const profile = ensureActiveOrcaProfile()
   state.activeOrcaProfile = profile
+  await initializeTeamCapabilities(getProfileUserDataPath(), profile.profile)
   // Read durable browser hosting ID before window argv stamps it or renderer and lease ownership diverge.
   initializeBrowserClientHostId(profile.profileDirectory)
   // Before the profile store and the fence: a conversion that rewrites the profile here leaves

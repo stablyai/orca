@@ -11,6 +11,7 @@ import { isConnectorSource } from '../../../src/shared/automation-event-triggers
 import { automationUnheardSources } from '../../../src/shared/bot-event-sources'
 import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
 import { translate } from '../i18n/mobile-i18n'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
 
@@ -85,7 +86,9 @@ export function automationWhenText(automation: BotAutomationView, enabled: boole
         : eventLabel(part.trigger)
     )
     .join(' · ')
-  return enabled ? when : [when, 'Paused'].filter(Boolean).join(' · ')
+  return enabled
+    ? when
+    : [when, translate('bots.automations.paused', 'Paused')].filter(Boolean).join(' · ')
 }
 
 function dotsStatus(dots: readonly AgentDotState[]): WorktreeStatus {
@@ -122,7 +125,7 @@ export function automationWontFireNote(
   if (!unheard) {
     return null
   }
-  const connectors = new Intl.ListFormat('en', { type: 'disjunction' }).format(
+  const connectors = new Intl.ListFormat(getUiIntlLocale(), { type: 'disjunction' }).format(
     unheard.sources.map((source) =>
       isConnectorSource(source)
         ? CONNECTOR_SOURCE_NAMES[source]
@@ -132,8 +135,14 @@ export function automationWontFireNote(
     )
   )
   return unheard.scheduled
-    ? `Runs on its schedule only: needs the ${connectors} connector`
-    : `Won’t run: needs the ${connectors} connector`
+    ? translate(
+        'automations.eventsWontFire',
+        'Runs on its schedule only: needs the {{connectors}} connector',
+        { connectors }
+      )
+    : translate('automations.wontFire', 'Won’t run: needs the {{connectors}} connector', {
+        connectors
+      })
 }
 
 /** Why a Settings save failed, in the owner's words. */

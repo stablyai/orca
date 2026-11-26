@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { rename, rm, stat } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
+import { link, lstat, open, rename, rm, stat, type FileHandle } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
 
 export function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 'base64'): Buffer {
@@ -71,6 +73,92 @@ export async function promoteDownloadedFile(
       await rename(backupPath, destinationPath).catch(() => {})
     }
     throw error
+  }
+}
+
+const COPY_FALLBACK_CHUNK_BYTES = 1024 * 1024
+// Volumes without hard links (FAT, exFAT, some network shares).
+const NO_HARD_LINK_CODES = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV', 'EMLINK'])
+
+/**
+ * Moves the finished file to the first name nothing holds, never replacing a file: a link (or, on
+ * a volume without links, an exclusive create that the file is then copied into) fails when the
+ * name was taken while it downloaded, and the next free name is tried.
+ */
+export async function promoteDownloadedFileWithoutOverwrite(
+  tempPath: string,
+  destinationPath: string,
+  nextFreePath: () => Promise<string>,
+  signal?: AbortSignal
+): Promise<string> {
+  let target = destinationPath
+  let hardLinks = true
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    signal?.throwIfAborted()
+    try {
+      await (hardLinks ? link(tempPath, target) : copyIntoNewFile(tempPath, target, signal))
+      await cleanupLocalTransferPath(tempPath)
+      return target
+    } catch (error) {
+      const code = errnoCodeOrUnknown(error)
+      if (code === 'EEXIST') {
+        target = await nextFreePath()
+      } else if (hardLinks && NO_HARD_LINK_CODES.has(code)) {
+        hardLinks = false
+      } else {
+        throw error
+      }
+    }
+  }
+  throw new Error('Could not choose a unique file name in Downloads.')
+}
+
+/** Writes through the handle that created the file, so nothing another app saves there is touched. */
+async function copyIntoNewFile(
+  sourcePath: string,
+  targetPath: string,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  const target = await open(targetPath, 'wx')
+  let copied = false
+  let closeError: unknown = null
+  let ours: Stats | null = null
+  let source: FileHandle | null = null
+  try {
+    ours = await target.stat()
+    source = await open(sourcePath, 'r')
+    const buffer = Buffer.alloc(COPY_FALLBACK_CHUNK_BYTES)
+    for (;;) {
+      signal?.throwIfAborted()
+      const { bytesRead } = await source.read(buffer, 0, buffer.length, null)
+      if (bytesRead === 0) {
+        break
+      }
+      for (let written = 0; written < bytesRead;) {
+        written += (await target.write(buffer, written, bytesRead - written)).bytesWritten
+      }
+    }
+    copied = true
+  } finally {
+    await source?.close().catch(() => {})
+    // Network shares and full disks can report a lost write only when the file closes.
+    await target.close().catch((error: unknown) => {
+      closeError = error
+      copied = false
+    })
+    if (!copied && ours) {
+      await removeIfStillOurs(targetPath, ours)
+    }
+  }
+  if (closeError) {
+    throw closeError
+  }
+}
+
+async function removeIfStillOurs(filePath: string, ours: Stats): Promise<void> {
+  const current = await lstat(filePath).catch(() => null)
+  if (current && current.dev === ours.dev && current.ino === ours.ino) {
+    await cleanupLocalTransferPath(filePath)
   }
 }
 

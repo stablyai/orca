@@ -14,9 +14,13 @@ import { CONNECTOR_CLOUD_STATUSES } from '../../../src/shared/bots/connector-clo
 export const phoneBotSchema = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
+  // Its handle, in what people type to ask it: `@Orca <folder>`, `bot:<folder>`.
+  folder: z.string(),
   folderWorkspaceId: z.string().min(1),
   avatar: z.string().nullable(),
   avatarColor: BotSchema.shape.avatarColor,
+  // A newer host's outfit this phone doesn't draw reads as none.
+  avatarOutfit: BotSchema.shape.avatarOutfit,
   paused: z.boolean(),
   agent: z.string(),
   permissionMode: salvagedOptional('permissionMode', z.enum(AGENT_CHAT_PERMISSION_MODES)),
@@ -46,7 +50,9 @@ export const phoneBotSchema = z.looseObject({
   acceptedOffers: BotSchema.shape.acceptedOffers,
   // The link a bot was made from, so opening that link again offers it.
   sharedFrom: BotSchema.shape.sharedFrom,
-  createdAt: salvagedOptional('createdAt', z.number())
+  createdAt: salvagedOptional('createdAt', z.number()),
+  // Most recent first where Connect Slack lists the host's other workspaces.
+  updatedAt: salvagedOptional('updatedAt', z.number())
 })
 
 export type PhoneBot = z.output<typeof phoneBotSchema>
@@ -193,6 +199,30 @@ export const botOwnChatsRead = bindDeferredRpcOperation(
       'bot-own-chats',
       z.looseObject({ chats: z.record(z.string(), salvagingArray(botOwnChatSchema)) })
     )
+  })
+)
+
+// A chat the list can't read is dropped, not the bot's others.
+const botChatRowSchema = z.looseObject({
+  id: z.string().min(1),
+  title: z.string().nullable(),
+  lastActivityAt: z.number(),
+  lastAsked: z.string().nullable(),
+  lastSaid: z.string().nullable(),
+  home: z.boolean(),
+  self: z.boolean(),
+  closed: z.boolean(),
+  reason: z.enum(['ended', 'other-host', 'unverifiable']).optional()
+})
+
+/** One bot's chats as `@` offers them, read as `callerSessionId` so that chat is marked. */
+export const botChatsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.chats-or-skip',
+    method: 'bots.chats',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-chats', z.looseObject({ chats: salvagingArray(botChatRowSchema) }))
   })
 )
 

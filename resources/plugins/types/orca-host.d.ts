@@ -246,7 +246,7 @@ declare module 'orca/host' {
     }
     /** Resumes an agent's earlier session by its `sessionId` in a new terminal of a workspace, in the background; `started` is false when an Orca terminal already runs it. From host API 1.9, a session no Orca pane runs that Agent Session History lists on this computer (among the workspace's own sessions and the 200 newest) is prepared and started as Orca's own Resume does, in the agent account Orca would pick; only `agent:launch` is needed, since the plugin must already know the id. Other sessions, and workspaces on another host, resume by id. In WSL it uses the distro's default agent account, as `agent.launch` does. Since host API 1.8. */
     "agent.resume": {
-      params: { workspaceId: string; agent: "claude" | "codebuddy" | "codex" | "qoder" | "qoder-cn" | "qwen-code" | "gemini" | "antigravity" | "opencode" | "opencode2" | "pi" | "mimo-code" | "droid" | "grok" | "devin" | "omp" | "prime-agent" | "copilot" | "cursor" | "kimi" | "muse" | "zcode" | "dsh" | "jcode" | "kiro" | "hermes"; sessionId: string }
+      params: { workspaceId: string; agent: "claude" | "codebuddy" | "codex" | "qoder" | "qoder-cn" | "qwen-code" | "antigravity" | "opencode" | "opencode2" | "pi" | "mimo-code" | "droid" | "grok" | "devin" | "omp" | "prime-agent" | "copilot" | "cursor" | "kimi" | "muse" | "zcode" | "dsh" | "jcode" | "kiro" | "hermes"; sessionId: string }
       result: { terminalId: string; started: boolean }
       surfaces: "worker"
     }

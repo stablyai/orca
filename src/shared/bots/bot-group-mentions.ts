@@ -2,6 +2,7 @@ import type { Bot } from '../bot-types'
 import { replaceImageReferences } from '../native-chat/attachments/native-chat-image-reference'
 import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../native-chat/input/composer/agent-image-paste'
 import type { BotGroup, BotGroupRemoteMember } from './bot-group-schema'
+import { BotFailureError } from './bot-failure-copy'
 
 type Room = Pick<BotGroup, 'members' | 'replyMode'> & {
   remoteMembers?: readonly Pick<BotGroupRemoteMember, 'environmentId' | 'botId' | 'name'>[]
@@ -195,10 +196,10 @@ export function botGroupReplyDraft(
 export function botGroupAudience(text: string, group: Room, bots: readonly Named[]): string[] {
   const mentions = roomMentions(text, group, bots)
   if (mentions.some((mention) => mention.match === 'ambiguous')) {
-    throw new Error('Correct the ambiguous bot mention before sending.')
+    throw new BotFailureError('groupMentionAmbiguous')
   }
   if (mentions.some((mention) => mention.leading && mention.match === 'none')) {
-    throw new Error('Correct the unavailable or ambiguous bot mention before sending.')
+    throw new BotFailureError('groupMentionUnavailable')
   }
   const targets = unique(mentions)
   if (targets.length > 0) {
@@ -206,7 +207,7 @@ export function botGroupAudience(text: string, group: Room, bots: readonly Named
   }
   const fallback = replyModeAudience(group)
   if (group.replyMode.kind === 'bot' && fallback.length === 0) {
-    throw new Error('Choose a current room member in Room replies.')
+    throw new BotFailureError('groupReplierNotMember')
   }
   return fallback
 }

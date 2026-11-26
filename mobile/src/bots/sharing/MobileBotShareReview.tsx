@@ -2,7 +2,6 @@
 // drilling in to the exact text Create writes. The desktop's BotShareReviewDialog and its pages.
 import { Text, View } from 'react-native'
 import { ShieldAlert, TriangleAlert } from 'lucide-react-native'
-import { isBotMascotId } from '../../../../src/shared/bot-avatar'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import type { BotShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
 import { toolHost } from '../../../../src/shared/bots/bot-share-review-files'
@@ -15,11 +14,10 @@ import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileBotAvatar } from '../MobileBotAvatar'
-import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botShareCheckSummary, botShareFlagLabel } from './bot-share-copy'
 import type { PhoneShareReview } from './bot-share-receive-operations'
+import { reviewAvatar } from './bot-share-review-avatar'
 import { ShareTickRow } from './MobileBotShareParts'
 import { shareFlagPage, type SharePartPage } from './mobile-share-pages'
 
@@ -38,8 +36,8 @@ export type ReviewContext = {
   review: PhoneShareReview
   spots: BotShareFlagSpot[]
   open: (page: ReviewPage) => void
-  toolIds: string[]
-  setToolIds: (ids: string[]) => void
+  /** The tools ticked to contact; null for an original only looked at, where nothing is chosen. */
+  consent: { toolIds: string[]; setToolIds: (ids: string[]) => void } | null
 }
 
 export function reviewListTitle(list: ReviewList, t: ReturnType<typeof useMobileTranslation>) {
@@ -76,16 +74,6 @@ export function reviewAccounts(review: PhoneShareReview): string[] {
   return review.bot.connectors.map(({ kind }) => CONNECTOR_NAMES[kind] ?? kind)
 }
 
-/** The picture the review shows: the shared image, else its mascot, else its first letter. */
-export function reviewAvatar(review: PhoneShareReview): MobileBotAvatarSource {
-  const mascot = review.bot.avatar?.mascot
-  return review.avatarDataUrl
-    ? { kind: 'image', uri: review.avatarDataUrl }
-    : mascot && isBotMascotId(mascot)
-      ? { kind: 'mascot', id: mascot }
-      : { kind: 'text', text: review.bot.name.slice(0, 1).toUpperCase() }
-}
-
 export const flagOf = (
   spots: readonly BotShareFlagSpot[],
   prefix: string
@@ -108,14 +96,17 @@ export function FlagMark({ flag }: { flag: 'secret' | 'warning' | null }) {
 /** The review's first view: hero, safety line, one row per part, then Create bot…. */
 export function MobileBotShareReviewOverview(props: {
   ctx: ReviewContext
-  /** The sharer moved the link since this review: Create would write a version not shown. */
-  updated: boolean
-  onCreate: () => void
-  onReviewAgain: () => void
+  /** Null for an original only looked at: no Create bot…. */
+  choosing: {
+    /** The sharer moved the link since this review: Create would write a version not shown. */
+    updated: boolean
+    onCreate: () => void
+    onReviewAgain: () => void
+  } | null
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { ctx } = props
+  const { ctx, choosing } = props
   const { review, spots } = ctx
   const { bot } = review
   const list = (name: ReviewList) => () => ctx.open({ kind: 'list', list: name })
@@ -167,41 +158,37 @@ export function MobileBotShareReviewOverview(props: {
           })}
         </Text>
       </View>
-      {first ? (
-        <SettingsSection>
+      <SettingsSection>
+        {first ? (
           <ListRow
-            leading={
-              <TriangleAlert size={18} color={secret ? colors.statusRed : colors.statusAmber} />
-            }
-            wrapTitle
-            title={
+            key="check"
+            title={t('bots.share.safetyCheck', 'Safety check')}
+            subtitle={
               spots.length === 1
-                ? t('bots.share.review.oneFlag', '{{summary}}: {{flag}} in {{where}}', {
-                    summary: botShareCheckSummary(spots),
-                    flag: botShareFlagLabel(first.flag.kind).toLowerCase(),
+                ? t('bots.share.review.flagIn', '{{flag}} in {{where}}', {
+                    flag: botShareFlagLabel(first.flag.kind),
                     where: first.part?.startsWith('skill:')
                       ? first.part.slice('skill:'.length)
                       : first.where
                   })
                 : botShareCheckSummary(spots)
             }
-            accessory={
-              <MobileBotTextButton
-                label={t('bots.share.view', 'View')}
-                onPress={() =>
-                  ctx.open(
-                    (spots.length === 1 ? reviewFlagPage(first, t) : null) ?? {
-                      kind: 'list',
-                      list: 'check'
-                    }
-                  )
+            subtitleLines={1}
+            accessibilityLabel={`${t('bots.share.safetyCheck', 'Safety check')}, ${
+              spots.length === 1 ? botShareFlagLabel(first.flag.kind) : botShareCheckSummary(spots)
+            }`}
+            accessory={<FlagMark flag={secret ? 'secret' : 'warning'} />}
+            navigates
+            onPress={() =>
+              ctx.open(
+                (spots.length === 1 ? reviewFlagPage(first, t) : null) ?? {
+                  kind: 'list',
+                  list: 'check'
                 }
-              />
+              )
             }
           />
-        </SettingsSection>
-      ) : null}
-      <SettingsSection>
+        ) : null}
         {row(t('bots.share.soul', 'Soul'), soulLines, flagOf(spots, 'soul'), () =>
           ctx.open({
             kind: 'part',
@@ -253,26 +240,28 @@ export function MobileBotShareReviewOverview(props: {
             )
           : null}
       </SettingsSection>
-      <View style={styles.foot}>
-        {props.updated ? (
-          <Text style={styles.hint}>
-            {t('bots.share.review.updated', '{{who}} updated this bot. Review it again.', {
-              who: review.publisher ?? t('bots.share.review.theSharer', 'The sharer')
-            })}
-          </Text>
-        ) : null}
-        {props.updated ? (
-          <SheetPrimaryButton
-            label={t('bots.share.review.reviewAgain', 'Review again')}
-            onPress={props.onReviewAgain}
-          />
-        ) : (
-          <SheetPrimaryButton
-            label={t('bots.share.review.createBot', 'Create bot…')}
-            onPress={props.onCreate}
-          />
-        )}
-      </View>
+      {choosing ? (
+        <View style={styles.foot}>
+          {choosing.updated ? (
+            <Text style={styles.hint}>
+              {t('bots.share.review.updated', '{{who}} updated this bot. Review it again.', {
+                who: review.publisher ?? t('bots.share.review.theSharer', 'The sharer')
+              })}
+            </Text>
+          ) : null}
+          {choosing.updated ? (
+            <SheetPrimaryButton
+              label={t('bots.share.review.reviewAgain', 'Review again')}
+              onPress={choosing.onReviewAgain}
+            />
+          ) : (
+            <SheetPrimaryButton
+              label={t('bots.share.review.createBot', 'Create bot…')}
+              onPress={choosing.onCreate}
+            />
+          )}
+        </View>
+      ) : null}
     </>
   )
 }
