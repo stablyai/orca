@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   PLUGIN_COMMAND_LIMIT,
   PLUGIN_EVENT_NAMES,
@@ -44,57 +45,73 @@ export const WORKER_METHODS = {
   runHook: 'hook.run'
 } as const
 
-export const pluginWorkerInitSchema = z.object({
-  /** Qualified `<publisher>.<id>` key. */
-  pluginId: z.string().min(1),
-  pluginRoot: z.string().min(1),
-  mainEntry: z.string().min(1),
-  /** Worker-side early refusals only; host rechecks every call regardless of declared grants. */
-  grantedCapabilities: z.array(z.enum(PLUGIN_CAPABILITY_KINDS)),
-  /** A development plugin: `host.has` also answers for proposed methods. */
-  allowProposed: z.boolean().optional()
-})
+export const pluginWorkerInitSchema = lazyZodSchema(() =>
+  z.object({
+    /** Qualified `<publisher>.<id>` key. */
+    pluginId: z.string().min(1),
+    pluginRoot: z.string().min(1),
+    mainEntry: z.string().min(1),
+    /** Worker-side early refusals only; host rechecks every call regardless of declared grants. */
+    grantedCapabilities: z.array(z.enum(PLUGIN_CAPABILITY_KINDS)),
+    /** A development plugin: `host.has` also answers for proposed methods. */
+    allowProposed: z.boolean().optional()
+  })
+)
 
-export const pluginWorkerInvokeParamsSchema = z.object({
-  commandId: z.string().min(1),
-  args: z.unknown().optional()
-})
+export const pluginWorkerInvokeParamsSchema = lazyZodSchema(() =>
+  z.object({
+    commandId: z.string().min(1),
+    args: z.unknown().optional()
+  })
+)
 
 /** Params are validated host-side before they are sent. */
-export const pluginWorkerInvokeTaskSourceParamsSchema = z.object({
-  sourceId: pluginIdSchema,
-  operation: z.enum(PLUGIN_TASK_SOURCE_OPERATIONS),
-  params: z.unknown().optional()
-})
+export const pluginWorkerInvokeTaskSourceParamsSchema = lazyZodSchema(() =>
+  z.object({
+    sourceId: pluginIdSchema,
+    operation: z.enum(PLUGIN_TASK_SOURCE_OPERATIONS),
+    params: z.unknown().optional()
+  })
+)
 
-export const pluginWorkerDeliverParamsSchema = z.object({
-  event: z.enum(PLUGIN_EVENT_NAMES),
-  payload: z.unknown()
-})
+export const pluginWorkerDeliverParamsSchema = lazyZodSchema(() =>
+  z.object({
+    event: z.enum(PLUGIN_EVENT_NAMES),
+    payload: z.unknown()
+  })
+)
 
-export const pluginWorkerReadySchema = z.object({
-  /** Command ids the worker registered handlers for (⊆ manifest commands). */
-  commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT),
-  /** Task source ids the worker registered (⊆ manifest taskSources). */
-  taskSources: z.array(pluginIdSchema).max(PLUGIN_TASK_SOURCE_LIMIT).default([])
-})
+export const pluginWorkerReadySchema = lazyZodSchema(() =>
+  z.object({
+    /** Command ids the worker registered handlers for (⊆ manifest commands). */
+    commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT),
+    /** Task source ids the worker registered (⊆ manifest taskSources). */
+    taskSources: z.array(pluginIdSchema).max(PLUGIN_TASK_SOURCE_LIMIT).default([])
+  })
+)
 
-export const pluginWorkerLogSchema = z.object({
-  level: z.enum(['info', 'warn', 'error']),
-  message: z.string().max(8192)
-})
+export const pluginWorkerLogSchema = lazyZodSchema(() =>
+  z.object({
+    level: z.enum(['info', 'warn', 'error']),
+    message: z.string().max(8192)
+  })
+)
 
-export const pluginWorkerFatalSchema = z.object({ error: z.string().max(8192) })
+export const pluginWorkerFatalSchema = lazyZodSchema(() =>
+  z.object({ error: z.string().max(8192) })
+)
 
 export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
 export type PluginWorkerReady = z.infer<typeof pluginWorkerReadySchema>
 
-const pluginWorkerChildEventSchema = z.discriminatedUnion('event', [
-  z.object({ event: z.literal(WORKER_EVENTS.ready), payload: pluginWorkerReadySchema }),
-  z.object({ event: z.literal(WORKER_EVENTS.log), payload: pluginWorkerLogSchema }),
-  z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema }),
-  z.object({ event: z.literal(WORKER_EVENTS.panelPost), payload: pluginWorkerPanelPostSchema })
-])
+const pluginWorkerChildEventSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('event', [
+    z.object({ event: z.literal(WORKER_EVENTS.ready), payload: pluginWorkerReadySchema }),
+    z.object({ event: z.literal(WORKER_EVENTS.log), payload: pluginWorkerLogSchema }),
+    z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema }),
+    z.object({ event: z.literal(WORKER_EVENTS.panelPost), payload: pluginWorkerPanelPostSchema })
+  ])
+)
 
 /** A worker → host lifecycle event, or null for anything else. */
 export function readPluginWorkerEvent(

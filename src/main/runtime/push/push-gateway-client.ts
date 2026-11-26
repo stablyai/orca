@@ -1,5 +1,6 @@
 // Return best-effort gateway outcomes instead of throwing through notification fan-out.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import type {
@@ -17,18 +18,22 @@ import {
 } from './push-gateway-response'
 import { PushGatewaySession } from './push-gateway-session'
 
-const RegisterResponseSchema = z.object({ registrationId: z.string().min(1).max(512) })
+const RegisterResponseSchema = lazyZodSchema(() =>
+  z.object({ registrationId: z.string().min(1).max(512) })
+)
 
-const SendResponseSchema = z.object({
-  results: z
-    .array(
-      z.object({
-        registrationId: z.string().min(1).max(512),
-        status: z.enum(['queued', 'dead', 'rate_limited', 'error'])
-      })
-    )
-    .max(64)
-})
+const SendResponseSchema = lazyZodSchema(() =>
+  z.object({
+    results: z
+      .array(
+        z.object({
+          registrationId: z.string().min(1).max(512),
+          status: z.enum(['queued', 'dead', 'rate_limited', 'error'])
+        })
+      )
+      .max(64)
+  })
+)
 
 export type PushSendResult = z.infer<typeof SendResponseSchema>['results'][number]
 

@@ -5,10 +5,12 @@ import * as z from 'zod'
 export const CONNECTOR_ACTIONS_PATH = '/v1/connector/actions'
 
 /** Connector calls that post as a bot chat and say whom its turn acts for: the CLI sends its session
- *  and the host verifies it, so a chat can only speak for its own turn. */
+ *  and the host verifies it, so a chat can only speak for its own turn. A reaction too: the host
+ *  tells the cloud it is the owner's only for a chat it verified. */
 export const CONNECTOR_POST_METHOD_NAMES = [
   'connector.act',
   'connector.reply',
+  'connector.react',
   'connector.leaveThread'
 ] as const
 

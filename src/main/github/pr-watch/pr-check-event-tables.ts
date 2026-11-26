@@ -35,8 +35,13 @@ export function replacePRCheckContexts(
   db: Database.Database,
   prKey: string,
   headSha: string,
-  contexts: readonly PRCheckContextState[]
+  contexts: readonly PRCheckContextState[],
+  /** The stored rows; a poll that changed none of them rewrites nothing. */
+  prior?: ReadonlyMap<string, PRCheckContextState>
 ): void {
+  if (prior && sameCheckContexts(prior, contexts)) {
+    return
+  }
   db.prepare('DELETE FROM pr_check_contexts WHERE pr_key = ? AND head_sha = ?').run(prKey, headSha)
   const insert = db.prepare(
     `INSERT INTO pr_check_contexts (pr_key, head_sha, context, last_state, last_run_id, pending_seen)
@@ -45,6 +50,24 @@ export function replacePRCheckContexts(
   for (const row of contexts) {
     insert.run(prKey, headSha, row.context, row.lastState, row.lastRunId, row.pendingSeen ? 1 : 0)
   }
+}
+
+function sameCheckContexts(
+  prior: ReadonlyMap<string, PRCheckContextState>,
+  contexts: readonly PRCheckContextState[]
+): boolean {
+  return (
+    contexts.length === prior.size &&
+    contexts.every((row) => {
+      const stored = prior.get(row.context)
+      return (
+        stored !== undefined &&
+        stored.lastState === row.lastState &&
+        stored.lastRunId === row.lastRunId &&
+        stored.pendingSeen === row.pendingSeen
+      )
+    })
+  )
 }
 
 export type PRPendingHead = {
