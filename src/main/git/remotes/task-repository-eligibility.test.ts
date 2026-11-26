@@ -77,6 +77,15 @@ it('keeps a GitHub Enterprise host whether or not it is authenticated', async ()
   expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
 })
 
+it('keeps an unauthenticated *.ghe.com remote unknown', async () => {
+  remotes(
+    'http://gitlab.example.com:8080/acme/widgets.git',
+    'https://acme.ghe.com/team/widgets.git'
+  )
+
+  expect(await isTaskRepositoryIneligible('/repo', 'github')).toBe(false)
+})
+
 it('treats known public non-GitHub forges as exclusion evidence', async () => {
   remotes(
     'http://gitlab.example.com:8080/acme/widgets.git',

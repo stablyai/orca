@@ -58,7 +58,7 @@ async function resolveRemoteForgeEvidence(
   const candidate = parseRemoteProjectRefCandidate(remoteUrl)
   const host = identity?.host ?? candidate?.host
   const knownForge = host ? getPublicForgeProviderForHost(host) : null
-  if (knownForge && knownForge !== 'gitlab') {
+  if (knownForge && knownForge !== 'gitlab' && knownForge !== 'github') {
     return 'non-github'
   }
 
