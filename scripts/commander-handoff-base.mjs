@@ -149,14 +149,12 @@ async function withLockedHandoffBase(cwd, expected, signal, stage) {
   }
 }
 
-// Checkout writes the index and worktree before it updates HEAD. Hold the real
-// index lock for the entire ref transaction, and publish our private index only
-// after git apply has updated all patch paths successfully.
-export async function stageOnHandoffBase({ cwd, index, worktreeIndex = index, expected }, apply) {
+// Checkout can replace worktree files before publishing HEAD. Reserve the
+// indexes before capturing the checkout or updating it.
+export async function withHandoffIndexes({ index, worktreeIndex = index }, action) {
   const locks = []
-  const privateIndex = `${index}.orca-${randomUUID()}`
   const controller = new AbortController()
-  const interrupt = () => controller.abort(new Error('Handoff staging interrupted'))
+  const interrupt = () => controller.abort(new Error('Handoff interrupted'))
   process.on('SIGINT', interrupt)
   process.on('SIGTERM', interrupt)
   try {
@@ -165,25 +163,40 @@ export async function stageOnHandoffBase({ cwd, index, worktreeIndex = index, ex
       closeSync(openSync(lock, 'wx'))
       locks.push(lock)
     }
-    try {
-      copyFileSync(index, privateIndex, constants.COPYFILE_EXCL)
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        throw error
-      }
-    }
-    await withLockedHandoffBase(cwd, expected, controller.signal, () => {
-      apply(privateIndex)
-      renameSync(privateIndex, index)
-    })
+    return await action(controller.signal)
   } finally {
     process.off('SIGINT', interrupt)
     process.off('SIGTERM', interrupt)
+    releaseLocks(locks)
+  }
+}
+
+export async function stageOnHandoffBase(target, apply) {
+  const { cwd, index, expected } = target
+  const privateIndex = `${index}.orca-${randomUUID()}`
+  await withHandoffIndexes(target, async (signal) => {
     try {
+      try {
+        copyFileSync(index, privateIndex, constants.COPYFILE_EXCL)
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          throw error
+        }
+      }
+      await withLockedHandoffBase(cwd, expected, signal, () => {
+        let recovery
+        try {
+          apply(privateIndex, (describeFailure) => {
+            recovery = describeFailure
+          })
+          renameSync(privateIndex, index)
+        } catch (error) {
+          throw recovery ? recovery(error) : error
+        }
+      })
+    } finally {
       rmSync(privateIndex, { force: true })
       rmSync(`${privateIndex}.lock`, { force: true })
-    } finally {
-      releaseLocks(locks)
     }
-  }
+  })
 }

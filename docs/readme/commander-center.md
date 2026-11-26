@@ -104,7 +104,7 @@ orca-commander-handoff publish release origin --include-tracked-edits
 }
 ```
 
-从仓库根目录运行以下命令可以查看已跟踪 JavaScript 和 TypeScript 文件的相对导入关系。用 `--scope` 缩小到当前任务涉及的目录，或加上 `--json` 给另一个程序读取。助手也可以调用 MCP 的 `commander_code_graph`。结果附带来源文件、引用行号和扫描覆盖信息。
+从仓库根目录运行以下命令可以查看已跟踪 JavaScript 和 TypeScript 文件的相对导入关系。用 `--scope` 缩小到当前任务涉及的目录，或加上 `--json` 给另一个程序读取。助手也可以调用 MCP 的 `commander_code_graph`。结果附带来源文件、引用行号、扫描覆盖信息和 `sourceMode`。Linux 能验证已打开文件的路径时使用 `working-tree`，可看到未暂存的修改。macOS、Windows 和无法验证文件路径的 Linux 环境使用 `index`，请先用 `git add` 暂存想要分析的修改。
 
 ```sh
 node /path/to/orca/scripts/commander-code-graph.mjs --scope src --max-files 80

@@ -74,6 +74,10 @@ function migratePageIndex(db) {
   }
 }
 
+function foldSearchText(value) {
+  return value?.toLowerCase().replaceAll('ς', 'σ') ?? ''
+}
+
 function readIndexQuery(params, fail, validId) {
   for (const [key] of params) {
     if (!indexKeys.has(key) || (key !== 'id' && params.getAll(key).length !== 1)) {
@@ -116,7 +120,7 @@ function readIndexQuery(params, fail, validId) {
     order,
     kind,
     project,
-    search: search.trim().toLowerCase(),
+    search: foldSearchText(search.trim()),
     after,
     stamp,
     deleted: flag('includeDeleted'),
@@ -139,7 +143,7 @@ const searchableFields = [
 
 export function openPageIndex(db, { fail, validId }) {
   migratePageIndex(db)
-  db.function('memory_lower', { deterministic: true }, (value) => value?.toLowerCase() ?? '')
+  db.function('memory_lower', { deterministic: true }, foldSearchText)
   db.function('memory_valid_rule', { deterministic: true }, (value) =>
     Number(readRule(value) !== null)
   )

@@ -114,7 +114,14 @@ export async function mintCommanderAgentGrant(account: CommanderAccount, raw: un
   const { projectId, agentId, type = 'agent' } = commanderAgentGrantRequest.parse(raw)
   return withCommanderAccount(account, async (request, assertCurrent) => {
     const grant = z
-      .object({ token: z.string().startsWith('orcacmd_'), expiresAt: z.string() })
+      .object({
+        token: z.string().startsWith('orcacmd_'),
+        expiresAt: z.string(),
+        tenantId: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional()
+      })
       .parse(await request('/delegations', { type, id: agentId, projectId }))
     const config = getOrcaCloudAuthConfig()
     if (!config.configured) {

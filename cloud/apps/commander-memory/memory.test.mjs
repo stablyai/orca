@@ -545,7 +545,7 @@ test('the owner browses paged, scoped summaries and resolves linked pages withou
     projectId: 'project-b',
     kind: 'guideline',
     title: 'Recurring answer',
-    body: 'Ordinary notes'
+    body: 'Ordinary notes: ΟΣ. Which runtime?today'
   })
   await write('handoff-A0000000-0123-4567-ABCD-000000000000')
   await write('handoff-incorrect')
@@ -561,6 +561,13 @@ test('the owner browses paged, scoped summaries and resolves linked pages withou
   assert.equal(first.pages.length, 50)
   assert.equal(first.next, 'page-47')
   assert.deepEqual(first.projects, ['project-a', 'project-b'])
+  for (const term of ['Σ', 'ς', 'Which runtime?today', 'Which runtime%3Ftoday']) {
+    const { pages } = await call('phone', '/index?q=' + term)
+    assert.deepEqual(
+      pages.map((p) => p.pageId),
+      ['unrelated']
+    )
+  }
   assert.equal(JSON.stringify(first.pages).includes('private summary text'), false)
   assert.deepEqual(
     (await call('phone', '/index?after=page-47&projectId=project-a')).pages.map((p) => p.pageId),
@@ -584,10 +591,13 @@ test('the owner browses paged, scoped summaries and resolves linked pages withou
     (await call('phone', '/index?handoffsOnly=true')).pages.map((p) => p.pageId),
     ['handoff-A0000000-0123-4567-ABCD-000000000000']
   )
+  const withDeleted = await call(
+    'phone',
+    '/index?id=removed&id=rule&id=unknown&includeDeleted=true'
+  )
+  assert.deepEqual(withDeleted.projects, ['archived', 'project-a', 'project-b'])
   assert.deepEqual(
-    (await call('phone', '/index?id=removed&id=rule&id=unknown&includeDeleted=true')).pages.map(
-      (p) => [p.pageId, p.deleted]
-    ),
+    withDeleted.pages.map((p) => [p.pageId, p.deleted]),
     [
       ['removed', true],
       ['rule', false]

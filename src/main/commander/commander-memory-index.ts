@@ -45,12 +45,16 @@ function legacyCursor(after: string, recent: boolean) {
   return { pageId: commanderMemoryId.parse(parts[2]), createdAt: parts[1]! }
 }
 
+function foldSearchText(value: string | null | undefined): string {
+  return value?.toLowerCase().replaceAll('ς', 'σ') ?? ''
+}
+
 function legacyIndex(
   pages: CommanderMemoryRevision[],
   query: CommanderMemoryIndexQuery
 ): CommanderMemoryIndexResult {
   const projects = new Set<string>()
-  const search = query.q?.trim().toLowerCase()
+  const search = foldSearchText(query.q?.trim())
   const recent = query.order === 'recent'
   const ids = query.ids && new Set(query.ids)
   const cursor = query.after ? legacyCursor(query.after, recent) : null
@@ -87,7 +91,7 @@ function legacyIndex(
         page.actor.id,
         page.createdBy.type,
         page.createdBy.id
-      ].some((value) => value?.toLowerCase().includes(search))
+      ].some((value) => foldSearchText(value).includes(search))
     )
   })
   visible.sort(compare)

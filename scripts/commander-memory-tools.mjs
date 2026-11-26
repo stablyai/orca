@@ -68,12 +68,23 @@ function result(data) {
 }
 
 export async function registerCommanderMemoryTools(server, grantPath) {
-  const { projectId, url, actorId } = JSON.parse(await readFile(grantPath, 'utf8'))
+  const { projectId, url, actorId, tenantId, token } = JSON.parse(await readFile(grantPath, 'utf8'))
   async function request(operation, payload, query) {
     const current = JSON.parse(await readFile(grantPath, 'utf8'))
     if (current.projectId !== projectId || current.url !== url || current.actorId !== actorId) {
       throw new Error(
         'The current memory grant does not match this client’s original project, service or agent.'
+      )
+    }
+    if (typeof tenantId === 'string' && /^[a-f0-9]{64}$/.test(tenantId)) {
+      if (current.tenantId !== tenantId) {
+        throw new Error(
+          'Export a grant for the original Orca account and organization, or restart the client to switch.'
+        )
+      }
+    } else if (current.token !== token) {
+      throw new Error(
+        'The original grant has no verified account and organization. Restart the client with the renewed grant.'
       )
     }
     return requestMemory(current, operation, payload, query)

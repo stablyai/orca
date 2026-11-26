@@ -13,11 +13,13 @@ import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-gr
 import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
+  checkpointCardSource,
   checkpointMarkdown,
   checkpointObservation,
   checkpointSources,
   confirmsNoAgents,
   missingCheckpointSources,
+  qualifyCheckpointSources,
   type CheckpointSource
 } from './commander-checkpoint-content'
 import { reportCheckpointError, useRecordingDevice } from './CommanderRecording'
@@ -47,15 +49,12 @@ function Publisher({ account, device }: { account: CommanderAccount; device: str
       hydrated
         ? projectCommanderAgents(repos, cards).map((project) => ({
             ...project,
+            repos,
             registrations: (registrations.get(project.id) ?? []).map((repo) => ({
               hostId: getRepoExecutionHostId(repo),
               repoId: repo.id
             })),
-            sources: project.cards.map((card) => ({
-              hostId: card.executionHostId ?? '',
-              repoId: card.repoId,
-              worktreeId: card.worktreeId
-            }))
+            sources: project.cards.map((card) => checkpointCardSource(card, repos))
           }))
         : [],
     [repos, cards, hydrated, registrations]
@@ -177,8 +176,11 @@ function Publisher({ account, device }: { account: CommanderAccount; device: str
                 continue
               }
               const toConfirm = empty
-                ? [...previousSources, ...project.registrations]
-                : missingCheckpointSources(page?.body ?? '', project.sources)
+                ? [
+                    ...qualifyCheckpointSources(previousSources, project.repos),
+                    ...project.registrations
+                  ]
+                : missingCheckpointSources(page?.body ?? '', project.sources, project.repos)
               if (!(await Promise.all(toConfirm.map(sourceIsEmpty))).every(Boolean)) {
                 retry = true
                 continue
@@ -191,6 +193,7 @@ function Publisher({ account, device }: { account: CommanderAccount; device: str
                 const current = latest.current.find((row) => row.id === project.id)
                 if (
                   !current ||
+                  current.repos !== project.repos ||
                   checkpointObservation(checkpointMarkdown(current.cards), current.sources) !==
                     candidate ||
                   JSON.stringify(current.registrations) !== JSON.stringify(project.registrations)

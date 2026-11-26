@@ -1,4 +1,8 @@
 import type { DashboardCard } from '../../../../shared/agent-status/presentation/dashboard-snapshot'
+import {
+  getRepoRegistrationHostIds,
+  type RepoHostTarget
+} from '../../../../shared/repository/repo-host-identity'
 
 type ProgressCard = Pick<
   DashboardCard,
@@ -36,6 +40,40 @@ export function checkpointMarkdown(cards: readonly ProgressCard[]): string {
 
 /** Stored in generated checkpoints so a restart cannot erase an unobserved host. */
 export type CheckpointSource = { hostId: string; repoId: string; worktreeId?: string }
+
+function possibleSourceHosts(source: CheckpointSource, repos: readonly RepoHostTarget[]): string[] {
+  if (source.hostId) {
+    return [source.hostId]
+  }
+  // Older cards defaulted to local but could lack their same-ID remote registration's host.
+  const hosts = getRepoRegistrationHostIds(repos, source.repoId)
+  hosts.add('local')
+  return [...hosts]
+}
+
+export function checkpointCardSource(
+  card: Pick<DashboardCard, 'executionHostId' | 'repoId' | 'worktreeId'>,
+  repos: readonly RepoHostTarget[]
+): CheckpointSource {
+  const source = {
+    hostId: card.executionHostId ?? '',
+    repoId: card.repoId,
+    worktreeId: card.worktreeId
+  }
+  if (!source.hostId && possibleSourceHosts(source, repos).length === 1) {
+    return { ...source, hostId: 'local' }
+  }
+  return source
+}
+
+export function qualifyCheckpointSources(
+  sources: readonly CheckpointSource[],
+  repos: readonly RepoHostTarget[]
+): CheckpointSource[] {
+  return sources.flatMap((source) =>
+    possibleSourceHosts(source, repos).map((hostId) => ({ ...source, hostId }))
+  )
+}
 
 const sourcePrefix = 'Observed registrations: '
 
@@ -85,11 +123,12 @@ export function checkpointObservation(
 
 export function missingCheckpointSources(
   previousBody: string,
-  current: readonly CheckpointSource[]
+  current: readonly CheckpointSource[],
+  repos: readonly RepoHostTarget[]
 ): CheckpointSource[] {
   const previous = checkpointSources(previousBody)
   const verifiedEmpty = previousBody === checkpointObservation('', previous)
-  return previous.filter(
+  return qualifyCheckpointSources(previous, repos).filter(
     (old) =>
       !current.some(
         (row) =>

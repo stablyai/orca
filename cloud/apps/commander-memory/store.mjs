@@ -143,7 +143,7 @@ function prepareMemoryStore(db) {
         projectId,
         expires
       )
-      return { token, expiresAt: new Date(expires).toISOString() }
+      return { token, expiresAt: new Date(expires).toISOString(), tenantId: digest(identity.tenant) }
     },
     delegatedIdentity(token) {
       const row = db

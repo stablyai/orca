@@ -70,7 +70,8 @@ export function createMemoryServer({ capabilitiesEndpoint, databasePath }) {
   const store = openStore(databasePath)
   const server = createServer(async (req, res) => {
     try {
-      const [path, query] = req.url.split('?')
+      const [path] = req.url.split('?', 1)
+      const query = req.url.slice(path.length + 1)
       const action =
         path === base ? '' : path.startsWith(base + '/') ? path.slice(base.length + 1) : null
       if (action === null) fail(404, 'Unknown memory endpoint')

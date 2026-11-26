@@ -13,7 +13,7 @@ The service verifies an Orca account bearer on every account request by posting 
 | GET | /worker-guidance?projectId=… | The owner reads current human guidelines for the account and selected project in `{guidelines,truncated}`. |
 | GET | /pages/:id | Current `page` and up to 25 newest-first revisions in `history`. Pass `?beforeVersion=<nextBeforeVersion>` for the next slice; a null cursor marks the end. |
 | POST | /human | Account-authored revision. |
-| POST | /delegations | With the account bearer, send `{type,id,projectId}` for an agent or commander and receive a project-scoped `token` and `expiresAt`. |
+| POST | /delegations | With the account bearer, send `{type,id,projectId}` for an agent or commander and receive a project-scoped `token`, `expiresAt` and an opaque `tenantId` identifying the issuing account and organization for renewal. |
 | POST | /agent or /commander | A worker uses its delegated token on the matching route. |
 | GET | /preferences/settings | The account owner reads `{enabled,version}` for the current account and organization. |
 | POST | /preferences/settings | The account owner sends `{enabled,expectedVersion}` and receives the saved settings. An outdated version that would change the current setting returns HTTP 409. |
@@ -37,7 +37,7 @@ Run `node --test memory.test.mjs` for an offline integration test using a loopba
 
 `GET /index` sorts by page ID by default. Pass `order=recent` for newest revisions first. Send the returned `next` value as the URL-encoded `after` parameter for the next batch, retaining the ordering and filters. A null cursor marks the last batch. The index shows the current state on each request. Refresh the first batch to see recent changes. Open `/pages/:id` for the full text, links and revision history.
 
-Optional filters include `projectId`, `kind` (guideline, decision or note), `handoffsOnly=true`, `recurringOnly=true`, and `q` for a case-insensitive substring search across current content and attribution. Include tombstones with `includeDeleted=true`. The project selector covers all account projects with visible pages, independently of pagination and filters. Add `includeDeletedProjects=true` to include projects whose last page was deleted. Request specific summaries with up to 50 repeated `id` parameters. A directly paired phone makes requests through the authorized desktop.
+Optional filters include `projectId`, `kind` (guideline, decision or note), `handoffsOnly=true`, `recurringOnly=true`, and `q` for a case-insensitive substring search across current content and attribution. By default the project selector lists projects with active pages, independently of pagination, search and page filters. Set `includeDeleted=true` to include deleted pages and their projects. Set `includeDeletedProjects=true` to include projects whose last page was deleted while keeping the default active-page list. Request specific summaries with up to 50 repeated `id` parameters. A directly paired phone makes requests through the authorized desktop.
 
 The service builds the SQLite index transactionally on first startup with an existing database. Other writers may wait during this initial migration. Subsequent revisions, including receipts and writes from earlier service versions, update the index in the same transaction as the underlying page.
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   commanderMemoryService,
   askHomeMemoryPreference,
+  mintCommanderAgentGrant,
   saveCommanderMemory,
   publishRecoveryMemory
 } from './commander-memory-service'
@@ -45,10 +46,24 @@ afterEach(() => {
 })
 
 describe('Commander account boundary', () => {
+  it('exports the issuing tenant when the service supplies one and preserves legacy token scope otherwise', async () => {
+    const tenantId = 'a'.repeat(64)
+    const grant = { token: 'orcacmd_example', expiresAt: '2026-11-26T19:00:00Z' }
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ ...grant, tenantId }))
+        .mockResolvedValueOnce(Response.json(grant))
+    )
+    const request = { projectId: 'app', agentId: 'worker' }
+    expect((await mintCommanderAgentGrant(account, request)).grant.tenantId).toBe(tenantId)
+    expect((await mintCommanderAgentGrant(account, request)).grant).not.toHaveProperty('tenantId')
+  })
   it('pages a legacy service without returning unrelated bodies or losing linked pages outside the current list', async () => {
     const base = {
       kind: 'note',
-      title: 'Note',
+      title: 'ΟΣ',
       actor: { type: 'human', id: 'alice' },
       createdBy: { type: 'human', id: 'alice' },
       version: 1,
@@ -90,6 +105,9 @@ describe('Commander account boundary', () => {
       includeDeleted: true
     })
     expect(linked.pages.map((p) => p.pageId)).toEqual(['deleted', 'note-50'])
+    expect(linked.projects).toEqual(['app', 'archived'])
+    const sigma = await commanderMemoryService.index(account, { ids: ['note-50'], q: 'Σ' })
+    expect(sigma.pages.map((p) => p.pageId)).toEqual(['note-50'])
   })
   it('keeps an unauthorized index read from falling back to the full account list', async () => {
     const paths: string[] = []

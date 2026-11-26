@@ -122,6 +122,7 @@ export function PhoneMemoryLibrary({
     handoffs,
     searchable,
     active: active && !detail && !draft,
+    busy,
     perform
   })
   const labels = {

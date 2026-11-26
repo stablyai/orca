@@ -1,10 +1,12 @@
 import { expect, it } from 'vitest'
 import {
+  checkpointCardSource,
   checkpointMarkdown,
   checkpointSources,
   checkpointObservation,
   confirmsNoAgents,
-  missingCheckpointSources
+  missingCheckpointSources,
+  qualifyCheckpointSources
 } from './commander-checkpoint-content'
 
 it('keeps counts and a bounded, stable Markdown sample for a 300-agent project', () => {
@@ -67,9 +69,13 @@ it('requires a census of the missing worktree even when its sibling remains busy
   const repo = { hostId: 'local', repoId: 'r' }
   const w1 = { ...repo, worktreeId: 'w1' }
   const w2 = { ...repo, worktreeId: 'w2' }
-  expect(missingCheckpointSources(checkpointObservation('Active', [w1, w2]), [w2])).toEqual([w1])
-  expect(missingCheckpointSources(checkpointObservation('Active', [repo]), [w2])).toEqual([repo])
-  expect(missingCheckpointSources(checkpointObservation('', [repo]), [w2])).toEqual([])
+  expect(missingCheckpointSources(checkpointObservation('Active', [w1, w2]), [w2], [])).toEqual([
+    w1
+  ])
+  expect(missingCheckpointSources(checkpointObservation('Active', [repo]), [w2], [])).toEqual([
+    repo
+  ])
+  expect(missingCheckpointSources(checkpointObservation('', [repo]), [w2], [])).toEqual([])
   const empty = { liveTerminalCount: 0, unverifiableTerminalCount: 0, agents: [] }
   const listing = {
     truncated: false,
@@ -82,4 +88,20 @@ it('requires a census of the missing worktree even when its sibling remains busy
   expect(confirmsNoAgents(listing, 'r', 'local', 'w1')).toBe(true)
   expect(confirmsNoAgents(listing, 'r', 'local', 'w2')).toBe(false)
   expect(confirmsNoAgents(listing, 'r', 'local')).toBe(false)
+})
+
+it('recovers older local sources and requires evidence for a colliding remote worktree', () => {
+  const card = { repoId: 'r', worktreeId: 'w' }
+  const local = { ...card, hostId: 'local' }
+  const remote = { ...card, hostId: 'runtime:other' }
+  const ambiguous = { ...card, hostId: '' }
+  const known = [{ id: 'r' }]
+  const twins = [...known, { id: 'r', executionHostId: 'runtime:other' as const }]
+  const oldBody = checkpointObservation('Active', [ambiguous])
+  expect(checkpointCardSource(card, known)).toEqual(local)
+  expect(qualifyCheckpointSources([ambiguous], known)).toEqual([local])
+  expect(missingCheckpointSources(oldBody, [local], known)).toEqual([])
+  expect(missingCheckpointSources(oldBody, [local], twins)).toEqual([remote])
+  expect(checkpointCardSource(card, twins)).toEqual(ambiguous)
+  expect(missingCheckpointSources(oldBody, [ambiguous], twins)).toEqual([local, remote])
 })

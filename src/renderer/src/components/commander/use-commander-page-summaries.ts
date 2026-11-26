@@ -31,10 +31,12 @@ export function useCommanderPageSummaries(account: CommanderAccount, ids: string
       }
       const batches = await Promise.all(requests)
       if (ticket === request.current) {
+        request.current = null
         setResult({ account, ids, pages: batches.flatMap((batch) => batch.pages), error: '' })
       }
     } catch (reason) {
       if (ticket === request.current) {
+        request.current = null
         const error =
           reason instanceof Error
             ? reason.message
@@ -53,7 +55,11 @@ export function useCommanderPageSummaries(account: CommanderAccount, ids: string
       return
     }
     const stop = installWindowVisibilityInterval({
-      run: () => void refresh(),
+      run: () => {
+        if (request.current === null) {
+          void refresh()
+        }
+      },
       intervalMs: 30_000,
       slowWhileUnfocused: true
     })

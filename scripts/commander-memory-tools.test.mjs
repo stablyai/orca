@@ -9,6 +9,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { createMemoryServer } from '../cloud/apps/commander-memory/server.mjs'
+import { validHandoffContent } from '../cloud/apps/commander-memory/handoff-content.mjs'
+import { encodeHandoffBody, readHandoff } from '../src/shared/commander/handoff-content.ts'
 import { registerCommanderMemoryTools } from './commander-memory-tools.mjs'
 
 async function listen(server) {
@@ -21,22 +23,27 @@ test('a fresh agent reads human guidance and records only its own project decisi
   const dir = await mkdtemp(join(tmpdir(), 'commander-mcp-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
   const auth = createServer((req, res) => {
-    if (req.headers.authorization !== 'Bearer fixture') {
+    const bearer = req.headers.authorization
+    if (bearer !== 'Bearer fixture' && bearer !== 'Bearer other-org') {
       res.writeHead(401)
       res.end()
       return
     }
-    res.end(JSON.stringify({ cloud: { userId: 'acct' } }))
+    res.end(
+      JSON.stringify({
+        cloud: { userId: 'acct', activeOrgId: bearer === 'Bearer fixture' ? null : 'org-b' }
+      })
+    )
   })
   const authUrl = await listen(auth)
   t.after(() => auth.close())
   const gateway = createMemoryServer({ capabilitiesEndpoint: authUrl, databasePath: ':memory:' })
   const url = `${await listen(gateway)}/v1/commander/memory`
   t.after(() => gateway.close())
-  async function post(path, body) {
+  async function post(path, body, bearer = 'fixture') {
     const res = await fetch(url + path, {
       method: 'POST',
-      headers: { authorization: 'Bearer fixture', 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
       body: JSON.stringify(body)
     })
     assert.equal(res.status, 200)
@@ -70,12 +77,16 @@ test('a fresh agent reads human guidance and records only its own project decisi
     )
   }
   await exportGrant(grant, projectId)
-  const server = new McpServer({ name: 'memory', version: '1' })
-  await registerCommanderMemoryTools(server, file)
-  const client = new Client({ name: 'worker', version: '1' })
-  const [left, right] = InMemoryTransport.createLinkedPair()
-  await Promise.all([client.connect(left), server.connect(right)])
-  t.after(() => client.close())
+  async function connect() {
+    const server = new McpServer({ name: 'memory', version: '1' })
+    await registerCommanderMemoryTools(server, file)
+    const worker = new Client({ name: 'worker', version: '1' })
+    const [left, right] = InMemoryTransport.createLinkedPair()
+    await Promise.all([worker.connect(left), server.connect(right)])
+    t.after(() => worker.close())
+    return worker
+  }
+  const client = await connect()
   async function call(name, args = {}) {
     const value = await client.callTool({ name, arguments: args })
     assert.ok(!value.isError, value.content[0].text)
@@ -336,11 +347,39 @@ test('a fresh agent reads human guidance and records only its own project decisi
       const denied = await client.callTool({ name: 'commander_save_memory', arguments: pending })
       assert.equal(denied.isError, true)
       assert.match(denied.content[0].text, /HTTP 403/)
+      const otherTenant = await post(
+        '/delegations',
+        { projectId, type: 'agent', id: 'claude' },
+        'other-org'
+      )
+      await exportGrant(otherTenant, projectId)
+      for (const [name, args] of [
+        ['commander_save_memory', pending],
+        ['commander_recall', {}]
+      ]) {
+        const response = await client.callTool({ name, arguments: args })
+        assert.equal(response.isError, true)
+        assert.match(response.content[0].text, /original Orca account and organization/)
+      }
       const renewed = await post('/delegations', { projectId, type: 'agent', id: 'claude' })
       await exportGrant(renewed, projectId)
       assert.equal((await call('commander_save_memory', pending)).page.projectId, projectId)
     }
   )
+
+  await t.test('a legacy grant requires restart before adopting a replacement token', async () => {
+    await exportGrant({ token: grant.token, expiresAt: grant.expiresAt }, projectId)
+    const legacyClient = await connect()
+    const read = { name: 'commander_recall', arguments: { pageId: 'review' } }
+    assert.ok(!(await legacyClient.callTool(read)).isError)
+    const renewed = await post('/delegations', { projectId, type: 'agent', id: 'claude' })
+    await exportGrant(renewed, projectId)
+    const rejected = await legacyClient.callTool(read)
+    assert.equal(rejected.isError, true)
+    assert.match(rejected.content[0].text, /Restart the client with the renewed grant/)
+    const restartedClient = await connect()
+    assert.ok(!(await restartedClient.callTool(read)).isError)
+  })
 
   await t.test(
     'a multibyte body at the byte limit saves and an extra byte fails locally',
@@ -364,4 +403,28 @@ test('a fresh agent reads human guidance and records only its own project decisi
       assert.equal((await call('commander_recall', { pageId: note.pageId })).page.version, 1)
     }
   )
+})
+
+test('the cloud picker and agent accept the same Markdown sections at the decoded length limit', () => {
+  const page = {
+    pageId: 'handoff-3feadb88-3068-4fc1-b494-1c82ab35816f',
+    kind: 'note',
+    title: 'Resume a release',
+    deleted: false
+  }
+  const boundary = '## Next step\n'.padEnd(4000, 'x')
+  for (const [progress, nextStep, valid] of [
+    ['', '', true],
+    ['Progress\n\n## Next step\n\ncontinued', '\\## Next step', true],
+    [boundary, boundary, true],
+    [`${boundary}x`, '', false],
+    ['', `${boundary}x`, false]
+  ]) {
+    const candidate = { ...page, body: encodeHandoffBody({ progress, nextStep }) }
+    assert.equal(validHandoffContent(candidate), valid)
+    assert.deepEqual(
+      readHandoff(candidate),
+      valid ? { goal: page.title, progress, nextStep } : null
+    )
+  }
 })

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-import { constants } from 'node:fs'
-import { open, realpath } from 'node:fs/promises'
-import { join, posix, win32 } from 'node:path'
+import { realpath } from 'node:fs/promises'
+import { posix, win32 } from 'node:path'
 import { parseArgs } from 'node:util'
 import { runProcess } from '@orca/process-host'
+import { createGraphSourceReader } from './commander-code-graph-source.mjs'
 
 const sourceFile = /\.(?:[cm]?[jt]s|[jt]sx)$/i
-const maxFileBytes = 128 * 1024
-const maxTotalBytes = 8 * 1024 * 1024
 const maxEdges = 500
-const help =
-  'orca-commander-code-graph [--scope <repository-relative file or directory>] [--max-files 1..200] [--json]'
+const help = [
+  'orca-commander-code-graph [--scope <repository-relative file or directory>] [--max-files 1..200] [--json]',
+  'Reads tracked working files where Linux can verify open paths. Other hosts read staged files from the Git index.'
+].join('\n')
 
 async function git(cwd, args) {
   const result = await runProcess({
@@ -42,47 +42,6 @@ function normalizeScope(value) {
   return posix.normalize(relative || '.').replace(/\/$/, '')
 }
 
-async function readSource(root, file, available) {
-  const path = join(root, file)
-  if ((await realpath(path)) !== path) {
-    return null
-  }
-  const handle = await open(
-    path,
-    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
-  )
-  try {
-    const stat = await handle.stat()
-    if (!stat.isFile() || stat.size > maxFileBytes || stat.size > available) {
-      return null
-    }
-    const bytes = Buffer.alloc(stat.size)
-    let n = 0
-    while (n < bytes.length) {
-      const { bytesRead } = await handle.read(bytes, n, bytes.length - n)
-      if (!bytesRead) {
-        break
-      }
-      n += bytesRead
-    }
-    const data = bytes.subarray(0, n)
-    return data.includes(0) ? null : data
-  } finally {
-    await handle.close()
-  }
-}
-
-async function readTrackedFile(root, file, available) {
-  try {
-    return await readSource(root, file, available)
-  } catch (error) {
-    if (['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP'].includes(error.code)) {
-      return null
-    }
-    throw error
-  }
-}
-
 function moduleSpecifiers(ts, source) {
   const literals = []
   function include(node) {
@@ -90,7 +49,9 @@ function moduleSpecifiers(ts, source) {
       literals.push(node)
     }
   }
-  function visit(node) {
+  const pending = [source]
+  while (pending.length) {
+    const node = pending.pop()
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
       include(node.moduleSpecifier)
     } else if (ts.isExternalModuleReference(node)) {
@@ -112,10 +73,11 @@ function moduleSpecifiers(ts, source) {
         }
       }
     }
-    ts.forEachChild(node, visit)
+    ts.forEachChild(node, (child) => {
+      pending.push(child)
+    })
   }
-  visit(source)
-  return literals
+  return literals.sort((left, right) => left.pos - right.pos)
 }
 
 export async function collectCommanderCodeGraph({
@@ -134,14 +96,14 @@ export async function collectCommanderCodeGraph({
     git(root, ['ls-files', '--stage', '-z']),
     git(root, ['rev-parse', '--verify', 'HEAD']).catch(() => '')
   ])
-  const indexed = new Set()
+  const indexed = new Map()
   for (const row of listing.split('\0')) {
-    const match = /^100(?:644|755) [a-f0-9]+ 0\t([\s\S]+)$/.exec(row)
+    const match = /^100(?:644|755) ([a-f0-9]+) 0\t([\s\S]+)$/.exec(row)
     if (match) {
-      indexed.add(match[1])
+      indexed.set(match[2], match[1])
     }
   }
-  const inScope = [...indexed].filter(
+  const inScope = [...indexed.keys()].filter(
     (file) => scope === '.' || file === scope || file.startsWith(`${scope}/`)
   )
   const sources = inScope.filter((file) => sourceFile.test(file))
@@ -167,37 +129,52 @@ export async function collectCommanderCodeGraph({
   }
   const edges = []
   const nodes = new Set()
-  let bytesLeft = maxTotalBytes
-  for (const file of sources.slice(0, maxFiles)) {
-    if (bytesLeft === 0 || coverage.edgeLimitReached) {
-      break
-    }
+  const reader = await createGraphSourceReader(root, indexed)
+  for await (const [file, data] of reader.sources(sources.slice(0, maxFiles))) {
     coverage.remaining--
-    const data = await readTrackedFile(root, file, bytesLeft)
-    if (!data) {
+    if (!data || data.includes(0)) {
+      coverage.skipped++
+      continue
+    }
+    let source
+    let imports
+    try {
+      source = ts.createSourceFile(file, data.toString('utf8'), ts.ScriptTarget.Latest)
+      imports = moduleSpecifiers(ts, source).filter((s) => /^(?:\.\.?)(?:\/|$)/.test(s.text))
+    } catch (error) {
+      // TypeScript's parser can itself exhaust the stack on nested expressions.
+      if (!(error instanceof RangeError)) {
+        throw error
+      }
       coverage.skipped++
       continue
     }
     coverage.scanned++
-    bytesLeft -= data.length
     nodes.add(file)
-    const text = data.toString('utf8')
-    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest)
-    for (const specifier of moduleSpecifiers(ts, source)) {
-      if (!/^(?:\.\.?)(?:\/|$)/.test(specifier.text)) {
-        continue
-      }
+    const candidates = new Set()
+    const relative = []
+    for (const specifier of imports) {
       const base = posix.join(posix.dirname(file), specifier.text)
       if (base === '..' || base.startsWith('../')) {
         coverage.unresolvedRelativeImports++
         continue
       }
+      relative.push(specifier)
       const manifest = posix.join(base, 'package.json')
-      if (indexed.has(manifest) && !manifests.has(manifest) && manifests.size < maxEdges) {
-        const content = await readTrackedFile(root, manifest, bytesLeft)
-        manifests.set(manifest, content?.toString('utf8'))
-        bytesLeft -= content?.length ?? 0
+      if (
+        indexed.has(manifest) &&
+        !manifests.has(manifest) &&
+        manifests.size + candidates.size < maxEdges
+      ) {
+        candidates.add(manifest)
       }
+    }
+    const metadata = await reader.readBatch([...candidates])
+    for (const manifest of candidates) {
+      const bytes = metadata.get(manifest)
+      manifests.set(manifest, bytes && !bytes.includes(0) ? bytes.toString('utf8') : undefined)
+    }
+    for (const specifier of relative) {
       const resolved = ts.resolveModuleName(
         specifier.text,
         `/${file}`,
@@ -220,10 +197,16 @@ export async function collectCommanderCodeGraph({
         line: source.getLineAndCharacterOfPosition(specifier.getStart(source)).line + 1
       })
     }
+    if (coverage.edgeLimitReached) {
+      break
+    }
   }
   return {
+    sourceMode: reader.sourceMode,
     source:
-      'Relative imports in tracked JavaScript and TypeScript working files. Targets are resolved against the Git index.',
+      reader.sourceMode === 'working-tree'
+        ? 'Relative imports in tracked JavaScript and TypeScript working files. Targets are resolved against the Git index.'
+        : 'Relative imports in the Git index. Stage working-tree edits to include them.',
     scope,
     commit: head.trim() || null,
     nodes: [...nodes],
@@ -264,7 +247,11 @@ function formatGraph(graph) {
   return lines.join('\n')
 }
 
-if (import.meta.main) {
+const entry = process.argv[1]
+if (
+  import.meta.main ??
+  (entry && (await realpath(entry).catch(() => null)) === import.meta.filename)
+) {
   try {
     const { values } = parseArgs({
       options: {

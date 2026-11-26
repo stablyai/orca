@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   CommanderAccount,
   CommanderMemoryRevision
@@ -15,6 +15,7 @@ export function usePhoneMemoryCollection({
   handoffs,
   searchable,
   active,
+  busy,
   perform
 }: {
   client: RpcClient
@@ -22,6 +23,7 @@ export function usePhoneMemoryCollection({
   handoffs: boolean
   searchable: boolean
   active: boolean
+  busy: boolean
   perform: (work: () => Promise<void>) => Promise<void>
 }) {
   const [filter, setFilter] = useState<HandoffFilter>({})
@@ -30,9 +32,11 @@ export function usePhoneMemoryCollection({
   >(null)
   const collection = listing?.searchable === searchable ? listing : null
   const includeDeleted = collection?.includeDeleted ?? false
+  const requestedMode = useRef<boolean | null>(null)
   const loadList = useCallback(
     (after?: string, withDeleted = includeDeleted, next?: HandoffFilter) =>
       perform(async () => {
+        requestedMode.current = searchable
         const result = await runRpcOperation(client, phoneListRead, {
           account,
           ...(handoffs ? { handoffsOnly: true } : {}),
@@ -60,11 +64,14 @@ export function usePhoneMemoryCollection({
       }),
     [account, client, perform, includeDeleted, handoffs, searchable, filter]
   )
+  // Wait for the shared RPC lock before trying a new mode. A failed load stays available for manual retry.
   useEffect(() => {
-    if (active && !collection) {
+    if (!active || collection) {
+      requestedMode.current = null
+    } else if (!busy && requestedMode.current !== searchable) {
       void loadList()
     }
-  }, [active, collection, loadList])
+  }, [active, busy, collection, loadList, searchable])
   function savedPage(page: CommanderMemoryRevision) {
     if (searchable) {
       setListing(null)

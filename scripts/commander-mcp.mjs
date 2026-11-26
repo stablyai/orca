@@ -32,7 +32,7 @@ server.registerTool(
   'commander_code_graph',
   {
     description:
-      'Inspect tracked JavaScript and TypeScript files and their relative imports in the configured checkout.',
+      'Inspect relative imports in the configured checkout. sourceMode reports verified working files on Linux or staged Git index contents.',
     annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       scope: z.string().optional(),
