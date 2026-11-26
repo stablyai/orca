@@ -11,6 +11,7 @@ import {
   storeConnectorImage
 } from './connector-asker-stored-image'
 import { ChatDeliveries } from './external-conversation-chat-delivery'
+import { ConversationChain } from './external-conversation-chain'
 import { DeliveryPreparation, DeliveryReceipts } from './external-conversation-delivery-receipts'
 import type { ExternalConversationSeamDeps } from './external-conversation-host'
 import { startConnectorConversation } from './external-conversation-start'
@@ -47,6 +48,10 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
   const db = new OrchestrationDb(':memory:')
   const deliveries = new ChatDeliveries(() => {})
   const signal = new AbortController().signal
+  const chain = new ConversationChain(signal)
+  const removal = Promise.withResolvers<void>()
+  let cleaned = Promise.withResolvers<void>()
+  let removed = 0
   const store: ExternalConversationSeamDeps['store'] = {
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
@@ -61,13 +66,26 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
         result: { download: { url: 'https://fixture.invalid/image', ticket: 'fixture' } }
       }
     }),
-    store: (name, bytes, fileId, stagingSignal) =>
-      storeConnectorImage(attachments, name, bytes, fileId, stagingSignal),
+    store: async (name, bytes, fileId, stagingSignal) => {
+      const upload = await storeConnectorImage(attachments, name, bytes, fileId, stagingSignal)
+      return {
+        path: upload.path,
+        discard: async () => {
+          await removal.promise
+          await upload.discard()
+          if (++removed === 4) {
+            cleaned.resolve()
+          }
+        }
+      }
+    },
     fetch: async () => new Response(Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10))
   })
   const receipts = new DeliveryReceipts(() => db)
   try {
     for (let delivery = 0; delivery < count; delivery++) {
+      removed = 0
+      cleaned = Promise.withResolvers<void>()
       const poll = new AbortController()
       const preparation = new DeliveryPreparation(poll.signal)
       const result = await startConnectorConversation(
@@ -75,7 +93,8 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
           store,
           receipts,
           askerImages,
-          enqueue: (run: (signal: AbortSignal) => Promise<Delivery>) => run(signal),
+          enqueue: (run: (signal: AbortSignal) => Promise<Delivery>) =>
+            chain.enqueue(KEY.externalId, run),
           deliver: (chat, message) =>
             deliveries.deliver(undefined, KEY, chat, { ...message, preparation }),
           link: () => {}
@@ -102,9 +121,17 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
         preparation
       )
       expect(result.initial).toEqual({ outcome: 'refused', reason: 'connectors_disabled' })
+      if (delivery === 0) {
+        expect(await receipts.recorded(KEY, `delivery-${delivery}`)).toBeNull()
+        expect(await chain.after(KEY.externalId)).toEqual({ outcome: 'accepted' })
+        expect(await readdir(root)).toHaveLength(4)
+        removal.resolve()
+      }
+      await cleaned.promise
     }
     expect(await readdir(root)).toEqual([])
   } finally {
+    removal.resolve()
     db.close()
     await rm(root, { recursive: true, force: true })
   }

@@ -643,6 +643,47 @@ it('updates screenshot positions even when a nested image precedes its label', a
   expect(blocks[3]).toMatchObject({ type: 'text', text: expect.stringContaining(quoted) })
 })
 
+it('leaves a returned request retryable if its images would exceed the Pi turn budget', async () => {
+  const bytes = 3 * 1024 * 1024
+  const path = stagedImage('earlier.png', bytes)
+  const next = { path: stagedImage('current.png', 1024 * 1024), fileId: 'FNEXT', bytes: 1024 ** 2 }
+  failedStart('failed', asked('failed', 'Two earlier images', THREAD, [path, path]), 'notSignedIn')
+  const queue = readJournalDomainReturnedCards(db, target, NOW + 3)
+  const inspect = () => connectorImageInspection(undefined, new AbortController().signal)
+  const pi = { ...THREAD, agent: 'pi' as const }
+  const withDirect = await carriedMessages(pi, queue, ACCOUNT, NOW + 3, [next], inspect())
+  expect(withDirect.cards).toEqual([])
+  expect(returnedIds()).toEqual(['failed'])
+  const alone = await carriedMessages(pi, queue, ACCOUNT, NOW + 3, [], inspect())
+  expect(alone.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
+})
+
+it('rechecks a previously missing image when carry progress clears during inspection', async () => {
+  const missing = join(dir, 'restored.png')
+  const healthy = stagedImage('healthy.png')
+  failedStart('missing', asked('missing', 'Earlier request', THREAD, [missing]), 'notSignedIn', NOW)
+  failedStart('healthy', asked('healthy', 'Next request', THREAD, [healthy]), 'notSignedIn', NOW + 1)
+  const progress = new ReturnedImageProgress()
+  const probes = new ConnectorImageProbes()
+  const carry = () =>
+    carriedMessages(
+      THREAD,
+      readJournalDomainReturnedCards(db, target, NOW + 3),
+      ACCOUNT,
+      Date.now(),
+      [],
+      connectorImageInspection(undefined, new AbortController().signal, { probes }),
+      { owner: progress, key: 'thread' }
+    )
+  expect((await carry()).cards.map(({ messageId }) => messageId)).toEqual(['healthy'])
+  const inFlight = carry()
+  progress.clear()
+  probes.clearRetries()
+  await inFlight
+  stagedImage('restored.png')
+  expect((await carry()).cards.map(({ messageId }) => messageId)).toEqual(['missing', 'healthy'])
+})
+
 /** Who each message of a chain of 20 failed starts carries, the senders taking turns. */
 async function failedChainStamps(
   senders: ConnectorMessageAsker[]

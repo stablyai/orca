@@ -4,7 +4,7 @@ import { PI_UNSHRUNK_IMAGE_LIMITS } from '../pi/rpc/prompts/pi-rpc-image-limits'
 import type { ConnectorImage, EarlierImageBudget } from './connector-asker-images'
 
 export function budgetForEarlierImages(
-  agent: ExternalConversationLink['agent'],
+  agent: ExternalConversationLink['agent'] | undefined,
   budget: EarlierImageBudget,
   direct: readonly ConnectorImage[]
 ): EarlierImageBudget {

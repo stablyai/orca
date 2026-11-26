@@ -96,7 +96,7 @@ export async function deliverToChat(
               ? signal
               : AbortSignal.any([signal, AbortSignal.timeout(ASKER_IMAGES_BUDGET_MS)]),
             {
-              allPaths: Boolean(delivery.askerImages && earlierImageContext),
+              allPaths: link.agent === 'pi' || Boolean(delivery.askerImages && earlierImageContext),
               queueSignal: delivery.preparation?.imageProbeQueueSignal(signal)
             }
           )
@@ -203,7 +203,7 @@ export async function deliverToChat(
     return stopped() ?? refused('agent_not_reachable')
   } finally {
     if (!delivery.stagedImages) {
-      await staged?.discardUnused()
+      staged?.discardUnused()
     }
   }
 }

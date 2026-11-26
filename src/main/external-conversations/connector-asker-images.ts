@@ -19,6 +19,28 @@ type ConnectorImageUpload = { path: string; discard?: () => Promise<void> }
 
 export type ConnectorImage = ConnectorImageUpload & { fileId: string; bytes: number }
 
+// Only the attachment sweeper owns overflow. Delivery completion never waits on a filesystem remove.
+const cleanupSlots = new PrioritySemaphore(4)
+const MAX_PENDING_CLEANUPS = 80
+let pendingCleanups = 0
+
+function discardInBackground(discard: () => Promise<void>): void {
+  if (pendingCleanups >= MAX_PENDING_CLEANUPS) {
+    return
+  }
+  pendingCleanups += 1
+  void cleanupSlots.acquire(0).then(async (release) => {
+    try {
+      await discard()
+    } catch {
+      // The existing sweep reclaims an unclaimed upload when removal fails.
+    } finally {
+      pendingCleanups -= 1
+      release()
+    }
+  })
+}
+
 export class StagedConnectorImages {
   readonly direct: ConnectorImage[]
   readonly earlier: ConnectorImage[]
@@ -36,10 +58,10 @@ export class StagedConnectorImages {
     this.retained = images
   }
 
-  async discardUnused(): Promise<void> {
+  discardUnused(): void {
     for (const image of this.images) {
-      if (!this.retained.includes(image)) {
-        await image.discard?.()
+      if (image.discard && !this.retained.includes(image)) {
+        discardInBackground(image.discard)
       }
     }
   }

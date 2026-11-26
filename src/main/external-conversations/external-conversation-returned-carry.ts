@@ -27,6 +27,7 @@ import type { ConversationChat } from './external-conversation-chat'
 import type { EarlierImageBudget, ConnectorImage } from './connector-asker-images'
 import type { ReturnedImageProgress } from './external-conversation-returned-image-progress'
 import type { ConnectorImageInspection } from './connector-asker-stored-image'
+import { budgetForEarlierImages } from './connector-asker-image-budget'
 
 // What a later send can get past: the agent itself couldn't take the message. A refusal of the
 // message's own content (too large, too many images, empty) would fail again, so it stays a card.
@@ -92,7 +93,8 @@ export function carriesReturnedCard(
 /** The carried cards as the turn takes them, ahead of its own message; `account` is the outbox
  *  account the turn answers through, if any, and `ownImages` the images the message brings. */
 export async function carriedMessages(
-  link: Pick<ExternalConversationLink, 'source' | 'externalId'>,
+  link: Pick<ExternalConversationLink, 'source' | 'externalId'> &
+    Partial<Pick<ExternalConversationLink, 'agent'>>,
   returned: readonly JournalReturnedCard[],
   account: string | undefined,
   now: number,
@@ -112,6 +114,8 @@ export async function carriedMessages(
     AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
     direct.reduce((total, image) => total + image.bytes, 0)
   let fileIds = new Set(direct.map((image) => image.fileId))
+  const imageBudget = budgetForEarlierImages(link.agent, { count, bytes, fileIds }, direct)
+  const reservedBytes = bytes - imageBudget.bytes
   let imageCount = 0
   const imagePositions = new Map<string, number>()
   const start = progress?.owner.read(progress.key, eligible, now) ?? 0
@@ -162,11 +166,14 @@ export async function carriedMessages(
       if (fileId && cardFileIds.has(fileId)) {
         continue
       }
-      if (++cardImages > count) {
+      if (
+        ++cardImages > count ||
+        (imageBudget.maxImageBytes !== undefined && (stored?.bytes ?? 0) > imageBudget.maxImageBytes)
+      ) {
         break cards
       }
       cardBytes += stored?.bytes ?? 0
-      if (cardBytes > bytes) {
+      if (cardBytes + reservedBytes > bytes) {
         break cards
       }
       if (fileId) {
@@ -185,7 +192,7 @@ export async function carriedMessages(
     carried.push(each)
     blocks.push(...withSentLine(ownBlocks, each.submittedAt, now))
   }
-  if (progress && missingPrefix > 0) {
+  if (progress && missingPrefix > 0 && !inspection?.signal.aborted) {
     progress.owner.remember(progress.key, eligible, missingPrefix, missingUntil, resume)
   }
   return {

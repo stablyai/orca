@@ -171,16 +171,28 @@ it.each(['old poll stops', 'cloud lease expires'])(
     })
     const bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
     const upload = await storeConnectorImage(attachments, 'shot.png', bytes, 'FSHOT', poll.signal)
+    const cleaned = Promise.withResolvers<void>()
     if (ending === 'old poll stops') {
       poll.abort()
     } else {
       left = 0
     }
-    finish([{ ...upload, fileId: 'FSHOT', bytes: bytes.length }])
+    finish([
+      {
+        ...upload,
+        fileId: 'FSHOT',
+        bytes: bytes.length,
+        discard: async () => {
+          await upload.discard()
+          cleaned.resolve()
+        }
+      }
+    ])
     await expect(result).resolves.toMatchObject({
       outcome: ending === 'cloud lease expires' ? 'expired' : 'refused'
     })
     expect(await (await journal()).reads.sendFingerprints()).toEqual([])
+    await cleaned.promise
     expect(await readdir(attachments.rootDir)).toEqual([])
     expect(deliveries.pending(SESSION)).toBe(false)
   }

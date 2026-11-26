@@ -112,7 +112,7 @@ export async function startConnectorConversation(
           }
           throw error
         } finally {
-          await stagedImages?.discardUnused()
+          stagedImages?.discardUnused()
           if (preparedThread && abandoned) {
             await host.bots?.forgetUnusedStart?.(preparedThread)
           }

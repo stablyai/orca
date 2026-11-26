@@ -30,6 +30,9 @@ export class ReturnedImageProgress {
   ): void {
     const previous = this.prefixes.get(key)
     const expiresAt = Math.min(previous?.expiresAt ?? Infinity, missingUntil)
+    if (!Number.isFinite(expiresAt)) {
+      return
+    }
     if (previous?.count === count && previous.resume === resume && previous.expiresAt === expiresAt) {
       return
     }
