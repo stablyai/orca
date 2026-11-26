@@ -106,6 +106,7 @@ export class RuntimeBrowserCommands {
   readonly browserTabProfileClone: RuntimeBrowserProfiles['browserTabProfileClone']
   readonly browserProfileList: RuntimeBrowserProfiles['browserProfileList']
   readonly browserProfileCreate: RuntimeBrowserProfiles['browserProfileCreate']
+  readonly browserProfileRename: RuntimeBrowserProfiles['browserProfileRename']
   readonly browserProfileDelete: RuntimeBrowserProfiles['browserProfileDelete']
   readonly browserCloseServerPagesOfMissingProfiles: RuntimeBrowserProfiles['browserCloseServerPagesOfMissingProfiles']
   readonly browserScreencast: RuntimeBrowserScreencasts['browserScreencast']
@@ -244,6 +245,7 @@ export class RuntimeBrowserCommands {
     this.browserTabProfileClone = profiles.browserTabProfileClone.bind(profiles)
     this.browserProfileList = profiles.browserProfileList.bind(profiles)
     this.browserProfileCreate = profiles.browserProfileCreate.bind(profiles)
+    this.browserProfileRename = profiles.browserProfileRename.bind(profiles)
     this.browserProfileDelete = profiles.browserProfileDelete.bind(profiles)
     this.browserCloseServerPagesOfMissingProfiles =
       profiles.browserCloseServerPagesOfMissingProfiles.bind(profiles)

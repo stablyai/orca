@@ -129,6 +129,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserTabProfileClone',
   'browserProfileList',
   'browserProfileCreate',
+  'browserProfileRename',
   'browserProfileDelete',
   'browserCloseServerPagesOfMissingProfiles',
   'browserProfileDetectBrowsers',

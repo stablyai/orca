@@ -2,6 +2,7 @@ import type {
   BrowserProfileCreateResult,
   BrowserProfileDeleteResult,
   BrowserProfileListResult,
+  BrowserProfileRenameResult,
   BrowserTabProfileCloneResult,
   BrowserTabProfileShowResult,
   BrowserTabSetProfileResult
@@ -52,6 +53,19 @@ export const BROWSER_PROFILE_HANDLERS: Record<string, CommandHandler> = {
       json,
       (value) =>
         `Created profile ${value.profile?.id ?? 'unknown'} (${value.profile?.label ?? label})`
+    )
+  },
+  'tab profile rename': async ({ flags, client, json }) => {
+    const profileId = getRequiredStringFlag(flags, 'profile')
+    const label = getRequiredStringFlag(flags, 'label')
+    const result = await client.call<BrowserProfileRenameResult>('browser.profileRename', {
+      profileId,
+      label
+    })
+    printResult(result, json, (value) =>
+      value.profile
+        ? `Renamed profile ${value.profile.id} to ${value.profile.label}`
+        : `Profile ${profileId} was not renamed`
     )
   },
   'tab profile delete': async ({ flags, client, json }) => {

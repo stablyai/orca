@@ -10,6 +10,7 @@ const NOT_PAGE_TARGETED = new Set([
   'tab create',
   'tab profile list',
   'tab profile create',
+  'tab profile rename',
   'tab profile delete',
   'browser identity get',
   'browser identity set'

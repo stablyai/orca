@@ -24,6 +24,7 @@ export const BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION: ReadonlySet<string> = new 
   'browserOpenUrlOnClient',
   'browserProfileList',
   'browserProfileCreate',
+  'browserProfileRename',
   'browserProfileDelete',
   'browserCloseServerPagesOfMissingProfiles',
   'browserProfileDetectBrowsers',

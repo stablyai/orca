@@ -4,7 +4,8 @@ import type { BrowserSessionProfile } from '../../../../../../shared/browser/wor
 import type {
   BrowserProfileCreateResult,
   BrowserProfileDeleteResult,
-  BrowserProfileListResult
+  BrowserProfileListResult,
+  BrowserProfileRenameResult
 } from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
 import {
   parseExecutionHostId,
@@ -14,7 +15,6 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getBrowserProfilesForHost,
   getBrowserSettingsHostId,
-  getBrowserSettingsRuntimeEnvironmentId,
   profileListByHostUpdate,
   updateDefaultBrowserProfileForHost
 } from '../hosts/browser-host-state'
@@ -24,7 +24,10 @@ export function createBrowserProfileListActions(
   get: BrowserSliceGet
 ): Pick<
   BrowserSlice,
-  'fetchBrowserSessionProfiles' | 'createBrowserSessionProfile' | 'deleteBrowserSessionProfile'
+  | 'fetchBrowserSessionProfiles'
+  | 'createBrowserSessionProfile'
+  | 'renameBrowserSessionProfile'
+  | 'deleteBrowserSessionProfile'
 > {
   // Why: change events can overlap fetches; only the latest listing per host may land, or an older one restores a deleted profile.
   const latestListingByHost = new Map<ExecutionHostId, number>()
@@ -50,6 +53,17 @@ export function createBrowserProfileListActions(
       await forgetDefaultProfileUnless(hostId, (id) =>
         profiles.some((profile) => profile.id === id)
       )
+    }
+  }
+  const profileActionTarget = (): {
+    hostId: ExecutionHostId
+    runtimeEnvironmentId: string | null
+  } => {
+    const hostId = getBrowserSettingsHostId(get())
+    const parsed = parseExecutionHostId(hostId)
+    return {
+      hostId,
+      runtimeEnvironmentId: parsed?.kind === 'runtime' ? parsed.environmentId : null
     }
   }
   const dropDeletedProfile = async (hostId: ExecutionHostId, profileId: string): Promise<void> => {
@@ -176,9 +190,45 @@ export function createBrowserProfileListActions(
       }
     },
 
+    renameBrowserSessionProfile: async (profileId, label) => {
+      const { hostId, runtimeEnvironmentId } = profileActionTarget()
+      const land = (profile: BrowserSessionProfile | null): BrowserSessionProfile | null => {
+        if (!profile) {
+          return null
+        }
+        set((s) => ({
+          ...profileListByHostUpdate(
+            s,
+            getBrowserProfilesForHost(s, hostId).map((entry) =>
+              entry.id === profile.id ? profile : entry
+            ),
+            hostId
+          )
+        }))
+        return profile
+      }
+      if (runtimeEnvironmentId) {
+        try {
+          const result = await callRuntimeRpc<BrowserProfileRenameResult>(
+            { kind: 'environment', environmentId: runtimeEnvironmentId },
+            'browser.profileRename',
+            { profileId, label },
+            { timeoutMs: 15_000 }
+          )
+          return land(result.profile)
+        } catch {
+          return null
+        }
+      }
+      try {
+        return land(await window.api.browser.sessionRenameProfile({ profileId, label }))
+      } catch {
+        return null
+      }
+    },
+
     deleteBrowserSessionProfile: async (profileId) => {
-      const hostId = getBrowserSettingsHostId(get())
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+      const { hostId, runtimeEnvironmentId } = profileActionTarget()
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileDeleteResult>(

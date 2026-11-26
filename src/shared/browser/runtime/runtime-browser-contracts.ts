@@ -242,6 +242,7 @@ export type BrowserProfileListResult = {
   executorRuntimeId?: string
 }
 export type BrowserProfileCreateResult = { profile: BrowserSessionProfile | null }
+export type BrowserProfileRenameResult = { profile: BrowserSessionProfile | null }
 export type BrowserProfileDeleteResult = { deleted: boolean; profileId: string }
 export type BrowserDetectedProfileInfo = { name: string; directory: string }
 

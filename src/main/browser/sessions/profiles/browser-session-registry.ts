@@ -31,6 +31,7 @@ import {
 } from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { BrowserSessionProfileMap } from './browser-session-profile-map'
+import { BrowserSessionProfileLabelStore } from './browser-session-profile-label-store'
 import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
 import {
   clearBrowserRoutePartitionPolicies,
@@ -67,6 +68,12 @@ export type BrowserSessionRegistryProfileOptions = {
 
 class BrowserSessionRegistry {
   private readonly profiles = new BrowserSessionProfileMap()
+  private readonly labels = new BrowserSessionProfileLabelStore(
+    this.profiles,
+    (updates) => this.persistMeta(updates),
+    () => this.persistProfiles(),
+    () => this.onProfilesChanged?.()
+  )
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
   private defaultPartition = ORCA_BROWSER_PARTITION
@@ -87,12 +94,13 @@ class BrowserSessionRegistry {
   }
 
   private resetDefaultProfile(): void {
+    const meta = this.loadPersistedMeta()
     this.profiles.set('default', {
       id: 'default',
       scope: 'default',
       partition: this.defaultPartition,
-      label: 'Default',
-      source: this.loadPersistedMeta().defaultSource
+      label: meta.defaultLabel ?? 'Default',
+      source: meta.defaultSource
     })
   }
 
@@ -276,19 +284,11 @@ class BrowserSessionRegistry {
     profileId: string,
     source: BrowserSessionProfile['source']
   ): BrowserSessionProfile | null {
-    const profile = this.profiles.get(profileId)
-    if (!profile) {
-      return null
-    }
-    const updated = { ...profile, source }
-    this.profiles.set(profileId, updated)
-    if (profileId === 'default') {
-      this.persistMeta({ defaultSource: source })
-    } else {
-      this.persistProfiles()
-    }
-    this.onProfilesChanged?.()
-    return updated
+    return this.labels.updateSource(profileId, source)
+  }
+
+  renameProfile(profileId: string, label: string): BrowserSessionProfile | null {
+    return this.labels.rename(profileId, label)
   }
 
   async deleteProfile(profileId: string): Promise<boolean> {

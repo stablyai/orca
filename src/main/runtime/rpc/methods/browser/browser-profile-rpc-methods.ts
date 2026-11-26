@@ -7,6 +7,7 @@ import {
   ProfileClearCookies,
   ProfileClearGoogleCookies,
   ProfileImportFromBrowser,
+  ProfileRename,
   TabProfileClone,
   TabSetProfile,
   TabShow
@@ -58,6 +59,12 @@ export const BROWSER_PROFILE_METHODS = [
     permission: 'workspace',
     params: ProfileDelete,
     handler: async (params, { runtime }) => runtime.browserProfileDelete(params)
+  }),
+  defineMethod({
+    name: 'browser.profileRename',
+    permission: 'workspace',
+    params: ProfileRename,
+    handler: async (params, { runtime }) => runtime.browserProfileRename(params)
   }),
   defineMethod({
     name: 'browser.profileDetectBrowsers',

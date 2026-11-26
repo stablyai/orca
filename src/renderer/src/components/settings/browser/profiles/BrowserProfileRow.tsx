@@ -1,4 +1,5 @@
-import { Import, Loader2, Trash2 } from 'lucide-react'
+import { Import, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import type {
@@ -26,6 +27,7 @@ import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-
 import { useTranslate } from '@/i18n/use-translate'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
+import { BrowserRenameProfileDialog } from './BrowserRenameProfileDialog'
 
 type DetectedBrowser = {
   family: string
@@ -58,6 +60,7 @@ export function BrowserProfileRow({
   sshRoute = null
 }: BrowserProfileRowProps): React.JSX.Element {
   const t = useTranslate()
+  const [isRenameOpen, setIsRenameOpen] = useState(false)
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
 
@@ -222,6 +225,15 @@ export function BrowserProfileRow({
           </DropdownMenuContent>
         </DropdownMenu>
         {/* An SSH host shows this computer's profiles; removing one there would delete it everywhere. */}
+        <Button
+          variant="ghost-muted"
+          size="icon"
+          className="size-7"
+          aria-label={t('browser.profile.renameAction', 'Rename profile')}
+          onClick={() => setIsRenameOpen(true)}
+        >
+          <Pencil className="size-3" />
+        </Button>
         {profile.scope === 'default' || sshRoute ? null : (
           <Button
             variant="ghost"
@@ -244,6 +256,10 @@ export function BrowserProfileRow({
           </Button>
         )}
       </div>
+      <BrowserRenameProfileDialog
+        profile={isRenameOpen ? profile : null}
+        onOpenChange={setIsRenameOpen}
+      />
     </div>
   )
 }
