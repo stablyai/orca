@@ -22675,7 +22675,7 @@
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity oturum açma yöntemi: {{method}}. Değiştir",
-        "chipTitle": "Antigravity oturum açma yöntemi: {{method}}",
+        "chipTooltip": "Google · {{method}}",
         "menuTitle": "Antigravity oturum açma yöntemi",
         "detected": "Algılandı",
         "settings": "Oturum açma ayarları…",

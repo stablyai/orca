@@ -21749,7 +21749,7 @@
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity는 {{method}}(으)로 로그인합니다. 변경",
-        "chipTitle": "Antigravity는 {{method}}(으)로 로그인합니다",
+        "chipTooltip": "Google · {{method}}",
         "menuTitle": "Antigravity 로그인 방식",
         "detected": "감지됨",
         "settings": "로그인 설정…",

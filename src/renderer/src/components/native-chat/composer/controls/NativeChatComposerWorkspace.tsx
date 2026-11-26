@@ -205,7 +205,7 @@ export function NativeChatComposerWorkspace({
         </div>
       )}
       <span className="ml-auto flex min-w-0 shrink items-center empty:hidden">
-        <NativeChatAntigravityAuthChip textClassName={FOOTER_TEXT} />
+        <NativeChatAntigravityAuthChip />
       </span>
     </div>
   )
