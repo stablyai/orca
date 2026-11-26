@@ -44,6 +44,11 @@ export class MobileEndpointNudgeRouter {
       }
       args.setForeground(true)
     }
+    // iOS repeats callbacks for an unchanged network; only a real move may lift a slow gate early.
+    if (reason === 'network-change' && args.controller.holdsExternalSignalGate()) {
+      void this.routeNetworkChange(() => args.controller.handleActiveNudge(args.logical, reason))
+      return
+    }
     args.controller.handleActiveNudge(args.logical, reason)
     if (reason !== 'network-change') {
       args.scheduleDirectProbe()
@@ -55,7 +60,7 @@ export class MobileEndpointNudgeRouter {
   }
 
   // iOS repeats callbacks for an unchanged network; only a move onto a new Wi-Fi network is an arrival.
-  private async routeNetworkChange(): Promise<void> {
+  private async routeNetworkChange(onMoved?: () => void): Promise<void> {
     const read = ++this.readsStarted
     let network: string | null
     try {
@@ -75,6 +80,7 @@ export class MobileEndpointNudgeRouter {
       return
     }
     this.lastLocalNetwork = network
+    onMoved?.()
     if (network === null) {
       this.args.scheduleDirectProbe()
     } else {

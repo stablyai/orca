@@ -148,15 +148,17 @@ export class RelayReconnectController {
     return needsCredentialRefresh
   }
 
+  // A refreshed or promoted credential supersedes every refused version.
   completeCredentialRefresh(): void {
+    this.credentials.clearRejected()
     if (this.recoveryGate === 'fresh-credential') {
       this.evidence.clear()
-      this.credentials.clearRejected()
       this.reset()
     }
   }
 
   blocksUntilFreshCredential = (): boolean => this.recoveryGate === 'fresh-credential'
+  holdsExternalSignalGate = (): boolean => this.recoveryGate === 'external-signal'
 
   hasDialableCredential(...credentials: (RelayCredentialLease | null | undefined)[]): boolean {
     return this.credentials.hasDialable(...credentials)

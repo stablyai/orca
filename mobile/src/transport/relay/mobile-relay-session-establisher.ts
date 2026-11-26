@@ -195,6 +195,10 @@ export class MobileRelaySessionEstablisher {
         writeBundle: args.writeBundle
       })
       args.adoptBundle(applied.bundle)
+      if (applied.bundle.current.version !== bundle.current.version) {
+        // Pending was promoted; the old versions' refusals would force a needless direct rotation.
+        args.controller.completeCredentialRefresh()
+      }
       args.scheduleLease(applied.leaseExpiry)
     } catch (error) {
       // Report post-migration bookkeeping separately; counting it as dial failure could suspend the healthy session.
