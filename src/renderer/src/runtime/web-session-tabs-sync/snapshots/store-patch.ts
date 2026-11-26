@@ -47,17 +47,14 @@ function copyWebClientChatReadMarksForPatch(
         .map(({ worktreeId }) => worktreeId)
     : affectedWorkspaces
   const nextTabs = patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree
-  if (
+  const tabsUnchanged =
     fullInventoryWorkspaceIds === undefined &&
     workspaceIds.every(
       (workspaceId) => nextTabs[workspaceId] === state.unifiedTabsByWorktree[workspaceId]
     )
-  ) {
-    return patch
-  }
   const copied = copyWebClientChatReadMarksForTabLists(
     state,
-    () => nextTabs,
+    tabsUnchanged ? undefined : () => nextTabs,
     workspaceIds,
     fullInventoryWorkspaceIds
   )

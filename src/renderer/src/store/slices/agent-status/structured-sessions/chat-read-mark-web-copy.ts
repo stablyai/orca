@@ -14,6 +14,7 @@ type ChatTabsByWorkspace = Readonly<
 const copiedChatPaneKeys = new Set<string>()
 const pendingWorkspaceIds = new Set<string>()
 let receivedFullInventory = false
+const paneKeysByLeafByRecord = new WeakMap<object, Map<string, string[]>>()
 
 function clearMigrationBookkeeping(): void {
   copiedChatPaneKeys.clear()
@@ -26,9 +27,27 @@ function hasLegacyMark(state: WebCopyState, sessionId: string): boolean {
   const leaf = destination.slice(destination.lastIndexOf(':') + 1)
   return [state.activityClearedAtByPaneKey, state.manuallyUnreadTurnsByPaneKey].some(
     (record) =>
-      record[destination] === undefined &&
-      Object.keys(record).some((key) => key !== destination && key.endsWith(`:${leaf}`))
+      record[destination] === undefined && (paneKeysByLeaf(record).get(leaf)?.length ?? 0) > 0
   )
+}
+
+function paneKeysByLeaf(record: Readonly<Record<string, number>>): Map<string, string[]> {
+  const cached = paneKeysByLeafByRecord.get(record)
+  if (cached) {
+    return cached
+  }
+  const byLeaf = new Map<string, string[]>()
+  for (const key of Object.keys(record)) {
+    const leaf = key.slice(key.lastIndexOf(':') + 1)
+    const keys = byLeaf.get(leaf)
+    if (keys) {
+      keys.push(key)
+    } else {
+      byLeaf.set(leaf, [key])
+    }
+  }
+  paneKeysByLeafByRecord.set(record, byLeaf)
+  return byLeaf
 }
 
 /** A paired web client copies its saved cutoffs and unread turns to conversation keys once; the host
@@ -56,7 +75,7 @@ export function copyWebClientChatReadMarksOnce(
 /** Copy each chat once before a full inventory makes this device's migration complete. */
 export function copyWebClientChatReadMarksForTabLists(
   state: WebCopyState,
-  readTabsByWorkspace: () => ChatTabsByWorkspace,
+  readTabsByWorkspace: (() => ChatTabsByWorkspace) | undefined,
   workspaceIds: Iterable<string>,
   fullInventoryWorkspaceIds?: Iterable<string>
 ): Partial<WebCopyState> | null {
@@ -79,6 +98,13 @@ export function copyWebClientChatReadMarksForTabLists(
     }
   }
   const complete = receivedFullInventory && pendingWorkspaceIds.size === 0
+  if (!readTabsByWorkspace) {
+    if (complete) {
+      clearMigrationBookkeeping()
+      return { chatReadMarksCopiedHere: true }
+    }
+    return null
+  }
   const tabsByWorkspace = readTabsByWorkspace()
   const sessionIds: string[] = []
   for (const workspaceId of affectedWorkspaceIds) {
