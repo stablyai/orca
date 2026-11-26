@@ -12248,6 +12248,17 @@
           "0bb18642b7": "사용량",
           "a8f4139350": "Grok은 이 계정에 대한 사용 비율을 보고하지 않았습니다."
         },
+        "ServerCliUsageStatus": {
+          "signedInOn": "{{host}}에 로그인됨",
+          "readsGrok": "Orca가 {{host}}의 Grok CLI 로그인을 읽습니다.",
+          "readsCursor": "Orca가 {{host}}의 Cursor 로그인을 읽습니다.",
+          "notReportedGrok": "{{host}}에서 Grok 사용량을 보고하지 않았습니다",
+          "notReportedCursor": "{{host}}에서 Cursor 사용량을 보고하지 않았습니다",
+          "grokHint": "{{host}}에서 grok을 실행하고 시작될 때까지 기다리세요. 요청하면 로그인하세요. 그런 다음 사용량 새로 고침을 클릭하세요.",
+          "cursorHint": "{{host}}에서 Cursor에 로그인한 다음(Cursor IDE 또는 cursor-agent login) 사용량 새로 고침을 클릭하세요.",
+          "cursorSubtitle": "{{host}}에 있는 로그인에서 Cursor 플랜 사용량을 보여줍니다. Orca는 읽기만 하며 그 Cursor 로그인을 변경하지 않습니다.",
+          "refreshUsage": "사용량 새로 고침"
+        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "사용",
           "usagePercentageDisplayRemaining": "남음"

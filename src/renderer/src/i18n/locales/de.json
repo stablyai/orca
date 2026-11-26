@@ -11996,6 +11996,17 @@
           "0bb18642b7": "Nutzung",
           "a8f4139350": "Grok hat für dieses Konto keinen Nutzungsprozentsatz gemeldet."
         },
+        "ServerCliUsageStatus": {
+          "signedInOn": "Auf {{host}} angemeldet",
+          "readsGrok": "Orca liest die Grok-CLI-Anmeldung auf {{host}}.",
+          "readsCursor": "Orca liest die Cursor-Anmeldung auf {{host}}.",
+          "notReportedGrok": "{{host}} hat keine Grok-Nutzung gemeldet",
+          "notReportedCursor": "{{host}} hat keine Cursor-Nutzung gemeldet",
+          "grokHint": "Führen Sie grok auf {{host}} aus und warten Sie, bis es gestartet ist; melden Sie sich an, falls Sie dazu aufgefordert werden. Klicken Sie dann auf „Nutzung aktualisieren“.",
+          "cursorHint": "Melden Sie sich auf {{host}} bei Cursor an (Cursor IDE oder cursor-agent login) und klicken Sie dann auf „Nutzung aktualisieren“.",
+          "cursorSubtitle": "Zeigt die Cursor-Tarifnutzung anhand der Anmeldung auf {{host}} an. Orca liest sie nur und ändert diese Cursor-Anmeldung niemals.",
+          "refreshUsage": "Nutzung aktualisieren"
+        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Verbraucht",
           "usagePercentageDisplayRemaining": "Verbleibend"

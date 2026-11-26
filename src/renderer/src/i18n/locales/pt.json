@@ -7815,6 +7815,17 @@
           "0bb18642b7": "Uso",
           "a8f4139350": "O Grok não relatou uma porcentagem de uso para esta conta."
         },
+        "ServerCliUsageStatus": {
+          "signedInOn": "Sessão iniciada em {{host}}",
+          "readsGrok": "O Orca lê o login do Grok CLI em {{host}}.",
+          "readsCursor": "O Orca lê o login do Cursor em {{host}}.",
+          "notReportedGrok": "{{host}} não informou o uso do Grok",
+          "notReportedCursor": "{{host}} não informou o uso do Cursor",
+          "grokHint": "Execute grok em {{host}} e aguarde ele iniciar, fazendo login se solicitado. Depois clique em Atualizar uso.",
+          "cursorHint": "Faça login no Cursor em {{host}} (Cursor IDE ou cursor-agent login) e depois clique em Atualizar uso.",
+          "cursorSubtitle": "Mostra o uso do plano Cursor pela sessão conectada em {{host}}. O Orca apenas a lê — nunca altera esse login no Cursor.",
+          "refreshUsage": "Atualizar uso"
+        },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Versão indisponível",
           "restartingHelp": "Esperando o servidor substituto se reconectar na nova versão.",

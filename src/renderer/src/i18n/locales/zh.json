@@ -12540,6 +12540,17 @@
           "0bb18642b7": "用量",
           "a8f4139350": "Grok 未返回此账户的用量百分比"
         },
+        "ServerCliUsageStatus": {
+          "signedInOn": "已在 {{host}} 上登录",
+          "readsGrok": "Orca 会读取 {{host}} 上的 Grok CLI 登录信息。",
+          "readsCursor": "Orca 会读取 {{host}} 上的 Cursor 登录信息。",
+          "notReportedGrok": "{{host}} 尚未报告 Grok 使用量",
+          "notReportedCursor": "{{host}} 尚未报告 Cursor 使用量",
+          "grokHint": "在 {{host}} 上运行 grok 并等待其启动，如有提示请登录。然后点击刷新使用量。",
+          "cursorHint": "在 {{host}} 上登录 Cursor（Cursor IDE 或 cursor-agent login），然后点击刷新使用量。",
+          "cursorSubtitle": "显示来自 {{host}} 上登录的 Cursor 套餐用量。Orca 仅读取，不会更改该 Cursor 登录",
+          "refreshUsage": "刷新使用量"
+        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "已用",
           "usagePercentageDisplayRemaining": "剩余"

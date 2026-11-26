@@ -11557,6 +11557,17 @@
           "0bb18642b7": "Uso",
           "a8f4139350": "Grok no informó ningún porcentaje de uso para esta cuenta."
         },
+        "ServerCliUsageStatus": {
+          "signedInOn": "Sesión iniciada en {{host}}",
+          "readsGrok": "Orca lee el inicio de sesión de Grok CLI en {{host}}.",
+          "readsCursor": "Orca lee el inicio de sesión de Cursor en {{host}}.",
+          "notReportedGrok": "{{host}} no ha informado del uso de Grok",
+          "notReportedCursor": "{{host}} no ha informado del uso de Cursor",
+          "grokHint": "Ejecuta grok en {{host}} y espera a que se inicie; inicia sesión si te lo pide. Luego haz clic en Actualizar uso.",
+          "cursorHint": "Inicia sesión en Cursor en {{host}} (Cursor IDE o cursor-agent login) y luego haz clic en Actualizar uso.",
+          "cursorSubtitle": "Muestra el uso del plan de Cursor a partir del inicio de sesión en {{host}}. Orca solo lo lee — nunca modifica ese inicio de sesión de Cursor.",
+          "refreshUsage": "Actualizar uso"
+        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Usado",
           "usagePercentageDisplayRemaining": "Restante"
