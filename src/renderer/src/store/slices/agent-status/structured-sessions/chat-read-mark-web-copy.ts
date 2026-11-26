@@ -6,6 +6,8 @@ type WebCopyState = Pick<
   'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey' | 'chatReadMarksCopiedHere'
 >
 
+type ChatTabsSnapshot = { tabs: readonly { type: string; sessionId?: string }[] }
+
 /** Once per paired web client, from the host's first tab list: its own saved cutoffs and unread
  *  turns gain conversation keys (chat-read-mark-copy.ts). The host copies shared acknowledgements. */
 export function copyWebClientChatReadMarksOnce(
@@ -23,4 +25,17 @@ export function copyWebClientChatReadMarksOnce(
     sessionIds()
   )
   return { ...copied, chatReadMarksCopiedHere: true }
+}
+
+/** Copy before the first snapshot that introduces chats can run attention cleanup. */
+export function copyWebClientChatReadMarksFromSnapshotsOnce(
+  state: WebCopyState,
+  snapshots: readonly ChatTabsSnapshot[]
+): Partial<WebCopyState> | null {
+  const sessionIds = snapshots.flatMap((snapshot) =>
+    snapshot.tabs.flatMap((tab) =>
+      tab.type === 'agent-session' && typeof tab.sessionId === 'string' ? [tab.sessionId] : []
+    )
+  )
+  return sessionIds.length === 0 ? null : copyWebClientChatReadMarksOnce(state, () => sessionIds)
 }

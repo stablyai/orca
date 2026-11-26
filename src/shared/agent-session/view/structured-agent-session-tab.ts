@@ -20,7 +20,7 @@ export function structuredAgentSessionIdOfTab(tabId: string): string | null {
     : null
 }
 
-/** The tab `id` names: that tab itself, else the chat tab whose session a legacy-derived id names. */
+/** The tab `id` names: a chat whose session a legacy-derived id names, else that tab itself. */
 export function findTabByIdOrChatAlias<
   T extends { id: string; contentType?: string; entityId?: string | null }
 >(tabs: readonly T[] | undefined, id: string): T | undefined {
@@ -29,14 +29,14 @@ export function findTabByIdOrChatAlias<
     (isStructuredAgentSessionHostTabId(id)
       ? id.slice(structuredAgentSessionHostTabId('').length)
       : null)
-  let chat: T | undefined
+  let exact: T | undefined
   for (const tab of tabs ?? []) {
     if (tab.id === id) {
+      exact = tab
+    }
+    if (sessionId && tab.contentType === 'agent-session' && tab.entityId === sessionId) {
       return tab
     }
-    if (!chat && sessionId && tab.contentType === 'agent-session' && tab.entityId === sessionId) {
-      chat = tab
-    }
   }
-  return chat
+  return exact
 }

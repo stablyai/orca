@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest'
-import { copyWebClientChatReadMarksOnce } from './chat-read-mark-web-copy'
+import {
+  copyWebClientChatReadMarksFromSnapshotsOnce,
+  copyWebClientChatReadMarksOnce
+} from './chat-read-mark-web-copy'
 
 const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
 const OLD_TAB_KEY = `agent-chat-tab-v1-abc:${LEAF}`
@@ -30,4 +33,30 @@ it('copies a web client’s tab-keyed marks to the conversation key once, and ne
     manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 }
   }
   expect(copyWebClientChatReadMarksOnce(state, () => ['sess-2'])).toBeNull()
+})
+
+it('copies before a subscription snapshot exposes the chat', () => {
+  const state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
+    chatReadMarksCopiedHere: false
+  }
+  const copied = copyWebClientChatReadMarksFromSnapshotsOnce(state, [
+    { tabs: [{ type: 'agent-session', sessionId: 'sess-2' }] }
+  ])
+
+  expect(copied).toEqual({
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70, [CONVERSATION_KEY]: 70 },
+    chatReadMarksCopiedHere: true
+  })
+})
+
+it('leaves the copy pending when no snapshot contains a chat', () => {
+  const state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
+    chatReadMarksCopiedHere: false
+  }
+
+  expect(copyWebClientChatReadMarksFromSnapshotsOnce(state, [])).toBeNull()
 })

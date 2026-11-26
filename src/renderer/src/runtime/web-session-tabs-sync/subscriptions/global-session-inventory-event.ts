@@ -24,6 +24,8 @@ import { applyWebSessionTabsSnapshots } from '../snapshots/snapshot-api'
 import { applyWebSessionTabsStorePatch } from '../snapshots/store-patch'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
 import type { VisibilityResumeCoordinator } from '../visibility-resume/visibility-resume-coordinator'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { copyWebClientChatReadMarksFromSnapshotsOnce } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 
 export type GlobalSessionInventoryEventArgs = {
   environmentId: string
@@ -134,14 +136,19 @@ export function handleGlobalSessionInventoryEvent({
         decisions[index]!.apply ? [snapshot] : []
       )
       settleHydration = applyWebSessionTabsStorePatch(
-        (state, changedAgentPaneKeys) =>
-          applyWebSessionTabsSnapshots(
+        (state, changedAgentPaneKeys) => {
+          const patch = applyWebSessionTabsSnapshots(
             state,
             freshSnapshots,
             environmentId,
             undefined,
             changedAgentPaneKeys
-          ),
+          )
+          const copied = isWebClientLocation()
+            ? copyWebClientChatReadMarksFromSnapshotsOnce(state, freshSnapshots)
+            : null
+          return copied ? { ...(patch === state ? {} : patch), ...copied } : patch
+        },
         {
           frames: applicable.map(({ snapshot }, index) => ({
             environmentId,
