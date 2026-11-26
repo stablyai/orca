@@ -19,6 +19,9 @@ import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
+import { checkAcpLaunchVersion, takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
+import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
+import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 
 class AcpCopyAccountMismatchError extends Error {
   constructor() {
@@ -72,6 +75,8 @@ export async function copyAcpConversation(
       release = launch.release
       signal.throwIfAborted()
       deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
+      await assertCopyCliVersion(deps.spec, input.identity.sessionId, launch)
+      signal.throwIfAborted()
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
       signal.throwIfAborted()
       connection = acpReleaseWithChild(deps.connect, launch.release)(
@@ -202,5 +207,24 @@ async function assertCopyAccountSelected(
     if (!agentSessionAccountHomesEqual(home, selected)) {
       throw new AcpCopyAccountMismatchError()
     }
+  }
+}
+
+/**
+ * The copy runs its own agent, so a launch read that skipped the version check because the source
+ * chat's agent is kept still checks it here: a downgraded CLI is named, not left to fail mid-copy.
+ */
+async function assertCopyCliVersion(
+  spec: AcpStructuredSessionAdapterDeps['spec'],
+  sourceChat: string,
+  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>
+): Promise<void> {
+  if (!takeAcpKeptVersionSkip(sourceChat)) {
+    return
+  }
+  const { command, prefixArgs, cwd, env } = launch
+  const version = await checkAcpLaunchVersion(spec, { command, prefixArgs, cwd, env }, false)
+  if (version.status === 'tooOld') {
+    throw AgentCliInstallationError.tooOld(spec.agent, version)
   }
 }

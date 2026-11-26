@@ -105,18 +105,17 @@ export async function placeKeptProviderRelay(
   relay: KeptProviderRelay,
   ask: number
 ) {
-  if (!providerRelayRunAskCurrent(chatKey, ask)) {
+  const placed = () => listed.get(chatKey)?.info.relayId === relay.info.relayId
+  if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
-  if (listed.get(chatKey)?.info.relayId === relay.info.relayId) {
+  // The row and its token are published together, so no ask ever sees a row whose token is pending.
+  const { pid, exit } = relay.info
+  const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
+  if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
   listed.set(chatKey, relay)
-  const { pid, exit } = relay.info
-  const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
-  if (!providerRelayRunAskCurrent(chatKey, ask) || listed.get(chatKey) !== relay) {
-    return
-  }
   if (token) {
     spawnTokens.set(chatKey, token)
   } else {
@@ -143,6 +142,9 @@ type InstanceListing = {
   /** Only an answer is reused; an unanswered listing is asked again by the next caller. */
   answered: boolean
   listing: Promise<ReadonlyMap<string, ProviderRelayInfo> | null>
+  /** The answer's cleanup, run once by the first ask that acts on it; an observer never runs it. */
+  kept: Promise<void> | null
+  keep: () => Promise<void>
 }
 /** By daemon start; bounded by the daemons this app has talked to. */
 const instanceListings = new Map<string, InstanceListing>()
@@ -150,26 +152,40 @@ const instanceListings = new Map<string, InstanceListing>()
 /**
  * The relays one daemon start holds, by relay id; null when it didn't answer. `fresh` asks again
  * unless a listing is in flight (a send or a failed attach must not reuse an answer); otherwise an
- * answer settled within 2 s answers. An unanswered one is never reused.
+ * answer settled within 2 s answers. An unanswered one is never reused. `observe` only reads: it
+ * neither ends relays nor records anything.
  */
-export function listProviderRelayInstance(
+export async function listProviderRelayInstance(
   client: DaemonClient,
   instance: string,
-  fresh = false
+  fresh = false,
+  observe = false
 ): Promise<ReadonlyMap<string, ProviderRelayInfo> | null> {
+  const entry = instanceListing(client, instance, fresh)
+  const listing = await entry.listing
+  if (listing && !observe) {
+    entry.kept ??= entry.keep()
+    await entry.kept
+  }
+  return listing
+}
+
+function instanceListing(client: DaemonClient, instance: string, fresh: boolean): InstanceListing {
   const cached = instanceListings.get(instance)
   if (
     cached &&
     (cached.settledAt === Number.POSITIVE_INFINITY ||
       (!fresh && cached.answered && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
   ) {
-    return cached.listing
+    return cached
   }
   const channel = providerRelayChannel(client)
   const entry: InstanceListing = {
     settledAt: Number.POSITIVE_INFINITY,
     answered: false,
-    listing: Promise.resolve(null)
+    listing: Promise.resolve(null),
+    kept: null,
+    keep: async () => {}
   }
   entry.listing = withTimeout(
     channel.list(LIST_TIMEOUT_MS).catch(() => null),
@@ -181,7 +197,7 @@ export function listProviderRelayInstance(
       if (!result || (result.daemonInstance !== undefined && result.daemonInstance !== instance)) {
         return null
       }
-      await keep(channel, result.relays)
+      entry.keep = () => keep(channel, result.relays)
       entry.answered = true
       return new Map(result.relays.map((info) => [info.relayId, info]))
     })
@@ -195,7 +211,7 @@ export function listProviderRelayInstance(
     }
   }
   instanceListings.set(instance, entry)
-  return entry.listing
+  return entry
 }
 
 async function listOne(client: DaemonClient): Promise<boolean> {
@@ -263,11 +279,14 @@ let askSeq = 0
  * Per chat with an ask in flight: how many, and the newest ask a later answer, close, deletion or
  * new run fenced off. An ask's verdict applies only when it started after that floor.
  */
-const asks = new Map<string, { inFlight: number; floor: number; unknownFloor: number }>()
+const asks = new Map<
+  string,
+  { inFlight: number; floor: number; unknownFloor: number; fence: number }
+>()
 
 /** Starts one ask; its number is passed back with its verdict. */
 export function beginProviderRelayRunAsk(chatKey: string): number {
-  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0, unknownFloor: 0 }
+  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0, unknownFloor: 0, fence: 0 }
   ask.inFlight += 1
   asks.set(chatKey, ask)
   askSeq += 1
@@ -306,6 +325,12 @@ export function providerRelayRunAskAwaitsProof(chatKey: string, seq: number): bo
   return ask !== undefined && seq > ask.floor && seq > ask.unknownFloor
 }
 
+/** No close, deletion or new run since the ask began (a newer answer about the same run is fine). */
+function providerRelayRunAskUnfenced(chatKey: string, seq: number): boolean {
+  const ask = asks.get(chatKey)
+  return ask !== undefined && seq > ask.fence
+}
+
 export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolean {
   const ask = asks.get(chatKey)
   return ask !== undefined && seq > ask.floor
@@ -318,6 +343,7 @@ export function forgetProviderRelayRunVerdict(chatKey: string): void {
   const ask = asks.get(chatKey)
   if (ask) {
     ask.floor = askSeq
+    ask.fence = askSeq
   }
 }
 

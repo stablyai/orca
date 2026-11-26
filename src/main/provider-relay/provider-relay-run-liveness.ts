@@ -87,7 +87,7 @@ async function decide(
   const client = await instanceClient(route.all, placement.daemon.instance, waitMs)
   const listing = client
     ? await withTimeout(
-        listProviderRelayInstance(client, placement.daemon.instance, fresh),
+        listProviderRelayInstance(client, placement.daemon.instance, fresh, ask === null),
         waitMs,
         null
       )

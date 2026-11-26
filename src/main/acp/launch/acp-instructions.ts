@@ -246,7 +246,7 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
 
 async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
-  void clearEarlierRunsOnce(root, sessionId, (path) => rm(path, { recursive: true, force: true }))
+  await clearEarlierRunsOnce(root, sessionId, (path) => rm(path, { recursive: true, force: true }))
   await mkdir(root, { recursive: true, mode: 0o700 })
   return root
 }
@@ -312,8 +312,9 @@ export async function makeAcpInstructionsFolder(
   sessionId: string
 ): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions-folders')
-  void clearEarlierRunsOnce(root, sessionId, removeTreeKeepingLinkTargets)
-  const path = join(root, `${nativeChatScratchFolderName(sessionId)}-${randomUUID()}`)
+  const name = `${nativeChatScratchFolderName(sessionId)}-${randomUUID()}`
+  await clearEarlierRunsOnce(root, sessionId, removeTreeKeepingLinkTargets, name)
+  const path = join(root, name)
   await mkdir(path, { recursive: true, mode: 0o700 })
   return path
 }

@@ -44,8 +44,11 @@ describe('clearing earlier runs’ instruction folders', () => {
       await mkdir(join(root, name))
       await utimes(join(root, name), at / 1000, at / 1000)
     }
+    // A launch never waits for the sweep, only for its own chat's removals.
     await clearEarlierRunsOnce(root, 'new-chat', (path) => rm(path, { recursive: true }))
-    expect((await readdir(root)).sort()).toEqual([`${kept}-agent`, `${kept}-copy`, `${kept}-old`])
+    await vi.waitFor(async () =>
+      expect((await readdir(root)).sort()).toEqual([`${kept}-agent`, `${kept}-copy`, `${kept}-old`])
+    )
     await rm(root, { recursive: true })
   })
 })

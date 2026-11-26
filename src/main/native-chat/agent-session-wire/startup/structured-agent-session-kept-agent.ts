@@ -1,4 +1,5 @@
 import {
+  forgetProviderRelayRunVerdict,
   hasAttachedProviderRelay,
   providerRelayRunLiveness,
   withProviderRelayRebind
@@ -12,6 +13,21 @@ export type KeptAgentRebind = 'attached' | 'unresolved' | 'gone'
 
 /** Reattaches the agent the terminal host kept running for this chat while Orca was closed. */
 export async function rebindKeptStructuredAgentSessionAgent(
+  open: (sessionId: string) => Promise<unknown>,
+  context: StructuredAgentSessionAttachContext,
+  sessionId: string
+): Promise<KeptAgentRebind> {
+  try {
+    return await rebind(open, context, sessionId)
+  } finally {
+    // A chat that never opened has no retry or close to clear its undecided run; its next open asks.
+    if (!context.sessions.has(sessionId)) {
+      forgetProviderRelayRunVerdict(sessionId)
+    }
+  }
+}
+
+async function rebind(
   open: (sessionId: string) => Promise<unknown>,
   context: StructuredAgentSessionAttachContext,
   sessionId: string

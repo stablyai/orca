@@ -1,4 +1,4 @@
-import { lstat, readdir } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { providerRelayRunLiveness } from '../../provider-relay/app-provider-relays'
@@ -15,27 +15,10 @@ const clearing = new Map<string, Promise<boolean>>()
 /** Roots whose clear ran this run. */
 const cleared = new Set<string>()
 
-/** When this app run started: a folder written since belongs to a launch of this run. */
-const RUN_STARTED_MS = Date.now() - process.uptime() * 1000
-
-/** Per-launch folders (`<chat>-<uuid>`) among `names` written before this app run started. */
-async function earlierRunFolders(root: string, names: string[]): Promise<string[]> {
-  const length = nativeChatScratchFolderName('').length
-  const launches = names.filter((entry) => entry.charAt(length) === '-')
-  const earlier: string[] = []
-  for (let at = 0; at < launches.length; at += REMOVE_BATCH) {
-    await Promise.all(
-      launches.slice(at, at + REMOVE_BATCH).map(async (name) => {
-        // One whose time can't be read may be the one an agent reads: it stays.
-        const written = (await lstat(join(root, name)).catch(() => null))?.mtimeMs
-        if (written !== undefined && written < RUN_STARTED_MS) {
-          earlier.push(name)
-        }
-      })
-    )
-  }
-  return earlier
-}
+/** Per root: per-launch folders this run made, by name. */
+const madeThisRun = new Map<string, Set<string>>()
+/** Per root and chat (folder name): removals of that chat's entries in flight. */
+const removing = new Map<string, Set<Promise<void>>>()
 
 /**
  * Chats (by folder name, among `present`) whose last run went to a terminal host and isn't proven
@@ -91,12 +74,12 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
   const isLive = (name: string) => ownedBy(name, (chat) => live.has(chat))
   const keptBy = (name: string) =>
     isLive(name) || ownedBy(name, (chat) => launched.get(root)?.has(chat) === true)
-  // Only names read before the asks, and of this run's chats (a fork shares its chat's name, so
-  // one may run several agents) only folders an earlier run wrote.
+  // Only names read before the asks; of this run's chats (a fork shares its chat's name, so one
+  // may run several agents) only per-launch folders an earlier run made.
+  const made = madeThisRun.get(root)
   const older = new Set(
-    await earlierRunFolders(
-      root,
-      listed.filter((n) => keptBy(n) && !isLive(n))
+    listed.filter(
+      (n) => keptBy(n) && !isLive(n) && n.charAt(length) === '-' && made?.has(n) !== true
     )
   )
   const gone = [...listed.filter((name) => !keptBy(name)), ...older]
@@ -105,24 +88,65 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
     const batch = gone
       .slice(at, at + REMOVE_BATCH)
       .filter((name) => older.has(name) || !keptBy(name))
-    await Promise.all(batch.map((name) => remove(join(root, name))))
+    // One failed removal doesn't end the sweep while others still run.
+    await Promise.allSettled(
+      batch.map((name) => removeTracked(root, name.slice(0, length), name, remove))
+    )
   }
   return true
 }
 
-/** A launch never waits for the clear: it names its chat first, which keeps its folder. A clear
- *  skipped before the chat records opened is tried again by a later launch. Resolves when it ends. */
+/** A launch of the chat waits for these: a reused path removed under its write would lose it. */
+function removeTracked(
+  root: string,
+  chat: string,
+  name: string,
+  remove: (path: string) => Promise<void>
+): Promise<void> {
+  const key = `${root}\0${chat}`
+  const inFlight = removing.get(key) ?? new Set<Promise<void>>()
+  removing.set(key, inFlight)
+  // A waiting launch only needs the removal over; its failure is the sweep's, not the launch's.
+  const removal: Promise<void> = remove(join(root, name))
+    .catch(() => undefined)
+    .finally(() => {
+      inFlight.delete(removal)
+      if (inFlight.size === 0) {
+        removing.delete(key)
+      }
+    })
+  inFlight.add(removal)
+  return removal
+}
+
+/**
+ * A launch never waits for the clear: it names its chat (and the per-launch folder it will make)
+ * first, which keeps them. It waits only for removals of its chat's entries already under way.
+ * A clear skipped before the chat records opened is tried again by a later launch.
+ */
 export function clearEarlierRunsOnce(
   root: string,
   sessionId: string,
-  remove: (path: string) => Promise<void>
+  remove: (path: string) => Promise<void>,
+  folder?: string
 ): Promise<void> {
+  const chat = nativeChatScratchFolderName(sessionId)
+  // Even after the clear: a removal it started may still be under way.
+  const removalsOfChat = (): Promise<void> => {
+    const inFlight: Promise<void>[] = Array.from(removing.get(`${root}\0${chat}`) ?? [])
+    return Promise.all(inFlight).then(() => undefined)
+  }
   if (cleared.has(root)) {
-    return Promise.resolve()
+    return removalsOfChat()
   }
   const names = launched.get(root) ?? new Set<string>()
-  names.add(nativeChatScratchFolderName(sessionId))
+  names.add(chat)
   launched.set(root, names)
+  if (folder !== undefined) {
+    const made = madeThisRun.get(root) ?? new Set<string>()
+    made.add(folder)
+    madeThisRun.set(root, made)
+  }
   let attempt = clearing.get(root)
   if (!attempt) {
     attempt = clearEarlierRuns(root, remove)
@@ -132,10 +156,11 @@ export function clearEarlierRunsOnce(
         if (done) {
           cleared.add(root)
           launched.delete(root)
+          madeThisRun.delete(root)
         }
         return done
       })
     clearing.set(root, attempt)
   }
-  return attempt.then(() => undefined)
+  return removalsOfChat()
 }
