@@ -11,30 +11,34 @@ function escapeIdentifier(name: string): string {
   return name.replace(/\$/g, '\\$')
 }
 
-function exportedDeclaration(code: string, name: string): number | null {
-  const match = new RegExp(
-    `\\bexport\\s+(?:default\\s+)?${DECLARATION_KEYWORDS}\\s+(${escapeIdentifier(name)})(?![\\w$])`
-  ).exec(code)
-  return match ? match.index + match[0].length - name.length : null
-}
+type DeclarationOffsets = { first: number | null; moduleScope: number | null }
 
-/** A module-level declaration; a same-named one nested in a function or class body never counts. */
-function moduleDeclaration(code: string, name: string): number | null {
+/** Where `name` sits in its first `prefix`-led declaration, and in the first one at module scope. */
+function declarationOffsets(code: string, prefix: string, name: string): DeclarationOffsets {
   const pattern = new RegExp(
-    `(?<![\\w$.])${DECLARATION_KEYWORDS}\\s+(${escapeIdentifier(name)})(?![\\w$])`,
+    `${prefix}${DECLARATION_KEYWORDS}\\s+(${escapeIdentifier(name)})(?![\\w$])`,
     'g'
   )
+  let first: number | null = null
   let depth = 0
   let scanned = 0
   for (const match of code.matchAll(pattern)) {
     for (; scanned < match.index; scanned += 1) {
-      depth += code[scanned] === '{' ? 1 : code[scanned] === '}' ? -1 : 0
+      // Why: regex literals stay unmasked, so a stray `}` must not sink module scope below zero.
+      depth = Math.max(0, depth + (code[scanned] === '{' ? 1 : code[scanned] === '}' ? -1 : 0))
     }
+    const offset = match.index + match[0].length - name.length
+    first ??= offset
     if (depth === 0) {
-      return match.index + match[0].length - name.length
+      return { first, moduleScope: offset }
     }
   }
-  return null
+  return { first, moduleScope: null }
+}
+
+/** A module-level declaration; a same-named function, class or namespace member never counts. */
+function moduleDeclaration(code: string, name: string): number | null {
+  return declarationOffsets(code, '(?<![\\w$.])', name).moduleScope
 }
 
 /** The local that `export { … }` (without `from`) exports as `name`, and where the list names it. */
@@ -77,6 +81,7 @@ function forwardedLocal(
 export function locateExportedName(source: string, name: string): ExportLocation | null {
   const code = maskNonCodeText(source, { blankStrings: true })
   const statements = scanImportStatements(source)
+  let nestedExport: number | null = null
   if (name === 'default') {
     const defaultExport = /\bexport\s+default\b/.exec(code)
     if (defaultExport) {
@@ -93,10 +98,11 @@ export function locateExportedName(source: string, name: string): ExportLocation
       return forwarded ?? { kind: 'declaration', offset: defaultExport.index }
     }
   } else {
-    const declared = exportedDeclaration(code, name)
-    if (declared !== null) {
-      return { kind: 'declaration', offset: declared }
+    const declared = declarationOffsets(code, '\\bexport\\s+(?:default\\s+)?', name)
+    if (declared.moduleScope !== null) {
+      return { kind: 'declaration', offset: declared.moduleScope }
     }
+    nestedExport = declared.first
   }
   const listed = exportListEntry(code, name)
   if (listed) {
@@ -113,7 +119,9 @@ export function locateExportedName(source: string, name: string): ExportLocation
       return { kind: 'reexport', specifier: statement.specifier, name: binding.imported }
     }
   }
-  return null
+  // Why: a namespace member loses to every module-level export above, but a regex literal's braces
+  // can hide module scope, so an `export` the scan saw still beats none.
+  return nestedExport === null ? null : { kind: 'declaration', offset: nestedExport }
 }
 
 /** Modules `source` forwards wholesale with `export * from`. */

@@ -35,10 +35,17 @@ describe('resolveImportNavigationTarget', () => {
     })
   })
 
-  it('maps an emitted .js specifier and a directory import to their TypeScript sources', async () => {
+  it('maps .js specifiers, directory imports and `#` aliases with a query to their sources', async () => {
     const files = memoryFiles({
+      '/repo/tsconfig.json': '{ "compilerOptions": { "paths": { "#/*": ["./src/*"] } } }',
       '/repo/src/lib/format.ts': 'export const format = 1\n',
       '/repo/src/features/chart/index.tsx': 'export const Chart = 1\n'
+    })
+    const hashAlias = await resolveImportNavigationTarget(files, {
+      specifier: '#/lib/format?raw',
+      importedName: null,
+      fromFilePath: FROM,
+      rootPath: ROOT
     })
     const emitted = await resolveImportNavigationTarget(files, {
       specifier: '../lib/format.js',
@@ -56,6 +63,7 @@ describe('resolveImportNavigationTarget', () => {
     expect(emitted?.offset).toBe(0)
     expect(directory?.filePath).toBe('/repo/src/features/chart/index.tsx')
     expect(directory?.offset).toBe(13)
+    expect(hashAlias?.filePath).toBe('/repo/src/lib/format.ts')
   })
 
   it('follows a tsconfig alias kept in a referenced, extended project config', async () => {
@@ -104,6 +112,8 @@ describe('resolveImportNavigationTarget', () => {
     const barrel = [
       "import Card from './card'",
       'const doc = "export const title = 0"',
+      'export namespace Legacy { export const title = 3; export const version = 1 }',
+      'export const version = 2',
       'function helper() {',
       '  const title = 1',
       "  const Card = 'nested'",
@@ -124,6 +134,7 @@ describe('resolveImportNavigationTarget', () => {
         rootPath: ROOT
       })
     expect((await fromBarrel('title'))?.offset).toBe(landing(barrel, 'title = 2'))
+    expect((await fromBarrel('version'))?.offset).toBe(landing(barrel, 'version = 2'))
     expect(await fromBarrel('default')).toEqual({
       filePath: '/repo/src/ui/card.tsx',
       content: card,
@@ -131,15 +142,16 @@ describe('resolveImportNavigationTarget', () => {
     })
   })
 
-  it('uses the referenced project whose include matches the file, and its effective baseUrl', async () => {
+  it('uses the referenced project that owns the file, with inherited include and effective baseUrl', async () => {
     const files = memoryFiles({
       '/repo/tsconfig.json':
-        '{ "files": [], "references": [{ "path": "./tsconfig.test.json" }, { "path": "./tsconfig.app.json" }] }',
+        '{ "files": [], "compilerOptions": { "baseUrl": "." }, "references": [{ "path": "./tsconfig.test.json" }, { "path": "./tsconfig.app.json" }] }',
       '/repo/tsconfig.test.json':
         '{ "include": ["src/**/*.test.ts"], "compilerOptions": { "paths": { "@/*": ["./test-support/*"] } } }',
       '/repo/tsconfig.app.json':
-        '{ "extends": "./config/tsconfig.base.json", "include": ["src"], "compilerOptions": { "baseUrl": "." } }',
-      '/repo/config/tsconfig.base.json': '{ "compilerOptions": { "paths": { "@/*": ["src/*"] } } }',
+        '{ "extends": "./config/tsconfig.base.json", "files": ["./types/env.d.ts"], "compilerOptions": { "baseUrl": "." } }',
+      '/repo/config/tsconfig.base.json':
+        '{ "include": ["../src"], "compilerOptions": { "paths": { "@/*": ["src/*"] } } }',
       '/repo/test-support/button.ts': 'export const button = 0\n',
       '/repo/src/button.ts': 'export const button = 1\n'
     })

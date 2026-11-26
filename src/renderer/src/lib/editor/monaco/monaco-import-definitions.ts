@@ -27,6 +27,8 @@ type ImportTarget = {
   relativePath: string
   worktreeId: string
   runtimeEnvironmentId: string | null
+  /** The source tab's SSH owner; worktree ids can repeat across hosts. */
+  externalSshTargetId?: string
 }
 
 // Monaco only underlines and previews a definition whose model exists, so targets get a read-only twin.
@@ -72,7 +74,9 @@ function importTargetModel(
   const uri = monaco.Uri.from({
     scheme: IMPORT_TARGET_SCHEME,
     // Why: the same path on two hosts must not share a preview.
-    authority: encodeURIComponent(`${target.worktreeId}|${target.runtimeEnvironmentId ?? ''}`),
+    authority: encodeURIComponent(
+      `${target.worktreeId}|${target.runtimeEnvironmentId ?? ''}|${target.externalSshTargetId ?? ''}`
+    ),
     path: monaco.Uri.file(target.filePath).path
   })
   const key = uri.toString()
@@ -186,20 +190,23 @@ async function importDefinition(
       filePath: resolved.filePath,
       relativePath,
       worktreeId: file.worktreeId,
-      runtimeEnvironmentId: owner?.kind === 'environment' ? owner.environmentId : null
+      runtimeEnvironmentId: owner?.kind === 'environment' ? owner.environmentId : null,
+      externalSshTargetId: file.externalSshTargetId
     },
     resolved.content
   )
   const start = targetModel.getPositionAt(resolved.offset)
   const word = targetModel.getWordAtPosition(start)
+  const endLineNumber = Math.min(targetModel.getLineCount(), start.lineNumber + PREVIEW_LINES)
   return {
     uri: targetModel.uri,
-    // Why: eight or more lines make Monaco preview the declaration's indented block, not one name.
+    // Why: eight or more lines make Monaco preview the declaration's indented block, not one name;
+    // ending at the line's end keeps a declaration on a short file's last line inside the range.
     range: {
       startLineNumber: start.lineNumber,
       startColumn: 1,
-      endLineNumber: Math.min(targetModel.getLineCount(), start.lineNumber + PREVIEW_LINES),
-      endColumn: 1
+      endLineNumber,
+      endColumn: targetModel.getLineMaxColumn(endLineNumber)
     },
     targetSelectionRange: {
       startLineNumber: start.lineNumber,
@@ -218,6 +225,7 @@ function openImportTarget(target: ImportTarget, line: number, column: number): v
       relativePath: target.relativePath,
       worktreeId: target.worktreeId,
       runtimeEnvironmentId: target.runtimeEnvironmentId,
+      ...(target.externalSshTargetId ? { externalSshTargetId: target.externalSshTargetId } : {}),
       language: detectLanguage(target.filePath),
       mode: 'edit'
     },

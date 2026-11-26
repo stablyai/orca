@@ -15,7 +15,8 @@ const MAX_EXTENDS_DEPTH = 4
 const MAX_REFERENCES = 8
 
 type ConfigPaths = { entries: Record<string, string[]>; originDir: string }
-type ConfigSources = { include: string[] | null; files: string[] | null; configDir: string }
+type ConfigSpecs = { specs: string[]; originDir: string }
+type ConfigSources = { include: ConfigSpecs | null; files: ConfigSpecs | null; configDir: string }
 
 type ConfigMappings = {
   baseUrl: string | null
@@ -88,7 +89,8 @@ async function loadConfigMappings(
   const configDir = dirname(configPath)
   let inheritedBaseUrl: string | null = null
   let inheritedPaths: ConfigPaths | null = null
-  let inheritedSources: ConfigSources | null = null
+  let inheritedInclude: ConfigSpecs | null = null
+  let inheritedFiles: ConfigSpecs | null = null
   if (depth < MAX_EXTENDS_DEPTH) {
     // Why: package-name bases (e.g. @tsconfig/node20) never define project aliases.
     for (const base of config.extends.filter(isPathLikeReference)) {
@@ -96,22 +98,24 @@ async function loadConfigMappings(
       const parent = await loadConfigMappings(access, basePath, depth + 1)
       inheritedBaseUrl = parent?.baseUrl ?? inheritedBaseUrl
       inheritedPaths = parent?.paths ?? inheritedPaths
-      inheritedSources =
-        parent && (parent.sources.include || parent.sources.files)
-          ? parent.sources
-          : inheritedSources
+      inheritedInclude = parent?.sources.include ?? inheritedInclude
+      inheritedFiles = parent?.sources.files ?? inheritedFiles
     }
   }
-  const ownSources = config.include || config.files
+  // Why: TypeScript inherits `include` and `files` separately, each relative to the config that set it.
+  const ownSpecs = (specs: string[] | undefined): ConfigSpecs | null =>
+    specs ? { specs, originDir: configDir } : null
   return {
     baseUrl:
       config.baseUrl === undefined
         ? inheritedBaseUrl
         : resolveModulePath(configDir, config.baseUrl),
     paths: config.paths ? { entries: config.paths, originDir: configDir } : inheritedPaths,
-    sources: ownSources
-      ? { include: config.include ?? null, files: config.files ?? null, configDir }
-      : (inheritedSources ?? { include: null, files: null, configDir }),
+    sources: {
+      include: ownSpecs(config.include) ?? inheritedInclude,
+      files: ownSpecs(config.files) ?? inheritedFiles,
+      configDir
+    },
     references: config.references.map((reference) => {
       const referencePath = resolveModulePath(configDir, reference)
       return referencePath.endsWith('.json')
@@ -186,13 +190,18 @@ function includeSpecMatches(spec: string, filePath: string): boolean {
   )
 }
 
-/** Whether a project's `files` or `include` (TypeScript's defaults when absent) list `filePath`. */
+/** Whether a project's `files` or `include` list `filePath`; with neither set, all files under it count. */
 function sourcesCover({ include, files, configDir }: ConfigSources, filePath: string): boolean {
-  if (files?.some((file) => resolveModulePath(configDir, file) === filePath)) {
+  if (files?.specs.some((file) => resolveModulePath(files.originDir, file) === filePath)) {
     return true
   }
-  const specs = include ?? (files ? [] : ['**/*'])
-  return specs.some((spec) => includeSpecMatches(resolveModulePath(configDir, spec), filePath))
+  const includes = include ?? (files ? null : { specs: ['**/*'], originDir: configDir })
+  if (!includes) {
+    return false
+  }
+  return includes.specs.some((spec) =>
+    includeSpecMatches(resolveModulePath(includes.originDir, spec), filePath)
+  )
 }
 
 /** Alias rules from the nearest tsconfig/jsconfig at or above `filePath`, inside `rootPath`. */
@@ -214,11 +223,12 @@ export async function loadImportPathMappings(
     return NO_IMPORT_PATH_MAPPINGS
   }
   const own = toMappings(config)
-  if (own) {
+  if (own && (config.references.length === 0 || sourcesCover(config.sources, filePath))) {
     return own
   }
-  // Why: solution-style roots (Vite's tsconfig.json) keep aliases in referenced project configs.
-  let fallback: ImportPathMappings | null = null
+  // Why: a solution-style root (Vite's tsconfig.json) owns no sources; the referenced project that
+  // includes the file supplies its aliases, even when the root sets a `baseUrl` of its own.
+  let fallback = own
   for (const reference of config.references.slice(0, MAX_REFERENCES)) {
     const referenced = await loadConfigMappings(access, reference, 0)
     const mappings = referenced ? toMappings(referenced) : null
