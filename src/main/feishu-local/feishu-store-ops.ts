@@ -1,6 +1,10 @@
 import type { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import type { FeishuInbox } from './feishu-inbox'
 const OPS = [
+  'deliveryReady',
+  'deliveryFailed',
+  'deliverySucceeded',
+  'deliveryRetrying',
   'putRoute',
   'messageRoute',
   'laneRoute',

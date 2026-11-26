@@ -233,59 +233,69 @@ export class FeishuInteractions {
     await this.asyncQuestions.flush()
     await this.native.flush()
     const b = this.b
-    for (const card of await this.store.pendingCards(b.account)) {
-      if (!this.active()) {
-        return
-      }
-      const data = cardData.parse(JSON.parse(card.body))
-      if (card.state === 'claimed' && card.selected !== null) {
-        const sender = data.ownerOnly
-          ? b.owner
-          : await this.store.laneSender(b.account, card.external)
-        if (!feishuAsker(b, this.members(), sender)) {
-          await this.store.closeCard(b.account, card.id, '提问权限已撤销')
-          continue
+    let after: string | null = null
+    while (this.active()) {
+      const rows = await this.store.pendingCards(b.account, after)
+      for (const card of rows) {
+        after = card.id
+        if (!this.active()) {
+          return
         }
-        if (!(await this.cards.publish(card.id))) {
-          continue
-        }
-        const option = data.options.find((o) => o.id === card.selected)
-        if (!option) {
-          await this.store.closeCard(b.account, card.id, '选项已失效')
-          continue
-        }
-        if (data.kind === 'choices' || data.kind === 'async-question') {
-          if (
-            data.kind === 'async-question' &&
-            !this.asyncQuestions.isCurrent(data, card.external)
-          ) {
-            await this.store.closeCard(b.account, card.id, '此问题已结束')
-            continue
+        await this.cards.attempts.run(`interaction:${card.id}`, async () => {
+          const data = cardData.parse(JSON.parse(card.body))
+          if (card.state === 'claimed' && card.selected !== null) {
+            const sender = data.ownerOnly
+              ? b.owner
+              : await this.store.laneSender(b.account, card.external)
+            if (!feishuAsker(b, this.members(), sender)) {
+              await this.store.closeCard(b.account, card.id, '提问权限已撤销')
+              return
+            }
+            if (!(await this.cards.publish(card.id))) {
+              return
+            }
+            const option = data.options.find((o) => o.id === card.selected)
+            if (!option) {
+              await this.store.closeCard(b.account, card.id, '选项已失效')
+              return
+            }
+            if (data.kind === 'choices' || data.kind === 'async-question') {
+              if (
+                data.kind === 'async-question' &&
+                !this.asyncQuestions.isCurrent(data, card.external)
+              ) {
+                await this.store.closeCard(b.account, card.id, '此问题已结束')
+                return
+              }
+              await continueFeishuChoice(this.store, b, card, data, option, sender!, this.members())
+            } else if (data.kind === 'prompt' && data.promptId) {
+              const seam = this.runtime.getExternalConversationSeam()
+              if (!seam) {
+                throw new Error('Conversation host unavailable')
+              }
+              const result = await seam.answer(
+                runtimeConversationHost(this.runtime),
+                { ...dmKey(b), externalId: card.external },
+                data.promptId,
+                option.id
+              )
+              await this.store.closeCard(
+                b.account,
+                card.id,
+                result.outcome === 'accepted'
+                  ? `已选择：${option.label}`
+                  : '此问题已失效，请在 Orca 中检查'
+              )
+            }
+            this.wake()
+            return
           }
-          await continueFeishuChoice(this.store, b, card, data, option, sender!, this.members())
-        } else if (data.kind === 'prompt' && data.promptId) {
-          const seam = this.runtime.getExternalConversationSeam()
-          if (!seam) {
-            throw new Error('Conversation host unavailable')
-          }
-          const result = await seam.answer(
-            runtimeConversationHost(this.runtime),
-            { ...dmKey(b), externalId: card.external },
-            data.promptId,
-            option.id
-          )
-          await this.store.closeCard(
-            b.account,
-            card.id,
-            result.outcome === 'accepted'
-              ? `已选择：${option.label}`
-              : '此问题已失效，请在 Orca 中检查'
-          )
-        }
-        this.wake()
-        continue
+          await this.cards.publish(card.id)
+        })
       }
-      await this.cards.publish(card.id)
+      if (rows.length < 32) {
+        break
+      }
     }
   }
 }

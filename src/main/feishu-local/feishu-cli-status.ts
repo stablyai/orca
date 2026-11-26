@@ -13,6 +13,26 @@ export class FeishuHostError extends Error {
     super(problem === 'cli-missing' ? FEISHU_CLI_MISSING : `Feishu connection: ${problem}`)
   }
 }
+
+export class FeishuCommandError extends Error {
+  constructor(readonly code: number | null) {
+    super(code === null ? 'Feishu CLI command failed' : `Feishu API error ${code}`)
+  }
+}
+
+export function feishuCommandError(stderr: string): FeishuCommandError {
+  try {
+    const result = z
+      .object({
+        ok: z.literal(false),
+        error: z.object({ code: z.number().int().optional() })
+      })
+      .parse(JSON.parse(stderr))
+    return new FeishuCommandError(result.error.code ?? null)
+  } catch {
+    return new FeishuCommandError(null)
+  }
+}
 export function feishuProblem(error: unknown): FeishuProblem {
   if (error instanceof FeishuHostError) {
     return error.problem

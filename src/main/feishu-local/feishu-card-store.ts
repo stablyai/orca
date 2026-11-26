@@ -149,12 +149,12 @@ export class FeishuCardStore {
         .get(account, original)
     )
   }
-  pending(account: string) {
+  pending(account: string, after: string | null = null) {
     return this.db
       .prepare(
-        "SELECT * FROM feishu_cards WHERE account=? AND review=0 AND (revision>sent OR state='claimed') ORDER BY (state='claimed') DESC,rowid LIMIT 32"
+        "SELECT * FROM feishu_cards WHERE account=? AND review=0 AND (revision>sent OR state='claimed') AND rowid>COALESCE((SELECT rowid FROM feishu_cards WHERE account=? AND id=?),0) ORDER BY rowid LIMIT 32"
       )
-      .all(account)
+      .all(account, account, after)
       .map((r) => row.parse(r))
   }
   claim(account: string, message: string, chat: string, option: string, questionId?: string) {

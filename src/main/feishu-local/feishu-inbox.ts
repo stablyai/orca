@@ -9,6 +9,7 @@ import { binding, type Binding } from './feishu-binding'
 import { claimFeishuControl } from './feishu-control-access'
 import type { BotMember } from '../../shared/bot-types'
 import { FeishuAdmissions } from './feishu-admissions'
+import { FeishuDeliveryFailures } from './feishu-delivery-failures'
 
 const inReplyWindow = (first: number, now: number): boolean =>
   now >= first && now - first < 55 * 60_000
@@ -20,6 +21,7 @@ export class FeishuInbox {
   private responses: FeishuResponseStore
   private admissions: FeishuAdmissions
   private routes: FeishuRoutes
+  private failures: FeishuDeliveryFailures
   constructor(path: string) {
     this.db = new Database(path)
     this.db.exec(`PRAGMA foreign_keys=ON;
@@ -30,11 +32,19 @@ export class FeishuInbox {
       CREATE TABLE IF NOT EXISTS text_replies(account TEXT NOT NULL,id TEXT NOT NULL,mid TEXT NOT NULL,text TEXT NOT NULL,first_post INTEGER,message_id TEXT,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,id),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
       CREATE INDEX IF NOT EXISTS pending_feishu_replies ON text_replies(account) WHERE message_id IS NULL AND review=0;
       CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
+    this.failures = new FeishuDeliveryFailures(this.db)
     this.cards = new FeishuCardStore(this.db)
     this.responses = new FeishuResponseStore(this.db, this.cards)
     this.routes = new FeishuRoutes(this.db)
     this.admissions = new FeishuAdmissions(this.db, this.routes)
   }
+  deliveryReady = (...args: Parameters<FeishuDeliveryFailures['ready']>) =>
+    this.failures.ready(...args)
+  deliveryFailed = (...args: Parameters<FeishuDeliveryFailures['failed']>) =>
+    this.failures.failed(...args)
+  deliverySucceeded = (...args: Parameters<FeishuDeliveryFailures['succeeded']>) =>
+    this.failures.succeeded(...args)
+  deliveryRetrying = (account: string) => this.failures.retrying(account)
   putRoute = (...args: Parameters<FeishuRoutes['put']>) => this.routes.put(...args)
   messageRoute(account: string, mid: string) {
     return this.routes.message(account, mid)
@@ -217,12 +227,12 @@ export class FeishuInbox {
       .run(account, mid, id, text)
     return { status: 'queued' as const }
   }
-  pendingReplies(account: string) {
+  pendingReplies(account: string, after: string | null = null) {
     return this.db
       .prepare(
-        'SELECT id,mid,text FROM text_replies WHERE account=? AND message_id IS NULL AND review=0 ORDER BY rowid LIMIT 32'
+        'SELECT id,mid,text FROM text_replies WHERE account=? AND message_id IS NULL AND review=0 AND rowid>COALESCE((SELECT rowid FROM text_replies WHERE account=? AND id=?),0) ORDER BY rowid LIMIT 32'
       )
-      .all(account)
+      .all(account, account, after)
       .map((row) => z.object({ id: z.string(), mid: z.string(), text: z.string() }).parse(row))
   }
   mayPostReply(account: string, id: string, now: number): boolean {
@@ -254,14 +264,17 @@ export class FeishuInbox {
     this.db.prepare('UPDATE inbox SET review=1 WHERE account=? AND mid=?').run(account, mid)
   }
   needsReview(account: string): boolean {
-    return Boolean(
-      this.db
-        .prepare('SELECT 1 FROM feishu_cards WHERE account=? AND review=1 LIMIT 1')
-        .get(account) ||
-      this.db.prepare('SELECT 1 FROM inbox WHERE account=? AND review=1 LIMIT 1').get(account) ||
-      this.db
-        .prepare('SELECT 1 FROM text_replies WHERE account=? AND review=1 LIMIT 1')
-        .get(account)
+    return (
+      this.failures.needsReview(account) ||
+      Boolean(
+        this.db
+          .prepare('SELECT 1 FROM feishu_cards WHERE account=? AND review=1 LIMIT 1')
+          .get(account) ||
+        this.db.prepare('SELECT 1 FROM inbox WHERE account=? AND review=1 LIMIT 1').get(account) ||
+        this.db
+          .prepare('SELECT 1 FROM text_replies WHERE account=? AND review=1 LIMIT 1')
+          .get(account)
+      )
     )
   }
   /** A reply whose outcome was lost must only be retried within Feishu's one-hour UUID window. */

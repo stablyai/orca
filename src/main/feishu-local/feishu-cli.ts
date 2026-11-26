@@ -3,7 +3,12 @@ import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import type { Readable } from 'node:stream'
 import { z } from 'zod'
 
-import { feishuDiagnostic, feishuProblem, FeishuHostError } from './feishu-cli-status'
+import {
+  feishuDiagnostic,
+  feishuProblem,
+  FeishuHostError,
+  feishuCommandError
+} from './feishu-cli-status'
 
 const EVENT = 'im.message.receive_v1'
 const appId = z.string().regex(/^cli_[a-zA-Z0-9]+$/)
@@ -61,7 +66,7 @@ export async function feishuCommand(
     timeoutMs: 20_000
   })
   if (result.code !== 0 || result.outputTruncated || signal?.aborted) {
-    throw new Error('Feishu CLI command failed')
+    throw feishuCommandError(result.outputTruncated || signal?.aborted ? '' : result.stderr)
   }
   try {
     return JSON.parse(result.stdout)

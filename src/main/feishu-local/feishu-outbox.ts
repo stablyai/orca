@@ -21,6 +21,7 @@ export async function drainFeishuOutbox(
   if (!b.chat) {
     return
   }
+  const defaultChat = b.chat
   cards.name = botName
   await drainFeishuTextOutbox(inbox, b, active, checkProfile, changed, cards)
   const handedOff = new Set<string>()
@@ -32,108 +33,110 @@ export async function drainFeishuOutbox(
       if (!active()) {
         return
       }
-      const route = await inbox.messageRoute(b.account, row.deliveryId)
-      const chat = route?.chat ?? b.chat
-      const fill = row.fill
-      if (
-        !fill ||
-        row.account !== b.account ||
-        row.conversation.source !== 'feishu-local' ||
-        (row.conversation.externalId !== dmKey(b).externalId &&
-          !(await inbox.laneRoute(b.account, row.conversation.externalId)))
-      ) {
-        continue
-      }
-      if (await inbox.pendingChoice(b.account, row.deliveryId)) {
-        continue
-      }
-      if (fill.turnItemId && !handedOff.has(fill.answerDeliveryId)) {
-        const siblings = await journal.read(row.sessionId)
-        for (const sibling of siblings) {
-          if (
-            sibling.account === b.account &&
-            sibling.conversation.source === 'feishu-local' &&
-            sibling.conversation.externalId === row.conversation.externalId &&
-            sibling.fill?.answerDeliveryId === fill.answerDeliveryId &&
-            sibling.fill.turnItemId === fill.turnItemId &&
-            sibling.deliveryId !== fill.answerDeliveryId
-          ) {
-            await inbox.updateResponse(
+      await cards.attempts.run(`final:${row.deliveryId}`, async () => {
+        const route = await inbox.messageRoute(b.account, row.deliveryId)
+        const chat = route?.chat ?? defaultChat
+        const fill = row.fill
+        if (
+          !fill ||
+          row.account !== b.account ||
+          row.conversation.source !== 'feishu-local' ||
+          (row.conversation.externalId !== dmKey(b).externalId &&
+            !(await inbox.laneRoute(b.account, row.conversation.externalId)))
+        ) {
+          return
+        }
+        if (await inbox.pendingChoice(b.account, row.deliveryId)) {
+          return
+        }
+        if (fill.turnItemId && !handedOff.has(fill.answerDeliveryId)) {
+          const siblings = await journal.read(row.sessionId)
+          for (const sibling of siblings) {
+            if (
+              sibling.account === b.account &&
+              sibling.conversation.source === 'feishu-local' &&
+              sibling.conversation.externalId === row.conversation.externalId &&
+              sibling.fill?.answerDeliveryId === fill.answerDeliveryId &&
+              sibling.fill.turnItemId === fill.turnItemId &&
+              sibling.deliveryId !== fill.answerDeliveryId
+            ) {
+              await inbox.updateResponse(
+                b.account,
+                row.conversation.externalId,
+                sibling.deliveryId,
+                chat,
+                {
+                  kind: 'handoff',
+                  from: fill.answerDeliveryId,
+                  turnItemId: fill.turnItemId,
+                  at: Date.now()
+                }
+              )
+            }
+          }
+          handedOff.add(fill.answerDeliveryId)
+        }
+        if (fill.answerDeliveryId !== row.deliveryId) {
+          await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
+          return
+        }
+        if (fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet') {
+          await checkProfile()
+          if (!active()) {
+            return
+          }
+          const artifact = await inbox.artifact(b.account, row.deliveryId)
+          if (!active()) {
+            return
+          }
+          if (artifact && fill.outcome === 'answered' && !artifact.posted) {
+            const key =
+              artifact.key ?? (await uploadFeishuFile(b.app, artifact.name, artifact.bytes, signal))
+            if (!active()) {
+              return
+            }
+            if (!artifact.key) {
+              await inbox.uploaded(b.account, row.deliveryId, key)
+            }
+            if (!active()) {
+              return
+            }
+            await replyFeishu(
+              b.app,
               b.account,
-              row.conversation.externalId,
-              sibling.deliveryId,
+              await inbox.replyMessage(b.account, row.deliveryId),
               chat,
-              {
-                kind: 'handoff',
-                from: fill.answerDeliveryId,
-                turnItemId: fill.turnItemId,
-                at: Date.now()
-              }
+              { type: 'file', content: { file_key: key } },
+              'file',
+              signal
             )
+            await inbox.filePosted(b.account, row.deliveryId)
+          }
+          if (!active()) {
+            return
           }
         }
-        handedOff.add(fill.answerDeliveryId)
-      }
-      if (fill.answerDeliveryId !== row.deliveryId) {
+        const id = await inbox.updateResponse(
+          b.account,
+          row.conversation.externalId,
+          row.deliveryId,
+          chat,
+          {
+            kind: 'final',
+            turnItemId: fill.turnItemId ?? undefined,
+            text:
+              fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet'
+                ? fill.prose || outcomeSentence(fill.outcome, 'Orca')
+                : '',
+            failed: fill.outcome === 'failed'
+          }
+        )
+        if (!id || !(await cards.publish(id))) {
+          changed()
+          return
+        }
         await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
-        continue
-      }
-      if (fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet') {
-        await checkProfile()
-        if (!active()) {
-          return
-        }
-        const artifact = await inbox.artifact(b.account, row.deliveryId)
-        if (!active()) {
-          return
-        }
-        if (artifact && fill.outcome === 'answered' && !artifact.posted) {
-          const key =
-            artifact.key ?? (await uploadFeishuFile(b.app, artifact.name, artifact.bytes, signal))
-          if (!active()) {
-            return
-          }
-          if (!artifact.key) {
-            await inbox.uploaded(b.account, row.deliveryId, key)
-          }
-          if (!active()) {
-            return
-          }
-          await replyFeishu(
-            b.app,
-            b.account,
-            await inbox.replyMessage(b.account, row.deliveryId),
-            chat,
-            { type: 'file', content: { file_key: key } },
-            'file',
-            signal
-          )
-          await inbox.filePosted(b.account, row.deliveryId)
-        }
-        if (!active()) {
-          return
-        }
-      }
-      const id = await inbox.updateResponse(
-        b.account,
-        row.conversation.externalId,
-        row.deliveryId,
-        chat,
-        {
-          kind: 'final',
-          turnItemId: fill.turnItemId ?? undefined,
-          text:
-            fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet'
-              ? fill.prose || outcomeSentence(fill.outcome, 'Orca')
-              : '',
-          failed: fill.outcome === 'failed'
-        }
-      )
-      if (!id || !(await cards.publish(id))) {
-        changed()
-        continue
-      }
-      await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
+      })
     }
     if (rows.length < 32) {
       break

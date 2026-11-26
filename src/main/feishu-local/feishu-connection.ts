@@ -211,7 +211,7 @@ export class FeishuConnection {
     }
   }
   wake(): void {
-    if (this.signal.aborted || !this.binding.owner || !this.bot() || this.retry) {
+    if (this.signal.aborted || !this.binding.owner || !this.bot()) {
       return
     }
     if (this.work) {
@@ -219,9 +219,13 @@ export class FeishuConnection {
       return
     }
     this.work = this.drain()
-      .then(() => {
-        if (this.deliveryRetry && !this.retry) {
-          this.deliveryRetry = false
+      .then(async () => {
+        const retrying = await this.inbox.deliveryRetrying(this.binding.account)
+        if (retrying) {
+          this.retryWork()
+        }
+        if (this.deliveryRetry !== retrying) {
+          this.deliveryRetry = retrying
           this.changed()
         }
       })
@@ -277,8 +281,7 @@ export class FeishuConnection {
   }
   private async sendOwed(displayName: string): Promise<void> {
     const b = this.binding
-    const bot = this.bot()
-    if (!b.chat || !bot) {
+    if (!b.chat || !this.bot()) {
       return
     }
     const journal = getStructuredAgentSessionHost()?.deps.store.connectorReplies()

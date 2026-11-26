@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { FeishuDeliveryAttempts } from './feishu-delivery-attempts'
 import { FeishuCardKit } from './feishu-cardkit'
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
@@ -11,6 +12,7 @@ import { replyFeishu } from './feishu-replies'
 export class FeishuCardDelivery {
   private readonly cardkit: FeishuCardKit
   private readonly writes = new Map<string, Promise<unknown>>()
+  readonly attempts: FeishuDeliveryAttempts
   name = 'Orca'
   constructor(
     private readonly store: FeishuStore,
@@ -18,6 +20,7 @@ export class FeishuCardDelivery {
     private readonly signal: AbortSignal,
     private readonly active: () => boolean
   ) {
+    this.attempts = new FeishuDeliveryAttempts(store, b.account, signal)
     this.cardkit = new FeishuCardKit(store, b, signal)
   }
 
@@ -25,7 +28,7 @@ export class FeishuCardDelivery {
     // Serialize each card, without making a click wait behind another card's streaming updates.
     const next = (this.writes.get(id) ?? Promise.resolve())
       .catch(() => {})
-      .then(() => this.write(id))
+      .then(() => this.attempts.run(`card:${id}`, () => this.write(id)))
     this.writes.set(id, next)
     return next.finally(() => {
       if (this.writes.get(id) === next) {
