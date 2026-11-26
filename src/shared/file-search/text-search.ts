@@ -205,7 +205,7 @@ export function buildSubmatchRegex(
 ): RegExp | null {
   let pattern = opts.useRegex ? query : escapeRegex(query)
   if (opts.wholeWord) {
-    pattern = `\\b${pattern}\\b`
+    pattern = `\\b(?:${pattern})\\b`
   }
   try {
     return new RegExp(pattern, `g${opts.caseSensitive ? '' : 'i'}`)

@@ -62,6 +62,17 @@ describe('ingestRgJsonLine', () => {
 })
 
 describe('ingestGitGrepLine', () => {
+  it('applies both whole-word boundaries to every regex alternative', () => {
+    const acc = createAccumulator()
+    const re = buildSubmatchRegex('foo|bar', { useRegex: true, wholeWord: true })
+    ingestGitGrepLine('a.ts\x001\x00foobar xbar foo bar\n', '/root', re, acc, 100)
+    expect(acc.totalMatches).toBe(2)
+    expect(Array.from(acc.fileMap.values())[0].matches).toEqual([
+      { line: 1, column: 13, matchLength: 3, lineContent: 'foobar xbar foo bar' },
+      { line: 1, column: 17, matchLength: 3, lineContent: 'foobar xbar foo bar' }
+    ])
+  })
+
   it('parses git grep null-delimited line, finds all submatch positions', () => {
     const acc = createAccumulator()
     const re = buildSubmatchRegex('foo', {})
