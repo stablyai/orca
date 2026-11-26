@@ -2,7 +2,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layou
 import type { TerminalIdentityReadContext } from '../../../terminal/query/terminal-identity-read-context'
 import { ptyRecordForPaneKey } from '../../../terminal/query/pty-pane-record'
 import type { RuntimeTerminalAgentPresenceOptions } from '../../../terminal/query/runtime-terminal-agent-presence'
-import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
+import { RuntimeSleptAgentWakes } from './slept-agent-wake-runtime'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import {
   isTerminalLeafId,
@@ -33,7 +33,7 @@ import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/te
 import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
 import { ChatWorkerModelWait } from '../../workers/turn-stops/chat-worker-model-wait'
 
-export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
+export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSleptAgentWakes {
   protected terminalIdentitySources = () => ({
     handles: this.handles,
     sshTerminals: this.orchestrationCompatibilitySshTerminals,
@@ -130,7 +130,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     handle: string,
     options?: RuntimeTerminalAgentPresenceOptions
   ): Promise<boolean> {
-    return this.terminalAgentPresence.isRunning(handle, options)
+    // A slept agent is an idle one to every caller: input wakes it in place.
+    return (
+      this.sleptAgentPaneForHandle(handle) !== null ||
+      this.terminalAgentPresence.isRunning(handle, options)
+    )
   }
 
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
@@ -259,7 +263,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
    *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
-  withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
+  withdrawStaleChatMail(touched?: Iterable<string>): void {
+    const mailboxes = touched && [...touched]
+    this.publishSleepingMail(mailboxes ? { mailboxes } : undefined)
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 

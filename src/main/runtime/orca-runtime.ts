@@ -218,11 +218,6 @@ class OrcaRuntimeService extends RuntimeAgentOverviewProjection {
     syncPRAutoRefreshCadence(this.store)
   }
 
-  /** What mobileRelay.hosts.list answers changed. */
-  notifyRelayHostsChanged(): void {
-    this.emitClientEvent({ type: 'relayHostsChanged' })
-  }
-
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>
 
   /** Subscribe from first use; returns the release function. */

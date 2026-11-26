@@ -12,7 +12,13 @@ import {
   writeAgentCliUpdateCardMemory,
   type AgentCliUpdateCardMemory
 } from './agent-cli-update-card-offer'
-import { rowFor, targetPhase, type RunTarget } from './agent-cli-update-card-run'
+import {
+  agentCliUpdateRowKey,
+  agentCliUpdateRowsByKey,
+  rowFor,
+  targetPhase,
+  type RunTarget
+} from './agent-cli-update-card-run'
 import { AgentCliUpdateToast } from './AgentCliUpdateToast'
 import type { AgentCliUpdateToastItem } from './AgentCliUpdateToastList'
 import { openAgentCliUpdateFailure } from './agent-cli-update-failure-modal'
@@ -38,9 +44,13 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
   const [exiting, setExiting] = useState(false)
   const exitTimer = useRef<number | null>(null)
 
-  const wait = agentCliUpdateCardWait(offerKeys, memory, clock)
+  const rowsByKey = useMemo(() => agentCliUpdateRowsByKey(rows), [rows])
+  const wait = useMemo(
+    () => agentCliUpdateCardWait(offerKeys, memory, clock),
+    [offerKeys, memory, clock]
+  )
   const targets = session?.targets ?? []
-  const phases = targets.map((target) => targetPhase(target, rows))
+  const phases = targets.map((target) => targetPhase(target, rowsByKey))
   const view =
     session === null
       ? 'offer'
@@ -131,7 +141,7 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
     startable.forEach(runAgentCliUpdateRow)
   }
   const retry = (target: RunTarget): void => {
-    const row = rowFor(target, rows)
+    const row = rowFor(target, rowsByKey)
     if (row) {
       runAgentCliUpdateRow(row)
     }
@@ -145,13 +155,14 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
   const failure =
     (hostKey: string, agent: AgentCliUpdateRow['agent'], tryAgain: () => void) => () =>
       openAgentCliUpdateFailure({ hostKey, agent, tryAgain })
-  const items: AgentCliUpdateToastItem[] =
+  // Built only while the list is mounted, so a collapsed card builds no rows.
+  const items = (): AgentCliUpdateToastItem[] =>
     view === 'offer'
       ? offerRows.flatMap((row) =>
           row.update
             ? [
                 {
-                  key: `${row.hostKey}\n${row.agent}`,
+                  key: agentCliUpdateRowKey(row),
                   hostLabel: hostLabels.get(row.hostKey) ?? null,
                   agent: row.agent,
                   from: row.update.installedVersion,
@@ -164,7 +175,7 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
             : []
         )
       : targets.map((target, index) => ({
-          key: `${target.hostKey}\n${target.agent}`,
+          key: agentCliUpdateRowKey(target),
           hostLabel: target.hostLabel,
           agent: target.agent,
           from: target.from,

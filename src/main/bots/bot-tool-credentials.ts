@@ -6,17 +6,15 @@ import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { z } from 'zod'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { announceBotToolCredentialsEnded } from './bot-tool-credential-ended'
 import {
-  CredentialsFile,
   type Entry,
   openEntry,
+  parseEnvelopes,
   refuseUnsealedSecrets,
   sealEntry,
-  warnOnce,
   type Stored
 } from './bot-tool-credential-envelope'
 import { announceIfShownChanged } from './bot-tool-sign-in-changed'
@@ -44,8 +42,6 @@ export type BotToolOAuthEntry = {
   revision: number
   record: BotToolOAuthRecord
 }
-
-const OlderLayout = z.object({ credentials: z.record(z.string(), z.unknown()) })
 
 let rootOverride: string | null = null
 
@@ -76,43 +72,27 @@ function readFileText(path: string): string | null {
   }
 }
 
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
-/**
- * The file's entries. A file in the older layout, with plaintext addresses beside separately sealed
- * values, is never opened: nothing vouches for its addresses, so its tools need signing in again.
- */
+/** The file's entries, each opened the first time it is read: most reads and writes touch one. */
 function parseStored(folder: string, text: string | null): Stored {
-  if (text === null) {
-    return {}
-  }
-  const json = parseJson(text)
-  const parsed = CredentialsFile.safeParse(json)
-  if (parsed.success) {
-    return Object.fromEntries(
-      Object.entries(parsed.data.credentials).map(([id, envelope]) => [
-        id,
-        { envelope, entry: openEntry(folder, id, envelope) }
-      ])
-    )
-  }
-  if (OlderLayout.safeParse(json).success) {
-    warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
-    return {}
-  }
-  throw new BotFailureError('toolCredentialsUnreadable')
+  return Object.fromEntries(
+    Object.entries(parseEnvelopes(text)).map(([id, envelope]) => {
+      let opened: Entry | null | undefined
+      const slot = {
+        envelope,
+        get entry() {
+          return opened === undefined ? (opened = openEntry(folder, id, envelope)) : opened
+        }
+      }
+      return [id, slot]
+    })
+  )
 }
 
 const readSealed = (folder: string): Stored =>
   parseStored(folder, readFileText(botToolCredentialsPath(folder)))
 
-const entryOf = (stored: Stored, id: string): Entry | null => stored[id]?.entry ?? null
+const entryOf = (stored: Stored, id: string): Entry | null =>
+  Object.hasOwn(stored, id) ? stored[id]!.entry : null
 
 /**
  * Publishes `next` only while the file still holds `expected`, so a write from another Orca on the
@@ -161,7 +141,30 @@ export function botToolCredentialsTransaction<T>(folder: string, work: () => Pro
 
 /** One header or source credential, opened and checked against its folder and id; null for none or a sign-in. */
 export function readBotToolCredential(folder: string, id: string): BotToolCredential | null {
-  const entry = entryOf(readSealed(folder), id)
+  return botToolCredentialsReader(folder).credential(id)
+}
+
+/** The sign-in a credential id holds, or null when it holds none or something else. */
+export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
+  return botToolCredentialsReader(folder).oauth(id)
+}
+
+type BotToolCredentialsReader = {
+  credential: (id: string) => BotToolCredential | null
+  oauth: (id: string) => BotToolOAuthEntry | null
+}
+
+/**
+ * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, taken on
+ * the first id asked for, so a caller with none reads nothing. Only the entries asked for are opened.
+ */
+export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
+  let sealed: Stored | undefined
+  const entry = (id: string) => entryOf((sealed ??= readSealed(folder)), id)
+  return { credential: (id) => credentialOf(entry(id)), oauth: (id) => oauthOf(entry(id)) }
+}
+
+function credentialOf(entry: Entry | null): BotToolCredential | null {
   if (!entry || entry.kind === 'oauth') {
     return null
   }
@@ -170,11 +173,6 @@ export function readBotToolCredential(folder: string, id: string): BotToolCreden
     ...(entry.kind === 'source' ? { source: entry.source } : {}),
     headers: { ...entry.headers }
   }
-}
-
-/** The sign-in a credential id holds, or null when it holds none or something else. */
-export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
-  return oauthOf(entryOf(readSealed(folder), id))
 }
 
 function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
@@ -195,25 +193,43 @@ function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
  * address and sign-in for an app Orca signs in to, so a refreshed token restarts no chat.
  */
 export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<string>): string {
-  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)])
+  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)()])
 }
 
-/** `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store. */
+/**
+ * `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store taken
+ * now; its entries are opened only the first time the answer is asked for, so a reader that never
+ * needs it opens none.
+ */
 export function botToolCredentialFingerprints(
   folder: string,
   ids: ReadonlySet<string>
-): Map<string, unknown> {
-  const sealed = readSealed(folder)
-  return new Map(
-    [...ids].sort().map((id) => {
-      const slot = sealed[id]
-      const entry = slot?.entry
-      return [
-        id,
-        entry?.kind === 'oauth' ? [entry.kind, entry.url, entry.grant] : (slot?.envelope ?? null)
-      ]
-    })
-  )
+): () => Map<string, unknown> {
+  if (ids.size === 0) {
+    return () => new Map()
+  }
+  // Let go of once the answer is made, so no opened entry outlives it.
+  let sealed: Stored | undefined = readSealed(folder)
+  let fingerprints: Map<string, unknown> | undefined
+  return () => {
+    if (!fingerprints) {
+      const store = sealed!
+      fingerprints = new Map(
+        [...ids].sort().map((id) => {
+          const slot = store[id]
+          const entry = slot?.entry
+          return [
+            id,
+            entry?.kind === 'oauth'
+              ? [entry.kind, entry.url, entry.grant]
+              : (slot?.envelope ?? null)
+          ]
+        })
+      )
+      sealed = undefined
+    }
+    return fingerprints
+  }
 }
 
 /** Header names only, for an editor that shows which values are saved. */

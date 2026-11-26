@@ -1,11 +1,11 @@
-import { OrcaRuntimeWithAgentQuestions } from '../../construction/orca-runtime-agent-questions'
+import { OrcaRuntimeWithRelayHostNotices } from '../../construction/orca-runtime-relay-host-notices'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { sessionTabPaneKey } from '../../../../shared/remote-runtime/session-graph/session-tab-pane-key'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
-export abstract class RuntimeAgentOverviewProjection extends OrcaRuntimeWithAgentQuestions {
+export abstract class RuntimeAgentOverviewProjection extends OrcaRuntimeWithRelayHostNotices {
   projectLocalAgentSessionTabs(frame: RuntimeMobileSessionTabsResult): {
     frame: RuntimeMobileSessionTabsResult
     complete: boolean

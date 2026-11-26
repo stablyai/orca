@@ -5,6 +5,7 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   StructuredAgentSessionItemAppendOptions,
+  StructuredAgentSessionItemCommitted,
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -89,11 +90,12 @@ export function appendCodexItemAndPublish(
   sink: StructuredAgentSessionEventSink,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  options: StructuredAgentSessionItemAppendOptions
+  options: StructuredAgentSessionItemAppendOptions,
+  onCommitted?: StructuredAgentSessionItemCommitted
 ): StructuredAgentSessionSinkAdmission {
   const admission = sink.tryAppendItem
-    ? sink.tryAppendItem(identity, body, options)
-    : (sink.appendItem(identity, body, options), ADMITTED)
+    ? sink.tryAppendItem(identity, body, options, onCommitted)
+    : (sink.appendItem(identity, body, options, onCommitted), ADMITTED)
   if (!admission.accepted) {
     return admission
   }
