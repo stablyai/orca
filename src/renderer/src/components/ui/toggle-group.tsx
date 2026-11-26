@@ -8,7 +8,7 @@ import { cn } from '@/lib/class-names'
 import { toggleVariants } from '@/components/ui/toggle'
 
 type ToggleGroupVariantProps = Omit<VariantProps<typeof toggleVariants>, 'variant'> & {
-  variant?: VariantProps<typeof toggleVariants>['variant'] | 'segmented-card' | 'segmented-pill'
+  variant?: VariantProps<typeof toggleVariants>['variant'] | 'segmented-card'
 }
 
 const ToggleGroupContext = React.createContext<
@@ -50,7 +50,6 @@ function ToggleGroup({
       className={cn(
         'group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs',
         variant === 'segmented-card' && 'grid w-full grid-cols-2 rounded-md bg-muted p-0.5',
-        variant === 'segmented-pill' && 'shrink-0 bg-foreground/7 p-0.5',
         className
       )}
       {...props}
@@ -78,10 +77,7 @@ function ToggleGroupItem({
       data-spacing={context.spacing}
       className={cn(
         toggleVariants({
-          variant:
-            selectedVariant === 'segmented-card' || selectedVariant === 'segmented-pill'
-              ? 'default'
-              : selectedVariant,
+          variant: selectedVariant === 'segmented-card' ? 'default' : selectedVariant,
           size: context.size || size
         }),
         'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10',
@@ -90,9 +86,6 @@ function ToggleGroupItem({
         // Why foreground-derived cues: themes often paint --card and --muted the same, hiding a card-only thumb.
         selectedVariant === 'segmented-card' &&
           'h-7 rounded-sm border-0 bg-transparent text-muted-foreground shadow-none hover:bg-card/70 hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-card-foreground data-[state=on]:shadow-xs data-[state=on]:inset-ring-1 data-[state=on]:inset-ring-foreground/12',
-        // Compact pill for a block header: 20px segments, the same foreground-derived thumb.
-        selectedVariant === 'segmented-pill' &&
-          'h-5 rounded-sm border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-card-foreground data-[state=on]:inset-ring-1 data-[state=on]:inset-ring-foreground/12',
         className
       )}
       {...props}

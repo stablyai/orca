@@ -8,8 +8,6 @@ import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButto
 import { NativeChatMarkdownRowKeyContext } from '../native-chat-markdown-row-identity'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
-import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
-import { isHtmlDocumentCodeBlock } from '../../../../../../shared/markdown/html-document-fences'
 
 /** Code fences need their own copy target rather than the whole chat message. */
 export function NativeChatCodeBlock({
@@ -27,18 +25,12 @@ export function NativeChatCodeBlock({
   const code = extractCodeText(children)
   const rowKey = useContext(NativeChatMarkdownRowKeyContext)
   // Keep wrap state in the transcript store so windowing and streaming block recuts cannot reset it; never persist it.
-  const blockKey =
-    rowKey === undefined || sourceLine === undefined ? undefined : `${rowKey}:${sourceLine}`
   const { open: wrapped, setOpen: setWrapped } = useNativeChatDisclosure(
-    blockKey && `code-wrap:${blockKey}`,
+    rowKey === undefined || sourceLine === undefined
+      ? undefined
+      : `code-wrap:${rowKey}:${sourceLine}`,
     false
   )
-  const htmlDocument = !plain && isHtmlDocumentCodeBlock(language, code)
-  const { open: previewOpen, setOpen: setPreviewing } = useNativeChatDisclosure(
-    blockKey && `code-preview:${blockKey}`,
-    false
-  )
-  const previewing = htmlDocument && previewOpen
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
@@ -56,33 +48,22 @@ export function NativeChatCodeBlock({
       className="group/code relative my-3 min-w-0 max-w-full overflow-hidden rounded-lg border border-chat-code-border bg-chat-code-surface"
     >
       {language ? (
-        <div
-          className={cn(
-            'flex items-center justify-between px-3',
-            htmlDocument ? 'h-8.5 gap-2' : 'h-7.5'
-          )}
-        >
-          {htmlDocument ? (
-            <NativeChatHtmlViewToggle previewing={previewing} onChange={setPreviewing} />
-          ) : (
-            <span
-              data-code-language={language}
-              className="min-w-0 font-sans text-xs text-chat-foreground-faint"
-            >
-              <span className="truncate">{getCodeFenceLanguageLabel(language)}</span>
-            </span>
-          )}
-          {code ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
+        <div className="flex h-7.5 items-center justify-between px-3">
+          <span
+            data-code-language={language}
+            className="min-w-0 font-sans text-xs text-chat-foreground-faint"
+          >
+            <span className="truncate">{getCodeFenceLanguageLabel(language)}</span>
+          </span>
+          {code ? <div className="-mr-1 flex items-center gap-0.5">{actions}</div> : null}
         </div>
       ) : null}
-      {previewing ? <NativeChatHtmlPreview code={code} /> : null}
       <pre
         data-native-chat-code-content
-        hidden={previewing}
         className={cn(
           'scrollbar-sleek m-0 max-w-full font-mono text-chat-code text-chat-code-foreground',
           wrapped ? 'whitespace-pre-wrap [overflow-wrap:anywhere]' : 'overflow-x-auto',
-          htmlDocument ? 'px-3 pt-0.5 pb-3' : language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-16'
+          language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-16'
         )}
       >
         {language && code && !plain ? (
