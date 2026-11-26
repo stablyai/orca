@@ -60,16 +60,18 @@ export function guardRunningTerminalClose(params: {
   worktreeId?: string
   /** Work the user already agreed to stop is not running work to ask about. */
   consentedPtyId?: string
-  onClose: () => void
+  /** Receives every terminal the tab held when the user was asked, the set the close is approved for. */
+  onClose: (approvedPtyIds: string[]) => void
   onCancel?: () => void
 }): void {
   const { terminalTabId, worktreeId, consentedPtyId, onClose, onCancel } = params
   const state = useAppStore.getState()
   const settings = state.settings
-  const ptyIds = collectTabPtyIds(state, terminalTabId).filter((id) => id !== consentedPtyId)
+  const approvedPtyIds = collectTabPtyIds(state, terminalTabId)
+  const ptyIds = approvedPtyIds.filter((id) => id !== consentedPtyId)
   // Opt-out and no-PTY closes stay synchronous.
   if (ptyIds.length === 0 || settings?.skipCloseTerminalWithRunningProcessConfirm === true) {
-    onClose()
+    onClose(approvedPtyIds)
     return
   }
 
@@ -80,7 +82,7 @@ export function guardRunningTerminalClose(params: {
       return
     }
     decided = true
-    onClose()
+    onClose(approvedPtyIds)
   }
   const confirmClose = (busyPtyIds: readonly string[]): void => {
     if (decided) {
@@ -100,7 +102,7 @@ export function guardRunningTerminalClose(params: {
       copyKind,
       ...(worktreeId ? { worktreeId } : {}),
       ...(canSleepInstead ? { canSleepInstead } : {}),
-      onConfirm: onClose,
+      onConfirm: () => onClose(approvedPtyIds),
       ...(onCancel ? { onCancel } : {})
     })
     // Claim ownership only once the prompt opens so thrown lookups can still fall through.

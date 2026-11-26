@@ -39,6 +39,7 @@ import { refreshWebRuntimeSessionTabsSnapshot } from '../inventory/web-runtime-s
 import { isServerFrameDrawnWorkspace } from '../frame-drawn/frame-drawn-server-workspace-set'
 import { redrawServerLayoutWorkspace } from '../../workspace-layout/server/server-layout-apply-routes'
 import { userTabCloseParams } from '../closing/web-session-user-tab-close-params'
+import { keepTabOpenForUnhonoredApproval } from '../closing/keep-tab-open-for-unhonored-approval'
 
 export async function activateWebRuntimeSessionTab(args: {
   worktreeId: string
@@ -76,7 +77,7 @@ export async function activateWebRuntimeSessionTab(args: {
 }
 
 /** Only unknown-tab proves definitive absence and permits teardown; timeouts/disconnects merely mean retry later and may leave a live host tab. */
-export type WebRuntimeSessionTabCloseOutcome = 'applied' | 'unknown-tab' | 'failed'
+export type WebRuntimeSessionTabCloseOutcome = 'applied' | 'refused' | 'unknown-tab' | 'failed'
 
 export async function closeWebRuntimeSessionTab(args: {
   worktreeId: string
@@ -89,6 +90,8 @@ export async function closeWebRuntimeSessionTab(args: {
   expectedPairingRevision?: number
   /** The user confirmed closing a pinned tab; sent only to hosts that honour it. */
   force?: boolean
+  /** The terminal handles the user approved closing; the host refuses if others joined, and a host that cannot is not sent the close. */
+  terminals?: string[]
   /** A held close re-sent, not a fresh click; marked so only to hosts that accept the mark. */
   replay?: true
 }): Promise<WebRuntimeSessionTabCloseOutcome> {
@@ -115,18 +118,19 @@ export async function replayWebSessionTabCloses(
       ...(replay.owner.pairingRevision !== undefined
         ? { expectedPairingRevision: replay.owner.pairingRevision }
         : {}),
-      ...(replay.force ? { force: true } : {})
+      ...(replay.force ? { force: true } : {}),
+      ...(replay.terminals !== undefined ? { terminals: replay.terminals } : {})
     })
     const settled = settleWebSessionCloseReplay(
       appPairedTerminalTabCloseIntentStore,
       replay,
-      outcome !== 'failed'
+      outcome !== 'failed',
+      outcome === 'refused'
     )
     if (settled === 'retry') {
       scheduleWebSessionCloseReplayRelist(environmentId, replay.worktreeId)
-      continue
     }
-    if (settled === 'done') {
+    if (settled !== 'gave-up') {
       continue
     }
     // The host kept failing the close and its tab is shown again rather than hidden forever.
@@ -158,6 +162,7 @@ async function callWebRuntimeSessionTabMethod(
     expectedCurrentLocalTabId?: string | null
     expectedPairingRevision?: number
     force?: boolean
+    terminals?: string[]
     replay?: true
   }
 ): Promise<WebRuntimeSessionTabCloseOutcome> {
@@ -168,7 +173,8 @@ async function callWebRuntimeSessionTabMethod(
         captureWebSessionIntentOwner(environmentId),
         args.worktreeId,
         [toHostSessionTabId(args.tabId)],
-        args.force
+        args.force,
+        args.terminals
       )
     }
     return 'failed'
@@ -230,8 +236,12 @@ async function callWebRuntimeSessionTabMethod(
         args.expectedCurrentLocalTabId
       )
     }
-    const userCloseParams =
-      isClose && !isLifecycleClose ? await userTabCloseParams(environmentId, args) : {}
+    const userClose =
+      isClose && !isLifecycleClose ? await userTabCloseParams(environmentId, args) : null
+    if (userClose?.approvalUnhonored) {
+      await keepTabOpenForUnhonoredApproval(intentOwner, args.worktreeId, closeIntentTabIds)
+      return 'refused'
+    }
     const response = await callEnvironment({
       // Generation cutover must fail closed before old hosts’ destructive legacy close handlers; they lack this additive method.
       method: isLifecycleClose ? 'session.tabs.closeLifecycle' : method,
@@ -255,7 +265,7 @@ async function callWebRuntimeSessionTabMethod(
               terminal: args.terminalHandle
             }
           : isClose
-            ? userCloseParams
+            ? (userClose?.params ?? {})
             : {})
       },
       timeoutMs: WEB_SESSION_TAB_RPC_TIMEOUT_MS
@@ -278,7 +288,7 @@ async function callWebRuntimeSessionTabMethod(
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
     }
-    return 'applied'
+    return isClose && result?.refused === true ? 'refused' : 'applied'
   } catch (error) {
     if (activationHostTabId) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, activationHostTabId)
@@ -300,7 +310,8 @@ async function callWebRuntimeSessionTabMethod(
         intentOwner,
         args.worktreeId,
         frameDrawn ? [closeHostTabId] : [...closeIntentTabIds].toReversed(),
-        args.force
+        args.force,
+        args.terminals
       )
     } else {
       for (const hostTabId of closeIntentTabIds) {
@@ -311,7 +322,7 @@ async function callWebRuntimeSessionTabMethod(
         }
       }
     }
-    if (isLifecycleClose) {
+    if (isLifecycleClose || (isClose && !hostHasNoSuchTab && !undeliveredUserClose)) {
       const { acceptReplayedWebSessionTabsSnapshot } = await import('../state')
       acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {

@@ -6,6 +6,8 @@ import { closeWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actio
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { useAppStore } from '@/store'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import { collectTabPtyIds } from './running-terminal-close-guard'
+import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 
 type TerminalTabBulkActionState = ReturnType<typeof useAppStore.getState>
 
@@ -41,13 +43,22 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
       continue
     }
     if (closeHostTerminalTabs) {
+      const approvedHandles = [
+        ...new Set(
+          collectTabPtyIds(state, tab.id).flatMap((ptyId) => {
+            const handle = getTerminalIncarnationHandle(ptyId, runtimeEnvironmentId!)
+            return handle ? [handle] : []
+          })
+        )
+      ]
       // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
       closeLocalTerminalTabState(tab.id, { remoteCloseOwnedByHost: true })
       void closeWebRuntimeSessionTab({
         worktreeId: activeWorktreeId,
         tabId: tab.id,
         environmentId: runtimeEnvironmentId,
-        reason: 'user'
+        reason: 'user',
+        terminals: approvedHandles
       })
     } else {
       state.closeTab(tab.id)

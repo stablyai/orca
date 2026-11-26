@@ -2,6 +2,7 @@ import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
+  refuseStaleTerminalClose,
   resolveMobileSessionLifecycleCloseContext,
   type MobileSessionLifecycleCloseHost
 } from './mobile-session-lifecycle-close-adjudication'
@@ -18,6 +19,7 @@ import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-sur
 import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/restoration/headless-editor-tabs'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/chat/structured-session-tab-presentation'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 
@@ -86,8 +88,9 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         snapshot?.tabs.find(
           (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
         ))
+    const host = this.getMobileSessionLifecycleCloseHost()
     const lifecycleClose = resolveMobileSessionLifecycleCloseContext({
-      host: this.getMobileSessionLifecycleCloseHost(),
+      host,
       worktreeId,
       tabId,
       tab,
@@ -97,7 +100,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     })
     if (!snapshot || !tab) {
       return adjudicateAbsentMobileSessionTabClose({
-        host: this.getMobileSessionLifecycleCloseHost(),
+        host,
         context: lifecycleClose,
         worktreeId,
         snapshot,
@@ -105,22 +108,17 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         addressedByPtyCloseAuthority: options.expectedPtyCloseAuthority !== undefined
       })
     }
-    if (options.expectedTerminalHandle !== undefined) {
-      const terminalIncarnationMatches =
-        tab.type === 'terminal' &&
-        snapshot.tabs.some(
-          (candidate) =>
-            candidate.type === 'terminal' &&
-            candidate.parentTabId === tab.parentTabId &&
-            this.getMobileSessionTerminalHandle(worktreeId, candidate) ===
-              options.expectedTerminalHandle
-        )
-      if (!terminalIncarnationMatches) {
-        this.republishMobileSessionTabsSnapshot(worktreeId)
-        return refusedMobileSessionTabClose('stale-terminal', {
-          snapshotRepublished: true
-        })
-      }
+    const staleTerminal = refuseStaleTerminalClose({
+      host,
+      worktreeId,
+      tab,
+      tabId,
+      snapshot,
+      observedPtyIds,
+      options
+    })
+    if (staleTerminal) {
+      return staleTerminal
     }
     let closedTabIds = [tab.id]
     const finishCommittedClose = (): MobileSessionTabCloseOutcome =>
@@ -315,7 +313,11 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       leaves: this.leaves,
       ptysById: this.ptysById,
       findPtyForMobileTerminalTab: this.findPtyForMobileTerminalTab.bind(this),
-      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
+      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId),
+      terminalHandleOf: (worktreeId, row) => this.getMobileSessionTerminalHandle(worktreeId, row),
+      mainSurfaces: ORCA_LAYOUT_OWNER_IS_MAIN ? startedMainTerminalSurfaces(this) : null,
+      workspaceSessionOf: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
+      handleOfPtyId: (ptyId) => this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId)
     }
   }
 }

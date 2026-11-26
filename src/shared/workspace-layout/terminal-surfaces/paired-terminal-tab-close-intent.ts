@@ -12,6 +12,8 @@ export type PairedTerminalTabCloseIntent = {
   pairingRevision?: number
   /** The user confirmed closing a pinned tab; the replay keeps that confirmation. */
   force?: true
+  /** Approved host terminal handles at close time so a replay cannot stop a later replacement. */
+  terminals?: string[]
 }
 
 /** How many unreplayed closes one environment may hold before the oldest are dropped. */
@@ -27,7 +29,8 @@ export const pairedTerminalTabCloseIntentSchema: z.ZodType<PairedTerminalTabClos
     worktreeId: z.string().min(1).max(1024),
     closedAt: z.number().int().nonnegative(),
     pairingRevision: z.number().int().nonnegative().optional(),
-    force: z.literal(true).optional()
+    force: z.literal(true).optional(),
+    terminals: z.array(z.string().min(1).max(256)).max(64).optional()
   }
 )
 

@@ -9,6 +9,8 @@ export type MobileSessionTabCloseOptions = {
   reason?: RuntimeSessionTabCloseReason
   expectedPublicationEpoch?: string
   expectedTerminalHandle?: string
+  /** Terminals the user approved stopping; a close finding any other live terminal is refused. */
+  approvedTerminalHandles?: readonly string[]
   clientNavigationId?: string
   localPtyTeardownOwnedExternally?: boolean
   expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority

@@ -23,14 +23,15 @@ export function holdUndeliveredUserClose(
   intentOwner: WebSessionIntentOwner,
   worktreeId: string,
   hostTabIds: readonly string[],
-  force: boolean | undefined
+  force: boolean | undefined,
+  terminals?: string[]
 ): void {
   holdWebSessionCloseForReplay(
     appPairedTerminalTabCloseIntentStore,
     intentOwner,
     worktreeId,
     hostTabIds,
-    { force }
+    { force, terminals }
   )
   scheduleWebSessionCloseReplayRelist(intentOwner.environmentId, worktreeId)
 }
