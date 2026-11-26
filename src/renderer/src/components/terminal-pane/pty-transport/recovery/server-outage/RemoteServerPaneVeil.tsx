@@ -36,9 +36,12 @@ function forwardWheelToTerminal(event: WheelEvent, terminal: Terminal): void {
     composed: true
   })
   // Why: xterm scrolls by the legacy wheelDelta fields, which a constructed WheelEvent leaves at 0.
-  const legacy = event as WheelEvent & { wheelDeltaX?: number; wheelDeltaY?: number }
-  Object.defineProperty(copy, 'wheelDeltaX', { value: legacy.wheelDeltaX ?? 0 })
-  Object.defineProperty(copy, 'wheelDeltaY', { value: legacy.wheelDeltaY ?? 0 })
+  Object.defineProperty(copy, 'wheelDeltaX', {
+    value: 'wheelDeltaX' in event ? event.wheelDeltaX : undefined
+  })
+  Object.defineProperty(copy, 'wheelDeltaY', {
+    value: 'wheelDeltaY' in event ? event.wheelDeltaY : undefined
+  })
   target.dispatchEvent(copy)
 }
 

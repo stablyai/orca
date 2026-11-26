@@ -163,11 +163,13 @@ export function TerminalPaneRecoveryPortals({
         const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
         const awaitingSignIn = recoveryState?.reason === 'ssh-sign-in'
         const paneEnvironmentId = paneEnvironmentIds[index]
-        const onReconnect = createPaneRecoveryReconnect(
-          () => paneTransportsRef.current.get(pane.id),
-          pairingRefusedEnvironmentId,
-          awaitingSignIn
-        )
+        const onReconnect = (): void => {
+          createPaneRecoveryReconnect(
+            () => paneTransportsRef.current.get(pane.id),
+            pairingRefusedEnvironmentId,
+            awaitingSignIn
+          )()
+        }
         // Why with or without a recovery: a stopped distro's pane is dead either way, and only Start revives it.
         if (
           stoppedWslDistro !== null &&

@@ -206,7 +206,9 @@ export function RemoteServerOutageCardLine({
           {stopped ? (
             <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-status-warning" />
           ) : (
-            <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+            <span className="inline-flex shrink-0 text-muted-foreground">
+              <LoadingSpinner className="size-3" />
+            </span>
           )}
           <ServerTitle
             template={titleTemplate}
@@ -230,8 +232,8 @@ export function RemoteServerOutageCardLine({
             <PopoverTrigger asChild>
               <Button
                 size="xs"
-                variant="ghost"
-                className="shrink-0 text-muted-foreground aria-expanded:bg-accent aria-expanded:text-accent-foreground"
+                variant="ghost-muted"
+                className="shrink-0"
                 data-remote-server-outage-details=""
               >
                 {t(
@@ -248,7 +250,7 @@ export function RemoteServerOutageCardLine({
         side="bottom"
         align="start"
         sideOffset={8}
-        className="w-[var(--radix-popover-trigger-width)] p-2 text-xs outline-none"
+        className="w-[var(--radix-popover-trigger-width)]"
         data-remote-server-outage-details-popover={environmentId}
         inert={inert}
         // Why the panel itself: focusing its first control would ring the copy button on every open.
@@ -257,37 +259,39 @@ export function RemoteServerOutageCardLine({
           detailsRef.current?.focus()
         }}
       >
-        {showTailscale ? (
-          <>
-            <div className="px-1 py-1 text-muted-foreground">
-              {t(
-                'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.tailscaleHintTitle',
-                'Check the Tailscale path'
-              )}
-            </div>
-            <div className="mx-1 mt-1 mb-1.5 flex min-w-0 items-center gap-1 rounded-md bg-muted py-1 pr-1 pl-2">
-              <code className="min-w-0 flex-1 truncate font-mono text-2xs select-text">
-                {tailscalePingCommand(tailscaleHost)}
-              </code>
-              <CopyTextButton
-                text={tailscalePingCommand(tailscaleHost)}
-                label={t(
-                  'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.copyPingCommand',
-                  'Copy command'
+        <div className="p-2 text-xs">
+          {showTailscale ? (
+            <>
+              <div className="px-1 py-1 text-muted-foreground">
+                {t(
+                  'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.tailscaleHintTitle',
+                  'Check the Tailscale path'
                 )}
-              />
-            </div>
-          </>
-        ) : (
-          <div className="px-1 py-1 leading-5 text-muted-foreground">{copy.body}</div>
-        )}
-        <div className="flex justify-end px-1 pt-0.5">
-          <Button size="xs" disabled={cooling} onClick={reconnect}>
-            {t(
-              'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectNowButton',
-              'Reconnect now'
-            )}
-          </Button>
+              </div>
+              <div className="mx-1 mt-1 mb-1.5 flex min-w-0 items-center gap-1 rounded-md bg-muted py-1 pr-1 pl-2">
+                <code className="min-w-0 flex-1 truncate font-mono text-2xs select-text">
+                  {tailscalePingCommand(tailscaleHost)}
+                </code>
+                <CopyTextButton
+                  text={tailscalePingCommand(tailscaleHost)}
+                  label={t(
+                    'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.copyPingCommand',
+                    'Copy command'
+                  )}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="px-1 py-1 leading-5 text-muted-foreground">{copy.body}</div>
+          )}
+          <div className="flex justify-end px-1 pt-0.5">
+            <Button size="xs" disabled={cooling} onClick={reconnect}>
+              {t(
+                'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectNowButton',
+                'Reconnect now'
+              )}
+            </Button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>

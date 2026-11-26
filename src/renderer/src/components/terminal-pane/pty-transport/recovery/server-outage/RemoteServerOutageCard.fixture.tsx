@@ -70,7 +70,7 @@ function FixtureTerminal({
       terminal.write('\x1b[?1000h\x1b[?1006h')
     }
     const input = terminal.onData((data) => {
-      const fixtureWindow = window as unknown as { fixturePaneInput?: string }
+      const fixtureWindow: Window & { fixturePaneInput?: string } = window
       fixtureWindow.fixturePaneInput = (fixtureWindow.fixturePaneInput ?? '') + data
     })
     onTerminal(terminal)
@@ -85,7 +85,7 @@ function FixtureTerminal({
 }
 
 type PaneSpec = { environmentId: string | null; id: string; mouseTracking?: boolean }
-type GroupSpec = { tabs: { title: string; down: boolean }[]; panes: PaneSpec[] }
+type GroupSpec = { id: string; tabs: { title: string; down: boolean }[]; panes: PaneSpec[] }
 
 function FixturePane({ pane, veiled }: { pane: PaneSpec; veiled: boolean }): React.JSX.Element {
   const [terminal, setTerminal] = useState<Terminal | null>(null)
@@ -161,8 +161,8 @@ function FixtureWindow({
       style={{ width }}
     >
       <div className="relative flex min-w-0 flex-1" data-fixture-workspace="">
-        {groups.map((group, index) => (
-          <FixtureGroup key={index} group={group} veiledServers={veiledServers} />
+        {groups.map((group) => (
+          <FixtureGroup key={group.id} group={group} veiledServers={veiledServers} />
         ))}
         {cards}
       </div>
@@ -177,10 +177,11 @@ function FixtureWindow({
 
 const MINUTES_25 = 25 * 60_000
 const ONE_PANE: GroupSpec[] = [
-  { tabs: [{ title: 'dev', down: true }], panes: [{ environmentId: DEVBOX, id: 'a' }] }
+  { id: 'dev', tabs: [{ title: 'dev', down: true }], panes: [{ environmentId: DEVBOX, id: 'a' }] }
 ]
 const SPLIT: GroupSpec[] = [
   {
+    id: 'dev',
     tabs: [
       { title: 'dev', down: true },
       { title: 'zsh', down: false }
@@ -188,6 +189,7 @@ const SPLIT: GroupSpec[] = [
     panes: [{ environmentId: DEVBOX, id: 'a' }]
   },
   {
+    id: 'agent',
     tabs: [
       { title: 'agent', down: true },
       { title: 'zsh', down: false }
@@ -248,7 +250,11 @@ export const splitRetrying = staticFixture({ groups: SPLIT, servers: [DEVBOX] })
 export const splitStopped = staticFixture({ groups: SPLIT, servers: [DEVBOX], stopped: true })
 export const detailsOpen = staticFixture({ groups: SPLIT, servers: [DEVBOX], openDetails: true })
 const NARROW: GroupSpec[] = [
-  { tabs: [{ title: 'build', down: true }], panes: [{ environmentId: BUILDBOX, id: 'a' }] }
+  {
+    id: 'build',
+    tabs: [{ title: 'build', down: true }],
+    panes: [{ environmentId: BUILDBOX, id: 'a' }]
+  }
 ]
 export const narrowRetrying = staticFixture({
   groups: NARROW,
@@ -265,6 +271,7 @@ export const twoServersDown = staticFixture({
   groups: [
     SPLIT[0],
     {
+      id: 'build',
       tabs: [{ title: 'build', down: true }],
       panes: [{ environmentId: BUILDBOX, id: 'd' }]
     }
@@ -325,15 +332,15 @@ function LiveWorkbench(): React.JSX.Element {
         className={cn('relative flex h-[360px] w-[900px] overflow-hidden rounded-md border')}
         data-fixture-workspace=""
       >
-        {SPLIT.map((group, index) => (
+        {SPLIT.map((group) => (
           <LiveSurface
-            key={index}
+            key={group.id}
             group={group}
             environmentId={DEVBOX}
             down={down}
             stopped={stopped}
             visible={!away}
-            tabId={`tab-${index}`}
+            tabId={group.id}
           />
         ))}
         <RemoteServerOutageCards />
@@ -347,8 +354,7 @@ export const liveOutage = defineFixture({
   width: 920,
   store: STORE,
   setup: () => {
-    const fixtureWindow = window as unknown as { fixtureReconnects: number }
-    fixtureWindow.fixtureReconnects = 0
+    const fixtureWindow = Object.assign(window, { fixtureReconnects: 0 })
     window.api.runtimeEnvironments.retryConnectionsNow = async () => {
       fixtureWindow.fixtureReconnects += 1
     }
