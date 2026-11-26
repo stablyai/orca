@@ -33,6 +33,8 @@ export class MobileRelaySessionEstablisher {
   private relay: MobileRelayEndpoint
   private readonly hostOfflineStreak: RelayHostOfflineStreak
   private readonly resolveTimeout = new RelayResolveTimeoutBudget()
+  // Director-refused tokens dial last next time: the director admits one resolve per host per window.
+  private readonly directorRefused = new Set<string>()
 
   constructor(
     private readonly args: {
@@ -84,10 +86,15 @@ export class MobileRelaySessionEstablisher {
     let usedPending = false
     const bundle = this.args.bundle()
     const pending = bundle ? pendingRelayCredentialLease(bundle) : null
-    for (const credential of credentials) {
+    const ordered = [
+      ...credentials.filter((credential) => !this.directorRefused.has(credential.token)),
+      ...credentials.filter((credential) => this.directorRefused.has(credential.token))
+    ]
+    for (const credential of ordered) {
       usedPending = credential.token === pending?.token
       const result = await this.dial(credential)
       if (result.ok) {
+        this.directorRefused.clear()
         return { outcome: 'established' }
       }
       if (result.error instanceof RelayDialAbortedError) {
@@ -108,6 +115,7 @@ export class MobileRelaySessionEstablisher {
       if (!isDirectorRefusal(result.error)) {
         break
       }
+      this.directorRefused.add(credential.token)
     }
     return {
       outcome: 'failed',
