@@ -6,10 +6,7 @@ import { subscribeStructuredAgentLaunchStatus } from '@/lib/agent-session/launch
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import {
-  structuredChatProviderWrite,
-  type StructuredChatCompanionWrite
-} from '@/store/slices/agent-status/structured-sessions/structured-chat-companion-writes'
+import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
@@ -113,12 +110,12 @@ function installStatusProjection(): () => void {
     }
     const feed = member.group?.feed
     const latest = feed?.getSnapshot().get(tab.entityId)
-    const provider = structuredChatProviderWrite(
-      tab,
-      feed?.getSessionObservation(tab.entityId) === 'live' ? latest?.agent : undefined
-    )
-    if (provider) {
-      writes.push(provider)
+    if (
+      latest?.agent &&
+      latest.agent !== tab.agentSessionAgent &&
+      feed?.getSessionObservation(tab.entityId) === 'live'
+    ) {
+      writes.push({ kind: 'provider', tab, agent: latest.agent })
     }
     if (latest?.launchDirectory !== directory) {
       return

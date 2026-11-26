@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { buildHydratedTabState } from '@/store/slices/tabs/tabs-hydration'
+import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -108,13 +109,11 @@ it('restores the known provider before a live status feed is available', () => {
   const { applyStructuredChatCompanionWrites } = useAppStore.getState()
   const update = {
     kind: 'provider',
-    worktreeId: tab.worktreeId,
-    tabId: tab.id,
-    sessionId: tab.entityId,
+    tab,
     agent: 'codex'
   } as const
   const original = useAppStore.getState().unifiedTabsByWorktree
-  applyStructuredChatCompanionWrites([{ ...update, sessionId: 'another-chat' }])
+  applyStructuredChatCompanionWrites([{ ...update, tab: { ...tab, entityId: 'another-chat' } }])
   expect(useAppStore.getState().unifiedTabsByWorktree).toBe(original)
   applyStructuredChatCompanionWrites([update])
   const saved = useAppStore.getState().unifiedTabsByWorktree
@@ -127,11 +126,25 @@ it('restores the known provider before a live status feed is available', () => {
       activeTabId: tab.id,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
-      unifiedTabs: saved
+      ...buildPersistedUnifiedTabSessionData({
+        unifiedTabsByWorktree: saved,
+        groupsByWorktree: {
+          [tab.worktreeId]: [
+            {
+              id: tab.groupId,
+              worktreeId: tab.worktreeId,
+              activeTabId: tab.id,
+              tabOrder: [tab.id]
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [tab.worktreeId]: tab.groupId },
+        layoutByWorktree: {}
+      })
     },
     new Set([tab.worktreeId])
   )
-  expect(hydrated.tabsByWorktree[tab.worktreeId]).toMatchObject([
+  expect(hydrated.unifiedTabsByWorktree[tab.worktreeId]).toMatchObject([
     { id: tab.id, entityId: tab.entityId, agentSessionAgent: 'codex' }
   ])
 })
