@@ -217,6 +217,9 @@ export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 // share_accept, share_send and share_declined (share-messages.ts); a machine lists it too once it takes them. Kept
 // out of CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that serves shares lists it.
 export const CONNECTOR_CLOUD_BOT_SHARES_FEATURE = 'bots.shares'
+// Listed by a machine that names an existing teammate share from a repeat share_resolved's `name`;
+// the cloud backfills names only to a machine that lists it.
+export const CONNECTOR_SHARE_NAMES_FEATURE = 'shareNames'
 // Listed by a machine that keeps a reply outbox, and by a cloud that takes its `reply` events (kept
 // out of CONNECTOR_CLOUD_FEATURES: the cloud lists it only while its switch is on). Under a hello
 // whose answer doesn't list it, the machine posts the same outcomes through replies instead.

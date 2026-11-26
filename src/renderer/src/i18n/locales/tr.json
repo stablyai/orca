@@ -30536,6 +30536,8 @@
     "tabs": {
       "homeDetail": "Ana sohbet: Botun temel sohbetidir. Belleği, otomasyonları ve başkalarından gelen istekler burada yer alır.",
       "sideDetail": "Yan sohbet: Bu botla ayrı bir konuyu konuşabileceğiniz sohbet.",
+      "teammateHomeDetail": "Ana sohbet: Bu ajanla temel sohbetiniz. İstekleriniz ve ajanın size verdiği yanıtlar burada yer alır.",
+      "personHomeDetail": "Home ({{name}}): Bu ajanla kişinin temel sohbeti.",
       "homeBanner": "{{name}} sayfasını aç",
       "homeTitle": "Ana sayfa"
     },

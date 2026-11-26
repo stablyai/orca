@@ -7982,7 +7982,8 @@
       "needsYouCount": "{{count}} sizi bekliyor",
       "open": "Aç",
       "delete": "Sohbeti sil",
-      "noMessages": "Henüz mesaj yok"
+      "noMessages": "Henüz mesaj yok",
+      "personHome": "Home ({{name}})"
     },
     "panel": {
       "backTo": "{{name}} ekranına dön",

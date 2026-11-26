@@ -30443,6 +30443,8 @@
     "tabs": {
       "homeDetail": "Home: the bot's main chat. Its memory, automations and requests from others land here.",
       "sideDetail": "Side chat: a separate topic with this bot.",
+      "teammateHomeDetail": "Home: your main chat with this agent. Your requests and its replies to you land here.",
+      "personHomeDetail": "{{name}}’s Home: their main chat with this agent.",
       "homeBanner": "Open {{name}}'s page",
       "homeTitle": "Home"
     },

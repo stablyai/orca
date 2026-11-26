@@ -105,18 +105,21 @@ export function withBotSharesEmailed(
 /**
  * An invite signed in as an Orca account, applied to the list as the host has it now: null when
  * the share is gone or no longer that email's (removed while the cloud resolved it). An account
- * already on the list keeps its own share, and the invite goes. The same list back: nothing to write.
+ * already on the list keeps its own share, and the invite goes. A repeat for the account share, by
+ * its account, gives it the name it carries. The same list back: nothing to write.
  */
 export function withBotShareResolved(
   shares: readonly BotShare[],
   resolved: { shareId: string; email: string; accountId: string; name?: string }
 ): readonly BotShare[] | null {
   const share = shares.find((entry) => entry.shareId === resolved.shareId)
+  // A repeat names a share resolved before the cloud sent names. Matched by account, not email:
+  // the teammate's sign-in email may have changed since they accepted.
+  if (share?.kind === 'account') {
+    return share.accountId === resolved.accountId ? withBotShareNamed(shares, resolved) : null
+  }
   if (!share || share.email !== normalizeShareEmail(resolved.email)) {
     return null
-  }
-  if (share.kind === 'account') {
-    return share.accountId === resolved.accountId ? shares : null
   }
   if (shares.some((entry) => entry.kind === 'account' && entry.accountId === resolved.accountId)) {
     return shares.filter((entry) => entry.shareId !== share.shareId)
@@ -130,6 +133,24 @@ export function withBotShareResolved(
     addedAt: share.addedAt
   }
   return shares.map((entry) => (entry === share ? account : entry))
+}
+
+/** The list with that account's share named `name`; the same list when it has no name to give or
+ *  already has it, so a repeat never writes and a missing name never clears one. */
+function withBotShareNamed(
+  shares: readonly BotShare[],
+  named: { shareId: string; accountId: string; name?: string }
+): readonly BotShare[] {
+  const share = shares.find((entry) => entry.shareId === named.shareId)
+  if (
+    !named.name ||
+    share?.kind !== 'account' ||
+    share.accountId !== named.accountId ||
+    share.name === named.name
+  ) {
+    return shares
+  }
+  return shares.map((entry) => (entry === share ? { ...share, name: named.name } : entry))
 }
 
 /** A share's teammate answer, as the owner's list and the teammate's computer each keep it. */

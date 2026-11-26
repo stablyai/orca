@@ -17,7 +17,10 @@ import {
   CONNECTOR_WAKE_FEATURE,
   ConnectorHelloWakeOfferSchema
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
-import { CONNECTOR_CLOUD_BOT_SHARES_FEATURE } from '../../shared/connector-cloud-features'
+import {
+  CONNECTOR_CLOUD_BOT_SHARES_FEATURE,
+  CONNECTOR_SHARE_NAMES_FEATURE
+} from '../../shared/connector-cloud-features'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
@@ -47,7 +50,8 @@ const FEATURES = [
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
   CONNECTOR_WAKE_FEATURE,
   CONNECTOR_RESUME_FEATURE,
-  CONNECTOR_CLOUD_BOT_SHARES_FEATURE
+  CONNECTOR_CLOUD_BOT_SHARES_FEATURE,
+  CONNECTOR_SHARE_NAMES_FEATURE
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.

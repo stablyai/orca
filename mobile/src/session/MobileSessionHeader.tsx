@@ -71,14 +71,13 @@ export function MobileSessionHeader({
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
   // A bot's screen has no source control (its home isn't a repository): Items takes its place.
   const itemsInBar = itemsOnPhone && routeBot !== null
-  const homeChatId = routeBot?.bot.chatSessionId
   const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
   const tabStrip = hasTabs ? (
     <MobileSessionTabBar
       controller={controller}
       inTopBar={tabsInTopBar}
       actionsCollapsed={actionsCollapsed}
-      homeChatId={homeChatId ?? null}
+      homeBot={routeBot?.bot ?? null}
     />
   ) : null
   const leading = (
