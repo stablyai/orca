@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 
 const WAIT_FOR_EXPANSION = Symbol()
+const NAME_TOKEN = '\u0000'
 
 /** Updating restarts servers, so every update asks once, naming what restarts and whether live sessions drop. */
 export function ServerRestartConfirm({
@@ -50,12 +51,15 @@ export function ServerRestartConfirm({
   }
   const open = openKey === key && !disabled && expansion?.expanded !== false
   const live = servers.some((entry) => entry.liveTabCount > 0 || entry.liveLeafCount > 0)
+  const serverName = servers.length === 1 ? servers[0].name : undefined
   const question =
-    servers.length === 1
-      ? t('settings.about.servers.confirmOne', 'Restart {{name}}?', { name: servers[0].name })
+    serverName !== undefined
+      ? t('settings.about.servers.confirmOne', 'Restart {{name}}?', { name: NAME_TOKEN })
       : t('settings.about.servers.confirmMany', 'Restart {{count}} servers?', {
           count: servers.length
         })
+  // Keep the translated punctuation and word order when the visible name has to truncate.
+  const [beforeName, afterName] = question.split(NAME_TOKEN)
   return (
     <Popover
       open={open}
@@ -115,7 +119,7 @@ export function ServerRestartConfirm({
       <PopoverContent
         side="top"
         align="end"
-        aria-label={question}
+        aria-label={question.replace(NAME_TOKEN, () => serverName ?? '')}
         aria-describedby={live ? warningId : undefined}
         className="@container/server-confirm w-[min(30rem,var(--radix-popover-trigger-width))]"
         onCloseAutoFocus={(event) => {
@@ -131,11 +135,19 @@ export function ServerRestartConfirm({
             <span
               className={
                 live
-                  ? 'hidden min-w-0 truncate @min-[27rem]/server-confirm:inline'
-                  : 'min-w-0 truncate'
+                  ? 'hidden min-w-0 overflow-hidden @min-[27rem]/server-confirm:flex'
+                  : 'flex min-w-0 overflow-hidden'
               }
             >
-              {question}
+              {afterName === undefined ? (
+                <span className="truncate">{question}</span>
+              ) : (
+                <>
+                  <span className="shrink-0 whitespace-pre">{beforeName}</span>
+                  <span className="min-w-0 truncate">{serverName}</span>
+                  <span className="shrink-0 whitespace-pre">{afterName}</span>
+                </>
+              )}
             </span>
             {live ? (
               <span id={warningId} className="shrink-0 whitespace-nowrap">
