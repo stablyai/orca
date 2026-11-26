@@ -134,10 +134,14 @@ function waitForInventory(sessionId: string, settleGone: () => Promise<void>): v
   })
 }
 
-/** The open recovery a kept open skipped: handed-over sends become unknown, a stopped queue awaits reopen. */
+/**
+ * The open recovery a kept open skipped: handed-over sends become unknown, and a stopped queue awaits
+ * reopen from the open's own boundary, so a Resume pressed since then still stands.
+ */
 export async function recoverStructuredAgentSessionKeptOpen(
   journal: Pick<SqlAgentSessionJournal, 'write' | 'markQueueReopen'>,
-  fence: number
+  fence: number,
+  openedSince: number
 ): Promise<void> {
   const commit = await journal.write({ kind: 'pending-unknown', fence })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pending-unknown returns settled ids or a serialized writer failure.
@@ -145,5 +149,5 @@ export async function recoverStructuredAgentSessionKeptOpen(
   if (result !== null && typeof result === 'object' && 'failure' in result) {
     throw restoreJournalSqlFailure(result.failure)
   }
-  await journal.markQueueReopen(fence)
+  await journal.markQueueReopen(fence, openedSince)
 }

@@ -207,6 +207,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessions.set(sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
     // Quit never waits on the listing: only the settle itself is tracked.
+    const openedSince = session.journal.cursor().sequence + 1
     void reconcileStructuredAgentSessionKeptAtOpen(
       sessionId,
       deps.logger,
@@ -219,7 +220,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
             const fence = deps.store.getConversation(sessionId)?.currentFence
             if (open && !open.child && fence !== undefined) {
               await settleGoneStructuredAgentSessionGeneration(deps, sessionId, open)
-              await recoverStructuredAgentSessionKeptOpen(open.journal, fence)
+              await recoverStructuredAgentSessionKeptOpen(open.journal, fence, openedSince)
             }
           })
         )
