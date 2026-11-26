@@ -1,7 +1,6 @@
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
-import { MobileNativeChatLongPressContent as Content } from '../message-content/MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatToolRunViewedImages } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-viewed-images'
 import { selectActiveToolCall } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
@@ -28,18 +27,17 @@ import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-na
 import { MobileNativeChatUserMessageFold } from '../message-content/MobileNativeChatUserMessageFold'
 import { TextAttachmentActions } from '../message-actions/MobileNativeChatTextAttachmentActions'
 import { MobileNativeChatMessageMeta } from './MobileNativeChatMessageMeta'
+import { MobileNativeChatLongPressContent as Content } from '../message-content/MobileNativeChatLongPressContent'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 import { MobileNativeChatResolutionReceipt } from './MobileNativeChatResolutionReceipt'
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
-import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundTaskRun'
 import { withoutBackgroundTaskRows } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { ToolRun } from '../tool-results/MobileNativeChatToolRun'
-import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from '../agent-messages/MobileNativeChatAgentMessageCard'
 import { mobileAutomationRow } from '../MobileAutomationSavedRow'
@@ -50,6 +48,7 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileNativeChatAnswerProse } from '../message-content/MobileNativeChatAnswerProse'
 import { Prose, userProseText } from '../message-content/MobileNativeChatProse'
 import * as Marks from './MobileNativeChatUserMessageMarks'
+import type { MobileNativeChatMessageProps } from '../projection/use-mobile-native-chat-row-props'
 
 function MobileNativeChatMessageImpl({
   message: rowMessage,
@@ -81,52 +80,17 @@ function MobileNativeChatMessageImpl({
   userMessageOpen,
   onToggleUserMessage,
   withoutMeta
-}: {
-  message: Chat.NativeChatMessage
-  // Stable placement key survives older messages joining a folded row.
-  rowKey?: string
-  runOwner?: string
-  // Only the newest live assistant row can still grow.
-  mayStillGrow?: boolean
-  // Compare plan updates against the prior write, not an empty checklist.
-  previousTodoWrite?: Chat.NativeChatToolCallBlock
-  previousUpdatePlan?: Chat.NativeChatToolCallBlock
-  fontScale?: number
-  turnStatus?: NativeChatTurnStatus | null
-  turnStatusAbove?: boolean
-  turnExpanded?: boolean
-  turnKey?: string
-  /** The chat may rewind to this row, by desktop's `nativeChatRowOffersRewind`. */
-  rewindable?: true
-  onToggleTurn?: (turnKey: string) => void
-  activeTurnIsWorking?: boolean
-  trailingRun?: boolean
-  // The run’s first row draws all members; later members render no duplicate activity.
-  workRun?: readonly Chat.NativeChatMessage[]
-  joinsWorkRun?: boolean
-  foldedAway?: boolean
-  openReasoning?: ReadonlySet<string>
-  structuredActivityUi?: boolean
-  // Hide the reasoning row while the live activity line discloses the same block.
-  reasoningIsLive?: boolean
-  reasoningExpanded?: boolean
-  onToggleReasoning?: (key: string) => void
-  unsentNotice?: string
-  receipt?: NativeChatResolvedPrompt
-  awaiting?: boolean
-  userMessageOpen?: boolean
-  onToggleUserMessage?: (messageId: string) => void
-  /** A group room draws one time line per turn; otherwise the time line always shows, so the row never shifts when copy appears. */
-  withoutMeta?: true
-}): React.JSX.Element {
+}: MobileNativeChatMessageProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { shown: message, showFull, recovery } = useMobileNativeChatFullMessage(rowMessage)
-  const agentFrom = message.role === 'user' || message.agentStart ? message.from : undefined
+  const { blocks, id, role, retainedSendId } = message
+  const isAssistant = role === 'assistant'
+  const agentFrom = role === 'user' || message.agentStart ? message.from : undefined
   const foldedIntoRequest = useMobileFoldedIntoBotRequest(agentFrom)
-  const isUser = message.role === 'user' && !agentFrom
-  const isReasoning = message.role === 'reasoning'
-  const { prose, tools: blocksOfTools } = splitNativeChatBlocks(message.blocks)
+  const isUser = role === 'user' && !agentFrom
+  const isReasoning = role === 'reasoning'
+  const { prose, tools: blocksOfTools } = splitNativeChatBlocks(blocks)
   const { asks, unansweredAsks, work: ownTools } = nativeChatAskRunBlocks(blocksOfTools)
   const { openActions: openSheet } = useContext(MobileNativeChatRowOverlaysContext)
   const run = useMemo(() => (workRun ? nativeChatWorkRunEntries(workRun) : null), [workRun])
@@ -140,17 +104,17 @@ function MobileNativeChatMessageImpl({
   })
   // Asks and prose read no files, so the run's own blocks or this message's give the same images.
   const viewedImages = useMemo(
-    () => nativeChatToolRunViewedImages(run?.blocks ?? message.blocks),
-    [run, message.blocks]
+    () => nativeChatToolRunViewedImages(run?.blocks ?? blocks),
+    [run, blocks]
   )
   // Task rows replace their plain-text twins, which the host writes for readers without task blocks.
-  const { backgroundTasks } = deriveNativeChatRowContent(message.blocks)
+  const { backgroundTasks, markdown } = deriveNativeChatRowContent(blocks)
   const drawnProse = isReasoning
     ? []
     : withoutSubagentGroupTwins(
         backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
       )
-  const isSystem = message.role === 'system'
+  const isSystem = role === 'system'
   const pullRequestEvent = isSystem
     ? drawnProse.find(
         (block): block is Chat.NativeChatTextBlock =>
@@ -168,7 +132,7 @@ function MobileNativeChatMessageImpl({
         pending={askPending}
         fontScale={fontScale}
         listsQuestions={false}
-        disclosureKey={`ask:${rowKey ?? message.id}`}
+        disclosureKey={`ask:${rowKey ?? id}`}
       />
     ) : null
   // A ref keeps the memoized Markdown context stable as the message streams.
@@ -177,12 +141,10 @@ function MobileNativeChatMessageImpl({
     pressedMessage.current = message
   }, [message])
   const openActions = useCallback(() => openSheet(pressedMessage.current), [openSheet])
-  const onLongPress = INLINE_TEXT_SELECTION ? undefined : openActions
+  const onLongPress = INLINE_TEXT_SELECTION && !retainedSendId ? undefined : openActions
   const renderVisual = useContext(MobileNativeChatVisualContext) ?? undefined
   const growingBlock =
-    message.role === 'assistant' && mayStillGrow && activeTurnIsWorking === true
-      ? message.blocks.at(-1)
-      : undefined
+    isAssistant && mayStillGrow && activeTurnIsWorking === true ? blocks.at(-1) : undefined
 
   const statusRow = turnStatus ? (
     <MobileNativeChatTurnStatus
@@ -193,7 +155,8 @@ function MobileNativeChatMessageImpl({
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />
   ) : null
-  const rowId = rowKey ?? message.id
+  const rowId = rowKey ?? id
+  const rowTestId = mobileNativeChatRowId(rowId)
   const withStatus = (row: React.ReactNode) => (
     <>
       {turnStatusAbove ? statusRow : null}
@@ -211,7 +174,7 @@ function MobileNativeChatMessageImpl({
     return tookOver ? (
       <MobileNativeChatTookOverRow rowId={rowId} workspace={tookOver.workspace} />
     ) : (
-      <View testID={mobileNativeChatRowId(rowId)} />
+      <View testID={rowTestId} />
     )
   }
   const automationRow = mobileAutomationRow(message, isUser, rowKey, fontScale)
@@ -226,7 +189,7 @@ function MobileNativeChatMessageImpl({
   }
   if (receipt) {
     return withStatus(
-      <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
+      <View style={styles.row} testID={rowTestId}>
         <MobileNativeChatResolutionReceipt
           body={receipt}
           awaiting={awaiting}
@@ -237,11 +200,10 @@ function MobileNativeChatMessageImpl({
     )
   }
   if (isReasoning && !workRun) {
-    const markdown = deriveNativeChatRowContent(message.blocks).markdown
     const draws = markdown.trim().length > 0 && !reasoningIsLive
     return withStatus(
       draws && (
-        <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
+        <View style={styles.row} testID={rowTestId}>
           <MobileNativeChatReasoningRow
             message={message}
             markdown={markdown}
@@ -256,10 +218,9 @@ function MobileNativeChatMessageImpl({
       )
     )
   }
-  const isChatTurn = message.role === 'user' || message.role === 'assistant'
   // Paced prose calls this from its own renders too, so the key must not depend on earlier calls.
   const proseRow = (block: Chat.NativeChatBlock, key: number, text: string, revealing = false) => {
-    const textKey = `${message.id}:text:${key}`
+    const textKey = `${id}:text:${key}`
     return Chat.isSubagentGroupBlock(block) && isRenderableSubagentGroup(block) ? (
       <MobileNativeChatSubagentGroup
         key={`subagent-group:${block.groupId}`}
@@ -288,7 +249,7 @@ function MobileNativeChatMessageImpl({
         userMessage={isUser}
         fontScale={fontScale}
         onLongPress={onLongPress}
-        renderVisual={message.role === 'assistant' ? renderVisual : undefined}
+        renderVisual={isAssistant ? renderVisual : undefined}
         text={text}
         growing={block === growingBlock}
         revealing={revealing}
@@ -301,9 +262,22 @@ function MobileNativeChatMessageImpl({
     <>
       {tookOver ? <MobileNativeChatTookOverRow workspace={tookOver.workspace} /> : null}
       {turnStatusAbove ? statusRow : null}
-      <View style={[styles.row, isUser && styles.rowUser]} testID={mobileNativeChatRowId(rowId)}>
+      <View style={[styles.row, isUser && styles.rowUser]} testID={rowTestId}>
         <Marks.MobileNativeChatConnectorMarks message={message} tagged={!agentFrom} end={isUser} />
-        <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
+        <Content
+          notice={unsentNotice}
+          noticeActionLabel={
+            retainedSendId
+              ? t('chat.messageActionsSheet.messageActions', 'Message actions')
+              : undefined
+          }
+          onLongPress={onLongPress}
+          style={[
+            styles.content,
+            isUser && styles.userBubble,
+            unsentNotice && styles.deliveryBubble
+          ]}
+        >
           {agentFrom ? (
             <MobileNativeChatAgentMessageCard
               message={message}
@@ -319,7 +293,7 @@ function MobileNativeChatMessageImpl({
               {pullRequestEvent ? (
                 <MobileNativeChatPullRequestEventLine
                   block={pullRequestEvent}
-                  messageId={message.id}
+                  messageId={id}
                   timestamp={message.timestamp}
                   fontScale={fontScale}
                   onLongPress={onLongPress}
@@ -329,7 +303,7 @@ function MobileNativeChatMessageImpl({
                   blocks={drawnProse}
                   fontScale={fontScale}
                   onLongPress={onLongPress}
-                  cardId={message.id}
+                  cardId={id}
                   timestamp={message.timestamp}
                 />
               ) : null}
@@ -337,10 +311,10 @@ function MobileNativeChatMessageImpl({
                 <>
                   {proseRows(drawnProse.filter(Chat.isImageRefBlock))}
                   <MobileNativeChatUserMessageFold
-                    text={deriveNativeChatRowContent(message.blocks).markdown}
+                    text={markdown}
                     fontScale={fontScale}
                     open={userMessageOpen === true}
-                    onToggle={() => onToggleUserMessage?.(message.id)}
+                    onToggle={() => onToggleUserMessage?.(id)}
                     recovery={recovery}
                     status={showFull}
                   >
@@ -349,10 +323,10 @@ function MobileNativeChatMessageImpl({
                 </>
               ) : (
                 <MobileNativeChatAnswerProse
-                  rowKey={message.id}
+                  rowKey={id}
                   blocks={drawnProse}
                   growingBlock={growingBlock}
-                  paced={message.role === 'assistant'}
+                  paced={isAssistant}
                   fontScale={fontScale}
                 >
                   {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
@@ -398,11 +372,10 @@ function MobileNativeChatMessageImpl({
           ) : null}
         </Content>
         {isUser ? <Marks.MobileNativeChatUserMessageNotes message={message} /> : null}
-        {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
-        {isChatTurn && !agentFrom && !withoutMeta ? (
+        {(isUser || isAssistant) && !agentFrom && !withoutMeta ? (
           <MobileNativeChatMessageMeta
             message={message}
-            rowKey={rowKey ?? message.id}
+            rowKey={rowId}
             fontScale={fontScale}
             rewindable={rewindable}
           />

@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { dispatchWasWithdrawn } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionCommandItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import {
+  structuredAgentSessionClearSequences,
+  structuredAgentSessionCommandItemIds
+} from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { useStructuredAgentSessionStartFailureFacts } from '../../../messages/notices/use-structured-agent-session-start-failure-facts'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 import { rowsBesideStreamedText } from '../../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import { structuredAgentSessionRetryLineages } from '../../../../../../../shared/agent-session/view/structured-agent-session-retry-lineage'
 
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
@@ -19,18 +25,75 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   journalItems: readonly AgentJournalRenderItem[]
   agentName: string
   startFailures?: readonly AgentSessionFailureFact[]
+  onRetry?: (submission: AgentJournalSubmission, bodyClientMessageId: string) => void
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, pending, submissions } = args
+  const onRetry = useLatestHandler(
+    (submission: AgentJournalSubmission, bodyClientMessageId: string) =>
+      args.onRetry?.(submission, bodyClientMessageId)
+  )
+  const retryEnabled = args.onRetry !== undefined
+  const lineages = useMemo(() => structuredAgentSessionRetryLineages(submissions), [submissions])
   // Only rejection wording needs journal items; pending delivery comes from submissions alone.
-  const hasRejected = submissions.some(
-    (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
+  const hasRejected = useMemo(
+    () =>
+      submissions.some(
+        (submission) =>
+          submission.dispatchState === 'rejected' &&
+          !dispatchWasWithdrawn(submission) &&
+          lineages.get(submission.retryOfClientMessageId ?? submission.clientMessageId)
+            ?.dispatchState !== 'accepted'
+      ),
+    [lineages, submissions]
   )
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     args.journalItems,
     hasRejected && args.startFailures === undefined
   )
   const startFailures = args.startFailures ?? loadedFailures
-  const commandItemIds = useCommandItemIds(args.journalItems, hasRejected)
+  const journalRows = rowsBesideStreamedText(args.journalItems)
+  const clearSequences = useMemo(() => {
+    if (hasRejected) {
+      const sequences = structuredAgentSessionClearSequences(journalRows)
+      return sequences.length ? sequences : undefined
+    }
+    return undefined
+  }, [journalRows, hasRejected])
+  const commandItemIds = useStableItemIds(
+    useMemo(
+      () => (hasRejected ? structuredAgentSessionCommandItemIds(journalRows) : NO_ITEMS),
+      [hasRejected, journalRows]
+    )
+  )
+  const retryItems = useMemo(() => {
+    const ids = new Set<string>()
+    for (const entry of pending) {
+      if (entry.retryOfClientMessageId) {
+        ids.add(agentJournalSubmissionKey(entry.retryOfClientMessageId))
+      }
+    }
+    for (const [root, retry] of lineages) {
+      if (retry.dispatchState === 'pending' || retry.dispatchState === 'rejected') {
+        ids.add(agentJournalSubmissionKey(root))
+        ids.add(agentJournalSubmissionKey(retry.clientMessageId))
+      }
+    }
+    return ids
+  }, [lineages, pending])
+  const itemIds = useStableItemIds(
+    useMemo(() => {
+      if (retryItems.size === 0) {
+        return NO_ITEMS
+      }
+      const found = new Set<string>()
+      for (const item of journalRows) {
+        if (retryItems.has(item.itemId)) {
+          found.add(item.itemId)
+        }
+      }
+      return found
+    }, [journalRows, retryItems])
+  )
   const notices = useMemo(
     () =>
       structuredAgentSessionDeliveryNotices({
@@ -38,51 +101,53 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
         submissions,
         agentName,
         startFailures,
-        commandItemIds
+        commandItemIds,
+        clearSequences,
+        itemIds,
+        onRetry: retryEnabled ? onRetry : undefined
       }),
-    [pending, submissions, agentName, startFailures, commandItemIds]
+    [
+      pending,
+      submissions,
+      agentName,
+      startFailures,
+      commandItemIds,
+      clearSequences,
+      itemIds,
+      retryEnabled,
+      onRetry
+    ]
   )
-  // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
-  const previousRef = useRef(notices)
-  const stable = sameNoticesKept(previousRef.current, notices)
-  useEffect(() => {
-    previousRef.current = stable
-  }, [stable])
+  const sendFromCurrentNotice = useLatestHandler((id: string) => notices.get(id)?.onSend?.())
+  const [previous, setPrevious] = useState(NO_NOTICES)
+  const stable = sameNoticesKept(previous, notices, sendFromCurrentNotice)
+  if (stable !== previous) {
+    setPrevious(stable)
+  }
   return stable
 }
 
-const NO_COMMANDS: ReadonlySet<string> = new Set()
+const NO_ITEMS: ReadonlySet<string> = new Set()
+const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
 
-/** Read command IDs only while enabled; retain unchanged sets through streaming. */
-function useCommandItemIds(
-  items: readonly AgentJournalRenderItem[],
-  enabled: boolean
-): ReadonlySet<string> {
-  const rows = rowsBesideStreamedText(items)
-  const ids = useMemo(
-    () => (enabled ? structuredAgentSessionCommandItemIds(rows) : NO_COMMANDS),
-    [enabled, rows]
-  )
-  const previousRef = useRef(ids)
-  const previous = previousRef.current
-  const stable = sameIds(previous, ids) ? previous : ids
-  useEffect(() => {
-    previousRef.current = stable
-  }, [stable])
-  return stable
-}
-
-// The memo holds while only a reply streams, so the same set skips comparing its ids.
-function sameIds(previous: ReadonlySet<string>, ids: ReadonlySet<string>): boolean {
-  return (
-    previous === ids || (previous.size === ids.size && [...ids].every((id) => previous.has(id)))
-  )
+/** Item-only streaming commits need no new notices when relevant membership is unchanged. */
+function useStableItemIds(ids: ReadonlySet<string>): ReadonlySet<string> {
+  const [previous, setPrevious] = useState(ids)
+  if (
+    previous !== ids &&
+    (previous.size !== ids.size || [...ids].some((id) => !previous.has(id)))
+  ) {
+    setPrevious(ids)
+    return ids
+  }
+  return previous
 }
 
 /** Reuse equivalent prior notices and the whole prior map when every entry matches. */
 function sameNoticesKept(
   previous: ReadonlyMap<string, NativeChatDeliveryNotice>,
-  next: ReadonlyMap<string, NativeChatDeliveryNotice>
+  next: ReadonlyMap<string, NativeChatDeliveryNotice>,
+  sendFromCurrentNotice: (id: string) => void
 ): ReadonlyMap<string, NativeChatDeliveryNotice> {
   if (previous === next) {
     return next
@@ -94,12 +159,23 @@ function sameNoticesKept(
     const same =
       before !== undefined &&
       before.text === notice.text &&
+      before.detail === notice.detail &&
       before.failureKind === notice.failureKind &&
       before.signIn?.agentName === notice.signIn?.agentName &&
       before.signIn?.account === notice.signIn?.account &&
+      (before.onSend === undefined) === (notice.onSend === undefined) &&
+      before.recoveryFocus === notice.recoveryFocus &&
+      before.recoveryCardId === notice.recoveryCardId &&
       (before.onDismiss === undefined) === (notice.onDismiss === undefined)
     allKept &&= same
-    kept.set(id, same ? before : notice)
+    kept.set(
+      id,
+      same
+        ? before
+        : notice.onSend
+          ? { ...notice, onSend: () => sendFromCurrentNotice(id) }
+          : notice
+    )
   }
   return allKept ? previous : kept
 }

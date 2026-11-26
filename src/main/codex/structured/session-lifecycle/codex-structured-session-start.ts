@@ -20,6 +20,10 @@ import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-ech
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
 import { openCodexThread } from '../threads/codex-structured-thread-open'
+import {
+  installCodexBotInstructions,
+  codexInstructionFailure
+} from '../threads/codex-bot-instruction-installation'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
 import { withCodexSkillRootsThreadConfig } from '../launch/codex-structured-skill-roots'
 import { codexReadOnlyMcpOff } from '../prompts/codex-structured-read-only'
@@ -89,7 +93,7 @@ export async function openCodexStructuredSession(
     assertCodexConnectionOpen(connection, sessionId)
   }
   current()
-  await waitForPromiseWithSignal(
+  const initialized = await waitForPromiseWithSignal(
     initializeCodexAppServerConnection(connection, null),
     openInput.signal
   )
@@ -118,7 +122,13 @@ export async function openCodexStructuredSession(
   const opened = await waitForPromiseWithSignal(
     openCodexThread(
       connection,
-      { ...threadLaunch, commandEnv },
+      {
+        ...threadLaunch,
+        commandEnv,
+        ...(launch.resumeThreadId !== null && !launch.instructionInstallation
+          ? { developerInstructions: undefined }
+          : {})
+      },
       // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
       deps.requestTimeoutMs ?? null,
       openInput.signal
@@ -127,15 +137,38 @@ export async function openCodexStructuredSession(
   )
   current()
   start.setPrimaryThreadId(opened.threadId)
+  if (
+    launch.instructionInstallation &&
+    launch.resumeThreadId !== null &&
+    !opened.supersededThreadId &&
+    !/\/0\.167\.1(?:\s|$)/.test(initialized.userAgent ?? '')
+  ) {
+    throw codexInstructionFailure('unknown')
+  }
+  const link = codexProviderHandleLink({
+    threadId: opened.threadId,
+    ...(opened.supersededThreadId
+      ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
+      : { resumed: launch.resumeThreadId !== null }),
+    fence: input.fence,
+    linkId: deps.mintLinkId?.(),
+    observedAt: deps.now?.() ?? Date.now()
+  })
+  current()
   attempt.window.appliedSettings.observe(opened)
   const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
+  const priorPolicy = launch.instructionInstallation?.store.getRecord(sessionId)?.instructionPolicy
+  if (priorPolicy) {
+    translator?.hideInstructionItem(priorPolicy.operationId)
+  }
+  let historyUnchanged = false
   if (
     translator &&
     input.events &&
     (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
   ) {
     const sink = input.events
-    await waitForPromiseWithSignal(
+    historyUnchanged = await waitForPromiseWithSignal(
       withStructuredHistoryInvocation(attempt, openInput.signal, (signal) =>
         catchUpCodexThread({
           connection,
@@ -157,6 +190,23 @@ export async function openCodexStructuredSession(
     )
     current()
   }
+  const installed = launch.instructionInstallation
+    ? await installCodexBotInstructions({
+        installation: launch.instructionInstallation,
+        hideItem: (id) => translator?.hideInstructionItem(id),
+        connection,
+        sessionId,
+        nativeId: opened.threadId,
+        generation,
+        anchor: link.linkId,
+        fence: input.fence,
+        historyUnchanged,
+        fresh: launch.resumeThreadId === null || opened.supersededThreadId !== undefined,
+        signal: openInput.signal,
+        assertCurrent: current
+      })
+    : undefined
+  current()
   const configured =
     opened.serviceTier === undefined
       ? await waitForPromiseWithSignal(
@@ -234,15 +284,17 @@ export async function openCodexStructuredSession(
   })
   session.skillReport.refresh()
   return {
-    link: codexProviderHandleLink({
-      threadId: opened.threadId,
-      ...(opened.supersededThreadId
-        ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
-        : { resumed: launch.resumeThreadId !== null }),
-      fence: input.fence,
-      linkId: deps.mintLinkId?.(),
-      observedAt: deps.now?.() ?? Date.now()
-    }),
+    link,
+    ...(installed
+      ? {
+          instructionPolicy: installed.policy,
+          instructionContext: {
+            account: launch.instructionInstallation!.account,
+            digest: launch.instructionInstallation!.snapshot.digest,
+            filesIncluded: installed.filesIncluded
+          }
+        }
+      : {}),
     reportedOptions: reportedCodexSessionOptions(session)
   }
 }

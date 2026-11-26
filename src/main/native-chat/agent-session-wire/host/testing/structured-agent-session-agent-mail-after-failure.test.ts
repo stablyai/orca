@@ -114,6 +114,44 @@ async function mail(): Promise<{ queued?: string; sent?: string }> {
   return 'queued' in result.value ? { queued: result.value.queued.messageId } : { sent: send.id }
 }
 
+it('reports a consumed card as accepted without queue custody when its handoff is off-page', async () => {
+  rig = await createQueuedMessageTestRig()
+  const { working, followUp } = await personQueued()
+  expect(await rig.host.sendAnswer(SESSION, followUp, true)).toMatchObject({
+    kind: 'waiting',
+    ownedByQueue: true
+  })
+  await providerTurn(working, 'completed')
+  await eventually(async () => expect((await rig.handoff(followUp))?.handedOverAt).toBeDefined())
+  const sent = await rig.handoffId(followUp)
+  expect(sent).not.toBe(followUp)
+  await rig.settleAccepted(sent, 'follow-up')
+  await failedTurn('later')
+  const tail = await rig.host.history({ sessionId: SESSION, direction: 'tail', limit: 1 })
+  expect(tail.page.submissions.map(({ clientMessageId }) => clientMessageId)).not.toContain(sent)
+  expect(await rig.host.sendAnswer(SESSION, followUp, true)).toEqual({ kind: 'accepted' })
+})
+
+it('publishes the returned card’s handoff ID when the rejected send is off-page', async () => {
+  rig = await createQueuedMessageTestRig()
+  const { working, followUp } = await personQueued()
+  await providerTurn(working, 'completed')
+  await eventually(async () => expect((await rig.handoff(followUp))?.handedOverAt).toBeDefined())
+  const sent = await rig.handoffId(followUp)
+  expect(sent).not.toBe(followUp)
+  await rig.settleRejected(sent, 'overloaded')
+  await failedTurn('later')
+  const tail = await rig.host.history({ sessionId: SESSION, direction: 'tail', limit: 1 })
+  expect(tail.page.submissions.map(({ clientMessageId }) => clientMessageId)).not.toContain(sent)
+  expect(tail.page.queuedMessages).toEqual([
+    expect.objectContaining({
+      messageId: followUp,
+      state: 'returned',
+      returnedFromClientMessageId: sent
+    })
+  ])
+})
+
 describe("another agent's mail after a failed turn", () => {
   it('runs as the next turn while the person’s follow-up stays held', async () => {
     rig = await createQueuedMessageTestRig()

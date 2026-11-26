@@ -1,4 +1,5 @@
 import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
+import { codexInstructionFailure } from '../../../codex/structured/threads/codex-bot-instruction-installation'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
 import { codexStructuredLaunchPart } from '../../../codex/structured/launch/codex-structured-launch-resolution'
@@ -70,8 +71,8 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         : {}),
       skillRoots: codexAtRestSkillRoots(deps)
     }),
-    resolveLaunch: withSupportedCodexCli(
-      composeStructuredLaunch(
+    resolveLaunch: withSupportedCodexCli(async (request) => {
+      const launch = await composeStructuredLaunch(
         CODEX_STRUCTURED_AGENT,
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
@@ -82,9 +83,23 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
             : {}),
           ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
         })
-      ),
-      deps.readCodexInstallation
-    ),
+      )(request)
+      const snapshot = deps.turnContext?.instructionSnapshot?.(request.identity.sessionId)
+      if (snapshot && snapshot.text === launch.developerInstructions) {
+        if (!launch.codexHome) {
+          throw codexInstructionFailure('unknown')
+        }
+        return {
+          ...launch,
+          instructionInstallation: {
+            store: context.store,
+            snapshot,
+            account: launch.codexHome
+          }
+        }
+      }
+      return launch
+    }, deps.readCodexInstallation),
     ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
     ...(deps.sharedCodexServers ? { sharedServers: deps.sharedCodexServers } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

@@ -5,6 +5,7 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
+import { unsettledStartIds } from './structured-agent-session-input-selection'
 
 /** Live handles and finite recovery snapshots identify their own handover windows. */
 type HandoverJournal = AgentSessionJournal | Pick<UnopenedSendJournal, 'snapshot' | 'submission'>
@@ -56,10 +57,11 @@ export function structuredAgentSessionHandingOver(
 }
 
 /** Pending submission membership is checked in the reader's snapshot, alongside these live owners. */
-export function structuredAgentSessionHandoverAuthority(journal: HandoverJournal): {
+export function structuredAgentSessionHandoverAuthority(journal: AgentSessionJournal): {
   handingOver: string[]
   continuingUnadmitted: string[]
   finalizing: string[]
+  unsettledStarts?: string[]
 } {
   const sends = structuredAgentSessionHandingOver(journal)
   const continuingUnadmitted: string[] = []
@@ -72,7 +74,13 @@ export function structuredAgentSessionHandoverAuthority(journal: HandoverJournal
       finalizing.push(id)
     }
   }
-  return { handingOver: [...sends.keys()], continuingUnadmitted, finalizing }
+  const unsettledStarts = unsettledStartIds(journal)
+  return {
+    handingOver: [...sends.keys()],
+    continuingUnadmitted,
+    finalizing,
+    ...(unsettledStarts ? { unsettledStarts } : {})
+  }
 }
 
 /** Volatile proof owned by the live handover; a crash or cancellation restores ordinary doubt. */

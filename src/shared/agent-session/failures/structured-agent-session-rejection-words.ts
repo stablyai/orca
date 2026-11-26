@@ -29,7 +29,11 @@ export function structuredAgentSessionRejectionParts(
   context: AgentSessionFailureWordsContext = {}
 ): AgentSessionWriteNoticePart[] {
   if (fact) {
-    return rejectionFactParts(write, fact, context)
+    const parts = rejectionFactParts(write, fact, context)
+    return write === 'composer-send' &&
+      (fact.instructionRecovery === 'timeout' || fact.instructionRecovery === 'unknown')
+      ? [...parts, 'tryAgainComposerSend']
+      : parts
   }
   if (reason === null) {
     return ['notDoneSend']

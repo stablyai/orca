@@ -203,3 +203,23 @@ export function isWriteFailureSubmission(
     dispatchRejectionWasTransportWriteFailure(submission.reason)
   )
 }
+
+export function legacyDispatchRejectionReason(
+  kind: string,
+  provider?: 'codex' | 'claude'
+): string | undefined {
+  if (kind === 'cancelled') {
+    return DISPATCH_REJECTED_CANCELLED
+  }
+  if (kind === 'writeFailed') {
+    return DISPATCH_REJECTED_WRITE_FAILED
+  }
+  if (kind === 'queueFull') {
+    return provider === 'codex'
+      ? DISPATCH_REJECTED_CODEX_QUEUE_FULL
+      : provider === 'claude'
+        ? DISPATCH_REJECTED_QUEUE_FULL
+        : undefined
+  }
+  return undefined
+}

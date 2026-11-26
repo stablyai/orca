@@ -106,6 +106,7 @@ const commonRows = [
   z.object({
     ...envelope,
     kind: z.literal('submission'),
+    retryOfClientMessageId: value,
     inputOrderContext: value,
     clientMessageId: value,
     payloadFingerprint: value,

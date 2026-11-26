@@ -1,3 +1,4 @@
+import { botCodexStandingFingerprint } from './bot-codex-instruction-policy'
 // A host's structured-session wiring for bots: preambles, own tools, the turn context, and look-around turns.
 import type { Bot } from '../../shared/bot-types'
 import { BoundedMap } from '../../shared/collections/bounded-map'
@@ -244,6 +245,14 @@ export function botStructuredSessionWiring(deps: {
     },
     turnContext: {
       ...turnContext,
+      instructionsCurrent: (record) => {
+        const bot = botOfRecord(record)
+        return (
+          bot !== null &&
+          record.instructionPolicy?.botId === bot.id &&
+          record.instructionPolicy.standing === botCodexStandingFingerprint(bot)
+        )
+      },
       mentions,
       handedOver: (sessionId, message) => {
         deps.work.handedOver(sessionId, message)
@@ -252,7 +261,7 @@ export function botStructuredSessionWiring(deps: {
       turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
         deps.work.turnEnded(sessionId)
         deps.requestTurnEnded?.(sessionId, turnId, ended)
-        turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
+        return turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote, ended)
       }
     },
     // A look reads through its allow-list; a tidy-up only replies, its new memory in its reply.

@@ -102,7 +102,6 @@ export async function openCodexThread(
         // Codex shows a server's form in Full Access only on a user thread.
         threadSource: 'user',
         ...(launch.model ? { model: launch.model } : {}),
-        // A resumed thread keeps the instructions it started with; Codex ignores new ones.
         ...(launch.developerInstructions
           ? { developerInstructions: launch.developerInstructions }
           : {})
@@ -118,7 +117,10 @@ export async function openCodexThread(
     // Omitting model preserves the resumed thread's model, provider and effort.
     const resumeParams = {
       threadId: resumeThreadId,
-      ...threadSettings
+      ...threadSettings,
+      ...(launch.developerInstructions
+        ? { developerInstructions: launch.developerInstructions }
+        : {})
     }
     const resume = (): Promise<unknown> => {
       throwIfSignalAborted(signal)

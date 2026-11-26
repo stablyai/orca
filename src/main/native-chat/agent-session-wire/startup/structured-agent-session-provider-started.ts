@@ -119,10 +119,13 @@ function settleReady(
       }
       local.started = true
       if (
-        !(await recordStartedHandle(context, event)) ||
+        !(await recordStartedHandle(context, event, () => {
+          const liveChild = context.sessions.get(event.sessionId)?.child
+          return !!liveChild && sameProviderChild(liveChild, child) && !signal?.aborted
+        })) ||
         !(await applyRewindAtStart(context, event.sessionId, current, rewind))
       ) {
-        return refusedStart()
+        return refusedStart(event.instructionPolicy !== undefined)
       }
       signal?.throwIfAborted()
       // The writes succeeded; a death meanwhile is still this start's outcome.
@@ -149,6 +152,9 @@ function settleReady(
           error
         })
       )
+      if (event.instructionContext) {
+        current.child.instructionAccount = event.instructionContext.account
+      }
       const sourceChild = current.child
       context.runtimeState.startupAttempts.ready(event.sessionId, child)
       noteStructuredAgentSessionRuntimeOptions(current.child, event.reportedOptions, true)

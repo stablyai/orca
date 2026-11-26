@@ -36,6 +36,10 @@ export function withLease(
   const acquiredAccount = acquiredAccountAcrossLease(record, lease)
   return {
     ...record,
+    ...(record.instructionPolicy?.state === 'pending' &&
+    lease.deathEvidence?.ownerFence === record.instructionPolicy.fence
+      ? { instructionPolicy: { ...record.instructionPolicy, state: 'released' as const } }
+      : {}),
     lease,
     ...(acquiredAccount === undefined ? {} : { acquiredAccount }),
     updatedAt: lease.lastRenewedAt

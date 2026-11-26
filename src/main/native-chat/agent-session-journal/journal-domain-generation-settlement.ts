@@ -55,7 +55,10 @@ export function applyJournalDomainGenerationSettlement(
       fence: input.fence,
       recovered: true,
       keepFailedStart: true,
-      mutations: [journalStartFailureRow(input.startKey, input)],
+      mutations:
+        input.clientMessageId !== null && input.rejection.instructionRecovery
+          ? []
+          : [journalStartFailureRow(input.startKey, input)],
       dispatches:
         input.clientMessageId === null
           ? []

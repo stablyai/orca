@@ -177,6 +177,7 @@ export type JournalResolvedLifecycleBatchInput = Omit<
 }
 
 export type JournalSubmissionInput = {
+  retryOfClientMessageId?: string
   clientMessageId: string
   payloadFingerprint: string
   body: AgentJournalMessageItem

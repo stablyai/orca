@@ -23,6 +23,9 @@ import {
 } from './queued-messages/queued-message-published-bytes'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalSendAdmissionResult } from './journal-send-admission'
+import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { readJournalDomainSubmissionAttempt } from './journal-domain-submission-records'
+import { journalDomainLastRetry } from './journal-domain-retry-lineage'
 
 /** Replay, queue eligibility, byte budget and acceptance share this writer position. */
 export function applyJournalSqlSendAdmission(
@@ -101,6 +104,40 @@ export function applyJournalSqlSendAdmission(
         })
       : empty({ kind: 'admitted', value: { clientMessageId: id, submission: existing } })
   }
+  const requestedRetry = input.retryOfClientMessageId
+  let retryId: string | undefined
+  if (requestedRetry) {
+    const requested = readJournalDomainSubmissionAttempt(db, target, requestedRetry)
+    retryId = requested?.submission.retryOfClientMessageId ?? requestedRetry
+    const original =
+      retryId === requestedRetry
+        ? requested
+        : readJournalDomainSubmissionAttempt(db, target, retryId)
+    const originalBody = original?.admission.body
+    if (
+      input.origin !== 'client' ||
+      requested?.submission.dispatchState !== 'rejected' ||
+      !readAgentSessionFailureFact(requested.submission.rejection)?.instructionRecovery ||
+      original?.submission.origin !== 'client' ||
+      original.submission.dispatchState !== 'rejected' ||
+      original.submission.retryOfClientMessageId !== undefined ||
+      !readAgentSessionFailureFact(original.submission.rejection)?.instructionRecovery ||
+      original.submission.payloadFingerprint !== input.payloadFingerprint ||
+      requested.submission.payloadFingerprint !== input.payloadFingerprint ||
+      originalBody?.role !== 'user' ||
+      originalBody.from ||
+      journalDomainLastRetry(scope, retryId, true)
+    ) {
+      return empty({
+        kind: 'refused',
+        refusal: refuse(
+          'agent_session_operation_invalid',
+          { reason: 'messageIdReused' },
+          'This message has already been retried or has changed.'
+        )
+      })
+    }
+  }
   const eligibility = journalDomainInputEligibility(scope, facts.send)
   const superseded = () =>
     empty({
@@ -138,7 +175,11 @@ export function applyJournalSqlSendAdmission(
   const settleCarried = () =>
     settleJournalDomainCarriedCards(db, scope, id, carried, { fence: input.fence, savedAt })
   let queue = false
-  if (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts)) {
+  if (
+    !retryId &&
+    !operation.instructionWriterUnresolved &&
+    (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts))
+  ) {
     queue = eligibility.prompts.length > 0 || eligibility.work.working() || !!eligibility.pending
     if (!queue && operation.fromAgent) {
       queue = readJournalDomainQueuePauseContext(
@@ -232,7 +273,7 @@ export function applyJournalSqlSendAdmission(
     db,
     stateDirectory,
     target,
-    { kind: 'submission', input },
+    { kind: 'submission', input: retryId ? { ...input, retryOfClientMessageId: retryId } : input },
     facts,
     savedAt
   )

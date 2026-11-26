@@ -1,3 +1,4 @@
+import { instructionBindingNeedsAcquisition } from '../startup/structured-agent-session-instruction-recovery'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
@@ -9,8 +10,7 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-
 import {
   openStructuredAgentSessionConversation,
   resettleOpenStructuredAgentSessionConversation,
-  type OpenedStructuredAgentSessionConversation,
-  type StructuredAgentSessionConversationOpenOptions
+  type OpenedStructuredAgentSessionConversation
 } from '../host/structured-agent-session-conversation-open'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
@@ -21,9 +21,9 @@ import {
   type StructuredAgentSessionDeliveryLoopDeps
 } from './structured-agent-session-delivery-loop-deps'
 import { structuredAgentSessionCommandRunning } from '../operations/structured-agent-session-command-turn'
-import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 import type {
+  StructuredAgentSessionConversationDelivery,
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChildIdentity
@@ -43,24 +43,7 @@ import type { StructuredAgentSessionStopEnding } from '../termination/structured
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
 
-export type StructuredAgentSessionConversationDelivery = {
-  loop: StructuredAgentSessionDeliveryLoop
-  open: (
-    sessionId: string,
-    options?: StructuredAgentSessionConversationOpenOptions
-  ) => Promise<StructuredAgentSessionHostSession | null>
-  /** Queue commit wakes under serialization so they cannot race a loop’s stopping decision. */
-  afterCommit: (sessionId: string, journal: AgentSessionJournal) => void
-  /** Settle edges affect status/steer holds without rows or renewed idle activity. */
-  afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
-  dispose: () => void
-  /** After an account switch; see `retireStructuredAgentSessionChildOnOtherAccount`. */
-  offAccount: (sessionId: string, committed: () => boolean) => Promise<void>
-  adoptOpened: (
-    sessionId: string,
-    opened: OpenedStructuredAgentSessionConversation
-  ) => Promise<void>
-}
+export type { StructuredAgentSessionConversationDelivery } from '../host/structured-agent-session-host-types'
 
 export function createStructuredAgentSessionConversationDelivery(input: {
   deps: StructuredAgentSessionHostDeps
@@ -68,10 +51,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   trackStart: <T>(start: Promise<T>) => Promise<T>
-  startProviderChild: (
-    sessionId: string,
-    startedFor: string
-  ) => Promise<StructuredAgentSessionStartClaim>
+  startProviderChild: StructuredAgentSessionDeliveryLoopDeps['startProviderChild']
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   startFlights?: StructuredAgentSessionDeliveryLoopDeps['startFlights']
   readiness: (
@@ -129,6 +109,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
     stopPermissionTransitionChild: (sessionId) => input.stopAgent(sessionId, { cause: 'evict' }),
+    instructionBindingNeedsAcquisition: (sessionId) =>
+      instructionBindingNeedsAcquisition(deps, sessionId, sessions.get(sessionId)?.child),
     retireOutgrownChild,
     immediatePermission: (sessionId) => {
       const record = deps.store.getRecord(sessionId)

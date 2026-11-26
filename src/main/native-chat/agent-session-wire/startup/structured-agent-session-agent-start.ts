@@ -1,6 +1,11 @@
 // Only queued work or provider operations start children. Run waits outside serialization;
 // fence each state commit so concurrent sends remain immediately acceptable.
 
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  deferBotInstructionRetirement,
+  instructionBindingNeedsAcquisition
+} from './structured-agent-session-instruction-recovery'
 import type {
   SubmissionRejectionFact,
   ProviderDiagnostic
@@ -71,6 +76,7 @@ export async function claimStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
   startedFor?: string,
+  retireInstructionBinding?: true,
   telemetryCallerKey?: string
 ): Promise<StructuredAgentSessionStartClaim> {
   try {
@@ -90,7 +96,7 @@ export async function claimStructuredAgentSessionAgent(
   if (flight) {
     return { outcome: flight.outcome }
   }
-  if (child && !child.close) {
+  if (child && !child.close && !retireInstructionBinding) {
     return { outcome: Promise.resolve({ ok: true }) }
   }
   return {
@@ -99,7 +105,15 @@ export async function claimStructuredAgentSessionAgent(
       sessionId,
       startedFor,
       (lock, attemptId) =>
-        runStart(context, sessionId, startedFor, lock, attemptId, telemetryCallerKey)
+        runStart(
+          context,
+          sessionId,
+          startedFor,
+          lock,
+          attemptId,
+          telemetryCallerKey,
+          retireInstructionBinding
+        )
     )
   }
 }
@@ -133,6 +147,7 @@ export async function claimOperationStart(
     context,
     sessionId,
     undefined,
+    undefined,
     telemetryCallerKey
   )
   return {
@@ -153,12 +168,34 @@ async function runStart(
   startedFor: string | undefined,
   lock: StructuredAgentSessionAttachLock,
   attemptId: string,
-  telemetryCallerKey?: string
+  telemetryCallerKey?: string,
+  retireInstructionBinding?: true
 ): Promise<StructuredAgentSessionResumeOutcome> {
+  if (retireInstructionBinding) {
+    await lock.commit(async () => {
+      const session = context.sessions.get(sessionId)
+      if (instructionBindingNeedsAcquisition(context.deps, sessionId, session?.child)) {
+        deferBotInstructionRetirement(context.deps, sessionId, session)
+      }
+    })
+  }
   // Never start beside a closing child; unverifiable exit refuses the restart.
   const closed = await joinClosingStructuredAgentSessionChild(context, sessionId, lock)
   if (!closed.ok) {
-    return closed
+    const record = context.deps.store.getRecord(sessionId)
+    const pending =
+      record?.instructionPolicy?.state === 'pending' ||
+      (record?.provider === 'codex' &&
+        context.deps.isBotHome?.(record.location.workspaceId) === true)
+    return pending
+      ? {
+          ...closed,
+          failure: agentSessionFailureFact('startFailed', {
+            instructionRecovery: 'pending',
+            neverReachedAgent: true
+          })
+        }
+      : closed
   }
   const callerKey = AGENT_START_CALLER_KEY
   // Read eligibility only after lease adjudication/recovery; each commits against its probed owner.

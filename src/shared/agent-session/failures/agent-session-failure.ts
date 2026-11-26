@@ -1,5 +1,7 @@
 import {
   readAgentUpdate,
+  isInstructionRecovery,
+  type AgentSessionInstructionRecovery,
   readAttachmentProblem,
   type AgentSessionAttachmentProblem
 } from './agent-session-failure-details'
@@ -170,6 +172,7 @@ export type AgentSessionProviderRetry = {
 }
 
 export type AgentSessionFailureFact = {
+  instructionRecovery?: AgentSessionInstructionRecovery
   kind: AgentSessionFailureKind
   account?: AgentSessionAccountKind
   /** Provider diagnostic, rejected model/plugin identity, or the host error on `launchPreparationFailed`; never Orca's sentence. */
@@ -220,19 +223,7 @@ export function providerDiagnostic(
 
 export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
   kind: TKind,
-  extra: {
-    account?: AgentSessionAccountKind
-    detail?: ProviderDiagnostic
-    refusal?: AgentSessionRefusalReference
-    attachment?: AgentSessionAttachmentProblem
-    retry?: AgentSessionProviderRetry
-    usageLimit?: AgentSessionUsageLimit
-    argumentProblem?: AgentSessionArgumentProblem
-    neverReachedAgent?: true
-    backgroundStop?: AgentSessionBackgroundStop
-    requestTimeout?: AgentSessionRequestTimeout
-    agentUpdate?: string
-  } = {}
+  extra: Omit<AgentSessionFailureFact, 'kind'> = {}
 ): AgentSessionFailureFact & { kind: TKind } {
   // Re-bounded here, so no writer can store more than the cap however it built the detail.
   const detail = extra.detail
@@ -240,6 +231,9 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     : undefined
   return {
     kind,
+    ...(kind === 'startFailed' && extra.instructionRecovery
+      ? { instructionRecovery: extra.instructionRecovery }
+      : {}),
     ...(extra.account ? { account: extra.account } : {}),
     ...(detail ? { detail } : {}),
     ...(extra.refusal ? { refusal: extra.refusal } : {}),
@@ -309,6 +303,9 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   const argumentProblem = readAgentSessionArgumentProblem(value.argumentProblem)
   const requestTimeout = readAgentSessionRequestTimeout(value.requestTimeout)
   return agentSessionFailureFact(value.kind, {
+    ...(isInstructionRecovery(value.instructionRecovery)
+      ? { instructionRecovery: value.instructionRecovery }
+      : {}),
     ...(value.account === 'managed' || value.account === 'system'
       ? { account: value.account }
       : {}),

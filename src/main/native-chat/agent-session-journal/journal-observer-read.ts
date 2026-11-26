@@ -22,6 +22,7 @@ export type JournalWorkAuthority = {
   handingOver: string[]
   continuingUnadmitted: string[]
   finalizing: string[]
+  unsettledStarts?: string[]
   openedThrough: AgentJournalCursor
   reopenFloor: AgentJournalCursor | null
   operationalRevision: number
@@ -115,6 +116,9 @@ export function copyJournalCurrentWorkAuthority(
     handingOver: [...authority.handingOver].sort(),
     continuingUnadmitted: [...authority.continuingUnadmitted].sort(),
     finalizing: [...authority.finalizing].sort(),
+    ...(authority.unsettledStarts
+      ? { unsettledStarts: [...authority.unsettledStarts].sort() }
+      : {}),
     openedThrough: { epoch: openedThrough.epoch, sequence: openedThrough.sequence },
     operationalRevision: authority.operationalRevision
   }

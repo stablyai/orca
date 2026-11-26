@@ -200,10 +200,12 @@ export class JournalSqlStatusContext {
     (this.unsettled ?? [...journalDomainUnsettledInputs(this.scope)]).filter(
       (send) => send.dispatchState === 'pending'
     )
-  firstQueuedInput = () =>
+  firstQueuedInput = (held?: ReadonlySet<string>) =>
     this.unsettled
-      ? this.sendingSubmissions().find(isQueuedAgentJournalSubmission)
-      : journalDomainFirstQueuedInput(this.scope)
+      ? this.sendingSubmissions().find(
+          (send) => isQueuedAgentJournalSubmission(send) && !held?.has(send.clientMessageId)
+        )
+      : journalDomainFirstQueuedInput(this.scope, held)
 
   item = (id: string) => this.current(id)?.item
 

@@ -18,6 +18,36 @@ export const START_FAILURE_PIECES = {
       COPY.botToolsGatewayOutdated,
       values
     ),
+  instructionNotSent: (values) =>
+    translate(
+      'components.native-chat.failureWords.instructionNotSent',
+      COPY.instructionNotSent,
+      values
+    ),
+  instructionPending: (values) =>
+    translate(
+      'components.native-chat.failureWords.instructionPending',
+      COPY.instructionPending,
+      values
+    ),
+  instructionCommit: (values) =>
+    translate(
+      'components.native-chat.failureWords.instructionCommit',
+      COPY.instructionCommit,
+      values
+    ),
+  instructionUpdate: (values) =>
+    translate(
+      'components.native-chat.failureWords.instructionUpdate',
+      COPY.instructionUpdate,
+      values
+    ),
+  instructionUnknown: (values) =>
+    translate(
+      'components.native-chat.failureWords.instructionUnknown',
+      COPY.instructionUnknown,
+      values
+    ),
   savedConversationMissing: (values) =>
     translate(
       'components.native-chat.failureWords.savedConversationMissing',

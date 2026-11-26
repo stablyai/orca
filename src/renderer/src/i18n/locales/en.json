@@ -21357,7 +21357,12 @@
         "thenSendAgain": "Then send your message again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
-        "attachmentsExpired": "{{names}} expired."
+        "attachmentsExpired": "{{names}} expired.",
+        "instructionNotSent": "Your message was not sent.",
+        "instructionPending": "Your message was not sent. The previous agent in this chat may still be running. Start a new chat to continue.",
+        "instructionCommit": "Orca couldn't save this to the chat's history. Your message was not sent.",
+        "instructionUpdate": "Your message was not sent. Update {{agent}} on the computer running this chat, then send it again.",
+        "instructionUnknown": "Your message was not sent. Orca couldn't prepare {{agent}} to start on the computer running this chat."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -27244,7 +27249,12 @@
       "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
       "botMissing": "The bot this automation runs as no longer exists.",
       "botFolderMissing": "The bot's folder is no longer available.",
-      "botPaused": "{{bot}} is paused, so Orca skipped this run."
+      "botPaused": "{{bot}} is paused, so Orca skipped this run.",
+      "instructionPending": "The previous agent in this chat may still be running.",
+      "instructionCommit": "Orca couldn't save this to the chat's history.",
+      "instructionUnsupported": "Update Codex on the computer running this chat.",
+      "instructionUnknown": "Orca couldn't prepare Codex to start on the computer running this chat.",
+      "instructionTimeout": "{{message}}."
     },
     "extraAgentArgs": {
       "errors": {

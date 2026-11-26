@@ -134,6 +134,9 @@ export function applyJournalDomainSubmission(
     resolvedAt: null,
     submittedSequence: sequence,
     ...(input.handoverRecorded ? { handoverRecorded: true, acceptedSequence: sequence } : {}),
+    ...(input.retryOfClientMessageId
+      ? { retryOfClientMessageId: input.retryOfClientMessageId }
+      : {}),
     ...(familyId !== undefined ? { queuedMessageId: familyId } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
     ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {}),

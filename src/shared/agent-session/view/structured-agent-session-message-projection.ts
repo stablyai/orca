@@ -1,3 +1,4 @@
+import { structuredAgentSessionRejectedShownInPlace } from './structured-agent-session-rejected-projection'
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type {
   AgentJournalMessageItem,
@@ -31,18 +32,22 @@ import {
   withAutomationResultMarks
 } from '../../bots/bot-automation-result-marks'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
+import { isAgentSessionContextClear } from '../conversation-context/agent-session-context-clear'
 import {
-  agentSessionContextSequenceFor,
-  isAgentSessionContextClear
-} from '../conversation-context/agent-session-context-clear'
+  structuredAgentSessionNewerRejection,
+  structuredAgentSessionRetryLineages,
+  structuredAgentSessionRetryRow
+} from './structured-agent-session-retry-lineage'
 
 /** Client echo until host publication; an acknowledged read past recordedCursor supersedes it. */
 export type StructuredAgentSessionOptimisticMessage = {
+  retryOfClientMessageId?: string
   clientMessageId: string
   body: AgentJournalMessageItem
   /** Null when this client did not make the send and nothing dates it. */
   queuedAt: number | null
   phase?: 'sending' | 'recorded' | 'unconfirmed'
+  retainedSendId?: string
   recordedCursor?: AgentJournalCursor
   /** In-memory placement captured at Send, independent of any acknowledgement. */
   afterSequence?: number
@@ -61,53 +66,13 @@ export function structuredAgentSessionCommandItemIds(
   )
 }
 
-/** Rejected sends shown as unsent in submission order; withdrawals use stop notices, queued handoffs/cards keep their cards,
- * and commands carry rejection in their own reply. `resent`: rejected sends a later copy stands in for. */
-export function structuredAgentSessionRejectedShownInPlace(
-  submissions: readonly AgentJournalSubmission[],
-  commandItemIds: ReadonlySet<string>,
-  clearSequences: readonly number[] = []
-): { shown: Set<string>; resent: Set<string> } {
-  const latest = new Map<string, number>()
-  const later = Array.from<number | undefined>({ length: submissions.length })
-  const scopeKey = (submission: AgentJournalSubmission) =>
-    JSON.stringify([
-      agentSessionContextSequenceFor(submission.acceptedSequence ?? 0, clearSequences),
-      submission.payloadFingerprint
-    ])
-  for (let index = submissions.length - 1; index >= 0; index--) {
-    const submission = submissions[index]
-    const key = scopeKey(submission)
-    later[index] = latest.get(key)
-    if (!dispatchWasWithdrawn(submission)) {
-      latest.set(key, Math.max(latest.get(key) ?? -Infinity, submission.submittedAt))
-    }
-  }
-  const shown = new Set<string>()
-  const resent = new Set<string>()
-  for (const [index, submission] of submissions.entries()) {
-    const { resolvedAt } = submission
-    if (
-      submission.dispatchState !== 'rejected' ||
-      dispatchWasWithdrawn(submission) ||
-      // Persist card ownership on the send so editing/deleting the card cannot resurrect its row.
-      agentJournalSubmissionReturnedToCard(submission) ||
-      commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-    ) {
-      continue
-    }
-    // Collapses resends of a rejected message: past Retries resent it under a new id, and the
-    // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
-    // was known counts, so a repeat sent before it is kept.
-    const key = agentJournalSubmissionKey(submission.clientMessageId)
-    if (resolvedAt !== null && later[index] !== undefined && later[index] >= resolvedAt) {
-      resent.add(key)
-    } else {
-      shown.add(key)
-    }
-  }
-  return { shown, resent }
+export function structuredAgentSessionClearSequences(
+  items: readonly AgentJournalRenderItem[]
+): number[] {
+  return items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
 }
+
+export { structuredAgentSessionRejectedShownInPlace }
 
 /** Start-failure rows answering these sends: after one, before the next send. The resend's own
  *  outcome replaces them, as its copy replaces the send. */
@@ -162,38 +127,75 @@ export function projectStructuredAgentSessionMessageRows(
       )
       .map((submission) => [agentJournalSubmissionKey(submission.clientMessageId), submission])
   )
-  // Other rejections are ledger-only unless explicitly shown in place as unsent.
-  const rejected = new Set(
-    submissions
-      .filter((submission) => submission.dispatchState === 'rejected')
-      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-      .filter((itemId) => !stoppedBeforeStart.has(itemId))
-  )
   // Avoid placement work on every stream commit when no stopped sends exist.
   const placement =
     stoppedBeforeStart.size > 0 ? placeStoppedSends(items, submissions, stoppedBeforeStart) : null
   const { shown: inPlace, resent } = structuredAgentSessionRejectedShownInPlace(
     submissions,
     structuredAgentSessionCommandItemIds(items),
-    items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
+    structuredAgentSessionClearSequences(items)
   )
   const replacedFailures = resent.size > 0 ? startFailureRowsAfter(items, resent) : resent
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
+  let pendingDelivery: Map<string, 'pending' | 'unknown'> | undefined
+  let itemIds: Set<string> | undefined
+  const hasItem = (id: string): boolean =>
+    (itemIds ??= new Set(items.map((item) => item.itemId))).has(id)
+  const submissionsByItemId = new Map<string, AgentJournalSubmission>()
+  const lineages = structuredAgentSessionRetryLineages(submissions)
+  for (const submission of submissions) {
+    submissionsByItemId.set(agentJournalSubmissionKey(submission.clientMessageId), submission)
+  }
   for (const item of items) {
-    if (inPlace.has(item.itemId)) {
+    const { itemId } = item
+    const send = submissionsByItemId.get(itemId)
+    const root = send && (send.retryOfClientMessageId ?? send.clientMessageId)
+    const retry = root ? lineages.get(root) : undefined
+    let state = send?.dispatchState
+    if (
+      send &&
+      retry &&
+      root &&
+      (state !== 'accepted' || send.clientMessageId === retry.clientMessageId)
+    ) {
+      const retainedOriginal = retry.dispatchState === 'unknown' && send.clientMessageId === root
+      if (
+        !retainedOriginal &&
+        itemId !==
+          structuredAgentSessionRetryRow(
+            root,
+            retry,
+            hasItem,
+            submissionsByItemId.get(agentJournalSubmissionKey(root)),
+            stoppedBeforeStart.has(agentJournalSubmissionKey(retry.clientMessageId))
+          )
+      ) {
+        continue
+      }
+      if (!retainedOriginal) {
+        state = retry.dispatchState
+      }
+      if (state === 'rejected' && send.retryOfClientMessageId && !stoppedBeforeStart.has(itemId)) {
+        if (!agentJournalSubmissionReturnedToCard(send) && !resent.has(itemId)) {
+          unsentItems.push(item)
+        }
+        continue
+      }
+    }
+    if (state === 'rejected' && inPlace.has(itemId)) {
       unsentItems.push(item)
-    } else if (!rejected.has(item.itemId) && !replacedFailures.has(item.itemId)) {
+    } else if (
+      (state !== 'rejected' || stoppedBeforeStart.has(itemId)) &&
+      !replacedFailures.has(itemId)
+    ) {
+      if (state === 'pending' || state === 'unknown') {
+        ;(pendingDelivery ??= new Map()).set(itemId, state)
+      }
       visibleItems.push(item)
     }
   }
-  const journalled = new Set(visibleItems.map((item) => item.itemId))
-  const submissionsByItemId = new Map(
-    submissions.map((submission) => [
-      agentJournalSubmissionKey(submission.clientMessageId),
-      submission
-    ])
-  )
+  const journalled = new Set([...visibleItems, ...unsentItems].map(({ itemId }) => itemId))
   const marks = automationResultMarks(visibleItems)
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
@@ -201,22 +203,15 @@ export function projectStructuredAgentSessionMessageRows(
   let moved = false
   for (const row of projectItems(visibleItems)) {
     const submission = submissionsByItemId.get(row.id)
-    const message: NativeChatMessage =
-      submission?.dispatchState === 'pending' || submission?.dispatchState === 'unknown'
-        ? {
-            ...row,
-            deliveryState: submission.dispatchState,
-            ...(submission.queuedMessageId ? { queuedMessageId: submission.queuedMessageId } : {})
-          }
-        : submission?.queuedMessageId && row.from
-          ? deliveredAgentMailRow(row, submission.queuedMessageId)
-          : row
+    const queuedMessageId = submission?.queuedMessageId
+    const deliveryState = pendingDelivery?.get(row.id)
+    const message: NativeChatMessage = deliveryState
+      ? { ...row, deliveryState, ...(queuedMessageId ? { queuedMessageId } : {}) }
+      : queuedMessageId && row.from
+        ? deliveredAgentMailRow(row, queuedMessageId)
+        : row
     // Until handover, queued sends have no conversation position.
-    if (
-      submission &&
-      submission.queuedMessageId === undefined &&
-      isQueuedAgentJournalSubmission(submission)
-    ) {
+    if (submission && queuedMessageId === undefined && isQueuedAgentJournalSubmission(submission)) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(withAutomationResultMarks(message, marks))
@@ -250,16 +245,44 @@ export function projectStructuredAgentSessionMessageRows(
           projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const }))
         )
       : conversation
-  const output = [
-    ...placed,
-    // Held cards follow the conversation outside its runs.
-    ...held,
-    // Host rows supersede client echoes under either client or provider IDs.
-    ...structuredAgentSessionEchoRows(optimistic, journalled, submissionsByItemId)
-  ]
+  const uncertainRoots = new Set<string>()
+  const echoes = structuredAgentSessionEchoRows(
+    optimistic.filter((entry) => {
+      const root = entry.retryOfClientMessageId
+      if (!root) {
+        return true
+      }
+      const retry = lineages.get(root)
+      if (retry?.dispatchState === 'accepted') {
+        return false
+      }
+      const rootItem = agentJournalSubmissionKey(root)
+      const retryIsVisible =
+        retry !== undefined && journalled.has(agentJournalSubmissionKey(retry.clientMessageId))
+      return entry.phase === 'unconfirmed'
+        ? retry?.dispatchState !== 'pending' &&
+            (!(retryIsVisible || journalled.has(rootItem)) ||
+              !structuredAgentSessionNewerRejection(retry, entry.queuedAt))
+        : !hasItem(rootItem) && !retryIsVisible
+    }),
+    journalled,
+    submissionsByItemId,
+    uncertainRoots
+  )
+  // An uncertain retry replaces the prior failure only when it actually has an echo.
+  const rows = uncertainRoots.size
+    ? placed.filter((row) => {
+        const send = submissionsByItemId.get(row.id)
+        return (
+          !row.unsent ||
+          !send ||
+          !uncertainRoots.has(send.retryOfClientMessageId ?? send.clientMessageId)
+        )
+      })
+    : placed
   return {
-    output,
-    conversationEnd: placed.length,
+    output: [...rows, ...held, ...echoes],
+    conversationEnd: rows.length,
     hasStoppedSends: stoppedBeforeStart.size > 0
   }
 }

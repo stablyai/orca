@@ -31,7 +31,7 @@ export function journalDomainInputEligibility(
     context,
     work,
     prompts,
-    pending: context.firstQueuedInput(),
+    pending: firstEligibleQueuedInput(context, authority),
     handover: [...context.enteredSubmissions()].filter((send) => work.owesSend(send)),
     activeTurnId: work.activeTurn()?.turnId
   }
@@ -61,7 +61,8 @@ function journalDomainInputRecordBlocked(record: ReturnType<typeof journalDomain
 /** A validated work answer already owns prompt, handover and active-turn policy. */
 export function journalDomainResolvedInputEligibility(
   context: JournalSqlStatusContext,
-  work: JournalObserverResult['work']
+  work: JournalObserverResult['work'],
+  authority: JournalCurrentWorkAuthority
 ) {
   const record = journalDomainInputRecord(context.scope, context)
   return {
@@ -69,10 +70,18 @@ export function journalDomainResolvedInputEligibility(
     record,
     context,
     prompts: work.actionablePrompts,
-    pending: context.firstQueuedInput(),
+    pending: firstEligibleQueuedInput(context, authority),
     handover: work.owedEnteredSubmissions,
     activeTurnId: work.activeTurn?.turnId
   }
+}
+
+function firstEligibleQueuedInput(
+  context: JournalSqlStatusContext,
+  authority: JournalCurrentWorkAuthority
+) {
+  const held = authority.unsettledStarts
+  return context.firstQueuedInput(held && new Set(held))
 }
 
 /** Claude and Codex take every waiting message in at their next step, so other agents' messages

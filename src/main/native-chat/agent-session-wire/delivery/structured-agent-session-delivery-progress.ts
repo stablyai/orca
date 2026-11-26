@@ -30,10 +30,13 @@ export class DeliveryProgress {
   async claim(
     sessionId: string,
     reads: StructuredAgentSessionDeliveryLoopDeps,
-    startedFor: string
+    startedFor: string,
+    retireInstructionBinding?: true
   ) {
     const flight = reads.startFlights?.get(sessionId)
-    const claim = await reads.startProviderChild(sessionId, startedFor)
+    const claim = retireInstructionBinding
+      ? await reads.startProviderChild(sessionId, startedFor, true)
+      : await reads.startProviderChild(sessionId, startedFor)
     this.joined = flight?.outcome === claim.outcome ? flight : undefined
     return claim
   }

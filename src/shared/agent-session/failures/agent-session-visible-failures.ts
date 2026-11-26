@@ -137,6 +137,7 @@ export function sameAgentSessionFailureFact(
 ): boolean {
   return (
     a.kind === b.kind &&
+    a.instructionRecovery === b.instructionRecovery &&
     a.account === b.account &&
     a.detail?.text === b.detail?.text &&
     a.detail?.audience === b.detail?.audience &&

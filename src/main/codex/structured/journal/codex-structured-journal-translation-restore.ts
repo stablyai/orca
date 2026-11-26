@@ -1,5 +1,6 @@
 import type { AgentJournalTurnLifecycle } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import '../items/codex-structured-item-translation'
+import { codexInstructionNotification } from '../items/codex-instruction-item'
 import { readCodexThreadItem } from '../items/codex-thread-item-identity'
 import type { CodexTurnOrdinals } from './codex-turn-ordinals'
 import type { CodexJournalCompactions } from './codex-structured-journal-compactions'
@@ -36,6 +37,9 @@ export function restoreCodexHistoryItem(
     executions: Pick<CodexSubagentExecutions, 'register'>
   }
 ): CodexJournalTranslationAdmission {
+  if (codexInstructionNotification(event.params)) {
+    return { accepted: true }
+  }
   const item = readCodexNotificationThreadItem(event.params, readCodexThreadItem)
   const announcements = item ? readCodexSubagentAnnouncements(item, input.primaryThreadId) : []
   for (const announcement of announcements) {

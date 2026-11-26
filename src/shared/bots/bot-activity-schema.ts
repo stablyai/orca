@@ -128,6 +128,14 @@ const upNextSchema = z.looseObject({
 })
 
 const automationRowSchema = z.looseObject({
+  latestFailure: salvagedOptional(
+    'latestFailure',
+    z.object({
+      error: z.string(),
+      errorCode: z.string().optional(),
+      errorParams: z.record(z.string(), z.union([z.string(), z.number()])).optional()
+    })
+  ),
   key: z.string(),
   failing: z.boolean(),
   automation: BotAutomationViewSchema,

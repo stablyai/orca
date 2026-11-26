@@ -1,11 +1,13 @@
-import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
+import type {
+  StructuredAgentSessionDeliveryLoopDeps,
+  StructuredAgentSessionDeliveryStep as Prepared
+} from './structured-agent-session-delivery-loop-deps'
 // Accept sends separately, then derive each delivery step from journal/child state. Wait outside
 // serialization for startup/readiness/provider calls so acceptance and Stop stay responsive.
 // Recover earlier-process queued sends before any handover; running commands block input.
 
 import { beginStructuredAgentSessionInputHandover } from './structured-agent-session-input-handover'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionProviderChildIdentity } from '../host/structured-agent-session-host-types'
 import {
   oldestQueuedSubmission,
@@ -15,25 +17,13 @@ import {
 import type { StructuredAgentSessionPendingHandover } from './structured-agent-session-handover'
 import { structuredAgentSessionNextHandover } from './structured-agent-session-opening-send'
 import { structuredAgentSessionCommandRunning } from '../operations/structured-agent-session-command-turn'
-import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 import { holdRestartedStructuredAgentSessionSends } from '../termination/structured-agent-session-host-lifetime'
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 import { waitsForCodexTurnOptions } from '../options/structured-agent-session-message-options'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
-
-type Prepared =
-  | 'stop'
-  | 'continue'
-  | { start: StructuredAgentSessionStartClaim }
-  | {
-      ok: true
-      awaited: StructuredAgentSessionProviderChildIdentity
-      clientMessageId: string
-      readiness: StructuredAgentSessionStartReadiness | null
-      before: Promise<void>
-    }
+import { instructionRecoveryFailure } from '../startup/structured-agent-session-instruction-recovery'
 
 type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
@@ -199,6 +189,12 @@ export class StructuredAgentSessionDeliveryLoop {
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
+    if (
+      this.deps.instructionBindingNeedsAcquisition?.(sessionId) &&
+      !(await this.deps.retainedWork?.(sessionId, oldest.clientMessageId))
+    ) {
+      return { start: await progress.claim(sessionId, this.deps, oldest.clientMessageId, true) }
+    }
     await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
@@ -260,11 +256,26 @@ export class StructuredAgentSessionDeliveryLoop {
       return this.stop(sessionId)
     }
     if (waited) {
+      if (this.deps.instructionBindingNeedsAcquisition?.(sessionId)) {
+        return 'continue'
+      }
       // Verify awaited-child identity before rechecking launch permissions.
       await this.deps.retireOutgrownChild(sessionId, undefined, next)
       if (session.child !== awaitedChild) {
         return 'continue'
       }
+    }
+    if (this.deps.instructionBindingNeedsAcquisition?.(sessionId)) {
+      const repeat = awaitedChild.instructionRecoveryRefused
+      awaitedChild.instructionRecoveryRefused = true
+      return this.fail(
+        sessionId,
+        {
+          startKey: awaitedChild.generation,
+          cause: { failure: instructionRecoveryFailure(repeat ? 'pending' : 'timeout') }
+        },
+        next.clientMessageId
+      )
     }
     if (
       await waitsForCodexTurnOptions(

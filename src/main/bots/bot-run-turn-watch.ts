@@ -12,6 +12,10 @@ import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycl
 import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createKeyedTrailingEdgeCoalescer } from '../runtime/client/events/keyed-trailing-edge-coalescer'
+import {
+  readAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../shared/agent-session/failures/agent-session-failure'
 
 /** Why a run has no result of its own (result_unavailable). */
 export type BotRunUnavailable =
@@ -33,6 +37,7 @@ export type BotTurnEnd =
       error?: string
       /** Why the agent refused the prompt before any turn, such as a failed start. */
       refusal?: AgentJournalSubmission['rejection']
+      instructionRecovery?: AgentSessionFailureFact['instructionRecovery']
     }
   | { unavailable: BotRunUnavailable }
 
@@ -90,7 +95,8 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
       return {
         outcome: 'failure',
         message: '',
-        ...(placed.rejection ? { refusal: placed.rejection } : {})
+        ...(placed.rejection ? { refusal: placed.rejection } : {}),
+        instructionRecovery: readAgentSessionFailureFact(placed.rejection)?.instructionRecovery
       }
     case 'none':
       return unavailable('unattributed')

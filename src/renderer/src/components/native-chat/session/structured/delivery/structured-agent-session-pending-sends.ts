@@ -3,6 +3,7 @@ import type { AgentJournalCursor } from '../../../../../../../shared/agent-sessi
 // Keep unanswered sends in memory only for the sender and mounted views.
 
 export type StructuredAgentSessionPendingSend = {
+  retryOfClientMessageId?: string
   clientMessageId: string
   sessionId: string
   body: ReturnType<typeof structuredAgentSessionSendBody>

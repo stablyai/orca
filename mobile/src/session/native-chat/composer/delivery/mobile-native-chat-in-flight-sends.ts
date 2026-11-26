@@ -1,3 +1,9 @@
+import type { AgentSessionDeliveryFact } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-evidence'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { useSyncExternalStore } from 'react'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import {
@@ -14,6 +20,7 @@ import type {
   MobileNativeChatSavedImage
 } from '../drafts/mobile-native-chat-saved-drafts'
 import type { PendingNativeChatImage } from '../attachments/mobile-native-chat-image-attachment'
+import { discardMobileNativeChatRecoveryNotices } from './mobile-native-chat-deferred-recovery-notices'
 
 // Sends cleared from the box before their outcome was known. `held` marks one a live hold is waiting on;
 // the rest came back with the page and wait for their chat to open.
@@ -21,6 +28,7 @@ type InFlightEntry = {
   scope: string
   send: MobileNativeChatInFlightSend
   held: boolean
+  recorded?: true
   // Chip ids this send took; a sent send drops them in the same write that forgets it.
   carriedIds?: ReadonlySet<string>
 }
@@ -36,7 +44,7 @@ function subscribeSavedInFlight(listener: () => void): () => void {
   }
 }
 
-function notifyClaimable(): void {
+export function notifyMobileNativeChatInFlightChange(): void {
   savedInFlightVersion += 1
   savedInFlightListeners.forEach((listener) => listener())
 }
@@ -65,17 +73,17 @@ export function beginMobileNativeChatInFlightSend(
   }
   const scope = destination.scope
   const inputs = readMobileNativeChatDraftInputs(scope)
-  const queued = extra.intent?.queued
-  const carried = queued ?? extra.intent?.carried
+  const { clientMessageId, command, intent } = extra
+  const queued = intent?.queued
+  const composer = intent?.carried
+  const carried = queued ?? composer
   const id = queued?.id ?? createUuidV4()
   inFlightSends.set(id, {
     scope,
     held: true,
     // Only the composer's chips: a queued message's own chips were never in the box.
     carriedIds: new Set(
-      [...(extra.intent?.carried?.images ?? []), ...(extra.intent?.carried?.files ?? [])].map(
-        (chip) => chip.id
-      )
+      [...(composer?.images ?? []), ...(composer?.files ?? [])].map(({ id }) => id)
     ),
     send: {
       id,
@@ -85,8 +93,8 @@ export function beginMobileNativeChatInFlightSend(
       images: (carried?.images ?? []).map(({ path }) => ({ path })),
       files: savedMobileNativeChatFiles(carried?.files ?? []),
       sessionId: origin.pendingKey?.slice(origin.draftKey.length + 1) ?? null,
-      ...(extra.clientMessageId === undefined ? {} : { clientMessageId: extra.clientMessageId }),
-      ...(extra.command ? { command: true } : {}),
+      ...(clientMessageId === undefined ? {} : { clientMessageId }),
+      ...(command ? { command: true } : {}),
       normalizedText: origin.normalizedText,
       baselineTailMessageId: origin.boundary.afterMessageId ?? null,
       ...(origin.queuedDuringWorkingEpoch !== undefined ? { queuedDuringWork: true } : {})
@@ -101,21 +109,50 @@ export function settleMobileNativeChatInFlightSend(
   id: string | null,
   outcome: 'sent' | 'kept' = 'kept'
 ): void {
-  const entry = id ? inFlightSends.get(id) : undefined
-  if (!entry || !id) {
+  if (!id) {
+    return
+  }
+  const entry = inFlightSends.get(id)
+  if (!entry) {
     return
   }
   inFlightSends.delete(id)
-  const carried = entry.carriedIds
+  const { scope, send, carriedIds } = entry
   // A sent send's chips leave the box in the same write, so a kill can't bring them back as a draft.
-  if (outcome === 'sent' && carried && carried.size > 0) {
-    updateMobileNativeChatDraftInputs(entry.scope, (inputs) => ({
+  if (outcome === 'sent' && carriedIds?.size) {
+    updateMobileNativeChatDraftInputs(scope, (inputs) => ({
       ...inputs,
-      images: inputs.images.filter((image) => !carried.has(image.id)),
-      files: inputs.files.filter((file) => !carried.has(file.id))
+      images: inputs.images.filter(({ id }) => !carriedIds.has(id)),
+      files: inputs.files.filter(({ id }) => !carriedIds.has(id))
     }))
   }
-  saveMobileNativeChatDraft(entry.scope, 'immediate')
+  saveMobileNativeChatDraft(scope, 'immediate')
+  if (send.deliveryUnconfirmed) {
+    notifyMobileNativeChatInFlightChange()
+  }
+}
+
+export function markMobileNativeChatInFlightUnconfirmed(
+  ids: readonly string[],
+  notify?: () => false | void
+): void {
+  let noticePending: boolean | undefined
+  for (const id of ids) {
+    const entry = inFlightSends.get(id)
+    if (entry?.send.kind !== 'structured') {
+      continue
+    }
+    const { send } = entry
+    let pending = send.unconfirmedNoticePending
+    if (notify && (!send.deliveryUnconfirmed || pending)) {
+      noticePending ??= notify() === false
+      pending = noticePending ? true : undefined
+    }
+    if (!send.deliveryUnconfirmed || pending !== send.unconfirmedNoticePending) {
+      entry.send = { ...send, deliveryUnconfirmed: true, unconfirmedNoticePending: pending }
+      saveMobileNativeChatDraft(entry.scope, 'immediate')
+    }
+  }
 }
 
 /** Saved sends nobody is waiting on yet; the caller now holds them until it settles or releases them. */
@@ -123,9 +160,9 @@ export function claimMobileNativeChatInFlightSends(
   matches: (scope: string, send: MobileNativeChatInFlightSend) => boolean
 ): MobileNativeChatInFlightSend[] {
   const claimed: MobileNativeChatInFlightSend[] = []
-  for (const entry of inFlightSends.values()) {
+  for (const [id, entry] of inFlightSends) {
     if (!entry.held && matches(entry.scope, entry.send)) {
-      entry.held = true
+      inFlightSends.set(id, { ...entry, held: true })
       claimed.push(entry.send)
     }
   }
@@ -143,17 +180,23 @@ export function releaseMobileNativeChatInFlightSends(ids: Iterable<string>): voi
   }
   // An open chat claims it now rather than at its next mount.
   if (released) {
-    notifyClaimable()
+    notifyMobileNativeChatInFlightChange()
   }
 }
 
 /** A structured send is known by the id the desktop records it under. */
 export function mobileNativeChatInFlightSendIds(clientMessageIds: ReadonlySet<string>): string[] {
   return [...inFlightSends.values()].flatMap(({ send }) =>
-    send.clientMessageId !== undefined && clientMessageIds.has(send.clientMessageId)
+    send.kind === 'structured' && clientMessageIds.has(send.clientMessageId ?? send.id)
       ? [send.id]
       : []
   )
+}
+
+// Releasing a view leaves the original lookup eligible to report until another view claims the send.
+export function mobileNativeChatInFlightClaim(ids: readonly string[]): () => string[] {
+  const entries = ids.map((id) => inFlightSends.get(id))
+  return () => ids.filter((id, index) => entries[index] && inFlightSends.get(id) === entries[index])
 }
 
 export function savedMobileNativeChatFiles(
@@ -177,10 +220,29 @@ export function restoredFiles(
   return files.map((file) => ({ ...file, id: createUuidV4() }))
 }
 
-export function readMobileNativeChatInFlightSend(
-  id: string
-): { scope: string; send: MobileNativeChatInFlightSend } | null {
+export function readMobileNativeChatInFlightSend(id: string): {
+  scope: string
+  send: MobileNativeChatInFlightSend
+  recorded?: true
+} | null {
   return inFlightSends.get(id) ?? null
+}
+
+export function readMobileNativeChatInFlightStructuredSession(
+  sessionId: string,
+  draftScope?: string
+): MobileNativeChatInFlightSend[] {
+  const sends: MobileNativeChatInFlightSend[] = []
+  for (const { scope, send } of inFlightSends.values()) {
+    if (
+      send.kind === 'structured' &&
+      send.sessionId === sessionId &&
+      (draftScope === undefined || scope === draftScope)
+    ) {
+      sends.push(send)
+    }
+  }
+  return sends
 }
 
 export function readMobileNativeChatInFlightSendsByScope(): Map<
@@ -204,14 +266,58 @@ export function registerSavedMobileNativeChatInFlightSends(
     inFlightSends.set(send.id, { scope, send, held: false })
   }
   if (returned.length > 0) {
-    notifyClaimable()
+    notifyMobileNativeChatInFlightChange()
   }
 }
 
 export function retireMobileNativeChatInFlightSends(scope: string): void {
+  discardMobileNativeChatRecoveryNotices(scope)
   for (const [id, entry] of inFlightSends) {
     if (entry.scope === scope) {
       inFlightSends.delete(id)
     }
   }
+}
+
+export function settleRecordedMobileNativeChatInFlightSends(
+  ids: readonly string[],
+  submissions: readonly AgentSessionDeliveryFact[],
+  ownedByQueue: readonly string[] = [],
+  onReturned?: (scope: string, fact: AgentSessionFailureFact, reason: string | null) => void
+): Set<string> {
+  const settled = new Set<string>()
+  const byId = new Map(submissions.map((submission) => [submission.clientMessageId, submission]))
+  const queued = ownedByQueue.length > 0 ? new Set(ownedByQueue) : undefined
+  for (const id of ids) {
+    const entry = inFlightSends.get(id)
+    if (!entry) {
+      continue
+    }
+    const clientMessageId = entry.send.clientMessageId ?? id
+    const submission = byId.get(clientMessageId)
+    const verdict = submission?.dispatchState
+    const card = submission?.keptAsQueuedMessageId ?? submission?.queuedMessageId
+    const failure =
+      verdict === 'rejected' ? readWholeAgentSessionFailureFact(submission?.rejection) : null
+    const transferred =
+      queued?.has(id) || queued?.has(clientMessageId) || (card !== undefined && queued?.has(card))
+    if (
+      transferred ||
+      verdict === 'accepted' ||
+      (verdict === 'rejected' && !failure?.instructionRecovery)
+    ) {
+      const firstSettlement = !settled.has(clientMessageId)
+      settled.add(clientMessageId)
+      settleMobileNativeChatInFlightSend(
+        id,
+        verdict === 'accepted' || transferred ? 'sent' : 'kept'
+      )
+      if (firstSettlement && submission && failure?.instructionRecovery) {
+        onReturned?.(entry.scope, failure, submission.reason)
+      }
+    } else if (submission && submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING) {
+      entry.recorded = true
+    }
+  }
+  return settled
 }

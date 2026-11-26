@@ -1,4 +1,5 @@
 import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
+import { isHiddenCodexInstructionEvent } from '../items/codex-instruction-item'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from '../background-work/codex-subagent-activity'
 import {
@@ -102,7 +103,13 @@ function createCodexTranslation(
     return admission
   }
 
+  const instructionIds = new Set<string>()
   return {
+    hideInstructionItem: (id) => {
+      if (instructionIds.size < 2) {
+        instructionIds.add(id)
+      }
+    },
     restoreThread: (threadId, thread) => {
       if (threadId === (deps.primaryThreadId?.() ?? null)) {
         readActivity = createCodexProviderActivityReader()
@@ -135,6 +142,9 @@ function createCodexTranslation(
       })
     },
     handle: (event) => {
+      if (isHiddenCodexInstructionEvent(event, instructionIds)) {
+        return CODEX_JOURNAL_ADMITTED
+      }
       const primaryThreadId = deps.primaryThreadId?.() ?? null
       if (event.type === 'notification' && primaryThreadId !== null) {
         // Register execution first so rows from this frame carry the child's run.

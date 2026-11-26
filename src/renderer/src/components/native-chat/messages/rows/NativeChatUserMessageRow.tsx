@@ -245,7 +245,13 @@ function NativeChatDeliveryLine({
       <span className="min-w-0 break-words">{notice.text}</span>
       <NativeChatSetupButton failureKind={notice.failureKind} rowId={rowId} />
       {notice.onSend ? (
-        <Button type="button" variant="ghost" size="xs" onClick={notice.onSend}>
+        <Button
+          data-native-chat-retry
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={notice.onSend}
+        >
           {t('components.native-chat.queuedMessages.send', 'Send')}
         </Button>
       ) : null}

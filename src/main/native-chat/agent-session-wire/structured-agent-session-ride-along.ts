@@ -106,7 +106,7 @@ export function structuredAgentSessionRideAlong(
         key !== undefined && context !== null && writeReceipt
           ? await writeReceipt(key, context)
           : false
-      plan.given({ instructionsRecorded })
+      await plan.given({ instructionsRecorded })
       if (!plan.note) {
         return
       }

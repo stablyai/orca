@@ -1,9 +1,9 @@
+import { instructionRecoveryCopy } from './agent-session-instruction-recovery-failure'
 import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
   type AgentSessionFailureKind,
-  type SubmissionRejectionFact,
-  type SubmissionRejectionKind
+  type SubmissionRejectionFact
 } from './agent-session-failure'
 import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
 import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
@@ -27,12 +27,7 @@ import { modelUnavailableSentence } from './agent-session-model-failure-words'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
 import { requestTimeoutSeconds } from './agent-session-request-timeout'
 import { namingAgent, SETUP_REFUSAL_SENTENCES } from './agent-session-setup-refusal-words'
-import {
-  DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_CODEX_QUEUE_FULL,
-  DISPATCH_REJECTED_QUEUE_FULL,
-  DISPATCH_REJECTED_WRITE_FAILED
-} from '../requests/structured-agent-session-dispatch-rejection'
+import { legacyDispatchRejectionReason } from '../requests/structured-agent-session-dispatch-rejection'
 
 // Build legacy text/reason/error and newer typed facts together. Quote provider text only when authored for a person; shared sentence pieces let desktop translate the same fact.
 
@@ -108,6 +103,9 @@ function startRetry(
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
+    if (fact.instructionRecovery) {
+      return say(instructionRecoveryCopy(fact.instructionRecovery), agent(say, context))
+    }
     const installation = agentCliInstallationFailureWords(fact.refusal, say, context.hostName)
     if (installation) {
       return installation
@@ -285,20 +283,6 @@ export function agentSessionFailureSentence(
   return sentence(context, fact, surface, say)
 }
 
-/** Preserve markers released clients hide. A write failure keeps the bare marker; its error stays in the log. */
-const LEGACY_REJECTION_MARKERS: Partial<
-  Record<SubmissionRejectionKind, (context: AgentSessionFailureWordsContext) => string | undefined>
-> = {
-  cancelled: () => DISPATCH_REJECTED_CANCELLED,
-  writeFailed: () => DISPATCH_REJECTED_WRITE_FAILED,
-  queueFull: ({ provider }) =>
-    provider === 'codex'
-      ? DISPATCH_REJECTED_CODEX_QUEUE_FULL
-      : provider === 'claude'
-        ? DISPATCH_REJECTED_QUEUE_FULL
-        : undefined
-}
-
 /** The words a status row reporting this fact records. */
 export function agentSessionFailureWords(
   fact: AgentSessionFailureFact,
@@ -321,7 +305,7 @@ export function agentSessionFailureWords(
     throw new Error(`agent session failure kind ${fact.kind} cannot reject a message`)
   }
   const words =
-    LEGACY_REJECTION_MARKERS[fact.kind]?.(context) ??
+    legacyDispatchRejectionReason(fact.kind, context.provider) ??
     agentSessionFailureSentence(fact, 'rejection', context)
   return { reason: branded(words), rejection: fact }
 }

@@ -9,26 +9,22 @@ import type { StructuredAgentSessionOptimisticMessage } from './structured-agent
 export function structuredAgentSessionEchoRows(
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   journalled: ReadonlySet<string>,
-  submissionsByItemId: ReadonlyMap<string, AgentJournalSubmission>
+  submissionsByItemId: ReadonlyMap<string, AgentJournalSubmission>,
+  uncertainRoots: Set<string>
 ): NativeChatMessage[] {
-  return optimistic
-    .filter((entry) => {
-      const key = agentJournalSubmissionKey(entry.clientMessageId)
-      const submission = submissionsByItemId.get(key)
-      return (
-        !journalled.has(key) &&
-        (!submission ||
-          submission.dispatchState === 'pending' ||
-          submission.reason === STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING)
-      )
-    })
-    .map((entry): NativeChatMessage => {
-      const id = agentJournalSubmissionKey(entry.clientMessageId)
-      const submission = submissionsByItemId.get(id)
-      const hostPending =
-        submission?.dispatchState === 'pending' &&
-        submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
-      return {
+  return optimistic.flatMap((entry): NativeChatMessage[] => {
+    const id = agentJournalSubmissionKey(entry.clientMessageId)
+    const submission = submissionsByItemId.get(id)
+    const recorded = submission && submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+    const hostPending = recorded && submission.dispatchState === 'pending'
+    if (journalled.has(id) || (recorded && !hostPending)) {
+      return []
+    }
+    if (entry.phase === 'unconfirmed' && entry.retryOfClientMessageId) {
+      uncertainRoots.add(entry.retryOfClientMessageId)
+    }
+    return [
+      {
         id,
         role: 'user',
         source: 'transcript',
@@ -38,6 +34,7 @@ export function structuredAgentSessionEchoRows(
             : 'unknown',
         timestamp: entry.queuedAt,
         blocks: entry.body.blocks,
+        retainedSendId: hostPending ? undefined : entry.retainedSendId,
         ...(entry.afterSequence !== undefined
           ? {
               journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt ?? 0 }
@@ -45,7 +42,8 @@ export function structuredAgentSessionEchoRows(
           : {}),
         ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
       }
-    })
+    ]
+  })
 }
 
 const deliveredAgentMail = new WeakMap<NativeChatMessage, NativeChatMessage>()

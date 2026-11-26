@@ -25,11 +25,13 @@ import { useMobilePendingControl } from '../components/controls/use-mobile-pendi
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { automationScheduleText } from './automation-schedule-label'
 import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
-import type { MobileAutomationRow } from './automation-reply-schema'
+import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
+import { automationRunErrorText } from './automation-run-presentation'
 import { automationStyles as styles } from './automation-styles'
 
 export function AutomationDetail(props: {
   row: MobileAutomationRow
+  lastRun?: MobileAutomationRun
   client: RpcClient | null
   disabled: boolean
   projectName: string | undefined
@@ -128,6 +130,8 @@ export function AutomationDetail(props: {
       : []
   const workspace = workspaces.length === 1 ? workspaces[0] : undefined
   const unavailable = t('automations.mobile.unavailable', 'Unavailable')
+  const lastFailure =
+    props.lastRun?.status === 'dispatch_failed' ? automationRunErrorText(props.lastRun) : null
   return (
     <>
       {item.selector.kind === 'orphan' ? (
@@ -151,6 +155,15 @@ export function AutomationDetail(props: {
         />
       </SettingsSection>
       <SettingsSection title={t('automations.mobile.schedule', 'Schedule')}>
+        {props.lastRun?.status === 'dispatch_failed' ? (
+          <ListRow
+            title={t('automations.mobile.lastRun', 'Last run')}
+            subtitle={[t('automations.mobile.failed', 'Failed'), lastFailure]
+              .filter(Boolean)
+              .join(' · ')}
+            subtitleLines={4}
+          />
+        ) : null}
         <ListRow
           title={t('automations.mobile.repeats', 'Repeats')}
           value={automationScheduleText(automation)}

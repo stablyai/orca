@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { journalRetryHistoryPresentation } from './journal-domain-retry-lineage'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
@@ -225,6 +226,9 @@ export function itemSubmissions(
   ordinals?: Map<string, number>,
   byItem?: Map<string, AgentJournalSubmission[]>
 ): AgentJournalSubmission[] {
+  const withRetry = journalRetryHistoryPresentation(
+    new JournalSqlScope(db, head.sessionId, head.epoch)
+  )
   return db
     .prepare(`SELECT attempt.payload_json, attempt.ordinal, attempt.item_id FROM json_each(?) wanted
       CROSS JOIN journal_submission_attempts attempt
@@ -232,7 +236,7 @@ export function itemSubmissions(
       ORDER BY attempt.submitted_at, attempt.ordinal`)
     .all(JSON.stringify(itemIds), head.sessionId, head.epoch)
     .map((row) => {
-      const send = present(JSON.parse(String(row.payload_json)))
+      const send = present(withRetry(JSON.parse(String(row.payload_json))))
       ordinals?.set(send.clientMessageId, Number(row.ordinal))
       if (byItem) {
         const group = byItem.get(String(row.item_id)) ?? []

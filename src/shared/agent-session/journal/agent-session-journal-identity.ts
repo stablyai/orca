@@ -37,3 +37,13 @@ export type AgentJournalItemIdentity =
   | { provider: 'orca'; clientMessageId: string }
   /** Bridge-era transcript record with no provider-stable identity. */
   | { provider: 'legacy'; agent: AgentType; sessionId: string; recordId: string }
+
+/** Every cursor-resume failure forces a clean client snapshot reload. */
+export const AGENT_JOURNAL_RESET_REASONS = [
+  'epoch_changed',
+  'cursor_ahead',
+  'cursor_compacted',
+  'journal_gap',
+  'schema_unreadable'
+] as const
+export type AgentJournalResetReason = (typeof AGENT_JOURNAL_RESET_REASONS)[number]

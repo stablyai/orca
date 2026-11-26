@@ -83,13 +83,19 @@ export const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     marginHorizontal: -5
   },
-  unsentNotice: {
+  deliveryBody: {
     maxWidth: '88%',
+    alignItems: 'flex-start'
+  },
+  deliveryBubble: {
+    maxWidth: '100%'
+  },
+  unsentNotice: {
     marginTop: spacing.xs,
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
-  automationResultsCarried: {
+  mutedNotice: {
     marginTop: spacing.xs,
     color: colors.textMuted,
     fontSize: typography.metaSize

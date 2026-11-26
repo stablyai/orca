@@ -83,8 +83,8 @@ export function withBotRulesUpdate(
       ...(plan?.text ? [plan.text] : [])
     ].join('\n\n'),
     instructionsKey: key,
-    given: (receipt) => {
-      plan?.given(receipt)
+    given: async (receipt) => {
+      await plan?.given(receipt)
       if (receipt.instructionsRecorded) {
         keep({ ...rules, held: key, recorded: key })
       }

@@ -3,6 +3,7 @@ import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evi
 import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
+import type { AgentSessionInstructionPolicy } from '../agent-session-instruction-policy'
 import { isAgentSessionConversationName } from '../conversation-naming/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -106,6 +107,7 @@ export type AgentSessionLease = {
 }
 
 export type AgentSessionRecord = {
+  instructionPolicy?: AgentSessionInstructionPolicy
   schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
   sessionId: string
   location: AgentSessionExecutionLocation

@@ -1,3 +1,4 @@
+import { INSTRUCTION_RECOVERY_FAILURE_COPY } from './agent-session-instruction-recovery-failure'
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
@@ -20,6 +21,7 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 
 /** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
+  ...INSTRUCTION_RECOVERY_FAILURE_COPY,
   theAgent: 'The agent',
   forkOriginalMissing:
     '{{agent}} could not find this response in the original chat. Open it and fork from there.',

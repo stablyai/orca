@@ -47,9 +47,9 @@ export function* journalDomainUnsettledInputs(scope: JournalSqlScope, pendingOnl
   }
 }
 
-export function journalDomainFirstQueuedInput(scope: JournalSqlScope) {
+export function journalDomainFirstQueuedInput(scope: JournalSqlScope, held?: ReadonlySet<string>) {
   for (const input of journalDomainUnsettledInputs(scope, true)) {
-    if (isQueuedAgentJournalSubmission(input)) {
+    if (isQueuedAgentJournalSubmission(input) && !held?.has(input.clientMessageId)) {
       return input
     }
   }

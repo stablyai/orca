@@ -108,11 +108,10 @@ export function useMobileStructuredAgentSession(
   const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
   const { status, epoch } = state
-  const linked = useMemo(
+  const { approvalPrompt, questionPrompt, navigation, promptIdentity } = useMemo(
     () => mobileStructuredLinkedPrompts(state, args.itemLink, sessionId),
     [state, args.itemLink, sessionId]
   )
-  const { approvalPrompt, questionPrompt } = linked
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     approvalItemId: approvalPrompt?.itemId,
     questionItemId: questionPrompt?.itemId,
@@ -128,7 +127,8 @@ export function useMobileStructuredAgentSession(
     submissions: state.submissions,
     queuedMessages,
     onSendError,
-    confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
+    confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport),
+    draftScope: args.composerScopeKey
   })
   const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
   const { clearing, transcriptItems, messages, receipts } = transcript
@@ -262,7 +262,7 @@ export function useMobileStructuredAgentSession(
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
     session: {
-      itemNavigation: savedAt === null ? linked.navigation : null,
+      itemNavigation: savedAt === null ? navigation : null,
       messages,
       status,
       // A stored copy can't answer "is this ask still open?" until a live frame confirms it.
@@ -286,7 +286,7 @@ export function useMobileStructuredAgentSession(
     holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
-      requestCancel(prompt ?? linked.promptIdentity),
+      requestCancel(prompt ?? promptIdentity),
     receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),

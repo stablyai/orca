@@ -3,6 +3,16 @@ import type { AgentJournalSubmission } from '../journal/agent-session-journal-ty
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from './structured-agent-session-send-evidence'
 import { handedOffQueuedMessageIds } from '../view/structured-agent-session-draft-hand-off'
 
+export type AgentSessionDeliveryFact = Pick<
+  AgentJournalSubmission,
+  | 'clientMessageId'
+  | 'dispatchState'
+  | 'reason'
+  | 'rejection'
+  | 'queuedMessageId'
+  | 'keptAsQueuedMessageId'
+>
+
 /** A bounded read supersedes acknowledged sends even when their rows are outside its page. */
 export function structuredAgentSessionReadCoversSend(
   cursor: AgentJournalCursor | null | undefined,

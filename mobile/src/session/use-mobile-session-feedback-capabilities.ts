@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import { Animated, Easing, Platform } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { reconcileMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
@@ -69,7 +69,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   const createWarning = reconciledCreateWarningState.visible
 
   const mountedRef = useRef(true)
-  useEffect(() => {
+  useLayoutEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
@@ -100,9 +100,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   }, [])
 
   const showToast = useCallback(
-    (message: string, durationMs = 1200) => {
+    (message: string, durationMs = 1200): false | void => {
       if (!mountedRef.current) {
-        return
+        return false
       }
       const seq = toastSeqRef.current + 1
       toastSeqRef.current = seq

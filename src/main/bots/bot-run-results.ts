@@ -1,5 +1,6 @@
 // A bot automation run's result: when its turn ends, its last message goes to the bot's Chat, a channel, a Linear issue, or nowhere.
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
+import { automationInstructionRecoveryFailure } from '../../shared/automations/history/automation-run-failure-copy'
 import type {
   Automation,
   AutomationBotTarget
@@ -163,6 +164,9 @@ export async function deliverBotRunResult(
       },
       result.sessionId
     )
+    if ('instructionRecovery' in ended && ended.instructionRecovery) {
+      return automationInstructionRecoveryFailure(ended.instructionRecovery)
+    }
     const error = COPY.failed(ended.outcome)
     await resultNote.leave(deps, result, 'couldNotFinish', ended.message.trim() || error)
     const why =

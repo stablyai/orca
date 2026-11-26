@@ -1,8 +1,10 @@
 // What a bot's Codex chat adds to a structured launch.
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import type { CodexInstructionInstallation } from '../threads/codex-bot-instruction-installation'
 
 export type CodexBotLaunchOptions = {
-  /** Given to a new thread only: a resumed one keeps those it started with. */
+  instructionInstallation?: CodexInstructionInstallation
+  /** Canonical configuration for fresh and cold-resumed threads. */
   developerInstructions?: string
   /** A bot's look-around or tidy-up: the host answers its approvals by this mode. */
   readOnly?: ReadOnlySessionMode

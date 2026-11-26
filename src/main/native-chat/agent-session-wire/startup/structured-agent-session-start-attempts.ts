@@ -1,3 +1,9 @@
+import {
+  beginInstructionRecoveryDeadline,
+  BotInstructionRecoveryDeadline,
+  instructionRecoveryOutcomeUnknown,
+  settleInstructionRecoveryFailure
+} from './structured-agent-session-instruction-recovery'
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -30,6 +36,7 @@ import {
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
+import { hasUnsettledStart } from '../delivery/structured-agent-session-input-selection'
 
 export function registerStructuredAgentSessionStart(
   context: StructuredAgentSessionAttachContext,
@@ -45,6 +52,7 @@ export function registerStructuredAgentSessionStart(
   let attemptId = randomUUID()
   let handle = attempts.begin(sessionId, attemptId)
   const registeredAt = handle.registeredAt
+  const endRecoveryDeadline = beginInstructionRecoveryDeadline(context, sessionId, acquire.abort)
   const children: NonNullable<ReturnType<typeof flights.get>>['children'] = []
   const register = () =>
     flights.register(sessionId, {
@@ -119,34 +127,49 @@ export function registerStructuredAgentSessionStart(
   let recorded: Promise<void> = Promise.resolve()
   // Stop, close, quit, the deadline and the contract guard decide the start at once, even while
   // its attempt or the session's serialized work is still held; late attempt work fails the
-  // flight's commit check. The failure row is queued before callers wake, so their work follows
-  // it, but they never wait for it to be written.
+  // flight's commit check. Instruction recovery holds the send until the failure is durable
+  // and reports an unknown outcome if the deadline expires during that write.
   const outcome = Promise.race([
     attempting,
     stoppedStructuredAgentSessionStartSignal(acquire.signal)
   ])
-    .then((result): StructuredAgentSessionResumeOutcome => {
+    .then(async (result): Promise<StructuredAgentSessionResumeOutcome> => {
       const settled =
         result.ok || !acquire.signal.aborted
           ? result
           : stoppedStructuredAgentSessionStart(acquire.signal.reason)
       if (!settled.ok && !settled.aborted && (startedFor !== undefined || children.length > 0)) {
         const key = { generation: children.at(-1)?.generation, startedFor, attemptId }
-        recorded = context
-          .serialize(sessionId, () =>
-            recordStructuredAgentSessionFlightFailure(context, sessionId, settled, key)
+        const write = () =>
+          recordStructuredAgentSessionFlightFailure(context, sessionId, settled, key)
+        if (settled.failure?.instructionRecovery) {
+          const settling = settleInstructionRecoveryFailure(
+            context,
+            sessionId,
+            startedFor,
+            children,
+            write,
+            settled.failure
           )
-          .catch((error: unknown) =>
-            context.deps.logger.warn('recording a failed start did not finish', {
-              scope: 'agent-start',
-              sessionId,
-              error
-            })
+          recorded = settling.then(() => {})
+          return (
+            (await waitForPromiseWithSignal(settling, acquire.signal).catch(
+              instructionRecoveryOutcomeUnknown
+            )) ?? settled
           )
+        }
+        recorded = context.serialize(sessionId, write).catch((error: unknown) =>
+          context.deps.logger.warn('recording a failed start did not finish', {
+            scope: 'agent-start',
+            sessionId,
+            error
+          })
+        )
       }
       return settled
     })
     .finally(() => {
+      endRecoveryDeadline()
       acquire.end()
       flights.end(sessionId, attemptId)
       attempts.abandon(sessionId, attemptId)
@@ -215,7 +238,7 @@ export async function structuredAgentSessionStartStillQueued(
   if (startedFor === undefined) {
     return true
   }
-  if (!session) {
+  if (!session || hasUnsettledStart(session.journal, startedFor)) {
     return false
   }
   const entry = await session.journal.reads.submission(startedFor)
@@ -266,6 +289,15 @@ function structuredAgentSessionOpenFailure(
 function stoppedStructuredAgentSessionStart(
   reason: unknown
 ): Extract<StructuredAgentSessionResumeOutcome, { ok: false }> {
+  if (reason instanceof BotInstructionRecoveryDeadline) {
+    return {
+      ...failedStructuredAgentSessionStart(),
+      failure: agentSessionFailureFact('startFailed', {
+        instructionRecovery: 'timeout',
+        neverReachedAgent: true
+      })
+    }
+  }
   if (isStructuredAgentSessionStartupExpired(reason)) {
     return { ...failedStructuredAgentSessionStart(), expired: true }
   }

@@ -110,6 +110,8 @@ export type StructuredAgentSessionChildClose = {
 /** Written only by structured-agent-session-provider-child. */
 export type StructuredAgentSessionProviderChild = StructuredAgentSessionProviderChildIdentity & {
   /** No input or authoritative options until host open settles. */
+  instructionAccount?: string
+  instructionRecoveryRefused?: true
   phase: StructuredAgentSessionProviderChildPhase
   /** Immutable, memory-only opening send ID; distinguishes its restart from another start. */
   readonly startedFor?: string
@@ -334,6 +336,8 @@ export type StructuredAgentSessionConversationDelivery = {
   /** Settle edges affect status/steer holds without rows or renewed idle activity. */
   afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
   dispose: () => void
+  /** After an account switch; see `retireStructuredAgentSessionChildOnOtherAccount`. */
+  offAccount: (sessionId: string, committed: () => boolean) => Promise<void>
   adoptOpened: (
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
