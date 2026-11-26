@@ -132,6 +132,7 @@ async function selectSpawnAgentProgram(
     return selectTerminalAgentProgram(programs, shell, {
       wsl: { distro: spawn.expectedWslDistro ?? undefined },
       pinForSetup: spawn.setupGate,
+      verifyWslHit: true,
       revalidateUnavailable: true,
       signal,
       onWslDistroSelected

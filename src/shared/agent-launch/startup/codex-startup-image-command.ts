@@ -25,13 +25,14 @@ import {
 } from './launch-position'
 import { hasPowerShellStopParsing, powerShellNativeLaunch } from './powershell-native-launch'
 import { withClaudeDirectLaunchCommand } from './claude-direct-launch-command'
+import { setupPosixAgentExec } from './setup-agent-program'
 import { CODEX_EXECUTABLE } from './direct-agent-launch-recognition'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 // What the interactive `codex` shell function adds, for a literal target (such as Orca's own copy by
 // full path) that bypasses it: hook prep, caller identity for commands Codex runs, the remote-viewer
 // clipboard marker, and optionally the image hint. --no-daemon is added at spawn.
-const posixScript = (images: boolean, probe: boolean): string =>
+const posixScript = (images: boolean, probe: boolean, setupGate: boolean): string =>
   [
     'p=$1; shift; i=${ORCA_CODEX_ISOLATE:-1}',
     `for a in "$@"; do case "$a" in ${CODEX_SHARED_SERVER_ARGS.join('|')}|--remote=*) i=0 ;; esac; done`,
@@ -41,7 +42,7 @@ const posixScript = (images: boolean, probe: boolean): string =>
       ? [
           'd=$i',
           `for a in "$@"; do case "$a" in ${CODEX_NO_DAEMON_SKIP_ARGS.join('|')}|--remote=*) d=0 ;; esac; done`,
-          'if [ "$d" != 0 ] && "$p" --help </dev/null 2>/dev/null | grep -q -- --no-daemon; then set -- --no-daemon "$@"; fi'
+          `if [ "$d" != 0 ] && ${setupGate ? `(${setupPosixAgentExec('"$p"', '--help')})` : '"$p" --help'} </dev/null 2>/dev/null | grep -q -- --no-daemon; then set -- --no-daemon "$@"; fi`
         ]
       : []),
     `if [ "$i" != 0 ]; then for k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.join(' ')}; do eval "v=\\\${$k:-}"; case "$v" in ''|*"'"*) ;; *) set -- -c "${identitySetArg('$k', '$v')}" "$@" ;; esac; done; [ "\${SSH_CONNECTION:-}" != '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' ] || set -- -c "${CLEAR_SSH_MARKER_ARG}" "$@"; fi`,
@@ -50,11 +51,11 @@ const posixScript = (images: boolean, probe: boolean): string =>
           `if [ "$${ORCA_IMAGE_PROTOCOL_ENV}" = ${ORCA_IMAGE_PROTOCOL_VALUE} ] && [ -z "\${KITTY_WINDOW_ID+x}" ]; then export KITTY_WINDOW_ID=${CODEX_KITTY_WINDOW_ID}; fi`
         ]
       : []),
-    'exec "$p" "$@"'
+    setupGate ? setupPosixAgentExec('"$p"') : 'exec "$p" "$@"'
   ].join('; ')
 
-const posixPrefix = (images: boolean, probe: boolean): string =>
-  `/bin/sh -c ${quoteStartupArg(posixScript(images, probe), 'posix')} orca-codex `
+const posixPrefix = (images: boolean, probe: boolean, setupGate: boolean): string =>
+  `${setupGate ? 'bash' : '/bin/sh'} -c ${quoteStartupArg(posixScript(images, probe, setupGate), 'posix')} orca-codex `
 
 function powerShellPrefix(images: boolean, probe: boolean): string {
   const remote = `$orcaRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY); `
@@ -78,7 +79,14 @@ const powerShellSuffix = (images: boolean): string =>
 const BOTH = [true, false]
 const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = /* @__PURE__ */ new Set(CODEX_NO_DAEMON_SKIP_ARGS)
 const POSIX_WRAPPERS = /* @__PURE__ */ BOTH.flatMap((images) =>
-  BOTH.map((probe) => ({ images, probe, prefix: posixPrefix(images, probe) }))
+  BOTH.flatMap((probe) =>
+    BOTH.map((setupGate) => ({
+      images,
+      probe,
+      setupGate,
+      prefix: posixPrefix(images, probe, setupGate)
+    }))
+  )
 )
 
 export function readCodexDirectLaunch(
@@ -140,7 +148,10 @@ export function withCodexDirectLaunchCommand(
     )
   }
   const wrapper = POSIX_WRAPPERS.find(
-    (each) => each.images === options.images && each.probe === probe
+    (each) =>
+      each.images === options.images &&
+      each.probe === probe &&
+      each.setupGate === Boolean(options.programExpression)
   )
   return wrapper
     ? command.slice(0, launch.start) +

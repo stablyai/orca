@@ -11,11 +11,15 @@ import {
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 import { setupCompletionMarkerPrefix } from './setup-completion-marker'
+import { AGENT_STARTUP_PROMPT_ENV } from './agent-startup-prompt-env'
+import { clearEnvCommand } from './tui-agent-startup-shell'
 import {
+  SETUP_AGENT_ARGV0_ENV,
   SETUP_AGENT_BLOCKED_MESSAGE,
   SETUP_AGENT_EXECUTABLE_ENV,
   SETUP_AGENT_NOTICE_ENV,
-  SETUP_AGENT_RECHECK_ENV
+  SETUP_AGENT_RECHECK_ENV,
+  buildPosixSetupAgentRecheck
 } from './setup-agent-program'
 
 const SETUP_AGENT_RECHECK_TIMEOUT_SECONDS = 10
@@ -29,6 +33,10 @@ export { SETUP_AGENT_BLOCKED_MESSAGE }
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
+export const SETUP_AGENT_PROMPT_ENV = [
+  ...AGENT_STARTUP_PROMPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+]
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
@@ -142,6 +150,7 @@ function buildPosixStartupScript(
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const shellFunctions = getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()
   const script = [
+    `trap 'unset ${SETUP_AGENT_PROMPT_ENV.join(' ')}' EXIT;`,
     `deadline=$((SECONDS + ${timeout}));`,
     `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_MESSAGE)} >&2;`,
     'while :; do',
@@ -153,23 +162,11 @@ function buildPosixStartupScript(
     `if [ -n "$${SETUP_AGENT_RECHECK_ENV}" ]; then`,
     `  unset ${SETUP_AGENT_EXECUTABLE_ENV};`,
     `  if [ -n "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
-    // Keep the waited-on PID off the filesystem and leave no capture pipe for a stalled descendant to hold.
-    `    ( (set -C; eval "$${SETUP_AGENT_RECHECK_ENV}" > ${tmp}) & worker=$!;`,
-    `      trap 'kill -KILL "$worker"; exit 1' TERM; wait "$worker"; ) </dev/null >/dev/null 2>&1 & recheck=$!;`,
-    '    (sleeper=; canceled=;',
-    `     trap 'if [ -n "$sleeper" ]; then kill "$sleeper"; wait "$sleeper"; exit; fi; canceled=1' TERM;`,
-    `     command -p sleep ${SETUP_AGENT_RECHECK_TIMEOUT_SECONDS} & sleeper=$!;`,
-    '     if [ -n "$canceled" ]; then kill "$sleeper"; wait "$sleeper";',
-    '     elif wait "$sleeper"; then kill "$recheck"; fi;',
-    '    ) </dev/null >/dev/null 2>&1 & watchdog=$!;',
-    '    wait "$recheck" 2>/dev/null; recheck_status=$?;',
-    '    kill "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null;',
-    `    if [ "$recheck_status" = 0 ]; then ${SETUP_AGENT_EXECUTABLE_ENV}=$(command -p cat ${tmp}); fi;`,
-    `    rm -f ${tmp} 2>/dev/null;`,
+    ...buildPosixSetupAgentRecheck(SETUP_AGENT_RECHECK_TIMEOUT_SECONDS),
     '  fi;',
     `  if [ -z "$${SETUP_AGENT_EXECUTABLE_ENV}" ] || [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
     `    printf '%s\\n' '${SETUP_AGENT_BLOCKED_MESSAGE}' "$${SETUP_AGENT_NOTICE_ENV}" >&2; exit 1; fi;`,
-    `  ${SETUP_AGENT_EXECUTABLE_ENV}=\${${SETUP_AGENT_EXECUTABLE_ENV}%.}; export ${SETUP_AGENT_EXECUTABLE_ENV};`,
+    `  export ${SETUP_AGENT_EXECUTABLE_ENV} ${SETUP_AGENT_ARGV0_ENV};`,
     `else\n${shellFunctions}fi;`,
     `if [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then echo '${SETUP_AGENT_BLOCKED_MESSAGE}' >&2; exit 1; fi;`,
     `echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;`,
@@ -251,6 +248,7 @@ function buildWindowsStartupCommand(
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
     `[Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_WAIT_MESSAGE)})`,
+    'try {',
     'while ($true) {',
     '  if (Test-Path -LiteralPath $marker) {',
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
@@ -299,7 +297,7 @@ function buildWindowsStartupCommand(
     '    exit 124',
     '  }',
     '  Start-Sleep -Seconds 1',
-    '}'
+    `} } finally { ${clearEnvCommand(SETUP_AGENT_PROMPT_ENV, 'powershell')} }`
   ].join('; ')
 
   return encodePowerShellInvocation(script)

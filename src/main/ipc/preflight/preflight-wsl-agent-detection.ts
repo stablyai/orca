@@ -2,14 +2,60 @@ import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quo
 import path from 'node:path'
 import type { AgentPathMatch } from '../command-path/command-path-batch'
 import { buildPosixFallbackPathPrelude } from '../../../shared/shell/command-resolution/posix-version-manager-bin-dirs'
-import { buildPosixCommandPathLookupScript } from '../../../shared/shell/command-resolution/posix-command-path-lookup'
-import { runWslProcess } from '../../wsl/execution/wsl-runner'
+import {
+  buildPosixCommandPathLookupScript,
+  POSIX_WINDOWS_MOUNT_PRELUDE
+} from '../../../shared/shell/command-resolution/posix-command-path-lookup'
+import { runWslProcess, type WslSpec } from '../../wsl/execution/wsl-runner'
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
 
 export type WslPreflightTarget = {
   distro?: string
+}
+
+const WSL_AGENT_REALPATH = [
+  'orca_guest_agent_path() (',
+  '  item=$1; links=0',
+  '  while :; do',
+  '    parent=${item%/*}; CDPATH= cd -P "${parent:-/}" || return 1',
+  '    parent=$(pwd -P && printf .) || return 1; parent=${parent%??}',
+  '    item="${parent%/}/${item##*/}"',
+  '    if [ ! -L "$item" ]; then',
+  '      [ -f "$item" ] && [ -x "$item" ] && printf "%s." "$item"; return "$?"',
+  '    fi',
+  '    [ "$links" -lt 40 ] || return 1',
+  '    link=$(command -p readlink "$item" && printf .) || return 1; link=${link%??}',
+  '    case "$link" in /*) item=$link ;; *) item="${parent%/}/$link" ;; esac',
+  '    links=$((links + 1))',
+  '  done',
+  ')'
+].join('\n')
+
+const WSL_AGENT_PATH_RECHECK = [
+  WSL_AGENT_REALPATH,
+  POSIX_WINDOWS_MOUNT_PRELUDE,
+  'canonical=$(orca_guest_agent_path "$1") || exit 1',
+  'for mount in $_orca_win_mounts; do case "${canonical%.}/" in "$mount"/*) exit 1 ;; esac; done',
+  'printf "%s" "$canonical"'
+].join('\n')
+
+export async function recheckWslAgentPath(
+  distro: string,
+  candidate: string,
+  signal: AbortSignal
+): Promise<string | undefined> {
+  const result = await runWslAgentProbe({
+    distro,
+    loginPath: 'none',
+    script: WSL_AGENT_PATH_RECHECK,
+    args: [candidate],
+    signal
+  })
+  return result?.stdout.endsWith('.') && path.posix.isAbsolute(result.stdout)
+    ? result.stdout.slice(0, -1)
+    : undefined
 }
 
 export async function probeWslCommandsOnPath(
@@ -35,21 +81,7 @@ export async function probeWslCommandsOnPath(
   const script = [
     // Reuse the common version-manager fallback and executable lookup, including directory rejection.
     buildPosixFallbackPathPrelude(),
-    'orca_guest_agent_path() (',
-    '  item=$1; links=0',
-    '  while :; do',
-    '    parent=${item%/*}; CDPATH= cd -P "${parent:-/}" || return 1',
-    '    parent=$(pwd -P && printf .) || return 1; parent=${parent%??}',
-    '    item="${parent%/}/${item##*/}"',
-    '    if [ ! -L "$item" ]; then',
-    '      [ -f "$item" ] && [ -x "$item" ] && printf "%s." "$item"; return "$?"',
-    '    fi',
-    '    [ "$links" -lt 40 ] || return 1',
-    '    link=$(command -p readlink "$item" && printf .) || return 1; link=${link%??}',
-    '    case "$link" in /*) item=$link ;; *) item="${parent%/}/$link" ;; esac',
-    '    links=$((links + 1))',
-    '  done',
-    ')',
+    WSL_AGENT_REALPATH,
     `for cmd in ${commandList}; do`,
     lookupScript,
     'if [ -n "$resolved" ]; then',
@@ -61,23 +93,25 @@ export async function probeWslCommandsOnPath(
     'done'
   ].join('\n')
 
+  // Use cached login PATH without shell startup banners.
+  const result = await runWslAgentProbe({
+    distro: wslTarget.distro,
+    loginPath: 'preferred',
+    script,
+    shell: 'sh'
+  })
+  return result
+    ? {
+        ...parseWslDetectedCommands(result.stdout),
+        environmentResolved: result.environmentResolved
+      }
+    : null
+}
+
+async function runWslAgentProbe(spec: WslSpec) {
   try {
-    // Use cached login PATH without shell startup banners.
-    const result = await runWslProcess({
-      distro: wslTarget.distro,
-      loginPath: 'preferred',
-      script,
-      // POSIX `command -v` loop; declared because the payload is opaque here.
-      shell: 'sh',
-      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
-    })
-    if (result.timedOut || result.code !== 0 || result.outputTruncated) {
-      return null
-    }
-    return {
-      ...parseWslDetectedCommands(result.stdout),
-      environmentResolved: result.environmentResolved
-    }
+    const result = await runWslProcess({ ...spec, timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS })
+    return result.timedOut || result.code !== 0 || result.outputTruncated ? null : result
   } catch {
     return null
   }

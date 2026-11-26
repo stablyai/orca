@@ -88,7 +88,7 @@ export async function readWslTerminalAgentProgram(
   return (await selectTerminalAgentProgram([program], 'posix', { wsl: target, signal })).result
 }
 
-/** Select the first available spelling from one inventory read in the receiving shell. */
+/** Select the first available spelling in the receiving shell. */
 export async function selectTerminalAgentProgram(
   programs: readonly [string, ...string[]],
   shell: AgentStartupShell,
@@ -97,6 +97,7 @@ export async function selectTerminalAgentProgram(
     shellPath?: string
     refresh?: boolean
     revalidateUnavailable?: boolean
+    verifyWslHit?: boolean
     pinForSetup?: boolean
     signal?: AbortSignal
     onWslDistroSelected?: (distro: string) => void
@@ -109,42 +110,59 @@ export async function selectTerminalAgentProgram(
       return selectWslTerminalAgentProgram(wsl, programs, options, waitSignal)
     }
     const slot = getLocalInventory(shellPath)
-    const read = readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
-      acceptAnyMatch: true,
-      qualifiesEarly: (match) => qualifyProgram(match, shell).kind === 'by-name',
-      revalidateUnavailable: options.revalidateUnavailable,
-      waitForCompletion: true
-    })
-    const publication = await read.wait(waitSignal).catch((error: unknown) => {
-      if (error instanceof AgentInventoryDeadlineError && isAbortSignalReason(waitSignal, error)) {
-        return read.snapshot()
-      }
-      throw error
-    })
-    const inventory = publication?.inventory
-    if (!inventory || slot !== getLocalInventory(shellPath)) {
-      return { program: preferred, result: { kind: 'unknown' } }
-    }
-    let inconclusive = false
-    for (const program of programs) {
-      if (!inventory.probed.has(program)) {
-        inconclusive = true
-        continue
-      }
-      const match = inventory.matches.get(program)
-      const result = qualifyProgram(match, shell)
-      if ('path' in result && (options.pinForSetup || !read.isCurrentMatch(program, match))) {
-        const canonicalPath = await canonicalLocalAgentProgram(result.path, waitSignal)
-        if (!canonicalPath || slot !== getLocalInventory(shellPath)) {
-          return { program, result: { kind: 'unknown' } }
+    for (let retry = false; ; retry = true) {
+      const read = readInventory(slot, programs, refresh || retry ? 'revalidate' : 'read', {
+        acceptAnyMatch: true,
+        qualifiesEarly: retry
+          ? undefined
+          : (match) => qualifyProgram(match, shell).kind === 'by-name',
+        revalidateUnavailable: options.revalidateUnavailable,
+        waitForCompletion: true
+      })
+      const publication = await read.wait(waitSignal).catch((error: unknown) => {
+        if (
+          !retry &&
+          error instanceof AgentInventoryDeadlineError &&
+          isAbortSignalReason(waitSignal, error)
+        ) {
+          return read.snapshot()
         }
-        return { program, result: options.pinForSetup ? { ...result, canonicalPath } : result }
+        throw error
+      })
+      const inventory = publication?.inventory
+      if (!inventory || slot !== getLocalInventory(shellPath)) {
+        return { program: preferred, result: { kind: 'unknown' } }
       }
-      if (result.kind !== 'unavailable') {
-        return { program, result }
+      let inconclusive = false
+      let rejected = false
+      for (const program of programs) {
+        if (!inventory.probed.has(program)) {
+          inconclusive = true
+          continue
+        }
+        const result = qualifyProgram(inventory.matches.get(program), shell)
+        if ('path' in result) {
+          const canonicalPath = await canonicalLocalAgentProgram(result.path, waitSignal)
+          if (slot !== getLocalInventory(shellPath) || waitSignal.aborted) {
+            return { program, result: { kind: 'unknown' } }
+          }
+          if (canonicalPath) {
+            return { program, result: options.pinForSetup ? { ...result, canonicalPath } : result }
+          }
+          if (retry) {
+            return { program, result: { kind: 'unknown' } }
+          }
+          rejected = true
+          break
+        }
+        if (result.kind !== 'unavailable') {
+          return { program, result }
+        }
+      }
+      if (!rejected) {
+        return { program: preferred, result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
       }
     }
-    return { program: preferred, result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
   }, signal).catch((): TerminalAgentProgramSelection => ({
     program: preferred,
     result: { kind: 'unknown' }

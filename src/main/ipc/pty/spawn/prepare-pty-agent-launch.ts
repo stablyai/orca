@@ -4,14 +4,14 @@ import {
 } from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import { planClaudeRootLaunch } from '../../../../shared/agent-launch/permissions/claude-root-bypass-launch'
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
-import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import {
+  clearEnvCommand,
+  commandSeparator,
+  type AgentStartupShell
+} from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
-import { matchesStockLaunchProgram } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
-import {
-  hermesStartupQueryFits,
-  ORCA_HERMES_STARTUP_QUERY_ENV
-} from '../../../../shared/agent-launch/startup/hermes-startup-query'
+import { hermesStartupQueryFits } from '../../../../shared/agent-launch/startup/hermes-startup-query'
 import { agentLaunchUnbuildableMessage } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentProgramBlockReason } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
@@ -19,20 +19,18 @@ import {
   withCodexDirectLaunchCommand
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
-import { prepareFreshOmpLaunch } from '../../../../shared/agent-launch/startup/omp-fresh-launch'
 import {
   buildSetupAgentRecheck,
   setupAgentBlockedNotice,
-  setupAgentProgramExpression,
   SETUP_AGENT_NOTICE_ENV,
   SETUP_AGENT_RECHECK_ENV,
-  SETUP_AGENT_RUNTIME_ROOT_ENV,
-  type SetupAgentProgram
+  SETUP_AGENT_RUNTIME_ROOT_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-program'
 import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { nativeWindowsPathToPosixShellPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import {
+  SETUP_AGENT_PROMPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
@@ -44,6 +42,7 @@ import { addSetupAgentWslInteropEnv } from '../../../pty/shell-startup/wsl-orca-
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
 import type { selectPtyAgentLaunch } from './select-pty-agent-launch'
 import { applyTerminalImageEnvironment } from './terminal-image-environment'
+import { preparePostSetupCommand } from './prepare-post-setup-agent-command'
 
 export async function preparePtyAgentLaunch(
   input: PtySpawnLaunchOptionsInput,
@@ -55,6 +54,7 @@ export async function preparePtyAgentLaunch(
   const {
     launchAgent,
     shell,
+    paneShell,
     platform,
     sequenced,
     launchConfig,
@@ -202,7 +202,14 @@ export async function preparePtyAgentLaunch(
   if (hermesQueryTooLarge) {
     agentCommand = undefined
     prepared = undefined
-    delete env[ORCA_HERMES_STARTUP_QUERY_ENV]
+  }
+  if (blocked || (postSetupProgram && !prepared)) {
+    for (const key of SETUP_AGENT_PROMPT_ENV) {
+      delete env[key]
+      if (!input.envToDelete.includes(key)) {
+        input.envToDelete.push(key)
+      }
+    }
   }
   const keepGate = sequenced && !blocked
   if (sequenced) {
@@ -215,57 +222,23 @@ export async function preparePtyAgentLaunch(
       env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] = prepared
     }
   }
+  const startup = keepGate ? input.launchCommand : prepared
   return {
     env,
     launchAgent: blocked ? undefined : launchAgent,
     launchConfig,
     blocked,
     launchCommand: sequenced && !blocked ? input.launchCommand : agentCommand,
-    startup: keepGate ? input.launchCommand : prepared,
+    startup:
+      startup && keepGate && postSetupProgram
+        ? startup + commandSeparator(paneShell) + clearEnvCommand(SETUP_AGENT_PROMPT_ENV, paneShell)
+        : startup,
     settings,
     startupNotice: hermesQueryTooLarge
       ? `\r\n[orca] ${agentLaunchUnbuildableMessage('hermes')}\r\n`
       : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
     terminalMcp: mcp.pane
   }
-}
-
-async function preparePostSetupCommand(
-  command: string,
-  program: SetupAgentProgram,
-  shell: 'posix' | 'powershell',
-  images: boolean
-): Promise<string | undefined> {
-  const programExpression = setupAgentProgramExpression(shell)
-  const render = (inner: string): string => {
-    const launch = readLaunchPosition(inner, shell)
-    if (
-      !launch ||
-      !matchesStockLaunchProgram(launch.executable, program.launchHead, process.platform)
-    ) {
-      return inner
-    }
-    const codex = withCodexDirectLaunchCommand(
-      inner,
-      shell,
-      { images, probeInShell: true, programExpression },
-      readCodexDirectLaunch(inner, shell, true)
-    )
-    const wrapped =
-      codex === inner ? withClaudeDirectLaunchCommand(inner, shell, programExpression) : codex
-    if (wrapped !== inner) {
-      return wrapped
-    }
-    return shell === 'powershell'
-      ? `${inner.slice(0, launch.invocationStart)}& ${programExpression}${inner.slice(launch.end)}`
-      : inner.slice(0, launch.start) + programExpression + inner.slice(launch.end)
-  }
-  const direct = render(command)
-  const prepared =
-    direct === command
-      ? await prepareFreshOmpLaunch(command, shell, async (inner) => render(inner))
-      : direct
-  return prepared === command ? undefined : prepared
 }
 
 async function prepareDirectLaunch(

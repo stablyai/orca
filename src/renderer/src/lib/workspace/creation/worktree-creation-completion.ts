@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { translate } from '@/i18n/i18n'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
@@ -18,16 +19,30 @@ export async function completeWorktreeCreation(args: {
   startupTerminalTabId?: string
   startupAgent?: TuiAgent
   backendSpawned: boolean
+  startupDraftDeferred?: boolean
   /** The host was asked to plan the agent launch, so the desktop's plan never runs. */
   hostPlannedStartup: boolean
   focusOnCompletion: boolean
 }): Promise<void> {
   const { request } = args
-  // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
-  useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
+  if (args.startupDraftDeferred) {
+    useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+      worktreeId: args.worktreeId,
+      status: 'error',
+      startupDraftDeferred: true,
+      error: translate(
+        'worktree.creation.startupDraftDeferred',
+        'Your worktree is ready. The agent draft is still available here.'
+      ),
+      request
+    })
+  } else {
+    // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
+    useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
+  }
   // Why: an agent the host planned but did not start has no tab to seed and is not the window's to start.
   const hostAgentMissing = args.hostPlannedStartup && !args.backendSpawned
-  if (!args.structuredLaunchAccepted && !hostAgentMissing) {
+  if (!args.startupDraftDeferred && !args.structuredLaunchAccepted && !hostAgentMissing) {
     seedAgentTabStateAfterWorktreeCreate({
       request,
       worktreeId: args.worktreeId,

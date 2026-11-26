@@ -7,6 +7,7 @@ import {
   getVisibleCheckoutProgress
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { formatElapsedTime, useWorktreeCreationClock } from './worktree-creation-clock'
@@ -47,7 +48,14 @@ export default function WorktreeCreationPanel({
       />
 
       <div className="min-h-0 flex-1 p-3">
-        {isVmCreation ? (
+        {entry.startupDraftDeferred ? (
+          <div className="flex max-w-3xl flex-col gap-2">
+            <label htmlFor={progressLabelId} className="text-xs text-muted-foreground">
+              {entry.error}
+            </label>
+            <Textarea id={progressLabelId} readOnly value={entry.request.launchDraftPrompt} />
+          </div>
+        ) : isVmCreation ? (
           // Keep the log fixed across provisioning/failure; swap only header and actions.
           <VmBuildSheet
             creationId={creationId}

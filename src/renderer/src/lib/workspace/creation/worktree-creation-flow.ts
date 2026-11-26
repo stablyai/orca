@@ -155,7 +155,7 @@ export function continueBackgroundWorktreeCreation(
 export function retryBackgroundWorktreeCreation(creationId: string): void {
   const store = useAppStore.getState()
   const entry = store.pendingWorktreeCreations[creationId]
-  if (!entry) {
+  if (!entry || entry.startupDraftDeferred) {
     return
   }
   if (entry.chatInputHandedOff && entry.worktreeId) {

@@ -265,7 +265,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     ...(warning ? { warning } : {}),
     ...(returnedSetup ? { returnedSetup } : {}),
     didSpawnSetup,
-    didSpawnStartup,
+    didSpawnStartup: didSpawnStartup && !(request.startupDraft && wrappedSetup),
     setupTerminalHandle,
     startupTerminalHandle,
     startupTerminalTabId,

@@ -51,8 +51,10 @@ function posixClaudeAccountRouting(
   ].join('; ')
 }
 
-export function getPosixClaudeDirectLaunchScript(): string {
-  const run = `${posixClaudeExportHooks}; exec "$__orca_claude_program" "$@"`
+export function getPosixClaudeDirectLaunchScript(
+  execute = 'exec "$__orca_claude_program" "$@"'
+): string {
+  const run = `${posixClaudeExportHooks}; ${execute}`
   return `${posixClaudeHookPlugin}; __orca_claude_program=$1; shift; if ${posixClaudeImageCondition}; then export CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1; fi; ${posixClaudeAccountRouting(run, (setup) => `${setup}; ${run}`, 'exit')}`
 }
 

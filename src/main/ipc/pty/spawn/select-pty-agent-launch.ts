@@ -85,6 +85,7 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   return {
     launchAgent,
     shell,
+    paneShell,
     platform,
     sequenced,
     startupCommand,

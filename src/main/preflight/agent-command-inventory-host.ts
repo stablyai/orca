@@ -1,4 +1,7 @@
-import type { WslPreflightTarget } from '../ipc/preflight/preflight-wsl-agent-detection'
+import {
+  recheckWslAgentPath,
+  type WslPreflightTarget
+} from '../ipc/preflight/preflight-wsl-agent-detection'
 import { hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { resolveWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
@@ -115,47 +118,65 @@ export async function selectWslTerminalAgentProgram(
   options: {
     refresh?: boolean
     pinForSetup?: boolean
+    verifyWslHit?: boolean
     revalidateUnavailable?: boolean
     onWslDistroSelected?: (distro: string) => void
   },
   signal: AbortSignal
 ): Promise<TerminalAgentProgramSelection> {
   const slot = await wslInventory(target, signal)
-  if (slot) {
-    await readInventory(slot, programs, options.refresh ? 'revalidate' : 'read', {
-      acceptAnyMatch: true,
-      revalidateUnavailable: options.revalidateUnavailable,
-      waitForCompletion: true
-    }).wait(signal)
+  if (!slot?.distro) {
+    return { program: programs[0], result: { kind: 'unknown' } }
+  }
+  for (let retry = false; ; retry = true) {
+    await readInventory(
+      slot,
+      programs,
+      retry ? 'refresh' : options.refresh ? 'revalidate' : 'read',
+      {
+        acceptAnyMatch: true,
+        revalidateUnavailable: options.revalidateUnavailable,
+        waitForCompletion: true
+      }
+    ).wait(signal)
     const inventory = currentInventoryPublication(slot, 'complete')?.inventory
-    if (inventory) {
-      let inconclusive = false
-      for (const program of programs) {
-        if (!inventory.probed.has(program)) {
-          inconclusive = true
-          continue
-        }
-        if (!inventory.found.has(program)) {
-          continue
-        }
-        const match = inventory.matches.get(program)
-        if (!match?.first || !match.user) {
+    if (!inventory) {
+      return { program: programs[0], result: { kind: 'unknown' } }
+    }
+    let inconclusive = false
+    let rejected = false
+    for (const program of programs) {
+      if (!inventory.probed.has(program)) {
+        inconclusive = true
+        continue
+      }
+      if (!inventory.found.has(program)) {
+        continue
+      }
+      const match = inventory.matches.get(program)
+      const canonicalPath =
+        options.verifyWslHit && match?.first
+          ? await recheckWslAgentPath(slot.distro, match.first, signal)
+          : match?.user
+      if (!match?.first || !canonicalPath || signal.aborted) {
+        if (!options.verifyWslHit || retry || signal.aborted) {
           return { program, result: { kind: 'unknown' } }
         }
-        if (slot.distro) {
-          options.onWslDistroSelected?.(slot.distro)
-        }
-        return {
-          program,
-          result: options.pinForSetup
-            ? { kind: 'full-path', path: match.first, canonicalPath: match.user }
-            : { kind: 'by-name', path: program }
-        }
+        rejected = true
+        break
       }
+      options.onWslDistroSelected?.(slot.distro)
+      return {
+        program,
+        result: options.pinForSetup
+          ? { kind: 'full-path', path: match.first, canonicalPath }
+          : { kind: 'by-name', path: program }
+      }
+    }
+    if (!rejected) {
       return { program: programs[0], result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
     }
   }
-  return { program: programs[0], result: { kind: 'unknown' } }
 }
 
 export function readPublishedLocalTerminalAgentProgram(

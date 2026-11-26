@@ -7,6 +7,7 @@ export const SETUP_AGENT_NOTICE_ENV = 'ORCA_SEQUENCED_AGENT_NOTICE'
 export const SETUP_AGENT_RECHECK_ENV = 'ORCA_SEQUENCED_AGENT_RECHECK'
 export const SETUP_AGENT_RUNTIME_ROOT_ENV = 'ORCA_SEQUENCED_AGENT_RUNTIME_ROOT'
 export const SETUP_AGENT_EXECUTABLE_ENV = 'ORCA_SEQUENCED_AGENT_EXECUTABLE'
+export const SETUP_AGENT_ARGV0_ENV = 'ORCA_SEQUENCED_AGENT_ARGV0'
 
 export type SetupAgentProgram = { agent: TuiAgent; launchHead: string; path?: string }
 
@@ -25,10 +26,19 @@ export function setupAgentBlockedNotice(
   )
 }
 
-export function setupAgentProgramExpression(shell: 'posix' | 'powershell'): string {
+export function setupAgentProgramPathExpression(shell: 'posix' | 'powershell'): string {
   return shell === 'posix'
     ? `"$${SETUP_AGENT_EXECUTABLE_ENV}"`
     : `$env:${SETUP_AGENT_EXECUTABLE_ENV}`
+}
+
+export function setupPosixAgentExec(program: string, args = '"$@"'): string {
+  return `exec -a "$${SETUP_AGENT_ARGV0_ENV}" ${program} ${args}`
+}
+
+export function setupAgentProgramExpression(shell: 'posix' | 'powershell'): string {
+  const program = setupAgentProgramPathExpression(shell)
+  return shell === 'posix' ? `bash -c '${setupPosixAgentExec(program)}' orca-agent` : program
 }
 
 export function buildSetupAgentRecheck(
@@ -39,6 +49,34 @@ export function buildSetupAgentRecheck(
     return shell === 'posix' ? 'exit 1' : 'return'
   }
   return shell === 'posix' ? buildPosixRecheck(path) : buildPowerShellRecheck(path)
+}
+
+export function buildPosixSetupAgentRecheck(timeoutSeconds: number): string[] {
+  return [
+    'supervisor=;',
+    'trap \'kill -TERM "$supervisor" 2>/dev/null; exit 130\' INT;',
+    'trap \'kill -TERM "$supervisor" 2>/dev/null; exit 143\' TERM;',
+    'exec 3< <(',
+    '  exec 2>/dev/null;',
+    '  worker= watchdog=;',
+    '  cleanup() {',
+    '    if [ -n "$worker" ]; then kill -KILL -- "-$worker" 2>/dev/null || :; fi;',
+    '    if [ -n "$watchdog" ]; then kill -KILL -- "-$watchdog" 2>/dev/null || :; fi;',
+    '  };',
+    "  trap 'cleanup; exit 1' INT TERM;",
+    '  set -m;',
+    `  (set +m; eval "$${SETUP_AGENT_RECHECK_ENV}") </dev/null & worker=$!;`,
+    `  (set +m; command -p sleep ${timeoutSeconds}; kill -KILL -- "-$worker") </dev/null >/dev/null 2>&1 & watchdog=$!;`,
+    '  recheck_status=0; wait "$worker" || recheck_status=$?;',
+    '  cleanup;',
+    '  wait "$watchdog" 2>/dev/null || :;',
+    // Complete the pipe record only after the worker exits successfully.
+    '  if [ "$recheck_status" = 0 ]; then printf "\\0"; fi;',
+    '); supervisor=$!;',
+    `if ! IFS= read -r -d "" ${SETUP_AGENT_EXECUTABLE_ENV} <&3 ||`,
+    `   ! IFS= read -r -d "" ${SETUP_AGENT_ARGV0_ENV} <&3; then unset ${SETUP_AGENT_EXECUTABLE_ENV}; fi;`,
+    'exec 3<&-; trap - INT TERM;'
+  ]
 }
 
 function buildPosixRecheck(path: string): string {
@@ -78,7 +116,7 @@ function buildPosixRecheck(path: string): string {
     `program=${quotePosixShell(path)}`,
     'pin=$(orca_setup_realpath "$program" && printf .) || exit 1',
     'pin=${pin%.}',
-    '[ -f "$pin" ] && [ -x "$pin" ] && printf "%s." "$program"'
+    '[ -f "$pin" ] && [ -x "$pin" ] && printf "%s\\0%s" "$pin" "${program##*/}"'
   ].join('\n')
 }
 
@@ -95,7 +133,7 @@ function buildPowerShellRecheck(path: string): string {
     "      if ($root -and ($itemPath.Equals($root, $compare) -or $itemPath.StartsWith($root + '\\', $compare))) { throw 'Orca runtime path' }",
     '      try { $item = Get-Item -LiteralPath $itemPath -Force -ErrorAction Stop }',
     '      catch [System.Management.Automation.ItemNotFoundException] {',
-    '        if ($AllowMissing -and $links -eq 0) { return $path }; throw',
+    '        if ($AllowMissing -and $links -eq 0) { return @{ Path = $path; ReparsePoint = $false } }; throw',
     '      }',
     '      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {',
     '        if ($item.LinkType -notin "SymbolicLink", "Junction" -or @($item.Target).Count -ne 1 -or !$item.Target) { throw "Unresolved reparse point" }',
@@ -109,17 +147,20 @@ function buildPowerShellRecheck(path: string): string {
     '      }',
     '      $dir = $item.FullName',
     '    }',
-    '    if ($i -eq $parts.Length) { return $dir }',
+    '    if ($i -eq $parts.Length) { return @{ Path = $dir; ReparsePoint = ($links -gt 0) } }',
     '  }',
     '  throw "Too many reparse points"',
     '}',
     'try {',
     '  $compare = [StringComparison]::OrdinalIgnoreCase',
-    `  $root = (Resolve-OrcaSetupPath $env:${SETUP_AGENT_RUNTIME_ROOT_ENV} $null -AllowMissing).TrimEnd('\\')`,
+    `  $root = (Resolve-OrcaSetupPath $env:${SETUP_AGENT_RUNTIME_ROOT_ENV} $null -AllowMissing).Path.TrimEnd('\\')`,
     `  $program = ${quotePowerShellLiteral(path)}`,
-    '  $pin = Resolve-OrcaSetupPath $program $root',
+    '  $resolved = Resolve-OrcaSetupPath $program $root',
+    '  $pin = $resolved.Path',
     '  $extensions = ($env:PATHEXT -split ";") + @(".exe", ".com", ".cmd", ".bat", ".ps1")',
-    '  if ([IO.Path]::GetExtension($pin) -in $extensions -and (Test-Path -LiteralPath $pin -PathType Leaf -ErrorAction Stop)) { return $program }',
+    '  if ([IO.Path]::GetExtension($pin) -in $extensions -and (Test-Path -LiteralPath $pin -PathType Leaf -ErrorAction Stop)) {',
+    '    if ($resolved.ReparsePoint) { return $pin }; return $program',
+    '  }',
     '} catch { return }'
   ].join('\n')
 }

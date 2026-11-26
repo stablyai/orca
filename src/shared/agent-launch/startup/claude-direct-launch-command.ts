@@ -5,11 +5,14 @@ import {
 } from '../../shell/launch/agents/claude-shell-function'
 import { launchExecutableIs, readLaunchPosition } from './launch-position'
 import { powerShellNativeLaunch } from './powershell-native-launch'
+import { setupPosixAgentExec } from './setup-agent-program'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 const CLAUDE_EXECUTABLE = /^claude(?:\.(?:exe|cmd|bat))?$/i
 const CLAUDE_DIRECT_POSIX_PREFIX = /* @__PURE__ */ (() =>
   `/bin/sh -c ${quoteStartupArg(getPosixClaudeDirectLaunchScript(), 'posix')} orca-claude `)()
+const CLAUDE_SETUP_POSIX_PREFIX = /* @__PURE__ */ (() =>
+  `bash -c ${quoteStartupArg(getPosixClaudeDirectLaunchScript(setupPosixAgentExec('"$__orca_claude_program"')), 'posix')} orca-claude `)()
 
 export function withClaudeDirectLaunchCommand(
   command: string,
@@ -30,7 +33,7 @@ export function withClaudeDirectLaunchCommand(
   if (shell === 'posix') {
     return (
       command.slice(0, launch.start) +
-      CLAUDE_DIRECT_POSIX_PREFIX +
+      (programExpression ? CLAUDE_SETUP_POSIX_PREFIX : CLAUDE_DIRECT_POSIX_PREFIX) +
       (programExpression
         ? programExpression + command.slice(launch.end)
         : command.slice(launch.start))

@@ -25829,6 +25829,9 @@
       "workspacesToReview": "Workspaces to review",
       "workspaceDetails": "Selected workspace details",
       "workspaceKept": "Will be kept"
+    },
+    "creation": {
+      "startupDraftDeferred": "Your worktree is ready. The agent draft is still available here."
     }
   },
   "projectBoard": {
