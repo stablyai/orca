@@ -8570,5 +8570,8 @@
       "needsWindow": "Güncellenemedi. {{desktop}} üzerinde Orca’yı açın.",
       "failed": "Ajan listesi güncellenemedi."
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
   }
 }

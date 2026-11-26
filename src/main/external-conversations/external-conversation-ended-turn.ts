@@ -4,7 +4,7 @@ import type {
   AgentJournalSnapshot
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
-  connectorReplyTurnStamps,
+  connectorReplyStampsOf,
   type ConnectorReplyStamp
 } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { AgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
@@ -126,14 +126,14 @@ function outboxTurn(
     return {}
   }
   const { prose, botProse, toolsRan } = structuredAgentSessionTurnReply(items, turnItemId)
+  const answered = journalTurnAnsweredMessages({ items, submissions }, opener, turnItemId)
   return {
     turnItemId,
-    stamps: connectorReplyTurnStamps({ items, submissions }, opener, turnItemId),
+    stamps: connectorReplyStampsOf(opener, answered),
     turnProse: prose,
     turnBotProse: botProse,
     turnToolsRan: toolsRan,
-    turnAnsweredOthers:
-      journalTurnAnsweredMessages({ items, submissions }, opener, turnItemId).length > 1
+    turnAnsweredOthers: answered.length > 1
   }
 }
 

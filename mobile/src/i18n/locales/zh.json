@@ -8326,5 +8326,8 @@
     "cardSlot": {
       "working": "工作中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所在组织的 Claude 设置阻止"
   }
 }

@@ -3,6 +3,11 @@ import type { Socket } from 'node:net'
 import { app } from 'electron'
 import { parseProcNetTcpEndpoint, parseProcNetTcpRow } from '../../../ports/linux-proc-net-tcp-rows'
 import {
+  darwinSocketOwnerHelperAvailable,
+  isOwnDarwinConnection,
+  retainDarwinSocketOwnerHelper
+} from './darwin-socket-owner-helper'
+import {
   loadWindowsSecurityAsync,
   type WindowsSecurity
 } from '../../../../shared/secure-storage/windows-security-addon'
@@ -98,9 +103,9 @@ export function findProcNetTcpClientUid(
   return null
 }
 
-/** How this computer names a loopback client's account; macOS has none, so any local account passes its loopback check. */
+/** How this computer names a loopback client's account. */
 type OwnerLookup =
-  | { kind: 'none' }
+  | { kind: 'darwin' }
   | { kind: 'uid'; uid: number }
   | { kind: 'windows'; security: WindowsSecurity }
   /** `reason` is fixed text, so a raw load error (which may name EACCES) never reads as a bind failure. */
@@ -120,8 +125,13 @@ async function readOwnerLookup(): Promise<OwnerLookup> {
       ? { kind: 'windows', security }
       : { kind: 'unavailable', reason: 'the Windows security addon predates the owner lookup' }
   }
+  if (process.platform === 'darwin') {
+    return (await darwinSocketOwnerHelperAvailable())
+      ? { kind: 'darwin' }
+      : { kind: 'unavailable', reason: 'the macOS socket owner helper is missing' }
+  }
   if (process.platform !== 'linux') {
-    return { kind: 'none' }
+    return { kind: 'unavailable', reason: `no connection owner lookup on ${process.platform}` }
   }
   const uid = process.getuid?.()
   return uid === undefined
@@ -143,15 +153,18 @@ export async function assertSocksClientOwnerLookup(listener: string): Promise<vo
   )
 }
 
-/** Linux and Windows list every user's connections with their owner; the client end must be ours. */
+/** Keeps the owner lookup ready while a listener is open (macOS runs a helper); call the result on close. */
+export function holdSocksClientOwnerLookup(): () => void {
+  return process.platform === 'darwin' ? retainDarwinSocketOwnerHelper() : () => {}
+}
+
+/** The client end of the connection must belong to this account: Linux and Windows list every user's
+ *  connections with their owner, and macOS looks among this account's own processes. */
 export async function verifySocksClientOwner(
   socket: AcceptedSocket,
   readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8')
 ): Promise<SocksClientOwnerVerdict> {
   const lookup = await readOwnerLookup()
-  if (lookup.kind === 'none') {
-    return { allowed: true }
-  }
   if (lookup.kind === 'unavailable') {
     const detail = lookup.detail ? `${lookup.reason}: ${lookup.detail}` : lookup.reason
     return { allowed: false, reason: 'lookup-failed', detail }
@@ -164,6 +177,12 @@ export async function verifySocksClientOwner(
   try {
     if (lookup.kind === 'windows') {
       return await verifyWindowsClientOwner(lookup.security, client, listener)
+    }
+    if (lookup.kind === 'darwin') {
+      // Another account's sockets are unreadable without root, so they read as not ours.
+      return (await isOwnDarwinConnection(client, listener))
+        ? { allowed: true }
+        : { allowed: false, reason: 'lookup-failed', detail: 'no process of this account holds it' }
     }
     // The kernel pages these tables and can skip a row that moved mid-read, so look twice before refusing.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -229,7 +248,7 @@ function toEndpoint(address: string | undefined, port: number | undefined): Endp
   if (!address || !port) {
     return null
   }
-  // The listener binds IPv4 only, so Node reports both ends as IPv4 (maybe v4-mapped).
+  // An IPv4 connection may be reported v4-mapped; the owner tables list it as plain IPv4.
   const host = address.toLowerCase().startsWith('::ffff:') ? address.slice(7) : address
   return { host, port }
 }

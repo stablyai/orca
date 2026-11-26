@@ -155,13 +155,17 @@ export async function signOutMcpServer(target: RuntimeClientTarget, id: string):
   await change(target, 'signOut', { id })
 }
 
-/** Move takes the server out of the agents' own files (with a backup); copy leaves them as they are. */
+/**
+ * Move takes the server out of the agents' own files (with a backup); copy leaves them as they are.
+ * A Move names the agents its confirm showed, so the host takes it out of no other.
+ */
 export async function importMcpServer(
   target: RuntimeClientTarget,
-  key: string,
+  server: Pick<DiscoveredMcpServer, 'key' | 'removesFrom'>,
   mode: 'move' | 'copy'
 ): Promise<McpServerView> {
-  return served(await change(target, mode, { key }))
+  const confirmed = mode === 'move' && server.removesFrom ? { agents: server.removesFrom } : {}
+  return served(await change(target, mode, { key: server.key, ...confirmed }))
 }
 
 export async function allowMcpAgentFile(

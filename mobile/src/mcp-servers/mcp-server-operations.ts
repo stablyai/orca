@@ -53,7 +53,8 @@ const AgentProblemsSchema = z
   .record(
     z.string(),
     z.looseObject({
-      kind: z.enum(['blocked', 'terminal-off']).catch('blocked'),
+      // A kind this app doesn't know keeps its host's line, not the org-policy one.
+      kind: z.string(),
       detail: z.string()
     })
   )

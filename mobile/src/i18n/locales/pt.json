@@ -5878,5 +5878,8 @@
     "cardSlot": {
       "working": "Trabalhando"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqueado pelas configurações do Claude da sua organização"
   }
 }

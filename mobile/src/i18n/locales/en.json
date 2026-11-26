@@ -8628,6 +8628,7 @@
     "agents": "Agents",
     "turnAllOn": "Turn all on",
     "agentsUnread": "Couldn’t read the agents on this computer.",
+    "agentBlocked": "Blocked by your organization’s Claude settings",
     "advanced": "Advanced",
     "sharedProcess": "Share one process across agents",
     "sharedProcessNote": "Uses less memory. Runs outside the workspace folder.",

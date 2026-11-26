@@ -1,4 +1,5 @@
 import { win32 } from 'node:path'
+import { clipboardFilePathsFromUriList } from './clipboard-file-urls'
 import type { FileHandle } from 'node:fs/promises'
 import type { NativeImage } from 'electron'
 import {
@@ -15,6 +16,7 @@ type WindowsClipboardImageFileDeps = {
 }
 
 export type WindowsClipboardFileFormats = {
+  uriList?: Buffer
   fileNameW: Buffer
   shellIdListArray: Buffer
 }
@@ -33,7 +35,7 @@ function isOrdinaryUncShare(share: string | undefined): boolean {
   return typeof share === 'string' && share.toLowerCase() !== 'pipe'
 }
 
-function isFullyQualifiedWindowsPath(filePath: string): boolean {
+export function isFullyQualifiedWindowsPath(filePath: string): boolean {
   if (/^[A-Za-z]:[\\/]/.test(filePath)) {
     return true
   }
@@ -79,10 +81,24 @@ function hasAtMostOneShellItem(value: Buffer): boolean {
 
 /** The one file Explorer copied; null when it copied none or several. */
 export function readWindowsCopiedFilePath({
+  uriList,
   fileNameW,
   shellIdListArray
 }: WindowsClipboardFileFormats): string | null {
+  const paths = uriList?.length ? readUriListPaths(uriList) : []
+  if (paths.length > 0) {
+    return paths.length === 1 && isFullyQualifiedWindowsPath(paths[0]) ? paths[0] : null
+  }
+  // An unreadable URI list falls back to Explorer's legacy formats.
   return hasAtMostOneShellItem(shellIdListArray) ? decodeFileNameW(fileNameW) : null
+}
+
+function readUriListPaths(uriList: Buffer): string[] {
+  try {
+    return clipboardFilePathsFromUriList(uriList, 'win32')
+  } catch {
+    return []
+  }
 }
 
 export function readWindowsCopiedImageFilePath(
