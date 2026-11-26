@@ -20,6 +20,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/s
 import { folderWorkspaceWriteOptions } from './folder-workspace-write-options'
 import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
+import { initialFolderWorkspaceTitlePending, renameFolderWorkspace } from './folder-workspace-title'
 import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
 import { applyDiffCommentWrite } from '../../../shared/file-review/diff-comment-mutation'
 
@@ -103,9 +104,7 @@ export class FolderWorkspacePersistenceOperations {
       isPinned: false,
       sortOrder: now,
       ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
-      ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
-        ? { pendingFirstAgentMessageRename: true }
-        : {}),
+      ...initialFolderWorkspaceTitlePending(this.state.settings, input),
       // Workspace creation establishes its first Recent stamp.
       lastActivityAt: ORCA_SIDEBAR_INPUTS_IS_MAIN ? now : 0,
       createdAt: now,
@@ -175,7 +174,7 @@ export class FolderWorkspacePersistenceOperations {
       updates = { ...updates, linkedTaskSourceContext: linkedUpdates.linkedTaskSourceContext }
     }
     if (updates.name !== undefined) {
-      workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+      renameFolderWorkspace(workspace, updates.name)
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
       const previous = workspace.folderPath

@@ -4,6 +4,7 @@ import type {
   AppPathName,
   AppProcessMetric
 } from '../../shared/app-lifecycle/app-environment'
+import { getSystemLanguageDetection } from '../i18n/system-language'
 
 export class ElectronAppEnvironment implements AppEnvironment {
   getPath(name: AppPathName): string {
@@ -16,6 +17,10 @@ export class ElectronAppEnvironment implements AppEnvironment {
 
   getVersion(): string {
     return app.getVersion()
+  }
+
+  getSystemLocale(): string {
+    return getSystemLanguageDetection()?.locale ?? 'en'
   }
 
   isPackaged(): boolean {

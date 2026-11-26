@@ -11,6 +11,7 @@ import type { NativeChatDefaultSettings } from '../../../../shared/agent-launch/
 
 export type RuntimeClientSettings = Pick<
   GlobalSettings,
+  | 'workspaceTitleLanguage'
   | 'defaultTuiAgent'
   | 'newWorkspaceSetupOnly'
   | 'disabledTuiAgents'
@@ -79,6 +80,7 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
+  | 'workspaceTitleLanguage'
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'
   | 'botsEnabled'
@@ -112,3 +114,9 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
 > & { hostNotifications?: Partial<HostNotificationSettings> } & Partial<HostOwnedSettings>
+
+/** Which Orca cloud services this host registered; headless hosts register none. */
+export type RuntimeSharingServicePresence = {
+  artifacts(): boolean
+  skills(): boolean
+}

@@ -8,6 +8,7 @@ export type AppEnvironment = {
   /** Mirrors electron `app.getAppPath()` — the install/bundle root. */
   getAppPath(): string
   getVersion(): string
+  getSystemLocale?(): string
   isPackaged(): boolean
   /** A headless host's profile-scoped CLI, when it has no Electron resources directory. */
   getCliLauncherPath?(): string | null

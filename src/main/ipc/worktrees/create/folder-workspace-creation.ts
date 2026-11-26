@@ -1,3 +1,4 @@
+import { shouldAutoRenameWorkspaceTitle } from '../../../../shared/settings/workspace-title-language'
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
@@ -36,6 +37,9 @@ export async function createFolderWorkspace(
     displayName: displayNameRequest.value || args.name,
     ...(displayNameRequest.kind === 'user' && displayNameRequest.value
       ? { displayNameIsPinned: true }
+      : {}),
+    ...(shouldAutoRenameWorkspaceTitle(store.getSettings())
+      ? { pendingFirstAgentMessageRename: true }
       : {}),
     lastActivityAt: now,
     createdAt: now,

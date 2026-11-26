@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
+import { normalizeWorkspaceTitleLanguage } from '../../../../shared/settings/workspace-title-language'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
@@ -39,7 +40,8 @@ import { agentLaunchSettingsRollbackUpdates } from '../../terminal/launch/agent-
 import type {
   RuntimeClientSettings,
   RuntimeClientSettingsUpdate,
-  RuntimeHostDisplayLabelOverrides
+  RuntimeHostDisplayLabelOverrides,
+  RuntimeSharingServicePresence
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
@@ -47,12 +49,6 @@ import { getDefaultNotificationSettings } from '../../../../shared/notifications
 import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
 import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-ai-projection'
 import { projectHostOwnedSettings } from '../../../../shared/settings/host-owned-settings'
-
-/** Which Orca cloud services this host registered; headless hosts register none. */
-export type RuntimeSharingServicePresence = {
-  artifacts(): boolean
-  skills(): boolean
-}
 
 export class RuntimeClientSettingsController {
   private reconciliationGeneration = 0
@@ -77,6 +73,7 @@ export class RuntimeClientSettingsController {
     const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
       ...projectHostOwnedSettings(settings),
+      workspaceTitleLanguage: normalizeWorkspaceTitleLanguage(settings.workspaceTitleLanguage),
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],

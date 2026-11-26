@@ -1,3 +1,4 @@
+import { shouldAutoRenameWorkspaceTitle } from '../../../shared/settings/workspace-title-language'
 import { readableWslDistroHoldText } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
@@ -1730,7 +1731,8 @@ async function performLocalWorktreeCreate(
         }
       : {}),
     ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
-    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
+    ...(shouldAutoRenameWorkspaceTitle(settings) ||
+    (args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent))
       ? { pendingFirstAgentMessageRename: true }
       : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),

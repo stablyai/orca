@@ -3,6 +3,7 @@ import type { PreloadApi } from '../../../../../preload/api-types'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../../shared/worktree/visibility/external-worktree-visibility'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { runtimePreferenceUpdates } from './web-runtime-preference-updates'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import {
@@ -139,6 +140,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
     // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
     const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
     const runtimeSettings = followHostVoiceSettings(local, result.settings)
+    Object.assign(runtimeSettings, runtimePreferenceUpdates(result.settings))
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
@@ -157,28 +159,11 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         currentEnvironment?.id === requestedEnvironment.id
       )
     )
-    if (typeof result.settings.minimaxGroupId === 'string') {
-      runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
-    }
-    if (typeof result.settings.minimaxUsageModels === 'string') {
-      runtimeSettings.minimaxUsageModels = result.settings.minimaxUsageModels
-    }
     if (zcodePlanSiteOwner(currentEnvironment) === requestedSiteOwner) {
       webRuntimeState.zcodePlanSiteRuntimeOwner = requestedSiteOwner
       const site = result.settings.zcodePlanSite
       webRuntimeState.zcodePlanSiteRuntimeValue =
         site === 'zai' || site === 'bigmodel' ? site : null
-    }
-    if (
-      result.settings.minimaxEndpoint === 'overseas' ||
-      result.settings.minimaxEndpoint === 'cn'
-    ) {
-      runtimeSettings.minimaxEndpoint = result.settings.minimaxEndpoint
-    }
-    if (Array.isArray(result.settings.prBotAuthorOverrides)) {
-      runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
-        result.settings.prBotAuthorOverrides
-      )
     }
     Object.assign(runtimeSettings, runtimeChatPermissionSetting(result.settings))
     chatSettings.publish(requestedEnvironment, result.settings)
@@ -216,7 +201,7 @@ export async function syncRuntimeBackedSettings(
 ): Promise<GlobalSettings> {
   const requestedEnvironment = requireActiveEnvironmentOrNull()
   if (requestedEnvironment) {
-    const runtimeUpdates: Partial<GlobalSettings> = {}
+    const runtimeUpdates = runtimePreferenceUpdates(updates)
     const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
       updates.worktreeVisibilityDefaults
     )
@@ -224,20 +209,6 @@ export async function syncRuntimeBackedSettings(
       runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
     }
     Object.assign(runtimeUpdates, cardPreferences.updates(updates, requestedEnvironment.id))
-    if (typeof updates.minimaxGroupId === 'string') {
-      runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
-    }
-    if (typeof updates.minimaxUsageModels === 'string') {
-      runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
-    }
-    if (updates.minimaxEndpoint === 'overseas' || updates.minimaxEndpoint === 'cn') {
-      runtimeUpdates.minimaxEndpoint = updates.minimaxEndpoint
-    }
-    if (Array.isArray(updates.prBotAuthorOverrides)) {
-      runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
-        updates.prBotAuthorOverrides
-      )
-    }
     Object.assign(runtimeUpdates, await chatSettings.updates(updates, requestedEnvironment))
     if (Object.keys(runtimeUpdates).length > 0) {
       try {
@@ -279,6 +250,7 @@ export async function syncRuntimeBackedSettings(
       } catch (error) {
         if (
           visibilityDefaults ||
+          runtimeUpdates.workspaceTitleLanguage !== undefined ||
           typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean'
         ) {
           throw error
