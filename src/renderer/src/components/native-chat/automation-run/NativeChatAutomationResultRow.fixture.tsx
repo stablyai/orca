@@ -47,7 +47,7 @@ const rows = (
 export const states = defineFixture({ width: 560, render: () => rows })
 export const narrow = defineFixture({ width: 300, render: () => rows })
 
-// Every row open, so its read line shows: unread, read with the next message, cleared.
+// Every row open, so its read line shows: unread, told with a later message, cleared.
 const ALL_OPEN: NativeChatDisclosureStore = {
   read: () => true,
   write: () => {},
