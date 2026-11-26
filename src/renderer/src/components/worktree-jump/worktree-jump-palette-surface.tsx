@@ -169,9 +169,10 @@ export function WorktreeJumpPaletteSurface({
         }}
         className="max-h-[min(600px,calc(100vh-14rem))] px-2.5 pb-2.5 pt-2"
       >
-        {controller.isLoading &&
-        controller.selectableItems.length === 0 &&
-        !controller.showCreateAction ? (
+        {/* The opening frame paints only the input; results fill in on the next frame. */}
+        {!controller.resultsReady ? null : controller.isLoading &&
+          controller.selectableItems.length === 0 &&
+          !controller.showCreateAction ? (
           <PaletteState
             title={t('auto.components.WorktreeJumpPalette.ff908adfe9', 'Loading jump targets')}
             subtitle={t(

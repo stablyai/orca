@@ -20,6 +20,7 @@ import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/us
 import { usePaletteSearchEvaluationContext } from '@/lib/workspace/search/palette/use-palette-search-evaluation-context'
 import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { useMemo } from 'react'
+import { useResultsReadyAfterOpeningPaint } from './state/use-results-ready-after-opening-paint'
 
 export function useWorktreeJumpPaletteController({
   visible,
@@ -30,7 +31,8 @@ export function useWorktreeJumpPaletteController({
   lingering: boolean
   createLookupGuard: WorktreePaletteRequestGuard
 }) {
-  const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering })
+  const resultsReady = useResultsReadyAfterOpeningPaint(visible)
+  const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering, resultsReady })
   const localState = useWorktreeJumpPaletteLocalState({ createLookupGuard, visible })
   // Showing only bots, every other section keeps the inputs it had, so none of its work reruns.
   const scoped = localState.scope === 'bots'
@@ -212,6 +214,7 @@ export function useWorktreeJumpPaletteController({
     ...listEntries,
     ...selectionLifecycle,
     ...selectionActions,
+    resultsReady,
     botScope,
     botScopeNote: botScopeEntries.botScopeNote,
     paletteNowMs: worktrees.hasQuery ? paletteSearchContext.nowMs : storeState.paletteNowMs,
