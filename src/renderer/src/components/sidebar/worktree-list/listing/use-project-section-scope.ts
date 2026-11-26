@@ -34,6 +34,7 @@ export function useProjectSectionScope(section: 'projects' | 'chats') {
       return repo !== undefined && Boolean(repo.chatWorkspace) === (section === 'chats')
     }
     return {
+      allRepoIds: catalog.map((repo) => repo.id),
       repos,
       ownsWorktree: owns,
       repoMap: new Map(repos.map((repo) => [repo.id, repo])),

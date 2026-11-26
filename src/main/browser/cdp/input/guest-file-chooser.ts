@@ -11,6 +11,7 @@ import {
   browserFileChooserViewer,
   cancelHeldFileChooser
 } from '../../guest-lifecycle/prompts/browser-file-chooser-viewers'
+import { registerFileChooserFrameCoverage } from './file-chooser-frame-coverage'
 
 // A click's user activation lasts 5s in Chromium, so its picker cannot open any later.
 const FILE_CHOOSER_OPEN_TIMEOUT_MS = 5_000
@@ -41,7 +42,7 @@ export async function interceptFileChooser(
   // Cancel tells the page its picker closed; upload keeps it pending to set files.
   { cancel = false }: { cancel?: boolean } = {}
 ): Promise<FileChooserInterception> {
-  const sessionIds = [...new Set([undefined, frameSessionId])]
+  const sessionIds: (string | undefined)[] = [...new Set([undefined, frameSessionId])]
   const { promise: opened, resolve: resolveOpened } = Promise.withResolvers<OpenedFileChooser>()
   let openedAny = false
   let abandoned = false
@@ -64,7 +65,35 @@ export async function interceptFileChooser(
   // The getter throws once the guest is destroyed, e.g. after a click that closes its popup.
   const dbg = wc.debugger
   dbg.on('message', onMessage)
+  const enableIn = async (sessionId: string | undefined): Promise<void> => {
+    // Chromium reports choosers only with Page on; a page with no agent session may not have it.
+    await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
+    if (abandoned) {
+      return
+    }
+    await sendGuestCdpCommand(
+      wc,
+      'Page.setInterceptFileChooserDialog',
+      cancel ? { enabled: true, cancel: true } : { enabled: true },
+      sessionId
+    )
+  }
+  // Input routed into a cross-site frame after this began needs that frame's session caught too.
+  const unregisterCoverage = registerFileChooserFrameCoverage(wc, async (sessionId) => {
+    if (abandoned || sessionIds.includes(sessionId)) {
+      return
+    }
+    sessionIds.push(sessionId)
+    await rejectAfterTimeout(
+      enableIn(sessionId),
+      PAGE_REPLY_TIMEOUT_MS,
+      'The page is not responding, so Orca did not send the input.'
+    )
+  })
   const release = async (): Promise<void> => {
+    unregisterCoverage()
+    // A frame enable still waiting on its page must not turn interception back on after this.
+    abandoned = true
     try {
       if (wc.isDestroyed()) {
         return
@@ -95,21 +124,7 @@ export async function interceptFileChooser(
   try {
     // Both wait on the renderer. Release follows any sent enable in order; abandon stops later ones.
     await rejectAfterTimeout(
-      Promise.all(
-        sessionIds.map(async (sessionId) => {
-          // Chromium reports choosers only with Page on; a page with no agent session may not have it.
-          await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
-          if (abandoned) {
-            return
-          }
-          await sendGuestCdpCommand(
-            wc,
-            'Page.setInterceptFileChooserDialog',
-            cancel ? { enabled: true, cancel: true } : { enabled: true },
-            sessionId
-          )
-        })
-      ),
+      Promise.all(sessionIds.map(enableIn)),
       PAGE_REPLY_TIMEOUT_MS,
       'The page is not responding, so Orca did not send the input.'
     )

@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Store } from '../../persistence/loading-store/store'
@@ -14,6 +14,31 @@ const roots: string[] = []
 afterEach(async () => {
   await closeTestStores()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+})
+
+it('registers a retried Chat creation only once while metadata is being detected', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-chat-workspace-'))
+  roots.push(root)
+  const store = createSqliteTestStore(Store, { dataFile: join(root, 'orca-data.json') })
+  const controller = new RuntimeRepositoryRegistrationController({
+    getStore: () => store,
+    invalidateResolvedWorktrees: () => {},
+    invalidateWorktreeScan: () => {},
+    notifyReposChanged: () => {}
+  })
+  const name = '2026-11-24-11111111-1111-4111-8111-111111111111'
+  await mkdir(join(root, 'chats', name), { recursive: true })
+  const results = await Promise.all(
+    Array.from({ length: 4 }, () => controller.createChatWorkspace(name, 'New project-20261124'))
+  )
+  const ids = results.map((result) => {
+    if (!('repo' in result)) {
+      throw new Error(result.error)
+    }
+    return result.repo.id
+  })
+  expect(new Set(ids).size).toBe(1)
+  expect(store.getRepos().filter((repo) => repo.path === join(root, 'chats', name))).toHaveLength(1)
 })
 
 it('allocates one folder per creation and persists only the first submitted chat’s generated name', async () => {

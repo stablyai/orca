@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
 import { useProjectSectionScope } from './use-project-section-scope'
+import { useWorkspaceSectionFolds } from '../controls/use-workspace-section-folds'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
@@ -43,6 +44,7 @@ import { useProjectsCollapseShortcut } from '../controls/use-projects-collapse-s
 import { useProjectsCollapseAllAnnouncement } from '../controls/use-projects-collapse-all-announcement'
 import {
   areAllProjectsCollapsed,
+  getOwnedProjectCollapseKeys,
   getRenderedProjectCollapseKeys,
   setAllProjectsCollapsed
 } from './project-collapse-all'
@@ -81,6 +83,7 @@ const WorktreeList = React.memo(function WorktreeList({
 }: WorktreeListProps) {
   const {
     allWorktrees,
+    allRepoIds,
     repoMap,
     worktreeMap,
     repos,
@@ -114,9 +117,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
-  const collapsedGroups = useAppStore((s) => s.collapsedGroups)
-  const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
+  const { collapsedGroups, toggleGroup, setCollapsedGroups } =
+    useWorkspaceSectionFolds(workspaceSection)
   const settings = useAppStore((s) => s.settings)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const { prCache, hostedReviewCache } = useAppStore(
@@ -180,14 +182,14 @@ const WorktreeList = React.memo(function WorktreeList({
   const handleToggleAllProjects = useCallback(() => {
     void useAppStore.getState().recordFeatureInteraction('projects-collapse-all')
     // Direction follows what is displayed, which may differ from stored state while a picker forces sections open.
-    setCollapsedGroups(
+    setCollapsedGroups((current) =>
       setAllProjectsCollapsed(
-        useAppStore.getState().collapsedGroups,
-        projectCollapseKeys,
+        current,
+        getOwnedProjectCollapseKeys(rowModel.occurrencePlan.sections),
         !allProjectsCollapsed
       )
     )
-  }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
+  }, [allProjectsCollapsed, rowModel.occurrencePlan.sections, setCollapsedGroups])
   const selection = useSidebarWorktreeSelection({
     workspaceSection,
     sectionRows: rowModel.sectionRows,
@@ -230,13 +232,12 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const handleCreateFolderWorkspace = useCallback(
     (projectGroup: ProjectGroup) => {
-      if (!projectGroup.parentPath) {
-        return
+      if (projectGroup.parentPath) {
+        openModal('new-workspace-composer', {
+          initialProjectGroupId: projectGroup.id,
+          telemetrySource: 'sidebar'
+        })
       }
-      openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
-        telemetrySource: 'sidebar'
-      })
     },
     [openModal]
   )
@@ -381,7 +382,7 @@ const WorktreeList = React.memo(function WorktreeList({
         worktreeMap={worktreeMap}
         worktreeLineageById={worktreeLineageById}
         childrenByParentIdentity={childrenByParentIdentity}
-        allRepoIds={rowModel.allRepoIds}
+        allRepoIds={allRepoIds}
         onReorderHostSections={rowModel.handleReorderHostSections}
         onHostDragActiveChange={rowModel.setHostDragActive}
         prCache={prCache}

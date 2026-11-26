@@ -91,7 +91,6 @@ export function createRuntimeStructuredChatNamingHandler(
           'aug',
           'kilo',
           'mimo-code',
-          'gemini',
           'droid',
           'qwen-code',
           'cline',

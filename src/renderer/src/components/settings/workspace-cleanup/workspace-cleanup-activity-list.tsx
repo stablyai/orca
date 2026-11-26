@@ -123,6 +123,7 @@ function ActivityRun({
         )
       : null
   ].filter((part): part is string => part !== null)
+  const separator = t('components.settings.workspaceCleanup.listSeparator', ', ')
   const when = uiDateTimeFormat({
     month: 'short',
     day: 'numeric',
@@ -164,13 +165,13 @@ function ActivityRun({
                   new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(
                     summary
                   )}
-              {', '}
+              {separator}
               {t('components.settings.workspaceCleanup.activity.keptCount', '{{count}} kept', {
                 count: run.counts.kept
               })}
               {run.counts.failed > 0 ? (
                 <>
-                  {', '}
+                  {separator}
                   <span className="text-destructive">
                     {t(
                       'components.settings.workspaceCleanup.activity.failedCount',

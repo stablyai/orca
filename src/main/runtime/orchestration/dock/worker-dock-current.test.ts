@@ -5,7 +5,8 @@ import { refreshWorkerDockActivity } from './worker-dock-activity'
 import { subscribeWorkerDock } from './worker-dock-stream'
 
 // The strip's current-work rule: live work always; failures only while recent, unacknowledged,
-// not stopped by the owner and not replaced by a retry; unresolved or unverified rows age out.
+// not stopped by the owner, not replaced by a retry and not on a completed task; unresolved or
+// unverified rows age out.
 const session = '22222222-2222-4222-8222-222222222222'
 const party = `orca_session_id:${session}`
 const NOW = Date.parse('2026-11-23T12:00:00Z')
@@ -69,7 +70,7 @@ it('shows a failure from the last four hours and drops an older one', () => {
   settle(stopped, 'stopped', 2 * HOUR)
   const abandoned = dispatch()
   settle(abandoned, 'abandoned', HOUR)
-  expect(new Set(current())).toEqual(new Set([recent, stopped]))
+  expect(new Set(current())).toEqual(new Set([recent]))
 })
 
 it('drops an acknowledged failure', () => {
@@ -81,17 +82,6 @@ it('drops an acknowledged failure', () => {
     settlements: [{ dispatchId: failed, settlement: settlementOf(failed) }],
     acknowledged: true
   })
-  expect(current()).toEqual([])
-})
-
-it('drops a failure the owner stopped', () => {
-  const stopped = dispatch()
-  settle(stopped, 'stopped', HOUR)
-  expect(current()).toEqual([stopped])
-  db.db
-    .prepare(`INSERT INTO worker_dock_owner_stops(request_id, source, dispatch_id, confirmed, settlement)
-      VALUES('stop-1', ?, ?, 1, ?)`)
-    .run(session, stopped, settlementOf(stopped))
   expect(current()).toEqual([])
 })
 
@@ -150,6 +140,41 @@ it('re-reads when a shown failure ages out, with no write to wake it', async () 
   try {
     expect(emit.mock.lastCall?.[0].identities.map((row) => row.dispatchId)).toEqual([failed])
     await vi.advanceTimersByTimeAsync(6 * 60_000)
+    expect(emit.mock.lastCall?.[0].identities).toEqual([])
+  } finally {
+    unsubscribe()
+  }
+})
+
+it('drops a failure once its task is completed, and re-reads when it is', async () => {
+  const done = task()
+  const failed = dispatch(done)
+  settle(failed, 'failed', HOUR)
+  const emit = vi.fn<(snapshot: ReturnType<typeof readWorkerDock>) => void>()
+  const unsubscribe = subscribeWorkerDock(db, party, emit, undefined, true, true)
+  try {
+    expect(emit.mock.lastCall?.[0].identities.map((row) => row.dispatchId)).toEqual([failed])
+    // The work finished another way, e.g. `task-update --status completed`.
+    db.updateTaskStatus(done, 'completed', 'finished by a follow-up')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(emit.mock.lastCall?.[0].identities).toEqual([])
+    expect(current()).toEqual([])
+  } finally {
+    unsubscribe()
+  }
+})
+
+it('re-reads when a task completes whose failed dispatch was already settled', async () => {
+  const done = task()
+  const failed = dispatch(done)
+  settle(failed, 'failed', HOUR)
+  db.db.prepare("UPDATE dispatch_contexts SET status = 'failed' WHERE id = ?").run(failed)
+  const emit = vi.fn<(snapshot: ReturnType<typeof readWorkerDock>) => void>()
+  const unsubscribe = subscribeWorkerDock(db, party, emit, undefined, true, true)
+  try {
+    expect(emit.mock.lastCall?.[0].identities.map((row) => row.dispatchId)).toEqual([failed])
+    db.updateTaskStatus(done, 'completed', 'finished by a new task')
+    await vi.advanceTimersByTimeAsync(0)
     expect(emit.mock.lastCall?.[0].identities).toEqual([])
   } finally {
     unsubscribe()

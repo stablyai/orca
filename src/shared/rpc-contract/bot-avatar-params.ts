@@ -28,4 +28,13 @@ export const BotAvatarRead = z.object({
   catalogEpoch: z.uuid().optional()
 })
 
+/** Whether a window should draw the bot's Slack icon for `look` (bots.avatar.slackIcon.wanted). */
+export const BotSlackIconWanted = z.object({
+  botId: requiredString('Missing bot id'),
+  look: z.string().min(1).max(120)
+})
+
+/** A window's 512 px drawing of the bot's mascot in `look`, for its Slack icon. */
+export const BotSlackIconUpload = BotSlackIconWanted.extend({ png: BotAvatarUpload.shape.png })
+
 export type BotAvatarUploadParams = z.infer<typeof BotAvatarUpload>

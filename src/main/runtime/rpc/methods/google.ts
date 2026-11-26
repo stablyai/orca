@@ -23,6 +23,8 @@ import {
   GoogleStatusParams
 } from '../../../../shared/rpc-contract/google-params'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { Bot } from '../../../../shared/bot-types'
+import { BotFailureError } from '../../../../shared/bots/bot-failure-copy'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { isAgentRpcCaller, rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { googleCallerAccount } from '../google-caller-api'
@@ -112,13 +114,21 @@ export function googleConnectedLine(account: string, defaultAccount: string | nu
 const GOOGLE_ASKERS_CHANGED =
   'Who can ask changed while you were confirming. Review it and turn Google on again.'
 
-function sameAskers(shown: readonly string[], current: readonly string[]): boolean {
-  const sortedShown = [...shown].sort()
-  const sortedCurrent = [...current].sort()
-  return (
-    sortedShown.length === sortedCurrent.length &&
-    sortedShown.every((key, index) => key === sortedCurrent[index])
-  )
+function sameKeys(shown: readonly string[], current: readonly string[]): boolean {
+  const a = new Set(shown)
+  const b = new Set(current)
+  return a.size === b.size && [...a].every((key) => b.has(key))
+}
+
+function sameGoogleAccess(
+  read: { on: boolean; accounts?: readonly string[] },
+  current: Pick<Bot, 'google' | 'googleAccounts'>
+): boolean {
+  const before = botGoogleAccess({ google: read.on, googleAccounts: read.accounts?.slice() })
+  const now = botGoogleAccess(current)
+  return before.kind === 'some' && now.kind === 'some'
+    ? sameKeys(before.accounts, now.accounts)
+    : before.kind === now.kind
 }
 
 export const GOOGLE_METHODS = [
@@ -233,15 +243,28 @@ export const GOOGLE_METHODS = [
     name: 'google.bot.set',
     permission: 'workspace',
     params: GoogleBotAccessSetParams,
-    handler: async ({ botToken, botId, on, accounts, confirmedAskers }, ctx) => {
+    handler: async (
+      { botToken, botId, on, accounts, allAccounts, basedOn, confirmedAskers },
+      ctx
+    ) => {
       refuseFromBot(botToken, ctx)
       ctx.runtime.bots.assertEnabled()
       const bot = await ctx.runtime.bots.update(botId, (current) => {
-        if (on && confirmedAskers && !sameAskers(confirmedAskers, botAskerKeys(current))) {
+        if (on && confirmedAskers && !sameKeys(confirmedAskers, botAskerKeys(current))) {
           throw new InvalidArgumentError(GOOGLE_ASKERS_CHANGED)
         }
-        // Off, or on with no list, clears the list: on is then every account, now and later.
-        return { google: on, googleAccounts: on && accounts ? [...new Set(accounts)] : undefined }
+        if (on && basedOn && !sameGoogleAccess(basedOn, current)) {
+          throw new BotFailureError('googleAccountsChanged')
+        }
+        if (!on) {
+          return { google: false, googleAccounts: undefined }
+        }
+        if (accounts) {
+          return { google: true, googleAccounts: [...new Set(accounts)] }
+        }
+        // A plain on (phone setup, older clients) keeps a list; only allAccounts widens it.
+        const keep = current.google === true && allAccounts !== true
+        return { google: true, googleAccounts: keep ? current.googleAccounts : undefined }
       })
       // Settings confirms this before turning Google on; the CLI prints it.
       const warning = on ? googleWhoCanAskWarning(bot.name, botOtherAskers(bot)) : null

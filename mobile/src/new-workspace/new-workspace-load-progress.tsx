@@ -30,7 +30,7 @@ export function NewWorkspaceLoadProgress({
       />
       <Text style={[styles.caption, onBackdrop && { color: colors.onAccent }]}>
         {t('newWorkspace.loadingDrawer.downloadProgress', 'Downloading… {{progress}}', {
-          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)
+          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes, t)
         })}
       </Text>
     </>

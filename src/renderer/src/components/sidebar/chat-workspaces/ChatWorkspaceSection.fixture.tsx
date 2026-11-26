@@ -11,6 +11,7 @@ import { SidebarProjectsListSlot } from '../SidebarBotsSplit'
 import { SidebarContentViewport } from '../SidebarContentViewport'
 import { useAppStore } from '@/store'
 import { PROJECTS_SECTION_GROUP_KEY } from '../../../../../shared/sidebar-list/sections/group-keys'
+import { SplitPaneLanding } from '../../tab-group/landing/SplitPaneLanding'
 
 function ProjectsHeader() {
   return <SidebarHeader collapsible reorderable={false} onWorkspaceBoardMenuOpenChange={() => {}} />
@@ -159,6 +160,50 @@ export const populated = defineFixture({
   )
 })
 
+const draft = {
+  ...chat,
+  id: 'chat-draft',
+  path: '/home/me/.orca/chats/2026-11-26-draft',
+  displayName: 'New project-20261126',
+  chatWorkspace: { initialName: 'New project-20261126', autoName: true }
+}
+const draftRoot = makeWorktree(`chat-draft::${draft.path}`, draft.displayName, {
+  repoId: draft.id,
+  path: draft.path,
+  branch: '',
+  isMainWorktree: true,
+  hostId: 'local'
+})
+
+export const overview = defineFixture({
+  ...populated,
+  width: 1100,
+  store: {
+    ...populated.store,
+    repos: [project, draft, chat],
+    activeRepoId: draft.id,
+    activeWorktreeId: draftRoot.id,
+    worktreesByRepo: { 'repo-1': [projectRoot], 'chat-draft': [draftRoot], chat: [chatRoot] }
+  },
+  render: () => (
+    <DndContext>
+      <ConfirmationDialogProvider>
+        <div className="grid grid-cols-[280px_1fr] overflow-hidden rounded-xl border bg-background">
+          <PopulatedSidebar height={620} />
+          <div className="relative border-l">
+            <SplitPaneLanding
+              worktreeId={draftRoot.id}
+              groupId="chat-draft-group"
+              autoFocus={false}
+              onClosePane={undefined}
+            />
+          </div>
+        </div>
+      </ConfirmationDialogProvider>
+    </DndContext>
+  )
+})
+
 export const manyProjects = defineFixture({
   ...populated,
   store: {
@@ -232,7 +277,13 @@ export const before = defineFixture({
 
 export const hostSubmenu = defineFixture({
   ...hostMenu,
-  width: 720,
+  width: overview.width,
+  render: overview.render,
+  store: {
+    ...overview.store,
+    runtimeEnvironments: hostMenu.store!.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: hostMenu.store!.runtimeStatusByEnvironmentId
+  },
   interact: async (frame) => {
     await hostMenu.interact?.(frame)
     document

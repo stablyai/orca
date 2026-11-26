@@ -39,6 +39,11 @@ import {
 } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
+import {
+  getRepoHostIdentity,
+  getRepoHostIdentityForParts
+} from '../../../../../../shared/repository/repo-host-identity'
+import { workspaceSectionFolds } from '../../../../../../shared/sidebar-list/sections/workspace-section-folds'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
@@ -62,6 +67,31 @@ export function computeRenderedSidebarRows(
   statuses: RuntimeStatuses,
   visibleWorktrees: readonly Worktree[]
 ): HostSectionRow[] {
+  return (['projects', 'chats'] as const).flatMap((section) => {
+    const repos = state.repos.filter(
+      (repo) => Boolean(repo.chatWorkspace) === (section === 'chats')
+    )
+    if (section === 'chats' && repos.length === 0) {
+      return []
+    }
+    const owners = new Set(repos.map(getRepoHostIdentity))
+    return computeRenderedSectionRows(
+      { ...state, repos, collapsedGroups: workspaceSectionFolds(state.collapsedGroups, section) },
+      statuses,
+      visibleWorktrees.filter((row) =>
+        owners.has(getRepoHostIdentityForParts(row.repoId, row.hostId ?? 'local'))
+      ),
+      section === 'chats'
+    )
+  })
+}
+
+function computeRenderedSectionRows(
+  state: AppState,
+  statuses: RuntimeStatuses,
+  visibleWorktrees: readonly Worktree[],
+  chats: boolean
+): HostSectionRow[] {
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(state.settings)
   const projection = getProjectHostSetupProjectionFromState(state)
@@ -69,7 +99,7 @@ export function computeRenderedSidebarRows(
     state.visibleWorkspaceHostIds,
     state.workspaceHostScope
   )
-  const projectGroups = state.projectGroups ?? []
+  const projectGroups = chats ? [] : (state.projectGroups ?? [])
   const { prCache } = selectWorktreeListReviewCacheInputs(
     state,
     state.groupBy,
@@ -102,7 +132,7 @@ export function computeRenderedSidebarRows(
     pendingCreations: EMPTY_PENDING_CREATIONS,
     projectGrouping: { projects: projection.projects, projectHostSetups: projection.setups },
     folderWorkspaces: filterFolderWorkspacesForVisibleHosts(
-      selectFolderWorkspaces(state),
+      chats ? [] : selectFolderWorkspaces(state),
       projectGroups,
       visibleHostIdSet,
       defaultHostId

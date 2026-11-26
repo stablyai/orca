@@ -234,10 +234,6 @@ export class RuntimeRepositoryRegistrationController {
       }
     }
     targetPathKeys = await getSavedProjectPathKeys(targetPath)
-    const raceWinner = findLocalAtTarget()
-    if (raceWinner) {
-      return { repo: raceWinner }
-    }
     // Register Git's checkout path so the new project stays its own selected checkout.
     const repoPath =
       repoKind === 'git'
@@ -248,6 +244,10 @@ export class RuntimeRepositoryRegistrationController {
       kind: repoKind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+    const concurrentWinner = findLocalAtTarget()
+    if (concurrentWinner) {
+      return { repo: concurrentWinner }
+    }
     const repo: Repo = {
       id: randomUUID(),
       path: repoPath,
