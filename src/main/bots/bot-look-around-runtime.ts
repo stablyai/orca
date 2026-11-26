@@ -2,6 +2,8 @@
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { AutomationService } from '../automations/automation-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
+import { readBotActiveWork } from './bot-active-work-read'
 import { botTurns, runtimeBotAutomationSessions } from './bot-automation-sessions'
 import { systemBackgroundRunPower } from './bot-background-run-power'
 import { requireStructuredHost } from './bot-chat-session'
@@ -13,6 +15,7 @@ import {
 import { BotLookAroundRunner } from './bot-look-around-runner'
 import { watchContinuedLooks } from './bot-look-around-continued'
 import { runtimeTidyUpRunner } from './bot-memory-tidy-up-runtime'
+import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 
 const LOOK_TURNED_OFF = `Look around turned off: the last ${LOOK_FAILURES_TO_TURN_OFF} looks failed. Turn it back on in Settings.`
 import { watchBotTurnEnds } from './bot-run-turn-watch'
@@ -31,6 +34,9 @@ export function runtimeLookAroundRunner(runtime: OrcaRuntimeService): BotLookAro
     store: runtime.lookAround,
     hadConversation: async (bot) =>
       (await runtime.listChatSessionTabs(folderWorkspaceKey(bot.folderWorkspaceId))).length > 0,
+    idleItems: async (botId) =>
+      (await withTimeout(readBotActiveWork(runtime, botId), BOT_WORK_NOTE_TIMEOUT_MS, null))
+        ?.idle ?? [],
     sessions: runtimeBotAutomationSessions(runtime),
     stopTurn: botTurns.stop,
     turnRunning: botTurns.running,

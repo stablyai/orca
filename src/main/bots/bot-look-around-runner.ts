@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../shared/bots/bot-look-around'
 import type { BotAutomationSessions } from '../automations/bot-automation-launch'
+import type { BotIdleItem } from './bot-active-work'
 import type { BotTurnEnd, BotTurnWatch } from './bot-run-turn-watch'
 import type { LookUsageLimit } from './bot-background-run-history'
 import type { BotLookAroundStore } from './bot-look-around-store'
@@ -60,6 +61,7 @@ export type BotLookAroundRunnerDeps = {
   store: Pick<BotLookAroundStore, 'get' | 'update'>
   /** Whether the bot has had a conversation; its looks start one interval after it first has. */
   hadConversation: (bot: Bot) => Promise<boolean>
+  idleItems: (botId: string) => Promise<readonly BotIdleItem[]>
   sessions: Pick<BotAutomationSessions, 'startConversation' | 'sendToChat' | 'release'>
   watchTurns: () => Promise<BotTurnWatch>
   /** Asks the session's host to stop its turn. */
@@ -214,10 +216,7 @@ export class BotLookAroundRunner {
     const sessionId = randomUUID()
     this.ownSessions.add(sessionId)
     const startedAt = this.deps.now()
-    const text = lookAroundPrompt({
-      focus: botLookAround(bot).focus,
-      history: lookHistory(this.deps.store.get(bot.id), startedAt)
-    })
+    const history = lookHistory(this.deps.store.get(bot.id), startedAt)
     // Recorded before the session exists, so its launch already knows it only reads.
     let before: BotLookState | undefined
     this.change(bot.id, (state) => beginRun((before = state), sessionId, startedAt))
@@ -238,6 +237,12 @@ export class BotLookAroundRunner {
           setup: () => this.deps.watchTurns(),
           start: async () => {
             await gate.beforeFirstMessage()
+            const idleItems = await this.deps.idleItems(bot.id)
+            const text = lookAroundPrompt({
+              focus: botLookAround(bot).focus,
+              history,
+              idleItems
+            })
             const send = await this.deps.sessions.startConversation(bot, {
               text,
               title: 'Look around',
