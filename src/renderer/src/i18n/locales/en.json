@@ -25450,7 +25450,7 @@
       "placeholder": "Search",
       "placeholderScoped": "Search {{path}}",
       "textInWorkspace": "Text in workspace",
-      "refine": "Too many matches. Refine the search."
+      "refine": "Too many matches"
     }
   },
   "sparsePreset": {

@@ -250,7 +250,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
     case 'refine':
       return (
         <div role="status" className="flex h-6 items-center px-2 text-xs text-muted-foreground">
-          {t('fileExplorer.combinedSearch.refine', 'Too many matches. Refine the search.')}
+          {t('fileExplorer.combinedSearch.refine', 'Too many matches')}
         </div>
       )
     case 'no-results':

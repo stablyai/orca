@@ -138,16 +138,24 @@ const ROW_ACTIONS: NameMatchRowActions = {
 /** Drives the real field, row model, keyboard model and list over an in-memory repo; no IPC. */
 function CombinedSearchHarness({
   initialQuery,
-  initialInclude = ''
+  initialInclude = '',
+  initialExclude = '',
+  cappedNames = false
 }: {
   initialQuery: string
   initialInclude?: string
+  initialExclude?: string
+  /** Simulates a capped listing whose rows all fall outside the view. */
+  cappedNames?: boolean
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(initialQuery)
   const [showAllQuery, setShowAllQuery] = useState<string | null>(null)
   const [options, setOptions] = useState({ caseSensitive: false, wholeWord: false, regex: false })
-  const [filters, setFilters] = useState({ includePattern: initialInclude, excludePattern: '' })
+  const [filters, setFilters] = useState({
+    includePattern: initialInclude,
+    excludePattern: initialExclude
+  })
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [opened, setOpened] = useState('')
   const hasQuery = query.trim().length > 0
@@ -172,12 +180,12 @@ function CombinedSearchHarness({
   const model = useMemo(
     () =>
       createCombinedSearchRows({
-        names,
-        textResult: text,
+        names: cappedNames ? { total: 0, matches: [], truncated: true } : names,
+        textResult: cappedNames ? null : text,
         textRows: buildSearchRows(text, collapsed),
         textPending: false
       }),
-    [collapsed, names, text]
+    [cappedNames, collapsed, names, text]
   )
   const clearQuery = useCallback(() => setQuery(''), [])
   const openRow = useCallback(
@@ -312,4 +320,18 @@ export const filterActive = defineFixture({
 export const shortMedium = defineFixture({
   width: 300,
   render: () => <CombinedSearchHarness initialQuery="cart" />
+})
+export const refineNarrow = defineFixture({
+  width: 220,
+  render: () => <CombinedSearchHarness initialQuery="ts" cappedNames />
+})
+export const longFilterNarrow = defineFixture({
+  width: 220,
+  render: () => (
+    <CombinedSearchHarness
+      initialQuery=""
+      initialInclude="src/**"
+      initialExclude="dist/**, node_modules/**"
+    />
+  )
 })
