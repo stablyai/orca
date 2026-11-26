@@ -10,6 +10,7 @@ import {
 } from '@/runtime/web-session-tabs-sync/tracking/tracking'
 import { UI_STORAGE_KEY } from '@/web/preload-api/web-storage'
 import { writeWebChatReadMarkEdits } from '@/web/preload-api/preferences/web-chat-read-mark-storage'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { hostSnapshotAffirmsAgentSessions } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type { RuntimeMobileSessionAgentTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -418,4 +419,25 @@ it('keeps unrelated cutoffs when clearing and undoing at the hydration limit', (
 
   expect(marks.stored().activityClearedAtByPaneKey).toEqual(original)
   expect(marks.reload().getState().activityClearedAtByPaneKey).toEqual(original)
+})
+
+it('keeps a newly copied cutoff when completing at the hydration limit', () => {
+  const cutoffs: Record<string, number> = { [OLD]: 50 }
+  for (let index = 0; index < 499; index += 1) {
+    const conversationKey = chatPaneKey(`saved-${index}`)
+    const leaf = conversationKey.slice(conversationKey.lastIndexOf(':') + 1)
+    cutoffs[conversationKey] = index + 100
+    cutoffs[`agent-chat-tab-v1-${index}:${leaf}`] = index + 100
+  }
+  const marks = load({ activityClearedAtByPaneKey: cutoffs })
+  marks.store.getState().applyActivityClearedAt({ [TERMINAL]: 600 })
+  marks.frame('w1', [CHAT_TAB], false, true)
+  marks.census('w1')
+
+  expect(marks.stored().activityClearedAtByPaneKey).toEqual({
+    ...cutoffs,
+    [TERMINAL]: 600,
+    [CHAT]: 50
+  })
+  expect(marks.stored().chatReadMarksCopiedHere).toBe(true)
 })

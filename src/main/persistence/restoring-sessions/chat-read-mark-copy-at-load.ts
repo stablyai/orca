@@ -6,10 +6,10 @@ import { copyChatReadMarksToConversationKeys } from '../../../shared/agent-sessi
  *  so a later Mark unread on the conversation key is never undone by a second copy. */
 export function copyChatReadMarksAtLoad(state: PersistedState): {
   state: PersistedState
-  changed: boolean
+  recordsChanged: boolean
 } {
   if (state.ui._chatReadMarksCopiedToConversationKeys === true) {
-    return { state, changed: false }
+    return { state, recordsChanged: false }
   }
   const sessions = [state.workspaceSession, ...Object.values(state.workspaceSessionsByHostId ?? {})]
   const sessionIds = sessions.flatMap((session) =>
@@ -30,14 +30,6 @@ export function copyChatReadMarksAtLoad(state: PersistedState): {
       ...state,
       ui: { ...state.ui, ...copied, _chatReadMarksCopiedToConversationKeys: true }
     },
-    changed: true
+    recordsChanged: copied !== null
   }
-}
-
-/** Load normalization plus the one-time copy, so a copy that changed the profile saves with it. */
-export function withChatReadMarksCopied<T extends { state: PersistedState; changed: boolean }>(
-  normalized: T
-): T {
-  const copied = copyChatReadMarksAtLoad(normalized.state)
-  return { ...normalized, state: copied.state, changed: normalized.changed || copied.changed }
 }

@@ -7,7 +7,7 @@ import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
-import { withChatReadMarksCopied } from '../restoring-sessions/chat-read-mark-copy-at-load'
+import { copyChatReadMarksAtLoad } from '../restoring-sessions/chat-read-mark-copy-at-load'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
 import {
@@ -121,13 +121,15 @@ export class Store {
     } else {
       throw new Error('Store requires an authority or a frozen serialized import')
     }
-    const normalized = withChatReadMarksCopied(
-      normalizePersistedPaneIdentityState(nameEmptyPersistedTerminalLayoutRoots(loaded), {
+    const normalized = normalizePersistedPaneIdentityState(
+      nameEmptyPersistedTerminalLayoutRoots(loaded),
+      {
         registerAliases: !imported,
         collectUnboundPaneAlias: options.collectUnboundPaneAlias
-      })
+      }
     )
-    let initialState = normalized.state
+    const readMarkCopy = copyChatReadMarksAtLoad(normalized.state)
+    let initialState = readMarkCopy.state
     // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
     if (options.initializeHomeWorkspace && !profileDocumentExisted) {
       initialState = createInitialHomeWorkspaceState(initialState)
@@ -176,11 +178,15 @@ export class Store {
       })
       if (
         normalized.changed ||
+        readMarkCopy.recordsChanged ||
         this.runtime.loadNeedsSave ||
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
         scheduleFullProfileSave(this.domains.scheduling)
+      } else if (readMarkCopy.state !== normalized.state) {
+        // Include the flag in the next selective save.
+        this.runtime.dirtyProfileStateDomains?.add('ui')
       }
     }
   }

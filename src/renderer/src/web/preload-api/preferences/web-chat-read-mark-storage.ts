@@ -79,6 +79,7 @@ export function commitWebChatReadMarkCopy(
       marks[field] = applyWebChatReadMarkEdits(marks[field], current, baseline[field])
     }
   }
+  let copied: Partial<ChatReadMarks> | null = null
   if (stored.chatReadMarksCopiedHere !== true && sessionIds) {
     const sources = { ...marks }
     for (const field of CHAT_READ_MARK_FIELDS) {
@@ -88,21 +89,23 @@ export function commitWebChatReadMarkCopy(
         )
       )
     }
-    const copied = copyChatReadMarksToConversationKeys(sources, sessionIds())
-    for (const field of CHAT_READ_MARK_FIELDS) {
-      for (const [key, value] of Object.entries(copied?.[field] ?? {})) {
-        // A pending deletion, including one of a stored destination, remains a deletion.
-        if (
-          !Object.hasOwn(marks[field], key) &&
-          !(changes[field] && Object.hasOwn(baseline[field], key))
-        ) {
-          marks[field][key] = value
-        }
-      }
-    }
+    copied = copyChatReadMarksToConversationKeys(sources, sessionIds())
   }
   for (const field of CHAT_READ_MARK_FIELDS) {
-    marks[field] = sanitizePaneKeyTimestampRecord(marks[field], changes[field] ?? baseline[field])
+    const current = changes[field] ?? baseline[field]
+    let retained: Record<string, number> | undefined
+    for (const [key, value] of Object.entries(copied?.[field] ?? {})) {
+      // A pending deletion, including one of a stored destination, remains a deletion.
+      if (
+        !Object.hasOwn(marks[field], key) &&
+        !(changes[field] && Object.hasOwn(baseline[field], key))
+      ) {
+        marks[field][key] = value
+        retained ??= { ...current }
+        retained[key] = value
+      }
+    }
+    marks[field] = sanitizePaneKeyTimestampRecord(marks[field], retained ?? current)
   }
   const result = { ...marks, chatReadMarksCopiedHere: true as const }
   writeJson(UI_STORAGE_KEY, { ...stored, ...result })
