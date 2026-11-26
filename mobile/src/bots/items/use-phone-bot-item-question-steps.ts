@@ -54,6 +54,6 @@ function useHeldDraft(scopeKey: string): { draft: string; setDraft: (next: strin
 }
 
 export const { useBotItemHeldAnswers, useBotItemQuestionSteps } = createBotItemQuestionStepsHooks(
-  { useCallback, useLayoutEffect, useMemo, useRef, useState },
+  { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore },
   useHeldDraft
 )

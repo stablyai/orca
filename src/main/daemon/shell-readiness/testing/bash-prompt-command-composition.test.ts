@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDaemonBashShellReadyRcfileContent } from '../daemon-bash-shell-ready-rcfile'
+import { getBashShellReadyRcfileContent } from '../../../providers/local-pty/local-pty-shell-ready-bash-rcfile'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
@@ -15,6 +16,9 @@ const bashMinor = hasBash
   : 0
 const LEGACY_GATE = 'BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1)'
 const bashPreservesOddTerminalBackslash = bashMajor > 4 || (bashMajor === 4 && bashMinor >= 4)
+const START_BEFORE_PROMPT = new RegExp(
+  `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+)
 
 function runInteractiveBash(
   profile: string,
@@ -219,6 +223,20 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output, 0)
   })
 
+  itWithBash.each([
+    ['daemon', getDaemonBashShellReadyRcfileContent],
+    ['local PTY', getBashShellReadyRcfileContent]
+  ])('starts each command once, after its prompt, under functrace (%s)', (_name, getRcfile) => {
+    // Why: functrace runs DEBUG in Orca's trap helpers and in prompt $(...) subshells.
+    const profile = ['set -T', "PS0='$(:)'", "PS1='$(:)ORCA_PS1> '"].join('\n')
+    const input = "trap ':' DEBUG\nfalse\nexit 0\n"
+    const output = runInteractiveBash(profile, tempHome, input, getRcfile())
+
+    expect(output).toContain('ORCA_PS1> ')
+    expect(output).not.toMatch(START_BEFORE_PROMPT)
+    expectLifecycle(output)
+  })
+
   itWithBash('does not treat a DEBUG trap query as a mutation', () => {
     const profile = [
       'trap \'trap -p DEBUG >/dev/null; printf "QUERY:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
@@ -282,12 +300,9 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
         legacyRcfile,
         bash
       )
-      const startBeforePrompt = new RegExp(
-        `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
-      )
 
       expect(output).toContain('ORCA_PS1> ')
-      expect(output).not.toMatch(startBeforePrompt)
+      expect(output).not.toMatch(START_BEFORE_PROMPT)
       expectLifecycle(output, 0)
     }
   )

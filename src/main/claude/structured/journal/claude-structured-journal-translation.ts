@@ -103,13 +103,11 @@ export function createClaudeJournalTranslator(
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
-    persist: (identity, text, options, ended) => {
-      const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, {
-        ...options,
-        turnScope: turnScope(),
-        ...(ended ? { lifecycle: true } : {})
-      })
+    sink: deps.sink,
+    liveBody: (text) => claudeStreamingMessageBody(text),
+    persist: (identity, text, options, ended, onCommitted) => {
+      const scoped = { ...options, turnScope: turnScope(), ...(ended ? { lifecycle: true } : {}) }
+      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), scoped, onCommitted)
       deps.sink.publish()
     }
   })
@@ -221,7 +219,7 @@ export function createClaudeJournalTranslator(
     } else if (event.type === 'message') {
       backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
       messageContext.usageLimits.observe(event.message, turn.command?.rejections)
-      const kind = claudeProviderFrameKind(event.message)
+      messageContext.assistantFailures.authRetry(event.message, turn.command ? null : turn.id)
       if (
         !journalClaudeMessage(
           messageContext,
@@ -233,7 +231,7 @@ export function createClaudeJournalTranslator(
         )
       ) {
         providerFallback.append(
-          kind,
+          claudeProviderFrameKind(event.message),
           event.message,
           undefined,
           undefined,

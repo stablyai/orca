@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
-import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
 import {
@@ -15,6 +14,7 @@ import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
+  ensureCloneDestination,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
@@ -148,7 +148,7 @@ export class RuntimeRepositoryCloneController {
       return reused
     }
 
-    await mkdir(trimmedDestination, { recursive: true })
+    await ensureCloneDestination(trimmedDestination)
     const claimedTarget = await claimCloneTarget(clonePath)
     let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
     try {

@@ -3,6 +3,7 @@
 import { readAgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionAnyRefusalDetails } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,
   parseAgentSessionResumeMarker,
@@ -13,30 +14,38 @@ import {
 const RESUME_ACTION_LEASE_TTL_MS = 10 * 60 * 1000
 export const MAX_FAILURE_FIELD_LENGTH = 512
 
-const legacyCapsuleSchema = z.object({ version: z.literal(1), markers: z.array(z.unknown()) })
-const entrySchema = z.object({
-  state: z.enum(['pending', 'in-progress']),
-  operationId: z.string().min(1).optional(),
-  startedAt: z.number().int().nonnegative().optional(),
-  marker: z.unknown(),
-  replacement: z.unknown().optional()
-})
-const failureSchema = z.object({
-  marker: z.unknown(),
-  failedAt: z.number().int().nonnegative(),
-  outcome: z.enum(AGENT_SESSION_RESUME_FAILURE_OUTCOMES),
-  reason: z.string().max(MAX_FAILURE_FIELD_LENGTH),
-  details: z.unknown().optional(),
-  latestPrompt: z.string().max(MAX_FAILURE_FIELD_LENGTH),
-  latestUserItemId: z.string().max(MAX_FAILURE_FIELD_LENGTH).nullable()
-})
+const legacyCapsuleSchema = lazyZodSchema(() =>
+  z.object({ version: z.literal(1), markers: z.array(z.unknown()) })
+)
+const entrySchema = lazyZodSchema(() =>
+  z.object({
+    state: z.enum(['pending', 'in-progress']),
+    operationId: z.string().min(1).optional(),
+    startedAt: z.number().int().nonnegative().optional(),
+    marker: z.unknown(),
+    replacement: z.unknown().optional()
+  })
+)
+const failureSchema = lazyZodSchema(() =>
+  z.object({
+    marker: z.unknown(),
+    failedAt: z.number().int().nonnegative(),
+    outcome: z.enum(AGENT_SESSION_RESUME_FAILURE_OUTCOMES),
+    reason: z.string().max(MAX_FAILURE_FIELD_LENGTH),
+    details: z.unknown().optional(),
+    latestPrompt: z.string().max(MAX_FAILURE_FIELD_LENGTH),
+    latestUserItemId: z.string().max(MAX_FAILURE_FIELD_LENGTH).nullable()
+  })
+)
 // Keep failures in a separate optional key: older builds reject new entry states but ignore unknown keys.
-const capsuleSchema = z.object({
-  version: z.literal(2),
-  entries: z.array(z.unknown()),
-  dismissedAt: z.number().int().nonnegative().optional(),
-  failed: z.unknown().optional()
-})
+const capsuleSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(2),
+    entries: z.array(z.unknown()),
+    dismissedAt: z.number().int().nonnegative().optional(),
+    failed: z.unknown().optional()
+  })
+)
 
 /** Failure guidance remains until user action, successful retry, dismissal or a newer teardown supersedes it. */
 export type AgentSessionResumeFailureRecord = {

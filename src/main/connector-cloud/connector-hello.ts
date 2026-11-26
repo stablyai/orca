@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 // What a hello says about this machine, always within the cloud's request cap.
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -51,9 +52,11 @@ const PROMPT_KINDS = ['approval', 'question']
 const SOURCES = ['slack', 'linear', 'github']
 
 // The answer as this machine reads it: the shared contract's wake offer beside the rest.
-export const ConnectorHelloAnswer = ConnectorHelloResponse.extend({
-  wake: ConnectorHelloWakeOfferSchema
-})
+export const ConnectorHelloAnswer = lazyZodSchema(() =>
+  ConnectorHelloResponse.extend({
+    wake: ConnectorHelloWakeOfferSchema
+  })
+)
 
 export type ConnectorHelloSaid = {
   /** Null: left out, so the cloud keeps the bots it has until its answer says whether it takes pages. */

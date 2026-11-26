@@ -1,20 +1,25 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
-const Size = z.object({ width: z.number().positive(), height: z.number().positive() })
+const Size = lazyZodSchema(() =>
+  z.object({ width: z.number().positive(), height: z.number().positive() })
+)
 
-const LayoutMetrics = z.object({
-  cssContentSize: Size,
-  cssVisualViewport: z.object({
-    pageX: z.number(),
-    pageY: z.number(),
-    clientWidth: z.number().positive(),
-    clientHeight: z.number().positive(),
-    scale: z.number().positive().optional(),
-    zoom: z.number().positive().optional()
-  }),
-  // Device pixels of the drawn surface; an emulated device scale factor leaves it unchanged.
-  visualViewport: z.object({ clientWidth: z.number().positive() }).optional()
-})
+const LayoutMetrics = lazyZodSchema(() =>
+  z.object({
+    cssContentSize: Size,
+    cssVisualViewport: z.object({
+      pageX: z.number(),
+      pageY: z.number(),
+      clientWidth: z.number().positive(),
+      clientHeight: z.number().positive(),
+      scale: z.number().positive().optional(),
+      zoom: z.number().positive().optional()
+    }),
+    // Device pixels of the drawn surface; an emulated device scale factor leaves it unchanged.
+    visualViewport: z.object({ clientWidth: z.number().positive() }).optional()
+  })
+)
 
 export type CaptureRect = { x: number; y: number; width: number; height: number }
 

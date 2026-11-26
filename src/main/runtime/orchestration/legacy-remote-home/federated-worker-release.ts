@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { getOrchestrationPeerCapabilityCache } from '../federation/orchestration-peer-capability-cache'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -18,27 +19,29 @@ type RemoteReleaseReceipt = Omit<WorkerReleaseReceipt, 'archive'> & {
   output?: { source?: string }
 }
 
-const RemoteReleaseReceiptSchema = z
-  .object({
-    dispatchId: z.string().min(1),
-    state: z.enum([
-      'released',
-      'already_released',
-      'retained',
-      'release_pending',
-      'release_unknown'
-    ]),
-    reason: z.string().optional(),
-    processAction: z.enum(['closed_agent_terminal', 'closed_exited_terminal', 'none']),
-    archive: z
-      .object({ source: z.string().nullable(), status: z.string().nullable() })
-      .nullable()
-      .optional(),
-    recovery: z.string().optional(),
-    lastError: z.string().optional(),
-    output: z.unknown().optional()
-  })
-  .passthrough()
+const RemoteReleaseReceiptSchema = lazyZodSchema(() =>
+  z
+    .object({
+      dispatchId: z.string().min(1),
+      state: z.enum([
+        'released',
+        'already_released',
+        'retained',
+        'release_pending',
+        'release_unknown'
+      ]),
+      reason: z.string().optional(),
+      processAction: z.enum(['closed_agent_terminal', 'closed_exited_terminal', 'none']),
+      archive: z
+        .object({ source: z.string().nullable(), status: z.string().nullable() })
+        .nullable()
+        .optional(),
+      recovery: z.string().optional(),
+      lastError: z.string().optional(),
+      output: z.unknown().optional()
+    })
+    .passthrough()
+)
 
 type FederatedWorkerMutationArgs = {
   runtime: WorkerTerminalReleaseRuntime
