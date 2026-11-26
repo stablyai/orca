@@ -340,7 +340,7 @@ describe('agent mail between paired Orca servers', () => {
       '--subject',
       '  re:build notes'
     )
-    expect(opened).toMatchObject({ result: { message: { to: 'term_b' } } })
+    expect(opened).toMatchObject({ result: { message: { to_handle: 'term_b' } } })
     const [original] = mailFor(a, 'term_b')
     await cli(a, 'reply', '--id', original!.id, '--body', 'Green.', '--from', 'term_b')
     const [reply] = mailFor(a, 'term_a')
