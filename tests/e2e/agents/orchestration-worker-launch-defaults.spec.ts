@@ -2,18 +2,23 @@ import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { test as base, expect } from './helpers/orca-app'
-import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
+import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
+import { test as base } from '../desktop/electron-fixtures/orca-app'
+import { waitForActivePaneHookDescriptor } from '../terminal/input/terminal-active-pane'
+import { waitForActivePanePtyId } from '../terminal/input/terminal'
+import {
+  ensureTerminalVisible,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from '../desktop/renderer-probes/store'
+import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './session-fixtures/fake-agent-paste-end-scanner'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
-} from './helpers/fake-agent-command-override'
-import { RuntimeClient } from '../../src/cli/runtime/client'
-import { ORCHESTRATION_ENABLED_STORAGE_KEY } from '../../src/renderer/src/components/orchestration/setup/orchestration-setup-state'
-import type { TuiAgent } from '../../src/shared/agent-launch/catalog/tui-agent'
+} from './session-fixtures/fake-agent-command-override'
+import { RuntimeClient } from '../../../src/cli/runtime/client'
+import { ORCHESTRATION_ENABLED_STORAGE_KEY } from '../../../src/renderer/src/components/orchestration/setup/orchestration-setup-state'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-worker-launch-defaults-'))
 const argvLedgerPath = path.join(fakeCliDir, 'worker-launch.jsonl')
