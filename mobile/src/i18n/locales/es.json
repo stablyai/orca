@@ -3110,12 +3110,7 @@
     },
     "commitFailurePanel": {
       "fix": "Arreglar",
-      "fixWithAi": "Solucionar error de commit con IA",
       "hideDetails": "Ocultar detalles",
-      "hideFailureDetails": "Ocultar detalles del error de commit",
-      "showDetails": "Mostrar detalles",
-      "showFailureDetails": "Mostrar detalles del error de commit",
-      "summary": "No se pudo hacer commit.",
       "title": "No se pudo hacer commit"
     },
     "commitMessageAi": {
@@ -3135,10 +3130,7 @@
       "cancelGeneration": "Cancelar la generación del mensaje de commit",
       "commitMessageDisabled": "Mensaje de commit deshabilitado. No hay archivos preparados.",
       "commitMessagePlaceholder": "Mensaje de commit",
-      "emptyMessage": "El árbol de trabajo está limpio.",
-      "emptyTitle": "No hay cambios locales",
       "generateMessage": "Generar mensaje de commit con IA",
-      "reconnecting": "Reconectando con el escritorio…",
       "regenerateHint": "Borre el mensaje para regenerar."
     },
     "createPrAction": {
@@ -3292,7 +3284,6 @@
       "updateDesktop": "Actualiza Orca en este host para usar el control de código fuente en el móvil."
     },
     "modals": {
-      "currentBranch": "actual",
       "discardButton": "Descartar",
       "discardConfirmMessage": "¿Descartar los cambios de \"{{path}}\"? Esta acción no se puede deshacer.",
       "discardTitle": "Descartar cambio",
