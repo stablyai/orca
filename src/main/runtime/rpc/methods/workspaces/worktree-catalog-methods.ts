@@ -15,6 +15,7 @@ import {
   WorktreeListParams,
   WorktreePsParams
 } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+import { teammateWorkspaceLists } from '../../../../bots/team-share/teammate-workspace-view'
 
 export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
@@ -24,7 +25,8 @@ export const WORKTREE_CATALOG_METHODS = [
     params: WorktreePsParams,
     handler: async (params, context) => {
       const pendingAtScan = snapshotPendingWorktreeRemovals()
-      const result = markWorktreePsOtherClientRows(
+      const teammate = await teammateWorkspaceLists(context)
+      const listed = markWorktreePsOtherClientRows(
         projectWorktreePsRemovals(
           await context.runtime.getWorktreePs(
             params.limit,
@@ -39,6 +41,8 @@ export const WORKTREE_CATALOG_METHODS = [
         ),
         context
       )
+      // Before snapshotting, so a teammate's deltas are taken against their own rows.
+      const result = teammate ? teammate.psRows(listed) : listed
       // Why: legacy callers keep exact activity; only snapshot pollers are coarsened.
       if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
         // A reader of several hosts joins their cross-machine parents by it (`worktree ps --since`).

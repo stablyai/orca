@@ -27,6 +27,7 @@ import {
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
 import { admitBotShareCall } from './bot-share-call-admission'
+import { withTeammateLists } from '../../../bots/team-share/teammate-workspace-lists'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -96,6 +97,10 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     const admitted = { method, request, caller, params: parsedParams.value }
     if (callerScope.kind !== 'bot-share') {
       return admitted
+    }
+    // A not-shared method got past the refusal only on a workspace teammate's tiers, as a pairing's would.
+    if (method.share === 'not-shared') {
+      return { ...admitted, method: withTeammateLists(method) }
     }
     return admitBotShareCall(runtime, callerScope, method.share, admitted.params).then(
       (answer) => {

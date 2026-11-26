@@ -23,7 +23,7 @@ import { defineOrchestrationMethod } from './access/orchestration-method-access'
 import { openClosedWorkerTerminal } from './worker/follow-up/closed-worker-terminal'
 import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
-async function locateParty(
+export async function locateParty(
   params: z.infer<typeof PartyLocationParams>,
   ctx: RpcContext
 ): Promise<OrchestrationPartyLocationResult> {
