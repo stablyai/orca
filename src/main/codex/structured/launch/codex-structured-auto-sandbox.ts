@@ -1,20 +1,25 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 
-const configuration = z.object({
-  config: z.object({
-    sandbox_workspace_write: z
-      .object({
-        writable_roots: z.array(z.string()).default([]),
-        network_access: z.boolean().default(false),
-        exclude_tmpdir_env_var: z.boolean().default(false),
-        exclude_slash_tmp: z.boolean().default(false)
-      })
-      .nullish()
+const configuration = lazyZodSchema(() =>
+  z.object({
+    config: z.object({
+      sandbox_workspace_write: z
+        .object({
+          writable_roots: z.array(z.string()).default([]),
+          network_access: z.boolean().default(false),
+          exclude_tmpdir_env_var: z.boolean().default(false),
+          exclude_slash_tmp: z.boolean().default(false)
+        })
+        .nullish()
+    })
   })
-})
-const requirements = z.object({ requirements: z.record(z.string(), z.unknown()).nullable() })
+)
+const requirements = lazyZodSchema(() =>
+  z.object({ requirements: z.record(z.string(), z.unknown()).nullable() })
+)
 
 /** Only the legacy path with observable inputs is projected; managed/backend compilation stays Codex's. */
 export async function readCodexAutoSandbox(

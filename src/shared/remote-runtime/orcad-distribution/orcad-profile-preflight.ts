@@ -1,3 +1,4 @@
+// Build scripts load this file as raw .ts under Node, so it imports nothing but zod.
 import { z } from 'zod'
 
 export const ORCAD_PROFILE_PREFLIGHT_FLAG = '--orcad-profile-state-preflight'

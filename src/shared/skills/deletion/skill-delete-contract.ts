@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { SkillDiscoveryTargetSchema } from '../discovery/skills'
 
 /** Reason codes let clients localize remote results and group skips. */
@@ -20,29 +21,33 @@ export type SkillDeleteStatus = (typeof SKILL_DELETE_STATUSES)[number]
 /** One UI page is the largest offered selection. */
 export const MAX_SKILL_DELETE_BATCH = 512
 
-const SkillPathSchema = z.string().min(1).max(4096)
+const SkillPathSchema = lazyZodSchema(() => z.string().min(1).max(4096))
 
-const SkillDeleteTargetSkillSchema = z
-  .object({
-    /** Use DiscoveredSkill.id; paths may have changed since the scan. */
-    id: z.string().min(1).max(128),
-    directoryPath: SkillPathSchema,
-    skillFilePath: SkillPathSchema,
-    name: z.string().min(1).max(256),
-    /** `stat(skillFilePath).mtimeMs` as displayed; null fails the guard closed. */
-    updatedAt: z.number().nullable()
-  })
-  .strict()
+const SkillDeleteTargetSkillSchema = lazyZodSchema(() =>
+  z
+    .object({
+      /** Use DiscoveredSkill.id; paths may have changed since the scan. */
+      id: z.string().min(1).max(128),
+      directoryPath: SkillPathSchema,
+      skillFilePath: SkillPathSchema,
+      name: z.string().min(1).max(256),
+      /** `stat(skillFilePath).mtimeMs` as displayed; null fails the guard closed. */
+      updatedAt: z.number().nullable()
+    })
+    .strict()
+)
 
 /** Strict so old hosts reject unknown delete-affecting fields instead of silently ignoring them. */
-export const SkillDeleteRequestSchema = z
-  .object({
-    operationId: z.string().min(1).max(128),
-    // Preserve the scan’s target exactly, including absence.
-    target: SkillDiscoveryTargetSchema.optional(),
-    skills: z.array(SkillDeleteTargetSkillSchema).min(1).max(MAX_SKILL_DELETE_BATCH)
-  })
-  .strict()
+export const SkillDeleteRequestSchema = lazyZodSchema(() =>
+  z
+    .object({
+      operationId: z.string().min(1).max(128),
+      // Preserve the scan’s target exactly, including absence.
+      target: SkillDiscoveryTargetSchema.optional(),
+      skills: z.array(SkillDeleteTargetSkillSchema).min(1).max(MAX_SKILL_DELETE_BATCH)
+    })
+    .strict()
+)
 
 export type SkillDeleteRequest = z.infer<typeof SkillDeleteRequestSchema>
 export type SkillDeleteTargetSkill = z.infer<typeof SkillDeleteTargetSkillSchema>
@@ -83,35 +88,41 @@ export type SkillDeleteResult = {
   skills: SkillDeleteResultEntry[]
 }
 
-const SkillDeletePlacementSchema = z.object({
-  path: SkillPathSchema,
-  kind: z.enum(SKILL_DELETE_PLACEMENT_KINDS),
-  rootLabel: z.string().max(256)
-})
+const SkillDeletePlacementSchema = lazyZodSchema(() =>
+  z.object({
+    path: SkillPathSchema,
+    kind: z.enum(SKILL_DELETE_PLACEMENT_KINDS),
+    rootLabel: z.string().max(256)
+  })
+)
 
-export const SkillDeletePlanSchema: z.ZodType<SkillDeletePlan> = z.object({
-  operationId: z.string().min(1).max(128),
-  skills: z.array(
-    z.object({
-      id: z.string().min(1).max(128),
-      name: z.string().max(256),
-      canonicalPath: SkillPathSchema,
-      placements: z.array(SkillDeletePlacementSchema).max(64),
-      blocked: z.enum(SKILL_DELETE_BLOCK_REASONS).optional()
-    })
-  )
-})
+export const SkillDeletePlanSchema: z.ZodType<SkillDeletePlan> = lazyZodSchema(() =>
+  z.object({
+    operationId: z.string().min(1).max(128),
+    skills: z.array(
+      z.object({
+        id: z.string().min(1).max(128),
+        name: z.string().max(256),
+        canonicalPath: SkillPathSchema,
+        placements: z.array(SkillDeletePlacementSchema).max(64),
+        blocked: z.enum(SKILL_DELETE_BLOCK_REASONS).optional()
+      })
+    )
+  })
+)
 
-export const SkillDeleteResultSchema: z.ZodType<SkillDeleteResult> = z.object({
-  operationId: z.string().min(1).max(128),
-  skills: z.array(
-    z.object({
-      id: z.string().min(1).max(128),
-      name: z.string().max(256),
-      status: z.enum(SKILL_DELETE_STATUSES),
-      blocked: z.enum(SKILL_DELETE_BLOCK_REASONS).optional(),
-      removedPaths: z.array(SkillPathSchema).max(64),
-      stagedPaths: z.array(SkillPathSchema).max(64).optional()
-    })
-  )
-})
+export const SkillDeleteResultSchema: z.ZodType<SkillDeleteResult> = lazyZodSchema(() =>
+  z.object({
+    operationId: z.string().min(1).max(128),
+    skills: z.array(
+      z.object({
+        id: z.string().min(1).max(128),
+        name: z.string().max(256),
+        status: z.enum(SKILL_DELETE_STATUSES),
+        blocked: z.enum(SKILL_DELETE_BLOCK_REASONS).optional(),
+        removedPaths: z.array(SkillPathSchema).max(64),
+        stagedPaths: z.array(SkillPathSchema).max(64).optional()
+      })
+    )
+  })
+)

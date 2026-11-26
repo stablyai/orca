@@ -167,7 +167,8 @@ export function dispatchTerminalShortcutAction(
     }
     const dir = action.direction === 'next' ? 1 : -1
     manager.setActivePane(panes[(currentIdx + dir + panes.length) % panes.length].id, {
-      focus: true
+      focus: true,
+      interaction: 'user'
     })
     return
   }

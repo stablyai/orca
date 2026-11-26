@@ -199,7 +199,7 @@ export class CodexAccountRegistration {
     managedHomePath: string,
     accountId: string
   ): Promise<void> {
-    const canonicalConfig = this.dependencies.configMirror.readForManagedHome(managedHomePath)
+    const canonicalConfig = await this.dependencies.configMirror.readForManagedHome(managedHomePath)
     this.dependencies.configMirror.assertOAuthAccountAddAllowed(canonicalConfig)
     await this.dependencies.configMirror.safeSyncIntoManagedHome(
       managedHomePath,

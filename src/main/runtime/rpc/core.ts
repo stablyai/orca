@@ -3,6 +3,7 @@ import type { RuntimeClientCapabilities } from './callers/runtime-client-capabil
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { RelayPhoneReader } from '../mobile-desktop-relay/mobile-relay-host-rows-announcer'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type {
@@ -183,12 +184,17 @@ export type RpcContext = {
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  // Authenticated phones only: this host's current direct endpoints, so a moved address can be followed.
+  pairingDirectEndpoints?: () => Promise<string[]>
   pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {
-    list(): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
-    worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
+    list(
+      reader?: RelayPhoneReader
+    ): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
+    worktrees(hostId: string, reader?: RelayPhoneReader): Promise<MobileRelayHostWorktreesResult>
+    releaseRowHolds?(connectionId: string): void
   }
   // Authenticated runtime devices see which other desktops share this server.
   peerDesktops?: {

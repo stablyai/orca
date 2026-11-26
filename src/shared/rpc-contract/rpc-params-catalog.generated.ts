@@ -19,6 +19,7 @@ import {
   BotGroupStop,
   BotGroupUpdate
 } from '../bots/bot-group'
+import { BotOfferAnswerParams } from '../bots/bot-offer-answers'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelBeginParams,
@@ -70,6 +71,7 @@ import { DelegatedMobileDeviceSyncParamsSchema } from '../remote-runtime/pairing
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { DeclareOrcaAccountParamsSchema } from '../remote-runtime/pairing/paired-desktop-account-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { PairingGetDirectEndpointsParamsSchema } from '../remote-runtime/pairing/pairing-direct-endpoints-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
@@ -112,6 +114,7 @@ import {
 } from './accounts/usage-credentials-params'
 import {
   AgentActivityClearParams,
+  AgentActivityOrchestrationParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
 import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
@@ -1079,6 +1082,8 @@ import { WorktreeCreate, WorktreePrefetchCreateBase } from './workspaces/worktre
 import {
   WorktreeActivate,
   WorktreeArchive,
+  WorktreeAutoNameParams,
+  WorktreeAutoNameWaitParams,
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
@@ -1179,7 +1184,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.read': AgentReadParams,
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
-  'agentActivity.orchestration': null,
+  'agentActivity.orchestration': AgentActivityOrchestrationParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
@@ -1365,6 +1370,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.memory.forget': BotMemoryForget,
   'bots.memory.history': BotChat,
   'bots.memory.undo': BotMemoryUndo,
+  'bots.offer.answer': BotOfferAnswerParams,
   'bots.request.outcome': BotRequestOutcomeParams,
   'bots.roster': BotRoster,
   'bots.sendRunAgain': BotRunSendAgainParams,
@@ -1942,6 +1948,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mcpServers.signOut': McpServerTarget,
   'mcpServers.update': McpServerUpdate,
   'mobileRelay.hosts.list': null,
+  'mobileRelay.hosts.unwatchRows': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,
   'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
@@ -2051,6 +2058,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
+  'pairing.getDirectEndpoints': PairingGetDirectEndpointsParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
@@ -2304,6 +2312,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
+  'worktree.autoName.availability': WorktreeAutoNameParams,
+  'worktree.autoName.dismiss': WorktreeAutoNameParams,
+  'worktree.autoName.retry': WorktreeAutoNameParams,
+  'worktree.autoName.wait': WorktreeAutoNameWaitParams,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,

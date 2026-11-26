@@ -1,6 +1,11 @@
 import type React from 'react'
 import { AppWindow } from 'lucide-react'
 import type { OpenInApplication } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import antigravityIconUrl from '../../../../../shared/agent-icons/antigravity.png?url'
+import cursorIconUrl from '../../../../../shared/agent-icons/cursor.png?url'
+import devinIconUrl from '../../../../../shared/agent-icons/devin.png?url'
+import vscodeIconUrl from '@/assets/editor-brands/vscode.png?url'
+import zedIconUrl from '@/assets/editor-brands/zed.png?url'
 import { cn } from '../../class-names'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -10,7 +15,7 @@ export type OpenInAppPreset = {
   id: string
   label: string
   command: string
-  faviconDomain: string
+  iconUrl: string
   iconClassName?: string
 }
 
@@ -19,33 +24,33 @@ export const getOpenInAppPresets = createLocalizedCatalog(() => [
     id: 'vscode',
     label: translate('auto.lib.open.in.app.catalog.173553f73a', 'VS Code'),
     command: BUILT_IN_EDITOR_COMMANDS.vscode,
-    faviconDomain: 'code.visualstudio.com'
+    iconUrl: vscodeIconUrl
   },
   {
     id: 'cursor',
     label: translate('auto.lib.open.in.app.catalog.d62b12e98a', 'Cursor'),
     command: BUILT_IN_EDITOR_COMMANDS.cursor,
-    faviconDomain: 'cursor.com'
+    iconUrl: cursorIconUrl
   },
   {
     id: 'zed',
     label: translate('auto.lib.open.in.app.catalog.f8b8ca2711', 'Zed'),
     command: BUILT_IN_EDITOR_COMMANDS.zed,
-    faviconDomain: 'zed.dev',
-    // Why: Zed's favicon is a black transparent mark, which disappears on dark menus.
+    iconUrl: zedIconUrl,
+    // Why: Zed's mark is black on transparent, so it disappears on dark menus.
     iconClassName: 'dark:invert'
   },
   {
     id: 'devin-desktop',
     label: translate('settings.openInApp.preset.devinDesktop', 'Devin Desktop'),
     command: BUILT_IN_EDITOR_COMMANDS['devin-desktop'],
-    faviconDomain: 'devin.ai'
+    iconUrl: devinIconUrl
   },
   {
     id: 'antigravity-ide',
     label: translate('settings.openInApp.preset.antigravityIde', 'Antigravity IDE'),
     command: BUILT_IN_EDITOR_COMMANDS['antigravity-ide'],
-    faviconDomain: 'antigravity.google'
+    iconUrl: antigravityIconUrl
   }
 ])
 
@@ -76,7 +81,7 @@ export function OpenInApplicationIcon({
   if (preset) {
     return (
       <img
-        src={`https://www.google.com/s2/favicons?domain=${preset.faviconDomain}&sz=64`}
+        src={preset.iconUrl}
         width={size}
         height={size}
         alt=""

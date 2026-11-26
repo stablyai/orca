@@ -236,6 +236,8 @@ type ProviderSegmentProps = {
   /** Remote host the readings come from; the chip tooltip would otherwise hide the row's. */
   hostLabel?: string
   countdownActive?: boolean
+  /** Off-layout copy read only for its width: tooltips can't change width, so it builds none. */
+  measuring?: boolean
 }
 
 /** A chip in the clipping status bar row: clipped chips stop their countdown wakes. */
@@ -255,7 +257,8 @@ export function ProviderSegment({
   mode = 'verbose',
   barMode = mode,
   hostLabel,
-  countdownActive = true
+  countdownActive = true,
+  measuring = false
 }: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
@@ -310,7 +313,7 @@ export function ProviderSegment({
     return (
       <span
         className="inline-flex items-center gap-1 text-muted-foreground"
-        title={getProviderUsageErrorMessage(p, t)}
+        title={measuring ? undefined : getProviderUsageErrorMessage(p, t)}
       >
         <ProviderIcon provider={provider} />
         {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
@@ -338,8 +341,8 @@ export function ProviderSegment({
 
   // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
   const compactTitle =
-    mode === 'compact' && tightest
-      ? [formatUsageChipTitle(p, display, t), hostLabel].filter(Boolean).join('\n')
+    mode === 'compact' && tightest && !measuring
+      ? [formatUsageChipTitle(p, sections[0], display, t), hostLabel].filter(Boolean).join('\n')
       : undefined
 
   return (
