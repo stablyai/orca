@@ -20,17 +20,15 @@ import {
   nativeChatNotesComposer,
   nativeChatNotesScopeKey,
   nativeChatNotesStillInDraft,
-  NativeChatNotesSupersededError,
   assertNativeChatNotesSoleEditor,
+  nativeChatNotesHandOffErrorText,
+  nativeChatNotesSoleEditor,
   sameNativeChatNotes,
   settleNativeChatHeldHandOff,
   NativeChatNotesEditedElsewhereError,
   settleNativeChatNotesReplacement,
-  NativeChatNotesAlreadyAddedError,
-  NativeChatNotesTooLargeError,
   captureNativeChatNotesSend,
   submitNativeChatNotesIfApproved,
-  NativeChatNotesUnsavedError,
   type NativeChatNotesComposer
 } from './native-chat-notes-handoff'
 import {
@@ -223,34 +221,7 @@ export function useNativeChatNotesDelivery({
         }
       } catch (error) {
         console.error('[native-chat] notes hand-off failed', error)
-        showError(
-          error instanceof NativeChatNotesUnsavedError
-            ? unsavedMessage
-            : error instanceof NativeChatNotesEditedElsewhereError
-              ? t(
-                  'components.native-chat.notes.editedElsewhere',
-                  'This image is open for editing in another window. Finish there first; your notes are still here.'
-                )
-              : error instanceof NativeChatNotesAlreadyAddedError
-                ? t(
-                    'components.native-chat.notes.alreadyAdded',
-                    'These notes were already added to your message from another window.'
-                  )
-                : error instanceof NativeChatNotesTooLargeError
-                  ? t(
-                      'components.native-chat.notes.annotateTooLarge',
-                      'This image is too large to draw notes on (over 33 megapixels).'
-                    )
-                  : error instanceof NativeChatNotesSupersededError
-                    ? t(
-                        'components.native-chat.notes.imageChanged',
-                        'This image left the message box. Your notes are still here.'
-                      )
-                    : t(
-                        'components.native-chat.notes.prepareFailed',
-                        'Couldn’t prepare the marked image. Your notes are still here.'
-                      )
-        )
+        showError(nativeChatNotesHandOffErrorText(t, error))
       }
       busyRef.current = false
       kept.end(handed)
@@ -272,8 +243,7 @@ export function useNativeChatNotesDelivery({
       showError,
       source,
       t,
-      title,
-      unsavedMessage
+      title
     ]
   )
 
@@ -292,6 +262,11 @@ export function useNativeChatNotesDelivery({
     }
     const scopeKey = composer?.scopeKey ?? nativeChatNotesScopeKey(opener.current)
     if (initialNotes?.length && notes.length === 0 && onCleared && scopeKey) {
+      // Clearing puts the clean image in the chip's place: not while another viewer edits it.
+      if (!nativeChatNotesSoleEditor(scopeKey, replacesAttachmentId)) {
+        showError(nativeChatNotesHandOffErrorText(t, new NativeChatNotesEditedElsewhereError()))
+        return
+      }
       const putBack = onCleared()
       showNativeChatNotesNotice(scopeKey, {
         text: t('components.native-chat.notes.notesRemoved', '{{count}} notes removed', {

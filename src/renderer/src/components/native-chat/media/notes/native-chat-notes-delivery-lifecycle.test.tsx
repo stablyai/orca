@@ -239,3 +239,52 @@ it('a reopened chip whose marked copy can’t be attached keeps the chip and the
   expect(readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual(['chip'])
   end()
 })
+
+it('clearing every note of a chip another viewer still edits leaves the chip to that viewer', async () => {
+  const { handle, opener } = chat(async () => null)
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'chip', path: '/c.png' }] })
+  setNativeChatAttachmentNotes(SCOPE, 'chip', {
+    mediaName: 'a.png',
+    source: { path: '/a.png' },
+    kind: 'image',
+    notes: [note(1)],
+    offset: 0
+  })
+  const endFirst = markNativeChatNotedImageEditing(SCOPE, 'chip')
+  const endSecond = markNativeChatNotedImageEditing(SCOPE, 'chip')
+  const onCleared = vi.fn(() => () => {})
+  const onOpenChange = vi.fn()
+  // This viewer removed every note; closing would put the clean image in the chip's place.
+  const view = renderHook(() => {
+    const editor = useNativeChatNotesEditor({ notes: [] })
+    return useNativeChatNotesDelivery({
+      opener,
+      loaded: CLEAR_LOADED,
+      editor,
+      title: 'a.png',
+      source: CLEAR_SOURCE,
+      offset: 0,
+      initialNotes: CLEAR_INITIAL,
+      onAttached: undefined,
+      onCleared,
+      replacesAttachmentId: 'chip',
+      onOpenChange,
+      showPanel: noop,
+      onRestored: noop
+    })
+  })
+  await act(async () => {
+    await view.result.current.close()
+  })
+  expect(onCleared).not.toHaveBeenCalled()
+  expect(onOpenChange).not.toHaveBeenCalled()
+  expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
+  expect(readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual(['chip'])
+  endFirst()
+  endSecond()
+})
+
+const CLEAR_LOADED = { size: { width: 10, height: 10 }, image: new Image() }
+const CLEAR_SOURCE = { path: '/a.png' }
+const CLEAR_INITIAL = [note(1)]
+const noop = (): void => {}

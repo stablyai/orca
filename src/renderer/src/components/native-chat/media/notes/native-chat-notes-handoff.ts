@@ -18,6 +18,22 @@ import {
   type NativeChatNotesSource
 } from './native-chat-attachment-notes'
 import { drawNativeChatNotesImage } from './native-chat-media-notes-draw'
+import {
+  NativeChatNotesAlreadyAddedError,
+  NativeChatNotesEditedElsewhereError,
+  NativeChatNotesSupersededError,
+  NativeChatNotesTooLargeError,
+  NativeChatNotesUnsavedError
+} from './native-chat-notes-handoff-errors'
+
+export {
+  NativeChatNotesAlreadyAddedError,
+  NativeChatNotesEditedElsewhereError,
+  NativeChatNotesSupersededError,
+  NativeChatNotesTooLargeError,
+  NativeChatNotesUnsavedError
+}
+export { nativeChatNotesHandOffErrorText } from './native-chat-notes-handoff-errors'
 import { nativeChatNotedImageEditedByOthers } from './native-chat-chip-notes'
 import { NATIVE_CHAT_NOTES_MAX_SOURCE_PIXELS } from './native-chat-notes-reasons'
 import {
@@ -56,27 +72,6 @@ export function nativeChatNotesScopeKey(from: Element | null): string | undefine
   return composers ? [...composers].at(-1)?.dataset.nativeChatComposerScope : undefined
 }
 
-/** Storage refused the notes: they are only in this window's memory. */
-export class NativeChatNotesUnsavedError extends Error {
-  constructor() {
-    super('The notes could not be saved.')
-  }
-}
-
-/** Another viewer of the same held notes already added them to the message. */
-export class NativeChatNotesAlreadyAddedError extends Error {
-  constructor() {
-    super('These held notes were already added from another viewer.')
-  }
-}
-
-/** Another viewer still has the chip these notes would replace open for editing. */
-export class NativeChatNotesEditedElsewhereError extends Error {
-  constructor() {
-    super('The image is open for editing in another viewer.')
-  }
-}
-
 /** Whether the notes are exactly these: same marks, words, numbers and times, in the same order. */
 export function sameNativeChatNotes(
   notes: readonly NativeChatMediaNote[],
@@ -85,21 +80,22 @@ export function sameNativeChatNotes(
   return JSON.stringify(notes) === JSON.stringify(other)
 }
 
+/** Whether no other viewer, here or in another window, has the chip these notes replace open. */
+export function nativeChatNotesSoleEditor(
+  scopeKey: string,
+  replacedId: string | undefined
+): boolean {
+  return !replacedId || !nativeChatNotedImageEditedByOthers(scopeKey, replacedId)
+}
+
 /** Replacing a reopened chip while another viewer edits it would end that edit under it: refused,
  *  with the words kept here. */
 export function assertNativeChatNotesSoleEditor(
   scopeKey: string,
   replacedId: string | undefined
 ): void {
-  if (replacedId && nativeChatNotedImageEditedByOthers(scopeKey, replacedId)) {
+  if (!nativeChatNotesSoleEditor(scopeKey, replacedId)) {
     throw new NativeChatNotesEditedElsewhereError()
-  }
-}
-
-/** The media grew past what notes are drawn on since they were made (a held image changed). */
-export class NativeChatNotesTooLargeError extends Error {
-  constructor() {
-    super('The image is too large to draw notes on.')
   }
 }
 
@@ -119,13 +115,6 @@ export function settleNativeChatHeldHandOff(
     throw new NativeChatNotesAlreadyAddedError()
   }
   void handOffHeldNativeChatNotes(claim, ids)
-}
-
-/** What the notes replace left the draft while they were prepared. */
-export class NativeChatNotesSupersededError extends Error {
-  constructor() {
-    super('The image these notes replace is no longer in the draft.')
-  }
 }
 
 /** What a hand-off's `onAttached` returned, settled: false means the image these notes replace left
