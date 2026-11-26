@@ -285,7 +285,7 @@ function getSharedControlConnection(
         // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
         appHeartbeat: {},
         // Ready for one link; used only once the host's status lists binary channels.
-        binaryChannels: remoteRuntimeOneLinkAllowed(),
+        binaryChannels: remoteRuntimeOneLinkAllowed(environmentId),
         // R39: every ready socket, including after a reconnect, re-declares this installation, and
         // the Orca account it is signed in to.
         onReady: async () => {

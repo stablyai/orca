@@ -1,25 +1,13 @@
 // One link per host through a stand-in Relay cell with the cell's real limits: calls, JSON streams
 // and several credit-windowed binary streams share one socket, survive a cut mid-burst and a slow
-// client, and no frame ever reaches the wrong stream.
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+// client, and no frame ever reaches the wrong stream. A cut ends each binary stream, as its own
+// socket's close did, and its owner reopens it; JSON streams replay on the new socket.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
-import {
-  clearRemoteRuntimeOneLink,
-  setRemoteRuntimeOneLink
-} from '../../../../shared/remote-runtime/control/remote-runtime-one-link'
 import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { defineMethod, defineStreamingMethod } from '../core'
-import { STATUS_METHODS } from '../methods/host-management/status'
-import { OrcaRuntimeService } from '../../orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { startRelayCellStandIn } from '../testing/relay-cell-stand-in'
+import { startOneLinkHostBehindCell } from '../testing/one-link-host-behind-cell'
 
 const FRAME_BYTES = 16 * 1024
 // Like a terminal stream's ack window: the host sends at most this far ahead of the client's acks.
@@ -97,69 +85,50 @@ afterEach(async () => {
   }
 })
 
-async function startHostBehindCell() {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-one-link-'))
-  const server = new OrcaRuntimeRpcServer({
-    runtime: new OrcaRuntimeService(),
-    userDataPath,
-    enableWebSocket: true,
-    wsPort: 0,
-    methods: [...STATUS_METHODS, burst, ticks, big]
-  })
-  await server.start()
-  cleanups.push(async () => {
-    await server.stop().catch(() => {})
-    rmSync(userDataPath, { recursive: true, force: true })
-  })
-  const offer = server.createPairingOffer({ address: '127.0.0.1', scope: 'runtime', name: 'Desk' })
-  if (!offer.available) {
-    throw new Error('WebSocket pairing unavailable')
-  }
-  const direct = pairedRuntimeConnectionFromOffer(parsePairingCode(offer.pairingUrl)!)
-  const cell = await startRelayCellStandIn(direct.endpoint)
-  cleanups.push(() => cell.close())
-  const connection = { ...direct, endpoint: cell.url }
-  const link = new RemoteRuntimeSharedControlConnection(connection, {
-    environmentId: 'one-link-test',
-    binaryChannels: true,
-    appHeartbeat: {}
-  })
-  setRemoteRuntimeOneLink('one-link-test', connection, () => link)
-  cleanups.push(() => {
-    clearRemoteRuntimeOneLink('one-link-test')
-    link.close()
-  })
-  return { server, cell, connection, link }
-}
+const startHostBehindCell = () => startOneLinkHostBehindCell([burst, ticks, big], cleanups)
 
-type Stream = { tag: number; frames: number; wrong: number; close: () => void }
+type Stream = { tag: number; frames: number; wrong: number; ends: number; close: () => void }
 
+// Like a terminal pane's owner: a stream that ends with its socket is opened again.
 async function openBurst(
   connection: Parameters<typeof subscribeRemoteRuntimeTransport>[0],
   tag: number
 ): Promise<Stream> {
-  const stream: Stream = { tag, frames: 0, wrong: 0, close: () => {} }
-  let ack: (bytes: Uint8Array) => boolean = () => false
-  const subscription = await subscribeRemoteRuntimeTransport(
-    connection,
-    'test.burst',
-    { tag },
-    10_000,
-    {
-      onResponse: () => {},
-      onBinary: (bytes) => {
-        if (bytes[0] === tag && bytes.byteLength === FRAME_BYTES) {
-          stream.frames += 1
-        } else {
-          stream.wrong += 1
+  const stream: Stream = { tag, frames: 0, wrong: 0, ends: 0, close: () => {} }
+  let closedByOwner = false
+  const open = async (): Promise<void> => {
+    let ack: (bytes: Uint8Array) => boolean = () => false
+    const subscription = await subscribeRemoteRuntimeTransport(
+      connection,
+      'test.burst',
+      { tag },
+      20_000,
+      {
+        onResponse: () => {},
+        onBinary: (bytes) => {
+          if (bytes[0] === tag && bytes.byteLength === FRAME_BYTES) {
+            stream.frames += 1
+          } else {
+            stream.wrong += 1
+          }
+          ack(Uint8Array.of(tag, 1))
+        },
+        onError: () => {},
+        onClose: () => {
+          stream.ends += 1
+          if (!closedByOwner) {
+            void open()
+          }
         }
-        ack(Uint8Array.of(tag, 1))
-      },
-      onError: () => {}
+      }
+    )
+    ack = subscription.sendBinary
+    stream.close = () => {
+      closedByOwner = true
+      subscription.close()
     }
-  )
-  ack = subscription.sendBinary
-  stream.close = subscription.close
+  }
+  await open()
   return stream
 }
 
@@ -185,7 +154,8 @@ describe('one link per host through a Relay cell', () => {
     })
     expect(server.readClientActivity().openConnections).toBeLessThanOrEqual(1)
 
-    // Cut mid-burst: every stream comes back on the new link with only its own frames.
+    // Cut mid-burst: every binary stream ends once and its owner reopens it on the new link, with
+    // only its own frames; the JSON stream replays by itself.
     const before = streams.map((s) => s.frames)
     const ticksBefore = tickCount
     cell.cut()
@@ -198,9 +168,10 @@ describe('one link per host through a Relay cell', () => {
     )
     expect((await link.request('status.get', { probe: true }, 10_000)).ok).toBe(true)
     expect(streams.map((s) => s.wrong)).toEqual([0, 0, 0])
+    expect(streams.map((s) => s.ends)).toEqual([1, 1, 1])
     expect(cell.limitCloses).toEqual([])
 
-    // The cut ended the old bursts; exactly one of each runs on the new link.
+    // The cut ended the old bursts on the host too; exactly one of each runs on the new link.
     expect([...runningBursts.entries()].sort()).toEqual([
       [1, 1],
       [2, 1],
@@ -234,6 +205,7 @@ describe('one link per host through a Relay cell', () => {
     })
     expect(cell.limitCloses).toEqual([])
     expect(streams.map((s) => s.wrong)).toEqual([0, 0])
+    expect(streams.map((s) => s.ends)).toEqual([0, 0])
     expect(link.getDiagnostics().reconnectAttempt).toBe(0)
   }, 60_000)
 })

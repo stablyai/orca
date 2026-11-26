@@ -118,6 +118,8 @@ export type RpcRequest = {
   executionHost?: unknown
   // Untrusted: the binary channel this stream's frames ride (runtime-binary-channel.ts).
   binaryChannel?: unknown
+  // What the stream on that channel would have declared on a socket of its own.
+  binaryChannelCapabilities?: unknown
 }
 
 export type LegacyCoordinatorAuthorityProof = Readonly<{

@@ -95,7 +95,7 @@ export class RemoteRuntimeSharedControlConnection {
     callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>,
     signal?: AbortSignal,
     /** A stream that would otherwise need a socket of its own: it gets a binary channel. */
-    stream?: { binaryChannel: boolean }
+    stream?: Parameters<SharedControlRequests['subscribe']>[5]
   ) {
     return this.requests.subscribe<TResult>(method, params, timeoutMs, callbacks, signal, stream)
   }
@@ -106,9 +106,7 @@ export class RemoteRuntimeSharedControlConnection {
     this.retryEpoch += 1
     this.socketGeneration.invalidate()
     this.reconnect.clear()
-    for (const subscription of Array.from(this.subscriptions.values())) {
-      this.closeSubscription(subscription.requestId)
-    }
+    Array.from(this.subscriptions.keys()).forEach((id) => this.closeSubscription(id))
     this.closeSocket(error)
     this.publishDiagnostics()
   }
@@ -296,7 +294,7 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private closeSocket(error?: Error, options: SharedControlTypes.CloseSocketOptions = {}): void {
-    closeSharedControlSocket({
+    const notifyEndedStreams = closeSharedControlSocket({
       reportClose: () => this.diagnostics.markSocketClosed(options.close ?? LOCAL_CLOSE),
       environmentId: this.options.environmentId,
       state: this.state,
@@ -312,5 +310,6 @@ export class RemoteRuntimeSharedControlConnection {
     this.channel = null
     this.state = 'closed'
     this.publishDiagnostics()
+    notifyEndedStreams()
   }
 }

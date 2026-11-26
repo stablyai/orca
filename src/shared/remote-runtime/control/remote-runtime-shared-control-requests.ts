@@ -7,6 +7,7 @@ import { sendSharedControlSubscription } from './remote-runtime-shared-control-s
 import type { SharedControlRetiredRequestIds } from '../requests/remote-runtime-shared-control-retired-request-ids'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
 import type { SharedControlBinaryChannels } from './remote-runtime-shared-control-binary-channels'
+import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 
 export class SharedControlRequests {
   constructor(
@@ -68,9 +69,13 @@ export class SharedControlRequests {
     timeoutMs: number,
     callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>,
     signal?: AbortSignal,
-    stream?: { binaryChannel: boolean }
+    /** A stream that would otherwise need a socket of its own: it gets a binary channel. */
+    stream?: Pick<
+      SharedControlTypes.SharedControlLogicalSubscription<unknown>,
+      'channelCapabilities' | 'idlePassive'
+    > & { binaryChannel: true }
   ): Promise<SharedControlTypes.RemoteRuntimeSharedSubscription> {
-    const binaryChannels = stream?.binaryChannel ? this.host.binaryChannels() : null
+    const binaryChannels = stream ? this.host.binaryChannels() : null
     return startSharedControlSubscription({
       subscriptions: this.host.subscriptions,
       deviceToken: this.host.connection().credential.deviceToken,
@@ -89,12 +94,24 @@ export class SharedControlRequests {
       closeSubscription: (requestId) => this.host.closeSubscription(requestId),
       binaryChannel: binaryChannels
         ? {
-            assign: (subscription) => binaryChannels.assign(subscription),
+            assign: (subscription) => binaryChannels.assign(subscription, stream!),
             sendBinary: (subscription, bytes) => binaryChannels.sendData(subscription, bytes),
-            sendRequest: (subscription, method, params, timeoutMs) =>
-              this.request(method, params, timeoutMs, undefined, undefined, {
-                binaryChannel: subscription.binaryChannel
+            // A call on an ended stream would open its channel anew on the host; refuse it as the
+            // stream's own socket did once closed.
+            sendRequest: (subscription, method, params, timeoutMs) => {
+              const ended = (): boolean => subscription.closed || !subscription.sent
+              if (ended()) {
+                return Promise.reject(remoteRuntimeUnavailableError('The stream has ended.'))
+              }
+              return this.request(method, params, timeoutMs, undefined, undefined, {
+                binaryChannel: subscription.binaryChannel,
+                beforeSend: () => {
+                  if (ended()) {
+                    throw remoteRuntimeUnavailableError('The stream has ended.')
+                  }
+                }
               })
+            }
           }
         : undefined
     })

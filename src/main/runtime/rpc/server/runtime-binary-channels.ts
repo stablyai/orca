@@ -8,8 +8,14 @@ import {
 } from '../../../../shared/remote-runtime/protocol/runtime-binary-channel'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
+import { RuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
 
-type OpenChannel = { connectionId: string; abort: AbortController }
+type OpenChannel = {
+  connectionId: string
+  abort: AbortController
+  capabilities: RuntimeClientCapabilities
+}
 
 export type OpenedBinaryChannel = {
   /** The stream's own connection id: its binary handlers and cleanups live under it. */
@@ -17,6 +23,8 @@ export type OpenedBinaryChannel = {
   /** Aborts when the client closes the channel or the socket closes. */
   signal: AbortSignal
   sendBinary: RpcBinarySender
+  /** What the stream's own socket would have declared, set by the request that opened it. */
+  capabilities: RuntimeClientCapabilities
   /** Releases the channel if this request opened it; a request that joined it leaves it open. */
   release: () => void
 }
@@ -45,7 +53,8 @@ export class RuntimeBinaryChannels {
   open(
     socketConnectionId: string,
     channel: number,
-    sendBinary: RpcBinarySender
+    sendBinary: RpcBinarySender,
+    capabilities: readonly RuntimeCapability[]
   ): OpenedBinaryChannel | { error: string } {
     let channels = this.bySocket.get(socketConnectionId)
     let current = channels?.get(channel)
@@ -58,7 +67,12 @@ export class RuntimeBinaryChannels {
         channels = new Map()
         this.bySocket.set(socketConnectionId, channels)
       }
-      current = { connectionId: `${socketConnectionId}#${channel}`, abort: new AbortController() }
+      current = {
+        connectionId: `${socketConnectionId}#${channel}`,
+        abort: new AbortController(),
+        capabilities: new RuntimeClientCapabilities()
+      }
+      current.capabilities.replace(capabilities)
       channels.set(channel, current)
     }
     const table = channels!
@@ -66,6 +80,7 @@ export class RuntimeBinaryChannels {
     return {
       connectionId: open.connectionId,
       signal: open.abort.signal,
+      capabilities: open.capabilities,
       sendBinary: (bytes, options) =>
         table.get(channel) === open && bytes.byteLength <= MAX_CHANNEL_PAYLOAD_BYTES
           ? sendBinary(

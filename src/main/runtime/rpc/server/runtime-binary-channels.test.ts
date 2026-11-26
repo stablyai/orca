@@ -44,7 +44,7 @@ function host(releaseConnection?: (connectionId: string) => void) {
     }
   }
   const open = (channel: number, send: OpenedBinaryChannel['sendBinary'] = () => true) => {
-    const opened = channels.open('socket', channel, send)
+    const opened = channels.open('socket', channel, send, [])
     if ('error' in opened) {
       throw new Error(opened.error)
     }
@@ -132,12 +132,14 @@ describe('runtime binary channels', () => {
     for (let channel = 2; channel <= MAX_OPEN_BINARY_CHANNELS; channel += 1) {
       open(channel)
     }
-    expect(channels.open('socket', MAX_OPEN_BINARY_CHANNELS + 1, () => true)).toEqual({
+    expect(channels.open('socket', MAX_OPEN_BINARY_CHANNELS + 1, () => true, [])).toEqual({
       error: 'Too many binary channels are open on this connection.'
     })
     first.release()
     expect(first.signal.aborted).toBe(true)
-    expect('error' in channels.open('socket', MAX_OPEN_BINARY_CHANNELS + 1, () => true)).toBe(false)
+    expect('error' in channels.open('socket', MAX_OPEN_BINARY_CHANNELS + 1, () => true, [])).toBe(
+      false
+    )
   })
 
   it('releases every channel on socket close even when one cleanup throws', () => {

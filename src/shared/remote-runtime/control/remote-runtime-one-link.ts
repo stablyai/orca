@@ -9,6 +9,8 @@ import type {
 import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 import type { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import { SharedControlBinaryChannels } from './remote-runtime-shared-control-binary-channels'
+import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
+import { unshippedTestSwitchOn } from '../../app-lifecycle/unshipped-test-switch'
 
 /**
  * Hosts whose client carries everything on one connection: calls, every stream and their binary.
@@ -30,8 +32,9 @@ function envFlag(name: string): boolean {
   return typeof process !== 'undefined' && process.env?.[name] === '1'
 }
 
+/** Never on in a shipped build, whatever its environment says. */
 export function remoteRuntimeOneLinkTestSwitchOn(): boolean {
-  return envFlag(ONE_LINK_TEST_SWITCH) && !envFlag(ONE_LINK_LOCAL_KILL)
+  return unshippedTestSwitchOn(ONE_LINK_TEST_SWITCH) && !envFlag(ONE_LINK_LOCAL_KILL)
 }
 
 export function remoteRuntimeOneLinkLocallyDisabled(): boolean {
@@ -115,13 +118,17 @@ export async function sendRemoteRuntimeRequestOnOneLink<TResult>(
   }
 ): Promise<RuntimeRpcResponse<TResult>> {
   let params = call.params
+  // The status and the call it vets must reach one socket, as on a socket of its own: a link that
+  // reconnects between them may have reached a restarted host.
+  let statusSocket: number | null = null
   if (call.validateStatus || call.requestSelection) {
     const status = await link.request<RuntimeStatus>(
       'status.get',
       undefined,
       call.timeoutMs,
       undefined,
-      call.signal
+      call.signal,
+      { beforeSend: () => void (statusSocket = link.socketGeneration.peek()) }
     )
     call.validateStatus?.(status)
     if (call.requestSelection) {
@@ -138,7 +145,12 @@ export async function sendRemoteRuntimeRequestOnOneLink<TResult>(
       prepareRequest: call.prepareRequest,
       prepareGuard: call.prepareGuard,
       responseTimeoutMs: call.responseTimeoutMs,
-      beforeSend: call.requestSelection?.onDispatch
+      beforeSend: () => {
+        if (statusSocket !== null && link.socketGeneration.peek() !== statusSocket) {
+          throw remoteRuntimeUnavailableError('Remote runtime connection changed before sending.')
+        }
+        call.requestSelection?.onDispatch?.()
+      }
     }
   )
   return await sent

@@ -5,11 +5,15 @@ import {
 import type { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { RUNTIME_BINARY_CHANNELS_CAPABILITY } from '../../../../shared/remote-runtime/protocol/runtime-binary-channel'
+import { isWslOrcadEnvironmentId } from '../../../wsl/orcad/wsl-orcad-environment-id'
 
-/** Whether a host that takes binary channels gets one link for everything. Direct hosts only
- *  under the test switch; support's local off switch wins over it. */
-export function remoteRuntimeOneLinkAllowed(): boolean {
-  return remoteRuntimeOneLinkTestSwitchOn()
+/**
+ * Whether a host that takes binary channels gets one link for everything. Direct hosts only under
+ * the test switch (never in a shipped build); support's local off switch wins over it. A WSL host
+ * keeps a socket per stream: an open browser pane's own socket is what holds it awake.
+ */
+export function remoteRuntimeOneLinkAllowed(environmentId: string): boolean {
+  return remoteRuntimeOneLinkTestSwitchOn() && !isWslOrcadEnvironmentId(environmentId)
 }
 
 /**
@@ -23,7 +27,7 @@ export function noteOneLinkHostCapabilities(
   control: () => RemoteRuntimeSharedControlConnection
 ): void {
   const oneLink =
-    remoteRuntimeOneLinkAllowed() &&
+    remoteRuntimeOneLinkAllowed(environmentId) &&
     (hostCapabilities?.includes(RUNTIME_BINARY_CHANNELS_CAPABILITY) ?? false)
   setRemoteRuntimeOneLink(environmentId, pairedConnection, oneLink ? control : null)
 }

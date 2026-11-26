@@ -1,4 +1,6 @@
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import {
+  BINARY_CHANNEL_HEADER_BYTES,
   BinaryChannelOpcode,
   decodeBinaryChannelFrame,
   encodeBinaryChannelFrame,
@@ -7,6 +9,9 @@ import {
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
 
 const EMPTY = new Uint8Array()
+// What fits a stream's own socket fits its channel; one oversized frame must fail only its send.
+const MAX_CHANNEL_PAYLOAD_BYTES =
+  REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES - BINARY_CHANNEL_HEADER_BYTES
 // Ended streams leave a stale owner entry until the next miss; sweep well before it matters.
 const STALE_OWNER_SWEEP_AT = 64
 
@@ -27,7 +32,10 @@ export class SharedControlBinaryChannels {
     }
   ) {}
 
-  assign(subscription: SharedControlLogicalSubscription<unknown>): void {
+  assign(
+    subscription: SharedControlLogicalSubscription<unknown>,
+    stream: Pick<SharedControlLogicalSubscription<unknown>, 'channelCapabilities' | 'idlePassive'>
+  ): void {
     if (this.owners.size >= STALE_OWNER_SWEEP_AT) {
       for (const [channel, requestId] of this.owners) {
         if (!this.args.subscriptions.has(requestId)) {
@@ -37,6 +45,8 @@ export class SharedControlBinaryChannels {
     }
     this.lastChannel += 1
     subscription.binaryChannel = this.lastChannel
+    subscription.channelCapabilities = stream.channelCapabilities
+    subscription.idlePassive = stream.idlePassive
     this.owners.set(this.lastChannel, subscription.requestId)
   }
 
@@ -47,6 +57,7 @@ export class SharedControlBinaryChannels {
     const channel = subscription.binaryChannel
     return (
       channel !== undefined &&
+      payload.byteLength <= MAX_CHANNEL_PAYLOAD_BYTES &&
       subscription.sent &&
       !subscription.closed &&
       this.args.send(

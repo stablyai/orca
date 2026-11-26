@@ -45,7 +45,9 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   const oneLink = remoteRuntimeOneLinkFor(connection)
   if (oneLink) {
     return await oneLink.subscribe(method, params, timeoutMs, callbacks, options?.signal, {
-      binaryChannel: true
+      binaryChannel: true,
+      channelCapabilities: remoteRuntimeClientCapabilities(options?.clientCapabilities),
+      idlePassive: options?.idlePassive
     })
   }
   const requestId = randomUUID()

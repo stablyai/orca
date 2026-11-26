@@ -39,7 +39,11 @@ export function sendSharedControlSubscription(args: {
       params: args.subscription.params,
       ...(args.subscription.binaryChannel === undefined
         ? {}
-        : { binaryChannel: args.subscription.binaryChannel })
+        : {
+            binaryChannel: args.subscription.binaryChannel,
+            binaryChannelCapabilities: args.subscription.channelCapabilities,
+            ...(args.subscription.idlePassive ? { idlePassive: true } : {})
+          })
     })
   ) {
     args.subscription.sent = true

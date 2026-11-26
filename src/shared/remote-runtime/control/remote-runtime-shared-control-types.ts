@@ -50,8 +50,15 @@ export type SharedControlLogicalSubscription<TResult = unknown> = {
   pendingReplayTag?: boolean
   // While resubscribe awaits its ID, close must defer cleanup or leak the server’s new subscription.
   awaitingResubscribe?: boolean
-  /** The binary channel this stream rides on a connection that carries them; kept across replays. */
+  /**
+   * The binary channel of a stream that would have had a socket of its own. Such a stream ends
+   * when the connection's socket does, as its own socket's stream did; its owner reopens it.
+   */
   binaryChannel?: number
+  /** What the stream's own socket would have declared; the host reads the channel's calls by it. */
+  channelCapabilities?: readonly RuntimeCapability[]
+  /** Background traffic, as the stream's own socket marked its opening request. */
+  idlePassive?: boolean
 }
 
 export type SharedControlReadyWaiter = {
