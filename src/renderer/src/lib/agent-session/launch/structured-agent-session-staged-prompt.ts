@@ -135,8 +135,9 @@ export function stagedDeliveryFromSlotOutcome(
 /**
  * End a staged prompt by handing its message back without a send. The terminal result
  * (`handBackFinished`, plus `inComposer` for a durable write) is published to `prompt.delivery` and
- * `whenCreateSettled` BEFORE the prompt is unstaged: unstaging releases the reservation, whose own
- * generic "dropped" outcome would otherwise win the public race without the terminal signal.
+ * `whenCreateSettled` synchronously, then the prompt is unstaged. Unstaging releases the reservation,
+ * whose own generic "dropped" outcome arrives a microtask later and so can no longer win the public
+ * race without the terminal signal.
  */
 export function finishStagedLaunchPromptWithHandBack(
   prompt: StagedStructuredLaunchPrompt,
