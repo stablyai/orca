@@ -25,7 +25,7 @@ import {
 import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import { startsInChatLineage } from '../worker/start/worker-chat-lineage'
-import { isInBotHome } from '../../../../../../bots/bot-home-membership'
+import { isInBotHome } from '../../../../../bots/bot-home-membership'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
 export function dispatchStartsChatWorkers(

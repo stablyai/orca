@@ -64,6 +64,8 @@ export function workerStartedByBot(
   return false
 }
 
+export const startedForBot = workerStartedByBot
+
 /** Tells the CLI whether to keep the worker open when it asked nothing; older CLIs ignore it. */
 export function withKeepOpenDefault<T>(
   runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb' | 'bots'>,

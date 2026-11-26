@@ -9,7 +9,11 @@ import {
   DISPATCH_CONTEXT_COLUMN_LIST,
   REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST
 } from './row-column-lists'
-import { isEquivalentPaneKey } from './pane-key-match'
+import {
+  isEquivalentPaneKey,
+  paneKeyMatchSuffix,
+  REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL
+} from './pane-key-match'
 
 export type DispatchCreatorTurnSource = NonNullable<DispatchContextRow['creator_turn_source']>
 
@@ -92,11 +96,15 @@ function findPotentiallyLiveAttachmentsForCreator(
   const rows = this.db
     .prepare(
       `SELECT ${REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST} FROM remote_dispatch_attachments
-       WHERE process_incarnation = ?
+       WHERE ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         AND process_incarnation = ?
          AND pane_key IS NOT NULL
          AND ${potentiallyLiveRemoteAttachmentSql()}`
     )
-    .all(creator.processIncarnation) as RemoteDispatchAttachmentRow[]
+    .all(
+      paneKeyMatchSuffix(creator.paneKey),
+      creator.processIncarnation
+    ) as RemoteDispatchAttachmentRow[]
 
   return rows.filter((row) => isEquivalentPaneKey(row.pane_key!, creator.paneKey!))
 }
