@@ -20,6 +20,7 @@ import { WorkerThreadChildProcess } from '../worker-thread-child-process/worker-
 import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 import { awaitProviderChildSpawn } from './provider-child'
+import { resolveProviderSpawner } from './provider-worker-child-process'
 
 let requests: WorkerThreadChildRequest[]
 let child: WorkerThreadChildProcess
@@ -95,5 +96,56 @@ describe('agent launches on the Windows provider worker', () => {
     })
 
     await expect(listing).rejects.toMatchObject({ reason: 'spawn' })
+  })
+
+  it('closes a child whose reader paused stdout with output still buffered', async () => {
+    const agent = resolveProviderSpawner(undefined)!({ program: 'claude', args: [] })
+    let text = ''
+    agent.stdout!.on('data', (chunk: Buffer) => {
+      text += chunk.toString()
+      agent.stdout!.pause()
+    })
+    let closed = false
+    agent.on('close', () => {
+      closed = true
+    })
+    child.receive({ type: 'spawn', id: 3, pid: 4141 })
+    child.receive({ type: 'stdout', id: 3, chunk: output('first-') })
+    await vi.waitFor(() => expect(text).toBe('first-'))
+    child.receive({ type: 'stdout', id: 3, chunk: output('second') })
+    child.receive({ type: 'exit', id: 3, code: 0, signal: null })
+    child.receive({ type: 'close', id: 3, code: 0, signal: null })
+
+    await vi.waitFor(() => expect(closed).toBe(true))
+    expect(text).toBe('first-second')
+  })
+
+  it('credits the worker for output only once the reader has room for it', async () => {
+    const agent = resolveProviderSpawner(undefined)!({ program: 'claude', args: [] })
+    const credits = (): number[] =>
+      requests.flatMap((request) => (request.type === 'output-consumed' ? [request.bytes] : []))
+    child.receive({ type: 'spawn', id: 3, pid: 4141 })
+
+    child.receive({ type: 'stdout', id: 3, chunk: new Uint8Array(64 * 1024) })
+    child.receive({ type: 'stdout', id: 3, chunk: new Uint8Array(1024) })
+    expect(credits()).toEqual([])
+
+    agent.stdout!.resume()
+    await vi.waitFor(() => expect(credits()).toEqual([65 * 1024]))
+  })
+
+  it('stops holding the worker for a reader that destroyed its stream', async () => {
+    const agent = resolveProviderSpawner(undefined)!({ program: 'claude', args: [] })
+    child.receive({ type: 'spawn', id: 3, pid: 4141 })
+    child.receive({ type: 'stdout', id: 3, chunk: new Uint8Array(64 * 1024) })
+
+    agent.stdout!.destroy()
+    child.receive({ type: 'stdout', id: 3, chunk: new Uint8Array(1024) })
+
+    await vi.waitFor(() =>
+      expect(requests).toContainEqual({ type: 'discard-output', id: 3, stream: 'stdout' })
+    )
+    expect(requests).toContainEqual({ type: 'output-consumed', id: 3, bytes: 64 * 1024 })
+    expect(requests).toContainEqual({ type: 'output-consumed', id: 3, bytes: 1024 })
   })
 })

@@ -23,8 +23,8 @@ function outputDrained(stream: PassThrough): Promise<void> {
   if (stream.readableEnded || stream.destroyed) {
     return Promise.resolve()
   }
-  // A stream nobody reads never ends; Node's own child discards unread output the same way.
-  if (stream.readableFlowing === null) {
+  // An unread or paused stream never ends; Node's own child resumes both at exit the same way.
+  if (stream.readableFlowing !== true) {
     stream.resume()
   }
   return new Promise((resolve) => {
@@ -43,6 +43,7 @@ class ProviderWorkerChildProcess extends EventEmitter {
   readonly ready: Promise<void>
   private spawnFailed = false
   private outputEnded: Promise<void> | null = null
+  private readonly heldCredit = { stdout: 0, stderr: 0 }
 
   constructor(private readonly worker: WorkerThreadChildProcess) {
     super()
@@ -62,8 +63,15 @@ class ProviderWorkerChildProcess extends EventEmitter {
         callback()
       }
     })
-    worker.stdout.on('data', (chunk: Buffer) => this.stdout.write(chunk))
-    worker.stderr.on('data', (chunk: Buffer) => this.stderr.write(chunk))
+    worker.manualOutputCredit = true
+    for (const name of ['stdout', 'stderr'] as const) {
+      worker[name].on('data', (chunk: Buffer) => this.relayOutput(name, chunk))
+      // A reader that destroyed its stream takes no more output, so it must not hold the worker back.
+      this[name].once('close', () => {
+        this.releaseCredit(name)
+        worker.discardOutput(name)
+      })
+    }
     worker.on('spawn', () => this.emit('spawn'))
     worker.on('error', (error: Error) => this.fail(error))
     worker.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
@@ -93,6 +101,30 @@ class ProviderWorkerChildProcess extends EventEmitter {
     const sent = this.worker.kill(signal)
     this.killed ||= sent
     return sent
+  }
+
+  // Credit the worker only once the reader has room, so a paused or slow reader holds the worker back.
+  private relayOutput(name: 'stdout' | 'stderr', chunk: Buffer): void {
+    const stream = this[name]
+    if (stream.destroyed) {
+      this.worker.creditOutput(chunk.byteLength)
+      return
+    }
+    const waitingForDrain = this.heldCredit[name] > 0
+    this.heldCredit[name] += chunk.byteLength
+    if (!stream.write(chunk)) {
+      if (!waitingForDrain) {
+        stream.once('drain', () => this.releaseCredit(name))
+      }
+    } else if (!waitingForDrain) {
+      this.releaseCredit(name)
+    }
+  }
+
+  private releaseCredit(name: 'stdout' | 'stderr'): void {
+    const bytes = this.heldCredit[name]
+    this.heldCredit[name] = 0
+    this.worker.creditOutput(bytes)
   }
 
   private fail(error: Error): void {
