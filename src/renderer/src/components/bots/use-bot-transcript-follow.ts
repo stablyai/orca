@@ -95,20 +95,20 @@ export function useBotTranscriptFollow({
     { markProgrammaticScroll: marks.mark },
     scroll
   )
-  const { record: recordAnchor, clear: clearAnchor } = useBotTranscriptReaderAnchor({
+  const recordAnchor = useBotTranscriptReaderAnchor({
     scrollRef,
     contentRef,
     readerAtEnd: scroll.readerAtEnd,
     scrollTo
   })
-  const leaveEnd = scroll.readerLeavesEnd
+  const { scrollMessageToTop } = scroll
   const revealRow = useCallback(
-    (row: HTMLElement, behavior: ScrollBehavior): void => {
-      leaveEnd()
-      clearAnchor()
-      row.scrollIntoView({ block: 'start', behavior })
+    (row: HTMLElement) => {
+      scrollMessageToTop(row)
+      // A resize before the scroll event must preserve the newly revealed row.
+      recordAnchor()
     },
-    [clearAnchor, leaveEnd]
+    [recordAnchor, scrollMessageToTop]
   )
   const followScroll = scroll.onScroll
   const onScroll = useCallback(
@@ -139,9 +139,10 @@ export function useBotTranscriptFollow({
     toolRunScroll,
     showJump: scroll.showJump,
     jumpToLatest: scroll.scrollToBottom,
-    revealRow,
+    leaveEnd: scroll.readerLeavesEnd,
     forwardedGesture: reader.forwardedGesture,
     transcriptRef,
-    scrollMessageToTop: scroll.scrollMessageToTop
+    scrollMessageToTop,
+    revealRow
   }
 }

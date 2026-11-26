@@ -22,7 +22,8 @@ import {
 } from '../../../../shared/bots/bot-sidebar-workspaces'
 import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-list/drag/project-group-header-drop'
 import { BotRow } from './BotRow'
-import { BotSidebarChats, BotSidebarGroupReplies } from './BotSidebarChats'
+import { BotSidebarChats } from './BotSidebarChats'
+import { BotSidebarGroupReplies } from './BotSidebarGroupReplies'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
 import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
@@ -169,6 +170,7 @@ export function BotSidebarEntry({
           <BotSidebarList
             bot={bot}
             workspaces={workspaces}
+            allWorkspaces={ordered}
             lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
             activeLine={activeLine}
             onFoldBot={() => toggleCollapsedGroup(groupKey)}
@@ -185,6 +187,7 @@ export function BotSidebarEntry({
 function BotSidebarList({
   bot,
   workspaces,
+  allWorkspaces,
   lineageChildrenByParentIdentity,
   activeLine,
   onFoldBot,
@@ -192,6 +195,8 @@ function BotSidebarList({
 }: {
   bot: Bot
   workspaces: Worktree[]
+  /** Every worker line, sleeping ones too, for what the fold of old chats must see. */
+  allWorkspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
   onFoldBot: () => void
@@ -205,8 +210,14 @@ function BotSidebarList({
       setBotSidebarChildren(entryKey, { chats: chatTree.chats.length > 0 })
     }
   }, [entryKey, chatTree.state, chatTree.chats.length])
-  const { showAllWorkspaces, toggleWorkspaces, chatSteps, setChatSteps } =
-    useBotSidebarPaging(entryKey)
+  const {
+    showAllWorkspaces,
+    toggleWorkspaces,
+    chatSteps,
+    setChatSteps,
+    showOlderChats,
+    toggleOlderChats
+  } = useBotSidebarPaging(entryKey)
   // Once the host answers (or can't), the rows a reveal waits for are as listed as they will get.
   useBotsRevealSettle(entryKey, chatTree.state !== 'loading')
   if (chatTree.state === 'loading') {
@@ -219,10 +230,13 @@ function BotSidebarList({
         bot={bot}
         tree={chatTree}
         workspaces={workspaces}
+        allWorkspaces={allWorkspaces}
         lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
         activeLine={activeLine}
         steps={chatSteps}
         onStep={setChatSteps}
+        showOlder={showOlderChats}
+        onToggleOlder={toggleOlderChats}
         onOpen={onOpen}
         groupReplies={groupReplies}
       />

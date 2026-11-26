@@ -32,7 +32,13 @@ const failed: WorkerDockResult = {
   report: false
 }
 
-function Card({ result }: { result: WorkerDockResult }) {
+function Card({
+  result,
+  workspaceRemoved
+}: {
+  result: WorkerDockResult
+  workspaceRemoved?: boolean
+}) {
   return (
     <div className="h-[420px] bg-background">
       <WorkerDockResultDialog
@@ -43,6 +49,7 @@ function Card({ result }: { result: WorkerDockResult }) {
         onRestore={() => {}}
         onReturnFocus={() => {}}
         ownerActionsAvailable
+        workspaceRemoved={workspaceRemoved}
       />
     </div>
   )
@@ -84,6 +91,11 @@ async function expandDetails() {
 }
 
 export const cardFailed = defineFixture({ width: 720, render: () => <Card result={failed} /> })
+
+export const cardWorkspaceRemoved = defineFixture({
+  width: 720,
+  render: () => <Card result={failed} workspaceRemoved />
+})
 
 export const cardFailedDetails = defineFixture({
   width: 720,

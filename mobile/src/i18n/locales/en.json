@@ -878,7 +878,8 @@
       "tasks": "Tasks",
       "moreActions": "More actions",
       "automations": "Automations",
-      "sharedLinks": "Shared links"
+      "sharedLinks": "Shared links",
+      "mcpServers": "MCP servers"
     },
     "deleteConfirm": {
       "changes_one": "{{count}} uncommitted change",
@@ -1026,7 +1027,9 @@
       "tryAgain": "Try again",
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
-      "checkingHost": "Checking host"
+      "checkingHost": "Checking host",
+      "downloadingLatestApp": "Downloading the latest app",
+      "downloadProgressFromHost": "from {{host}} · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Update Orca",
@@ -1034,6 +1037,9 @@
       "updateMessageNoHost": "This screen needs a newer Orca.",
       "serverTitle": "Can’t reach this server",
       "serverMessage": "Your phone can’t reach this workspace’s server through {{host}}."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} of {{total}} MB"
     }
   },
   "navigation": {
@@ -1048,7 +1054,8 @@
       "changes": "Changes",
       "pullRequest": "Pull Request",
       "workspace": "Workspace",
-      "automations": "Automations"
+      "automations": "Automations",
+      "mcpServers": "MCP servers"
     }
   },
   "notifications": {
@@ -3941,7 +3948,8 @@
         "needsAuth_other": "{{count}} need sign-in",
         "failed": "{{count}} failed"
       },
-      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
+      "manage": "Manage MCP servers"
     },
     "selectionQuote": {
       "action": "Quote",
@@ -5726,6 +5734,7 @@
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
       "purposeLabel": "Identity",
+      "purposeTooLongForHost": "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
       "purposePlaceholder": "Who it is and what it does",
       "create": "Create",
       "fromTemplate": "Use template",
@@ -6620,7 +6629,9 @@
         "replaced": "The agent asked a new question. Read it, then reply.",
         "replacedByNewer": "Replaced by a newer question",
         "skipped": "Skipped",
-        "notNow": "Not now"
+        "notNow": "Not now",
+        "heldImagesLimit": "Your answers go as one comment, which takes up to {{max}} photos. Remove some and try again.",
+        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Remove some and try again."
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
@@ -7127,7 +7138,8 @@
       "removeVariableRow": "Remove variable",
       "emptyArgument": "Empty",
       "valueNew": "New value",
-      "valueSaved": "Saved"
+      "valueSaved": "Saved",
+      "hostMcpServers": "Your MCP servers"
     },
     "handToBot": {
       "menu": "Hand to bot…",
@@ -7966,7 +7978,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "pairedServers": {
       "heading": "Paired servers",
@@ -8336,6 +8351,12 @@
                 "message": "Claude usage updates the next time Claude runs."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Updates when Codex runs",
+                "message": "Codex usage updates the next time Codex runs."
+              }
+            },
             "1804cd8c3f": "Refreshing sign-in",
             "bf2e739f18": "Sign-in unavailable",
             "f8f0f9d8cc": "Network issue",
@@ -8559,5 +8580,98 @@
       "home": "A managed agent's Home Chat can't be deleted",
       "workerOwed": "An orchestration still waits on this chat"
     }
+  },
+  "mcpServers": {
+    "category": {
+      "coding": "Coding",
+      "chat": "Chat",
+      "monitoring": "Monitoring",
+      "docs": "Docs and projects",
+      "more": "More"
+    },
+    "searchApps": "Search apps",
+    "filterActive": "Filter, {{filter}}",
+    "filter": "Filter",
+    "allApps": "All apps",
+    "added": "Added",
+    "addTitle": "Add an MCP server",
+    "customServer": "Custom server",
+    "customServerLine": "URL, command or pasted config",
+    "noMatch": "No app matches “{{query}}”.",
+    "apps": "Apps",
+    "header": "Header",
+    "headerName": "Name",
+    "headerValue": "Value",
+    "removeHeader": "Remove header",
+    "headers": "Headers",
+    "headerEmpty": "Empty",
+    "addHeader": "Add header",
+    "addButton": "Add",
+    "sourceLabel": "Server URL or start command",
+    "sourcePlaceholder": "https://… or npx …",
+    "sourceNote": "Paste a server URL, a start command or an mcpServers config.",
+    "details": "Details",
+    "trust": "Only add software you trust.",
+    "serverType": "Server type",
+    "urlMode": "Connect to a URL",
+    "commandMode": "Run a command",
+    "serverName": "Server name",
+    "headersNone": "None",
+    "yours": "Yours",
+    "addServer": "Add a server",
+    "fromPlugins": "From plugins",
+    "inYourAgents": "In your agents",
+    "needsSignIn": "Needs sign-in",
+    "wontStart": "Won’t start",
+    "signIn": "Sign in",
+    "projectsOnly": "{{projects}} only",
+    "moreFor": "More for {{name}}",
+    "moveToOrca": "Move to Orca",
+    "copyToOrca": "Copy to Orca",
+    "signInAgain": "Sign in again",
+    "signOut": "Sign out",
+    "workspaces": "Workspaces",
+    "account": "Account",
+    "signedIn": "Signed in",
+    "agents": "Agents",
+    "turnAllOn": "Turn all on",
+    "agentsUnread": "Couldn’t read the agents on this computer.",
+    "agentBlocked": "Blocked by your organization’s Claude settings",
+    "advanced": "Advanced",
+    "sharedProcess": "Share one process across agents",
+    "sharedProcessNote": "Uses less memory. Runs outside the workspace folder.",
+    "removeServer": "Remove server",
+    "url": "URL",
+    "command": "Command",
+    "arguments": "Arguments",
+    "title": "MCP servers",
+    "reading": "Reading MCP servers…",
+    "unavailable": "MCP servers aren’t on {{host}}",
+    "signedInTo": "Signed in to {{app}}",
+    "allWorkspaces": "All workspaces",
+    "includingLater": "Including ones added later",
+    "appliesToNewNote": "Changes apply to new sessions.",
+    "allAgents": "All agents",
+    "agentsOf": "{{on}} of {{total}}",
+    "workspacesAll": "All",
+    "workspacesAllBut": "All but {{names}}",
+    "workspacesNone": "None",
+    "appliesToNew": "Applies to new sessions",
+    "restartSessions": "Restart {{count}} sessions",
+    "restarted": "Restarted {{count}} sessions",
+    "agentFileTitle": "Turn on {{server}} for {{agent}}?",
+    "agentFileMessage": "Orca will keep your MCP servers in {{agent}}’s settings file ({{file}}). Your own entries stay as they are.",
+    "agentFilesMessage": "Orca will keep your MCP servers in their settings files. Your own entries stay as they are.",
+    "allow": "Allow",
+    "removeTitle": "Remove {{name}}?",
+    "removeMessage": "New sessions won’t have it. You can add it again any time.",
+    "remove": "Remove",
+    "moveTitle": "Move {{name}} to Orca?",
+    "moveMessage": "Orca removes it from {{agents}} settings and keeps a backup.",
+    "move": "Move",
+    "workspacesCount": "{{count}} workspaces",
+    "workspacesAllButCount": "All but {{count}}",
+    "headerMissing": "Fill in {{header}} to add this server.",
+    "servers": "Servers"
   }
 }

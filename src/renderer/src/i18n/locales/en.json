@@ -882,6 +882,7 @@
         "widthDescription": "How wide messages and the message box can grow in a wide pane.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
+        "resetKeyword": "reset",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -1080,7 +1081,7 @@
         "importInvalid": "{{count}} unreadable rows",
         "importUndecryptable": "{{count}} protected by the browser; export a CSV from it instead",
         "imported": "Imported {{count}} passwords",
-        "deleteAllConfirmDescription": "Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.",
+        "deleteAllConfirmDescription": "All saved passwords, notes, and never-save sites in the {{profile}} profile will be permanently deleted. This can’t be undone.",
         "deletedAll": "Password data deleted",
         "form": {
           "invalidSite": "Enter a website address, like example.com.",
@@ -1363,6 +1364,8 @@
     },
     "mcp": {
       "inspectFailed": "Unable to inspect {{directory}}.",
+      "inspectConfigsFailed": "Unable to inspect MCP configs.",
+      "createConfigFailed": "Failed to create MCP config.",
       "unreadable": "Unreadable",
       "notFound": "Not found",
       "invalidJson": "Invalid JSON",
@@ -1426,6 +1429,7 @@
           "spaces": "spaces",
           "link": "link",
           "tabs": "tabs",
+          "tab_characters": "tab characters",
           "trim": "trim",
           "root": "root",
           "word_wrap": "word wrap",
@@ -1571,6 +1575,8 @@
         "nothingToUndo": "Nothing left to undo: those lines changed since.",
         "empty": "No changes yet."
       },
+      "muteNotifications": "Mute notifications",
+      "muteNotificationsDescription": "Stop sending system notifications. Unread indicators still appear.",
       "notifyNeedsPermission": "Needs permission",
       "notifyNeedsPermissionDescription": "When the bot or a worker needs your approval.",
       "notifyTaskComplete": "Task complete",
@@ -1705,7 +1711,10 @@
           "checkAgain": "Check again",
           "executionContextOnHost": "{{agent}} · {{host}}",
           "commandWarningOnHost": "The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust."
-        }
+        },
+        "hostMcpNone": "None on this host yet",
+        "hostMcp": "Your MCP servers",
+        "hostMcpAndMore": "Your MCP servers, {{rest}}"
       },
       "editPicture": "Edit bot picture",
       "retry": "Retry",
@@ -2037,6 +2046,155 @@
     "navigation": {
       "accounts": {
         "description": "Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, MiniMax, and Grok."
+      }
+    },
+    "mcpServers": {
+      "custom": {
+        "noneChecked": "Check a server to add.",
+        "addMany": "Add {{count}} servers",
+        "found": "Found {{count}} servers",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "Command · {{line}}",
+        "title": "Custom server",
+        "sourceLabel": "Server URL, start command or config",
+        "sourceHint": "Paste a server URL, start command or config, or enter the details yourself.",
+        "nameTaken": "A server named {{name}} already exists. Choose another name.",
+        "line": "A URL, a start command or a config",
+        "foundTaken": "Already added"
+      },
+      "empty": {
+        "copied": "Copied {{count}} servers from {{host}}",
+        "title": "No MCP servers on {{host}}",
+        "copyFrom": "Copy from {{host}}"
+      },
+      "addServer": "Add a server",
+      "toast": {
+        "allOn": "{{name}} turned on for every agent",
+        "allOff": "{{name}} turned off for every agent",
+        "agentOn": "{{name}} turned on for {{agent}}",
+        "agentOff": "{{name}} turned off for {{agent}}",
+        "saved": "{{name}} saved",
+        "sharedOn": "{{name}} shares one process",
+        "sharedOff": "{{name}} runs once per session",
+        "signedOut": "Signed out of {{name}}",
+        "removed": "{{name}} removed",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}} added",
+        "newSessions": "Applies to new sessions",
+        "restart_one": "Restart {{count}} session",
+        "restart_other": "Restart {{count}} sessions",
+        "staleTerminals_one": "{{count}} agent terminal uses an older MCP setup",
+        "staleTerminals_other": "{{count}} agent terminals use an older MCP setup",
+        "staleTerminalsOnHost_one": "{{count}} agent terminal on {{host}} uses an older MCP setup",
+        "staleTerminalsOnHost_other": "{{count}} agent terminals on {{host}} use an older MCP setup",
+        "staleTerminalsRestart_one": "Restart it to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestart_other": "Restart them to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_one": "Restart it yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_other": "Restart them yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartSome_one": "{{restartable}} can be resumed here. Restart the other one yourself.",
+        "staleTerminalsRestartSome_other": "{{restartable}} can be resumed here. Restart the other {{count}} yourself.",
+        "addedMany": "{{count}} servers added",
+        "repoOn": "{{name}} turned on in {{repo}}",
+        "repoOff": "{{name}} turned off in {{repo}}"
+      },
+      "fileAgent": {
+        "title": "Let Orca edit {{agent}}’s MCP file?",
+        "line": "Orca will keep your MCP servers in {{agent}}’s settings file ({{file}}). Your own entries stay as they are.",
+        "allow": "Allow"
+      },
+      "agents": {
+        "title": "Agents",
+        "allOff": "Turn all off",
+        "allOn": "Turn all on",
+        "all": "All agents",
+        "someOff": "{{count}} agents off",
+        "none": "No agents",
+        "some": "{{on}} of {{total}} agents",
+        "blocked": "Blocked by your organization’s Claude settings"
+      },
+      "stale": "This server changed elsewhere. Showing it as it is now.",
+      "launch": {
+        "title": "Launch",
+        "command": "Command",
+        "args": "Arguments",
+        "env": "Environment"
+      },
+      "connection": {
+        "title": "Connection",
+        "url": "URL",
+        "headers": "Headers"
+      },
+      "shared": {
+        "title": "Share one process across agents",
+        "line": "Uses less memory. The server runs outside the workspace folder."
+      },
+      "status": {
+        "needsSignIn": "Needs sign-in",
+        "signedIn": "Signed in",
+        "commandFailed": "Command not found on {{host}}",
+        "unreachable": "Can’t reach {{host}}"
+      },
+      "signIn": "Sign in",
+      "signInActions": "Sign-in actions",
+      "signInAgain": "Sign in again",
+      "signOut": "Sign out",
+      "loading": "Reading MCP servers…",
+      "remove": {
+        "title": "Remove {{name}}?",
+        "line": "New sessions on {{host}} won’t have it. Its saved values and sign-in are deleted.",
+        "confirm": "Remove",
+        "button": "Remove server"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · {{projects}} only",
+        "move": "Move to Orca",
+        "actions": "{{name}} actions",
+        "copy": "Copy to Orca",
+        "open": "Open",
+        "copied": "Copied {{name}} to Orca",
+        "title": "In your agents",
+        "summary": "Found {{count}} servers in {{agents}}",
+        "moveAll": "Move all to Orca"
+      },
+      "signedInToast": "Signed in to {{name}}",
+      "pasteRefused": "That address isn’t from this sign-in.",
+      "workspaces": {
+        "title": "Workspaces",
+        "later": "Workspaces added later",
+        "all": "All workspaces",
+        "none": "No workspaces",
+        "allBut": "All but {{names}}",
+        "only": "Only {{names}}"
+      },
+      "catalog": {
+        "noMatch": "No server matches “{{query}}”.",
+        "search": "Search servers",
+        "caption": "Servers"
+      },
+      "add": {
+        "title": "Add an MCP server"
+      },
+      "catalogLine": {
+        "github": "Issues, pull requests and code search",
+        "linear": "Read and update issues and projects"
+      },
+      "move": {
+        "title": "Move {{name}} to Orca?",
+        "allTitle": "Move {{count}} servers to Orca?",
+        "line": "Orca removes it from {{agents}} settings and keeps a backup.",
+        "allLine": "Orca removes them from {{agents}} settings and keeps a backup.",
+        "confirm": "Move"
+      },
+      "yours": "Yours",
+      "fromPlugins": "From plugins",
+      "unsupported": "MCP servers aren’t available on {{host}}.",
+      "title": "MCP servers",
+      "description": "Servers your agents can use. Changes apply to new sessions.",
+      "repo": {
+        "on": "On in this repo",
+        "add": "Add a server for this repo",
+        "files": "From this repo’s files",
+        "open": "Open {{file}}"
       }
     }
   },
@@ -2737,6 +2895,10 @@
             "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again.",
             "restoredMoved": "Forwarded port {{port}} from {{host}} to localhost:{{localPort}}",
             "restoredMovedReason": "localhost:{{previousPort}} is in use on this computer."
+          },
+          "forwardedUrl": {
+            "openedIpv4": "Opened 127.0.0.1:{{port}} instead of localhost",
+            "openedIpv4Reason": "Another app on this computer uses localhost:{{port}}."
           }
         }
       },
@@ -2887,7 +3049,8 @@
         "projectRemoved": "The project was removed from Orca.",
         "folderWorkspaceRemoved": "The folder workspace was removed.",
         "chatStillStarting": "This chat is still starting. Try again in a moment.",
-        "chatOpenFailed": "Couldn't open this chat.",
+        "chatOpenFailed": "Couldn't open chat",
+        "chatOpenDismiss": "Dismiss",
         "chatOpenRetry": "Retry",
         "chatOpenShowDetails": "Show details",
         "chatOpenHideDetails": "Hide details"
@@ -6092,6 +6255,12 @@
                 "message": "Claude usage updates the next time Claude runs."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Updates when Codex runs",
+                "message": "Codex usage updates the next time Codex runs."
+              }
+            },
             "justNow": "just now",
             "minutesAgo": "{{minutes}}m ago",
             "hoursAgo": "{{hours}}h ago",
@@ -7133,13 +7302,24 @@
           "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
           "preservedTitle": "Your edits to {{value0}} were saved separately",
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "preservedBackupOnly": "Orca saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
-          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+          "uncertainDescriptionKept": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}} or still in the skills folder."
         },
         "SkillBackupPathLine": {
           "movedTo": "Old copy moved to:",
           "movedToOnHost": "Old copy moved to {{host}}:",
           "showFolder": "Show folder"
+        },
+        "skillBackupRefusal": {
+          "inPlaceReason": "Can't back it up: it's on another drive.",
+          "tryAgain": "Move it out of the skills folder, then try again.",
+          "leftoverReason": "Can't back up the left-over copy: it's on another drive.",
+          "movedAsideReason": "Couldn't back up the old copy: it's on another drive.",
+          "keepIt": "Move it out of the skills folder to keep it.",
+          "noReminder": "Move it out of the skills folder. Orca won't remind you.",
+          "copyPathFor": "Copy path for {{value0}}",
+          "copyFailed": "Couldn't copy the path."
         }
       },
       "sidebar": {
@@ -7284,10 +7464,7 @@
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
-          "ca3b225195": "Branch auto-name failed",
-          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
           "tryAgain": "Try again",
-          "namingBranch": "Naming branch…",
           "errorDetailsAt": "Error details · {{time}}",
           "reasonNothingYet": "No changes to name this branch from yet.",
           "reasonBranchChanged": "The branch changed while Orca was naming it.",
@@ -7301,8 +7478,7 @@
           "reasonNoDistinctName": "The generated name matched the current one.",
           "reasonFirstMessageUnavailable": "Orca couldn't find this workspace's first message.",
           "reasonAlreadyNamed": "This workspace was already renamed.",
-          "reasonUnavailable": "Orca can't name this branch anymore.",
-          "branchNameKept": "Branch name kept"
+          "reasonUnavailable": "Orca can't name this branch anymore."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choose parent folder...",
@@ -7735,9 +7911,6 @@
           "0f33af979b": "Partial checkout. Files outside these paths are not on disk.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "primary",
-          "4eba2ea99e": "Auto-name failed. Click to see details.",
-          "74522ee457": "rename failed",
-          "02e19349f4": "Auto-rename failed: view error",
           "691ccfd622": "Deleting…",
           "deleteFailed": "Delete failed",
           "35ccfe2475": "Project {{value0}}",
@@ -7847,7 +8020,8 @@
           "lineageSubmenu": "Parent & Children",
           "projectGroupSubmenu": "Project Group",
           "muteNotifications": "Mute Notifications",
-          "unmuteNotifications": "Unmute Notifications"
+          "unmuteNotifications": "Unmute Notifications",
+          "copyAutoNameError": "Auto-Name Error"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -8516,8 +8690,8 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "descriptionMoveFromSidebar": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.",
-          "descriptionAutoMove": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
+          "descriptionMoveFromSidebar": "Git, files and terminals run natively in Linux. Existing WSL projects stay on Windows until you choose Move to … host in their project menu.",
+          "descriptionAutoMove": "Git, files and terminals run natively in Linux. Your WSL projects move here once their terminals are idle.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
@@ -8655,6 +8829,26 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "AutoNameFailed": {
+          "naming": "Naming this workspace…",
+          "title": "Couldn’t auto-name",
+          "dismiss": "Dismiss",
+          "modelUnavailableOnAccount": "{{model}} isn’t available on this {{agent}} account",
+          "modelUnavailableForAgent": "{{model}} isn’t available for {{agent}}",
+          "modelUnavailable": "{{model}} isn’t available",
+          "timedOut": "Timed out after {{seconds}}s",
+          "agentMissing": "{{agent}} isn’t installed",
+          "usageLimitAgent": "{{agent}} hit its usage limit",
+          "usageLimit": "The naming agent hit its usage limit",
+          "signedOutAgent": "{{agent}} isn’t signed in",
+          "signedOut": "The naming agent isn’t signed in",
+          "agentFailed": "{{agent}} exited with an error",
+          "noAgent": "No naming agent is set up",
+          "publishCheck": "Couldn’t check whether the branch was pushed",
+          "environment": "Couldn’t start the naming agent",
+          "emptyName": "The agent returned no usable name",
+          "unknown": "The naming agent hit an error"
         }
       },
       "shared": {
@@ -14044,6 +14238,8 @@
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
             "deferred": "Not done yet: the server isn’t ready for this. Try again later.",
+            "stopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not start the update. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
+            "rollbackStopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not roll back. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
             "failed": "Orca couldn’t finish this on the server. Try again.",
             "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.",
             "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes."
@@ -14210,7 +14406,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "Toggle WSL distros as hosts",
           "title": "WSL distros as hosts",
-          "description": "Add a WSL 2 distro as a host. Orca runs its server inside the distro, so git, files and terminals in new projects there run natively in Linux.",
+          "description": "Run Orca’s server inside a WSL 2 distro, so git, files and terminals run natively in Linux.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "distro"
@@ -14218,17 +14414,17 @@
         "wslHosts": {
           "title": "WSL hosts",
           "experimental": "Experimental",
-          "description": "Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.",
+          "description": "Orca runs a server inside each distro. To start a stopped distro, click Start, open a terminal, or connect it here.",
           "add": "Add WSL distro",
           "connect": "Connect",
           "forceUpdate": "Force update",
           "turnOn": "Open Experimental",
           "chip": "WSL",
-          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this.",
+          "notStartedAsWslHost": "An SSH host started this server, so projects can't move here. Restart it as a WSL host to fix this.",
           "restartAsWslHost": {
             "button": "Restart as WSL host",
             "title": "Restart as WSL host?",
-            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "description": "Ends every terminal and agent on {{host}}, including ones an SSH host opened, then restarts Orca’s server as a WSL host.",
             "cancel": "Cancel",
             "action": "End terminals and restart"
           }
@@ -16654,8 +16850,6 @@
           "noRemote": "Local git repo · no remote",
           "openUpstream": "Open {{value0}} in browser",
           "forkOf": "Fork of {{value0}}",
-          "openSettingsPage": "Open settings page",
-          "done": "Done",
           "resetDone": "Icon and color reset",
           "undo": "Undo",
           "styleLetters": "Letters",
@@ -16665,7 +16859,8 @@
           "lettersInput": "Up to 2 letters",
           "lettersPlaceholder": "1–2 letters",
           "useLetters": "Use “{{value0}}”",
-          "usingGitHubAvatar": "Using the GitHub avatar"
+          "usingGitHubAvatar": "Using the GitHub avatar",
+          "openSettings": "Open Settings"
         }
       },
       "pet": {
@@ -18111,7 +18306,7 @@
           "13822cdfda": "Plain text"
         },
         "RichMarkdownDocLinkMenu": {
-          "e17b987473": "↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss",
+          "e17b987473": "↑↓ navigate  ↵ select  esc dismiss",
           "63ced7cb9b": "No documents found",
           "0e8489bc11": "Markdown document links",
           "showingOfTotal": "Showing {{shown}} of {{total}}"
@@ -20767,6 +20962,11 @@
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
         "stateStopped": "Stopped"
+      },
+      "RunTargetCombobox": {
+        "noWslDistros": "No WSL distros found",
+        "wslDistro": "WSL distro",
+        "wslDistroHint": "A Linux distro on this PC"
       }
     },
     "i18n": {
@@ -21858,10 +22058,7 @@
         "started_other": "Kicked off {{count}} subagents",
         "ran_one": "Ran {{count}} subagent",
         "ran_other": "Ran {{count}} subagents",
-        "backToMain": "Back to main agent",
         "mainAgent": "Main agent",
-        "promptFromMain": "Prompt from main agent",
-        "backTo": "Back to {{value0}}",
         "path": "Subagent path",
         "stateHeading": {
           "completed": "Completed",
@@ -21874,7 +22071,15 @@
         "noSteps": "No steps yet",
         "beforeClear": "This subagent ran before the chat was cleared",
         "stoppedBeforeReply": "Stopped before replying",
-        "noReply": "Ended without a reply"
+        "noReply": "Ended without a reply",
+        "prompt": "Prompt",
+        "result": "Result",
+        "close": "Close",
+        "needsYou": "Needs you",
+        "agentNeedsYou": "{{name}} needs you",
+        "mainNeedsYou": "Main agent needs you",
+        "show": "Show",
+        "backTo": "Back to {{value0}}"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",
@@ -21905,6 +22110,10 @@
       "copyCode": "Copy code",
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap",
+      "htmlPreview": "HTML preview",
+      "htmlView": "HTML view",
+      "htmlViewCode": "Code",
+      "htmlViewPreview": "Preview",
       "context": {
         "unavailable": "Context usage is not known yet. It becomes available after the agent next responds.",
         "summary": "Context: {{used}} / {{window}} tokens ({{percent}}%), estimated from the last response.",
@@ -22539,7 +22748,8 @@
           "addressLabel": "Sign-in page address",
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
-        }
+        },
+        "manage": "Manage MCP servers"
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
@@ -22856,6 +23066,7 @@
         "dismiss": "Dismiss",
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
+        "workspaceRemoved": "This worker's workspace was removed",
         "restore": "Show in dock again",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
@@ -22891,7 +23102,7 @@
         "task": "Task",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "stoppedByYou": "Stopped by you",
+        "stopped": "Stopped",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
         "needsYouCount": "{{count}} needs you",
@@ -23365,6 +23576,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
+      },
+      "paste": {
+        "clipboardUnpastable": "Couldn't paste the copied file. Try dragging it into the terminal."
       }
     },
     "settings": {
@@ -23659,7 +23873,8 @@
           "correctionWord": "Correction word",
           "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
           "correctionWordOff": "None"
-        }
+        },
+        "localOnlyNotice": "Talk instead of typing in any pane. These settings apply to this computer only; {{host}} keeps its own."
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
@@ -23834,6 +24049,7 @@
         },
         "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
         "retry": "Try again",
+        "listSeparator": ", ",
         "summary": {
           "merged": "Delete merged",
           "unchanged": "Delete unchanged",
@@ -24146,9 +24362,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Keep open",
-        "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
-        "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
-        "bannerFinishedStatus": "Orchestration worker finished · Closes soon",
+        "bannerRunning": "Closes {{minutes}} min after finishing",
+        "bannerFinished": "Finished · closes in {{countdown}}",
+        "bannerFinishedStatus": "Worker finished · closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
         "boundFallbackName": "its worker"
@@ -24228,6 +24444,9 @@
       "fileRenameFailed": "Failed to rename '{{name}}'.",
       "worktreeCreateFailed": "Failed to create worktree.",
       "missingBaseBranchHelp": "Create an initial commit (for example on main), or select an existing branch in Create From, then try again.",
+      "baseBranchLookupFailedTitle": "Could not look up the base branch",
+      "baseBranchLookupFailedMessage": "Git failed or timed out while looking up this repo's default base branch.",
+      "baseBranchLookupFailedHelp": "Try again, or select a base branch in Create From.",
       "dropTooManyPaths": "Drop contains too many paths.",
       "dropPathsTooLarge": "Drop path list is too large.",
       "fileOwnerResolveFailed": "Failed to resolve file owner."
@@ -25523,6 +25742,12 @@
       }
     },
     "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "selection": {
+      "claudeRemoteWslDefaultUnavailable": "Switching this host's WSL lane back to the system default isn't available from here yet.",
+      "claudeWslLanesNotReset": "WSL Claude accounts can't be reset from here yet.",
+      "codexSystemDefaultIncludingWsl": "Use your current {{value0}} Codex login, including WSL.",
+      "systemDefaultIncludingWsl": "{{value0}} · including WSL"
+    },
     "rename": {
       "action": "Rename",
       "title": "Rename account",
@@ -25863,19 +26088,6 @@
         "grokFailed": "Grok could not name this chat. Try generating the name again.",
         "antigravityFailed": "Antigravity could not name this chat. Try generating the name again."
       }
-    }
-  },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} tab",
-      "chipOnlyName_other": "{{title}}, {{count}} tabs",
-      "entryNeedsAttention": "{{title}}, needs attention",
-      "moreTabs_one": "{{count}} more tab",
-      "moreTabs_other": "{{count}} more tabs",
-      "needAttention_one": ", {{count}} needs attention",
-      "needAttention_other": ", {{count}} need attention",
-      "openTabs_one": "{{count}} open tab",
-      "openTabs_other": "{{count}} open tabs"
     }
   },
   "updates": {
@@ -26571,7 +26783,8 @@
       "bots": "Bots"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "Switch worktree"
+      "worktreePaletteFormerTitle": "Switch worktree",
+      "quickCommandsMenuFormerTitle": "Toggle Quick Commands menu"
     }
   },
   "gpuFallback": {
@@ -27557,6 +27770,7 @@
       "computerHint": "Where the bot runs.",
       "computerAccountHint": "Where the bot runs, signed in to Orca as {{account}}.",
       "useChatDefaults": "Use chat defaults",
+      "useChatDefaultsHint": "Reset the agent's model, options and permissions to your chat defaults",
       "usingChatDefault": "Using your chat default. Background runs use your Agents setting.",
       "agent": "Agent",
       "folder": "Folder: {{path}}",
@@ -27603,7 +27817,36 @@
         "setUpInFirstChat": "Set up in first chat"
       },
       "identityWatches": "Watches {{what}}",
-      "identityReports": "Reports {{what}}"
+      "identityReports": "Reports {{what}}",
+      "wslSetupFailedShort": "Setup didn’t finish",
+      "wslSettingUp": "Setting up…",
+      "wslSetup": {
+        "waiting": "Waiting for {{distro}}…",
+        "starting": "Starting {{distro}}",
+        "installing": "Installing Orca’s server in ~/.orca-remote",
+        "connecting": "Connecting",
+        "findingAgents": "Looking for agents in {{distro}}",
+        "installingHint": "The first time also downloads its Linux Node runtime.",
+        "failedTitle": "Couldn’t set up {{distro}}",
+        "details": "Details",
+        "retry": "Retry",
+        "chooseAnother": "Choose another computer",
+        "title": "Setting up {{distro}} as a host",
+        "subtitle": "About a minute the first time. Your Windows files and other distros aren’t touched.",
+        "cancel": "Cancel",
+        "failedGeneric": "Orca’s server didn’t start in the distro. Details say what stopped it."
+      },
+      "wslNoAgent": {
+        "field": "No agent in {{distro}}",
+        "title": "Install an agent inside {{distro}}",
+        "body": "Agents installed on Windows can’t run inside WSL. Install one in the distro and sign in, and it shows up here.",
+        "copied": "Copied",
+        "copy": "Copy",
+        "checking": "Checking again…"
+      },
+      "hostSleeping": "Sleeping · wakes when used",
+      "wslWaking": "Waking {{distro}}…",
+      "hostWaking": "Waking…"
     },
     "section": {
       "scrollLeft": "Scroll left · {{amount}} hidden",
@@ -27622,6 +27865,7 @@
     },
     "errors": {
       "nameTaken": "Another bot already has that name.",
+      "purposeTooLongForHost": "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
       "generic": "Something went wrong. Try again.",
       "avatarHomeUnreadable": "Couldn't read the saved picture. Choose it again.",
       "folderNotOwned": "Couldn't verify this bot's folder.",
@@ -27968,7 +28212,6 @@
         "cancel": "Cancel",
         "cancelRunning": "Cancel generating",
         "edit": "Edit description",
-        "realPerson": "Avatars can't show real people. Describe a character instead.",
         "signedOut": "{{agent}} isn't signed in. Sign in to it, then try again.",
         "usageLimit": "{{agent}} hit its usage limit. Try again later.",
         "noImage": "{{agent}} didn't make an image. Try rewording your description.",
@@ -29047,7 +29290,8 @@
         "purpose": "Your Composio project key lets your bots use the apps you connect there. It stays on this computer; bots never see it.",
         "getKey": "Get a key",
         "change": "Change",
-        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it."
+        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it.",
+        "changeKey": "Change key"
       },
       "card": {
         "heading": "Composio",
@@ -29769,7 +30013,12 @@
         "keyStored": "Stored on this computer; bots never see it. Composio holds your app sign-ins.",
         "addKey": "Add key and continue",
         "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
-        "signsIn": "Signs in through your Composio account."
+        "signsIn": "Signs in through your Composio account.",
+        "changeKeyTitle": "Change your Composio key",
+        "replacesKeyEnding": "Replaces the key ending in {{hint}}, for all your bots.",
+        "replacesKey": "Replaces your saved key, for all your bots.",
+        "newKeyNeeds": "The new key needs <permission/>.",
+        "replaceKey": "Replace key and continue"
       },
       "closeKeepsSigningIn": "Sign-in continues in your browser",
       "openPageAgain": "Open page again",
@@ -29910,7 +30159,8 @@
         "more": "More"
       },
       "setUpNamed": "Set up {{name}}",
-      "setUp": "Set up"
+      "setUp": "Set up",
+      "couldNotConnect": "Couldn’t connect {{app}}"
     },
     "panel": {
       "idle": "Idle",
@@ -30155,7 +30405,8 @@
       "delete": "Delete chat",
       "open": "Open",
       "actions": "Chat actions",
-      "needsYouCount": "{{count}} needs you"
+      "needsYouCount": "{{count}} needs you",
+      "hideOlder": "Hide older"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -30403,8 +30654,10 @@
         "activity": "Activity",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
+        "links": "Links",
         "showLess": "Show less",
         "showMore": "Show more",
+        "subWhere": "Item {{number}} · {{chat}}",
         "showEarlier": "Show earlier",
         "next": "Next item",
         "previous": "Previous item",
@@ -30416,10 +30669,7 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "linkCount": "{{count}} links",
-        "reply": "Reply",
-        "replyAbove": "Reply, above",
-        "replyBelow": "Reply, below",
+        "moreLinks": "{{count}} more links",
         "loading": "Loading item…"
       },
       "loading": "Loading items…",
@@ -30455,7 +30705,9 @@
         "sending": "Sending…",
         "sendSome": "Send {{count}}/{{total}}",
         "sendSomeLabel": "Send {{count}} of {{total}} answers",
-        "changeAnswer": "{{question}}: {{answer}}. Change answer"
+        "changeAnswer": "{{question}}: {{answer}}. Change answer",
+        "heldImagesLimit": "Your answers go as one comment, which takes up to {{max}} images. Send the answers held so far first, or remove some.",
+        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Send the answers held so far first, or remove some."
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {
@@ -30607,7 +30859,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "lookAroundEvery": {
       "every4h": "Every 4 hours, 8 AM to 8 PM",
@@ -31023,31 +31278,21 @@
     "failedDescription": "Orca ran <code>{{command}}</code> on <strong>{{host}}</strong> to update your {{product}} from <strong>{{installedVersion}}</strong> to <strong>{{latestVersion}}</strong>, and it failed.",
     "failedDescriptionNoCommand": "Orca couldn't update your {{product}} on <strong>{{host}}</strong>.",
     "cardLabel": "Agent CLI updates",
-    "cardSingleTitle": "{{name}} {{version}} is out",
-    "cardSingleInstalled": "You have {{version}}",
-    "cardNamesTwo": "{{first}} and {{second}}",
-    "cardNamesThree": "{{first}}, {{second}} and {{third}}",
-    "cardDismiss": "Dismiss",
-    "cardDetails": "Details",
     "cardLater": "Later",
-    "copyCommandFull": "Copy command",
-    "cardDoneOne": "{{name}} is up to date",
-    "cardFailedOne": "{{name}} didn’t update",
-    "cardProgress": "{{done}} of {{total}}",
-    "cardShowEach": "Show each CLI",
-    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
-    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
-    "cardNamesMany_one": "{{first}} and {{count}} more",
-    "cardNamesMany_other": "{{first}} and {{count}} more",
-    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
-    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
-    "cardUpdateSome_one": "Update {{count}} CLI",
-    "cardUpdateSome_other": "Update {{count}} CLIs",
-    "cardDone_one": "{{count}} CLI is up to date",
-    "cardDone_other": "All {{count}} CLIs are up to date",
-    "cardFailed_one": "{{count}} CLI didn’t update",
-    "cardFailed_other": "{{count}} CLIs didn’t update",
-    "cardSingleInstalledOn": "{{host}} has {{version}}"
+    "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
+    "toastUpdating_other": "Updating {{current}} of {{count}} CLIs",
+    "toastDone_one": "{{count}} CLI updated",
+    "toastDone_other": "{{count}} CLIs updated",
+    "hideList": "Hide list",
+    "showList": "Show list",
+    "toastUpdate": "Update {{total}}",
+    "toastRetry": "Retry {{failed}}",
+    "copied": "Copied",
+    "manualSection": "Manual",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
+    "toastClose": "Close",
+    "queued": "Queued"
   },
   "backgroundWorkerPaused": {
     "title": "Some background work paused after crashing repeatedly",
@@ -31081,7 +31326,10 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More",
-    "pageRegion": "Page"
+    "customize": "Customize",
+    "pageRegion": "Page",
+    "account": "Account",
+    "signIn": "Sign in"
   },
   "chats": {
     "delete": {

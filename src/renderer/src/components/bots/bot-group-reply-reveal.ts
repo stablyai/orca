@@ -181,7 +181,7 @@ export function useBotGroupReplyJump({
           `[data-group-post="${CSS.escape(selectedReply.messageId)}"] [data-group-remote-ask="${CSS.escape(targetMail.requestId)}"]`
         )
         if (row) {
-          revealRow(row, 'instant')
+          revealRow(row)
           flashRevealedRow(row)
         }
         finish(!row)
@@ -200,7 +200,7 @@ export function useBotGroupReplyJump({
           )
         : null
       if (row) {
-        revealRow(row, 'instant')
+        revealRow(row)
         flashRevealedRow(row)
         finish(false)
       } else if (

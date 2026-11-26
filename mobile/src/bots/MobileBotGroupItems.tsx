@@ -98,6 +98,7 @@ export function MobileBotGroupItems({
   const read = useMobileBotGroupItems({
     visible,
     client,
+    hostKey: hostBotsKey(hostId),
     groupId,
     bots,
     reads,
@@ -184,7 +185,7 @@ export function MobileBotGroupItems({
           now={now}
           disabled={failed}
           owner={owner ? { name: owner.name, avatar: mobileBotAvatarSource(owner) } : undefined}
-          onPress={() => walk.open(item, botItemWalkOf(groups, groups.closed.length))}
+          onPress={() => walk.open(item, botItemWalkOf(groups, groups.closed.length, item.uid))}
           onLongPress={() => setSheet({ kind: 'row', item })}
         />
       )

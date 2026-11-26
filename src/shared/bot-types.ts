@@ -82,6 +82,11 @@ export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
 }
 
+/** Memory upkeep runs tool-free, so every bot agent runs it; Look around is `lookAroundSupported`. */
+export function tidyUpSupported(agent: string): boolean {
+  return isBotAgent(agent)
+}
+
 export const BOT_NAME_MAX_LENGTH = 64
 export const BOT_HANDED_PAIRED_WORKSPACES_MAX = 50
 export const BOT_MAX_MEMBERS = 200
@@ -218,6 +223,9 @@ export const BotSchema = z.object({
   /** The accounts it may use while `google` is on; absent is every account, now and later. A malformed
    *  list reads as none, never as every account. */
   googleAccounts: z.array(z.string().min(1).max(320)).max(100).optional().catch([]),
+  /** Its sessions also take the host's MCP server list (and so its sign-ins); absent is off. Only
+   *  bots.tools.setHostMcpServers sets it, never the bot itself. Older hosts drop it. */
+  hostMcpServers: z.boolean().optional().catch(undefined),
   /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
   skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
   /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
