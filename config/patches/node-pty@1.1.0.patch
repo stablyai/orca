@@ -1786,7 +1786,7 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..f23925ec12a9c36ed78bc82b263f3d58
 +  }
  }
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de74b442ff 100644
+index 7b286d3d644c26141df516929703aa6e129df4b2..f649cbc15d11f4c55889fc0d6889c0a8ee9b3a26 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,7 +18,10 @@
@@ -1885,7 +1885,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
  
      auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
      switch (status) {
-@@ -197,40 +247,64 @@
+@@ -197,41 +247,69 @@
                                           std::wstring& inName,
                                           std::wstring& outName,
                                           const std::wstring& pipeName,
@@ -1920,8 +1920,11 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
        bool success = createDataServerPipe(true, L"in", phInput, inName, pipeName);
        if (!success)
        {
+-        return HRESULT_FROM_WIN32(GetLastError());
++        // Orca: read the error before string work can overwrite it.
++        const DWORD pipeError = GetLastError();
 +        failedStep = "CreateNamedPipe(in)";
-         return HRESULT_FROM_WIN32(GetLastError());
++        return HRESULT_FROM_WIN32(pipeError);
        }
        success = createDataServerPipe(false, L"out", phOutput, outName, pipeName);
        if (!success)
@@ -1950,11 +1953,15 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
        // Failed to find CreatePseudoConsole in kernel32. This is likely because
        //    the user is not running a build of Windows that supports that API.
        //    We should fall back to winpty in this case.
+-      return HRESULT_FROM_WIN32(GetLastError());
++      // Orca: read the error before string work can overwrite it.
++      const DWORD procError = GetLastError();
 +      failedStep = std::string("GetProcAddress(") + createName + ")";
-       return HRESULT_FROM_WIN32(GetLastError());
++      return HRESULT_FROM_WIN32(procError);
      }
    } else {
-@@ -242,6 +316,20 @@
+     throw errorWithCode(info, "Failed to load conpty.dll");
+@@ -242,6 +320,20 @@
    return HRESULT_FROM_WIN32(GetLastError());
  }
  
@@ -1975,7 +1982,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
  static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
    Napi::Env env(info.Env());
    Napi::HandleScope scope(env);
-@@ -289,7 +377,9 @@
+@@ -289,7 +381,9 @@
  
    HANDLE hIn, hOut;
    HPCON hpc;
@@ -1986,7 +1993,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
  
    // Restore default handling of ctrl+c
    SetConsoleCtrlHandler(NULL, FALSE);
-@@ -301,10 +391,22 @@
+@@ -301,10 +395,22 @@
      // We were able to instantiate a conpty
      const int ptyId = InterlockedIncrement(&ptyCounter);
      marshal.Set("pty", Napi::Number::New(env, ptyId));
@@ -2012,7 +2019,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
    }
  
    std::string inNameStr = path_util::wstring_to_string(inName);
-@@ -350,11 +452,15 @@
+@@ -350,11 +456,15 @@
    const bool useConptyDll = info[4].As<Napi::Boolean>().Value();
    Napi::Function exitCallback = info[5].As<Napi::Function>();
  
@@ -2032,7 +2039,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
  
    // Prepare command line
    std::unique_ptr<wchar_t[]> mutableCommandline = std::make_unique<wchar_t[]>(cmdline.length() + 1);
-@@ -409,6 +515,15 @@
+@@ -409,6 +519,15 @@
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -2048,7 +2055,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +531,10 @@
+@@ -416,7 +535,10 @@
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -2060,7 +2067,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +544,54 @@
+@@ -426,8 +548,54 @@
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -2117,7 +2124,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -438,8 +602,12 @@
+@@ -438,8 +606,12 @@
      }
    }
  
@@ -2132,7 +2139,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -472,9 +640,10 @@
+@@ -472,9 +644,10 @@
    SHORT rows = static_cast<SHORT>(info[2].As<Napi::Number>().Uint32Value());
    const bool useConptyDll = info[3].As<Napi::Boolean>().Value();
  
@@ -2145,7 +2152,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -513,9 +682,10 @@
+@@ -513,9 +686,10 @@
      return env.Undefined();
    }
  
@@ -2158,7 +2165,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -544,30 +714,336 @@
+@@ -544,30 +718,336 @@
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -2509,7 +2516,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..edd0a38c7ec917564847d6f4e13d42de
  * Init
  */
  
-@@ -577,6 +1053,13 @@
+@@ -577,6 +1057,13 @@
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
