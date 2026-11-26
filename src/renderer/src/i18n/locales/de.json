@@ -579,10 +579,6 @@
         "pageChanged": "Diese Seite wurde während des Imports geschlossen oder hat das Profil gewechselt. Versuche es erneut."
       },
       "notice": {
-        "importedMore_one": "{{count}} Cookie für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
-        "importedMore_other": "{{count}} Cookies für {{domains}} +{{more}} weitere importiert. Zur Verwendung die Seite neu laden.",
-        "imported_one": "{{count}} Cookie für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
-        "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
       },
       "routedPage": {

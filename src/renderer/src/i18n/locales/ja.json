@@ -23533,8 +23533,6 @@
         "pageChanged": "インポート中にこのページが閉じられたか、プロファイルが変更されました。もう一度お試しください。"
       },
       "notice": {
-        "importedMore_other": "{{domains}} と他 {{more}} 件のドメイン用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
-        "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
       },
       "routedPage": {

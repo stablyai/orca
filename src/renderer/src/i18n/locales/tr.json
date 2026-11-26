@@ -583,10 +583,6 @@
         "pageChanged": "Bu sayfa içe aktarma sırasında kapandı veya profil değiştirdi. Tekrar deneyin."
       },
       "notice": {
-        "importedMore_one": "{{domains}} ve diğer {{more}} alan adı için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
-        "importedMore_other": "{{domains}} ve diğer {{more}} alan adı için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
-        "imported_one": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
-        "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
       },
       "routedPage": {

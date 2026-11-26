@@ -23861,8 +23861,6 @@
         "pageChanged": "导入期间此页面已关闭或更改了配置文件。请重试。"
       },
       "notice": {
-        "importedMore_other": "已为 {{domains}} 及其他 {{more}} 个域名导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
-        "imported_other": "已为 {{domains}} 导入 {{count}} 个 Cookie。请重新加载页面以使用它们",
         "failed": "Cookie 导入失败：{{reason}}"
       },
       "routedPage": {

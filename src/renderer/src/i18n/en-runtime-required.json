@@ -2349,10 +2349,8 @@
         "sshHostDisconnected": "This page is no longer connected through its SSH host. Reconnect and try again."
       },
       "notice": {
-        "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
-        "importedMore_other": "Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.",
-        "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
-        "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them."
+        "importedCount_one": "Imported {{countLabel}} cookie",
+        "importedCount_other": "Imported {{countLabel}} cookies"
       }
     },
     "loadFailure": {

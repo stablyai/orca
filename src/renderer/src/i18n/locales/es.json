@@ -24222,12 +24222,6 @@
         "pageChanged": "Esta página se cerró o cambió de perfil durante la importación. Inténtalo de nuevo."
       },
       "notice": {
-        "importedMore_one": "Se importó {{count}} cookie para {{domains}} +{{more}} más. Recarga la página para usarla.",
-        "importedMore_other": "Se importaron {{count}} cookies para {{domains}} +{{more}} más. Recarga la página para usarlas.",
-        "importedMore_many": "Se importaron {{count}} cookies para {{domains}} +{{more}} más. Recarga la página para usarlas.",
-        "imported_one": "Se importó {{count}} cookie para {{domains}}. Recarga la página para usarla.",
-        "imported_other": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
-        "imported_many": "Se importaron {{count}} cookies para {{domains}}. Recarga la página para usarlas.",
         "failed": "No se pudieron importar las cookies: {{reason}}"
       },
       "routedPage": {
