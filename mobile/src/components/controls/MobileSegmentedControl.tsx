@@ -21,6 +21,8 @@ export type MobileSegment<Value extends string> = {
   accessibilityLabel?: string
   /** Drawn after the label, e.g. a count with its dot. */
   trailing?: ReactNode
+  /** Drawn before the label, e.g. a provider logo; an empty label leaves just the icon. */
+  icon?: ReactNode
 }
 
 type Props<Value extends string> = {
@@ -112,19 +114,25 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
           styles.segment,
           props.fill && !props.scrollWhenCrowded && styles.segmentFill,
           props.scrollWhenCrowded && styles.segmentCrowdable,
+          segment.icon !== undefined && segment.label === '' && styles.segmentIconOnly,
           equalShare,
           active && (props.onSheet ? styles.segmentActiveOnSheet : styles.segmentActive),
           pressed && !active && styles.segmentPressed
         ]}
       >
-        {segment.trailing ? (
+        {segment.trailing || segment.icon ? (
           <View style={styles.segmentRow}>
-            <Text
-              style={[styles.segmentText, active && styles.segmentTextActive]}
-              numberOfLines={1}
-            >
-              {segment.label}
-            </Text>
+            {segment.icon ? (
+              <View style={!active && styles.segmentIconInactive}>{segment.icon}</View>
+            ) : null}
+            {segment.label ? (
+              <Text
+                style={[styles.segmentText, active && styles.segmentTextActive]}
+                numberOfLines={1}
+              >
+                {segment.label}
+              </Text>
+            ) : null}
             {segment.trailing}
           </View>
         ) : (
@@ -217,5 +225,9 @@ const styles = themedStyleSheet(() => ({
   segmentActiveOnSheet: { backgroundColor: colors.translucentFill },
   segmentText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
   segmentTextActive: { color: colors.textPrimary },
-  segmentPressed: { opacity: feedback.pressedOpacity }
+  segmentPressed: { opacity: feedback.pressedOpacity },
+  // An icon carries no text color, so unselected ones dim to keep the selected tab obvious.
+  segmentIconInactive: { opacity: 0.5 },
+  // With the 5 pt hitSlop above and below, an icon-only tab stays a 44 pt touch box.
+  segmentIconOnly: { minWidth: 44 }
 }))

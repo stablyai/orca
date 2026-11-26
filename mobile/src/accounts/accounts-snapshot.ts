@@ -45,6 +45,8 @@ export const ProviderRateLimitsSchema = z
     rateLimitResetCredits: RateLimitResetCreditsSchema.nullable().optional(),
     updatedAt: TimestampSchema,
     error: z.string().nullable(),
+    // What an 'ok' reading needs said beside it, e.g. Muse before its first turn in a window.
+    notice: z.string().nullable().optional(),
     status: z.enum(['idle', 'fetching', 'ok', 'error', 'unavailable'])
   })
   .passthrough()

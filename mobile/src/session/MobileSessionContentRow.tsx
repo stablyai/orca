@@ -16,6 +16,11 @@ import {
 } from './session-side-strip-inset'
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
+import {
+  ComposerUsageClientContext,
+  ComposerUsageTabAgentContext
+} from '../composer-usage/composer-usage-client-context'
+import { getMobileTerminalTabHostAgentIdentity } from './tabs/mobile-terminal-tab-agent'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -32,8 +37,14 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     createWarning,
     dictation,
     cancelDictation,
-    handleSessionContentRowLayout
+    handleSessionContentRowLayout,
+    client,
+    connState
   } = controller
+  const tabAgent =
+    (controller.activeSessionTab &&
+      getMobileTerminalTabHostAgentIdentity(controller.activeSessionTab, controller.terminals)) ??
+    null
   const strip = useSessionSideStripInset(canDockPanel && activePanel !== null)
   const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
   return (
@@ -60,11 +71,15 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
           </View>
         ) : null}
         <MobileDictationLiveContext.Provider value={dictationLive}>
-          <MobileSessionActiveContent controller={controller} />
-          {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
-          <View style={sideStripMargin(strip.main)}>
-            <MobileSessionCommandDock controller={controller} />
-          </View>
+          <ComposerUsageClientContext.Provider value={connState === 'connected' ? client : null}>
+            <ComposerUsageTabAgentContext.Provider value={tabAgent}>
+              <MobileSessionActiveContent controller={controller} />
+              {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
+              <View style={sideStripMargin(strip.main)}>
+                <MobileSessionCommandDock controller={controller} />
+              </View>
+            </ComposerUsageTabAgentContext.Provider>
+          </ComposerUsageClientContext.Provider>
         </MobileDictationLiveContext.Provider>
       </View>
       {canDockPanel && activePanel !== null && (

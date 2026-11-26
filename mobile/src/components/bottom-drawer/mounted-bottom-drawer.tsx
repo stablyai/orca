@@ -28,6 +28,7 @@ import {
   useBottomDrawerModalHostBackClaim
 } from './bottom-drawer-modal-host-scope'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
+import { useReleasedSideInset } from '../../layout/released-side-inset'
 import { useWindowSafeAreaInsets } from '../../layout/side-safe-area'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import {
@@ -56,6 +57,8 @@ export type MountedBottomDrawerProps = {
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
   scrollResetKey?: string | null
+  /** Span a side the session lays its chat across (the Duo's status column), as that chat's composer does. */
+  spanReleasedSide?: boolean
   /** False leaves the screen behind undimmed, for a sheet whose changes show there. */
   dimsBackground?: boolean
 }
@@ -72,6 +75,7 @@ export function MountedBottomDrawer({
   dismissible = true,
   zIndex = 1000,
   scrollResetKey = null,
+  spanReleasedSide = false,
   dimsBackground = true
 }: MountedBottomDrawerProps) {
   useMobileColorScheme()
@@ -94,6 +98,8 @@ export function MountedBottomDrawer({
   const { height: screenHeight } = useWindowDimensions()
   const sheetHeight = useSharedValue(screenHeight)
   const insets = useWindowSafeAreaInsets()
+  const spanned = useReleasedSideInset()?.side
+  const spannedSide = spanReleasedSide ? spanned : undefined
   // Cap/center tablet width while retaining phone’s bottom anchor and drag/keyboard transforms.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useBottomDrawerModalHost() !== null
@@ -301,7 +307,10 @@ export function MountedBottomDrawer({
           style={[
             styles.anchor,
             isWideLayout && styles.anchorWide,
-            { paddingLeft: insets.left, paddingRight: insets.right }
+            {
+              paddingLeft: spannedSide === 'left' ? 0 : insets.left,
+              paddingRight: spannedSide === 'right' ? 0 : insets.right
+            }
           ]}
           pointerEvents="box-none"
         >

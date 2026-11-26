@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Platform } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { ComposerUsageDisplayPicker } from '../composer-usage/ComposerUsageDisplayPicker'
+import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -160,6 +162,17 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
             onPress={() => void resetNativeChatTextSettings()}
             testID="chat-text-reset"
           />
+        </SettingsSection>
+
+        <SettingsSection
+          title={t('settings.nativeChatSettingsScreen.composerUsageHeading', 'COMPOSER USAGE')}
+          footer={t(
+            'settings.nativeChatSettingsScreen.composerUsageDescription',
+            'Chat and agent terminal composers show your agent plan as used or left. Tap the meter for every window, reset times and pace.'
+          )}
+        >
+          <ComposerUsageWindowPicker inSettings />
+          <ComposerUsageDisplayPicker inSettings />
         </SettingsSection>
       </SettingsScreen>
     </GestureHandlerRootView>

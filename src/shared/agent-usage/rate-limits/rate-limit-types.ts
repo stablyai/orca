@@ -1,3 +1,5 @@
+import type { UsageHistoryByWindow } from './usage-window-history'
+
 export type RateLimitWindow = {
   /** Percentage of the window consumed (0–100). */
   usedPercent: number
@@ -141,6 +143,8 @@ export type ProviderRateLimits = {
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */
   error: string | null
+  /** Shown beside an 'ok' reading that needs explaining, e.g. Muse before its first turn in a window. */
+  notice?: string | null
   status: ProviderRateLimitStatus
   usageMetadata?: UsageRateLimitMetadata
 }
@@ -222,6 +226,8 @@ export type RateLimitState = {
   inactiveCodexAccounts: InactiveAccountUsage[]
   /** Saved Antigravity accounts; agy has one shared login, so only the active one is ever read. */
   antigravityAccounts: AntigravityAccountUsage[]
+  /** Used-percent samples of each active provider window since its last reset; absent on older hosts. */
+  usageHistory?: UsageHistoryByWindow
 }
 
 export type RuntimeTargetUsageProvider = 'claude' | 'codex'

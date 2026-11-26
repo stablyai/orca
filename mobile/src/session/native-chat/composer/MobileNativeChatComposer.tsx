@@ -39,6 +39,7 @@ import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatCom
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
+import { MobileNativeChatActionGap } from './MobileNativeChatActionGap'
 import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
 export type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 
@@ -333,7 +334,14 @@ export function MobileNativeChatComposer({
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             <MobileNativeChatDictationLeading
-              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+              {...{ micActive, micStarting, micProcessing, cancelRef }}
+              trailing={
+                <MobileNativeChatActionGap
+                  agent={editSession ? null : (agent ?? null)}
+                  ring={contextRing.ring}
+                  toggle={null}
+                />
+              }
             >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}

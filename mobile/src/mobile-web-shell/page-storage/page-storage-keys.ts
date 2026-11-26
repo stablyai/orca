@@ -52,6 +52,10 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:terminalSplitLayout',
   /** Whether every Duo chat runs across the status column. */
   'orca:duoChatExpanded',
+  /** Which usage window the composer meter shows. */
+  'orca:composerUsageWindow',
+  /** Whether that meter shows percent used or percent left. */
+  'orca:composerUsageDisplay',
   /** Terminal font, line spacing and weight. */
   'orca:terminalFontStyle',
   /** Chat text size, font and spacing; a pinch in a chat saves here. */
@@ -70,6 +74,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
 export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalSplitLayout',
   'orca:duoChatExpanded',
+  'orca:composerUsageWindow',
+  'orca:composerUsageDisplay',
   'orca:terminalFontStyle',
   'orca:nativeChatText',
   'orca:newAgentSurface',
