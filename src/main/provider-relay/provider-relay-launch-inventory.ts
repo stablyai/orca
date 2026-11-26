@@ -302,6 +302,11 @@ export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolea
   return ask !== undefined && seq > ask.floor
 }
 
+/** Something still waits on the chat's run: an ask in flight, or its unknown verdict. */
+export function providerRelayRunAwaited(chatKey: string): boolean {
+  return asks.has(chatKey) || unknownRuns.has(chatKey)
+}
+
 /** Its chat closed or was deleted, or a new run replaced the one asked about. */
 export function forgetProviderRelayRunVerdict(chatKey: string): void {
   unknownRuns.delete(chatKey)

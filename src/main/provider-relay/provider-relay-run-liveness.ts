@@ -7,8 +7,6 @@ import {
   type AgentSessionRunPlacement
 } from '../../shared/agent-session/lifecycle/agent-session-run-placement'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { probeAgentSessionProcessIdentity } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
-import { readEchoedAgentSessionSpawnToken } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 import { providerRelayChannel } from './provider-relay-channel'
 import {
   forgetListedProviderRelayChat,
@@ -21,6 +19,7 @@ import {
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
 import { providerRelayRoute } from './provider-relay-route'
+import { agentProvenGone, provenGone } from './provider-relay-exit-probes'
 
 /** `kept`: its daemon start holds it. `gone`: proven ended. `unknown`: its daemon can't say yet. */
 export type ProviderRelayRunLiveness = 'kept' | 'gone' | 'unknown'
@@ -108,7 +107,7 @@ async function decide(
   }
   // Its daemon start can't answer: only both processes proven gone end the run. A daemon can lose
   // its endpoint and keep its agents, and a supervised agent may outlive its daemon for a grace.
-  if (await processesProvenGone(placement, waitMs)) {
+  if (await processesProvenGone(record.sessionId, placement, waitMs)) {
     forget()
     return 'gone'
   }
@@ -159,14 +158,6 @@ async function instanceClient(
   return waiting.find(named) ?? null
 }
 
-async function provenGone(identity: AgentSessionProcessIdentity, readToken: boolean) {
-  const probe = await probeAgentSessionProcessIdentity({
-    identity,
-    deps: readToken ? { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken } : {}
-  }).catch(() => null)
-  return probe?.outcome === 'pid-absent' || probe?.outcome === 'identity-mismatch'
-}
-
 /** One daemon start's proof, shared by every chat asking within 2 s; bounded by daemon starts. */
 const DAEMON_PROOF_FRESH_MS = 2_000
 const daemonProofs = new Map<string, { at: number; gone: Promise<boolean> }>()
@@ -189,87 +180,16 @@ function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promis
   return gone
 }
 
-/**
- * Agents outliving a dead daemon are probed four at a time in arrival order. Each agent has at most
- * one probe queued or running, however many chats ask, so the queue holds at most the agents being
- * asked about. A probe keeps its place when its callers stop waiting: each caller waits only its
- * own deadline, and the next ask finds the probe's answer (a proof of exit is kept until it's read).
- */
-const AGENT_PROBES_RUNNING = 4
-const AGENT_PROOF_KEPT_MS = 5 * 60_000
-let agentProbesRunning = 0
-const agentProbeQueue: (() => void)[] = []
-let agentProbeHead = 0
-const agentProbes = new Map<string, Promise<boolean>>()
-/** Exits proven after their asker stopped waiting, by agent; read once, pruned on insert. */
-const agentExits = new Map<string, number>()
-
-function admitNextAgentProbe(): void {
-  while (agentProbesRunning < AGENT_PROBES_RUNNING && agentProbeHead < agentProbeQueue.length) {
-    const start = agentProbeQueue[agentProbeHead]
-    agentProbeHead += 1
-    agentProbesRunning += 1
-    start()
-  }
-  if (agentProbeHead > 32 && agentProbeHead * 2 > agentProbeQueue.length) {
-    agentProbeQueue.splice(0, agentProbeHead)
-    agentProbeHead = 0
-  }
-}
-
-function agentProbe(key: string, agent: AgentSessionProcessIdentity): Promise<boolean> {
-  const running = agentProbes.get(key)
-  if (running) {
-    return running
-  }
-  const probe = new Promise<void>((admit) => {
-    agentProbeQueue.push(admit)
-    admitNextAgentProbe()
-  })
-    .then(() => provenGone(agent, true))
-    .then((gone) => {
-      if (gone) {
-        for (const [old, at] of agentExits) {
-          if (Date.now() - at >= AGENT_PROOF_KEPT_MS) {
-            agentExits.delete(old)
-          }
-        }
-        agentExits.set(key, Date.now())
-      }
-      return gone
-    })
-    .finally(() => {
-      agentProbes.delete(key)
-      agentProbesRunning -= 1
-      admitNextAgentProbe()
-    })
-  agentProbes.set(key, probe)
-  return probe
-}
-
-async function agentProvenGone(
-  agent: AgentSessionProcessIdentity,
-  deadlineMs: number
-): Promise<boolean> {
-  const key = `${agent.hostId}:${agent.pid}:${agent.processStartTimeMs}:${agent.spawnToken}`
-  if (agentExits.delete(key)) {
-    return true
-  }
-  const gone = await withTimeout(agentProbe(key, agent), deadlineMs, false)
-  // The answer reached this caller: it isn't kept for a later one.
-  if (gone) {
-    agentExits.delete(key)
-  }
-  return gone
-}
-
 async function processesProvenGone(
+  chatKey: string,
   placement: Extract<AgentSessionRunPlacement, { kind: 'relayed' }>,
   deadlineMs: number
 ): Promise<boolean> {
   const { daemon, agent } = placement
   // A live daemon decides alone; its agent is only probed once the daemon is proven gone.
-  return (await daemonProvenGone(daemon, agent.hostId)) && agentProvenGone(agent, deadlineMs)
+  return (
+    (await daemonProvenGone(daemon, agent.hostId)) && agentProvenGone(chatKey, agent, deadlineMs)
+  )
 }
 
 /**
