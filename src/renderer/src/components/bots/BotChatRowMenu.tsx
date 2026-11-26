@@ -1,8 +1,7 @@
 // A bot chat row's menu, the same from its ⋯ and a right-click, in the Chats tab and the sidebar:
-// Open, then Delete chat (stopping it when it runs), off with the reason while it can't go. The live
-// Home, where the agent's mail and connectors land, has no Delete.
+// Open, Archive or Restore when the row allows it, then Delete chat apart from the live Home.
 import type React from 'react'
-import { ArrowUpRight, Ellipsis, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowUpRight, Ellipsis, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -27,6 +26,8 @@ import {
 } from '@/lib/agent-session/chat-deletion/orca-chat-delete'
 import type { Bot } from '../../../../shared/bot-types'
 import { botChatOffersDelete, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import { canArchiveBotChat, isBotChatArchived } from '../../../../shared/bots/bot-chat-archive'
+import { setBotChatArchived, useBotChatArchive } from './use-bot-chat-archive'
 
 type MenuKind = 'dropdown' | 'context'
 
@@ -47,12 +48,23 @@ function BotChatMenuItems({
   const Item = kind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = kind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const label = t('bots.chats.delete', 'Delete chat')
+  const archive = useBotChatArchive()
+  const archived = isBotChatArchived(archive, bot.hostId, bot.id, chat)
+  const offersArchive = archived || canArchiveBotChat(chat)
   return (
     <>
       <Item onSelect={onOpen}>
         <ArrowUpRight className="size-3.5" />
         {t('bots.chats.open', 'Open')}
       </Item>
+      {offersArchive ? (
+        <Item onSelect={() => setBotChatArchived(bot.hostId, bot.id, chat, !archived)}>
+          {archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
+          {archived
+            ? t('bots.chats.restore', 'Restore chat')
+            : t('bots.chats.archive', 'Archive chat')}
+        </Item>
+      ) : null}
       {botChatOffersDelete(chat) ? (
         <>
           <Separator />
