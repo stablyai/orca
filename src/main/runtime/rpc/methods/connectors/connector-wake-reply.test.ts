@@ -188,6 +188,15 @@ describe("the bot's Chat answers the DM a start came from, until anyone else wri
     await arrive(OTHER_DM, 'd2')
     await arrive(DM, 'd3')
     expect(await startFrom('d1')).toEqual({ place: null })
+    // An automation run adopted into the Chat after the opener, then the DM again.
+    await arrive(DM, 'd4')
+    deliveries.adopt(
+      { source: 'slack', externalId: OTHER_DM },
+      { worktreeId: 'folder:w', sessionId: CHAT, agent: 'claude' },
+      'run'
+    )
+    await arrive(DM, 'd5')
+    expect(await startFrom('d4')).toEqual({ place: null })
     // An opener Orca never saw arrive (a reset since, or an earlier Orca): unknown, nothing.
     expect(await startFrom('d9')).toEqual({ place: null })
     ownTurn()

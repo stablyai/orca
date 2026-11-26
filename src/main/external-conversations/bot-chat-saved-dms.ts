@@ -10,19 +10,28 @@ const MAX_DMS_PER_CHAT = 64
 type Arrival = { deliveryId: string | null; conversation: string }
 
 export class BotChatSavedDms {
-  private readonly arrivals = new Map<string, Arrival[]>()
+  // Only for bot Chats, the chats that can save a DM: one per bot, not one per thread.
+  private readonly arrivals = new Map<string, { botId: string; log: Arrival[] }>()
   private readonly saved = new Map<string, { botId: string; dms: Map<string, ConversationKey> }>()
 
   /** Recorded before it is sent: anything a conversation brings a chat voids every DM saved there
    *  but its own, whichever turn it opens or joins. */
-  arrived(sessionId: string, key: ConversationKey, deliveryId?: string): void {
+  arrived(
+    sessionId: string,
+    key: ConversationKey,
+    { botChat, deliveryId }: { botChat?: string; deliveryId?: string } = {}
+  ): void {
     const conversation = conversationId(key)
-    const log = this.arrivals.get(sessionId) ?? []
-    log.push({ deliveryId: deliveryId ?? null, conversation })
-    if (log.length > ARRIVALS_KEPT) {
-      log.shift()
+    // Once a chat is a bot's Chat, everything that reaches it is logged, whatever it came as.
+    const known = this.arrivals.get(sessionId)
+    const entry = known ?? (botChat ? { botId: botChat, log: [] } : null)
+    if (entry) {
+      entry.log.push({ deliveryId: deliveryId ?? null, conversation })
+      if (entry.log.length > ARRIVALS_KEPT) {
+        entry.log.shift()
+      }
+      this.arrivals.set(sessionId, entry)
     }
-    this.arrivals.set(sessionId, log)
     const chat = this.saved.get(sessionId)
     for (const [to, dm] of chat?.dms ?? []) {
       if (conversationId(dm) !== conversation) {
@@ -38,7 +47,7 @@ export class BotChatSavedDms {
     botId: string,
     { key, openerDeliveryId, to }: { key: ConversationKey; openerDeliveryId: string; to: string }
   ): boolean {
-    const log = this.arrivals.get(sessionId) ?? []
+    const log = this.arrivals.get(sessionId)?.log ?? []
     const conversation = conversationId(key)
     let at = log.length - 1
     while (at >= 0 && log[at]?.deliveryId !== openerDeliveryId) {
@@ -66,9 +75,11 @@ export class BotChatSavedDms {
 
   /** A deleted bot's saved DMs go with it. */
   forgetBot(botId: string): void {
-    for (const [sessionId, chat] of this.saved) {
-      if (chat.botId === botId) {
-        this.saved.delete(sessionId)
+    for (const chats of [this.saved, this.arrivals]) {
+      for (const [sessionId, chat] of chats) {
+        if (chat.botId === botId) {
+          chats.delete(sessionId)
+        }
       }
     }
   }

@@ -39,6 +39,9 @@ export function linkedChat(worktreeId: string, link: ExternalConversationLink): 
   return { worktreeId, sessionId, agent, ...(bot ? { bot } : {}) }
 }
 
+const botChatOf = (chat: LinkableChat) =>
+  chat.bot?.kind === 'bot-chat' ? chat.bot.botId : undefined
+
 export class ChatDeliveries {
   // Chats sent a delivery since their last turn ended; that turn is the delivery's, not Orca-typed.
   private readonly delivered = new Set<string>()
@@ -169,7 +172,7 @@ export class ChatDeliveries {
 
   /** A chat that already took its message elsewhere (an automation run): its turn is the conversation's. */
   adopt(key: ConversationKey, chat: LinkableChat, text: string): void {
-    this.savedDms.arrived(chat.sessionId, key)
+    this.savedDms.arrived(chat.sessionId, key, { botChat: botChatOf(chat) })
     // Marked first, so the running turn the link joins is the conversation's.
     this.delivered.add(chat.sessionId)
     try {
@@ -193,7 +196,10 @@ export class ChatDeliveries {
     }
   ): Promise<Delivery> {
     // Before anything is sent: the chat may take it, or queue it behind a running turn, at once.
-    this.savedDms.arrived(chat.sessionId, key, delivery.deliveryId)
+    this.savedDms.arrived(chat.sessionId, key, {
+      botChat: botChatOf(chat),
+      deliveryId: delivery.deliveryId
+    })
     // A send starts the chat's agent, so the host is installed for it as any send would.
     const generation = this.generations.get(chat.sessionId) ?? {}
     this.generations.set(chat.sessionId, generation)
