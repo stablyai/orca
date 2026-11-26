@@ -1,5 +1,6 @@
 import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs'
 import { access, open, readdir, readFile, stat } from 'node:fs/promises'
+import { withTimeoutResult } from '../../concurrency/promise-timeout-fallback'
 import {
   hasNativeExecutableMagic,
   isNativeExecutable,
@@ -108,10 +109,32 @@ export function runCliFsReadsSync<T>(reads: CliFsReads<T>): T {
   return step.value
 }
 
-export async function runCliFsReadsAsync<T>(reads: CliFsReads<T>): Promise<T> {
+const CLI_BATCH_FS_PROBE_TIMEOUT_MS = 1_000
+const CLI_BATCH_FS_BUDGET_MS = 5_000
+
+export async function runCliFsReadsAsync<T>(
+  reads: CliFsReads<T>,
+  onProbeTimeout?: () => void
+): Promise<T> {
+  const deadline = Date.now() + CLI_BATCH_FS_BUDGET_MS
   let step = reads.next()
   while (!step.done) {
-    step = reads.next(await readAsync(step.value))
+    if (!onProbeTimeout) {
+      step = reads.next(await readAsync(step.value))
+      continue
+    }
+    const remaining = deadline - Date.now()
+    const result =
+      remaining > 0
+        ? await withTimeoutResult(
+            readAsync(step.value),
+            Math.min(remaining, CLI_BATCH_FS_PROBE_TIMEOUT_MS)
+          )
+        : undefined
+    if (!result?.ok) {
+      onProbeTimeout()
+    }
+    step = reads.next(result?.ok ? result.value : null)
   }
   return step.value
 }

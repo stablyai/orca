@@ -257,6 +257,9 @@ async function rewriteLaunchExecutable(
       }
     }
     if (hermesArgv) {
+      if (selected.kind === 'by-name' && hermesArgv[0] === program && source === shell) {
+        return { command, launchConfig }
+      }
       return {
         command: buildHermesQueryCommand(
           [selected.kind === 'full-path' ? selected.path : program, ...hermesArgv.slice(1)],

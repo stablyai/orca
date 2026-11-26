@@ -17,9 +17,10 @@ export function resolveCliCommandAsync(
 
 export function resolveCliCommandsAsync(
   commandNames: readonly string[],
-  options: ResolveCommandOptions = {}
+  options: ResolveCommandOptions = {},
+  onProbeTimeout?: () => void
 ): Promise<Map<string, string>> {
-  return runCliFsReadsAsync(cliCommandsLookup(commandNames, options))
+  return runCliFsReadsAsync(cliCommandsLookup(commandNames, options), onProbeTimeout)
 }
 
 /** resolveExecutableCommand with every filesystem read off the event loop. */

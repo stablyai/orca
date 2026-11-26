@@ -221,6 +221,7 @@ export async function detectAgentCommandInventoryOnHost(
           }),
           waitSignal
         ))
+      throwIfSignalAborted(waitSignal)
       return { slot, inventory }
     } catch (error) {
       const latest = slot?.published?.inventory
@@ -231,6 +232,7 @@ export async function detectAgentCommandInventoryOnHost(
           inventory: {
             found: latest?.found ?? new Set<string>(),
             matches: latest?.matches ?? new Map<string, AgentPathMatch>(),
+            probed: new Set<string>(),
             incomplete: true
           }
         }
@@ -256,7 +258,9 @@ export async function detectAgentCommandInventoryOnHost(
   }
   return {
     found,
-    ...(inventory.incomplete ? { incomplete: true } : {}),
+    ...(inventory.incomplete || commands.some((command) => !inventory.probed.has(command))
+      ? { incomplete: true }
+      : {}),
     ...(afterPublication === undefined ? {} : { afterPublication })
   }
 }

@@ -25,12 +25,17 @@ it("checks one agent by probing only that agent's commands", async () => {
 
 it("checks one agent in a WSL project by probing only that agent's commands in the guest", async () => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
+  vi.mocked(detectAgentCommandInventoryOnHost).mockResolvedValueOnce({
+    found: new Set(['claude']),
+    incomplete: true
+  })
   await expect(
     detectInstalledAgents({ wslDistro: 'Ubuntu' }, { onlyTuiAgent: 'claude' })
   ).resolves.toEqual(['claude'])
   expect(probed()).toEqual(['claude'])
   expect(vi.mocked(detectAgentCommandInventoryOnHost).mock.calls[0]?.[1]).toEqual({
     context: { wslDistro: 'Ubuntu' },
-    onlyRequested: true
+    onlyRequested: true,
+    waitForCompletion: true
   })
 })

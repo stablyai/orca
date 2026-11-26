@@ -17,6 +17,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/s
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import {
+  agentLaunchUnbuildableMessage,
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan
 } from '../../../../shared/agent-launch/startup/tui-agent-startup'
@@ -247,7 +248,7 @@ export async function buildWorktreeStartupForAgent(
     startupPlan = buildAgentStartupPlan({ ...planInputs, prompt, allowEmptyPromptLaunch: true })
   }
   if (!startupPlan) {
-    throw new Error(`Could not build launch command for ${agent}.`)
+    throw new Error(agentLaunchUnbuildableMessage(agent))
   }
   return {
     agent,

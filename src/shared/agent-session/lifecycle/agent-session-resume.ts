@@ -295,9 +295,11 @@ export type SavedResumeDecision = {
   verdict: 'admitted' | 'chat-home' | 'chat-writing' | 'unverifiable'
 }
 
+export type AgentProgramBlockReason = 'unknown' | 'unavailable' | 'unbuildable'
+
 /** Effective facts of a terminal launch; a refused shell carries no rejected agent metadata. */
 export type TerminalLaunchResult = {
-  agentProgramBlocked?: 'unknown' | 'unavailable'
+  agentProgramBlocked?: AgentProgramBlockReason
   savedResumeDecision?: SavedResumeDecision
   agentResumeUnavailable?: true
   agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'

@@ -15,7 +15,7 @@ import {
 import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
-  detectAgentsOnHost,
+  detectAgentInventoryOnHost,
   HOST_DEFAULT_AGENT_DETECTION
 } from '../../../preflight/workspace-agent-detection'
 import { defineMethod } from '../core'
@@ -53,9 +53,12 @@ function availabilitySnapshot(
 export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
   const settings = runtime.requireStore().getSettings()
   const [detected, roster] = await Promise.all([
-    detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION, hostDetectionOptions(runtime)).catch(
-      () => null
-    ),
+    detectAgentInventoryOnHost(HOST_DEFAULT_AGENT_DETECTION, {
+      ...hostDetectionOptions(runtime),
+      waitForCompletion: true
+    })
+      .then(({ agents, incomplete }) => (incomplete ? null : agents))
+      .catch(() => null),
     availabilitySnapshot(runtime)
   ])
   const detectedIds = detected?.filter(isTuiAgent) ?? null

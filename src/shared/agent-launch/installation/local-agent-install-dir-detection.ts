@@ -6,16 +6,20 @@ export async function detectCommandsInInstallDirs(
   commands: readonly string[],
   /** The PATH detection searched; defaults to this process's own. */
   pathEnv?: string,
-  options?: { skipPathSearch?: boolean }
+  options?: { skipPathSearch?: boolean; onProbeTimeout?: () => void }
 ): Promise<Map<string, string>> {
   if (commands.length === 0) {
     return new Map()
   }
   try {
-    const resolvedCommands = await resolveCliCommandsAsync(commands, {
-      ...(pathEnv === undefined ? {} : { pathEnv }),
-      ...(options?.skipPathSearch ? { skipPathSearch: true } : {})
-    })
+    const resolvedCommands = await resolveCliCommandsAsync(
+      commands,
+      {
+        ...(pathEnv === undefined ? {} : { pathEnv }),
+        ...(options?.skipPathSearch ? { skipPathSearch: true } : {})
+      },
+      options?.onProbeTimeout
+    )
     // Each command found, to the full path it was found at.
     return new Map(
       commands.flatMap((command) => {

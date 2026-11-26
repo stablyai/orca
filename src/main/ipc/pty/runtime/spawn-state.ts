@@ -21,6 +21,7 @@ import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
+  AgentProgramBlockReason,
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -62,7 +63,7 @@ export type RuntimePtySpawnState = {
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
-  agentProgramBlocked?: 'unknown' | 'unavailable'
+  agentProgramBlocked?: AgentProgramBlockReason
   launchCommand: string | undefined
   /** What the host's MCP server list gave the pane, recorded at commit. */
   terminalMcp?: TerminalMcpPaneLaunch | null

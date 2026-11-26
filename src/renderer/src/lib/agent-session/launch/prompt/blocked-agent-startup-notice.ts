@@ -1,10 +1,16 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { notifyAgentLaunchFailure } from '../failure/agent-launch-failure'
 
 export function notifyBlockedAgentStartup(
-  reason: 'unknown' | 'unavailable',
+  reason: AgentProgramBlockReason,
   request: string | undefined
 ): void {
+  if (reason === 'unbuildable') {
+    notifyAgentLaunchFailure('hermes')
+    return
+  }
   toast.message(
     reason === 'unavailable'
       ? translate('terminal.agentStartup.unavailable', 'The agent could not be found on this host.')

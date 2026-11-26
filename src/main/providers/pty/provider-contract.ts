@@ -62,7 +62,7 @@ export type PtySpawnOptions = {
   /** Main-validated home provenance for an automatic Codex session resume. */
   codexHomePathOverride?: { value: string | null }
   command?: string
-  /** Pane text shown before a fresh startup command, written by the host that spawns its shell. */
+  /** Pane text shown at startup by the host that spawns the shell. */
   startupNotice?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery

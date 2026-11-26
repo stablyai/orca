@@ -100,12 +100,17 @@ export type RuntimeSkillCommandSurface = {
     signal?: AbortSignal,
     onProgress?: (progress: SkillBundleInstallProgress) => void
   ): Promise<SkillBundleInstallResult>
-  planLocalBundledSkills(request: LocalBundledSkillPlanRequest): Promise<BundledSkillPlan>
+  planLocalBundledSkills(
+    request: LocalBundledSkillPlanRequest,
+    signal?: AbortSignal
+  ): Promise<BundledSkillPlan>
   executeLocalBundledSkills(
-    request: LocalBundledSkillExecuteRequest
+    request: LocalBundledSkillExecuteRequest,
+    signal?: AbortSignal
   ): Promise<BundledSkillInstallResult>
   autoUpdateLocalBundledSkills(
-    request: BundledSkillAutoUpdateRequest
+    request: BundledSkillAutoUpdateRequest,
+    signal?: AbortSignal
   ): Promise<BundledSkillInstallResult>
   getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null
   cancelSharedSkillInstall(operationId: string): boolean

@@ -144,7 +144,9 @@ export async function detectInstalledAgentInventory(
     probeCommands,
     {
       context,
-      afterPublication: options?.afterPublication,
+      ...(options?.afterPublication === undefined
+        ? {}
+        : { afterPublication: options.afterPublication }),
       waitForCompletion: options?.waitForCompletion,
       ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
       ...(options?.onlyTuiAgent ? { onlyRequested: true } : {}),
@@ -192,12 +194,19 @@ export async function detectInstalledAgents(
       { waitForCompletion: true, ...options },
       revalidate,
       signal
-    )
+    ),
+    options
   )
 }
 
-function completeAgentList(inventory: InstalledAgentInventory): string[] {
-  if (inventory.incomplete) {
+function completeAgentList(
+  inventory: InstalledAgentInventory,
+  options?: InstalledAgentDetectionOptions
+): string[] {
+  if (
+    inventory.incomplete &&
+    (inventory.afterPublication !== undefined || options?.waitForCompletion === false)
+  ) {
     throw new AgentInventoryDeadlineError(inventory.afterPublication)
   }
   return inventory.agents
@@ -223,6 +232,7 @@ export async function detectInstalledAgentsWithShellPathHydration(
       context,
       { waitForCompletion: true, ...options },
       signal
-    )
+    ),
+    options
   )
 }

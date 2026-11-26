@@ -19,20 +19,38 @@ export async function scanLocalAgentCommandInventory(
   const env = localEnv ?? (readLoginPath ? await resolveLoginShellEnvironment() : process.env)
   const pathEnv = env.PATH ?? Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1]
   const matches = new Map<string, AgentPathMatch>()
+  const unverified = new Set<string>()
   const found = await findCommandsOnLocalPath([...probed], {
     env,
-    inventory: { isRuntimePath: isOrcaAgentRuntimePath, matches }
+    inventory: { isRuntimePath: isOrcaAgentRuntimePath, matches },
+    unverified
   })
-  const installs = await detectCommandsInInstallDirs(
-    [...probed].filter((cmd) => !found.has(cmd) && !hasPathSeparatorToken(cmd)),
-    pathEnv,
-    { skipPathSearch: true }
+  const installerCommands = [...probed].filter(
+    (cmd) => !found.has(cmd) && !hasPathSeparatorToken(cmd)
   )
+  let installerTimedOut = false
+  const installs = await detectCommandsInInstallDirs(installerCommands, pathEnv, {
+    skipPathSearch: true,
+    onProbeTimeout: () => {
+      installerTimedOut = true
+    }
+  })
   for (const [command, user] of installs) {
     if (!isOrcaAgentRuntimePath(user)) {
       matches.set(command, { ...matches.get(command), user })
       found.add(command)
     }
   }
-  return { matches, found, probed }
+  if (installerTimedOut) {
+    for (const command of installerCommands) {
+      unverified.add(command)
+    }
+  }
+  return {
+    matches,
+    found,
+    probed: unverified.size
+      ? new Set([...probed].filter((command) => found.has(command) || !unverified.has(command)))
+      : probed
+  }
 }

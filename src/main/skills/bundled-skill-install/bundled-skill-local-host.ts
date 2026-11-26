@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
@@ -30,11 +31,15 @@ export async function localBundledSkillInput(options: {
   /** Use the app account router when supplied; otherwise ignore CLAUDE_CONFIG_DIR injected by Orca managed-account terminals. */
   claudeConfigDirectory?: string | null
   selection: BundledSkillSelection
+  signal?: AbortSignal
 }): Promise<BundledSkillServiceInput> {
-  const { destination, selection } = options
+  const { destination, selection, signal } = options
+  throwIfSignalAborted(signal)
   const agents =
     options.agents ??
-    (await detectInstalledAgentsWithShellPathHydration()).filter(isSkillInstallProviderId)
+    (await detectInstalledAgentsWithShellPathHydration(undefined, undefined, signal)).filter(
+      isSkillInstallProviderId
+    )
   return {
     destination,
     agents,

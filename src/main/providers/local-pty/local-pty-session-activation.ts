@@ -129,7 +129,7 @@ export function activateLocalPtySession(args: {
     onEmission: emitIngressData
   })
   startupIngressByPty.set(id, startupIngress)
-  if (spawn.startupNotice && spawn.command) {
+  if (spawn.startupNotice) {
     startupIngress.accept(spawn.startupNotice)
   }
 

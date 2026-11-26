@@ -1,4 +1,7 @@
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProgramBlockReason,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { preparePtyAgentLaunch } from './prepare-pty-agent-launch'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -64,7 +67,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   env: Record<string, string> | undefined
   launchCommand: string | undefined
   launchConfig?: SleepingAgentLaunchConfig
-  blocked?: 'unknown' | 'unavailable'
+  blocked?: AgentProgramBlockReason
   /** What the host's MCP server list gave the pane; null when it was left as main leaves it. */
   terminalMcp: TerminalMcpPaneLaunch | null
 }> {

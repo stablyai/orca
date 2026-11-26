@@ -47,6 +47,10 @@ export type AgentStartupPlan = {
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
+export function agentLaunchUnbuildableMessage(agent: TuiAgent): string {
+  return `Could not build launch command for ${agent}.`
+}
+
 export function buildAgentStartupPlan(args: {
   agent: TuiAgent
   prompt: string

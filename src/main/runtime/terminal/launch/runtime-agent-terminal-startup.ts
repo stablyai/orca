@@ -14,7 +14,10 @@ import {
   buildExecutionHostAgentStartupPlan,
   planExecutionHostStartupWithPromptCandidate
 } from '../../../opencode/model-launch/opencode-model-startup-plan'
-import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import {
+  agentLaunchUnbuildableMessage,
+  agentPromptRidesLaunchCommand
+} from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
@@ -198,9 +201,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
   if (!startupPlan) {
     // Explicit agents without plans must not become bare shells that never reach readiness.
     if (opts.startupAgent) {
-      throw new AgentLaunchUnbuildableError(
-        `Could not build launch command for ${opts.startupAgent}.`
-      )
+      throw new AgentLaunchUnbuildableError(agentLaunchUnbuildableMessage(opts.startupAgent))
     }
     return opts
   }

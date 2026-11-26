@@ -1,5 +1,6 @@
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
+import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import {
@@ -62,7 +63,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     session.startupDraftPasteAttempted = true
     clearStartupDraftPasteTimers()
   }
-  session.notifyBlockedStartup = (reason: 'unknown' | 'unavailable'): void => {
+  session.notifyBlockedStartup = (reason: AgentProgramBlockReason): void => {
     notifyBlockedAgentStartup(reason, session.startupDraftPrompt ?? session.paneStartup?.command)
   }
   const getStartupDraftPtyId = (): string | null => {

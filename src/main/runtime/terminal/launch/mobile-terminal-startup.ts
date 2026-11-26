@@ -11,7 +11,10 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
-import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import {
+  agentLaunchUnbuildableMessage,
+  buildAgentStartupPlan
+} from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
@@ -154,7 +157,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
-      throw new Error(`Could not build launch command for ${opts.agent}.`)
+      throw new Error(agentLaunchUnbuildableMessage(opts.agent))
     }
     if (opts.agentPrompt && startupPlan.followupPrompt) {
       throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)

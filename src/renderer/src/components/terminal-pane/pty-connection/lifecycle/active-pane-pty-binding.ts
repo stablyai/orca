@@ -1,4 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import type { AgentProgramBlockReason } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store'
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/agent-session/accounts/codex/codex-stale-pane-sweep'
@@ -126,7 +127,7 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
     return true
   }
 
-  session.onPtySpawn = (ptyId: string, blocked?: 'unknown' | 'unavailable'): void => {
+  session.onPtySpawn = (ptyId: string, blocked?: AgentProgramBlockReason): void => {
     // Track actual fresh spawns so unused shell-startup failures remain visible; reattach/cold restore must retain ordinary exit semantics.
     session.spawnedFreshPtyId = ptyId
     // Seed Command Code working state once bound; it has no prompt-start hook, and later hooks refine it.

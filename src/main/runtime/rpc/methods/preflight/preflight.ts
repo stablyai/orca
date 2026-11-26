@@ -45,7 +45,7 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.installedAgents',
     permission: 'workspace',
     params: PreflightAgentDetection,
-    handler: (params, { runtime }) => listInstalledWorkspaceAgents(runtime, params)
+    handler: (params, { runtime, signal }) => listInstalledWorkspaceAgents(runtime, params, signal)
   }),
   defineMethod({
     name: 'preflight.check',
@@ -58,7 +58,7 @@ export const PREFLIGHT_METHODS = [
     permission: 'workspace',
     params: PreflightProjectAgentDetection,
     // Only the host knows the workspace's actual project runtime, including WSL.
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, signal }) => {
       if (params.launch) {
         const ptyId = runtime.getTerminalPtyIdForHandle(params.launch.terminal)
         return ptyId
@@ -91,7 +91,7 @@ export const PREFLIGHT_METHODS = [
             ...hostDetectionOptions(runtime),
             afterPublication: params.afterPublication
           })
-        : detectAgentsOnHost(host, hostDetectionOptions(runtime))
+        : detectAgentsOnHost(host, hostDetectionOptions(runtime), signal)
     }
   }),
   defineMethod({

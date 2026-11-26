@@ -18,6 +18,8 @@ import {
   ORCA_HERMES_STARTUP_QUERY_ARGV_ENV,
   ORCA_HERMES_STARTUP_QUERY_ENV
 } from '../../../../shared/agent-launch/startup/hermes-startup-query'
+import { agentLaunchUnbuildableMessage } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { AgentProgramBlockReason } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   readCodexDirectLaunch,
   withCodexDirectLaunchCommand
@@ -59,7 +61,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   const {
     command: startupCommand,
     launchConfig,
-    blocked,
+    blocked: selectionBlocked,
     rebuiltHermesQuery
   } = await alignManagedAgentLaunchAtSpawn(
     {
@@ -81,7 +83,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     paneEnv = { ...paneEnv }
     delete paneEnv[GENERATED_AGENT_LAUNCH_ENV]
     delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
-    if (blocked) {
+    if (selectionBlocked) {
       delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ENV]
     }
   }
@@ -197,7 +199,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       : await prepareDirectLaunch(agentCommand, shell, input, env, local, images)
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   // Setup gates carry the wrapper in the environment, where it is counted once.
-  const keepOriginalHermesQuery =
+  const hermesQueryTooLarge =
     rebuiltHermesQuery &&
     prepared !== undefined &&
     !hermesStartupQueryFits(
@@ -205,9 +207,14 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       sequenced ? { ...env, [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: prepared } : env,
       platform
     )
-  if (keepOriginalHermesQuery) {
-    agentCommand = command
-    prepared = command
+  const blocked: AgentProgramBlockReason | undefined = hermesQueryTooLarge
+    ? 'unbuildable'
+    : selectionBlocked
+  if (hermesQueryTooLarge) {
+    agentCommand = undefined
+    prepared = undefined
+    delete env[ORCA_HERMES_STARTUP_QUERY_ENV]
+    delete env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
   }
   if (sequenced) {
     if (prepared === undefined) {
@@ -219,12 +226,14 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   return {
     env,
     launchAgent: blocked ? undefined : launchAgent,
-    launchConfig: keepOriginalHermesQuery ? input.launchConfig : launchConfig,
+    launchConfig,
     blocked,
     launchCommand: sequenced && !blocked ? input.launchCommand : agentCommand,
     startup: sequenced && !blocked ? input.launchCommand : prepared,
     settings,
-    startupNotice: authoredRootLaunch?.notice ?? rootLaunch?.notice,
+    startupNotice: hermesQueryTooLarge
+      ? `\r\n[orca] ${agentLaunchUnbuildableMessage('hermes')}\r\n`
+      : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
     terminalMcp: mcp.pane
   }
 }
