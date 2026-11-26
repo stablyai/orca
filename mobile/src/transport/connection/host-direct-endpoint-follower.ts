@@ -11,6 +11,7 @@ import {
   adoptHostDirectEndpoint,
   markHostDirectEndpointListed
 } from '../../host-catalog/host-direct-endpoint-persistence'
+import { peekHosts } from '../../host-catalog/host-store'
 import { isPairingRelayRpcUnavailable } from '../../pairing/pairing-relay-rpc-unavailable'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../rpc/rpc-operation'
 import { rpcResultVariant } from '../rpc/rpc-operation-result-reader'
@@ -29,7 +30,7 @@ const pairingDirectEndpointsRead = bindDeferredRpcOperation(
 export type HostDirectEndpointFollower = {
   /** Where the desktop should answer now: an unverified replacement, else the saved endpoint. */
   directEndpoint(): string
-  /** `directEndpoint()`, remembered so a direct win there proves the replacement. */
+  /** `directEndpoint()` for a dial, remembered so a direct win there proves the replacement. */
   dialEndpoint(): string
   onConnected(): void
   refresh(): void
@@ -42,9 +43,13 @@ export function createHostDirectEndpointFollower(args: {
   saved: HostDirectEndpointFields
 }): HostDirectEndpointFollower {
   const { client, hostId } = args
-  let saved: HostDirectEndpointFields = args.saved
-  // The opener may hand over a primed copy older than storage; the first answer re-reads the row.
-  let syncedWithStorage = false
+  // The last settled host list is storage as of its read, until a write clears it; the opener's copy may be older.
+  const settledRow = peekHosts()?.find((host) => host.id === hostId)
+  const { endpoint, directEndpointOrigin } = settledRow ?? args.saved
+  let saved: HostDirectEndpointFields = { endpoint, directEndpointOrigin }
+  let syncedWithStorage = settledRow !== undefined
+  // After one answer only a desktop-owned row can change, so manual and unknown rows stop asking.
+  let answered = false
   let candidate: string | null = null
   let lastDialed: string | null = null
   let unsupported = false
@@ -70,13 +75,18 @@ export function createHostDirectEndpointFollower(args: {
       syncedWithStorage = true
     }
     candidate = directEndpointCandidate(saved, endpoints)
+    answered = true
   }
   const refresh = (): void => {
     if (inFlight) {
       requestedWhileInFlight = true
       return
     }
-    if (unsupported || client.getState() !== 'connected') {
+    if (
+      unsupported ||
+      (answered && saved.directEndpointOrigin !== 'host') ||
+      client.getState() !== 'connected'
+    ) {
       return
     }
     inFlight = true
@@ -112,6 +122,9 @@ export function createHostDirectEndpointFollower(args: {
     directEndpoint,
     dialEndpoint() {
       lastDialed = directEndpoint()
+      // A return probe dials only while direct is down: ask again so a stale answer, or an address back
+      // from a blip, reaches the next probe. Probe cadence and the in-flight guard bound it.
+      refresh()
       return lastDialed
     },
     onConnected() {

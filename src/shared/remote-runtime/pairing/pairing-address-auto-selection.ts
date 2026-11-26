@@ -29,16 +29,11 @@ export function isVirtualBridgeInterface(name: string, hasDefaultRoute?: boolean
 export function selectAutoAdvertisedPairingAddress(
   interfaces: readonly PairingNetworkInterface[]
 ): string | undefined {
-  return listAutoAdvertisedPairingAddresses(interfaces)[0]
-}
-
-/** Every address the QR could auto-advertise, best first; paired phones use it to tell a moved address. */
-export function listAutoAdvertisedPairingAddresses(
-  interfaces: readonly PairingNetworkInterface[]
-): string[] {
-  const advertisable = interfaces
-    .filter((iface) => !isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute))
-    .map((iface) => iface.address)
-  const tailnet = advertisable.filter(isTailnetIPv4Address)
-  return [...new Set([...tailnet, ...advertisable])]
+  const advertisable = interfaces.filter(
+    (iface) => !isVirtualBridgeInterface(iface.name, iface.hasDefaultRoute)
+  )
+  return (
+    advertisable.find((iface) => isTailnetIPv4Address(iface.address))?.address ??
+    advertisable[0]?.address
+  )
 }

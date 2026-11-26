@@ -54,7 +54,8 @@ export function startMobileEndpointLifecycle(
     saved: initialHost
   })
   const unsubscribeDirectEndpoints = logical.onStateChange((state) => {
-    if (state === 'connected') {
+    // A background reconnect can wait: the resume nudge asks again.
+    if (state === 'connected' && foreground) {
       directEndpoints.onConnected()
     }
   })

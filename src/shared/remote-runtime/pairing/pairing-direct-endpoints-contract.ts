@@ -11,7 +11,7 @@ export const PairingGetDirectEndpointsParamsSchema = lazyZodSchema(() => z.objec
 export const PairingGetDirectEndpointsResultSchema = lazyZodSchema(() =>
   z.object({
     v: z.literal(1),
-    // The host's current auto-advertisable direct endpoints, in QR preference order; empty when not network-exposed.
+    // Every direct endpoint the host's listener answers on now, in QR preference order; empty when not network-exposed.
     endpoints: z.array(z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS)).max(64)
   })
 )
