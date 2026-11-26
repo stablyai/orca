@@ -59,16 +59,9 @@ export function subscribeRuntimeAccountChanges(
     if (!previous?.pluginUsageProviders?.length) {
       return
     }
-    // Revocations must reach the client even if account reads keep failing. Retain only data
-    // already delivered on this connection, and never add a new reading without a valid roster.
-    const retained = previous.pluginUsageProviders.filter((reading) =>
-      current.some(
-        (candidate) =>
-          candidate.pluginKey === reading.pluginKey &&
-          candidate.providerId === reading.providerId &&
-          candidate.iconRevision === reading.iconRevision
-      )
-    )
+    // The producer keeps a reading's object identity until it is replaced or removed.
+    const currentReadings = new Set(current)
+    const retained = previous.pluginUsageProviders.filter((reading) => currentReadings.has(reading))
     if (retained.length < previous.pluginUsageProviders.length) {
       try {
         publish({ ...previous, pluginUsageProviders: retained })

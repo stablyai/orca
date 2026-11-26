@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { PluginAuditLog } from '../logging/plugin-audit-log'
@@ -7,6 +7,7 @@ import {
   createPluginServiceHostCall,
   resolvePluginServiceHostCallPolicy
 } from '../runtime/plugin-service-host-call'
+import { STALE_THRESHOLD_MS } from '../../rate-limits/service/service-types'
 import { PluginUsageProviderState } from './plugin-usage-provider-state'
 
 function plugin(id: string, contentHash: string, provider: string): ValidDiscoveredPlugin {
@@ -105,4 +106,31 @@ describe('plugin usage worker authority', () => {
       usageProviders.dispose()
     }
   })
+})
+
+it('publishes expiry when the clock crosses the deadline during reconciliation', async () => {
+  const source = plugin('sample', 'tree', 'quota')
+  const state = new PluginUsageProviderState(() => source)
+  const published: number[] = []
+  vi.useFakeTimers()
+  vi.setSystemTime(0)
+  const now = vi.spyOn(Date, 'now')
+  try {
+    state.onChanged((readings) => published.push(readings.length))
+    state.update(source, {
+      id: 'quota',
+      status: 'ok',
+      accounts: [{ label: 'Sample', windows: [{ label: '5h', usedPercent: 25 }] }]
+    })
+
+    now.mockReturnValueOnce(STALE_THRESHOLD_MS - 1).mockReturnValue(STALE_THRESHOLD_MS)
+    state.reconcile()
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(published).toEqual([1, 0])
+  } finally {
+    state.dispose()
+    now.mockRestore()
+    vi.useRealTimers()
+  }
 })

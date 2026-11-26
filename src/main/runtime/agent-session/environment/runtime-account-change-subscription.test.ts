@@ -90,13 +90,14 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     delayedRoster.resolve(accounts)
     await setImmediate()
 
-    expect(snapshots).toEqual([
+    expect(snapshots.splice(0)).toEqual([
+      { claude: accounts, codex: accounts, rateLimits: initialUsage, pluginUsageProviders: [] },
       { claude: accounts, codex: accounts, rateLimits: nextUsage, pluginUsageProviders }
     ])
 
     pluginUsageProviders = []
     onPluginUsageChanged(pluginUsageProviders)
-    expect(snapshots[1]).toEqual({
+    expect(snapshots[0]).toEqual({
       claude: accounts,
       codex: accounts,
       rateLimits: nextUsage,
@@ -128,12 +129,31 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     await setImmediate()
     expect(snapshots.at(-1)).toMatchObject({ rateLimits: nextUsage, pluginUsageProviders })
 
+    const unchanged = { ...reading, providerId: 'second-quota' }
+    const replacement = {
+      ...reading,
+      accounts: [{ label: 'Sample account', windows: [{ label: '5h', usedPercent: 50 }] }]
+    }
+    pluginUsageProviders = [reading, unchanged]
+    onPluginUsageChanged(pluginUsageProviders)
+
     failStreamReads = true
     onRename()
-    pluginUsageProviders = []
+    pluginUsageProviders = [replacement, unchanged]
     onPluginUsageChanged(pluginUsageProviders)
     await setImmediate()
-    expect(snapshots.at(-1)).toMatchObject({ rateLimits: nextUsage, pluginUsageProviders: [] })
+    expect(snapshots.at(-1)).toMatchObject({
+      rateLimits: nextUsage,
+      pluginUsageProviders: [unchanged]
+    })
+
+    failStreamReads = false
+    onPluginUsageChanged(pluginUsageProviders)
+    await setImmediate()
+    expect(snapshots.at(-1)).toMatchObject({
+      rateLimits: nextUsage,
+      pluginUsageProviders: [replacement, unchanged]
+    })
   } finally {
     unsubscribe()
   }

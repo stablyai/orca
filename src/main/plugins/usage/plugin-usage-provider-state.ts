@@ -55,8 +55,7 @@ export class PluginUsageProviderState {
     return true
   }
 
-  snapshot(): PluginUsageReading[] {
-    const now = Date.now()
+  snapshot(now = Date.now()): PluginUsageReading[] {
     return [...this.readings].flatMap(([pluginKey, { revision, byProvider }]) =>
       this.isCurrent(pluginKey, revision)
         ? [...byProvider.values()].filter(({ observedAt }) => now - observedAt < STALE_THRESHOLD_MS)
@@ -84,9 +83,9 @@ export class PluginUsageProviderState {
       }
     }
     if (changed) {
-      this.publish()
+      this.publish(now)
     } else {
-      this.scheduleExpiry(this.snapshot())
+      this.scheduleExpiry(this.snapshot(now))
     }
   }
 
@@ -125,8 +124,8 @@ export class PluginUsageProviderState {
     }
   }
 
-  private publish(): void {
-    const snapshot = this.snapshot()
+  private publish(now = Date.now()): void {
+    const snapshot = this.snapshot(now)
     this.scheduleExpiry(snapshot)
     for (const listener of this.listeners) {
       listener(snapshot)
