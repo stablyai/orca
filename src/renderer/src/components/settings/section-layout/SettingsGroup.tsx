@@ -42,7 +42,7 @@ export function SettingsGroup({
     <div
       ref={bodyRef}
       data-settings-group-body=""
-      // A hovered row's fill replaces the rules above and below it.
+      // SettingsNavigationRow sets data-settings-row-hover; its hover fill replaces the rules above and below it.
       className="-mt-px [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t-border [&_[data-settings-row-hover]:hover]:border-t-transparent! [&_[data-settings-row-hover]:hover+[data-settings-row]]:border-t-transparent!"
     >
       {children}
