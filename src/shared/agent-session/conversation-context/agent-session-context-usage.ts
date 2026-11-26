@@ -17,6 +17,7 @@ export function contextTokensFromUsage(usage: AgentSessionTokenUsage): number {
 export const MAX_CONTEXT_MODEL_ID_CHARS = 256
 export const MAX_CONTEXT_CATEGORIES = 64
 export const MAX_CONTEXT_CATEGORY_NAME_CHARS = 80
+export const MAX_CONTEXT_CURRENCY_CHARS = 16
 
 /** One row of the provider's breakdown, as it names and counts it. */
 export type AgentSessionContextUsageCategory = {
@@ -56,8 +57,24 @@ export type AgentSessionContextUsed =
   /** Compaction, a conversation reset or a model change: unknown until a response or report restates it. */
   | { kind: 'unknown'; capturedAt: number }
 
+/** What the session has spent so far, as the provider totals it. */
+export type AgentSessionCost = {
+  amount: number
+  /** ISO 4217 code, e.g. `USD`. */
+  currency: string
+  capturedAt: number
+}
+
+/** Where the agent compacts on its own, when it says so outside a `/context` report. */
+export type AgentSessionAutoCompaction = {
+  autoCompactAtTokens: number
+  capturedAt: number
+}
+
 /** Context facts on a turn row. An absent part says nothing. */
 export type AgentSessionContextUsage = {
   window?: AgentSessionContextWindow
   used?: AgentSessionContextUsed
+  cost?: AgentSessionCost
+  autoCompaction?: AgentSessionAutoCompaction
 }

@@ -3,6 +3,7 @@
 import {
   MAX_CONTEXT_CATEGORIES,
   MAX_CONTEXT_CATEGORY_NAME_CHARS,
+  MAX_CONTEXT_CURRENCY_CHARS,
   MAX_CONTEXT_MODEL_ID_CHARS,
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
@@ -61,14 +62,21 @@ const MAX_CONTEXT_PART_BYTES: Record<keyof AgentSessionContextUsage, number> = (
         deferred: true as const
       })),
       capturedAt: number
-    }
+    },
+    cost: { amount: number, currency: text(MAX_CONTEXT_CURRENCY_CHARS), capturedAt: number },
+    autoCompaction: { autoCompactAtTokens: number, capturedAt: number }
   }
-  return { window: jsonBytes(worst.window), used: jsonBytes(worst.used) }
+  return {
+    window: jsonBytes(worst.window),
+    used: jsonBytes(worst.used),
+    cost: jsonBytes(worst.cost),
+    autoCompaction: jsonBytes(worst.autoCompaction)
+  }
 })()
 
 /** Bound retained parts conservatively; supplied parts use their actual size. */
 function contextBytesBound(write: AgentSessionContextUsage | undefined): number {
-  const parts: (keyof AgentSessionContextUsage)[] = ['window', 'used']
+  const parts: (keyof AgentSessionContextUsage)[] = ['window', 'used', 'cost', 'autoCompaction']
   return parts.reduce(
     (total, part) =>
       total + 32 + (write?.[part] ? jsonBytes(write[part]) : MAX_CONTEXT_PART_BYTES[part]),

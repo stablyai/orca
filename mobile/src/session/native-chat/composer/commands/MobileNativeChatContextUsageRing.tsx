@@ -124,7 +124,7 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
     },
     [layerRef, cardKeepsKeyboard]
   )
-  const { filled, critical, used, window } = contextUsageRingReadout(usage)
+  const { filled, critical, used, window, compactsAt, cost } = contextUsageRingReadout(usage)
   const rows = keyContextUsageRows(usage.rows)
   const counted = rows.filter(({ row }) => !row.deferred)
   const deferred = rows.filter(({ row }) => row.deferred)
@@ -185,8 +185,17 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
         title={t('chat.contextUsage.title', 'Context')}
         titleTrailing={`${used}/${window}`}
       >
-        <View style={styles.track}>
-          <View style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]} />
+        <View style={styles.trackFrame}>
+          <View style={styles.track}>
+            <View style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]} />
+          </View>
+          {compactsAt ? (
+            <View
+              style={[styles.compactionMarker, { left: `${compactsAt.percentage}%` }]}
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            />
+          ) : null}
         </View>
         {counted.length > 0 ? (
           <View style={styles.rows}>{counted.map(renderContextUsageRow)}</View>
@@ -206,6 +215,24 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
           <Text style={styles.estimated}>
             {t('chat.contextUsage.estimated', 'Estimated from the last response.')}
           </Text>
+        ) : null}
+        {compactsAt || cost ? (
+          <View style={[styles.rows, styles.deferred]}>
+            {compactsAt ? (
+              <View style={styles.row}>
+                <Text style={styles.rowName}>
+                  {t('chat.contextUsage.compactsAt', 'Compacts at')}
+                </Text>
+                <Text style={styles.rowValue}>{compactsAt.tokens}</Text>
+              </View>
+            ) : null}
+            {cost ? (
+              <View style={styles.row}>
+                <Text style={styles.rowName}>{t('chat.contextUsage.cost', 'Session cost')}</Text>
+                <Text style={styles.rowValue}>{cost}</Text>
+              </View>
+            ) : null}
+          </View>
         ) : null}
       </AnchoredDetailCardLayer>
     </>
@@ -234,9 +261,11 @@ const ringStyles = StyleSheet.create({
 })
 
 const styles = themedStyleSheet(() => ({
+  trackFrame: {
+    marginTop: spacing.sm
+  },
   track: {
     height: 6,
-    marginTop: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.translucentFill,
     overflow: 'hidden'
@@ -248,6 +277,15 @@ const styles = themedStyleSheet(() => ({
   },
   fillCritical: {
     backgroundColor: colors.statusRed
+  },
+  compactionMarker: {
+    position: 'absolute',
+    top: -2,
+    width: 2,
+    height: 10,
+    marginLeft: -1,
+    borderRadius: radii.pill,
+    backgroundColor: colors.textMuted
   },
   rows: {
     marginTop: spacing.md,

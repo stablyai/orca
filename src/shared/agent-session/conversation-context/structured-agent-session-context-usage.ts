@@ -2,10 +2,12 @@
 
 import {
   contextTokensFromUsage,
+  type AgentSessionAutoCompaction,
   type AgentSessionContextUsage,
   type AgentSessionContextUsageCategory,
   type AgentSessionContextUsed,
-  type AgentSessionContextWindow
+  type AgentSessionContextWindow,
+  type AgentSessionCost
 } from './agent-session-context-usage'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../options/protocol/agent-session-options-result'
@@ -24,6 +26,10 @@ export type StructuredAgentContextUsage = {
   estimated: boolean
   /** The provider's breakdown; empty for an estimate. */
   categories: readonly AgentSessionContextUsageCategory[]
+  /** The session's spend so far, when the provider totals one. */
+  cost?: Pick<AgentSessionCost, 'amount' | 'currency'>
+  /** Where the agent compacts on its own, inside the window. */
+  autoCompactAtTokens?: number
 }
 
 type ContextFactSource = Pick<AgentJournalRenderItem, 'sequence' | 'body'>
@@ -35,6 +41,8 @@ export function latestStructuredAgentContextFacts(
 ): AgentSessionContextUsage {
   let used: { sequence: number; fact: AgentSessionContextUsed } | null = null
   let window: { sequence: number; fact: AgentSessionContextWindow } | null = null
+  let cost: { sequence: number; fact: AgentSessionCost } | null = null
+  let autoCompaction: { sequence: number; fact: AgentSessionAutoCompaction } | null = null
   for (const item of items) {
     if (isAgentSessionContextClear(item.body) && item.sequence > minimumSequence) {
       minimumSequence = item.sequence
@@ -43,6 +51,12 @@ export function latestStructuredAgentContextFacts(
       }
       if (window && window.sequence <= minimumSequence) {
         window = null
+      }
+      if (cost && cost.sequence <= minimumSequence) {
+        cost = null
+      }
+      if (autoCompaction && autoCompaction.sequence <= minimumSequence) {
+        autoCompaction = null
       }
     }
     if (item.sequence <= minimumSequence) {
@@ -55,8 +69,22 @@ export function latestStructuredAgentContextFacts(
     if (facts?.window && (window === null || item.sequence >= window.sequence)) {
       window = { sequence: item.sequence, fact: facts.window }
     }
+    if (facts?.cost && (cost === null || item.sequence >= cost.sequence)) {
+      cost = { sequence: item.sequence, fact: facts.cost }
+    }
+    if (
+      facts?.autoCompaction &&
+      (autoCompaction === null || item.sequence >= autoCompaction.sequence)
+    ) {
+      autoCompaction = { sequence: item.sequence, fact: facts.autoCompaction }
+    }
   }
-  return { ...(used ? { used: used.fact } : {}), ...(window ? { window: window.fact } : {}) }
+  return {
+    ...(used ? { used: used.fact } : {}),
+    ...(window ? { window: window.fact } : {}),
+    ...(cost ? { cost: cost.fact } : {}),
+    ...(autoCompaction ? { autoCompaction: autoCompaction.fact } : {})
+  }
 }
 
 /** Loaded rows reach the live head and outrank wholeJournal; use the host answer only for missing parts from older rows. */
@@ -89,7 +117,27 @@ export function selectStructuredAgentSessionContextUsage(
   )
 }
 
-function summarizeStructuredAgentContextFacts({
+function summarizeStructuredAgentContextFacts(
+  facts: AgentSessionContextUsage
+): StructuredAgentContextUsage | null {
+  const usage = summarizeContextWindowFacts(facts)
+  if (!usage) {
+    return null
+  }
+  const { cost, autoCompaction } = facts
+  // A point from before a model change can sit past the new window.
+  const compactAt =
+    autoCompaction && autoCompaction.autoCompactAtTokens < usage.windowTokens
+      ? autoCompaction.autoCompactAtTokens
+      : undefined
+  return {
+    ...usage,
+    ...(cost ? { cost: { amount: cost.amount, currency: cost.currency } } : {}),
+    ...(compactAt !== undefined ? { autoCompactAtTokens: compactAt } : {})
+  }
+}
+
+function summarizeContextWindowFacts({
   used: fact,
   window
 }: AgentSessionContextUsage): StructuredAgentContextUsage | null {

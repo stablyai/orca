@@ -51,7 +51,7 @@ export class AcpTimelineTranslator {
   readonly elicitations = new AcpUrlElicitations()
   readonly failures: AcpTurnFailures
   private loading = false
-  private readonly context = new AcpContextTimeline()
+  private readonly context = new AcpContextTimeline(() => this.dialect)
   private readonly threadGoal = new AcpThreadGoalTimeline()
   protected activeTurn?: string
   private readonly agentTurns: AcpAgentTurns
@@ -144,7 +144,7 @@ export class AcpTimelineTranslator {
   }
 
   contextModels = (models: unknown, at: number): ProviderTimelineEvent[] =>
-    this.context.models(models, at, this.dialect, { thread: this.options.sessionId })
+    this.context.models(models, at, { thread: this.options.sessionId })
 
   /** Discard loaded history except context-window information. */
   beginLoad(): void {

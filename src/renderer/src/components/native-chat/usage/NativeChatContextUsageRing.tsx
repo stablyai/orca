@@ -99,7 +99,7 @@ export function NativeChatContextUsageRing({
   usage: NativeChatContextUsageSummary
 }): React.JSX.Element {
   const t = useTranslate()
-  const { filled, critical, used, window } = contextUsageRingReadout(usage)
+  const { filled, critical, used, window, compactsAt, cost } = contextUsageRingReadout(usage)
   const label = t(
     'components.native-chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
@@ -194,7 +194,17 @@ export function NativeChatContextUsageRing({
                 {used}/{window}
               </span>
             </div>
-            <Progress value={filled} aria-label={label} className="mt-2 h-1.5" />
+            <div className="relative mt-2">
+              <Progress value={filled} aria-label={label} className="h-1.5" />
+              {compactsAt ? (
+                <span
+                  aria-hidden="true"
+                  data-native-chat-context-compaction-marker=""
+                  className="absolute -top-0.5 h-2.5 w-0.5 -translate-x-1/2 rounded-full bg-muted-foreground ring-1 ring-popover"
+                  style={{ left: `${compactsAt.percentage}%` }}
+                />
+              ) : null}
+            </div>
             {counted.length > 0 ? <ContextUsageRowList rows={counted} className="mt-3" /> : null}
             {deferred.length > 0 ? (
               <div className="mt-3 border-t border-border pt-3">
@@ -214,6 +224,28 @@ export function NativeChatContextUsageRing({
                   'Estimated from the last response.'
                 )}
               </p>
+            ) : null}
+            {compactsAt || cost ? (
+              <ul className="mt-3 space-y-1 border-t border-border pt-3 text-xs">
+                {compactsAt ? (
+                  <li className="flex items-baseline justify-between gap-3">
+                    <span className="text-foreground">
+                      {t('components.native-chat.contextUsage.compactsAt', 'Compacts at')}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {compactsAt.tokens}
+                    </span>
+                  </li>
+                ) : null}
+                {cost ? (
+                  <li className="flex items-baseline justify-between gap-3">
+                    <span className="text-foreground">
+                      {t('components.native-chat.contextUsage.cost', 'Session cost')}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">{cost}</span>
+                  </li>
+                ) : null}
+              </ul>
             ) : null}
           </div>
         </PopoverContent>

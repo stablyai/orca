@@ -24,7 +24,8 @@ import type {
   ModelInfo,
   SessionNotification,
   SessionUpdate,
-  ToolCallUpdate
+  ToolCallUpdate,
+  UsageUpdate
 } from '../generated/acp-protocol.generated'
 
 export const pendingAcpResolution = {
@@ -204,6 +205,8 @@ export type AcpDialect = {
     params: unknown
   ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
+  /** Context tokens past which the agent compacts on its own, from a `usage_update` extension. */
+  autoCompactAtTokens?(update: UsageUpdate): number | undefined
   modelEfforts?(model: ModelInfo): AcpAdvertisedEfforts
   /** Efforts of a listed model family that `models` advertises only as per-effort variants. */
   familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined

@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type {
+  ToolCallContent,
+  ToolCallUpdate,
+  UsageUpdate
+} from '../generated/acp-protocol.generated'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp-dialect'
 
@@ -24,6 +28,14 @@ const toolResultSchema = z.looseObject({
     .optional()
 })
 const asyncInputSchema = z.looseObject({ async: z.literal(true) })
+// OMP puts its own auto-compaction point beside the full window it reports as `size`.
+const usageMetaSchema = z.looseObject({
+  compaction: z.looseObject({ thresholdTokens: z.number() })
+})
+
+function autoCompactAtTokens(update: UsageUpdate): number | undefined {
+  return usageMetaSchema.safeParse(update._meta).data?.compaction.thresholdTokens
+}
 
 function contentText(block: ToolCallContent | undefined): string | undefined {
   return block?.type === 'content' && block.content.type === 'text' ? block.content.text : undefined
@@ -144,6 +156,7 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
   compactionReply,
+  autoCompactAtTokens,
   modelCommand: {
     // #setModelById (acp-agent.ts) takes listed provider/id values only.
     refusedByOption: (error) => errorDetails(error)?.startsWith('Unknown ACP model: ') === true,

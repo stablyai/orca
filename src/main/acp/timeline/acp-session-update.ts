@@ -116,7 +116,9 @@ export function acpSessionUpdate(
         }
       ]
     case 'usage_update':
-      return [{ type: 'context.usage', usage: acpWindowUsage(update, at), ...join }]
+      return [
+        { type: 'context.usage', usage: acpWindowUsage(update, at, context.dialect), ...join }
+      ]
     case 'available_commands_update':
     case 'current_mode_update':
     case 'config_option_update':
