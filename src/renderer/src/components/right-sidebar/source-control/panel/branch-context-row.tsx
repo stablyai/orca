@@ -124,10 +124,12 @@ export function SourceControlBranchContextRow({
         inspectFailureMessage={rebase.state.inspectFailureMessage}
       />
     ) : loading ? (
-      <div className="flex h-5 min-w-0 items-center">
+      // aria-busy stays on the compare row so a paused-rebase strip is never muted by it.
+      <div className="flex h-5 min-w-0 items-center" aria-busy="true">
         <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
         <span className="sr-only">
-          {t('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}
+          {t('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}{' '}
+          {baseLabel}
         </span>
       </div>
     ) : failed ? (
@@ -161,7 +163,6 @@ export function SourceControlBranchContextRow({
       className="flex min-w-0 flex-col text-[11px] text-muted-foreground"
       role={flowLabel != null ? 'group' : undefined}
       aria-label={flowLabel}
-      aria-busy={loading || undefined}
       data-testid="source-control-branch-context"
     >
       {headRowShown ? (

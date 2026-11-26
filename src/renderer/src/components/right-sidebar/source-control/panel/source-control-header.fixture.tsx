@@ -55,7 +55,7 @@ const COMMIT = {
   timestamp: 1_763_000_000_000
 }
 
-const OPEN_REVIEW = {
+const OPEN_REVIEW: HostedReviewInfo = {
   provider: 'github',
   number: 812,
   title: 'Settings panel',
@@ -64,7 +64,7 @@ const OPEN_REVIEW = {
   status: 'pending',
   updatedAt: '2026-11-20T00:00:00Z',
   mergeable: 'MERGEABLE'
-} as HostedReviewInfo
+}
 
 function createPrAction(disabled: boolean): PrimaryAction {
   return {
@@ -102,12 +102,10 @@ const PAUSED_REBASE: BaseRebaseActions = {
     continueState: 'ready',
     inspectFailureMessage: null
   },
-  isRebasing: false,
   isAbortingRebase: false,
   isContinuingRebase: false,
   isRetryingRebaseInspect: false,
   hasGitOwner: true,
-  onRebase: () => {},
   onAbortRebase: () => {},
   onContinueRebase: () => {},
   onRetryRebaseInspect: () => {}

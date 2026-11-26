@@ -82,9 +82,9 @@ export function GitGraphOpenButton({
   const button = (
     <Button
       type="button"
-      variant="ghost"
+      variant={iconOnly ? 'ghost-muted' : 'ghost'}
       size={iconOnly ? 'icon-xs' : 'xs'}
-      className={iconOnly ? 'size-5 text-muted-foreground hover:text-foreground' : undefined}
+      className={iconOnly ? 'size-5' : undefined}
       disabled={support !== true}
       aria-label={iconOnly ? label : undefined}
       data-testid="source-control-git-graph-button"

@@ -118,9 +118,9 @@ export function SourceControlFilterRow({
       </div>
       <Button
         type="button"
-        variant="ghost"
+        variant="ghost-muted"
         size="icon-xs"
-        className="shrink-0 text-muted-foreground hover:text-foreground"
+        className="shrink-0"
         aria-label={clearLabel}
         title={clearLabel}
         onClick={clearAndCollapse}

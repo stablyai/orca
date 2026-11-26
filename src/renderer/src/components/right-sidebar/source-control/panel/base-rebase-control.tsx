@@ -7,12 +7,10 @@ import type { BaseRebaseState, RebaseContinueState } from './base-rebase-state'
 
 export type BaseRebaseActions = {
   state: BaseRebaseState
-  isRebasing: boolean
   isAbortingRebase: boolean
   isContinuingRebase: boolean
   isRetryingRebaseInspect: boolean
   hasGitOwner: boolean
-  onRebase: () => void
   onAbortRebase: () => void
   onContinueRebase: () => void
   onRetryRebaseInspect: () => void

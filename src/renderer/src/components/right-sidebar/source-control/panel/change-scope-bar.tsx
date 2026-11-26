@@ -176,8 +176,7 @@ export function SourceControlChangeScopeBar({
       variant="outline"
       size="xs"
       className={cn(
-        // Tighter than xs's icon padding so Diff keeps its label at 240px beside a scrollbar.
-        'aria-disabled:cursor-default has-[>svg]:px-1',
+        'aria-disabled:cursor-default',
         !(openDiffDisabled && !branchCompareLoading) && 'mx-0.5'
       )}
       disabled={openDiffDisabled && !branchCompareLoading}
@@ -219,26 +218,24 @@ export function SourceControlChangeScopeBar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button
+                  {/* Quiet text, not a padded Button: the label sits on the 12px edge and keeps its words at 240px. */}
+                  <button
                     ref={scopeTriggerRef}
                     type="button"
-                    variant="ghost"
-                    size="xs"
-                    // Pull the label onto the panel's 12px edge; the hover fill uses the padding.
-                    className="-ml-1 min-w-0 shrink justify-start gap-0.5 px-1 text-foreground"
+                    className="-ml-1 inline-flex h-6 min-w-0 shrink items-center gap-0.5 rounded-md px-1 text-xs font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     data-testid="source-control-change-scope-trigger"
                   >
                     <span className="min-w-0 truncate">{scopeLabel}</span>
-                    <ChevronDown className="size-3 text-muted-foreground" />
-                  </Button>
+                    <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+                  </button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
-              {commitMeta ? (
-                <TooltipContent className="max-w-xs break-words">
-                  {scopeLabel}
-                  <div className="text-muted-foreground">{commitMeta}</div>
-                </TooltipContent>
-              ) : null}
+              {/* Always available: the label may truncate and the count hides when narrow. */}
+              <TooltipContent className="max-w-xs break-words">
+                {scopeLabel}
+                {commitMeta ? <div className="text-muted-foreground">{commitMeta}</div> : null}
+                {countTitle ? <div className="text-muted-foreground">{countTitle}</div> : null}
+              </TooltipContent>
             </Tooltip>
             {changeScope.kind !== 'all' ? (
               <Tooltip>
@@ -260,16 +257,18 @@ export function SourceControlChangeScopeBar({
                 <TooltipContent>{showAllLabel}</TooltipContent>
               </Tooltip>
             ) : null}
-            {/* Yields first when narrow (or a scrollbar takes width) so the scope label keeps its words. */}
+            {/* The number yields first when narrow (or a scrollbar takes width); its text equivalent stays. */}
             {scoped && countTitle ? (
-              <span
-                className="ml-0.5 shrink-0 text-2xs tabular-nums text-muted-foreground @max-[228px]/change-scope:hidden"
-                title={countTitle}
-                data-testid="source-control-change-scope-count"
-              >
-                <span aria-hidden="true">{scoped.files.toLocaleString(intlLocale)}</span>
+              <>
+                <span
+                  aria-hidden="true"
+                  className="ml-0.5 shrink-0 text-2xs tabular-nums text-muted-foreground @max-[228px]/change-scope:hidden"
+                  data-testid="source-control-change-scope-count"
+                >
+                  {scoped.files.toLocaleString(intlLocale)}
+                </span>
                 <span className="sr-only">{countTitle}</span>
-              </span>
+              </>
             ) : null}
             {commitMeta ? <span className="sr-only">{commitMeta}</span> : null}
             <div className="ml-auto flex shrink-0 items-center">

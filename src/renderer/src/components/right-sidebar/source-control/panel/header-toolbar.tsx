@@ -81,7 +81,6 @@ export function SourceControlHeaderToolbar({
   const reviewControl = hostedReview ? (
     <HostedReviewToolbarLink
       review={hostedReview}
-      compact
       onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
     />
   ) : suppressedGitHubPRNumber !== null ? (

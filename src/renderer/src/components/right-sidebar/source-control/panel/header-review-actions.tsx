@@ -5,27 +5,20 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
 import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
 
 export function HostedReviewToolbarLink({
   review,
-  onOpenHostedReviewInChecks,
-  compact
+  onOpenHostedReviewInChecks
 }: {
   review: HostedReviewInfo
   onOpenHostedReviewInChecks: () => void
-  compact?: boolean
 }): React.JSX.Element {
+  // Shares the branch row: the link keeps its size and the branch name truncates instead.
   return (
-    <div
-      className={cn(
-        'flex min-w-0 items-center gap-1 text-[11.5px] leading-none',
-        compact ? 'max-w-[72px] shrink-0' : 'flex-1'
-      )}
-    >
+    <div className="flex shrink-0 items-center gap-1 text-[11.5px] leading-none">
       <HostedReviewIcon review={review} className="size-3 shrink-0" />
       <HostedReviewHeaderLink
         review={review}
