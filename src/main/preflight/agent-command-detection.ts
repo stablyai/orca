@@ -111,6 +111,7 @@ export async function selectTerminalAgentProgram(
     refresh?: boolean
     revalidateUnavailable?: boolean
     signal?: AbortSignal
+    onWslDistroSelected?: (distro: string) => void
   }
 ): Promise<TerminalAgentProgramSelection> {
   const { wsl, refresh, signal } = options
@@ -156,6 +157,9 @@ export async function selectTerminalAgentProgram(
           : { kind: 'unavailable' }
         : qualifyProgram(inventory.matches.get(program), shell)
       if (result.kind !== 'unavailable') {
+        if (slot?.distro) {
+          options.onWslDistroSelected?.(slot.distro)
+        }
         return { program, result }
       }
     }

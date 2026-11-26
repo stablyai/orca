@@ -81,11 +81,17 @@ export class InventoryFsProbes {
     read: () => Promise<ProbeResult>
   ): Promise<ProbeResult> {
     const release = await lane.acquire(0, this.signal)
+    if (this.signal.aborted) {
+      release()
+      return UNVERIFIED_FS_PROBE
+    }
+    const joined = pending.get(path)
+    if (joined) {
+      release()
+      return await joined
+    }
     try {
-      if (this.signal.aborted) {
-        return UNVERIFIED_FS_PROBE
-      }
-      return await (pending.get(path) ?? issueProbe(pending, path, kind, read))
+      return await issueProbe(pending, path, kind, read)
     } finally {
       release()
     }

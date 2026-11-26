@@ -1,7 +1,6 @@
-import { readdir as readdirCallback, type Dir, type Dirent } from 'node:fs'
+import type { Dir } from 'node:fs'
 import { lstat, opendir, readdir } from 'node:fs/promises'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import {
   isMissingPathError,
   isPathPermissionError,
@@ -64,28 +63,33 @@ export async function readDetectionDirectory(dir: string): Promise<DetectionDire
   }
 }
 
-function isDirentLookupError(error: unknown): error is { syscall: 'lstat'; code?: unknown } {
+function isDirentLookupError(error: unknown): boolean {
   return !!error && typeof error === 'object' && 'syscall' in error && error.syscall === 'lstat'
 }
 
-// The callback API resolves DT_UNKNOWN entries with async lstat.
-const readdirEntries = promisify<string, { withFileTypes: true }, Dirent[]>(readdirCallback)
-
 export async function readInstallSubdirectories(dir: string): Promise<InstallDirectoryListing> {
   const names: string[] = []
-  let uncertain = false
   try {
-    const entries = await readdirEntries(dir, { withFileTypes: true })
-    return {
-      names: entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
-      uncertain
+    // Node resolves DT_UNKNOWN sequentially on the worker, outside the libuv pool.
+    for await (const entry of await opendir(dir)) {
+      if (entry.isDirectory()) {
+        names.push(entry.name)
+      }
     }
+    return { names, uncertain: false }
   } catch (error) {
-    if (!isDirentLookupError(error)) {
-      return { names, uncertain: !isMissingPathError(error) && !isPathPermissionError(error) }
+    if (isDirentLookupError(error)) {
+      return readInstallSubdirectoriesByName(dir, !isMissingPathError(error))
     }
-    uncertain = !isMissingPathError(error)
+    return { names: [], uncertain: !isMissingPathError(error) && !isPathPermissionError(error) }
   }
+}
+
+export async function readInstallSubdirectoriesByName(
+  dir: string,
+  uncertain = false
+): Promise<InstallDirectoryListing> {
+  const names: string[] = []
   try {
     for (const name of await readdir(dir)) {
       try {

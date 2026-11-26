@@ -82,7 +82,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       if (!resume?.launchRuntime) {
         return { ok: false, reason: 'no_resume_command' }
       }
-      const { launchRuntime } = resume
+      const launchRuntime = resume.launchRuntime
+      let restartRuntime = launchRuntime
       const cwd = workspace.path
       const { shellOverride } = launchRuntime.pty
       const expectedWslDistro = resolveWslSessionContext({ cwd, ...launchRuntime.pty })?.distro
@@ -107,6 +108,12 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         agentLaunchQuotingShell(launchRuntime),
         (program) => {
           preselectedAgentProgram = program
+          if (program.wslDistro) {
+            restartRuntime = {
+              ...launchRuntime,
+              pty: { ...launchRuntime.pty, terminalWindowsWslDistro: program.wslDistro }
+            }
+          }
         }
       )
       if (aligned.blocked) {
@@ -228,7 +235,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             startupCommandDelivery: resume.startupCommandDelivery,
             launchConfig: resume.launchConfig,
             launchAgent: resume.launchAgent,
-            launchRuntime: resume.launchRuntime,
+            launchRuntime: restartRuntime,
             preselectedAgentProgram,
             resumeProviderSession: resume.resumeProviderSession,
             spawnIntent: 'user-resume',

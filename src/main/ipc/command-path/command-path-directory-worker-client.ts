@@ -1,6 +1,6 @@
 import type { Worker } from 'node:worker_threads'
 import type { InstallDirectoryListing } from '../../../shared/shell/command-resolution/inventory-fs-probes'
-import { readInstallSubdirectories } from './command-path-directory'
+import { readInstallSubdirectoriesByName } from './command-path-directory'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
@@ -18,6 +18,7 @@ import type {
 const IDLE_TEARDOWN_MS = 60_000
 const REQUEST_TIMEOUT_MS = 10_000
 const MAX_PENDING_LISTINGS = 16
+let workerEntryMissing = false
 
 function createWorker(): Worker {
   const workerPath = resolveWorkerThreadEntryPath(
@@ -37,7 +38,7 @@ export class DetectionDirectoryWorkerClient {
   private nextId = 1
 
   constructor(
-    workerFactory: WorkerThreadFactory = createWorker,
+    private readonly workerFactory: WorkerThreadFactory = createWorker,
     private readonly mode: DetectionDirectoryRequest['mode'] = 'path'
   ) {
     this.host = new LazyWorkerThreadHost({
@@ -59,14 +60,26 @@ export class DetectionDirectoryWorkerClient {
           this.host.scheduleIdleTeardown()
         }
       },
-      onError: () => this.dispose(),
+      onError: (error) => {
+        if (
+          workerFactory === createWorker &&
+          'code' in error &&
+          (error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND')
+        ) {
+          workerEntryMissing = true
+        }
+        this.dispose()
+      },
       onExit: () => this.dispose(),
       onUnavailable: () => {}
     })
   }
 
   read(dir: string): Promise<DirectoryWorkerListing> {
-    if (this.mode === 'path' && this.pending.size >= MAX_PENDING_LISTINGS) {
+    if (
+      (workerEntryMissing && this.workerFactory === createWorker) ||
+      (this.mode === 'path' && this.pending.size >= MAX_PENDING_LISTINGS)
+    ) {
       return Promise.resolve(null)
     }
     const worker = this.host.ensure()
@@ -115,7 +128,7 @@ export async function readInstallDirectoriesViaWorker(
   dir: string
 ): Promise<InstallDirectoryListing | null> {
   if (cliInventory) {
-    return readInstallSubdirectories(dir)
+    return readInstallSubdirectoriesByName(dir)
   }
   installClient ??= new DetectionDirectoryWorkerClient(createWorker, 'install')
   const listing = await installClient.read(dir)

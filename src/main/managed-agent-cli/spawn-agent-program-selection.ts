@@ -37,8 +37,7 @@ export type SpawnProgramContext = {
 
 export type PreselectedAgentProgram = {
   shell: AgentStartupShell
-  wslDistro?: string | null
-  cmdCwd?: string
+  wslDistro?: string
   selection: TerminalAgentProgramSelection
 }
 
@@ -55,25 +54,33 @@ export async function resolveSpawnAgentProgram(
     result: { kind: 'unknown' }
   }
   const preselected = spawn.preselectedAgentProgram
-  const wslDistro =
-    spawn.codexRuntime === 'wsl' ? (spawn.expectedWslDistro?.toLowerCase() ?? null) : undefined
-  const cmdCwd =
-    shell === 'cmd' && (onProgramSelected || preselected)
-      ? resolve(spawn.cwd ?? process.cwd(), launchCwd ?? '.')
-      : undefined
   if (preselected) {
+    const sameRuntime =
+      spawn.codexRuntime === 'wsl'
+        ? preselected.wslDistro !== undefined &&
+          preselected.wslDistro.toLowerCase() === spawn.expectedWslDistro?.toLowerCase()
+        : preselected.wslDistro === undefined
     return preselected.shell === shell &&
-      preselected.wslDistro === wslDistro &&
-      (preselected.selection.result.kind !== 'by-name' || preselected.cmdCwd === cmdCwd) &&
+      sameRuntime &&
+      !(shell === 'cmd' && preselected.selection.result.kind === 'by-name') &&
       programs.includes(preselected.selection.program)
       ? preselected.selection
       : unknownSelection
   }
-  const selection = await withAgentInventoryDeadline((signal) =>
-    selectSpawnAgentProgram(spawn, shell, programs, launchCwd, pinned, signal)
+  let wslDistro: string | undefined
+  let selection = await withAgentInventoryDeadline((signal) =>
+    selectSpawnAgentProgram(spawn, shell, programs, launchCwd, pinned, signal, (distro) => {
+      wslDistro = distro
+    })
   ).catch(() => unknownSelection)
-  if ('path' in selection.result) {
-    onProgramSelected?.({ shell, wslDistro, cmdCwd, selection })
+  if (onProgramSelected && 'path' in selection.result) {
+    if (shell === 'cmd' && selection.result.kind === 'by-name') {
+      selection = {
+        program: selection.program,
+        result: { kind: 'full-path', path: selection.result.path }
+      }
+    }
+    onProgramSelected({ shell, wslDistro, selection })
   }
   return selection
 }
@@ -84,7 +91,8 @@ async function selectSpawnAgentProgram(
   programs: readonly [string, ...string[]],
   launchCwd = '.',
   pinned: string | undefined,
-  signal: AbortSignal
+  signal: AbortSignal,
+  onWslDistroSelected: (distro: string) => void
 ): Promise<TerminalAgentProgramSelection> {
   const preferred = programs[0]
   if (spawn.sshTarget) {
@@ -94,7 +102,8 @@ async function selectSpawnAgentProgram(
     return selectTerminalAgentProgram(programs, shell, {
       wsl: { distro: spawn.expectedWslDistro ?? undefined },
       revalidateUnavailable: true,
-      signal
+      signal,
+      onWslDistroSelected
     })
   }
   if (pinned && isAbsolute(pinned) && !isOrcaAgentRuntimePath(pinned)) {

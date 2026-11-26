@@ -208,7 +208,7 @@ export async function findCommandsOnLocalPath(
   const { inventoryCommandCount, signal } = options
   const concurrency =
     (inventoryCommandCount ?? commands.length) <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4
-  await scanInventoryPathCommands(
+  await scanInventoryPathCommands<Listing>(
     directories,
     remaining,
     concurrency,
