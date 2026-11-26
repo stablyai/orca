@@ -27,6 +27,29 @@ describe('a send read for the item it became', () => {
     ).toBe(true)
   })
 
+  it('finds a send by the item its client id echoes as, before any provider id names it', () => {
+    expect(
+      personSendsOf([journalSubmission({ clientMessageId: 'q', ...PERSON_SEND })])('orca:q')
+    ).toBe(true)
+    expect(
+      personSendsOf([
+        journalSubmission({ clientMessageId: 'q', ...ORCA_SEND }),
+        journalSubmission({ clientMessageId: 'a', providerItemId: 'orca:q', ...PERSON_SEND })
+      ])('orca:q')
+    ).toBe(false)
+  })
+
+  it('reads a send from an older host that named no sender by who sent it there', () => {
+    expect(
+      personSendsOf([journalSubmission({ clientMessageId: 'q', origin: 'client' })])('orca:q')
+    ).toBe(true)
+    expect(
+      personSendsOf([
+        journalSubmission({ clientMessageId: 'q', origin: 'client', source: { kind: 'agent' } })
+      ])('orca:q')
+    ).toBe(false)
+  })
+
   it('takes an empty provider id as an id', () => {
     const sends = personSendsOf([
       journalSubmission({ clientMessageId: 'a', providerItemId: '', ...PERSON_SEND }),
