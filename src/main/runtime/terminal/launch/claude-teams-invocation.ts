@@ -3,11 +3,7 @@ import { join } from 'node:path'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
 import { structuredAgentCommandPlan } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { launchCommandProvenance } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
-import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
-import {
-  readLocalTerminalAgentProgram,
-  type TerminalAgentProgram
-} from '../../../preflight/agent-command-detection'
+import { readLocalTerminalAgentProgram } from '../../../preflight/agent-command-detection'
 import { isOrcaAgentRuntimePath } from '../../../managed-agent-cli/managed-agent-cli-path'
 
 export async function resolveClaudeTeamsInvocation(override: string | undefined): Promise<{
@@ -35,11 +31,7 @@ export async function resolveClaudeTeamsInvocation(override: string | undefined)
 }
 
 async function userClaude(): Promise<string> {
-  const selection = await withTimeout<TerminalAgentProgram>(
-    readLocalTerminalAgentProgram('claude', 'posix'),
-    10_000,
-    { kind: 'unknown' }
-  )
+  const selection = await readLocalTerminalAgentProgram('claude', 'posix')
   if (!('path' in selection)) {
     throw new Error('Your Claude installation could not be found.')
   }

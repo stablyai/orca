@@ -18,10 +18,7 @@ import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storag
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
 import { resolveExecutableCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
-import {
-  readLocalTerminalAgentProgram,
-  type TerminalAgentProgram
-} from '../../../../preflight/agent-command-detection'
+import { readLocalTerminalAgentProgram } from '../../../../preflight/agent-command-detection'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -169,11 +166,7 @@ export async function resolveNativeChatSignInProgram(
   settings: LaunchSettings,
   shell: AgentStartupShell
 ): Promise<string | null> {
-  const result = await withTimeout<TerminalAgentProgram>(
-    readLocalTerminalAgentProgram(program, shell),
-    10_000,
-    { kind: 'unknown' }
-  )
+  const result = await readLocalTerminalAgentProgram(program, shell)
   return 'path' in result
     ? result.path
     : withTimeout(managedCopyFor(agent, program, settings), RELEASE_READ_WAIT_MS, null)

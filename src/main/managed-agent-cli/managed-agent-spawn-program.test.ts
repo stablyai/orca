@@ -1,6 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { withOmpDraftCleanup } from '../../shared/agent-launch/startup/omp-draft-launch'
 import { withFreshOmpLaunch } from '../../shared/agent-launch/startup/omp-fresh-launch'
@@ -11,6 +11,9 @@ import { alignManagedAgentLaunchAtSpawn } from './managed-agent-spawn-program'
 const detection = vi.hoisted(() => ({ path: '' }))
 vi.mock('../ipc/preflight/preflight-local-env', () => ({
   buildLocalPreflightEnv: () => ({ Path: detection.path })
+}))
+vi.mock('../ipc/command-path/command-path-directory-worker-client', () => ({
+  readDetectionDirectoryViaWorker: async () => null
 }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => (process.platform === 'win32' ? 'C:\\data\\orca' : '/data/orca')
@@ -25,13 +28,14 @@ const spawn = (launchCommand: string) =>
   )
 
 it.runIf(process.platform === 'win32')(
-  'uses the absolute Claude path in PowerShell when its directory is quoted on PATH',
+  'uses the PATH directory spelling and on-disk executable spelling for quoted PowerShell paths',
   async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca claude path '))
-    const bin = join(dir, 'claude.exe')
+    const pathEntry = join(dirname(dir), basename(dir).toUpperCase())
+    const bin = join(dir, 'claude.eXe')
     try {
       await writeFile(bin, '')
-      detection.path = `"${dir}"`
+      detection.path = `"${pathEntry}"`
       const inventory = await detectInstalledAgentInventory()
       const plan = buildAgentStartupPlan({
         agent: 'claude',
@@ -43,7 +47,7 @@ it.runIf(process.platform === 'win32')(
         cmdOverrides: {},
         managedAgentCommands: inventory.outsidePath
       })
-      expect(plan?.launchCommand).toBe(`& '${bin}' '--verbose'`)
+      expect(plan?.launchCommand).toBe(`& '${join(pathEntry, 'claude.eXe')}' '--verbose'`)
 
       detection.path += `;${dir}`
       expect((await detectInstalledAgentInventory()).outsidePath?.claude).toBeUndefined()

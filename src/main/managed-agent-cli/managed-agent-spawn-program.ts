@@ -1,5 +1,8 @@
 import { basename, isAbsolute, join, resolve, win32 } from 'node:path'
-import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../shared/concurrency/abort-signal-reason'
 import {
   matchesStockLaunchProgram,
   renderCmdLaunchForPowerShell,
@@ -34,12 +37,12 @@ import { isExecutableFile } from '../ipc/command-path/command-path-directory'
 import {
   readLocalTerminalAgentProgram,
   readWslTerminalAgentProgram,
+  withAgentInventoryDeadline,
   type TerminalAgentProgram
 } from '../preflight/agent-command-detection'
 import { prepareNativeChatSignIn } from './prepare-native-chat-sign-in'
 
 type SpawnSettings = Parameters<typeof prepareNativeChatSignIn>[1]
-const INVENTORY_WAIT_MS = 10_000
 const stockAgents = Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent)
 const stockPrograms = new Set(
   stockAgents.map((agent) =>
@@ -116,10 +119,15 @@ async function selectProgram(
   shell: AgentStartupShell,
   program: string,
   launch: LaunchPosition,
-  pinned: string | undefined
+  pinned: string | undefined,
+  signal: AbortSignal
 ): Promise<TerminalAgentProgram> {
   if (spawn.codexRuntime === 'wsl') {
-    return readWslTerminalAgentProgram({ distro: spawn.expectedWslDistro ?? undefined }, program)
+    return readWslTerminalAgentProgram(
+      { distro: spawn.expectedWslDistro ?? undefined },
+      program,
+      signal
+    )
   }
   if (spawn.sshTarget) {
     // SSH panes execute the name in the guest shell, with no desktop runtime paths.
@@ -129,11 +137,12 @@ async function selectProgram(
     pinned &&
     isAbsolute(pinned) &&
     !isOrcaAgentRuntimePath(pinned) &&
-    (await isExecutableFile(pinned, process.platform === 'win32'))
+    (await waitForPromiseWithSignal(isExecutableFile(pinned, process.platform === 'win32'), signal))
   ) {
     return { kind: 'full-path', path: pinned }
   }
-  const selected = await readLocalTerminalAgentProgram(program, shell, Boolean(pinned))
+  const selected = await readLocalTerminalAgentProgram(program, shell, Boolean(pinned), signal)
+  throwIfSignalAborted(signal)
   if (
     selected.kind === 'by-name' &&
     Object.keys(spawn.launchConfig?.agentEnv ?? {}).some((key) =>
@@ -148,11 +157,17 @@ async function selectProgram(
   const launchCwd = launch.cwd ?? '.'
   const cwd = isAbsolute(launchCwd)
     ? launchCwd
-    : resolve((await spawn.readCwd?.()) || spawn.cwd || process.cwd(), launchCwd)
+    : resolve(
+        (spawn.readCwd && (await waitForPromiseWithSignal(spawn.readCwd(), signal))) ||
+          spawn.cwd ||
+          process.cwd(),
+        launchCwd
+      )
+  throwIfSignalAborted(signal)
   const pathExt =
     Object.entries(spawn.env ?? {}).find(([key]) => key.toLowerCase() === 'pathext')?.[1] ??
     process.env.PATHEXT
-  const first = await cmdFolderProgram(program, cwd, pathExt)
+  const first = await waitForPromiseWithSignal(cmdFolderProgram(program, cwd, pathExt), signal)
   return first &&
     normalizeRuntimePathForComparison(first) !== normalizeRuntimePathForComparison(selected.path)
     ? { kind: 'full-path', path: selected.path }
@@ -257,11 +272,9 @@ async function rewriteLaunchExecutable(
   if (agent) {
     const program = stock(agent)
     const pinned = spawn.restoring ? config?.selectedExecutable : undefined
-    const selected = await withTimeout<TerminalAgentProgram>(
-      selectProgram(spawn, shell, program, launch, pinned).catch(() => ({ kind: 'unknown' })),
-      INVENTORY_WAIT_MS,
-      { kind: 'unknown' }
-    )
+    const selected = await withAgentInventoryDeadline((signal) =>
+      selectProgram(spawn, shell, program, launch, pinned, signal)
+    ).catch(() => ({ kind: 'unknown' as const }))
     if (!('path' in selected)) {
       return { command: undefined, launchConfig: config, blocked: selected.kind }
     }

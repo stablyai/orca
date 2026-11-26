@@ -13,7 +13,7 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
-import { detectAgentCommandsOnHost } from './agent-command-detection'
+import { detectAgentCommandsOnHost, withAgentInventoryDeadline } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
@@ -116,7 +116,8 @@ export type InstalledAgentInventory = {
 export async function detectInstalledAgentInventory(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions,
-  refresh = false
+  refresh = false,
+  signal?: AbortSignal
 ): Promise<InstalledAgentInventory> {
   const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
@@ -133,7 +134,8 @@ export async function detectInstalledAgentInventory(
     context,
     ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
     ...(options?.onlyTuiAgent ? { onlyRequested: true } : {}),
-    ...(refresh ? { refresh: true } : {})
+    ...(refresh ? { refresh: true } : {}),
+    ...(signal ? { signal } : {})
   })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
@@ -162,23 +164,28 @@ export async function detectInstalledAgentInventory(
 export async function detectInstalledAgents(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions,
-  revalidate = false
+  revalidate = false,
+  signal?: AbortSignal
 ): Promise<string[]> {
-  return (await detectInstalledAgentInventory(context, options, revalidate)).agents
+  return (await detectInstalledAgentInventory(context, options, revalidate, signal)).agents
 }
 
 export async function detectInstalledAgentInventoryWithShellPathHydration(
   context?: PreflightRuntimeContext,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal
 ): Promise<InstalledAgentInventory> {
-  await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgentInventory(context, options)
+  return withAgentInventoryDeadline(async (waitSignal) => {
+    await hydrateShellPathForAgentDetection(context, false, waitSignal)
+    return detectInstalledAgentInventory(context, options, false, waitSignal)
+  }, signal)
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
   context?: PreflightRuntimeContext,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal
 ): Promise<string[]> {
-  await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context, options)
+  return (await detectInstalledAgentInventoryWithShellPathHydration(context, options, signal))
+    .agents
 }

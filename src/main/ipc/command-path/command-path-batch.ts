@@ -35,10 +35,10 @@ const DIRECT_DETECTION_COMMAND_LIMIT = 4
 const realpathNative = promisify(realpath.native)
 
 async function windowsHitSpelling(dir: string, candidate: string): Promise<string> {
-  const resolved = await realpathNative(candidate).catch(() => candidate)
-  // Keep PATH's entry if native realpath followed a link to a different path.
-  return path.win32.relative(candidate, resolved) === ''
-    ? joinCandidatePath(true, dir, path.win32.basename(resolved))
+  const basename = path.win32.basename(await realpathNative(candidate).catch(() => candidate))
+  // Native realpath can expand a short PATH directory name or follow a link.
+  return basename.toLowerCase() === path.win32.basename(candidate).toLowerCase()
+    ? joinCandidatePath(true, dir, basename)
     : candidate
 }
 
@@ -127,7 +127,7 @@ export async function findCommandsOnLocalPath(
           .map(async (command): Promise<[string, string] | undefined> => {
             const checked = new Set<string>()
             for (const ext of extensions.get(command) ?? []) {
-              const wanted = command + ext
+              const wanted = command + ext.toLowerCase()
               const key = directoryNameKey(wanted)
               const listed = names?.get(key)
               if (

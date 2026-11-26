@@ -16,7 +16,10 @@ import {
   readWslTerminalAgentProgram
 } from '../../../../preflight/agent-command-detection'
 import { invalidateWslGuestEnvironment } from '../../../../wsl/execution/wsl-guest-environment'
-import { refreshAgentsOnHost } from '../../../../preflight/workspace-agent-detection'
+import {
+  detectProjectLaunchContext,
+  refreshAgentsOnHost
+} from '../../../../preflight/workspace-agent-detection'
 import { resolveClaudeTeamsInvocation } from '../../../terminal/launch/claude-teams-invocation'
 
 const fixture = vi.hoisted(() => {
@@ -154,10 +157,10 @@ it('keeps a cold scan alive through launch timeouts and publishes the result for
   const gate = Promise.withResolvers<void>()
   fixture.onScan = entered.resolve
   fixture.installs = gate.promise
-  const inventory = detectInstalledAgentInventory()
+  vi.useFakeTimers()
+  const inventory = detectInstalledAgentInventory().catch((error: unknown) => error)
   const saved = legacy(`${quoted(orca)} --verbose`)
   const generated = { ...legacy('claude'), commandProvenance: 'generated' as const }
-  vi.useFakeTimers()
   const resume = alignManagedAgentLaunchAtSpawn(
     {
       launchCommand: `${saved.agentCommand} --resume session`,
@@ -183,7 +186,7 @@ it('keeps a cold scan alive through launch timeouts and publishes the result for
     expect(await fresh).toEqual({ command: undefined, launchConfig: generated, blocked: 'unknown' })
     const retry = launch()
     gate.resolve()
-    expect((await inventory).agents).toContain('claude')
+    expect(await inventory).toEqual(new Error('Agent inventory is still running. Try again.'))
     expect((await retry).command).toBe(`${quoted(user)} --verbose`)
     expect((await launch()).command).toBe(`${quoted(user)} --verbose`)
     expect(fixture.enumerate).toHaveBeenCalledTimes(1)
@@ -232,7 +235,7 @@ it('reports unavailable when only the Orca executable is on PATH', async () => {
 })
 
 it.runIf(windows)('rechecks the cmd launch folder after an earlier miss', async () => {
-  const user = await executable('path', 'claude.exe')
+  const user = await executable('path', 'claude.eXe')
   const cwd = join(fixture.root, 'workspace')
   await mkdir(cwd)
   const launch = () =>
@@ -360,21 +363,81 @@ it('returns the queued refresh result to the cold waiter and overlapping refresh
   }
 })
 
-it('retries after an incomplete WSL probe whose fallback exited zero', async () => {
+it('uses WSL fallback hits and retries inconclusive misses after cooldown', async () => {
+  vi.useFakeTimers()
   const target = { distro: 'SlowUbuntu' }
   fixture.wslProcess.mockResolvedValueOnce({
     code: 0,
-    stdout: '',
+    stdout: '__ORCA_AGENT_PATH__codex\t/opt/tools/bin/codex\n',
     stderr: '',
     timedOut: false,
     environmentResolved: false
   })
   await expect(readWslTerminalAgentProgram(target, 'claude')).resolves.toEqual({ kind: 'unknown' })
+  await expect(readWslTerminalAgentProgram(target, 'codex')).resolves.toEqual({
+    kind: 'by-name',
+    path: 'codex'
+  })
+  await expect(readWslTerminalAgentProgram(target, 'claude')).resolves.toEqual({ kind: 'unknown' })
+  expect(fixture.wslProcess).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(5_000)
   await expect(readWslTerminalAgentProgram(target, 'claude')).resolves.toEqual({
     kind: 'by-name',
     path: 'claude'
   })
   expect(fixture.wslProcess).toHaveBeenCalledTimes(2)
+})
+
+it('coalesces refreshes requested during an active WSL refresh into one successor', async () => {
+  const entered = Promise.withResolvers<void>()
+  const held = Promise.withResolvers<WslRunner.WslResult>()
+  fixture.wslProcess.mockImplementationOnce(() => {
+    entered.resolve()
+    return held.promise
+  })
+  const refresh = () =>
+    detectAgentCommandsOnHost(['claude'], {
+      context: { wslDistro: 'RefreshUbuntu' },
+      refresh: true
+    })
+  const first = refresh()
+  try {
+    await entered.promise
+    const second = refresh()
+    const third = refresh()
+    held.resolve({ code: 0, stdout: '', stderr: '', timedOut: false, environmentResolved: true })
+    await expect(Promise.all([first, second, third])).resolves.toEqual([
+      new Set(['claude']),
+      new Set(['claude']),
+      new Set(['claude'])
+    ])
+    expect(fixture.wslProcess).toHaveBeenCalledTimes(2)
+  } finally {
+    held.resolve({ code: 0, stdout: '', stderr: '', timedOut: false, environmentResolved: true })
+    await first
+  }
+})
+
+it('keeps an SSH worker agent miss even when Claude is installed locally', async () => {
+  await executable('path', claudeName)
+  const context = await detectProjectLaunchContext(
+    {},
+    {
+      id: 'remote-repo',
+      path: '/work/repo',
+      displayName: 'Remote repo',
+      badgeColor: '',
+      addedAt: 0,
+      connectionId: 'remote-host'
+    },
+    'claude',
+    { detect: async (host) => (host.kind === 'ssh' ? [] : ['claude']) }
+  )
+  expect(context).toEqual({
+    agents: [],
+    workspaceKind: 'git-worktree',
+    executionContext: { kind: 'ssh' }
+  })
 })
 
 it.skipIf(windows)('expands the executable head for standalone Agent Teams', async () => {

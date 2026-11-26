@@ -34,11 +34,12 @@ import {
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
   detectInstalledAgentsWithShellPathHydration,
-  refreshShellPathAndDetectAgents,
+  refreshAgentShellPath,
   type RefreshAgentsResult
 } from './agent-detection'
 import {
   agentCommandOverrideDetectionOptions,
+  detectInstalledAgentInventory,
   detectInstalledAgentInventoryWithShellPathHydration,
   detectInstalledAgents,
   type InstalledAgentDetectionOptions,
@@ -46,6 +47,11 @@ import {
 } from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
+import { withAgentInventoryDeadline } from './agent-command-detection'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../shared/concurrency/abort-signal-reason'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -161,13 +167,14 @@ function resolveFolderWorkspace(
 
 export async function detectAgentsOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal
 ): Promise<string[]> {
   // Unserved hosts are unverifiable; [] would falsely cache no installed agents.
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return detectInstalledAgentsWithShellPathHydration(host.context, options)
+  return detectInstalledAgentsWithShellPathHydration(host.context, options, signal)
 }
 
 /** The host's terminal agents and user CLI paths outside PATH. */
@@ -198,23 +205,34 @@ export async function refreshAgentsOnHost(
     throw new SshHostNotServedError(host.connectionId)
   }
   const wsl = getPreflightWslTarget(host.context)
-  const refresh = async (): Promise<RefreshAgentsResult> => {
-    const detect = () =>
-      options
-        ? refreshShellPathAndDetectAgents(host.context, options)
-        : refreshShellPathAndDetectAgents(host.context)
-    const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
+  return withAgentInventoryDeadline(async (signal) => {
+    const preparePath = () => refreshAgentShellPath(host.context, signal)
+    const path = wsl
+      ? await preparePath()
+      : await waitForPromiseWithSignal(
+          refreshAtRestCommandContext(() => {
+            throwIfSignalAborted(signal)
+            return captureHostShellEnvironment(preparePath)
+          }),
+          signal
+        )
+    // Keep filesystem scans out of the serialized shell environment refresh.
+    const inventory = await detectInstalledAgentInventory(host.context, options, true, signal)
+    throwIfSignalAborted(signal)
     notifyAgentsRefreshedOnHost(userInitiated && !wsl)
-    return result
-  }
-  return wsl ? refresh() : refreshAtRestCommandContext(refresh)
+    return { ...inventory, ...path }
+  })
 }
 
 /** A prospective workspace uses the create route's resolved repo, never a client host guess. */
 export async function detectProjectLaunchContext(
   store: WorkspaceAgentDetectionStore,
   repo: Repo,
-  onlyTuiAgent?: TuiAgent
+  onlyTuiAgent?: TuiAgent,
+  {
+    detect = detectAgentsOnHost,
+    signal
+  }: { detect?: typeof detectAgentsOnHost; signal?: AbortSignal } = {}
 ): Promise<ProjectLaunchContext> {
   const host = getRepoExecutionHostId(repo)
   const ssh = getSshTargetIdForExecutionHost(host)
@@ -228,13 +246,16 @@ export async function detectProjectLaunchContext(
   const overrides = agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   const options = onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
   const context = { projectRuntime }
-  let agents = await detectAgentsOnHost(
-    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context },
-    options
-  )
-  if (onlyTuiAgent && !agents.includes(onlyTuiAgent)) {
-    agents = await detectInstalledAgents(context, options, true)
-  }
+  const agents = await withAgentInventoryDeadline(async (waitSignal) => {
+    const detected = await detect(
+      ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context },
+      options,
+      waitSignal
+    )
+    return !ssh && onlyTuiAgent && !detected.includes(onlyTuiAgent)
+      ? detectInstalledAgents(context, options, true, waitSignal)
+      : detected
+  }, signal)
   return {
     agents: agents.filter(isTuiAgent),
     workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',

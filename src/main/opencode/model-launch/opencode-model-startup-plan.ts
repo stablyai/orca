@@ -1,8 +1,4 @@
-import {
-  readLocalTerminalAgentProgram,
-  type TerminalAgentProgram
-} from '../../preflight/agent-command-detection'
-import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
+import { readLocalTerminalAgentProgram } from '../../preflight/agent-command-detection'
 import {
   launchCommandProvenance,
   launchProgramHead,
@@ -59,11 +55,7 @@ export async function resolveOpenCodeModelLaunchRoute(
   // Probe the same user installation as the PTY, even when it sits outside PATH.
   const selected =
     commandProvenance === 'generated'
-      ? await withTimeout<TerminalAgentProgram>(
-          readLocalTerminalAgentProgram(stock, shell),
-          10_000,
-          { kind: 'unknown' }
-        )
+      ? await readLocalTerminalAgentProgram(stock, shell)
       : undefined
   if (selected && !('path' in selected)) {
     refuseModel(OPENCODE_MODEL_VERSION_REFUSAL)
