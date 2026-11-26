@@ -35,22 +35,29 @@ export const DISPATCH_LINK_JOINS = `LEFT JOIN worker_dispatches w ON w.dispatch_
   LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
   LEFT JOIN tasks t ON t.id = d.task_id`
 
-/** A Dispatch a paired server runs as its own, in DISPATCH_LINK_COLUMNS' shape. Abandoned here, it is
- *  settled here; its workers' own Dispatches are the server's, so it names no assignee. */
-const REMOTE_SETTLED = `(rd.task_settled_here = 2 OR rd.status NOT IN ('pending', 'dispatched'))`
+/** A Dispatch a paired server runs as its own, in DISPATCH_LINK_COLUMNS' shape. It stops running here
+ *  once it is terminal there (`isRemoteDispatchTerminal`), abandoned here, or its server's link closed
+ *  (a re-made pairing or a removed server): nothing will report it again. Its workers' own Dispatches
+ *  are the server's, so it names no assignee. */
+const REMOTE_ACTIVE = `rd.status IN ('pending', 'dispatched')`
+const REMOTE_LIVE = `(${REMOTE_ACTIVE} AND rd.task_settled_here <> 2
+  AND (rd.worker_state IS NULL OR rd.worker_state NOT IN ('succeeded', 'failed', 'stopped', 'abandoned'))
+  AND rl.state IS NOT 'closed')`
 export const REMOTE_DISPATCH_LINK_COLUMNS = `rd.dispatch_id AS id,
-  CASE WHEN rd.task_settled_here = 2 AND rd.status IN ('pending', 'dispatched') THEN 'failed'
-    ELSE rd.status END AS status,
+  CASE WHEN ${REMOTE_LIVE} OR NOT ${REMOTE_ACTIVE} THEN rd.status
+    WHEN rd.worker_state = 'succeeded' THEN 'completed' ELSE 'failed' END AS status,
   CASE WHEN rd.task_settled_here = 2 THEN 'abandoned'
     WHEN rd.worker_state IN ('stopped', 'abandoned') THEN rd.worker_state
+    WHEN ${REMOTE_ACTIVE} AND rl.state = 'closed' THEN 'server_unlinked'
     ELSE rd.last_failure END AS last_failure,
   rd.creator_orca_session_id, rd.creator_pane_key,
   NULL AS assignee_orca_session_id, NULL AS assignee_pane_key, rd.worktree_id,
-  CASE WHEN ${REMOTE_SETTLED} THEN rd.updated_at ELSE rd.created_at END AS at,
-  CASE WHEN ${REMOTE_SETTLED} THEN rd.updated_at END AS completed_at,
+  CASE WHEN ${REMOTE_LIVE} THEN rd.created_at ELSE rd.updated_at END AS at,
+  CASE WHEN ${REMOTE_LIVE} THEN NULL ELSE rd.updated_at END AS completed_at,
   COALESCE(t.task_title, t.display_name) AS title,
   rd.environment_id AS server_environment_id, rd.agent AS server_agent`
-export const REMOTE_DISPATCH_LINK_JOINS = `LEFT JOIN tasks t ON t.id = rd.task_id`
+export const REMOTE_DISPATCH_LINK_JOINS = `LEFT JOIN tasks t ON t.id = rd.task_id
+  LEFT JOIN remote_run_links rl ON rl.conversation_id = rd.conversation_id`
 
 function sqliteUtcMs(value: unknown): number {
   // Either datetime('now') (UTC, no zone) or an ISO string with its own zone.

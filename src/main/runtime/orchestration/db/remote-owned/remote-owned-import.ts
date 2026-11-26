@@ -228,7 +228,9 @@ function importWorkerState(
   adoptRemoteAttempt(db, link, {
     taskId: dispatch.taskId,
     dispatchId: dispatch.id,
-    agent: dispatch.agent
+    agent: dispatch.agent,
+    worktreeId: dispatch.worktreeId,
+    earlierDispatchId: dispatch.followUpOf ?? dispatch.creatorDispatchId
   })
   const record = recordRemoteDispatchState(
     db,

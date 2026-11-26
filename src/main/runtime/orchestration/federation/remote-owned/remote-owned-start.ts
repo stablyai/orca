@@ -37,6 +37,7 @@ import { resolveDispatchCreator } from '../../../rpc/methods/orchestration/runs/
 import {
   errorData,
   failedBeforeSending,
+  answeredWorktreeId,
   inServerTerms,
   serverNeverAnswered
 } from './remote-owned-answers'
@@ -119,22 +120,8 @@ const StartedOnServer = z.object({
   run: z.object({ id: z.string().min(1) }).optional(),
   agent: z.string().nullable().optional(),
   launch: z.unknown().optional(),
-  state: z.string().optional(),
-  effects: z.array(z.unknown()).optional()
+  state: z.string().optional()
 })
-
-const CreatedWorktreeEffect = z.object({ kind: z.literal('worktree'), id: z.string().min(1) })
-
-/** The workspace the server's start created, so the worker's line sits under the chat that started it. */
-function createdWorktreeId(effects: readonly unknown[] | undefined): string | null {
-  for (const effect of effects ?? []) {
-    const parsed = CreatedWorktreeEffect.safeParse(effect)
-    if (parsed.success) {
-      return parsed.data.id
-    }
-  }
-  return null
-}
 
 /**
  * worker-start --on a server that owns its workers: the Task stays in this Orca's graph, and the
@@ -247,7 +234,7 @@ export async function startRemoteOwnedWorker(
       requestKey: forward.key,
       peerRunId: started.data.run?.id,
       agent,
-      worktreeId: createdWorktreeId(started.data.effects)
+      worktreeId: answeredWorktreeId(receipt)
     })
     if (!recorded) {
       // A reset already removed the reservation; a re-made pairing keeps it, so a later start of the Task there is refused here.

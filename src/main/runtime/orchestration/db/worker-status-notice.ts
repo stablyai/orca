@@ -73,6 +73,10 @@ export function installWorkerStatusNotice(
     BEGIN SELECT ${NOTICE_FUNCTION}(OLD.dispatch_id, 'deleted'); END;
     CREATE TEMP TRIGGER IF NOT EXISTS orca_task_update_notice
     AFTER UPDATE ON main.tasks
-    BEGIN SELECT ${NOTICE_FUNCTION}(d.id, 'written') FROM main.dispatch_contexts d WHERE d.task_id = NEW.id; END;
+    BEGIN
+      SELECT ${NOTICE_FUNCTION}(d.id, 'written') FROM main.dispatch_contexts d WHERE d.task_id = NEW.id;
+      SELECT ${NOTICE_FUNCTION}(rd.dispatch_id, 'written') FROM main.remote_dispatches rd
+      WHERE rd.task_id = NEW.id;
+    END;
   `)
 }

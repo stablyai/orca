@@ -183,27 +183,28 @@ function finishedSlice(finished: readonly FinishedRef[], page?: BotChatTreePage)
   return start < 0 ? [] : finished.slice(start, start + CHAT_TREE_CAPS.step)
 }
 
-/** The Dispatches whose worker records a read needs: the running ones, and the finished rows it shows. */
+/** The Dispatches whose worker records a read needs: the running ones, and the finished rows it shows.
+ *  A paired server's own Dispatch has no worker record here; its row is its Dispatch's. */
 export function botChatTreeDispatchIds(
   chats: readonly BotChatFacts[],
   placed: readonly BotChatTreePlaced[],
   extras: readonly BotChatTreeExtra[],
   page?: BotChatTreePage
 ): string[] {
-  const ids: string[] = []
+  const ids: BotChatTreeDispatch[] = []
   for (const [chatId, chat] of refsByChat(placed, extras, homeIdOf(chats))) {
     // Every running record, even for one chat's page: one that reads ended moves to its own chat's history.
-    ids.push(...chat.running.map((entry) => entry.dispatch.id))
+    ids.push(...chat.running.map((entry) => entry.dispatch))
     if (page && page.chatId !== chatId) {
       continue
     }
     for (const ref of finishedSlice(chat.finished, page)) {
       if (ref.placed) {
-        ids.push(ref.placed.dispatch.id)
+        ids.push(ref.placed.dispatch)
       }
     }
   }
-  return ids
+  return ids.flatMap((dispatch) => (dispatch.serverEnvironmentId ? [] : [dispatch.id]))
 }
 
 function workerState(worker: OrchestrationSessionWorker): BotChatTreeWorker['state'] {

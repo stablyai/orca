@@ -16,7 +16,6 @@ import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-run
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import {
   ABANDONED_HERE,
-  ensureRemoteDispatchRecord,
   getRemoteDispatch,
   isRemoteDispatchActive,
   isRemoteDispatchTerminal,
@@ -25,6 +24,7 @@ import {
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
 import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
 import { writtenRow } from './written-row'
+import { ensureRemoteDispatchRecord, type RemoteDispatchIdentity } from './remote-dispatch-identity'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 
 export function getRemotePlacement(
@@ -227,7 +227,7 @@ export function recordRemoteStart(
 export function adoptRemoteAttempt(
   db: OrchestrationDb,
   link: RemoteRunLinkRow,
-  attempt: { taskId: string; dispatchId: string; agent?: string | null; worktreeId?: string | null }
+  attempt: RemoteDispatchIdentity
 ): RemoteDispatchRow {
   const known = getRemoteDispatch(db, attempt.dispatchId)
   const record = ensureRemoteDispatchRecord(db, link, attempt)

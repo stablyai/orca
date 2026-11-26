@@ -25,7 +25,7 @@ import {
 } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller'
-import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
+import { answeredWorktreeId, inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { OrchestrationError } from '../../orchestration-error'
 import { nameRefusingComputer } from '../../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
@@ -264,12 +264,13 @@ function paramsForServer(access: OrchestrationMethodAccessDeclaration, values: V
 
 async function forwardToLink(
   runtime: OrcaRuntimeService,
-  { link, dispatchId }: RemoteSubject,
+  subject: RemoteSubject,
   method: string,
   access: OrchestrationMethodAccessDeclaration,
   values: Values,
   forward?: RemoteForwardKey
 ): Promise<unknown> {
+  const { link, dispatchId } = subject
   const db = runtime.getOrchestrationDb()
   const server = await remoteServerName(runtime, link.environment_id)
   const params = paramsForServer(access, values)
@@ -281,7 +282,7 @@ async function forwardToLink(
       ...(forward ? { requestId: forward.key } : {}),
       whileLink: ['open']
     })
-    seedNamedDispatches(db, link, answer)
+    seedNamedDispatches(db, subject, answer)
     return inServerTerms(answer, { server, forward, link })
   } catch (error) {
     const explained = explainRemoteServerFailure(error, { server, method, params, dispatchId })
@@ -289,18 +290,20 @@ async function forwardToLink(
   }
 }
 
-/** A Dispatch the server's answer names (a follow-up it started) is its; record it so commands about it route there. */
-function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer: unknown): void {
+/** A Dispatch the server's answer names (a follow-up it started for the subject) is its; record it
+ *  so commands about it route there and it lists under the subject's chat. */
+function seedNamedDispatches(db: OrchestrationDb, subject: RemoteSubject, answer: unknown): void {
   const named: Values = answer && typeof answer === 'object' ? { ...answer } : {}
   const dispatchId = stringField(named, 'dispatchId')
   const taskId = stringField(named, 'taskId')
   if (!dispatchId || !taskId || getRemoteDispatch(db, dispatchId)) {
     return
   }
+  const seen = { taskId, dispatchId, worktreeId: answeredWorktreeId(answer) }
   runLifecycleWriteTransaction(db.db, 'seed_remote_dispatch', () => {
-    const open = getOpenRemoteRunLink(db, link.conversation_id)
+    const open = getOpenRemoteRunLink(db, subject.link.conversation_id)
     if (open) {
-      adoptRemoteAttempt(db, open, { taskId, dispatchId })
+      adoptRemoteAttempt(db, open, { ...seen, earlierDispatchId: subject.dispatchId })
     }
   })
 }
