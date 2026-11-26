@@ -3,6 +3,7 @@ import { useActiveRendererPty } from '../../pty-transport/delivery/use-active-re
 import { syncPaneOutputCadences } from '../../pty-transport/renderer-active-pty'
 import { useTerminalPaneExpandEvent } from '../../layout/expand/use-terminal-pane-expand-event'
 import { useTerminalPaneFocusEvent } from '../../input/focus/use-terminal-pane-focus-event'
+import { useTerminalPaneScrollEvent } from '../../input/scroll/use-terminal-pane-scroll-event'
 import { useTerminalProgrammaticPasteEvent } from '../../input/paste/use-terminal-programmatic-paste-event'
 import { useTerminalDictationInsertEvent } from '../../input/paste/use-terminal-dictation-insert-event'
 import { useEffect, useRef } from 'react'
@@ -211,6 +212,8 @@ export function useTerminalPaneGlobalEffects({
   useTerminalPaneExpandEvent({ tabId, managerRef, toggleExpandPane })
 
   useTerminalPaneFocusEvent({ tabId, managerRef, scheduleFollowOutputIfNeeded, toggleExpandPane })
+
+  useTerminalPaneScrollEvent({ tabId, managerRef, isVisibleRef })
 
   useTerminalProgrammaticPasteEvent({ tabId, managerRef, paneTransportsRef })
 

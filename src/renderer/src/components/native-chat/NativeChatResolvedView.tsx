@@ -260,6 +260,7 @@ export function NativeChatResolvedView({
   )
   const surface = useNativeChatSurface({
     tabId: terminalTabId,
+    paneKey,
     sessionId,
     isVisible,
     isFocusedGroup,
