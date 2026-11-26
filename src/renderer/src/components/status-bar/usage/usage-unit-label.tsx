@@ -1,11 +1,9 @@
 import React from 'react'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
-
-export type UsageUnitLabelState = 'absent' | 'collapsed' | 'shown'
 
 export function usageChipShowsPercentage(
   p: ProviderRateLimits | null,
@@ -15,40 +13,26 @@ export function usageChipShowsPercentage(
   return getStatusBarUsageSections(p, mode, t).length > 0
 }
 
-export function getUsageUnitLabelState(
-  providers: readonly ProviderRateLimits[],
-  collapsedProviders: readonly string[],
-  mode: StatusBarUsageMode,
-  t?: Translate
-): UsageUnitLabelState {
-  const withPercentage = providers.filter((p) => usageChipShowsPercentage(p, mode, t))
-  if (withPercentage.length === 0) {
-    return 'absent'
-  }
-  return withPercentage.every((p) => collapsedProviders.includes(p.provider))
-    ? 'collapsed'
-    : 'shown'
-}
-
-/** Stays measurable while collapsed so the density calculation remains stable. */
 export function UsageUnitLabel({
-  collapsed,
-  display
+  display,
+  compact = false
 }: {
-  collapsed: boolean
   display: UsagePercentageDisplay
+  /** Compact bar: dimmer label with a hairline separating it from the numbers. */
+  compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const label =
+    display === 'used'
+      ? t('auto.components.status.bar.usageUnitLabel.used', 'Used')
+      : t('auto.components.status.bar.usageUnitLabel.remaining', 'Remaining')
+  if (!compact) {
+    return <span className="text-muted-foreground">{label}</span>
+  }
   return (
-    <span
-      data-usage-unit
-      data-usage-collapsed={collapsed}
-      aria-hidden={collapsed}
-      className="text-muted-foreground data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
-    >
-      {display === 'used'
-        ? t('auto.components.status.bar.usageUnitLabel.used', 'Used')
-        : t('auto.components.status.bar.usageUnitLabel.remaining', 'Remaining')}
+    <span className="inline-flex items-center gap-3.5 text-muted-foreground">
+      {label}
+      <span aria-hidden="true" className="h-3 w-px bg-muted-foreground/60" />
     </span>
   )
 }

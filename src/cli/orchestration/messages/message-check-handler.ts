@@ -6,7 +6,7 @@ import { printOrchestrationResult } from '../agent-view'
 import { checkView } from './message-agent-views'
 import { getOptionalStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   formatOrchestrationCheckText,
   prepareOrchestrationCheckOutput,

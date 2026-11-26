@@ -11,7 +11,7 @@ import {
   editorBufferOwnerPathKey,
   isLocalWindowsEditorOwner
 } from '@/store/slices/editor/buffers/editor-buffer-identity'
-import { parseWslUncPath } from '../../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 
 // Use host path rules: Windows model-URI normalization would conflate distinct backslash/slash paths on POSIX hosts.
 function physicalFileKey(owner: EditorModelOwner, filePath: string): string | null {

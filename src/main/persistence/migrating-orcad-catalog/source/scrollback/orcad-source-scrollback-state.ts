@@ -5,7 +5,7 @@ import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
 } from '../../../../../shared/orcad-migration/orcad-migration-scrollback'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../../../shared/terminal/replay/terminal-scrollback-limits'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import {

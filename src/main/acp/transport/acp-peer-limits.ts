@@ -1,4 +1,4 @@
-import { isSafeTimerDelayMs } from '../../../shared/timer-delay'
+import { isSafeTimerDelayMs } from '../../../shared/concurrency/timer-delay'
 
 // Under the ACP SDK's 32 MiB stdin line limit (OpenCode 2); a longer line kills the agent.
 export const ACP_MAX_LINE_BYTES = 31 * 1024 * 1024

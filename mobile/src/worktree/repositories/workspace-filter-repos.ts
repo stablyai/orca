@@ -1,8 +1,8 @@
-import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
-import { resolveRepoBadgeColor } from '../../../../src/shared/repo-badge-color'
-import { buildSectionRepoMap } from '../workspace-list/workspace-list-sections'
+import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import { resolveRepoBadgeColor } from '../../../../src/shared/repository/appearance/repo-badge-color'
+import { buildSectionRepoMap } from '../workspace-list/section-repo-map'
 import type { SectionRepo, Worktree } from '../workspace-list/workspace-list-types'
-import { isRepoHidden } from '../../../../src/shared/hidden-projects'
+import { isRepoHidden } from '../../../../src/shared/project/catalog/hidden-projects'
 
 export type WorkspaceSectionRepo = {
   /** Unique per host: two hosts can each hold a repo of the same name. */

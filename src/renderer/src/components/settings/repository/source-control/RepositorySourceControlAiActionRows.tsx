@@ -5,12 +5,12 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 import { useRepositoryActionPickerInputs } from './use-repository-action-picker-inputs'
 import { shallow } from 'zustand/shallow'
-import { sameAgentLaunchPickerModel } from '../../../tab-bar/new-tab-agent-menu-model'
+import { sameAgentLaunchPickerModel } from '../../../agent/launch-menu/new-tab-agent-menu-model'
 import { selectSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
 import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
-import type { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
-import type { NativeChatDefaultSettings } from '../../../../../../shared/structured-native-chat-launch-route'
+import type { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
+import type { NativeChatDefaultSettings } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   SourceControlActionAgentPickerView,
   sourceControlActionAgentPreview
@@ -36,7 +36,7 @@ import {
   SOURCE_CONTROL_TEXT_ACTION_ID_SET,
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
-  getSourceControlAgentArgsPlaceholder
+  SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER
 } from '../../source-control/source-control-action-recipe-options'
 import {
   ACTION_MODE_INHERIT,
@@ -173,16 +173,7 @@ const SelectedRepositoryActionRows = memo(
               : (pickerAgent
                   ? sourceControlActionExecutionArgs(recipe, pickerAgent)
                   : inheritedAgentArgs) ||
-                (isLaunchAction
-                  ? ''
-                  : getSourceControlAgentArgsPlaceholder(
-                      resolveAgentArgsPlaceholderAgent(
-                        effectiveAgent,
-                        source,
-                        actionId,
-                        defaultTuiAgent
-                      )
-                    ))
+                (isLaunchAction ? '' : SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER)
           const agentWarningText = getSourceControlActionAgentWarningText(
             actionId,
             effectiveAgent,

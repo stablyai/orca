@@ -3,8 +3,8 @@ import { fixture } from './crew-read-model.test-fixture'
 import { subscribeCrew } from './crew-stream'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
-import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { MountedCrewProducerModule } from '../../../../shared/orchestration/orchestration-crew-mounted.test-fixture'
 
 export const createMountedCrewProducer: MountedCrewProducerModule['createMountedCrewProducer'] =

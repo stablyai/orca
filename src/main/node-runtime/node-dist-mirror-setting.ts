@@ -1,4 +1,4 @@
-import { resolveNodeDistMirror } from '../../shared/node-dist-mirror'
+import { resolveNodeDistMirror } from '../../shared/node-runtime/node-dist-mirror'
 
 let readMirrorSetting: (() => string | undefined) | null = null
 

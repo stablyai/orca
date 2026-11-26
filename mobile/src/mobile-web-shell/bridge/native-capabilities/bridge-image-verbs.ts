@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../src/shared/clipboard-image'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../src/shared/clipboard/clipboard-image'
 import { isKnownRasterImageMimeType } from '../../../../../src/shared/file-preview/raster-image-preview-limits'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../files/attachments/mobile-clipboard-image-upload-chunk'
 

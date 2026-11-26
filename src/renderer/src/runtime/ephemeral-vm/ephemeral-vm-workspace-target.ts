@@ -2,21 +2,21 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
-} from '../../../../shared/project-types'
+} from '../../../../shared/project/project-types'
 import {
   getEphemeralVmRecipeResultCheckoutMode,
   getEphemeralVmRecipeResultProjectRoot
-} from '../../../../shared/ephemeral-vm-recipes'
-import type { EphemeralVmRecipeResultWarning } from '../../../../shared/ephemeral-vm-recipe-diagnostics'
-import '../../../../shared/protocol-version'
+} from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import type { EphemeralVmRecipeResultWarning } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY
-} from '../../../../shared/worktree-runtime-capabilities'
+} from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'

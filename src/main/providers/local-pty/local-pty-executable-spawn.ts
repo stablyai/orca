@@ -4,13 +4,14 @@ import type * as pty from 'node-pty'
 import {
   nodePtyNativeBuildEntryDir,
   usesNodePtySpawnHelper
-} from '../../../shared/node-pty-spawn-helper'
+} from '../../orcad/native-runtime/node-pty-spawn-helper'
 import { TERMINAL_SPAWN_ISSUE_REQUEST } from '../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
 } from '../shell-launch/macos/tcc-login-shell'
 import { formatLocalPtyEnvironmentDiag } from '../working-directory/validation'
+import { spawnWithSystemConptyFallback } from '../../windows/bundled-conpty-fallback'
 
 let didEnsureSpawnHelperExecutable = false
 
@@ -132,9 +133,21 @@ export type ShellSpawnResult = {
   startupCommandDeliveredInShellArgs?: boolean
 }
 
-// Bundled ConPTY matches daemon wrap markers; system ConPTY can corrupt wide TUI scrollback in local fallback mode.
-function windowsConptyDllOptions(): { useConptyDll: true } | Record<string, never> {
-  return process.platform === 'win32' ? { useConptyDll: true } : {}
+// Bundled ConPTY matches daemon wrap markers; the system ConPTY is only a fallback when the bundled one cannot start (#47506).
+function spawnWithConpty(
+  ptySpawn: ShellSpawnParams['ptySpawn'],
+  file: string,
+  args: string[],
+  options: pty.IPtyForkOptions
+): pty.IPty {
+  return spawnWithSystemConptyFallback(
+    (useConptyDll) =>
+      ptySpawn(file, args, {
+        ...options,
+        ...(process.platform === 'win32' ? { useConptyDll } : {})
+      }),
+    file
+  )
 }
 
 // ConPTY can reject Store aliases with access-denied (5); try pre-resolved real executables instead.
@@ -147,13 +160,12 @@ function spawnWindowsFallbackChain(
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
-      const proc = ptySpawn(attempt.shellPath, attempt.shellArgs, {
+      const proc = spawnWithConpty(ptySpawn, attempt.shellPath, attempt.shellArgs, {
         name: termName,
         cols,
         rows,
         cwd: attempt.effectiveCwd,
-        env,
-        ...windowsConptyDllOptions()
+        env
       })
       console.warn(
         `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
@@ -178,13 +190,12 @@ export type PtyExecutableSpawnParams = Pick<
 /** One executable with an argv array, no shell and no fallback; throws when it can't start. */
 export function spawnPtyExecutable(params: PtyExecutableSpawnParams): pty.IPty {
   const { file, args, termName = 'xterm-256color', cols, rows, cwd, env, ptySpawn } = params
-  return ptySpawn(file, args, {
+  return spawnWithConpty(ptySpawn, file, args, {
     name: termName,
     cols,
     rows,
     cwd,
-    env,
-    ...windowsConptyDllOptions()
+    env
   })
 }
 

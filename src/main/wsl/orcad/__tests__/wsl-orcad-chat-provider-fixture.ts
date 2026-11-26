@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { z } from 'zod'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
@@ -120,6 +120,8 @@ export async function installWslChatFixture(lane: WslChatHost) {
   // No Command setting: orcad must find each CLI the way a user's install is found.
   await lane.rpc('settings.update', {
     nativeChatPermissionMode: 'ask',
+    // Saved here, long before any lane stops the distro: these lanes press Continue themselves.
+    nativeChatResumeWorkOnRestart: false,
     agentDefaultEnv: {
       claude: {
         ORCA_SDK_CONTRACT_SCENARIO_PATH: `${root}/scenario.json`,

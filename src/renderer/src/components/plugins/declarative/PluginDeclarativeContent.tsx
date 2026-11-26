@@ -1,5 +1,5 @@
 import { NativeChatHighlightedCode } from '@/components/native-chat/markdown/code/NativeChatHighlightedCode'
-import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
+import { MarkdownGitHubCallout } from '@/components/comment-markdown/markdown-github-callout'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PluginDeclarativeProps } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { PluginDeclarativeIconGlyph } from './plugin-declarative-icons'

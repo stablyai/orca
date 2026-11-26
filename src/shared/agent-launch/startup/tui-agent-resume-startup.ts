@@ -6,14 +6,19 @@ import type {
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'
+import { startupUpdatePromptSuppression } from './agent-startup-update-prompt'
 import type { AgentStartupPlan } from './tui-agent-startup'
-import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  quoteStartupArg,
+  resolveStartupShell,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
 import { buildAiVaultResumeShellCommand } from '../../ai-vault/resume/ai-vault-resume-command'
-import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
-import { parseWslUncPath } from '../../wsl-paths'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { dropRecordedAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
 
 export function buildAgentResumeStartupPlan(args: {
@@ -88,7 +93,13 @@ export function buildAgentResumeStartupPlan(args: {
     agentArgs: recorded.agentArgs,
     ...baseCommand.resumeLaunch
   })
-  const resumeCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
+  // Orca starts every resume and often types into it, so an update screen must not take that Enter.
+  const suppression = startupUpdatePromptSuppression(args.agent)
+  const suppressedCommand = suppression.args.length
+    ? `${baseCommand.command} ${suppression.args.map((arg) => quoteStartupArg(arg, shell)).join(' ')}`
+    : baseCommand.command
+  const resumeCommand = buildAgentResumeLaunchCommand(args.agent, suppressedCommand, argv, shell)
+  const env = suppression.env ? { ...args.agentEnv, ...suppression.env } : args.agentEnv
   const agentCwd = args.providerSession.cwd
   const launchCommand =
     agentCwd && args.launchCwd && !args.resumeInLaunchCwd && !isSameFolder(agentCwd, args.launchCwd)
@@ -108,7 +119,7 @@ export function buildAgentResumeStartupPlan(args: {
     launchConfig,
     ...(args.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
     ...(Object.keys(applied).length > 0 ? { sessionOptions: { ...applied } } : {}),
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    ...(env ? { env: { ...env } } : {})
   }
 }
 

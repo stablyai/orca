@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { connect, type Socket } from 'node:net'
 import { randomBytes } from 'node:crypto'
-import { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
+import { RelayFrameBuffer } from '../../../shared/remote-runtime/relay/relay-frame-buffer'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { ensureAdbOk } from './android-adb-result'
@@ -48,7 +48,12 @@ export type ScrcpyControlTarget = {
   // Touch positions must carry this size; the server drops events sized for another frame.
   videoSize(): H264PictureSize | null
   sendControl(message: Buffer): boolean
+  /** True when the server can add a UHID keyboard without changing the device's keyboard configuration. */
+  readonly uhidKeyboard?: boolean
 }
+
+// `am get-config` names the keyboard type (`-qwerty-`, or `-nokeys-` without a hardware keyboard).
+const UHID_KEYBOARD_PROBE = 'test -r /dev/uhid -a -w /dev/uhid && am get-config'
 
 function newScid(): string {
   // scrcpy expects a signed 32-bit scid formatted as eight hex digits.
@@ -67,6 +72,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
   private readonly ready: Promise<void>
   private resolveReady: (() => void) | null = null
   private rejectReady: ((error: Error) => void) | null = null
+  uhidKeyboard = false
 
   private constructor(
     private readonly options: ScrcpyStreamOptions,
@@ -102,10 +108,18 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
 
   private async deploy(): Promise<void> {
     const { runner, sdk, serial, localJarPath } = this.options
-    ensureAdbOk(
-      await runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
-      'scrcpy server push'
-    )
+    // Probed once per session, next to the push, so key presses never spawn anything. Only a device
+    // that already has a hardware keyboard gets one: attaching the first would change its keyboard
+    // configuration and restart activities that don't handle it. Output, not exit status, decides,
+    // since adb shell before Android 7 always exits 0.
+    const [push, uhid] = await Promise.all([
+      runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
+      runner(sdk.adb, ['-s', serial, 'shell', UHID_KEYBOARD_PROBE])
+        .then((result) => /-qwerty-/.test(result.stdout))
+        .catch(() => false)
+    ])
+    ensureAdbOk(push, 'scrcpy server push')
+    this.uhidKeyboard = uhid
     const forward = ensureAdbOk(
       await runner(sdk.adb, scrcpyForwardArgs(serial, this.port, this.scid)),
       'scrcpy port forward'
@@ -204,6 +218,8 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
         this.controlSocket = null
       }
     })
+    // Device messages (UHID keyboard LED reports, clipboard) are unused; reading them keeps them from backing up.
+    socket.on('data', () => {})
     this.controlSocket = socket
   }
 

@@ -1,13 +1,13 @@
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { worktreePathComparisonKey } from '../../../workspaces/catalog/worktree-path-comparison-key'
 import { parseRuntimeWorktreeId } from '../catalog/runtime-worktree-path-identity'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+} from '../../../../shared/execution-host/execution-host'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 type RuntimeWorktreeSummaryPathCandidate = { summary: RuntimeWorktreePsSummary; order: number }
 /** One candidate per host, first registration first. */

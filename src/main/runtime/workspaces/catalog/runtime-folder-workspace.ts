@@ -1,12 +1,12 @@
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
-import type { Repo } from '../../../../shared/repo-types'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoMainWorktreeId
 } from '../../../../shared/worktree/id'
-import { normalizeWorkspaceCreatorProvenance } from '../../../../shared/workspace-creator-provenance'
+import { normalizeWorkspaceCreatorProvenance } from '../../../../shared/workspace/identity/workspace-creator-provenance'
 
 export function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
   return getRepoMainWorktreeId(repo)

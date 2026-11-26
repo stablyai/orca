@@ -33,7 +33,7 @@ async function loadTransport(source, sourceFile = sourcePath) {
               return
             }
             const owners = {
-              './envelope-schema': 'src/shared/runtime-rpc-envelope.ts',
+              './envelope-schema': 'src/shared/remote-runtime/rpc/runtime-rpc-envelope.ts',
               './types': 'src/cli/runtime/connection/types.ts',
               './runtime-access-denied': 'src/cli/runtime/connection/runtime-access-denied.ts'
             }

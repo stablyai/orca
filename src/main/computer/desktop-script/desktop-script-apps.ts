@@ -2,7 +2,7 @@ import type {
   ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerProviderCapabilities
-} from '../../../shared/computer-use-runtime-types'
+} from '../../../shared/computer/computer-use-runtime-types'
 import { RuntimeClientError } from '../runtime-client-error'
 import { stringParam } from './desktop-script-provider-params'
 import type { BridgeRequest, BridgeResponse } from './desktop-script-provider-types'

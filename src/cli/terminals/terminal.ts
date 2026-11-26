@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
@@ -8,7 +8,7 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
-} from '../../shared/runtime-terminal-contracts'
+} from '../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from './codex-command-classification'
 import {
@@ -37,8 +37,8 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import {
   isSupportedWindowsShellOverride,
   listSupportedWindowsShellOverrides
-} from '../../shared/windows-terminal-shell'
-import '../../shared/protocol-version'
+} from '../../shared/shell/launch/windows-terminal-shell'
+import '../../shared/remote-runtime/protocol/protocol-version'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
@@ -207,6 +207,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       title: getOptionalStringFlag(flags, 'title'),
       focus,
       ...(focus ? { presentation: 'focused' } : {}),
+      ...(flags.has('keep-open') ? { keepOpen: true } : {}),
       // Compat: hosts before v1.4.211 (#22384) need renderer startup replies; remove once unsupported.
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
@@ -251,7 +252,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client),
       direction: directionFlag,
       command: getOptionalStringFlag(flags, 'command'),
-      ...(retrySplit !== undefined ? { retrySplit } : {})
+      ...(retrySplit !== undefined ? { retrySplit } : {}),
+      ...(flags.has('keep-open') ? { keepOpen: true } : {})
     })
     printResult(result, json, formatTerminalSplit)
   }

@@ -36,7 +36,7 @@
 
 Следите за агентами и направляйте их работу с телефона — получайте уведомления о завершении задач и отправляйте дополнительные указания откуда угодно.
 
-[App Store для iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK для Android](https://orca.dev/download/android) · [Документация →](https://orca.dev/docs/mobile)
+[App Store для iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [APK для Android](https://orca.dev/download/android) · [Документация →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -237,7 +237,7 @@ yay -S stably-orca-bin
 Подключите его к настольному приложению, чтобы следить за агентами и направлять их работу с телефона.
 
 - **iOS:** [Скачать в App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Скачать APK](https://orca.dev/download/android) · [Руководство по установке](https://orca.dev/docs/android-apk)
+- **Android:** [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [Скачать APK](https://orca.dev/download/android) · [Руководство по установке](https://orca.dev/docs/android-apk)
 
 ---
 

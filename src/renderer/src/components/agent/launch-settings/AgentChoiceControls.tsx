@@ -1,4 +1,5 @@
 import { modelMenuOptions } from '../../../../../shared/agent-session/options/view/model-menu-options'
+import { orderEffortLevels } from '../../../../../shared/agent-session/options/view/effort-level-order'
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices
@@ -17,12 +18,13 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import {
   agentPickerEntryOptions,
-  agentPickerModels
+  agentPickerModels,
+  withComposedParts
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
-import { classifyAgentModels } from '../../../../../shared/legacy-agent-models'
+import { classifyAgentModels } from '../../../../../shared/agent-session/options/model-catalog/legacy-agent-models'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
@@ -112,6 +114,9 @@ export function AgentChoiceFields({
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
       ? selected.model
       : undefined
+  const listedRow = live
+    ? (menu?.rows ?? agentPickerModels(live)).find(({ id }) => id === selected?.model)
+    : undefined
   const liveEffort = live
     ? agentPickerEntryOptions(live, selected?.model, 'terminal').find(({ id }) => id === 'effort')
     : undefined
@@ -185,6 +190,16 @@ export function AgentChoiceFields({
                 }
               ]
         const current = selected?.options?.[option.id]
+        const menu = [
+          {
+            value: AGENT_DEFAULT_VALUE,
+            label: defaultLabels?.options?.[option.id] ?? defaultLabel
+          },
+          ...choices,
+          ...(current && !choices.some((choice) => choice.value === current)
+            ? [{ value: current, label: current }]
+            : [])
+        ]
         return (
           <AgentChoiceMenu
             key={option.id}
@@ -194,16 +209,7 @@ export function AgentChoiceFields({
             value={current ?? AGENT_DEFAULT_VALUE}
             disabled={disabled || (option.id === 'effort' && effort?.settable === false)}
             onOpenChange={onOpenChange}
-            choices={[
-              {
-                value: AGENT_DEFAULT_VALUE,
-                label: defaultLabels?.options?.[option.id] ?? defaultLabel
-              },
-              ...choices,
-              ...(current && !choices.some((choice) => choice.value === current)
-                ? [{ value: current, label: current }]
-                : [])
-            ]}
+            choices={option.category === 'thought_level' ? orderEffortLevels(menu) : menu}
             onChange={(next) => {
               const encoded =
                 next === AGENT_DEFAULT_VALUE
@@ -212,7 +218,14 @@ export function AgentChoiceFields({
                       option.kind,
                       option.kind.type === 'boolean' ? next === 'true' : next
                     )
-              onSelect({ options: { [option.id]: encoded } })
+              onSelect(
+                withComposedParts(
+                  listedRow,
+                  selected ?? {},
+                  model?.options ?? catalog?.unknownModelOptions ?? [],
+                  { options: { [option.id]: encoded } }
+                )
+              )
             }}
           />
         )

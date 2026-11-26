@@ -5,8 +5,8 @@ import { dirname, join } from 'node:path'
 import {
   APPIMAGE_NODE_RUNTIME_SEGMENTS,
   appImageNodeRuntimeTarget
-} from '../../shared/appimage-node-runtime'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
+} from '../../shared/desktop-distribution/appimage/appimage-node-runtime'
+import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime/node-runtime-pin'
 import { verifyFileSha256 } from './pinned-runtime-materializer'
 
 export type AppImageNodeRuntime = {

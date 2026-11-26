@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../runtime-session-contracts'
+import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 /** Bound shared by the host's stored list and a client's retained copy of it. */
 export const MAX_RETIRED_TERMINAL_SURFACE_PROOFS = 64

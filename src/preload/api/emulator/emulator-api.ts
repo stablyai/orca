@@ -33,7 +33,9 @@ export type EmulatorApi = {
   }) => void
   /** Resolves false when the device has no live scrcpy control socket. */
   sendScrcpyKeyboard: (
-    input: { deviceId: string; text: string } | { deviceId: string; key: string; shift: boolean }
+    input:
+      | { deviceId: string; text: string; paste?: boolean; hid?: { usage: number; shift: boolean } }
+      | { deviceId: string; key: string; shift: boolean; hid?: { usage: number; shift: boolean } }
   ) => Promise<boolean>
   onVideoStreamFrame: (
     callback: (data: {

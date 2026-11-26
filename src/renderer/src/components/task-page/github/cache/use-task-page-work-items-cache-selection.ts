@@ -6,7 +6,7 @@ import {
   createTaskPageWorkItemsCacheSelector
 } from '@/components/task-page/task-page-cache-selectors'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../../../shared/github/work-items/work-items-query-bounds'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getTaskPageRepoCacheInput } from '../../task-page-source-context'
 
 /** Selected rows' current-query cache entries, plus the entries the source displays read (see the selector). */

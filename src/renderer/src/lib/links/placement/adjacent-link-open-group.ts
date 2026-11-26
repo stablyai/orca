@@ -1,4 +1,7 @@
-import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type {
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 
 type LayoutRect = { left: number; top: number; right: number; bottom: number }

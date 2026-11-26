@@ -4,7 +4,7 @@ import { pluginWorkspaceId } from '../../../../shared/plugins/workers/plugin-hos
 import {
   suggestCreatureNameForPaths,
   suggestionPathBasename
-} from '../../../../shared/worktree-name-suggestion'
+} from '../../../../shared/worktree/naming/worktree-name-suggestion'
 import { WorktreeCreateSetupChoiceRefusedError } from '../../../runtime/workspaces/creation/worktree-create-setup-choice-refusal'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'

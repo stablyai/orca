@@ -1,11 +1,11 @@
 import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   applyAgentPaneActivityFlags,
   createAgentPaneActivityFlags,
   rankWorktreeStatus,
   type WorktreeStatus
-} from '../../../../shared/worktree-status-rollup'
+} from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
 

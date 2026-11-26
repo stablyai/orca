@@ -40,7 +40,7 @@ import type {
   UpdatePullRequestBySlugArgs,
   UpdateProjectItemFieldArgs
 } from '../../../shared/github/projects/project-request-types'
-import type { AppStarSource } from '../../../shared/gh-star-source'
+import type { AppStarSource } from '../../../shared/github/repositories/gh-star-source'
 import type { PreloadApi } from '../../api-types'
 
 export const ghMutationsAndProjectsApi = {

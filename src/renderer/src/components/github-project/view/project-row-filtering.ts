@@ -2,7 +2,7 @@ import type {
   GitHubProjectRow,
   GitHubProjectTable
 } from '../../../../../shared/github/projects/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 /** Origin matches own the slug through their own remote; upstream matches are
  *  forks whose parent the row names. */

@@ -8,13 +8,13 @@
 # Usage:
 #   mirror-release-to-r2.sh                 # latest desktop release, website assets
 #   mirror-release-to-r2.sh v1.4.254        # a specific desktop tag
-#   mirror-release-to-r2.sh mobile-android-v0.0.64 app-release.apk
+#   mirror-release-to-r2.sh android-v0.0.65 app-release.apk
 #   ALL_ASSETS=1 mirror-release-to-r2.sh    # every asset except sourcemaps
 #
 # Layout written to the bucket:
 #   releases/<tag>/<asset>       immutable, versioned copy
 #   latest/<asset>               stable desktop tags (vX.Y.Z) only — what the mirror link points at
-#   android/latest/<asset>       mobile-android-v* tags only
+#   android/latest/<asset>       android-v* tags (dev.orca.app) only
 #   latest/release.json          {tag, mirroredAt, assets[]} for the desktop alias
 #
 # Requires: gh (authenticated), curl, jq, and an uploader:
@@ -82,7 +82,7 @@ fi
 # Why: GitHub's /releases/latest skips RCs, so an RC must never move latest/.
 if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   ALIAS_PREFIX="latest"
-elif [[ "$TAG" == mobile-android-v* ]]; then
+elif [[ "$TAG" == android-v* ]]; then
   ALIAS_PREFIX="android/latest"
 else
   ALIAS_PREFIX=""

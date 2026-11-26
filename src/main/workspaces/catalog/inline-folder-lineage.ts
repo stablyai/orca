@@ -1,4 +1,4 @@
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { folderLineageEdgeOf } from '../../../shared/worktree/lineage/folder-lineage-parents'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../shared/worktree/types'

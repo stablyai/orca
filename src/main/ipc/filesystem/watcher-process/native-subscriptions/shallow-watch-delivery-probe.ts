@@ -80,9 +80,3 @@ export function detectShallowWatchDelivery(): Promise<boolean> {
   })
   return probe
 }
-
-export function resetShallowWatchDeliveryProbeForTests(): void {
-  delivered = false
-  probe = null
-  negativeAt = null
-}

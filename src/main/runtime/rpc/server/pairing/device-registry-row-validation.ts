@@ -1,7 +1,7 @@
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
-import type { DeviceEntry } from './device-entry'
-import { parseMobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import type { DeviceEntry, DeviceOrcaAccount } from './device-entry'
+import { parseMobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
 import { isExchangeDeviceToken } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
 import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
@@ -48,6 +48,24 @@ function isTimestamp(value: unknown): value is number {
 }
 
 /** Null for a row without a usable identity; the caller must treat the registry as doubtful. */
+function validOrcaAccount(value: unknown): DeviceOrcaAccount | undefined {
+  return typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'name' in value &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.name === 'string'
+    ? {
+        id: value.id,
+        name: value.name,
+        ...('computer' in value && typeof value.computer === 'string' && value.computer
+          ? { computer: value.computer }
+          : {})
+      }
+    : undefined
+}
+
 export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
   if (
     !isRecord(device) ||
@@ -78,6 +96,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     // Bad push metadata must not fail registry load and strand all devices.
     pushRegistration: parseMobilePushRegistration(device.pushRegistration),
     parentDeviceId: typeof device.parentDeviceId === 'string' ? device.parentDeviceId : undefined,
+    orcaAccount: validOrcaAccount(device.orcaAccount),
     phoneKey: typeof device.phoneKey === 'string' ? device.phoneKey : undefined,
     credentialRevision:
       typeof device.credentialRevision === 'number' &&
@@ -95,6 +114,10 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     exchangeToken: isExchangeDeviceToken(device.exchangeToken) ? device.exchangeToken : undefined,
     ticketFirstSeenAt: isTimestamp(device.ticketFirstSeenAt) ? device.ticketFirstSeenAt : undefined,
     servesSessionBrowsers: device.servesSessionBrowsers === true ? true : undefined,
+    createdByDeviceId:
+      typeof device.createdByDeviceId === 'string' ? device.createdByDeviceId : undefined,
+    originClientInstanceId:
+      typeof device.originClientInstanceId === 'string' ? device.originClientInstanceId : undefined,
     ...validDeviceKeyFields(device)
   }
 }

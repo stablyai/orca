@@ -6,8 +6,8 @@ import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalShow,
   RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
@@ -21,9 +21,10 @@ import {
   labelTerminalReadSource,
   readTerminalTail
 } from '../output/tail/terminal-tail-read'
+import { readSleptAgentTerminal } from './slept-agent-terminal-read'
 import { getTerminalState } from '../wait/terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {
@@ -198,7 +199,8 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
-    const pty = this.getLivePtyForHandle(handle)
+    // A slept agent whose tab isn't mounted shows as the idle agent its saved record names.
+    const pty = this.unmountedSleptAgentLeaf(handle) ? null : this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
       const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
@@ -220,7 +222,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktreesById = await this.getResolvedWorktreeMap()
     this.assertStableReadyGraph(graphEpoch)
-    const { leaf } = this.getLiveLeafForHandle(handle)
+    const leaf = this.unmountedSleptAgentLeaf(handle) ?? this.getLiveLeafForHandle(handle).leaf
     const summary = this.buildTerminalSummary(leaf, worktreesById)
     const preview = leaf.ptyId
       ? await this.visibleSnapshotPreview(leaf.ptyId, summary.preview)
@@ -255,6 +257,13 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (structured) {
       // `screen` asks for a rendered grid; there is none, and the journal is the whole record.
       return { ...structured, source: opts.screen ? 'screen-unavailable' : 'stream' }
+    }
+    // A slept agent reads as idle, without waking.
+    const slept = this.sleptAgentHandle(handle)
+    if (slept) {
+      return readSleptAgentTerminal(handle, slept, opts, (pty) =>
+        this.readPtyTerminal(handle, pty, opts)
+      )
     }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN ? this.startRestoredHandlePane(handle) : null

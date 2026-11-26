@@ -7,7 +7,7 @@ import {
   resolveCommandOnLocalPath
 } from '../ipc/command-path/command-path-resolver'
 import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
-import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
+import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
 import { detectInstalledAgents } from '../preflight/installed-agent-detection'
 import { resolveGitBashPath } from '../pty/shell-startup/git-bash'
 import {

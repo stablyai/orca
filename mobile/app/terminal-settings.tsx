@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useWindowDimensions, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -7,7 +8,7 @@ import Animated, {
   useSharedValue
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { Smartphone, Type } from 'lucide-react-native'
+import { Smartphone } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'
@@ -16,7 +17,7 @@ import { loadHosts, peekHosts } from '../src/host-catalog/host-store'
 import type { HostProfile } from '../src/host-catalog/host-profile'
 import { useFocusedSettingsHostClients } from '../src/settings/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc/rpc-client-contract'
-import { LIST_LEADING_INSET, ListRow } from '../src/components/list/ListGroup'
+import { LIST_LEADING_INSET, ListRow, SectionHeader } from '../src/components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../src/components/sheets/PickerModal'
 import { TerminalShortcutSettings } from '../src/terminal/shortcuts/settings/TerminalShortcutSettings'
 import {
@@ -24,8 +25,15 @@ import {
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
 } from '../src/terminal/viewport/terminal-auto-restore-fit-state'
-import { setTerminalSettingsScrollEnabled } from '../src/terminal/preferences/terminal-settings-scroll-lock'
-import { useTerminalTextScaleSetting } from '../src/terminal/preferences/use-terminal-text-scale-setting'
+import { setDragReorderScrollEnabled } from '../src/components/reorder/drag-reorder-scroll-lock'
+import { useTerminalFontSettings } from '../src/terminal/preferences/use-terminal-font-settings'
+import {
+  TerminalFontPicker,
+  TerminalFontSection
+} from '../src/terminal/preferences/settings/TerminalFontSettings'
+import { TerminalFontPreview } from '../src/terminal/preferences/settings/TerminalFontPreview'
+import { getResponsiveLayoutMetrics } from '../src/layout/responsive-layout-metrics'
+import { themedStyleSheet } from '../src/theme/themed-styles'
 import {
   SettingsEmptyRow,
   SettingsNavBar,
@@ -34,37 +42,6 @@ import {
 } from '../src/settings/settings-screen-frame'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
-
-type TextSizeValue = 'smallest' | 'smaller' | 'default' | 'large' | 'larger' | 'largest'
-
-// Baseline zoom sits above fit-to-width; keep presets in sync with TERMINAL_TEXT_SCALES and pinch snapping.
-function textSizeOptions(t: Translate): (PickerOption<TextSizeValue> & { scale: number })[] {
-  return [
-    {
-      value: 'smallest',
-      label: t('app.terminalSettings.smallestText', 'Smallest (50%)'),
-      scale: 0.5
-    },
-    {
-      value: 'smaller',
-      label: t('app.terminalSettings.smallerText', 'Smaller (75%)'),
-      scale: 0.75
-    },
-    { value: 'default', label: t('app.terminalSettings.defaultText', 'Default (100%)'), scale: 1 },
-    { value: 'large', label: t('app.terminalSettings.largeText', 'Large (125%)'), scale: 1.25 },
-    { value: 'larger', label: t('app.terminalSettings.largerText', 'Larger (150%)'), scale: 1.5 },
-    { value: 'largest', label: t('app.terminalSettings.largestText', 'Largest (200%)'), scale: 2 }
-  ]
-}
-
-function textSizeValueFromScale(scale: number, t: Translate): TextSizeValue {
-  return textSizeOptions(t).find((o) => o.scale === scale)?.value ?? 'default'
-}
-
-function textSizeSummary(scale: number, t: Translate): string {
-  const options = textSizeOptions(t)
-  return (options.find((o) => o.scale === scale) ?? options[0]!).label
-}
 
 function restoreAfterMinutes(t: Translate, count: number): string {
   return count === 1
@@ -174,16 +151,18 @@ export default function TerminalSettingsScreen() {
   const [hostMs, setHostMs] = useState<Record<string, number | null | undefined>>({})
   const [pickerHostId, setPickerHostId] = useState<string | null>(null)
 
-  const [textScale, selectTextScale] = useTerminalTextScaleSetting()
-  const [textSizePickerOpen, setTextSizePickerOpen] = useState(false)
-  const selectTextSize = useCallback(
-    (value: TextSizeValue) => {
-      const opt = textSizeOptions(t).find((o) => o.value === value)
-      if (opt) {
-        selectTextScale(opt.scale)
-      }
-    },
-    [selectTextScale, t]
+  const fontSettings = useTerminalFontSettings()
+  const [fontPickerOpen, setFontPickerOpen] = useState(false)
+  const window = useWindowDimensions()
+  // A wide iPad screen keeps the preview beside the controls instead of scrolling it away.
+  const wide = getResponsiveLayoutMetrics(window.width, window.height).isWideLayout
+  const preview = (
+    <TerminalFontPreview
+      textScale={fontSettings.textScale}
+      fontStyle={fontSettings.fontStyle}
+      columnsWidth={window.width}
+      height={wide ? 360 : 180}
+    />
   )
 
   useEffect(() => {
@@ -241,7 +220,7 @@ export default function TerminalSettingsScreen() {
   // Toggle imperatively: rerendering during drag rebuilds row gestures and can cancel it.
   const setScrollEnabled = useCallback(
     (enabled: boolean) => {
-      setTerminalSettingsScrollEnabled(scrollRef, enabled)
+      setDragReorderScrollEnabled(scrollRef, enabled)
     },
     [scrollRef]
   )
@@ -258,72 +237,77 @@ export default function TerminalSettingsScreen() {
           onBack={() => router.back()}
         />
 
-        <Animated.ScrollView
-          ref={scrollRef}
-          contentContainerStyle={[
-            settingsScreenStyles.scrollContent,
-            { paddingBottom: insets.bottom + spacing.xl }
-          ]}
-          showsVerticalScrollIndicator={false}
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
-          onContentSizeChange={(_width, height) => {
-            scrollContentHeight.value = height
-          }}
-        >
-          <SettingsSection
-            first
-            title={t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
-            separatorInset={LIST_LEADING_INSET}
-            footer={t(
-              'app.terminalSettings.leaveAppDescription',
-              "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually."
-            )}
+        <View style={styles.body}>
+          <Animated.ScrollView
+            ref={scrollRef}
+            style={styles.controls}
+            contentContainerStyle={[
+              settingsScreenStyles.scrollContent,
+              { paddingBottom: insets.bottom + spacing.xl }
+            ]}
+            showsVerticalScrollIndicator={false}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            onContentSizeChange={(_width, height) => {
+              scrollContentHeight.value = height
+            }}
           >
-            {hosts.length === 0 ? (
-              <SettingsEmptyRow key="empty">
-                {t(
-                  'app.terminalSettings.noPairedDesktops',
-                  'No paired desktops yet. Pair one to control terminal behavior.'
-                )}
-              </SettingsEmptyRow>
-            ) : (
-              hosts.map((host) => (
-                <HostFitRow
-                  key={host.id}
-                  client={hostClientsById.get(host.id) ?? null}
-                  hostName={host.name}
-                  ms={hostMs[host.id]}
-                  onPress={() => setPickerHostId(host.id)}
-                />
-              ))
-            )}
-          </SettingsSection>
-
-          <SettingsSection
-            title={t('app.terminalSettings.textSizeHeading', 'TEXT SIZE')}
-            footer={t(
-              'app.terminalSettings.textSizeDescription',
-              "Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn't change the desktop terminal."
-            )}
-          >
-            <ListRow
-              key="textSize"
-              title={t('app.terminalSettings.textSize', 'Text size')}
-              subtitle={textSizeSummary(textScale, t)}
-              leading={<Type size={18} color={colors.textSecondary} />}
-              navigates
-              onPress={() => setTextSizePickerOpen(true)}
+            {wide ? null : <View style={styles.previewSlot}>{preview}</View>}
+            <TerminalFontSection
+              settings={fontSettings}
+              onOpenFontPicker={() => setFontPickerOpen(true)}
             />
-          </SettingsSection>
 
-          <TerminalShortcutSettings
-            scrollRef={scrollRef}
-            scrollOffsetY={scrollOffsetY}
-            scrollContentHeight={scrollContentHeight}
-            onDragActiveChange={handleDragActiveChange}
-          />
-        </Animated.ScrollView>
+            <SettingsSection
+              title={t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
+              separatorInset={LIST_LEADING_INSET}
+              footer={t(
+                'app.terminalSettings.leaveAppDescription',
+                "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually."
+              )}
+            >
+              {hosts.length === 0 ? (
+                <SettingsEmptyRow key="empty">
+                  {t(
+                    'app.terminalSettings.noPairedDesktops',
+                    'No paired desktops yet. Pair one to control terminal behavior.'
+                  )}
+                </SettingsEmptyRow>
+              ) : (
+                hosts.map((host) => (
+                  <HostFitRow
+                    key={host.id}
+                    client={hostClientsById.get(host.id) ?? null}
+                    hostName={host.name}
+                    ms={hostMs[host.id]}
+                    onPress={() => setPickerHostId(host.id)}
+                  />
+                ))
+              )}
+            </SettingsSection>
+
+            <TerminalShortcutSettings
+              scrollRef={scrollRef}
+              scrollOffsetY={scrollOffsetY}
+              scrollContentHeight={scrollContentHeight}
+              onDragActiveChange={handleDragActiveChange}
+            />
+
+            <SettingsSection>
+              <ListRow
+                key="resetFont"
+                title={t('app.terminalSettings.resetFont', 'Reset font settings')}
+                onPress={fontSettings.reset}
+              />
+            </SettingsSection>
+          </Animated.ScrollView>
+          {wide ? (
+            <View style={styles.widePreview}>
+              <SectionHeader first title={t('app.terminalSettings.previewHeading', 'PREVIEW')} />
+              {preview}
+            </View>
+          ) : null}
+        </View>
       </SafeAreaView>
 
       <PickerModal<RestoreValue>
@@ -343,14 +327,18 @@ export default function TerminalSettingsScreen() {
         onClose={() => setPickerHostId(null)}
       />
 
-      <PickerModal<TextSizeValue>
-        visible={textSizePickerOpen}
-        title={t('app.terminalSettings.textSizePickerTitle', 'Terminal text size')}
-        options={textSizeOptions(t)}
-        selected={textSizeValueFromScale(textScale, t)}
-        onSelect={selectTextSize}
-        onClose={() => setTextSizePickerOpen(false)}
+      <TerminalFontPicker
+        visible={fontPickerOpen}
+        settings={fontSettings}
+        onClose={() => setFontPickerOpen(false)}
       />
     </GestureHandlerRootView>
   )
 }
+
+const styles = themedStyleSheet(() => ({
+  body: { flex: 1, flexDirection: 'row' },
+  controls: { flex: 1 },
+  previewSlot: { paddingTop: spacing.sm },
+  widePreview: { flex: 1, paddingTop: spacing.sm, paddingRight: spacing.lg }
+}))

@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { hashKey, type QueryClient } from '@tanstack/react-query'
 import { translate } from '../../i18n/mobile-i18n'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../src/shared/worktree/id'
 import { defineHostQuery, type HostSignalEvent } from '../../query/host-query'
 import { hostQueryKey, type HostQueryTarget } from '../../query/host-query-key'

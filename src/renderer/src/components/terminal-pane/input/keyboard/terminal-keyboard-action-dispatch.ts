@@ -3,6 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PaneCwdMap } from '../../layout/split/resolve-split-cwd'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
+import { copyTerminalPaneAgentSessionId } from '../../clipboard/terminal-pane-menu-copy-actions'
 import { splitTerminalPaneWithInheritedCwd } from '../../layout/split/terminal-pane-split-with-inherited-cwd'
 import {
   markTerminalFollowOutput,
@@ -97,6 +98,16 @@ export function dispatchTerminalShortcutAction(
     }
     return
   }
+  if (action.type === 'copySessionId') {
+    // Consume held repeats too so a user-chosen chord never leaks into the agent's input.
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (!event.repeat) {
+      armNativeOnlyShortcut(event)
+      void copyTerminalPaneAgentSessionId(manager.getActivePane() ?? manager.getPanes()[0], tabId)
+    }
+    return
+  }
   if (event.repeat) {
     return
   }
@@ -156,7 +167,8 @@ export function dispatchTerminalShortcutAction(
     }
     const dir = action.direction === 'next' ? 1 : -1
     manager.setActivePane(panes[(currentIdx + dir + panes.length) % panes.length].id, {
-      focus: true
+      focus: true,
+      interaction: 'user'
     })
     return
   }

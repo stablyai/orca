@@ -25,7 +25,7 @@ export function JiraConnectPrompt({
       iconElement={<TaskProviderLogo provider="jira" size={24} color={colors.textMuted} />}
       title={
         unavailableReason
-          ? t('components.jiraConnectPrompt.updateDesktop', 'Update Orca desktop')
+          ? t('components.jiraConnectPrompt.updateDesktop', 'Update Orca on this host')
           : t('components.jiraConnectPrompt.connectOnDesktop', 'Connect Jira on your desktop')
       }
       message={

@@ -2,7 +2,7 @@ import type { Slice } from '@tiptap/pm/model'
 import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
-} from '../../../../../../shared/utf8-byte-limits'
+} from '../../../../../../shared/text/utf8-byte-limits'
 import {
   getRichMarkdownLeafVisibleText,
   isRichMarkdownVisibleBlockStart

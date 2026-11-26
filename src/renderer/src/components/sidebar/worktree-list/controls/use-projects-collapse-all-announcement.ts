@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { isContextualTourSessionConsumed } from '@/store/slices/ui/ui-slice-tour-actions'
-import { hasFeatureInteraction } from '../../../../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../../../../shared/feature-education/interactions/feature-interactions'
 import { isProjectSectionGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 
 const TOUR_ID = 'projects-collapse-all'

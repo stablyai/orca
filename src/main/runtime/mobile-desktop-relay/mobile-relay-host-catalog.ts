@@ -1,25 +1,36 @@
-import type { RecipeEnvironmentDescription } from '../../../shared/recipe-host-removal'
+import type { RecipeEnvironmentDescription } from '../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult,
   MobileRelayServerWorktreeRow
 } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import {
-  getPairedDeviceIdsByEnvironment,
-  isWorkspaceOwnedBySomeoneElse
-} from '../../../shared/workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../../shared/workspace-view/workspace-creator-visibility'
+import { stampDesktopSidebarView, stampRecipeEnvironment } from './mobile-relay-row-stamping'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
-import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
-import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
+import type {
+  MobileDesktopRelayHosts,
+  MobileDesktopRelayListing
+} from './mobile-desktop-relay-hosts'
+import {
+  describeRelayHost,
+  describeRelayHosts,
+  relayHostFence,
+  type DescribedRelayHost
+} from './mobile-relay-host-descriptions'
+import {
+  RelayHostRowsAnnouncer,
+  relayHostRowsSources,
+  type RelayPhoneReader
+} from './mobile-relay-host-rows-announcer'
 import {
   RelayHostListAnnouncer,
   type RelayHostListAnnouncerSources
@@ -27,7 +38,7 @@ import {
 import {
   isPendingVmCheckout,
   type PendingVmCheckoutIndex
-} from '../../../shared/pending-vm-checkouts'
+} from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 export type MobileRelayRecipeEnvironmentLookup = (
   hostId: string
@@ -35,9 +46,12 @@ export type MobileRelayRecipeEnvironmentLookup = (
 
 /** Sidebar live rows or per-phone-request fetches, always read as the desktop. */
 export type ServerWorktreeRows = {
-  sync: () => void
-  /** Fetch now or join the in-flight fetch. */
-  refresh: (environmentId: string) => Promise<void>
+  sync: (listing?: MobileDesktopRelayListing) => void | Promise<void>
+  /** Fetch now or join the in-flight fetch; may return the post-fetch host listing it verified. */
+  refresh: (
+    environmentId: string,
+    host?: DescribedRelayHost
+  ) => Promise<MobileDesktopRelayListing | void>
   /** Last-fetched rows under this pairing; null before a successful fetch. */
   rows: (environmentId: string, fence: string) => readonly MobileRelayServerWorktreeRow[] | null
 }
@@ -86,14 +100,13 @@ export class MobileRelayHostCatalog {
       return null
     }
     const { environmentId } = parsed
-    this.options.serverRows.sync()
-    const cached = this.cachedWorkspaceContext(hostId, environmentId, worktreeId)
+    const initialListing = await this.options.hosts.list()
+    await this.options.serverRows.sync(initialListing)
+    const cached = this.cachedWorkspaceContext(initialListing, hostId, environmentId, worktreeId)
     if (cached !== undefined && cached !== null) {
       return cached
     }
-    const host = describeRelayHosts(this.options.hosts).find(
-      (entry) => entry.environmentId === environmentId
-    )
+    const host = describeRelayHost(initialListing, environmentId)
     if (host?.health !== 'available') {
       return null
     }
@@ -107,11 +120,13 @@ export class MobileRelayHostCatalog {
       this.contextMissFetchedAt.clear()
     }
     this.contextMissFetchedAt.set(missKey, now)
-    await withinFetchBound(
-      this.options.serverRows.refresh(environmentId).catch(() => {}),
+    const refreshedListing = await withinFetchBound(
+      this.options.serverRows.refresh(environmentId, host).catch(() => undefined),
       PAIRED_WORKSPACE_CONTEXT_FETCH_TIMEOUT_MS
     )
-    const fetched = this.cachedWorkspaceContext(hostId, environmentId, worktreeId) ?? null
+    const postListing = refreshedListing ?? (await this.options.hosts.list())
+    const fetched =
+      this.cachedWorkspaceContext(postListing, hostId, environmentId, worktreeId) ?? null
     if (fetched) {
       this.contextMissFetchedAt.delete(missKey)
     }
@@ -120,13 +135,12 @@ export class MobileRelayHostCatalog {
 
   /** undefined: no rows under the current pairing; null: rows hold no such workspace. */
   private cachedWorkspaceContext(
+    listing: MobileDesktopRelayListing,
     hostId: ExecutionHostId,
     environmentId: string,
     worktreeId: string
   ): PairedWorkspaceContext | null | undefined {
-    const current = this.options.hosts
-      .list()
-      .environments.find((environment) => environment.id === environmentId)
+    const current = listing.environments.find((environment) => environment.id === environmentId)
     const rows = current
       ? this.options.serverRows.rows(environmentId, relayHostFence(current))
       : null
@@ -155,15 +169,26 @@ export class MobileRelayHostCatalog {
 
   private announcer: RelayHostListAnnouncer | null = null
 
-  list(): MobileRelayHostsListResult {
-    const result = this.describe()
-    this.announcer?.listed(result)
+  async list(reader?: RelayPhoneReader): Promise<MobileRelayHostsListResult> {
+    const result = await this.describe()
+    this.announcer?.listed(result, reader)
     return result
+  }
+
+  /** Whether a phone can reach this server through the desktop now, without announcing a list. */
+  async relayReady(hostId: ExecutionHostId): Promise<boolean> {
+    return (await this.describe()).hosts.some(
+      (host) => host.hostId === hostId && host.relay === 'ready'
+    )
   }
 
   /** Calls `changed` whenever list() would answer differently, so phones need not poll it. */
   publishListChanges(sources: RelayHostListAnnouncerSources): () => void {
-    const announcer = new RelayHostListAnnouncer(this.options.hosts, () => this.describe(), sources)
+    const announcer = new RelayHostListAnnouncer(
+      this.options.hosts,
+      async () => await this.describe(),
+      sources
+    )
     this.announcer = announcer
     return () => {
       announcer.dispose()
@@ -173,9 +198,9 @@ export class MobileRelayHostCatalog {
     }
   }
 
-  private describe(): MobileRelayHostsListResult {
+  private async describe(): Promise<MobileRelayHostsListResult> {
     return {
-      hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
+      hosts: (await describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides())).map(
         ({
           hostId,
           label,
@@ -183,7 +208,8 @@ export class MobileRelayHostCatalog {
           relay,
           stoppedOnDesktop,
           unavailableOnDesktop,
-          installationId
+          installationId,
+          rowChanges
         }) => ({
           hostId,
           label,
@@ -191,37 +217,57 @@ export class MobileRelayHostCatalog {
           relay,
           ...(stoppedOnDesktop ? { stoppedOnDesktop } : {}),
           ...(unavailableOnDesktop ? { unavailableOnDesktop } : {}),
-          ...(installationId ? { installationId } : {})
+          ...(installationId ? { installationId } : {}),
+          ...(rowChanges ? { rowChanges } : {})
         })
       )
     }
   }
 
-  async worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult> {
+  private rowsAnnouncer: RelayHostRowsAnnouncer | null = null
+
+  /** Calls `changed` when a server a connected phone read has new agent rows, so phones need not poll them. */
+  publishRowChanges(changed: (hostId: `runtime:${string}`) => void): () => void {
+    const announcer = new RelayHostRowsAnnouncer(relayHostRowsSources(this.options.hosts), changed)
+    this.rowsAnnouncer = announcer
+    return () => announcer.dispose()
+  }
+
+  /** Releases all server row watches held by a phone connection that navigated away from row views. */
+  releaseRowHolds(connectionId: string): void {
+    this.rowsAnnouncer?.release(connectionId)
+  }
+
+  /** `by` is the phone connection reading, so the server stays watched for it. */
+  async worktrees(hostId: string, by?: RelayPhoneReader): Promise<MobileRelayHostWorktreesResult> {
     const parsed = parseExecutionHostId(hostId)
-    // Re-pairing since status publication must fetch under the new identity.
-    this.options.serverRows.sync()
-    const host =
-      parsed?.kind === 'runtime'
-        ? describeRelayHosts(this.options.hosts).find(
-            (entry) => entry.environmentId === parsed.environmentId
-          )
-        : undefined
+    if (parsed?.kind !== 'runtime') {
+      return { worktrees: null }
+    }
+    // One host listing serves sync and host lookup; re-pairing since status publication must fetch under the new identity.
+    const initialListing = await this.options.hosts.list()
+    await this.options.serverRows.sync(initialListing)
+    const host = describeRelayHost(initialListing, parsed.environmentId)
     if (!host) {
       return { worktrees: null }
     }
+    let postListing = initialListing
     if (host.health === 'available') {
-      await withinFetchBound(
-        this.options.serverRows.refresh(host.environmentId),
+      this.rowsAnnouncer?.hold(host, by)
+      const refreshedListing = await withinFetchBound(
+        this.options.serverRows.refresh(host.environmentId, host),
         SERVER_FETCH_TIMEOUT_MS
       )
+      this.rowsAnnouncer?.refreshed(host.environmentId)
+      postListing = refreshedListing ?? (await this.options.hosts.list())
     }
-    const { environments, statusByEnvironmentId } = this.options.hosts.list()
+    const { environments, statusByEnvironmentId } = postListing
     const current = environments.find((environment) => environment.id === host.environmentId)
-    // Re-pairing during fetch can leave old-server rows; recheck identity afterward.
-    const rows = current
-      ? this.options.serverRows.rows(host.environmentId, relayHostFence(current))
-      : null
+    // The request belongs to the pairing that admitted its fetch.
+    if (!current || relayHostFence(current) !== relayHostFence(host.identity)) {
+      return { worktrees: null }
+    }
+    const rows = this.options.serverRows.rows(host.environmentId, relayHostFence(current))
     if (!current || !rows) {
       return { worktrees: null }
     }
@@ -257,56 +303,15 @@ export class MobileRelayHostCatalog {
   }
 }
 
-/** Only this desktop knows which workspaces live on VMs it created; the server's rows can't say. */
-function stampRecipeEnvironment(
-  row: MobileRelayServerWorktreeRow,
-  recipeEnvironments: ReadonlyMap<string, RecipeEnvironmentDescription> | undefined
-): MobileRelayServerWorktreeRow {
-  const environment =
-    typeof row.worktreeId === 'string' ? recipeEnvironments?.get(row.worktreeId) : undefined
-  if (environment) {
-    return { ...row, recipeEnvironment: environment }
-  }
-  // Only this desktop may say a row's VM is its own; drop the field if the server sent one.
-  if ('recipeEnvironment' in row) {
-    const { recipeEnvironment: _serverClaim, ...rest } = row
-    return { ...rest, hostId: row.hostId }
-  }
-  return row
-}
-
 /** Bound waiting even while the call sits in the desktop queue, before its own timeout starts. */
-async function withinFetchBound(refresh: Promise<void>, timeoutMs: number): Promise<void> {
+async function withinFetchBound<T>(refresh: Promise<T>, timeoutMs: number): Promise<T | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined
-  const bound = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, timeoutMs)
+  const bound = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), timeoutMs)
   })
   try {
     return await Promise.race([refresh, bound])
   } finally {
     clearTimeout(timer)
-  }
-}
-
-/** Stamp desktop-only knowledge: mark other-client rows without dropping them, and include browser/chat activity. */
-function stampDesktopSidebarView(
-  row: MobileRelayServerWorktreeRow,
-  environmentId: string,
-  desktopDeviceIds: ReadonlyMap<string, string>,
-  sessionActivity: ReadonlySet<string>
-): MobileRelayServerWorktreeRow {
-  const otherClient = isWorkspaceOwnedBySomeoneElse(
-    { creatorProvenance: row.creatorProvenance, runtimeOwnerEnvironmentId: environmentId },
-    desktopDeviceIds
-  )
-  const active =
-    typeof row.worktreeId === 'string' && sessionActivity.has(worktreeIdentityKey(row.worktreeId))
-  if (!otherClient && !active) {
-    return row
-  }
-  return {
-    ...row,
-    ...(otherClient ? { desktopOtherClient: true } : {}),
-    ...(active ? { hasHostSidebarActivity: true } : {})
   }
 }

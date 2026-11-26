@@ -1,5 +1,5 @@
 import { posix } from 'node:path'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { isOpenSshConfigBackedTarget } from '../system-transport/system-ssh-args'
 import { isValidAuthorityPart } from './vscode-ssh-authority'
 

@@ -1,3 +1,4 @@
+import type { SleepingMailUiApi } from './ui-sleeping-mail-api'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -7,9 +8,9 @@ import type {
   JiraSavedFilterState,
   JiraSavedFilterMutation
 } from '../../../shared/jira/jira-saved-filters'
-import type { BrowserTabCreateRequest } from '../../../shared/browser-tab-create-request'
+import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,
@@ -30,36 +31,37 @@ import type {
   AgentPaneActivityReply,
   AgentPaneActivityRequest
 } from '../../../shared/agent-status/presentation/agent-list-status'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
-} from '../../../shared/project-move-pause'
+} from '../../../shared/project/move/project-move-pause'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
 } from '../../../shared/worktree/creation/launch-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
-import type { BrowserFindSource } from '../../../shared/browser-find-source'
+import type { BrowserFindSource } from '../../../shared/browser/guest-lifecycle/browser-find-source'
 import type {
   BrowserHistoryNavigateCommand,
   BrowserPageCommandTarget,
   BrowserPageTabShortcut
-} from '../../../shared/browser-page-command-target'
-import type { BrowserPageZoomCommand } from '../../../shared/browser-page-zoom'
+} from '../../../shared/browser/guest-lifecycle/browser-page-command-target'
+import type { BrowserPageZoomCommand } from '../../../shared/browser/site-settings/browser-page-zoom'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
-import type { RuntimeMobileSessionTabMove } from '../../../shared/runtime-session-contracts'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
+import type { RendererTerminalSplitRequest } from '../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
+import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalTabCreateReply } from '../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
@@ -68,12 +70,12 @@ import type {
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
-} from '../../../shared/session-tab-close'
-import type { WorkspaceSleepNotice } from '../../../shared/workspace-sleep'
+} from '../../../shared/workspace-layout/client-views/session-tab-close'
+import type { WorkspaceSleepNotice } from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RemoteCliBrowserScopeQuery,
   RemoteCliBrowserScopeReply
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 
 export type CloseActiveTabPayload = { sourceId: string }
 
@@ -109,7 +111,8 @@ export type UiCommandEventApi = {
   onOpenCrashReport: (callback: () => void) => () => void
   onToggleLeftSidebar: (callback: () => void) => () => void
   onToggleRightSidebar: (callback: () => void) => () => void
-  onToggleWorktreePalette: (callback: () => void) => () => void
+  /** `openOnly` comes from the View menu item, which opens but never closes the palette. */
+  onToggleWorktreePalette: (callback: (options?: { openOnly?: boolean }) => void) => () => void
   onToggleFloatingTerminal: (callback: () => void) => () => void
   onTerminalShortcutCaptured: (
     callback: (data: { actionId: KeybindingActionId }) => void
@@ -230,19 +233,7 @@ export type UiCommandEventApi = {
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void) => () => void
   replyAgentPaneActivity: (reply: AgentPaneActivityReply) => void
-  onSplitTerminal: (
-    callback: (data: {
-      tabId: string
-      paneRuntimeId: number
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-      activate?: false
-    }) => void
-  ) => () => void
+  onSplitTerminal: (callback: (data: RendererTerminalSplitRequest) => void) => () => void
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null; recordInteraction?: false }) => void
   ) => () => void
@@ -306,7 +297,6 @@ export type UiCommandEventApi = {
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
   onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
   respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
-  onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void
-}
+} & SleepingMailUiApi

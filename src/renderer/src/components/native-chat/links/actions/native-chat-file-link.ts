@@ -1,5 +1,5 @@
-import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
-import type { NativeChatHrefRoute } from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
+import type { NativeChatHrefRoute } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../../../shared/file-links/file-uri-path'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
 import {
@@ -31,7 +31,7 @@ function resolvePathText(
     return null
   }
   // Explicit agent-authored hrefs bypass automatic terminal-detection filename filters.
-  const resolved = resolveExplicitFileLinkTarget(parsed, context.worktreePath)
+  const resolved = resolveExplicitFileLinkTarget(parsed, context.pathBase ?? context.worktreePath)
   if (!resolved) {
     return null
   }
@@ -63,12 +63,13 @@ export function resolveNativeChatFileLink(
   if (!context) {
     return null
   }
-  const route = routeNativeChatFileHref(href, context.worktreePath)
+  const base = context.pathBase ?? context.worktreePath
+  const route = routeNativeChatFileHref(href, base)
   if (route.kind !== 'file') {
     return null
   }
   if (route.pathKind === 'literal') {
-    const absolutePath = resolveExplicitFileLinkTargetPath(route.pathText, context.worktreePath)
+    const absolutePath = resolveExplicitFileLinkTargetPath(route.pathText, base)
     return absolutePath
       ? {
           absolutePath,

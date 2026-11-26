@@ -8,7 +8,7 @@ import {
 } from '../../mobile/paired-mobile-devices'
 import { useMobilePairingDevicePolling } from '../../mobile/pairing/mobile-pairing-device-polling'
 import { useMobilePairedDeviceRevocation } from './pairing/use-mobile-paired-device-revocation'
-import type { PairingNetworkInterface } from '../../../../../shared/pairing-address-auto-selection'
+import type { PairingNetworkInterface } from '../../../../../shared/remote-runtime/pairing/pairing-address-auto-selection'
 import { MachineNameField } from '../../machine-identity/MachineNameField'
 import { MobilePairingQrSection } from './pairing/MobilePairingQrSection'
 import { MobilePairedDevicesSection } from './pairing/MobilePairedDevicesSection'
@@ -27,6 +27,7 @@ import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtim
 import { useMobilePairingConnectionMode } from '../../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../../mobile/use-mobile-pairing-address-preference'
 import { usePairingOfferExpiry } from '../../mobile/use-pairing-offer-expiry'
+import { useMobileRelayMintRecovery } from '../../mobile/use-mobile-relay-status'
 import { MOBILE_SETTING_ANCHORS, shouldOpenMobilePairingAddress } from './mobile-pane-search'
 
 export function MobilePane(): React.JSX.Element {
@@ -332,6 +333,12 @@ export function MobilePane(): React.JSX.Element {
       void loadDevices()
     }
   }, [devicesLoaded, loadDevices])
+
+  useMobileRelayMintRecovery({
+    failure: connectionMode === 'automatic' ? relayMintFailure : null,
+    busy: loading,
+    onRecover: () => void generateQR({ rotate: true })
+  })
 
   // Refresh ahead of expiry; the old code stays valid for a phone mid-scan.
   usePairingOfferExpiry(pairingUrl != null ? qrExpiresAt : null, () => void generateQR())

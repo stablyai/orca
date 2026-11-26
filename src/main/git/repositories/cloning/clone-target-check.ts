@@ -1,12 +1,12 @@
 import { basename, join } from 'node:path'
 import { lstat, readdir } from 'node:fs/promises'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   CloneTargetArgs,
   CloneTargetCheck
 } from '../../../../shared/git/clone/clone-target-check'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import type { Repo } from '../../../../shared/repo-types'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   deriveCloneOwnerFromUrl,
   deriveValidatedClonePath,

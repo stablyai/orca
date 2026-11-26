@@ -1,4 +1,4 @@
-import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../../shared/ssh-types'
+import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from '../ssh-connection-timing'
 
 // A connection that held this long is treated as healthy, so the next drop restarts the delay ladder.

@@ -1,4 +1,4 @@
-import type { SpeechModelManifest } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest } from '../../../../../shared/speech/speech-types'
 import type { Translate } from '@/i18n/use-translate'
 
 /** One line on what a model is good at; claims follow the catalog's languages and Orca's speech bench. */

@@ -154,7 +154,7 @@ export async function executePluginHostCall(
       const { message, retryAfterMs } = error
       const code =
         error instanceof PluginRuntimeCallError &&
-        bound.spec.since < PLUGIN_RUNTIME_FAILURE_CODES_SINCE
+        callMinor(bound.spec, input.params) < PLUGIN_RUNTIME_FAILURE_CODES_SINCE
           ? 'action_failed'
           : error.code
       return {
@@ -213,4 +213,19 @@ function summarizeParams(method: string, params: unknown): string {
 
 function textLength(value: unknown): number {
   return typeof value === 'string' ? value.length : 0
+}
+
+/** The minor a call relies on: the method's, or a newer param's it passes. Why: a param added after
+ *  the runtime failure codes reports them, while calls without it keep the codes they always had. */
+function callMinor(
+  spec: { since: number; paramsSince?: Readonly<Record<string, number>> },
+  params: unknown
+): number {
+  const passed = isPluginJsonObject(params) ? params : {}
+  return Math.max(
+    spec.since,
+    ...Object.entries(spec.paramsSince ?? {})
+      .filter(([param]) => passed[param] !== undefined)
+      .map(([, minor]) => minor)
+  )
 }

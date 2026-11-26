@@ -2,7 +2,7 @@ import { materializeOmpFreshConfig } from '../../../shared/agent-launch/startup/
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { createHash } from 'node:crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
@@ -15,10 +15,10 @@ import {
 import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
 import { safeRemoveOverlay } from '../../pty/scrollback/overlay-mirror'
 import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
-import type { PiAgentKind } from '../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 
 const PI_AGENT_SUBDIR = 'agent'
-const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+export const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
@@ -44,7 +44,7 @@ const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   'prime-agent': '.prime'
 }
 
-function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
+export function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
   const root = kind === 'omp' ? configDirName || AGENT_HOME_DIR_NAME.omp : AGENT_HOME_DIR_NAME[kind]
   return join(homedir(), root, PI_AGENT_SUBDIR)
 }
@@ -53,7 +53,7 @@ function toSafeOverlayDirName(ptyId: string): string {
   return createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
 }
 
-function withOrcaManagedExtensionMarker(source: string): string {
+export function withOrcaManagedExtensionMarker(source: string): string {
   return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
     ? source
     : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
@@ -119,10 +119,8 @@ export class PiTitlebarExtensionService {
     return this.writeManagedExtension(fallbackPath, source) === 'written' ? fallbackPath : undefined
   }
 
-  private installManagedExtensions(
-    sourceAgentDir: string,
-    kind: PiAgentKind
-  ): PiManagedExtensionEnv {
+  /** Refreshes Orca-owned extension files in a Pi agent dir; user-owned files with these names stay. */
+  installManagedExtensions(sourceAgentDir: string, kind: PiAgentKind): PiManagedExtensionEnv {
     const extensionsDir = join(sourceAgentDir, 'extensions')
     try {
       mkdirSync(extensionsDir, { recursive: true })
@@ -168,7 +166,7 @@ export class PiTitlebarExtensionService {
     ptyId: string,
     existingAgentDir: string | undefined,
     kind: PiAgentKind,
-    options?: { materializeDefaultHome?: boolean; configDirName?: string }
+    options?: { materializeDefaultHome?: boolean; configDirName?: string; cliOnPath?: boolean }
   ): Record<string, string> {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
@@ -181,9 +179,9 @@ export class PiTitlebarExtensionService {
       }
     }
 
-    // Bare shells must not recreate deleted agent homes; materialize only on explicit opt-in (#10196).
+    // Bare shells must not recreate deleted agent homes (#10196) or write into one whose CLI is gone (#43445).
     const materializeDefaultHome = options?.materializeDefaultHome !== false
-    if (!existsSync(sourceAgentDir) && !materializeDefaultHome) {
+    if (!materializeDefaultHome && (options?.cliOnPath === false || !existsSync(sourceAgentDir))) {
       if (kind === 'omp') {
         const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
         const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)

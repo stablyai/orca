@@ -1,11 +1,13 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   createNativeChatRestartStore,
   type NativeChatRestartStore
 } from './native-chat-restart-runtime-store'
 import { localNativeChatRestartStore } from './native-chat-resume-on-restart-store'
+import { isResumeRunSessionStarting } from '../runs/native-chat-resume-run'
 
 const stores = new Map<string, NativeChatRestartStore>()
 const listeners = new Set<() => void>()
@@ -32,9 +34,20 @@ export function useNativeChatTargetRestartResuming(target: RuntimeClientTarget) 
   )
 }
 
+/** Whether this chat is still queued or starting in its host's resume run, as the status bar's
+ *  "Resuming agents" counts it. */
+export function nativeChatRestartStillStarting(
+  target: RuntimeClientTarget,
+  sessionId: string
+): boolean {
+  const store =
+    target.kind === 'local' ? localNativeChatRestartStore : stores.get(target.environmentId)
+  return isResumeRunSessionStarting(store?.getNativeChatRestartRun() ?? null, sessionId)
+}
+
 export function useNativeChatRestartRuntimes() {
   const environments = useAppStore((state) => state.runtimeEnvironments)
-  const statuses = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const statuses = useRuntimeStatusByEnvironmentId()
   useSyncExternalStore(
     subscribe,
     () => revision,

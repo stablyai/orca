@@ -12,7 +12,7 @@ import { resolveCliStatusCaller } from '../status/status-caller'
 import { getServeSuperviseValidationError } from '../serve/supervision/serve-supervised-service'
 import { getOptionalServePort } from './serve-port-flag'
 import { resolveLaunchUserDataPath } from '../profile/launch-user-data-path'
-import { getServeOptionValidationError } from '../../../shared/serve-option-validation'
+import { getServeOptionValidationError } from '../../../shared/remote-runtime/serve-supervisor/serve-option-validation'
 
 function envRecord(): Record<string, string> {
   // Inherited ELECTRON_RUN_AS_NODE would force nested Electron children into plain Node mode.

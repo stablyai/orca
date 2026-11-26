@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
 import { cn } from '@/lib/class-names'
 import {
   buildSourceControlTree,
@@ -9,8 +9,8 @@ import {
   flattenSourceControlTree,
   type SourceControlTreeNode
 } from '../../../../../shared/source-control/listing/source-control-tree'
-import { VirtualizedList } from '@/components/virtualized-list'
-import type { ConflictReviewEntry } from '../../../../../shared/editor-tab-view-types'
+import { VirtualizedList } from '@/components/ui/virtualized-list'
+import type { ConflictReviewEntry } from '../../../../../shared/editor/views/editor-tab-view-types'
 import type { GitStatusEntry } from '../../../../../shared/git/status/git-status-types'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -1,5 +1,5 @@
 import { setImmediate } from 'node:timers/promises'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalSqlReaderPool, JournalSqlForkReader } from './journal-sql-reader-pool'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
 import type { JournalForkStageBegin, JournalForkInstall } from './journal-fork-stages'

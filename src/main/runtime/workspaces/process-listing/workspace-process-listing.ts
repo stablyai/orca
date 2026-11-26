@@ -1,4 +1,5 @@
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { crewChatStatusChange } from '../../orchestration/crew/crew-changes'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
@@ -6,7 +7,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/chat-worker-runtime-events'
 
-import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import {
@@ -21,13 +22,13 @@ import { applyRuntimeWorktreePsUnverifiableTerminals } from './runtime-worktree-
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../../workspaces/catalog/repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/structured-agent-session-runtime'
+import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/installation/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
-} from '../../agent-session/structured-agent-session-mobile-attention'
+} from '../../agent-session/lifecycle/structured-agent-session-mobile-attention'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
@@ -40,15 +41,14 @@ import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
 import { structuredChatNamingDeps } from '../../agent-session/naming/structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { chatWorkerTurnStopReporter } from '../../orchestration/workers/turn-stops/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../catalog/worktree-listing-host-scope'
 import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
-import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { structuredAgentSettingGates } from '../../agent-session/launch/structured-agent-setting-gates'
 import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
@@ -58,10 +58,11 @@ import {
 } from '../catalog/runtime-visible-catalog'
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
-import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
-import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
-import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
-const DEFAULT_WORKTREE_PS_LIMIT = 200
+import { nativeChatIdleStopMs } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
+import { prWatchWorkspaceSources } from '../../agent-session/lifecycle/pr-watch-workspace-sources'
+import { startPRWatchRuntime } from '../../agent-session/lifecycle/pr-watch-runtime'
+import { workerDockFailureSink } from '../../orchestration/dock/worker-dock-provider-failures'
+import { workerDockSourceOfSession } from '../../orchestration/dock/worker-dock-source'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
@@ -69,12 +70,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   )
 
   /** The task each pane was dispatched, by pane key, as `worktree.ps` rows title it. */
-  listAgentTasksByPaneKey() {
-    return this.agentOrchestrationProjection.buildByPaneKey() ?? {}
-  }
+  listAgentTasksByPaneKey = () => this.agentOrchestrationProjection.buildByPaneKey() ?? {}
 
   async getWorktreePs(
-    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    limit = 200,
     sourceDefaultsSupported = true,
     includeAgentWait = false,
     worktreeId?: string
@@ -118,7 +117,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       getLivenessVerdict: (ptyId) => this.getPtyLivenessVerdict(ptyId),
       getSummary
     })
-    const { mirroredWorktreeIdByTabId, connectedPtyEvidence } =
+    const { mirroredWorktreeIdByTabId, connectedPtyEvidence, savedAgentRecords } =
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
@@ -132,7 +131,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     const rowSources = collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId,
       connectedPtyEvidence,
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookSnapshots: this.paneAgentStatuses(undefined, savedAgentRecords),
       readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
     })
     attachRuntimeWorktreeAgentRows({
@@ -238,85 +237,87 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
 
   /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */
   async ensureStructuredAgentSessionHost(): Promise<void> {
-    const logger = createStructuredAgentSessionLogger()
-    const nameChat = createStructuredChatNamingHandler(
-      structuredChatNamingDeps(
-        () => this.requireStore(),
-        {
-          resolveWorkspace: async (workspaceId) => {
-            const target = await this.resolveRuntimeFileTarget(`id:${workspaceId}`)
-            return { path: target.worktree.path, executionHostId: target.executionHostId }
+    // Built only when this call installs: deps run install-time work such as each bot's tool-secret sweep.
+    await installStructuredAgentSessionHost(() => {
+      const logger = createStructuredAgentSessionLogger()
+      const nameChat = createStructuredChatNamingHandler(
+        structuredChatNamingDeps(
+          () => this.requireStore(),
+          {
+            resolveWorkspace: async (workspaceId) => {
+              const target = await this.resolveRuntimeFileTarget(`id:${workspaceId}`)
+              return { path: target.worktree.path, executionHostId: target.executionHostId }
+            },
+            getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
+            resolveNamingEnvironment: (agent) =>
+              resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
+            workerTaskTitle: (record) =>
+              structuredWorkerOpenTaskTitle(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+            retitleOpenTab: (workspaceId, sessionId) =>
+              this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
           },
-          getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
-          resolveNamingEnvironment: (agent) =>
-            resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
-          workerTaskTitle: (record) =>
-            structuredWorkerOpenTaskTitle(this.getOrchestrationDbIfAvailable?.() ?? null, record),
-          retitleOpenTab: (workspaceId, sessionId) =>
-            this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
-        },
-        logger
-      )
-    )
-    const { stateDirectory, ...catalogDeps } = this.structuredAgentCatalogDependencies()
-    await installStructuredAgentSessionHost({
-      stateDirectory,
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      claimKeyId: this.agentSessionClaimSigner.keyId,
-      logger,
-      ...catalogDeps,
-      claudeCliFlags: claudeCliFlagSupport,
-      usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
-      idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },
-      nativeChatVisuals: {
-        isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
-      },
-      resolveAgentFullAccess: (agent) =>
-        isTuiAgent(agent) &&
-        preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
-      launchAccountHome: (record, purpose) =>
-        this.resolveStructuredAgentLaunchAccountHome(record, purpose),
-      prepareLaunchAccountHome: (record, launchDirectory) =>
-        this.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
-      onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
-      // Structured chat has no CLI hooks; this projection drives first-work renaming.
-      onSessionStatusChanged: (summary, options) => {
-        this.crewChanges.notify(new Set(['status', 'names']))
-        this.onStructuredSessionStatusForMail(summary)
-        this.workerAutoReleaseActivity.observeChat(summary)
-        nameChat(summary, options)
-        void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
-          summary,
-          options,
-          firstWorkRenameDeps(this.requireStore(), this)
+          logger
         )
-      },
-      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
-      conversationNaming: nameChat,
-      onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
-      queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),
-      assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
-      attentionDelivery: createStructuredAttentionMobileDelivery({
-        readNotificationSettings: () => this.requireStore().getSettings().notifications,
-        readWorkspaceLabels: (scope) =>
-          readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
-        isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
-        // The same contexts the session's chat row carries.
-        readOrchestration: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
-        dispatch: (event) => this.mobileNotifications.dispatch(event),
-        reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
-        now: () => Date.now()
-      }),
-      createTurnAttention: () =>
-        chatWorkerTurnStopReporter({
-          ...this.workerTurnStopReportDeps,
-          openExistingDb: () => this.getExistingOrchestrationDb()
+      )
+      return {
+        legacySessionTabIds: this.legacyStructuredSessionTabIds,
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        claimKeyId: this.agentSessionClaimSigner.keyId,
+        logger,
+        ...this.structuredAgentCatalogDependencies(),
+        ...this.botStructuredSessionHostDeps(() => this.requireStore()),
+        claudeCliFlags: claudeCliFlagSupport,
+        usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
+        idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },
+        nativeChatVisuals: {
+          isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
+        },
+        ...structuredAgentSettingGates(() => this.requireStore().getSettings()),
+        launchAccountHome: (record, purpose) =>
+          this.resolveStructuredAgentLaunchAccountHome(record, purpose),
+        prepareLaunchAccountHome: (record, launchDirectory) =>
+          this.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
+        onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
+        onIdleProviderDeath: (death) => this.onStructuredIdleProviderDeathForMail(death),
+        readWorkerDockPresence: (sessionId) =>
+          this._orchestrationDb?.workerDockSources.read(workerDockSourceOfSession(sessionId)),
+        // Structured chat has no CLI hooks; this projection drives first-work renaming.
+        onSessionStatusChanged: (summary, options) => {
+          this.crewChanges.notify(crewChatStatusChange(summary.sessionId))
+          this.onStructuredSessionStatusForMail(summary)
+          this.workerAutoReleaseActivity.observeChat(summary)
+          nameChat(summary, options)
+          void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
+            summary,
+            options,
+            firstWorkRenameDeps(this.requireStore(), this)
+          )
+        },
+        statusSink: workerDockFailureSink(this.structuredAgentStatusSinkFn, this),
+        conversationNaming: nameChat,
+        onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
+        queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),
+        assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
+        attentionDelivery: createStructuredAttentionMobileDelivery({
+          readNotificationSettings: () => this.requireStore().getSettings().notifications,
+          readWorkspaceLabels: (scope) =>
+            readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
+          ...this.botAttentionDeliveryDeps(),
+          // The same contexts the session's chat row carries.
+          readOrchestration: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
+          dispatch: (event) => this.mobileNotifications.dispatch(event),
+          reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state)
         }),
-      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
-      hasOpenDispatch: (record) =>
-        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
-    })
+        createTurnAttention: () =>
+          chatWorkerTurnStopReporter({
+            ...this.workerTurnStopReportDeps,
+            openExistingDb: () => this.getExistingOrchestrationDb()
+          }),
+        // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
+        hasOpenDispatch: (record) =>
+          structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
+      }
+    }).then(() => this.backfillBotBackgroundChats())
     // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
     this.startPullRequestWatches()
   }

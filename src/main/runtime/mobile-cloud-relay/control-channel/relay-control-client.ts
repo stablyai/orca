@@ -2,14 +2,13 @@ import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../../shared/remote-runtime/relay/mobile-relay-close-codes'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import {
   RelayConnectionOpenMessageSchema,
   RelayControlErrorMessageSchema,
   RelayDrainMessageSchema,
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
-  RELAY_HOST_CAPABILITY_HEADERS,
   encodeRelayHostHello,
   parseRelayControlMessage,
   type RelayHostHelloAckMessage,
@@ -18,9 +17,10 @@ import {
 import { RelayControlRequests } from './relay-control-requests'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 
-import { answerRelayHostChallenge } from './relay-host-proof'
+import { proveRelayHostChallenge } from './relay-control-challenge'
 import { RelayControlLiveness } from './relay-control-liveness'
 import { closeRelayControlSocket } from './relay-control-socket-close'
+import { createRelayControlSocket } from './relay-control-socket-factory'
 import { controlWebSocketUrl } from './relay-control-url'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
@@ -35,6 +35,7 @@ export class RelayControlClient {
   private readonly requests: RelayControlRequests
   private socket: WebSocket | null = null
   private state: RelayControlState = 'idle'
+  private renewedWhileConnecting: string | null = null
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
   private connectTimer: ReturnType<typeof setTimeout> | null = null
@@ -50,19 +51,13 @@ export class RelayControlClient {
       send: (frame) => this.socket?.send(frame),
       isLive: () => this.isLive(),
       terminate: () => this.socket?.terminate(),
-      random: options.livenessRandom
+      random: options.livenessRandom,
+      onStall: options.onStall
     })
     this.requests = new RelayControlRequests(options.onPendingChanged, (timeout) =>
       this.liveness.noteRequestTimeout(timeout)
     )
-    this.createSocket =
-      options.createSocket ??
-      ((url, token) =>
-        new WebSocket(url, {
-          headers: { authorization: `Bearer ${token}`, ...RELAY_HOST_CAPABILITY_HEADERS },
-          perMessageDeflate: false,
-          maxPayload: 64 * 1024
-        }))
+    this.createSocket = options.createSocket ?? createRelayControlSocket
   }
 
   connect(): Promise<RelayHostHelloAckMessage> {
@@ -113,7 +108,14 @@ export class RelayControlClient {
     )
   }
 
+  // A renewal that lands while this control is still connecting cannot be sent yet. Its hello
+  // carried the older token, so it is sent on activation; otherwise the relay closes the control
+  // with 4401 when that older token expires.
   refreshAuthorization(relayJwt: string): void {
+    if (this.state === 'idle' || this.state === 'opening' || this.state === 'proving') {
+      this.renewedWhileConnecting = relayJwt
+      return
+    }
     this.sendActive({ type: 'auth-refresh', relayJwt })
   }
 
@@ -234,34 +236,21 @@ export class RelayControlClient {
   private handleProofMessage(message: Record<string, unknown>): void {
     const challenge = RelayHostChallengeMessageSchema.safeParse(message)
     if (challenge.success) {
-      const invalid: { reason: string | Error } = { reason: 'unknown' }
-      const proofB64 = answerRelayHostChallenge(challenge.data, {
-        relayOrigin: this.relayOrigin,
-        ...this.options.identity,
-        relayHostId: this.options.relayHostId,
-        hostPublicKey: this.options.keypair.publicKey,
-        hostSecretKey: this.options.keypair.secretKey,
-        assignmentEpoch: this.options.assignmentEpoch,
-        previousGeneration: this.options.previousGeneration,
-        resumeRequested: Boolean(this.options.controlResumeSecret),
-        onInvalid: (reason, error) => {
-          invalid.reason = error ?? reason
-        }
-      })
-      if (!proofB64) {
-        // Report failing check names, never challenge field values.
-        this.failProtocol(
-          invalid.reason instanceof Error
-            ? invalid.reason
-            : `invalid host challenge: ${invalid.reason} origin=${this.relayOrigin}`
-        )
+      const proof = proveRelayHostChallenge(challenge.data, this.options, this.relayOrigin)
+      if ('failure' in proof) {
+        this.failProtocol(proof.failure)
+        return
+      }
+      // Connect race: only the first path to deliver a valid challenge answers; the rest close unanswered.
+      if (this.options.claimChallenge?.() === false) {
+        this.closeNow()
         return
       }
       this.socket?.send(
         JSON.stringify({
           type: 'host-challenge-ack',
           challengeId: challenge.data.challengeId,
-          proofB64
+          proofB64: proof.proofB64
         })
       )
       return
@@ -275,6 +264,10 @@ export class RelayControlClient {
     this.liveness.start()
     this.connectResolve?.(ack.data)
     this.clearConnectPromise()
+    if (this.renewedWhileConnecting) {
+      this.sendActive({ type: 'auth-refresh', relayJwt: this.renewedWhileConnecting })
+      this.renewedWhileConnecting = null
+    }
   }
 
   private sendActive(payload: Record<string, unknown>): void {

@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   normalizePRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../../shared/review-refresh-policy'
+} from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'

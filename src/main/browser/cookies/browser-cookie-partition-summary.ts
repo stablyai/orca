@@ -1,4 +1,4 @@
-import type { BrowserCookieImportSummary } from '../../../shared/browser-workspace-types'
+import type { BrowserCookieImportSummary } from '../../../shared/browser/workspaces/browser-workspace-types'
 import type { ImportWriteSkip, PlannableCookie } from './browser-cookie-import-write'
 
 export function summarizePartitionSkips(

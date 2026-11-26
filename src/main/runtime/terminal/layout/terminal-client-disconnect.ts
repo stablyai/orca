@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithHasRecentTerminalOutputPath } from '../output/terminal-output-path'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeFileCommandSurface } from '../../construction/runtime-file-command-surface'
 
 export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecentTerminalOutputPath {

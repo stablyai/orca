@@ -1,4 +1,7 @@
-import type { DashboardCard, DashboardCardReview } from '../../../../../shared/dashboard-snapshot'
+import type {
+  DashboardCard,
+  DashboardCardReview
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 
 export type DashboardReviewFilter = DashboardCardReview['state'] | 'none'
 
@@ -18,8 +21,13 @@ export function activeDashboardFilterCount(filters: DashboardFilters): number {
   return filters.projects.length + filters.workspaceStatuses.length + filters.reviewStates.length
 }
 
+const searchTextByCard = new WeakMap<DashboardCard, string>()
 function cardSearchText(card: DashboardCard): string {
-  return [
+  const cached = searchTextByCard.get(card)
+  if (cached !== undefined) {
+    return cached
+  }
+  const text = [
     card.worktreeName,
     card.repoName,
     card.agentType,
@@ -34,26 +42,25 @@ function cardSearchText(card: DashboardCard): string {
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
+  searchTextByCard.set(card, text)
+  return text
 }
 
-export function filterDashboardCards(
-  cards: DashboardCard[],
-  query: string,
+export function matchesDashboardCard(
+  card: DashboardCard,
+  normalizedQuery: string,
   filters: DashboardFilters
-): DashboardCard[] {
-  const normalizedQuery = query.trim().toLowerCase()
-  return cards.filter((card) => {
-    const reviewState = card.review?.state ?? (card.hasReview ? null : 'none')
-    return (
-      (normalizedQuery.length === 0 || cardSearchText(card).includes(normalizedQuery)) &&
-      (filters.projects.length === 0 || filters.projects.includes(card.repoId)) &&
-      (filters.workspaceStatuses.length === 0 ||
-        (card.workspaceStatusId !== undefined &&
-          filters.workspaceStatuses.includes(card.workspaceStatusId))) &&
-      (filters.reviewStates.length === 0 ||
-        (reviewState !== null && filters.reviewStates.includes(reviewState)))
-    )
-  })
+): boolean {
+  const reviewState = card.review?.state ?? (card.hasReview ? null : 'none')
+  return (
+    (normalizedQuery.length === 0 || cardSearchText(card).includes(normalizedQuery)) &&
+    (filters.projects.length === 0 || filters.projects.includes(card.repoId)) &&
+    (filters.workspaceStatuses.length === 0 ||
+      (card.workspaceStatusId !== undefined &&
+        filters.workspaceStatuses.includes(card.workspaceStatusId))) &&
+    (filters.reviewStates.length === 0 ||
+      (reviewState !== null && filters.reviewStates.includes(reviewState)))
+  )
 }
 
 export function toggleDashboardFilter<T extends string>(values: T[], value: T): T[] {

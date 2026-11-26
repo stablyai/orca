@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithWorktreeSleepResumeRecording } from '../stop/worktree-sleep-resume-recording'
 import { AgentGeneratedTabTitles, type GeneratedTitleTarget } from './agent-generated-tab-titles'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   parseLegacyNumericPaneKey,
   parsePaneKey

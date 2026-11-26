@@ -1,7 +1,7 @@
 import {
   LINEAR_AUTHENTICATION_ERROR,
   isIntegrationCredentialDecryptionError
-} from '../../../shared/integration-credential-errors'
+} from '../../../shared/secure-storage/integration-credential-errors'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 import { acquire, release } from '../requests/linear-request-concurrency'
@@ -59,7 +59,7 @@ async function readIssueWithSignal(
   workspaceId: LinearWorkspaceSelection | null | undefined,
   signal: AbortSignal
 ): Promise<LinearIssue | null> {
-  const entries = getClients(workspaceId, signal)
+  const entries = await getClients(workspaceId, signal)
   if (entries.length === 0) {
     return null
   }
@@ -82,7 +82,7 @@ async function readIssueWithSignal(
     } catch (error) {
       signal.throwIfAborted()
       if (isAuthError(error)) {
-        clearToken(entry.workspace.id)
+        await clearToken(entry.workspace.id)
         if (shouldThrowAuthError(workspaceId)) {
           throw new Error(LINEAR_AUTHENTICATION_ERROR)
         }
@@ -101,7 +101,7 @@ export async function getIssueByUuidForAgent(
   workspaceId?: string | null,
   signal?: AbortSignal
 ): Promise<LinearIssueWriteRecord | null> {
-  const entry = getClients(workspaceId, signal)[0]
+  const entry = (await getClients(workspaceId, signal))[0]
   if (!entry) {
     return null
   }
@@ -126,7 +126,9 @@ export async function getCommentByUuidForAgent(
   signal?: AbortSignal
 ): Promise<LinearCommentWriteRecord | null> {
   const entry =
-    signal && workspaceId ? getRequiredEntry(workspaceId, signal) : getClients(workspaceId)[0]
+    signal && workspaceId
+      ? await getRequiredEntry(workspaceId, signal)
+      : (await getClients(workspaceId))[0]
   if (!entry) {
     return null
   }
@@ -150,7 +152,7 @@ export async function getAttachmentByUuidForAgent(
   workspaceId?: string | null,
   signal?: AbortSignal
 ): Promise<LinearAttachmentWriteRecord | null> {
-  const entry = getClients(workspaceId, signal)[0]
+  const entry = (await getClients(workspaceId, signal))[0]
   if (!entry) {
     return null
   }
@@ -187,7 +189,7 @@ export async function searchIssues(
   limit = 20,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
-  const entries = getClients(workspaceId)
+  const entries = await getClients(workspaceId)
   if (entries.length === 0) {
     return []
   }
@@ -204,7 +206,7 @@ export async function searchIssues(
         return nodes.map((issue) => mapRawIssueForWorkspace(entry, issue))
       } catch (error) {
         if (isAuthError(error)) {
-          clearToken(entry.workspace.id)
+          await clearToken(entry.workspace.id)
         } else {
           console.warn('[linear] searchIssues failed:', error)
         }

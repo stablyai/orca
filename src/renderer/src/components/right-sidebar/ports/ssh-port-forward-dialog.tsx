@@ -7,10 +7,16 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import type { PortForwardEntry } from '../../../../../shared/ssh-types'
+import type { PortForwardEntry } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
+import {
+  addPortForward,
+  portForwardOwnerKey,
+  updatePortForward,
+  type PortForwardOwner
+} from './port-forward-owner'
 
 // Remap privileged ports to avoid EACCES when binding locally without root.
 function safeLocalPort(remotePort: number): number {
@@ -20,13 +26,15 @@ function safeLocalPort(remotePort: number): number {
   return remotePort
 }
 
+// The owner is pinned when the dialog opens so worktree navigation cannot redirect the forward.
 export type PortForwardDialogState =
   | { mode: 'closed' }
   | {
       mode: 'add'
-      defaults: { remotePort?: number; remoteHost?: string; label?: string; targetId?: string }
+      owner: PortForwardOwner
+      defaults: { remotePort?: number; remoteHost?: string; label?: string }
     }
-  | { mode: 'edit'; entry: PortForwardEntry }
+  | { mode: 'edit'; owner: PortForwardOwner; entry: PortForwardEntry }
 
 function digitsOnly(value: string): string {
   return value.replace(/\D/g, '')
@@ -37,11 +45,9 @@ const INPUT_CLASS =
 
 export function SshPortForwardDialog({
   state,
-  activeConnectionId,
   onClose
 }: {
   state: PortForwardDialogState
-  activeConnectionId: string | null
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -76,14 +82,6 @@ export function SshPortForwardDialog({
         ? (state.defaults.label ?? '')
         : ''
 
-  // Pin the dialog-open target so worktree navigation cannot redirect the SSH forward.
-  const targetId =
-    state.mode === 'edit'
-      ? state.entry.connectionId
-      : state.mode === 'add'
-        ? (state.defaults.targetId ?? activeConnectionId ?? '')
-        : (activeConnectionId ?? '')
-
   return (
     <Dialog
       open={isOpen}
@@ -112,12 +110,12 @@ export function SshPortForwardDialog({
                 )}
           </DialogDescription>
         </DialogHeader>
-        {isOpen && (
+        {state.mode !== 'closed' && (
           <PortForwardForm
             key={
               state.mode === 'edit'
                 ? `edit-${state.entry.id}`
-                : `add-${targetId}-${initialRemotePort}-${initialRemoteHost}`
+                : `add-${portForwardOwnerKey(state.owner)}-${initialRemotePort}-${initialRemoteHost}`
             }
             mode={state.mode}
             editId={state.mode === 'edit' ? state.entry.id : undefined}
@@ -125,7 +123,7 @@ export function SshPortForwardDialog({
             initialLocalPort={initialLocalPort}
             initialRemoteHost={initialRemoteHost}
             initialLabel={initialLabel}
-            targetId={targetId}
+            owner={state.owner}
             onClose={onClose}
           />
         )}
@@ -141,7 +139,7 @@ function PortForwardForm({
   initialLocalPort,
   initialRemoteHost,
   initialLabel,
-  targetId,
+  owner,
   onClose
 }: {
   mode: 'add' | 'edit'
@@ -150,7 +148,7 @@ function PortForwardForm({
   initialLocalPort: string
   initialRemoteHost: string
   initialLabel: string
-  targetId: string
+  owner: PortForwardOwner
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -190,22 +188,15 @@ function PortForwardForm({
 
       setSubmitting(true)
       try {
+        const change = {
+          localPort: lPort,
+          remoteHost: remoteHost || 'localhost',
+          remotePort: rPort,
+          label: label || undefined
+        }
         await (mode === 'edit' && editId
-          ? window.api.ssh.updatePortForward({
-              id: editId,
-              targetId,
-              localPort: lPort,
-              remoteHost: remoteHost || 'localhost',
-              remotePort: rPort,
-              label: label || undefined
-            })
-          : window.api.ssh.addPortForward({
-              targetId,
-              localPort: lPort,
-              remoteHost: remoteHost || 'localhost',
-              remotePort: rPort,
-              label: label || undefined
-            }))
+          ? updatePortForward(owner, editId, change)
+          : addPortForward(owner, change))
         onClose()
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -231,7 +222,7 @@ function PortForwardForm({
       }
       setSubmitting(false)
     },
-    [mode, editId, remotePort, localPort, remoteHost, label, targetId, onClose]
+    [mode, editId, remotePort, localPort, remoteHost, label, owner, onClose]
   )
 
   return (

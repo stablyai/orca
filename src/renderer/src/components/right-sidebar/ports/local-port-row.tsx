@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Box, Copy, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
+import { Box, Copy, ExternalLink, Info, Plug, Server, Trash2 } from 'lucide-react'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-browser-open'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import type { WorkspacePort } from '../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 import { useTranslate } from '@/i18n/use-translate'
 
 const LOCAL_PORT_MENU_CONTENT_CLASS =
@@ -25,13 +25,16 @@ export function LocalPortRow({
   port,
   onStop,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  onForward
 }: {
   port: WorkspacePort
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   /** Absent when this client has no route to the port's host. */
   onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  /** Present only when this client can forward the port over SSH and it isn't forwarded yet. */
+  onForward?: (port: WorkspacePort) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const handleCopy = useCallback(() => {
@@ -66,6 +69,16 @@ export function LocalPortRow({
     [handleOpenBrowser]
   )
 
+  const handleForwardButtonClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      onForward?.(port)
+      if (event.detail > 0) {
+        event.currentTarget.blur()
+      }
+    },
+    [onForward, port]
+  )
+
   const handleStopButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       onStop(port)
@@ -95,6 +108,7 @@ export function LocalPortRow({
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'
   )
+  const forwardLabel = t('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')
   const confidenceLabel =
     port.kind === 'workspace' ? (port.owner.confidence === 'cwd' ? 'cwd' : 'command') : null
   const canStopProcess =
@@ -151,6 +165,25 @@ export function LocalPortRow({
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
                   {getPortOpenBrowserTooltipLabel(openBrowserLabel)}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {onForward && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={handleForwardButtonClick}
+                    aria-label={forwardLabel}
+                  >
+                    <Plug size={13} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {forwardLabel}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -213,6 +246,12 @@ export function LocalPortRow({
           >
             <ExternalLink size={13} />
             {openBrowserLabel}
+          </ContextMenuItem>
+        )}
+        {onForward && (
+          <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={() => onForward(port)}>
+            <Plug size={13} />
+            {forwardLabel}
           </ContextMenuItem>
         )}
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>

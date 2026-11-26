@@ -1,6 +1,6 @@
 import SyncDatabase from '../../sqlite/sync-database'
 import type { TranscriptMessage } from '../../ai-vault/transcripts/session-transcript-consumers'
-import { ownRetainedString } from '../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../shared/text/own-retained-string'
 
 /** Shared by all handles; a capped row can overshoot the resident budget by at most 16,256 bytes. */
 export class SessionSearchStagingBudget {

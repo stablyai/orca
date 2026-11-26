@@ -1,4 +1,4 @@
-import { startAgentSessionCommandMenuQuery } from '../../../../../../src/shared/agent-session/agent-session-command-menu-query'
+import { startAgentSessionCommandMenuQuery } from '../../../../../../src/shared/agent-session/requests/agent-session-command-menu-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod'

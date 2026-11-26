@@ -1,5 +1,5 @@
 import type WebSocket from 'ws'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 
 const NORMAL_CLOSE_CODE = 1000
 const REASONED_CLOSE_FLUSH_MS = 1_000

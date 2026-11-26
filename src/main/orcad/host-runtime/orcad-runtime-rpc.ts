@@ -2,7 +2,10 @@ import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { OrcadOptions } from '../serve-startup/orcad-start-contract'
 import { resolveOrcadWebClientRoot } from '../serve-startup/orcad-command-arguments'
-import { orcadWsPortOptions } from '../serve-startup/orcad-ws-port-policy'
+import {
+  clearDesktopRuntimeFallbackPort,
+  orcadWsPortOptions
+} from '../serve-startup/orcad-ws-port-policy'
 
 export function createOrcadRuntimeRpcServer(
   runtime: OrcaRuntimeService,
@@ -10,6 +13,7 @@ export function createOrcadRuntimeRpcServer(
   options: OrcadOptions,
   bindHost: string
 ): OrcaRuntimeRpcServer {
+  clearDesktopRuntimeFallbackPort(userDataPath)
   return new OrcaRuntimeRpcServer({
     runtime,
     userDataPath,

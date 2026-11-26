@@ -9,6 +9,11 @@ type StagedBrowserTabSnapshotFields = Pick<
   | 'unifiedTabsByWorktree'
 >
 
+// The live array stays when nothing was dropped, so saves see that workspace as unchanged.
+function keepWhenUnfiltered<T>(source: T[], filtered: T[]): T[] {
+  return filtered.length === source.length ? source : filtered
+}
+
 /** Drop unpublished optimistic browser tabs on restore; their page IDs have no host owner and would resurrect invalid workspaces. */
 export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotFields>(snapshot: T): T {
   const handles = snapshot.remoteBrowserPageHandlesByPageId ?? {}
@@ -32,7 +37,10 @@ export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotField
     browserTabsByWorktree: Object.fromEntries(
       Object.entries(snapshot.browserTabsByWorktree).map(([worktreeId, workspaces]) => [
         worktreeId,
-        workspaces.filter((workspace) => !stagedWorkspaceIds.has(workspace.id))
+        keepWhenUnfiltered(
+          workspaces,
+          workspaces.filter((workspace) => !stagedWorkspaceIds.has(workspace.id))
+        )
       ])
     ),
     browserPagesByWorkspace,
@@ -46,8 +54,11 @@ export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotField
     unifiedTabsByWorktree: Object.fromEntries(
       Object.entries(snapshot.unifiedTabsByWorktree).map(([worktreeId, tabs]) => [
         worktreeId,
-        tabs.filter(
-          (tab) => !(tab.contentType === 'browser' && stagedWorkspaceIds.has(tab.entityId))
+        keepWhenUnfiltered(
+          tabs,
+          tabs.filter(
+            (tab) => !(tab.contentType === 'browser' && stagedWorkspaceIds.has(tab.entityId))
+          )
         )
       ])
     )

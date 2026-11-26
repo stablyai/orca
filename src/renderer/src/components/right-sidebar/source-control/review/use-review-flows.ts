@@ -125,6 +125,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeRepoPath,
     activeWorktreeId,
     branchName,
+    currentHeadOid: activeWorktree?.head ?? null,
     effectiveBaseRef,
     fallbackGitHubPRNumber,
     getHostedReviewCreationEligibility,

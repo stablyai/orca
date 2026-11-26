@@ -5,7 +5,7 @@ import {
   REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,
   takePendingReactErrorBoundaryReport
 } from '@/diagnostics/crash-reporting/react-error-boundary-reporting'
-import type { CrashReportRecord } from '../../../../shared/crash-reporting'
+import type { CrashReportRecord } from '../../../../shared/crash-reporting/crash-reporting'
 
 const CrashReportDialogSurface = lazy(() =>
   import('./CrashReportDialogSurface').then((module) => ({

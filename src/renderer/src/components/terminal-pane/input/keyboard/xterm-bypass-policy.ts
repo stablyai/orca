@@ -1,4 +1,3 @@
-import '../../../../../../shared/keybindings'
 import { keybindingMatchesInput } from '../../../../../../shared/keybindings/matching'
 import { isHangulJamoKeyText } from '../ime/hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../../../lib/keyboard-layout/layout-base-character'

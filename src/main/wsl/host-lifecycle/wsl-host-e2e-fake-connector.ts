@@ -57,7 +57,10 @@ export function readFakeWslHostsConfig(
 export function createFakeWslHostConnector(
   config: FakeWslHostsConfig,
   onChange: NonNullable<WslOrcadConnectionDependencies['onChange']>,
-  options: { isKnownDistro: (distro: string) => boolean; runtime: WslHostRuntimeAccess }
+  options: {
+    isKnownDistro: (distro: string) => boolean | Promise<boolean>
+    runtime: WslHostRuntimeAccess
+  }
 ): WslHostConnector {
   const offer = parsePairingCode(config.pairingCode)
   const port = offer ? Number(new URL(offer.endpoint).port) : 0
@@ -81,7 +84,7 @@ export function createFakeWslHostConnector(
     intent?: WslOrcadConnectIntent
   ): Promise<WslOrcadConnection> => {
     // Same guard as the real connector: nothing starts for a host that is gone.
-    if (!options.isKnownDistro(distro)) {
+    if (!(await options.isKnownDistro(distro))) {
       throw new Error(`${distro} is no longer a WSL host; Orca will not start anything for it.`)
     }
     if (isStopped(distro)) {

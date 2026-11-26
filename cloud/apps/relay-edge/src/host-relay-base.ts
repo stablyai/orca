@@ -1,6 +1,6 @@
 // HostRelay's state and shared plumbing: socket attachments, the session, the host's connection
 // bookkeeping (splice pool), alarm scheduling. The class chain is base → handshake → control →
-// phones → HostRelay (host-relay.ts); each layer adds one group of handlers, nothing overrides.
+// phones → director → HostRelay (host-relay.ts); each layer adds one group of handlers, nothing overrides.
 import { DurableObject } from 'cloudflare:workers'
 import type { RelayHello } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
@@ -13,6 +13,8 @@ import { metric } from './metrics'
 import { ObjectStore } from './object-store'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
 import { edgeBackend, type CredentialReservation, type EdgeBackend } from './edge-backend'
+import { directorConfig } from './director-config'
+import { USER_INDEX_PENDING_KEY, type UserIndexPending } from './user-index'
 
 // Longer than one database operation can take (connect 2 s + query 5 s, edge-database.ts).
 export const ASSIGNMENT_CHECK_DEADLINE_MS = 8_000
@@ -239,6 +241,11 @@ export abstract class HostRelayBase extends DurableObject<Env> {
         await this.ctx.storage.put(SWEEP_AT_KEY, sweepAt)
       }
       next = Math.min(next, sweepAt)
+    }
+    // An erasure index write still unacknowledged (user-index.ts). Director off: not even read.
+    if (directorConfig(this.env)) {
+      const indexRetryAt = (await this.ctx.storage.get<UserIndexPending>(USER_INDEX_PENDING_KEY))?.retryAt
+      if (indexRetryAt !== undefined) { next = Math.min(next, indexRetryAt) }
     }
     if (next === NO_DEADLINE) {
       await this.ctx.storage.deleteAlarm()

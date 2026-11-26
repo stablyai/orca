@@ -5,7 +5,7 @@ import type { AppState } from '../types'
 import type {
   NestedRepoScanResult,
   ProjectGroupImportResult
-} from '../../../../shared/project-group-types'
+} from '../../../../shared/project/groups/project-group-types'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'

@@ -14,8 +14,8 @@ import { structuredAgentSessionCommandRunning } from '../operations/structured-a
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 
 /** Queue conversion and provider handoff use the same live child acceptance rule. */
 export function structuredAgentSessionChildAcceptsInput(input: {

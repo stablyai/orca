@@ -12,24 +12,30 @@ import {
   resolveTabRegistrationWaiters
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
+import { registerBrowserGuestDiscardHandlers } from './browser-guest-discard-ipc'
+import {
+  syncBrowserMemorySaverPolicy,
+  type BrowserMemorySaverSettingsSource
+} from '../../browser/guest-lifecycle/browser-page-idle-discard'
 import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
+import { registerBrowserGrabHandlers } from './browser-grab-ipc'
 import {
   disposeGrabModeStateForPage,
-  registerBrowserGrabHandlers,
   resetGrabModeState
-} from './browser-grab-ipc'
+} from '../../browser/element-grab/browser-grab-mode-sequencer'
 import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
-import type { BrowserCertificateProceedResult } from '../../../shared/browser-workspace-types'
+import type { BrowserCertificateProceedResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   cancelBrowserWebAuthnAccountRequests,
   respondToBrowserWebAuthnAccountRequest
 } from '../../browser/webauthn/browser-webauthn-account-picker'
-import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser-webauthn-account'
+import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser/prompts/browser-webauthn-account'
 import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
 } from '../../../shared/browser/prompts/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompts/browser-page-prompts'
+import { openStreamedBrowserExternalAppLink } from '../../browser/guest-lifecycle/prompts/browser-external-app-launch'
 import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
 import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-lifecycle'
 import { registerBrowserExtensionHandlers } from './browser-extensions'
@@ -53,7 +59,9 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
   agentBrowserBridgeRef = bridge
 }
 
-export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): void {
+export function registerBrowserHandlers(
+  store: BrowserPasswordsSettingsSource & BrowserMemorySaverSettingsSource
+): void {
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
@@ -64,6 +72,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   ipcMain.removeHandler('browser:proceedCertificate')
   ipcMain.removeHandler('browser:respondWebAuthnAccount')
   ipcMain.removeHandler('browser:respondPagePrompt')
+  ipcMain.removeHandler('browser:openStreamedExternalAppLink')
 
   const registerGuest = (
     event: Electron.IpcMainInvokeEvent,
@@ -199,24 +208,44 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
     }
   )
 
-  ipcMain.handle('browser:unregisterGuest', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
+  ipcMain.handle(
+    'browser:unregisterGuest',
+    (event, args: { browserPageId: string; webContentsId?: number; replacement?: boolean }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      // Documents withdraw by grant revocation; dropping their intent here could silently settle an unarmed grab.
+      if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
+        return false
+      }
+      const currentId = browserManager.getGuestWebContentsId(args.browserPageId)
+      if (
+        args.replacement &&
+        args.webContentsId !== undefined &&
+        currentId !== args.webContentsId
+      ) {
+        return false
+      }
+      // Destroy bridge sessions before unregistering clears the guest mapping.
+      const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
+      if (wcId !== null && agentBrowserBridgeRef) {
+        if (args.replacement) {
+          void agentBrowserBridgeRef.onProcessSwap(args.browserPageId, wcId).catch(() => {})
+        } else {
+          agentBrowserBridgeRef.onTabClosed(wcId)
+        }
+      } else if (!args.replacement && agentBrowserBridgeRef) {
+        void agentBrowserBridgeRef.onPageClosed(args.browserPageId).catch(() => {})
+      }
+      cancelBrowserWebAuthnAccountRequests(args.browserPageId)
+      browserManager.unregisterGuest(
+        args.browserPageId,
+        args.replacement ? 'guest-destroyed' : 'page-closed'
+      )
+      disposeGrabModeStateForPage(args.browserPageId)
+      return true
     }
-    // Documents withdraw by grant revocation; dropping their intent here could silently settle an unarmed grab.
-    if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
-      return false
-    }
-    // Destroy bridge sessions before unregistering clears the guest mapping.
-    const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
-    if (wcId !== null && agentBrowserBridgeRef) {
-      agentBrowserBridgeRef.onTabClosed(wcId)
-    }
-    cancelBrowserWebAuthnAccountRequests(args.browserPageId)
-    browserManager.unregisterGuest(args.browserPageId)
-    disposeGrabModeStateForPage(args.browserPageId)
-    return true
-  })
+  )
 
   ipcMain.handle(
     'browser:respondWebAuthnAccount',
@@ -236,6 +265,14 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
       }
       return respondToBrowserPagePrompt(event.sender, response)
     }
+  )
+
+  ipcMain.handle(
+    'browser:openStreamedExternalAppLink',
+    (event, rawUrl: unknown): Promise<boolean> =>
+      isTrustedBrowserRenderer(event.sender)
+        ? openStreamedBrowserExternalAppLink(rawUrl)
+        : Promise.resolve(false)
   )
 
   ipcMain.handle(
@@ -277,6 +314,8 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   })
 
   registerBrowserGuestViewHandlers()
+  registerBrowserGuestDiscardHandlers()
+  syncBrowserMemorySaverPolicy(store)
   registerBrowserDictationHandlers()
 
   registerBrowserGrabHandlers()

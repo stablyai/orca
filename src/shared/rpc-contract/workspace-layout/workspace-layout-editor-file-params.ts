@@ -1,16 +1,19 @@
 import { z } from 'zod'
-import type { EditorTabView } from '../../editor-tab-view-types'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import type { EditorTabView } from '../../editor/views/editor-tab-view-types'
 
 /** An edit-mode file's restorable record, as the window saves it. */
-export const EditorFileRecord = z.object({
-  filePath: z.string().min(1),
-  relativePath: z.string(),
-  language: z.string(),
-  runtimeEnvironmentId: z.string().nullable().optional(),
-  externalSshTargetId: z.string().min(1).optional(),
-  readOnly: z.literal(true).optional(),
-  liveTail: z.literal(true).optional()
-})
+export const EditorFileRecord = lazyZodSchema(() =>
+  z.object({
+    filePath: z.string().min(1),
+    relativePath: z.string(),
+    language: z.string(),
+    runtimeEnvironmentId: z.string().nullable().optional(),
+    externalSshTargetId: z.string().min(1).optional(),
+    readOnly: z.literal(true).optional(),
+    liveTail: z.literal(true).optional()
+  })
+)
 
 const EDITOR_VIEW_MODES: ReadonlySet<unknown> = new Set<EditorTabView['mode']>([
   'edit',
@@ -33,7 +36,9 @@ function isEditorTabView(value: unknown): value is EditorTabView {
 }
 
 /** What a non-plain editor tab shows, with its file's facts; main keeps it in memory only. */
-export const EditorViewRecord = z.object({
-  view: z.custom<EditorTabView>(isEditorTabView, 'Invalid editor tab view'),
-  file: EditorFileRecord.omit({ liveTail: true })
-})
+export const EditorViewRecord = lazyZodSchema(() =>
+  z.object({
+    view: z.custom<EditorTabView>(isEditorTabView, 'Invalid editor tab view'),
+    file: EditorFileRecord.omit({ liveTail: true })
+  })
+)

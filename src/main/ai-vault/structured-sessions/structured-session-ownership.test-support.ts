@@ -13,6 +13,7 @@ import type {
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredProviderSessionOwnership } from '../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { AgentSessionConversationKeys } from '../../runtime/agent-session/records/agent-session-conversation-key-index'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -25,9 +26,10 @@ export function installOwnership(
     handle?: AgentSessionProviderHandle
     accountHome?: AgentSessionRecord['accountHome']
     acquiredAccount?: AgentSessionRecord['acquiredAccount']
+    lastTurn?: AgentSessionRecord['lastTurn']
   } = {}
 ): void {
-  const { handle, accountHome, acquiredAccount, ...ownershipOverrides } = overrides
+  const { handle, accountHome, acquiredAccount, lastTurn, ...ownershipOverrides } = overrides
   const ownership: Omit<StructuredProviderSessionOwnership, 'role' | 'key'> = {
     sessionId: 'session-alpha',
     workspaceId: 'workspace-1',
@@ -61,20 +63,22 @@ export function installOwnership(
       }
     ],
     ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {}),
-    ...(acquiredAccount === undefined ? {} : { acquiredAccount })
+    ...(acquiredAccount === undefined ? {} : { acquiredAccount }),
+    ...(lastTurn ? { lastTurn } : {})
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
+  const view = {
+    ...agentSessionConversationView(record),
+    ownerObservation: ownership.ownerObservation
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `conversationsKeyedBy`, `getRecord` and `hostId`; the rest of the host is never reached.
   setStructuredAgentSessionHost({
     deps: {
       store: {
         hostId: record.lease.ownerProcess?.hostId ?? 'local',
         getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
-        listConversations: () => [
-          {
-            ...agentSessionConversationView(record),
-            ownerObservation: ownership.ownerObservation
-          }
-        ]
+        listConversations: () => [view],
+        conversationsKeyedBy: (keys: AgentSessionConversationKeys, key: string) =>
+          keys(view).includes(key) ? [view] : []
       }
     }
   } as never)
@@ -101,6 +105,10 @@ export function installCopyingChat(
       store: {
         listRecords: () => [record, ...otherRecords],
         listConversations: () => [record, ...otherRecords].map(agentSessionConversationView),
+        conversationsKeyedBy: (keys: AgentSessionConversationKeys, key: string) =>
+          [record, ...otherRecords]
+            .map(agentSessionConversationView)
+            .filter((view) => keys(view).includes(key)),
         selectWritableRecord: () => ({ kind: 'writable', record }),
         requireWritableRecord: () => record,
         getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null)
@@ -140,8 +148,9 @@ export function installChats(records: AgentSessionRecord[]) {
   return store
 }
 
-export function listResult(): AiVaultListResult {
-  const session: AiVaultSession = {
+/** One history row; the defaults are the owned Codex chat these tests share. */
+export function historySession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
+  return {
     id: `local:codex:${PROVIDER_SESSION}`,
     executionHostId: 'local',
     agent: 'codex',
@@ -161,7 +170,11 @@ export function listResult(): AiVaultListResult {
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     resumeCommand: `codex resume '${PROVIDER_SESSION}'`,
-    subagent: null
+    subagent: null,
+    ...overrides
   }
-  return { sessions: [session], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
+}
+
+export function listResult(): AiVaultListResult {
+  return { sessions: [historySession()], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
 }

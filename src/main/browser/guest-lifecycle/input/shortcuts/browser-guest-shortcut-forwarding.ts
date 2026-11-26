@@ -1,17 +1,17 @@
-import { textInputOwnsComposition } from '../../../../../shared/text-input-shortcut-policy'
+import { textInputOwnsComposition } from '../../../../../shared/keybindings/text-input-shortcut-policy'
 import { isAgentInjectingInput } from '../../../cdp/input/agent-input-injection'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
   nativeZoomCommandMatchesKeybindings,
   resolveWindowShortcutAction
-} from '../../../../../shared/window-shortcut-policy'
+} from '../../../../../shared/keybindings/window-shortcut-policy'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
-import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
+import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../shared/keybindings/modifier-double-tap-detector'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 import { consumeRecentGuestWheelZoom } from '../browser-guest-wheel-zoom'
 import {
@@ -24,7 +24,8 @@ import {
 
 // Focused guest key events do not reach renderer shortcut handlers.
 export function setupGuestShortcutForwarding(args: {
-  browserTabId: string
+  /** A function for a guest that acts for whichever page it sits beside (extension side panels). */
+  browserTabId: string | (() => string | null)
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   isLocalRenderer?: (renderer: Electron.WebContents) => boolean
@@ -37,7 +38,7 @@ export function setupGuestShortcutForwarding(args: {
   browserPage?: boolean
 }): () => void {
   const {
-    browserTabId,
+    browserTabId: browserTabIdSource,
     guest,
     resolveRenderer,
     isLocalRenderer,
@@ -52,16 +53,7 @@ export function setupGuestShortcutForwarding(args: {
   const doubleTapDetector = new ModifierDoubleTapDetector()
   const resetDoubleTapDetector = (): void => doubleTapDetector.reset()
 
-  const forwardBrowserPageZoom = (
-    event: Electron.Event,
-    direction: BrowserPageZoomDirection
-  ): void => {
-    event.preventDefault()
-    const renderer = resolveRenderer(browserTabId)
-    renderer?.send('ui:zoomBrowserPage', { browserPageId: browserTabId, direction })
-  }
-
-  const forwardContext: GuestShortcutForwardContext = {
+  const makeForwardContext = (browserTabId: string): GuestShortcutForwardContext => ({
     browserTabId,
     resolveRenderer,
     isLocalRenderer,
@@ -70,8 +62,23 @@ export function setupGuestShortcutForwarding(args: {
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
-    forwardBrowserPageZoom,
+    forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => {
+      event.preventDefault()
+      resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', {
+        browserPageId: browserTabId,
+        direction
+      })
+    },
     browserPage
+  })
+  const fixedContext =
+    typeof browserTabIdSource === 'string' ? makeForwardContext(browserTabIdSource) : null
+  const currentContext = (): GuestShortcutForwardContext | null => {
+    if (fixedContext) {
+      return fixedContext
+    }
+    const browserTabId = typeof browserTabIdSource === 'function' ? browserTabIdSource() : null
+    return browserTabId ? makeForwardContext(browserTabId) : null
   }
 
   const handler = (event: Electron.Event, input: Electron.Input): void => {
@@ -79,6 +86,11 @@ export function setupGuestShortcutForwarding(args: {
     if (isAgentInjectingInput(guest)) {
       return
     }
+    const forwardContext = currentContext()
+    if (!forwardContext) {
+      return
+    }
+    const { browserTabId } = forwardContext
     const keybindings = getKeybindings?.()
     if (
       input.type === 'keyDown' &&
@@ -152,7 +164,7 @@ export function setupGuestShortcutForwarding(args: {
     if (!nativeZoomCommandMatchesKeybindings(zoomDirection, process.platform, getKeybindings?.())) {
       return
     }
-    forwardBrowserPageZoom(event, zoomDirection)
+    currentContext()?.forwardBrowserPageZoom(event, zoomDirection)
   }
 
   guest.on('before-input-event', handler)

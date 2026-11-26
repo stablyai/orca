@@ -11,7 +11,7 @@ export function StatCard({ label, value, icon }: StatCardProps): React.JSX.Eleme
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-lg font-semibold leading-tight text-foreground">{value}</p>
+        <p className="break-words text-lg font-semibold leading-tight text-foreground">{value}</p>
         <p className="text-xs text-muted-foreground">{label}</p>
       </div>
     </div>

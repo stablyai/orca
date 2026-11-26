@@ -12,7 +12,7 @@ import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import {
   isTerminalLeafId,
@@ -31,7 +31,7 @@ import type {
 
 import { readTerminalTail } from '../output/tail/terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithMailboxTerminalIdentity {
   protected abstract bindPtyIncarnationHandle(
@@ -135,7 +135,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     }
 
     const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
-    if (!leaf || leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) {
+    if (
+      !leaf ||
+      ((leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) &&
+        !this.isSleptLeafBinding(handle, leaf))
+    ) {
       throw new Error('terminal_handle_stale')
     }
     return { record, leaf }
@@ -296,6 +300,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     const panePty = this.getPtyRecordForPaneKey(paneKey, context)
     if (panePty?.connected) {
       return this.issuePtyHandle(panePty, context)
+    }
+    // A slept pane keeps its own name: the stopped process's synthetic handle cannot wake it.
+    const slept = leaf && !leaf.ptyId ? this.sleptLeafHandle(leaf) : null
+    if (slept) {
+      return slept
     }
     if (leaf?.ptyId) {
       return this.issueHandle(leaf, context)

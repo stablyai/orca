@@ -1,7 +1,7 @@
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, GitPullRequestArrow, LoaderCircle, Unlink } from 'lucide-react'
-import type { BitbucketConnectionStatus } from '../../../../../shared/bitbucket-credentials'
+import type { BitbucketConnectionStatus } from '../../../../../shared/bitbucket/bitbucket-credentials'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
@@ -134,7 +134,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
             {connectionLoadFailed
               ? t(
                   'auto.components.settings.bitbucket.integration.card.replaceCredentials',
-                  'Add or replace credentials'
+                  'Manage credentials'
                 )
               : storedCredential
                 ? t('auto.components.settings.bitbucket.integration.card.edit', 'Edit credentials')

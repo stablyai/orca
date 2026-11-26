@@ -1,4 +1,4 @@
-import { resolveOrcadBindHost } from '../../../shared/orcad-bind-address'
+import { resolveOrcadBindHost } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-bind-address'
 import { getPresentStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../connection/types'
 

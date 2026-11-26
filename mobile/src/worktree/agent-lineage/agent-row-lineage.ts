@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 export type AgentRowNode = {
   row: RuntimeWorktreeAgentRow

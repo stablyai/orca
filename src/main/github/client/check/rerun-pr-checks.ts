@@ -13,7 +13,10 @@ import { resolveGitHubRepoExecution } from '../../repositories/github-api-reposi
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import { getPRChecks } from './get-pr-checks'
 import { parseActionsRunId } from './check-detail-field-mapping'
-import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../../shared/source-control/code-host-failure-copy'
 export async function rerunPRChecks(
   repoPath: string,
   prNumber: number,

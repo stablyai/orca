@@ -2,21 +2,14 @@ import {
   withGitHubRepoExecution,
   type LocalGitExecOptions
 } from '../../repositories/github-repository-identity'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import { acquire, release } from '../../execution/github-operation-slots'
 import { classifyGhError } from '../../api/gh-error-classification'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 
-import {
-  resolveGitHubApiRepository,
-  resolveGitHubApiRepositoryCandidates,
-  resolveIssueGitHubApiRepositorySource
-} from '../../repositories/github-api-repository'
+import { resolveIssueGitHubApiRepositorySource } from '../../repositories/github-api-repository'
+import { resolveGitHubWorkItemLinkRepository } from '../../repositories/github-work-item-link-repository'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
-import {
-  githubRepoIdentityKey,
-  isDefaultGitHubHost
-} from '../../../../shared/github/repositories/repository-identity-key'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import {
   getIssueDetailsViaGraphQL,
@@ -24,13 +17,10 @@ import {
 } from '../../issues/issue-work-item-details'
 import {
   fetchIssueWorkItem,
-  fetchWorkItemPreview,
   fetchPullRequestWorkItem,
   fetchPullRequestWorkItemFromCandidates
 } from './work-item-fetch'
-function githubHostKey(host?: string): string {
-  return isDefaultGitHubHost(host) ? 'github.com' : host!.trim().toLowerCase()
-}
+import { fetchWorkItemPreview } from './work-item-preview'
 
 export async function getWorkItem(
   repoPath: string,
@@ -64,7 +54,13 @@ export async function getWorkItemWithRepository(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
-  includeIssueDetails = false
+  {
+    includeIssueDetails = false,
+    includeChecksSummary
+  }: {
+    includeIssueDetails?: boolean
+    includeChecksSummary?: boolean
+  } = {}
 ): Promise<WorkItemRepositoryLookup> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
     await acquire()
@@ -107,7 +103,8 @@ export async function getWorkItemWithRepository(
             number,
             connectionId,
             localGitOptions,
-            preference
+            preference,
+            { includeChecksSummary }
           ),
           repository: null
         }
@@ -145,7 +142,8 @@ export async function getWorkItemWithRepository(
           number,
           connectionId,
           localGitOptions,
-          preference
+          preference,
+          { includeChecksSummary }
         ),
         repository: null
       }
@@ -166,67 +164,101 @@ export async function getWorkItemByOwnerRepo(
   localGitOptions: LocalGitExecOptions = {},
   options: { preview?: boolean } = {}
 ): Promise<MainWorkItem | null> {
+  const { item } = await getWorkItemWithExactRepository(
+    repoPath,
+    ownerRepo,
+    number,
+    type,
+    connectionId,
+    localGitOptions,
+    options
+  )
+  return item
+}
+
+export async function getWorkItemWithExactRepository(
+  repoPath: string,
+  ownerRepo: GitHubApiRepository,
+  number: number,
+  type: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  options: {
+    preview?: boolean
+    issueDetails?: { fresh: boolean }
+    includeChecksSummary?: boolean
+  } = {}
+): Promise<WorkItemRepositoryLookup> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    const requestedHost = ownerRepo.host?.trim().toLowerCase()
-    const requestedRepository = requestedHost
-      ? { ...ownerRepo, host: requestedHost }
-      : await resolveGitHubApiRepository(repoPath, ownerRepo, connectionId, localGitOptions)
-    if (!requestedRepository) {
-      return null
-    }
-    const { candidates } = await resolveGitHubApiRepositoryCandidates(
+    const matchedRepository = await resolveGitHubWorkItemLinkRepository(
       repoPath,
+      ownerRepo,
+      { allowSameHost: options.preview },
       connectionId,
       localGitOptions
     )
-    const requestedKey = githubRepoIdentityKey(requestedRepository)
-    const requestedHostKey = githubHostKey(requestedRepository.host)
-    // Pasted hosts must match configured remotes before receiving credentials. A preview reads any
-    // repo on such a host, as a link card does: that host's sign-in already serves this workspace.
-    const matchedRepository =
-      candidates.find((candidate) => githubRepoIdentityKey(candidate) === requestedKey) ??
-      (options.preview &&
-      candidates.some((candidate) => githubHostKey(candidate.host) === requestedHostKey)
-        ? requestedRepository
-        : undefined)
     if (!matchedRepository) {
-      return null
+      return { item: null, repository: null }
     }
     await acquire()
     try {
       if (options.preview) {
-        return await fetchWorkItemPreview(
-          repoPath,
-          matchedRepository,
-          number,
-          type,
-          connectionId,
-          localGitOptions
-        )
+        return {
+          item: await fetchWorkItemPreview(
+            repoPath,
+            matchedRepository,
+            number,
+            type,
+            connectionId,
+            localGitOptions
+          ),
+          repository: matchedRepository
+        }
       }
       if (type === 'issue') {
-        return await fetchIssueWorkItem(
+        const issueDetails = options.issueDetails
+          ? await getIssueDetailsViaGraphQL(
+              repoPath,
+              number,
+              matchedRepository,
+              connectionId,
+              localGitOptions,
+              true,
+              options.issueDetails.fresh
+            )
+          : undefined
+        return {
+          item:
+            issueDetails?.item ??
+            (await fetchIssueWorkItem(
+              repoPath,
+              matchedRepository,
+              number,
+              connectionId,
+              localGitOptions
+            )),
+          repository: matchedRepository,
+          issueDetails
+        }
+      }
+      return {
+        item: await fetchPullRequestWorkItem(
           repoPath,
           matchedRepository,
           number,
           connectionId,
-          localGitOptions
-        )
+          localGitOptions,
+          options
+        ),
+        repository: matchedRepository
       }
-      return await fetchPullRequestWorkItem(
-        repoPath,
-        matchedRepository,
-        number,
-        connectionId,
-        localGitOptions
-      )
     } catch (err) {
       // Only the failure class is logged: stderr and the command line name the repository.
       const stderr = extractExecError(err).stderr || (err instanceof Error ? err.message : '')
       console.warn(
         `getWorkItemByOwnerRepo ${options.preview ? 'preview' : type} lookup failed: ${classifyGhError(stderr).type}`
       )
-      return null
+      return { item: null, repository: null }
     } finally {
       release()
     }

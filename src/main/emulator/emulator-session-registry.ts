@@ -5,7 +5,7 @@ import type {
 } from './emulator-types'
 import type { EmulatorSessionState } from './emulator-bridge-types'
 import type { EmulatorBackend } from './backends/emulator-backend'
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { deriveAvccUrlFromStreamUrl } from './serve-sim-detached-session'
 
 const DEVICE_LISTING_BUDGET_MS = 5_000

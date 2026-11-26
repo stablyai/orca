@@ -1,5 +1,5 @@
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 

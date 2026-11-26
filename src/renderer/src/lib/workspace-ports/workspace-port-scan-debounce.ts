@@ -1,4 +1,4 @@
-import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace/ports/workspace-ports'
 
 export type KeyedPortScan = { key: string; result: WorkspacePortScanResult }
 

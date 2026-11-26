@@ -3,7 +3,7 @@ import {
   BROWSER_COOKIE_IMPORT_FAILURE_COPY as EN,
   type BrowserCookieImportFailure,
   type BrowserCookieImportFailureCode
-} from '../../../../../shared/browser-cookie-import-failure-copy'
+} from '../../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 
 type Values = {
   text: (name: string) => string | null
@@ -129,7 +129,10 @@ const COPY: Record<BrowserCookieImportFailureCode, (values: Values) => string | 
   },
   connectionEnded: () =>
     translate('browser.cookieImport.errors.connectionEnded', EN.connectionEnded),
-  serverRepaired: () => translate('browser.cookieImport.errors.serverRepaired', EN.serverRepaired)
+  serverRepaired: () => translate('browser.cookieImport.errors.serverRepaired', EN.serverRepaired),
+  sshHostDisconnected: () =>
+    translate('browser.cookieImport.errors.sshHostDisconnected', EN.sshHostDisconnected),
+  pageChanged: () => translate('browser.cookieImport.errors.pageChanged', EN.pageChanged)
 }
 
 function isBrowserCookieImportFailureCode(code: unknown): code is BrowserCookieImportFailureCode {

@@ -6,7 +6,7 @@ import {
   EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
   hasExtraAgentArgs
 } from '../../shared/agent-launch/startup/automation-extra-agent-args'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 

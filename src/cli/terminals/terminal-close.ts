@@ -1,7 +1,7 @@
 import type {
   RuntimeTerminalClose,
   RuntimeWorktreeTerminalCloseResult
-} from '../../shared/runtime-terminal-contracts'
+} from '../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { formatTerminalClose } from './terminal-format'
 import { reportCliError } from '../output/cli-error'

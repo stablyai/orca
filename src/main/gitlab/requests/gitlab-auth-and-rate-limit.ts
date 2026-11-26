@@ -3,7 +3,7 @@ import type {
   GitLabAuthDiagnostic,
   GitLabRateLimitSnapshot,
   GitLabViewer
-} from '../../../shared/gitlab-types'
+} from '../../../shared/gitlab/gitlab-types'
 import { acquire, glabApiWithHeaders, release } from './glab-request-admission'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import {

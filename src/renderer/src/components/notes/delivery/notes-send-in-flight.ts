@@ -92,8 +92,3 @@ export function diffCommentSendKey(
     note.source ?? null
   ])
 }
-
-export function resetNotesInFlightForTests(): void {
-  holds.clear()
-  changed()
-}

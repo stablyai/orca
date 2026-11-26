@@ -1,9 +1,9 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../../shared/execution-host/project-runtime-legacy-migration'
 import { normalizeTaskProviderSettings } from '../../../../shared/work-items/task-providers'
-import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
 import { normalizePluginSystemEnabledDefaultOn } from '../../../../shared/plugins/plugin-system-settings'
 import { migrateNestedWorkerMaxDepthDefault } from '../../../../shared/orchestration/workers/nested-worker-depth'
 import {
@@ -12,12 +12,12 @@ import {
   normalizeMobilePairingCustomAddresses
 } from '../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
-import { normalizeProjectGroups } from '../../../../shared/project-groups'
+import { normalizeProjectGroups } from '../../../../shared/project/groups/project-groups'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal/appearance/terminal-line-height-settings'
-import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
+import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/i18n/portuguese-ui-language-migration'
 import { migrateAgentYoloDefaults } from '../../applying-settings/terminal-settings-migrations'
 import { hasTypedAgentPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
@@ -93,6 +93,10 @@ export function prepareLoadedProfileSettings(
   )
   const migratedPluginSystemEnabled = normalizePluginSystemEnabledDefaultOn(parsed.settings)
   if (parsed.settings?.pluginSystemDefaultedOn !== true) {
+    markNeedsSave()
+  }
+  // normalizeLoadedGlobalSettings applies the usage-limit continue flip; this saves its stamp.
+  if (parsed.settings?.nativeChatAutoContinueAfterUsageLimitDefaultedOn !== true) {
     markNeedsSave()
   }
   const migratedNestedWorkerMaxDepth = migrateNestedWorkerMaxDepthDefault(parsed.settings)

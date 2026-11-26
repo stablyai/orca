@@ -1,4 +1,4 @@
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { isDefaultGitHubHost } from '../../../../shared/github/repositories/repository-identity-key'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubRepoExecOptions } from '../../repositories/github-api-repository'

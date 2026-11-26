@@ -1,5 +1,14 @@
+import {
+  antigravityChatAuthEnvironment,
+  launchAntigravityChatAuth
+} from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
-import { overlayEnvironmentVariables } from '../../../shared/environment-overlay'
+import type { McpServer } from '../generated/acp-protocol.generated'
+import { botToolsOffInstruction } from '../../bots/bot-launch-tools'
+import { withSessionMcpToolsEnv } from '../../mcp-servers/session-mcp-tools'
+import { deliverHostMcpServersBesideConfig } from '../../mcp-servers/session-host-mcp-delivery'
+import { acpBotMcpServers } from '../../bots/bot-tools-acp'
+import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
   assertStructuredAgentResolutionCurrent,
@@ -10,17 +19,12 @@ import {
 } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
-import {
-  resolveAntigravityChatAuthConfig,
-  type AntigravityChatAuthConfig
-} from '../../../shared/antigravity-chat-auth-config'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
-import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
+import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
@@ -31,11 +35,31 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
+import { homeBeforeFirstTurn } from './acp-launch-home-before-first-turn'
 import {
   nothingExchangedOn,
-  type AcpSavedSessionReads
-} from '../session/acp-structured-resume-history'
-import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
+  type SavedProviderTurnReads
+} from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
+import {
+  childEnvironmentView,
+  loadAcpSkillRoots,
+  type AcpLaunchVisualsDeps
+} from './acp-structured-launch-skill-roots'
+import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
+import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release'
+import type { AcpInstructionsLaunch } from './acp-instructions'
+import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
+import { withAcpToolFreeFolder } from '../session/acp-tool-free-run'
+import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
+
+/** The environment a launch's process gets; see `AcpLaunchSpec.sharedToolProcess`. */
+export function acpProcessEnvironment(
+  launch: Pick<AcpStructuredLaunch, 'spec' | 'env' | 'envToDelete'>
+): { env: Record<string, string>; envToDelete: string[] } {
+  return launch.spec.sharedToolProcess
+    ? withoutCallerIdentity(launch.env, launch.envToDelete)
+    : { env: launch.env, envToDelete: launch.envToDelete }
+}
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
   spec: AcpLaunchSpec
@@ -46,8 +70,23 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   env: Record<string, string>
   envToDelete: string[]
   fullAccess: boolean
+  /** A tool-free run (`StructuredAgentLaunchBasis.toolFree`) and the empty folder it starts in. */
+  toolFree?: { cwd: string }
+  /** See `AcpInstructionsLaunch`. */
+  sessionMeta?: Record<string, unknown>
+  sessionMetaOnReopen?: true
+  takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
+  sessionMetaOptional?: true
+  aroundSessionOpen?: AcpInstructionsLaunch['aroundSessionOpen']
+  release?: AcpInstructionsLaunch['release']
+  /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
+  mcpServers?: McpServer[]
   /** The saved model the launch line carries. */
   launchModel?: string
+  /** The launched program's version, when its check or managed release names it. */
+  version?: string
+  /** The home this launch moved the chat to, which the chat keeps from now on. */
+  launchedAccountHome?: AgentSessionAccountHome
   resume: {
     sessionId: string
     key: string
@@ -59,7 +98,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
 }
 
 export type AcpStructuredLaunchPartDeps = {
-  savedSession: AcpSavedSessionReads
+  savedSession: SavedProviderTurnReads
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
   inheritedEnv?: NodeJS.ProcessEnv
@@ -88,6 +127,8 @@ export type AcpLaunchInvocationDeps = {
 
 /** What a launch runs, and the spec of the backend the account home pins. */
 export type AcpLaunchInvocation = StructuredAgentCommand & {
+  /** The managed release's version, when the launch runs one. */
+  version?: string
   env: Record<string, string>
   envToDelete: string[]
   spec: AcpLaunchSpec
@@ -121,21 +162,16 @@ async function readAcpLaunchInvocation(
     accountHome,
     overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
   )
-  const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
-  if (spec.agent === 'antigravity' && spec.managedRuntime) {
-    await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
+  const commandSettings = deps.resolveCommandSettings?.()
+  // Orca's account-type setting reaches only agy run on a home Orca owns.
+  const antigravityChatAuth = launchAntigravityChatAuth(spec, commandSettings?.antigravityChatAuth)
+  const envToDelete =
+    spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env, antigravityChatAuth) ?? []
+  if (antigravityChatAuth) {
+    Object.assign(env, await antigravityChatAuthEnvironment(antigravityChatAuth, env))
     assertStructuredAgentResolutionCurrent(deps.operation)
   }
   Object.assign(env, spec.env)
-  const commandSettings = deps.resolveCommandSettings?.()
-  // Orca's account-type setting selects only the managed server's sign-in.
-  const usesChatAuth = spec.agent === 'antigravity' && spec.authMethod !== undefined
-  if (usesChatAuth) {
-    assertAntigravityChatAuthPublished(commandSettings?.antigravityChatAuth)
-  }
-  const antigravityChatAuth = usesChatAuth
-    ? resolveAntigravityChatAuthConfig(commandSettings?.antigravityChatAuth)
-    : undefined
   const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
   return {
     ...invocation,
@@ -150,10 +186,12 @@ export function acpStructuredLaunchPart(
   agentSpec: AcpLaunchSpec,
   deps: AcpStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
-  return async (basis, identity) => {
+  return withAcpToolFreeFolder(deps, async (basis, identity) => {
     const { record } = basis
-    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth } =
-      await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
+    const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
+    const accountHome = movedHome ?? record.accountHome
+    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
+      await resolveAcpLaunchInvocation(agentSpec, accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,
@@ -164,34 +202,87 @@ export function acpStructuredLaunchPart(
         ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
         dataDirectory: deps.dataDirectory
       })
+    noteManagedServerUse(spec.agent, spec.managedRuntime, version)
     const cwd = await basis.launchDirectory()
-    const visuals = spec.visualsSkill ? await basis.visuals() : null
+    const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
+    const linked = await basis.linkedSkills()
+    // Only a folder with skills: these agents read it once, so a later link reaches them as a list.
+    const linkedRoot = linked.projects.length > 0 ? linked.root : null
+    const roots = [...(visuals ? [visuals.skill] : []), ...(linkedRoot ? [linkedRoot] : [])]
     // PATH may have changed since chat creation.
     const launchVersion = await checkAcpLaunchVersion(
       spec,
       { command, prefixArgs, cwd, env },
-      visuals !== null,
+      roots.length > 0,
       deps.probeVersion
     )
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
-    const skill = visuals
-      ? await loadAcpVisualsSkill(spec, deps, {
-          sessionId: identity.sessionId,
-          visuals,
-          version: launchVersion.version,
-          env,
-          envToDelete,
-          inherited: deps.inheritedEnv ?? process.env
-        })
-      : null
+    const inherited = deps.inheritedEnv ?? process.env
+    const skill = await loadAcpSkillRoots(spec, deps, {
+      sessionId: identity.sessionId,
+      roots,
+      visualsRoot: visuals?.skill ?? null,
+      version: launchVersion.version,
+      env,
+      envToDelete,
+      inherited
+    })
+    const loaded = skill?.loaded ?? []
+    const skillLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
+    // A managed release's receipt names its version; other programs answer the check.
+    const launchedVersion = version ?? launchVersion.version
+    // The agent's own servers, which a same-named server from the host's list leaves running. Like
+    // its other tools, a read-only session gets none.
+    const ownServers = basis.readOnly
+      ? []
+      : ((await spec.ownMcpServers?.({
+          cwd,
+          env: childEnvironmentView(env, inherited, envToDelete),
+          version: launchedVersion
+        })) ?? [])
+    // An agent that ignores a session's servers gets none of the host list's; a bot's own are noted off.
+    const named = { env, cwd, also: ownServers.map((one) => one.name), hostOff: !!spec.botToolsOff }
+    const tools = await deliverHostMcpServersBesideConfig(basis, spec.agent, named)
+    // Why a bot's tools are off for this agent; its chat starts without them and is told so.
+    const toolsOff = tools.servers.length > 0 ? spec.botToolsOff : undefined
+    const own = await basis.instructions(
+      linkedSkillsSection(
+        linked.projects,
+        linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
+      )
+    )
+    const delivered = await acpInstructionsWithVisuals(
+      spec,
+      deps,
+      {
+        sessionId: identity.sessionId,
+        text: toolsOff ? [own, botToolsOffInstruction(toolsOff)].filter(Boolean).join('\n\n') : own,
+        env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete),
+        cwd,
+        version: launchVersion.version
+      },
+      visuals && !skillLoaded ? visuals.skill : null
+    )
+    const instructions = delivered.launch
+    const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
+    const botServers = toolsOff ? [] : acpBotMcpServers(tools)
+    // On a shared name the bot's server wins; the host list's never shares one (above).
+    const mcpServers = [
+      ...botServers,
+      ...ownServers.filter((own) => !botServers.some((bot) => bot.name === own.name))
+    ]
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
     const model = spec.launchesWithModel && !head ? record.options?.model : undefined
-    const args = spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null, model })
+    const args = [
+      ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
+      ...(skill?.args ?? []),
+      ...(instructions?.args ?? [])
+    ]
     return {
       launch: {
         spec,
@@ -200,7 +291,22 @@ export function acpStructuredLaunchPart(
         prefixArgs,
         args: [...prefixArgs, ...args],
         fullAccess,
+        ...(instructions?.sessionMeta
+          ? {
+              sessionMeta: instructions.sessionMeta,
+              sessionMetaOnReopen: instructions.sessionMetaOnReopen,
+              takesSessionMeta: instructions.takesSessionMeta,
+              ...(instructions.sessionMetaOptional ? { sessionMetaOptional: true as const } : {})
+            }
+          : {}),
+        ...(instructions?.aroundSessionOpen
+          ? { aroundSessionOpen: instructions.aroundSessionOpen }
+          : {}),
+        ...(instructions?.release ? { release: instructions.release } : {}),
+        ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),
+        ...(launchedVersion ? { version: launchedVersion } : {}),
+        ...(movedHome ? { launchedAccountHome: movedHome } : {}),
         resume: head
           ? {
               sessionId: head.handle.nativeId,
@@ -218,13 +324,16 @@ export function acpStructuredLaunchPart(
             }
           : null
       },
-      env: withNativeChatVisualsEnv({ ...env, ...skill?.env }, skill ? visuals : null),
+      env: withNativeChatVisualsEnv(
+        withSessionMcpToolsEnv({ ...env, ...skill?.env, ...instructions?.env }, tools),
+        visualsLoaded
+      ),
       inheritedEnvToDelete: [
         ...envToDelete,
         // An inherited scratch directory belongs to a different chat.
-        ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
+        ...(visualsLoaded ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ]
     }
-  }
+  })
 }

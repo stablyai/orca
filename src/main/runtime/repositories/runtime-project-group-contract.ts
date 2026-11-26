@@ -1,9 +1,10 @@
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
+import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
 import type { FolderWorkspaceCreateResult } from '../../../shared/folder-workspaces/folder-workspace-create'
 import type { RuntimeGroupFolderCreateInput } from '../workspaces/creation/runtime-group-folder-setup'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
 
@@ -49,4 +50,5 @@ export type FolderWorkspaceUpdates = Partial<
     | 'diffComments'
   >
 > &
-  WorkspaceAttachmentMutation
+  WorkspaceAttachmentMutation &
+  DiffCommentBaseMutation

@@ -3,7 +3,8 @@ import type { OrcaRuntimeWithInvalidateAllHandlesForPty } from '../lifecycle/pty
 import { randomUUID } from 'node:crypto'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { forgetPtySurface } from '../surface/pty-recorded-surface-topology'
-import { RuntimeMobileSessionTabSubscriptions } from '../../session-tabs/mobile-session-tab-subscriptions'
+import { sleptCursorCount } from '../recovery/slept-agent-terminal-read'
+import { RuntimeMobileSessionTabSubscriptions } from '../../session-tabs/publication/mobile-session-tab-subscriptions'
 export abstract class RuntimePreallocatedTerminalHandles extends RuntimeMobileSessionTabSubscriptions {
   protected abstract deliverPendingMessagesForPty(ptyId: string): void
 
@@ -90,9 +91,30 @@ export abstract class RuntimePreallocatedTerminalHandles extends RuntimeMobileSe
 
   protected setPtyHandle(ptyId: string, handle: string): void {
     if (this.handleByPtyId.get(ptyId) !== handle) {
+      this.continueHandleLineCursors(handle, ptyId)
       this.terminalIdentity.bindPty(ptyId, handle)
       this.wakeMailForNewPtyHandle(ptyId)
     }
+  }
+
+  /** A process taking over a handle a stopped process held (a slept agent's resume) continues its
+   *  line cursors, so a cursor issued before the takeover still reads everything the new one prints. */
+  protected continueHandleLineCursors(handle: string, ptyId: string): void {
+    const record = this.handles.get(handle)
+    const next = this.ptysById.get(ptyId)
+    const stopped = record?.ptyId ? this.ptysById.get(record.ptyId) : undefined
+    if (
+      !record?.ptyId ||
+      record.ptyId === ptyId ||
+      !next ||
+      next.linesContinuedFrom === record.ptyId ||
+      stopped?.connected
+    ) {
+      return
+    }
+    const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
+    next.tailLinesTotal += sleptCursorCount(stopped, leaf)
+    next.linesContinuedFrom = record.ptyId
   }
 
   /** Mail waits for a PTY's handle, so every new one is that PTY's delivery edge. */

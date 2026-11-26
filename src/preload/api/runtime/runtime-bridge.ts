@@ -1,22 +1,31 @@
+import type {
+  RendererStatusPublication,
+  RendererStatusAck
+} from '../../../shared/agent-status/renderer-status-publication'
 import { ipcRenderer } from 'electron'
-import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalDriverState
-} from '../../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../../runtime/runtime-environment-subscriptions'
 import type { PreloadApi } from '../../api-types'
 
 export const runtimeApi = {
+  syncAgentStatus: (batch: RendererStatusPublication): Promise<RendererStatusAck> =>
+    ipcRenderer.invoke('runtime:syncAgentStatus', batch),
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
-  call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
-    ipcRenderer.invoke('runtime:call', args),
+  call: (args: {
+    method: string
+    params?: unknown
+    orchestration?: { contractVersion: number; requestId: string }
+  }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtime:call', args),
   subscribe: async (
     args: { method: string; params?: unknown },
     callback: (response: RuntimeRpcResponse<unknown>) => void
@@ -147,5 +156,23 @@ export const runtimeApi = {
       callback(data)
     ipcRenderer.on('runtime:sidebarInputsChanged', listener)
     return () => ipcRenderer.removeListener('runtime:sidebarInputsChanged', listener)
+  },
+  onOrchestrationSessionWorkersChanged: (
+    callback: (event: { sessionId: string }) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string }) =>
+      callback(data)
+    ipcRenderer.on('runtime:orchestrationSessionWorkersChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:orchestrationSessionWorkersChanged', listener)
+  },
+  onPeerMailReturned: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:peerMailReturned', listener)
+    return () => ipcRenderer.removeListener('runtime:peerMailReturned', listener)
+  },
+  onMcpServersChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:mcpServersChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:mcpServersChanged', listener)
   }
 } satisfies PreloadApi['runtime']

@@ -1,4 +1,4 @@
-import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
@@ -176,6 +176,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
     listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
+    getClientPage: (browserPageId) => getRuntimeBrowserPageRegistry(this).getPage(browserPageId),
     hasLivePlacement: (browserPageId) =>
       getBrowserHostLeaseRegistry(this).getPlacement(browserPageId) !== undefined,
     resolveDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),

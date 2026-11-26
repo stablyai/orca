@@ -1,13 +1,13 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   adoptsCliConversations,
   chatAgentsShareConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
-} from '../../../shared/structured-agent-cli-conversation-adoption'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+} from '../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { needsWslHostResolution } from '../transcript-discovery/host-readable-transcript-path'
 import { parseSshTranscriptPath } from '../transcript-filesystem/ssh-transcript-path'
 

@@ -7,7 +7,7 @@ import { WINDOWS_HOOK_STDIN_READER } from '../../agent-hooks/installation/script
 import {
   CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS,
   CLAUDE_STATUSLINE_PATHNAME
-} from '../../../shared/claude-statusline-rate-limits'
+} from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { wrapWindowsDirectCmdHookCommand } from '../../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import { getManagedCommand } from './hook-settings'
 

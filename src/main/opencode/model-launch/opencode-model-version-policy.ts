@@ -1,5 +1,5 @@
-import { compareAppVersions } from '../../../shared/app-version'
-import { OPENCODE_NATIVE_PROMPT_VERSIONS } from '../../../shared/opencode-cli-version'
+import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
+import { OPENCODE_NATIVE_PROMPT_VERSIONS } from '../../../shared/agent-launch/startup/opencode-cli-version'
 
 // Real-CLI-verified floors, capped to their major: a new major may change the model route.
 const LEGACY_FLAG_MODEL_FLOOR = '1.18.30'

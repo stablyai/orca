@@ -1,4 +1,4 @@
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { boundHostList, type BoundedHostList } from '../../host-picker/bounded-host-list'
 
 // Bound idle hosts because generated SSH configs can turn thousands of rows into gigabytes of DOM.

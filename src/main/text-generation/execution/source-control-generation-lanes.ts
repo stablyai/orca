@@ -29,3 +29,28 @@ export function clearLocalGenerationCancelToken(laneKey: string, cancel: () => v
     cancelTokensByLane.delete(laneKey)
   }
 }
+
+export const CANCELED_GENERATION_RESULT = {
+  success: false,
+  error: 'Generation canceled.',
+  canceled: true
+} as const
+
+/** Holds the lane's cancel token across pre-spawn awaits; a spawned agent replaces it with its own kill token. */
+export function runCancelableLocalGeneration<T>(
+  operation: TextGenerationOperation,
+  cwd: string,
+  run: (isCanceled: () => boolean) => Promise<T>
+): Promise<T | typeof CANCELED_GENERATION_RESULT> {
+  const laneKey = localGenerationLaneKey(operation, cwd)
+  let canceled = false
+  const canceledBeforeSpawn = Promise.withResolvers<typeof CANCELED_GENERATION_RESULT>()
+  const cancel = (): void => {
+    canceled = true
+    canceledBeforeSpawn.resolve(CANCELED_GENERATION_RESULT)
+  }
+  setLocalGenerationCancelToken(laneKey, cancel)
+  return Promise.race([run(() => canceled), canceledBeforeSpawn.promise]).finally(() =>
+    clearLocalGenerationCancelToken(laneKey, cancel)
+  )
+}

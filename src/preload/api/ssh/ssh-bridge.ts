@@ -12,11 +12,11 @@ import type {
   PortForwardEntry,
   UnrestoredPortForward,
   EnrichedDetectedPort
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   admitSshConnectionStateForAuthorityReconciliation,
   admitSshDetectedPorts
-} from '../../../shared/ssh-retained-payload-admission'
+} from '../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 import type { FilesystemPathFlavor } from '../../../shared/file-access/filesystem-path-flavor'
 import type { PreloadApi } from '../../api-types'
 
@@ -106,6 +106,12 @@ export const sshApi = {
     remotePort: number
     label?: string
   }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:addPortForward', args),
+
+  ensurePortForward: (args: {
+    targetId: string
+    remotePort: number
+  }): Promise<{ entry: PortForwardEntry; created: boolean }> =>
+    ipcRenderer.invoke('ssh:ensurePortForward', args),
 
   updatePortForward: (args: {
     id: string

@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
-import type { RichMarkdownContextMenuCommandPayload } from '../../../../../../shared/rich-markdown-context-menu'
+import type { RichMarkdownContextMenuCommandPayload } from '../../../../../../shared/editor/markdown/rich-markdown-context-menu'
 import {
   runRichMarkdownTableAction,
   type RichMarkdownTableAction

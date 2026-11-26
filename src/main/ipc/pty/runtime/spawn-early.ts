@@ -1,6 +1,6 @@
 import type { RuntimePtySpawnState } from './spawn-state'
-import { requireAcceptedSpawn } from '../spawn-outcome'
-import { beginPtySpawn, reportPtyPaneAdoption } from '../spawn-begin'
+import { requireAcceptedSpawn } from '../spawn/spawn-outcome'
+import { beginPtySpawn, reportPtyPaneAdoption } from '../spawn/spawn-begin'
 
 /** Host reply projection only; acquisition and process lifetime belong to the pane operation. */
 export async function adoptMaterializedRuntimePtySpawn(ctx: RuntimePtySpawnState) {

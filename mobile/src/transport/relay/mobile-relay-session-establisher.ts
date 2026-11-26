@@ -8,12 +8,12 @@ import { RelayHostOfflineStreak } from './relay-host-offline-streak'
 import { RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
-import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
+import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/relay-host-close-reason'
+import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
 
@@ -64,7 +64,7 @@ export class MobileRelaySessionEstablisher {
     this.relay = relay
   }
 
-  // Try only grace-repairable BAD_OUTER_CREDENTIAL failures with another eligible credential.
+  // Try the grace credential only after an explicit rejection.
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
@@ -81,7 +81,7 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!relayFailureAllowsGraceRetry(result.error)) {
+      if (!isExplicitCredentialRejection(result.error)) {
         break
       }
       // Why: a rejected version stays invalid; retry only the grace credential.
@@ -128,17 +128,23 @@ export class MobileRelaySessionEstablisher {
     if (!args.isActive() || !bundle) {
       return { ok: false, error: new RelayDialAbortedError() }
     }
-    const session = args.openRelay(
-      this.relay,
-      credential,
-      `confirm-${encodeBase64Url(args.randomBytes(16))}`,
-      // Read the controller latch because close reasons can arrive after the dial failed; only connection clears it.
-      (reason) => {
-        if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
-          args.controller.assertHostReachability('signed-out')
+    let session: ReturnType<typeof args.openRelay>
+    try {
+      session = args.openRelay(
+        this.relay,
+        credential,
+        `confirm-${encodeBase64Url(args.randomBytes(16))}`,
+        // Read the controller latch because close reasons can arrive after the dial failed; only connection clears it.
+        (reason) => {
+          if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
+            args.controller.assertHostReachability('signed-out')
+          }
         }
-      }
-    )
+      )
+    } catch (error) {
+      // Why: a socket constructor throw is a failed dial; it must book a retry, not reject the recovery.
+      return { ok: false, error: toError(error) }
+    }
     try {
       // Why: backgrounding or a direct winner withdraws this dial before cutover.
       await args.logical.migrateTo(

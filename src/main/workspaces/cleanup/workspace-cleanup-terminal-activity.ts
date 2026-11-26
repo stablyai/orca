@@ -1,7 +1,7 @@
 import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import { inspectPtyProviderProcess } from '../../providers/pty/process-inspection'
 import { worktreePtyOwnership } from '../../providers/pty/worktree-ownership'
-import type { RuntimeTerminalListResult } from '../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalListResult } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   classifyTerminalProcessInspectionFailure,

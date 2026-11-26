@@ -16,12 +16,15 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 /** The part of a pane's previous status the next one may inherit its provider session from. */
-export type PreviousHookStatus = Pick<ResumeRecordStatus, 'agentType' | 'state' | 'providerSession'>
+export type PreviousHookStatus = Pick<
+  ResumeRecordStatus,
+  'agentType' | 'state' | 'providerSession' | 'executionHost'
+>
 
 /** Main's word on a pane's launch as `agent`: its note, null for none, undefined when main can't tell. */
 export type PaneLaunchConfigOf = (
@@ -64,9 +67,9 @@ export function resumeStatusFromHookRow(
   if (row.providerSessionOnly || row.structuredHost) {
     return null
   }
-  const providerSession =
-    normalizeAgentProviderSession(row.providerSession) ??
-    (canReuseStatusProviderSession(previous, row) ? previous.providerSession : undefined)
+  const own = normalizeAgentProviderSession(row.providerSession)
+  const reused = !own && canReuseStatusProviderSession(previous, row)
+  const providerSession = own ?? (reused ? previous.providerSession : undefined)
   return {
     paneKey: row.paneKey,
     agentType: row.agentType,
@@ -79,6 +82,10 @@ export function resumeStatusFromHookRow(
     lastAssistantMessage: row.lastAssistantMessage,
     interrupted: row.interrupted,
     ...(row.mainAgent ? { mainAgent: row.mainAgent } : {}),
+    // A status that reuses the pane's session keeps that session's tmux host.
+    ...(row.executionHost === 'shared' || (reused && previous.executionHost === 'shared')
+      ? { executionHost: 'shared' as const }
+      : {}),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
   }
 }

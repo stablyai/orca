@@ -1,8 +1,8 @@
 import {
   createNormalizedPathInsideOrEqualMatcher,
   normalizeRuntimePathForComparison
-} from '../../cross-platform-path'
-import { parseWslUncPath, toWindowsWslPath } from '../../wsl-paths'
+} from '../../file-access/cross-platform-path'
+import { parseWslUncPath, toWindowsWslPath } from '../../file-access/wsl-paths'
 import type { AiVaultSession } from '../contracts/ai-vault-types'
 
 /** Native scans can contain several WSL distros under the same execution host. */

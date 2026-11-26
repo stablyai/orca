@@ -1,4 +1,4 @@
-import { throwIfSignalAborted } from '../../abort-signal-reason'
+import { throwIfSignalAborted } from '../../concurrency/abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { admitSharedControlSubscription } from '../control/remote-runtime-shared-control-admission'

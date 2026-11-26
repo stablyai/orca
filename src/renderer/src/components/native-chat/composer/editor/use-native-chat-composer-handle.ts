@@ -1,4 +1,4 @@
-import { useImperativeHandle, type ForwardedRef } from 'react'
+import { useCallback, useImperativeHandle, type ForwardedRef } from 'react'
 import type { ClipboardEventLike } from '../../paste/native-chat-clipboard-payload'
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import { useNativeChatComposerPaste } from '../../paste/use-native-chat-composer-paste'
@@ -6,6 +6,7 @@ import type { UseNativeChatComposerPasteArgs } from '../../paste/native-chat-com
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 import { useNativeChatPastedTextFile } from '../../paste/use-native-chat-pasted-text-file'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { glowNativeChatComposer } from '../../native-chat-composer-glow'
 
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
   Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
@@ -13,6 +14,8 @@ type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInser
     resend?: NativeChatComposerHandle['resend']
     /** A structured chat's editor while it shows this scope, where a long paste saved as a file lands. */
     pastedTextEditor: (() => NativeChatComposerInput | null) | null
+    /** Text this long pastes as a "Pasted text" file; defaults to chat's. */
+    longPasteThreshold?: number
   }
 
 /** Expose typed/pasted insertion to pane routing and return the paste handler. */
@@ -21,14 +24,42 @@ export function useNativeChatComposerHandle(
   args: UseNativeChatComposerHandleArgs
 ): (event: ClipboardEventLike) => void {
   const { textareaRef, isComposing, setDraft, setActiveSuggestion, ...pasteArgs } = args
-  const { insertTypedText, appendText, acceptsText, insertPastedText, focus, contains } =
-    useNativeChatTypedInsertion({
-      textareaRef,
-      isComposing,
-      setDraft,
-      setCaret: args.setCaret,
-      setActiveSuggestion
-    })
+  const {
+    insertTypedText,
+    appendText: appendPlainText,
+    acceptsText,
+    insertPastedText,
+    focus: focusInput,
+    contains
+  } = useNativeChatTypedInsertion({
+    textareaRef,
+    isComposing,
+    setDraft,
+    setCaret: args.setCaret,
+    setActiveSuggestion
+  })
+
+  const { attachmentScopeKey } = args
+  const appendText = useCallback(
+    (text: string, options?: { glow?: boolean }): void => {
+      appendPlainText(text)
+      if (options?.glow && attachmentScopeKey) {
+        glowNativeChatComposer(attachmentScopeKey)
+      }
+    },
+    [appendPlainText, attachmentScopeKey]
+  )
+
+  const focus = useCallback(
+    (options?: { caretAtEnd?: boolean; glow?: boolean }): boolean => {
+      const focused = focusInput(options)
+      if (focused && options?.glow && attachmentScopeKey) {
+        glowNativeChatComposer(attachmentScopeKey)
+      }
+      return focused
+    },
+    [focusInput, attachmentScopeKey]
+  )
 
   const insertPastedTextOrFile = useNativeChatPastedTextFile({
     scopeKey: args.attachmentScopeKey ?? '',
@@ -36,7 +67,8 @@ export function useNativeChatComposerHandle(
     scopeEditor: args.attachmentScopeKey ? args.pastedTextEditor : null,
     resolveAttachmentOwner: args.resolveAttachmentOwner,
     insertTypedText: insertPastedText,
-    setNotice: args.setNotice
+    setNotice: args.setNotice,
+    longPasteThreshold: args.longPasteThreshold
   })
   const { handlePaste: handlePasteEvent, pasteFromClipboard } = useNativeChatComposerPaste({
     ...pasteArgs,

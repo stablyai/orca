@@ -1,12 +1,13 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   aiVaultSessionInScope,
   createAiVaultScopeCwdMatcher
 } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { PLUGIN_AGENT_SESSION_LIST_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api-agent-history'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { aiVaultSessionListCacheGeneration } from '../../../ai-vault/listing/cached-session-list'
 import { resolveAiVaultScopeRealPaths } from '../../../ai-vault/scope/session-scope-real-paths'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
@@ -15,28 +16,32 @@ import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
  * The parts of an Agent Session History row the plugin host reads. Previews, prompts and the
  * account home stay behind; `filePath` and `codexHome` stay in main, for resume preparation only.
  */
-const historyRow = z.object({
-  agent: z.string(),
-  sessionId: z.string(),
-  title: z.string(),
-  cwd: z.string().nullable(),
-  cwdAliases: z.array(z.string()).optional(),
-  branch: z.string().nullable(),
-  filePath: z.string(),
-  codexHome: z.string().nullable(),
-  executionHostId: z.string(),
-  createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
-  modifiedAt: z.string(),
-  messageCount: z.number(),
-  totalTokens: z.number(),
-  subagent: z.unknown().nullable().optional()
-})
-const historyAnswer = z.object({
-  sessions: z.array(z.unknown()),
-  fingerprint: z.string().optional(),
-  unchanged: z.literal(true).optional()
-})
+const historyRow = lazyZodSchema(() =>
+  z.object({
+    agent: z.string(),
+    sessionId: z.string(),
+    title: z.string(),
+    cwd: z.string().nullable(),
+    cwdAliases: z.array(z.string()).optional(),
+    branch: z.string().nullable(),
+    filePath: z.string(),
+    codexHome: z.string().nullable(),
+    executionHostId: z.string(),
+    createdAt: z.string().nullable(),
+    updatedAt: z.string().nullable(),
+    modifiedAt: z.string(),
+    messageCount: z.number(),
+    totalTokens: z.number(),
+    subagent: z.unknown().nullable().optional()
+  })
+)
+const historyAnswer = lazyZodSchema(() =>
+  z.object({
+    sessions: z.array(z.unknown()),
+    fingerprint: z.string().optional(),
+    unchanged: z.literal(true).optional()
+  })
+)
 
 export type PluginHistorySession = {
   agent: string

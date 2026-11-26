@@ -1,5 +1,5 @@
 import type { AgentLaunchResult } from '../../shared/agent-launch/contracts/agent-launch-intent'
-import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 
 /** A published surface and, separately, its prompt settlement, which never rejects. */
 export type AgentLaunchOpening = {

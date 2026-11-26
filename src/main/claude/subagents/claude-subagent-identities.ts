@@ -1,5 +1,5 @@
 import { ClaudeTaskInvocations } from '../background-tasks/claude-task-invocations'
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import type { ClaudeJournaledSubagents } from './claude-subagent-journaled-identities'
 import {
@@ -51,7 +51,11 @@ export class ClaudeSubagentIdentities {
   parentOf = (id: string, run?: string): string | undefined =>
     this.taskInvocations.parentOf(id, run)
 
-  observeSystemFrame(message: Record<string, unknown>): boolean {
+  observeFrame(message: Record<string, unknown>): boolean {
+    if (message.type !== 'system') {
+      this.aliasForkedCommandRef(message)
+      return false
+    }
     this.taskInvocations.observe(message)
     const frame = readClaudeSubagentTaskFrame(message)
     if (!frame) {
@@ -78,6 +82,21 @@ export class ClaudeSubagentIdentities {
       this.announce(frame.taskId, frame.toolUseId)
     }
     return true
+  }
+
+  /** A forked command's messages name `forked-command-<name>`, which its task frames never
+   *  mention; `agent_id` is that task's id. */
+  private aliasForkedCommandRef(message: Record<string, unknown>): void {
+    const ref = message.parent_tool_use_id
+    const agentId = message.agent_id
+    if (
+      typeof ref === 'string' &&
+      ref.startsWith('forked-command-') &&
+      typeof agentId === 'string' &&
+      this.taskInvocations.get(agentId)?.forkedCommand === true
+    ) {
+      this.ids.alias(ref, agentId)
+    }
   }
 
   dispose(): void {

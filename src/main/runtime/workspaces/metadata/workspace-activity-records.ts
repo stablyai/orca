@@ -1,14 +1,20 @@
-import { getRepoRegistrationHostIds } from '../../../../shared/repo-host-identity'
+import { getRepoRegistrationHostIds } from '../../../../shared/repository/repo-host-identity'
 import type { AgentPaneWorkspace } from '../../../agent-hooks/observations/agent-transition-detector'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type {
   SmartStampFields,
   SmartTier,
   SortStamps
 } from '../../../../shared/sidebar-list/sorting/sort-stamps'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { Repo } from '../../../../shared/repo-types'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget

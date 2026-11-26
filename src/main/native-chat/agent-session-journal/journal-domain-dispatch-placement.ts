@@ -3,6 +3,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import type { JournalDomainSubmissionTarget } from './journal-domain-submission-records'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalDomainDispatchItem = {
   item: AgentJournalRenderItem
@@ -23,7 +24,7 @@ export function readJournalDomainDispatchItem(
     .get(target.sessionId, target.epoch, itemId)
   return row
     ? {
-        item: JSON.parse(String(row.payload_json)),
+        item: readJournalStoredItem(db, [target.sessionId, target.epoch], row.payload_json),
         ordinal: Number(row.ordinal),
         hidden: Boolean(row.hidden),
         ownerFence: Number(row.owner_fence),

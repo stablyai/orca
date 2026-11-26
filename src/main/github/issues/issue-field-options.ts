@@ -1,7 +1,7 @@
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import {
   resolveGitHubRepoExecution,

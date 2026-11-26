@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   PluginDeclarativeProps,

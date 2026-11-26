@@ -2,7 +2,7 @@ import { runProcess } from '@orca/process-host'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
-} from '../../../shared/wsl-login-shell-command'
+} from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 
@@ -180,15 +180,4 @@ export function peekWslGuestEnvironment(
   distro: string | undefined
 ): WslGuestEnvironment | undefined {
   return resolved.get(cacheKey(distro))
-}
-
-/** Test-only: pretend a distro has already been probed. */
-export function seedWslGuestEnvironmentForTests(
-  distro: string | undefined,
-  environment: WslGuestEnvironment
-): void {
-  const key = cacheKey(distro)
-  inFlight.set(key, Promise.resolve(environment))
-  resolved.set(key, environment)
-  retryAfter.delete(key)
 }

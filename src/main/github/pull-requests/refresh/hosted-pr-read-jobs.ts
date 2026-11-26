@@ -3,7 +3,7 @@ import type {
   PRRefreshOutcome,
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { getPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { freshTimedPROutcome } from './pr-refresh-candidate-policy'
 import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'

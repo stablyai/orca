@@ -1,7 +1,7 @@
-import { constants, copyFileSync, existsSync } from 'node:fs'
+import { constants, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
+import { readEnvironmentRegistryFile } from './runtime-environment-store-observation'
 import {
   PersistedRuntimeEnvironmentSchema,
   type PersistedRuntimeEnvironment
@@ -101,16 +101,16 @@ export function readEnvironmentStoreRecords(
   options: EnvironmentStoreRecordsReadOptions = {}
 ): EnvironmentStoreRecords {
   const path = getEnvironmentStorePath(userDataPath)
-  if (!options.requireStoreFile && !existsSync(path)) {
-    return { environments: [], unreadable: [] }
-  }
   let text: string
   try {
-    hardenExistingSecureFile(path)
-    text = readNodeFileSyncWithinLimit(
-      path,
-      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
-    ).buffer.toString('utf8')
+    const read = readEnvironmentRegistryFile(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES)
+    if (!read) {
+      if (options.requireStoreFile) {
+        throw invalidEnvironmentStoreError(path)
+      }
+      return { environments: [], unreadable: [] }
+    }
+    text = read.buffer.toString('utf8')
   } catch {
     throw invalidEnvironmentStoreError(path)
   }
@@ -155,10 +155,14 @@ export function backUpBlankEnvironmentStore(userDataPath: string): void {
   const backupPath = `${path}.corrupt-${Date.now()}-${process.pid}`
   copyFileSync(path, backupPath, constants.COPYFILE_EXCL)
   hardenExistingSecureFile(backupPath)
-  console.warn(`[runtime-environments] ${path} held no data; kept a copy at ${backupPath}.`)
+  warnUnreadableEnvironmentState(`${path} held no data; kept a copy at ${backupPath}.`)
 }
 
 const warned = new Set<string>()
+let warningSink = (message: string): void => console.warn(`[runtime-environments] ${message}`)
+export function setEnvironmentStoreWarningSink(sink: (message: string) => void): void {
+  warningSink = sink
+}
 
 /** Logs once per distinct message so per-round-trip reads do not flood the log. */
 export function warnUnreadableEnvironmentState(message: string): void {
@@ -166,5 +170,5 @@ export function warnUnreadableEnvironmentState(message: string): void {
     return
   }
   warned.add(message)
-  console.warn(`[runtime-environments] ${message}`)
+  warningSink(message)
 }

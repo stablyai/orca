@@ -12,11 +12,11 @@ import {
   subscribeAntigravityChatSignIns,
   type AntigravityChatSignInView
 } from '../../runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
-} from '../../../../shared/antigravity-account-types'
+} from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 /** A running flow another client started: the host tells only its starter the id. */
 const otherClients = (flow: AntigravityChatSignInState | null): boolean =>
@@ -30,7 +30,7 @@ export function chatSignInLine(
   t: Translate = translate
 ): string | null {
   if (otherClients(flow)) {
-    return t('accounts.antigravity.chatOtherClient', 'Sign-in is in progress in another client.')
+    return t('accounts.antigravity.chatOtherWindow', 'Sign-in is in progress in another window.')
   }
   switch (flow?.phase) {
     case 'starting':
@@ -38,7 +38,10 @@ export function chatSignInLine(
     case 'waiting':
       return openFailed
         ? t('accounts.antigravity.chatOpenFailed', 'Copy the link and open it in your browser.')
-        : t('accounts.antigravity.chatWaiting', 'Finish signing in in your browser.')
+        : t(
+            'accounts.antigravity.chatFinishInBrowser',
+            'Finish in your browser, then paste the code.'
+          )
     case 'verifying':
       return t('accounts.antigravity.chatVerifying', 'Finishing sign-in…')
     // A settled flow only stands in until the host answers whether it is signed in.
@@ -75,12 +78,15 @@ function signInAction(
   return auth === 'signedIn' ? 'changeAccount' : 'signIn'
 }
 
+const subscribeToNothing = (): (() => void) => () => {}
+
 const NOT_FOLLOWED: AntigravityChatSignInView = {
   status: 'unknown',
   flow: null,
   auth: 'unknown',
   error: null,
-  openFailed: false
+  openFailed: false,
+  retryIntent: 'signIn'
 }
 
 export function useAntigravityChatSignIn(
@@ -99,7 +105,12 @@ export function useAntigravityChatSignIn(
   )
   const read = (): AntigravityChatSignInView =>
     owner ? readAntigravityChatSignIn(owner) : NOT_FOLLOWED
-  return useSyncExternalStore(subscribeAntigravityChatSignIns, read, read)
+  // Panes that follow no host (every non-Antigravity chat) skip this store's publications.
+  return useSyncExternalStore(
+    shown ? subscribeAntigravityChatSignIns : subscribeToNothing,
+    read,
+    read
+  )
 }
 
 /** Share host auth across Settings layouts; auth stays unknown until a chat or sign-in asks the host. */
@@ -107,7 +118,8 @@ export type AntigravityChatSignInControls = ReturnType<typeof useAntigravityChat
 
 export function useAntigravityChatSignInControls(props: {
   owner: RuntimeClientTarget
-  label: string
+  /** Names the host in a failed read's alert; omitted where no alert shows. */
+  label?: string
   disabled: boolean
 }) {
   const t = useTranslate()
@@ -122,16 +134,18 @@ export function useAntigravityChatSignInControls(props: {
   const failed = t('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')
   const error = view.error === null ? null : view.error || failed
   const copyFailed = t('accounts.antigravity.chatCopyFailed', 'Could not copy the link.')
-  const readFailed = t(
-    'accounts.antigravity.chatReadFailed',
-    'Could not check the sign-in on {{host}}.',
-    { host: label }
-  )
+  const readFailed =
+    label === undefined
+      ? null
+      : t('accounts.antigravity.chatReadFailed', 'Could not check the sign-in on {{host}}.', {
+          host: label
+        })
   const ownFlow = running(flow) && flow.flowId !== null
   const action = signInAction(flow, auth, error)
   const line = status === 'known' ? chatSignInLine(flow, auth, openFailed, t) : null
   return {
     flow,
+    known: status === 'known',
     auth: status === 'known' ? auth : 'unknown',
     signingIn: running(flow),
     ownFlow,
@@ -148,11 +162,14 @@ export function useAntigravityChatSignInControls(props: {
     copyLabel: t('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
     signInDisabled: props.disabled || pending || status !== 'known' || otherClients(flow),
     recoveryDisabled: props.disabled || pending || otherClients(flow),
-    start: () => act(() => startAntigravityChatSignIn(owner)),
+    start: () =>
+      act(() => startAntigravityChatSignIn(owner, action === 'retry' ? view.retryIntent : action)),
+    /** Signs agy in to another Google account; the host saves both logins. */
+    addAccount: () => act(() => startAntigravityChatSignIn(owner, 'changeAccount')),
     cancel: () => act(() => cancelAntigravityChatSignIn(owner)),
-    send: (callbackUrl: string, refused: (message: string) => void) =>
+    send: (pasted: string, refused: (message: string) => void) =>
       act(async () => {
-        const refusal = await completeAntigravityChatSignIn(owner, callbackUrl)
+        const refusal = await completeAntigravityChatSignIn(owner, pasted)
         if (refusal !== null) {
           refused(refusal || failed)
         }

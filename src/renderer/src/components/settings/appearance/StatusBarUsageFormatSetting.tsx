@@ -1,8 +1,8 @@
 import type React from 'react'
 import { useMemo, useState } from 'react'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
@@ -94,8 +94,8 @@ export function StatusBarUsageFormatSetting({
     [
       '{buckets}',
       t(
-        'auto.components.settings.StatusBarUsageFormatSetting.placeholder.buckets',
-        'Gemini model buckets'
+        'auto.components.settings.StatusBarUsageFormatSetting.placeholder.usagePools',
+        'named usage pools, e.g. Antigravity models'
       )
     ],
     [

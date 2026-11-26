@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { cn } from '@/lib/class-names'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
@@ -17,27 +17,39 @@ import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-po
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WorkspacePort } from '../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getLocalWorkspacePortSections,
   shouldShowLocalWorkspacePortSections
 } from './local-workspace-port-sections'
+import { useQuietPortScan } from '@/lib/workspace-ports/use-quiet-port-scan'
 import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
 import { SshForwardedPortsSection } from './ssh-forwarded-ports-section'
+import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
+import { portForwardKey, portForwardRemoteHost } from './port-forward-remote-host'
+import { portForwardOwnerKey, type PortForwardOwner } from './port-forward-owner'
+import type { PortForwardEntry } from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
+
+const NO_FORWARDS: readonly PortForwardEntry[] = []
 
 export function LocalWorkspacePortsPanel({
   isVisible,
   runtimeTarget,
-  sshForwardTargetId = null
+  sshForwardTargetId = null,
+  forwardEnvironmentId = null
 }: {
   isVisible: boolean
   /** The endpoint that owns the active workspace, even if the sidebar is focused elsewhere. */
   runtimeTarget: RuntimeClientTarget | null
   /** A managed server's SSH host, whose connection carries this client's forwards. */
   sshForwardTargetId?: string | null
+  /** A paired server whose own connection carries this client's forwards. */
+  forwardEnvironmentId?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const activeWorktree = useActiveWorktree()
@@ -51,6 +63,38 @@ export function LocalWorkspacePortsPanel({
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
+  const [forwardDialog, setForwardDialog] = useState<PortForwardDialogState>({ mode: 'closed' })
+  const forwardOwner = useMemo<PortForwardOwner | null>(
+    () =>
+      sshForwardTargetId
+        ? { kind: 'ssh', targetId: sshForwardTargetId }
+        : forwardEnvironmentId
+          ? { kind: 'runtime', environmentId: forwardEnvironmentId }
+          : null,
+    [forwardEnvironmentId, sshForwardTargetId]
+  )
+  const forwards = useAppStore((s) =>
+    forwardOwner
+      ? (s.portForwardsByConnection[portForwardOwnerKey(forwardOwner)] ?? NO_FORWARDS)
+      : NO_FORWARDS
+  )
+  // Older servers have no network.portForward, and web clients can't listen here, so neither offers Forward.
+  const serverForwards = useRuntimeEnvironmentCapability(
+    window.api.runtimeEnvironments.portForwards ? forwardEnvironmentId : null,
+    NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY
+  )
+  const sshConnected = useAppStore(
+    (s) =>
+      sshForwardTargetId !== null &&
+      s.sshConnectionStates.get(sshForwardTargetId)?.status === 'connected'
+  )
+  const canForward = forwardOwner?.kind === 'ssh' ? sshConnected : serverForwards
+  const showForwarded =
+    forwardOwner !== null && (forwardOwner.kind === 'ssh' || serverForwards || forwards.length > 0)
+  const forwardedKeys = useMemo(
+    () => new Set(forwards.map((entry) => portForwardKey(entry.remoteHost, entry.remotePort))),
+    [forwards]
+  )
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     other: true,
     external: true
@@ -103,6 +147,24 @@ export function LocalWorkspacePortsPanel({
 
   // Scope WorkspacePortScanner's shared 30s results instead of starting another poll loop.
   const displayScan = isVisible && scanKey ? (scansByKey[scanKey] ?? null) : null
+  const hasDisplayScan = displayScan !== null
+  const firstScanRequestedKeyRef = useRef<string | null>(null)
+  const { pending: firstScanPending, scan: scanFirstView } = useQuietPortScan()
+
+  // Background scans publish silently, so opening the panel before any result scans once in view.
+  useEffect(() => {
+    if (
+      !isVisible ||
+      !runtimeTarget ||
+      !scanKey ||
+      hasDisplayScan ||
+      firstScanRequestedKeyRef.current === scanKey
+    ) {
+      return
+    }
+    firstScanRequestedKeyRef.current = scanKey
+    scanFirstView(runtimeTarget)
+  }, [isVisible, runtimeTarget, scanKey, hasDisplayScan, scanFirstView])
 
   const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((current) => ({ ...current, [sectionId]: !current[sectionId] }))
@@ -178,6 +240,29 @@ export function LocalWorkspacePortsPanel({
     [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
   )
 
+  const handleForwardPort = useCallback(
+    (port: WorkspacePort) => {
+      if (!forwardOwner) {
+        return
+      }
+      setForwardDialog({
+        mode: 'add',
+        owner: forwardOwner,
+        defaults: {
+          remotePort: port.port,
+          remoteHost: portForwardRemoteHost(port.connectHost),
+          label: port.processName
+        }
+      })
+    },
+    [forwardOwner]
+  )
+  const isPortForwarded = useCallback(
+    (port: WorkspacePort) => forwardedKeys.has(portForwardKey(port.connectHost, port.port)),
+    [forwardedKeys]
+  )
+  const onForwardPort = canForward ? handleForwardPort : undefined
+
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
     () => getLocalWorkspacePortSections(displayScan, activeRepoId, activeWorktree?.id),
     [activeRepoId, activeWorktree?.id, displayScan]
@@ -226,7 +311,13 @@ export function LocalWorkspacePortsPanel({
         </Tooltip>
       </div>
 
-      {sshForwardTargetId && <SshForwardedPortsSection connectionId={sshForwardTargetId} />}
+      {forwardOwner && showForwarded && (
+        <SshForwardedPortsSection
+          owner={forwardOwner}
+          canAdd={canForward}
+          onOpenDialog={setForwardDialog}
+        />
+      )}
 
       {displayScan?.unavailableReason && (
         <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
@@ -248,7 +339,7 @@ export function LocalWorkspacePortsPanel({
             title={t('auto.components.right.sidebar.PortsPanel.935dda7718', 'Active Workspace')}
             ports={activePorts}
             emptyText={
-              refreshing && !displayScan
+              (refreshing || firstScanPending) && !displayScan
                 ? t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
                 : t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
             }
@@ -257,6 +348,8 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            onForwardPort={onForwardPort}
+            isPortForwarded={isPortForwarded}
           />
           <LocalPortSection
             id="other"
@@ -267,6 +360,8 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            onForwardPort={onForwardPort}
+            isPortForwarded={isPortForwarded}
           />
           <LocalPortSection
             id="external"
@@ -277,6 +372,8 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            onForwardPort={onForwardPort}
+            isPortForwarded={isPortForwarded}
           />
         </>
       )}
@@ -295,6 +392,11 @@ export function LocalWorkspacePortsPanel({
         )}
 
       <LocalPortDetailsDialog port={detailsPort} onClose={() => setDetailsPort(null)} />
+      {/* Stays mounted across workspace switches; the open dialog keeps its pinned target. */}
+      <SshPortForwardDialog
+        state={forwardDialog}
+        onClose={() => setForwardDialog({ mode: 'closed' })}
+      />
     </div>
   )
 }

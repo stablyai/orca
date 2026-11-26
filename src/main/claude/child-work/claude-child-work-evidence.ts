@@ -1,4 +1,4 @@
-import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../../shared/orca-cli-invocations'
+import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../../shared/cli/orca-cli-invocations'
 import type {
   AgentChildWorkKind,
   AgentChildWorkOperation,
@@ -10,7 +10,7 @@ import type {
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from '../background-tasks/claude-background-task-frames'
 import type { ClaudeSession } from '../structured/claude-structured-session-state'
-import type { ClaudeStructuredSessionEvent } from '../structured/claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../structured/lifecycle/claude-structured-session-event'
 import { deriveToolInputPreview } from '../../../shared/agent-hook-listener/tool-input-preview'
 import {
   claudeRecord,

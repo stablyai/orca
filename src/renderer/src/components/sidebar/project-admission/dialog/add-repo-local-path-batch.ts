@@ -1,15 +1,24 @@
 import { useEffect, type RefObject } from 'react'
 import { toast } from 'sonner'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WslMoveRowRef } from '../../../../../../shared/wsl-move/wsl-move-driver-types'
 import { showSkippedBatchFoldersToast } from '../completion/add-repo-skipped-folders-toast'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 
+/** What a paused add added; `imported` lists every repo a nested import added, `repo` included. */
+export type PausedLocalPathAdd = { repo: Repo; imported?: readonly WslMoveRowRef[] }
+
 export type LocalPathAddResult =
   | { status: 'completed'; repo: Repo }
-  | { status: 'cancelled' | 'paused' | 'skipped' | 'failed' }
+  | {
+      status: 'paused'
+      /** Set when the add waits on "Open as Folder" or nested review: the project it added, or null. */
+      projectAdded?: Promise<PausedLocalPathAdd | null>
+    }
+  | { status: 'cancelled' | 'skipped' | 'failed' }
 
 export type LocalPathAddMode = 'single' | 'batch'
 
@@ -125,6 +134,53 @@ async function runPickedLocalPathsBatch({
   }
 }
 
+/** Holds one local path to offer its WSL distro as a host; `isCurrent` turns false on close. */
+export type OfferWslHost = (
+  path: string,
+  source: AddRepoExistingWorkspaceSource,
+  isCurrent: () => boolean
+) => Promise<boolean>
+
+/** True when the offer held `path`, or the add it answered for was closed meanwhile. */
+export async function heldByWslHostOffer(
+  offerWslHost: OfferWslHost | undefined,
+  path: string,
+  isCurrent: () => boolean
+): Promise<boolean> {
+  return (await offerWslHost?.(path, 'local_folder_picker', isCurrent)) === true || !isCurrent()
+}
+
+/** Adds a folder dropped onto the dialog once, unless the WSL host offer holds it. */
+export function useDroppedLocalPathAutoAdd({
+  isOpen,
+  droppedLocalPath,
+  droppedLocalPathHandledRef,
+  localAddGenRef,
+  offerWslHost,
+  addPath
+}: {
+  isOpen: boolean
+  droppedLocalPath: string
+  droppedLocalPathHandledRef: RefObject<string | null>
+  localAddGenRef: RefObject<number>
+  offerWslHost?: OfferWslHost
+  addPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
+}): void {
+  useEffect(() => {
+    if (!isOpen || !droppedLocalPath || droppedLocalPathHandledRef.current === droppedLocalPath) {
+      return
+    }
+    droppedLocalPathHandledRef.current = droppedLocalPath
+    const gen = localAddGenRef.current
+    void (async () => {
+      const isCurrent = (): boolean => gen === localAddGenRef.current
+      if (!(await heldByWslHostOffer(offerWslHost, droppedLocalPath, isCurrent))) {
+        await addPath(droppedLocalPath, 'local_folder_picker')
+      }
+    })()
+  }, [addPath, droppedLocalPath, droppedLocalPathHandledRef, isOpen, localAddGenRef, offerWslHost])
+}
+
 export function usePickedLocalPathsAutoAdd({
   isOpen,
   pickedLocalPaths,
@@ -140,7 +196,7 @@ export function usePickedLocalPathsAutoAdd({
   pickedLocalPaths: readonly string[] | null
   pickedLocalPathsHandledRef: RefObject<readonly string[] | null>
   localAddGenRef: RefObject<number>
-  offerWslHost?: (path: string, source: AddRepoExistingWorkspaceSource) => boolean
+  offerWslHost?: OfferWslHost
   addPaths: (
     paths: readonly string[],
     source: AddRepoExistingWorkspaceSource,
@@ -158,22 +214,27 @@ export function usePickedLocalPathsAutoAdd({
       return
     }
     pickedLocalPathsHandledRef.current = pickedLocalPaths
-    if (
-      pickedLocalPaths.length === 1 &&
-      offerWslHost?.(pickedLocalPaths[0], 'local_folder_picker')
-    ) {
-      return
-    }
-    const gen = ++localAddGenRef.current
-    setIsAdding(true)
-    void runPickedLocalPathsBatch({
-      paths: pickedLocalPaths,
-      gen,
-      isCurrentGen: () => gen === localAddGenRef.current,
-      addPaths,
-      onUnsettled,
-      onFinally: onFinishAttempt
-    })
+    const offerGen = localAddGenRef.current
+    void (async () => {
+      const isCurrent = (): boolean => offerGen === localAddGenRef.current
+      if (
+        pickedLocalPaths.length === 1
+          ? await heldByWslHostOffer(offerWslHost, pickedLocalPaths[0], isCurrent)
+          : !isCurrent()
+      ) {
+        return
+      }
+      const gen = ++localAddGenRef.current
+      setIsAdding(true)
+      await runPickedLocalPathsBatch({
+        paths: pickedLocalPaths,
+        gen,
+        isCurrentGen: () => gen === localAddGenRef.current,
+        addPaths,
+        onUnsettled,
+        onFinally: onFinishAttempt
+      })
+    })()
   }, [
     addPaths,
     isOpen,

@@ -1,5 +1,5 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { canResumeAiVaultSessionOnTarget } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
@@ -14,7 +14,7 @@ import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import '../session-list/ai-vault-session-worktree'
 import { aiVaultResumeInSessionWorkspaceLabel } from '../session-list/ai-vault-session-worktree-affordances'
 import {

@@ -2,8 +2,11 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { SecretStore } from '../../../shared/secret-store'
-import { _resetSecretStoreForTests, setSecretStore } from '../../../shared/secret-store'
+import type { SecretStore } from '../../../shared/secure-storage/secret-store'
+import {
+  _resetSecretStoreForTests,
+  setSecretStore
+} from '../../../shared/secure-storage/secret-store'
 import { readStoredCredentialToken } from '../../credentials/integration-credential-file'
 import { migratePlaintextCredentials } from './orcad-plaintext-credential-migration'
 import { orcadSecretStateFileName } from './orcad-secret-key-record'
@@ -37,12 +40,12 @@ describe('migratePlaintextCredentials', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('seals a legacy plaintext token in place without losing it, and tightens its mode', () => {
+  it('seals a legacy plaintext token in place without losing it, and tightens its mode', async () => {
     const path = join(dir, 'linear-token.enc')
     writeFileSync(path, 'lin_api_plaintext', 'utf8')
     chmodSync(path, 0o644)
 
-    expect(migratePlaintextCredentials(store, [{ path, raw: true }], log)).toEqual({
+    expect(await migratePlaintextCredentials(store, [{ path, raw: true }], log)).toEqual({
       sealed: 1,
       failed: 0
     })
@@ -55,12 +58,12 @@ describe('migratePlaintextCredentials', () => {
     expect(logs.join('\n')).not.toContain('lin_api_plaintext')
   })
 
-  it('rewrites a plaintext envelope as an encrypted one', () => {
+  it('rewrites a plaintext envelope as an encrypted one', async () => {
     const path = join(dir, 'minimax-api-key.enc')
     const prefix = 'orca-minimax-api-key:v1:'
     writeFileSync(path, `${prefix}plaintext:${Buffer.from('mm-key').toString('base64')}`)
 
-    migratePlaintextCredentials(store, [{ path, envelopePrefix: prefix }], log)
+    await migratePlaintextCredentials(store, [{ path, envelopePrefix: prefix }], log)
     const text = readFileSync(path, 'utf8')
     expect(text.startsWith(`${prefix}encrypted:`)).toBe(true)
     expect(
@@ -68,7 +71,7 @@ describe('migratePlaintextCredentials', () => {
     ).toBe('mm-key')
   })
 
-  it('leaves sealed files, foreign ciphertext, and the speech JSON format alone', () => {
+  it('leaves sealed files, foreign ciphertext, and the speech JSON format alone', async () => {
     const sealedPath = join(dir, 'sealed.enc')
     const sealed = store.encryptString('already')
     writeFileSync(sealedPath, sealed)
@@ -77,7 +80,7 @@ describe('migratePlaintextCredentials', () => {
     writeFileSync(foreignPath, foreign)
 
     expect(
-      migratePlaintextCredentials(
+      await migratePlaintextCredentials(
         store,
         [
           { path: sealedPath, raw: true },
@@ -105,7 +108,7 @@ describe('migratePlaintextCredentials', () => {
       machineIdentity: () => otherMachine
     })
 
-    expect(migratePlaintextCredentials(locked, [{ path, raw: true }], log)).toEqual({
+    expect(await migratePlaintextCredentials(locked, [{ path, raw: true }], log)).toEqual({
       sealed: 0,
       failed: 1
     })

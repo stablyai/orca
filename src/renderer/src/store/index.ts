@@ -1,3 +1,6 @@
+import { logActiveWorkspaceChanges } from './active-workspace-change-log'
+import { bindAppRuntimeStatusStore } from './slices/runtime-status/views/app-runtime-status-binding'
+import { withStatusTransaction } from './status-transaction/status-transaction-boundary'
 import { withBrowserInitializationPresentations } from './slices/browser/hosts/browser-initialization-presentation-store'
 import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
 import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
@@ -33,7 +36,7 @@ import { createSshSlice } from './slices/ssh/create-ssh-slice'
 import { createRuntimeEnvironmentSshSlice } from './slices/ssh/runtime-environment-ssh'
 import { createWslHostsSlice } from './slices/wsl/wsl-hosts'
 import { createAgentStatusSlice } from './slices/agent-status/agent-status'
-import { createPaneForegroundAgentSlice } from './slices/agent-status/pane-foreground-agent'
+import { createPaneForegroundAgentSlice } from './slices/agent-status/pane-authority/pane-foreground-agent'
 import { createDiffCommentsSlice } from './slices/diff-comments/create-diff-comments-slice'
 import { createDetectedAgentsSlice } from './slices/agent-inventory/create-detected-agents-slice'
 import { createRuntimeDetectedAgentsSlice } from './slices/agent-inventory/runtime-detected-agents'
@@ -52,10 +55,11 @@ import { createNewIssueDraftSlice } from './slices/task-creation/new-issue-draft
 import { createFeedbackDraftSlice } from './slices/feedback/feedback-draft'
 import { createTaskCreationDraftsSlice } from './slices/task-creation/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/runtime-host-updates/remote-server-updates'
+import { createAgentCliUpdatesSlice } from './slices/runtime-host-updates/agent-cli-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminals/quick-commands/terminal-quick-command-hosts'
-import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-session-launch-directories'
-import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-chat-slept-at'
-import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
+import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-sessions/structured-session-launch-directories'
+import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import { createEphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
@@ -66,13 +70,14 @@ import {
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/browser/navigation/http-link-routing'
 import { registerAppHttpLinkStateAccessor } from '@/lib/browser/navigation/app-http-link-open'
+import { registerServerPortForwardStateAccessor } from '@/lib/workspace-ports/server-port-forward-support'
 import { installStoreListenerCensus } from './diagnostics/store-listener-census'
 import { installSettledSortEpoch } from './slices/ui/settled-sort-epoch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { withReactCommitCascadeWriteProbe } from './diagnostics/react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './diagnostics/store-identity-churn-probe'
 import { withEditorBufferRecords } from './slices/editor/buffers/editor-buffer-record-lifecycle'
-import { withAgentConversationRetention } from './slices/agent-status/agent-conversation-retention'
+import { withAgentConversationRetention } from './slices/agent-status/conversation/agent-conversation-retention'
 import { attachEditorBufferIdentityEvents } from './slices/editor/buffers/editor-buffer-identity-events'
 import {
   registerRendererMemoryProfileContributor,
@@ -94,78 +99,83 @@ const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) 
 // Presentation ownership follows accepted buffer reconciliation; probes see the caller’s patch.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
-  withBrowserInitializationPresentations(
-    withEditorBufferRecords(
-      withAppStoreWritePolicies(
-        withReactCommitCascadeWriteProbe((...a) => {
-          // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
-          // Switch point: the stamp-sorted list reads no settled epoch.
-          if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-            installSettledSortEpoch(a[2])
-          }
-          // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
-          installStoreListenerCensus(a[2])
-          return {
-            ...createRepoSlice(...a),
-            ...createSparsePresetsSlice(...a),
-            ...createWorktreeSlice(...a),
-            ...createTerminalSlice(...a),
-            ...createTabsSlice(...a),
-            ...createUISlice(...a),
-            ...createSettingsSlice(...a),
-            ...createKeybindingsSlice(...a),
-            ...createGitHubSlice(...a),
-            ...createHostedReviewSlice(...a),
-            ...createLinearSlice(...a),
-            ...createPreflightSlice(...a),
-            ...createJiraSlice(...a),
-            ...createEditorSlice(...a),
-            ...createStatsSlice(...a),
-            ...createMemorySlice(...a),
-            ...createWorkspaceSpaceSlice(...a),
-            ...createClaudeUsageSlice(...a),
-            ...createCodexUsageSlice(...a),
-            ...createOpenCodeUsageSlice(...a),
-            ...createMuseUsageSlice(...a),
-            ...createBrowserSlice(...a),
-            ...createRateLimitSlice(...a),
-            ...createSshSlice(...a),
-            ...createRuntimeEnvironmentSshSlice(...a),
-            ...createWslHostsSlice(...a),
-            ...createAgentStatusSlice(...a),
-            ...createPaneForegroundAgentSlice(...a),
-            ...createDiffCommentsSlice(...a),
-            ...createDetectedAgentsSlice(...a),
-            ...createRuntimeDetectedAgentsSlice(...a),
-            ...createWorktreeNavHistorySlice(...a),
-            ...createDictationSlice(...a),
-            ...createWorkspaceCleanupSlice(...a),
-            ...createWorkspaceCleanupBrowseSlice(...a),
-            ...createRuntimeStatusSlice(...a),
-            ...createPullRequestGenerationSlice(...a),
-            ...createCommitMessageGenerationSlice(...a),
-            ...createPinnedTabCloseConfirmSlice(...a),
-            ...createRecentlyClosedTerminalTabsSlice(...a),
-            ...createRecentlyClosedTabsSlice(...a),
-            ...createOrcaProfilesSlice(...a),
-            ...createNewIssueDraftSlice(...a),
-            ...createFeedbackDraftSlice(...a),
-            ...createTaskCreationDraftsSlice(...a),
-            ...createRemoteServerUpdatesSlice(...a),
-            ...createTerminalQuickCommandHostsSlice(...a),
-            ...createStructuredSessionLaunchDirectorySlice(...a),
-            ...createStructuredChatSleptAtSlice(...a),
-            ...createStructuredChatCompanionWritesSlice(...a),
-            ...createWorkspaceAttentionSlice(...a),
-            ...createEphemeralVmLifecycleSlice(...a)
-          }
-        })
+  withStatusTransaction(
+    withBrowserInitializationPresentations(
+      withEditorBufferRecords(
+        withAppStoreWritePolicies(
+          withReactCommitCascadeWriteProbe((...a) => {
+            // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
+            // Switch point: the stamp-sorted list reads no settled epoch.
+            if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+              installSettledSortEpoch(a[2])
+            }
+            // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
+            installStoreListenerCensus(a[2])
+            return {
+              ...createRepoSlice(...a),
+              ...createSparsePresetsSlice(...a),
+              ...createWorktreeSlice(...a),
+              ...createTerminalSlice(...a),
+              ...createTabsSlice(...a),
+              ...createUISlice(...a),
+              ...createSettingsSlice(...a),
+              ...createKeybindingsSlice(...a),
+              ...createGitHubSlice(...a),
+              ...createHostedReviewSlice(...a),
+              ...createLinearSlice(...a),
+              ...createPreflightSlice(...a),
+              ...createJiraSlice(...a),
+              ...createEditorSlice(...a),
+              ...createStatsSlice(...a),
+              ...createMemorySlice(...a),
+              ...createWorkspaceSpaceSlice(...a),
+              ...createClaudeUsageSlice(...a),
+              ...createCodexUsageSlice(...a),
+              ...createOpenCodeUsageSlice(...a),
+              ...createMuseUsageSlice(...a),
+              ...createBrowserSlice(...a),
+              ...createRateLimitSlice(...a),
+              ...createSshSlice(...a),
+              ...createRuntimeEnvironmentSshSlice(...a),
+              ...createWslHostsSlice(...a),
+              ...createAgentStatusSlice(...a),
+              ...createPaneForegroundAgentSlice(...a),
+              ...createDiffCommentsSlice(...a),
+              ...createDetectedAgentsSlice(...a),
+              ...createRuntimeDetectedAgentsSlice(...a),
+              ...createWorktreeNavHistorySlice(...a),
+              ...createDictationSlice(...a),
+              ...createWorkspaceCleanupSlice(...a),
+              ...createWorkspaceCleanupBrowseSlice(...a),
+              ...createRuntimeStatusSlice(...a),
+              ...createPullRequestGenerationSlice(...a),
+              ...createCommitMessageGenerationSlice(...a),
+              ...createPinnedTabCloseConfirmSlice(...a),
+              ...createRecentlyClosedTerminalTabsSlice(...a),
+              ...createRecentlyClosedTabsSlice(...a),
+              ...createOrcaProfilesSlice(...a),
+              ...createNewIssueDraftSlice(...a),
+              ...createFeedbackDraftSlice(...a),
+              ...createTaskCreationDraftsSlice(...a),
+              ...createRemoteServerUpdatesSlice(...a),
+              ...createAgentCliUpdatesSlice(...a),
+              ...createTerminalQuickCommandHostsSlice(...a),
+              ...createStructuredSessionLaunchDirectorySlice(...a),
+              ...createStructuredChatSleptAtSlice(...a),
+              ...createStructuredChatCompanionWritesSlice(...a),
+              ...createWorkspaceAttentionSlice(...a),
+              ...createEphemeralVmLifecycleSlice(...a)
+            }
+          })
+        ),
+        import.meta.env.DEV || e2eConfig.exposeStore
       ),
       import.meta.env.DEV || e2eConfig.exposeStore
-    ),
-    import.meta.env.DEV || e2eConfig.exposeStore
+    )
   )
 )
+
+bindAppRuntimeStatusStore(useAppStore)
 
 registerTerminalNoticeShutdownReader(
   (ptyId) => (useAppStore.getState().pendingPtyShutdownIds[ptyId] ?? 0) > 0
@@ -184,6 +194,7 @@ registerHttpLinkGroupActionAvailability((request) =>
   canOfferHttpLinkGroupAction(useAppStore.getState(), request)
 )
 registerAppHttpLinkStateAccessor(() => useAppStore.getState())
+registerServerPortForwardStateAccessor(() => useAppStore.getState())
 attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
@@ -198,17 +209,26 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
       outcome.status === 'failed' ||
       (outcome.status === 'refused' && !request.linkContext.linkIntent?.targetGroupId)
     ) {
-      const { intentPresentation } =
+      const { intentPresentation, openFailure } =
         await import('@/lib/browser/workspace/workspace-browser-tab-presentation')
-      throw new Error(intentPresentation(request.intent, request.url).error)
+      throw openFailure(
+        intentPresentation(request.intent, request.url).error,
+        `link open ${outcome.status}`,
+        undefined,
+        outcome.status === 'refused'
+          ? { kind: 'link-blocked' }
+          : outcome.status === 'failed' && outcome.cause === 'client-create-rejected'
+            ? { kind: 'host-error', stage: 'create', code: 'client_create_rejected' }
+            : null
+      )
     }
     if (
       request.linkContext.linkIntent?.targetGroupId &&
       (outcome.status === 'refused' || outcome.status === 'unsupported')
     ) {
-      const { showOpenInGroupRefusedToast } =
+      const { showLinkOpenInGroupRefusedToast } =
         await import('@/components/terminal-pane/links/files/terminal-file-open-in-group-toast')
-      showOpenInGroupRefusedToast(request.url)
+      showLinkOpenInGroupRefusedToast()
     }
     return outcome.status === 'opened' ? outcome.result.browserPageId : null
   }
@@ -229,6 +249,9 @@ registerRendererMemoryProfileContributor('storeKB', () =>
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>
   testWindow.__store = useAppStore
+  if (import.meta.env.DEV) {
+    logActiveWorkspaceChanges(useAppStore)
+  }
   if (e2eConfig.exposeStore) {
     testWindow.__webRuntimeSessionE2E = {
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>

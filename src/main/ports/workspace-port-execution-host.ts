@@ -2,13 +2,13 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import type {
   WorkspacePortHostKillRequest,
   WorkspacePortHostScanResult,
   WorkspacePortKillResult,
   WorkspacePortProbe
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import { killWorkspacePort, scanWorkspacePortProbes } from './workspace-port-ownership'
 
 export type WorkspacePortExecutionHostDeps = {

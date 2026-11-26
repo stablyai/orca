@@ -1,7 +1,7 @@
 import { codexRowAfterQuestionSkip } from '../../../shared/agent-hook-listener/providers/codex/codex-question-skip'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/native-chat/input/questions/codex-async-question-input'
 import { AgentHookServerStatusInference } from './server-status-inference'
 import { isValidPaneKey } from './server-status-identity'
 import type { EnrichedAgentHookEventPayload } from './server-types'

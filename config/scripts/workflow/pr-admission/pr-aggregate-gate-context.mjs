@@ -24,6 +24,14 @@ export function compileAggregateExpression(expression, contexts = ['needs']) {
     ).evaluate()
 }
 
+// Jobs can share a selector, so read each job's selector variable from its check_job call.
+const aggregateJobSelectors = new Map(
+  [...aggregateShell.run.matchAll(/^\s*check_job (\S+) "\$\w+" "\$(\w+)"$/gm)].map((match) => [
+    match[1],
+    match[2]
+  ])
+)
+
 export const aggregateShouldRun = compileAggregateExpression(aggregateJob.if, ['needs', 'github'])
 const aggregateEnvironmentExpressions = Object.fromEntries(
   Object.entries(aggregateShell.env).map(([name, expression]) => [
@@ -47,18 +55,12 @@ export function aggregateNeeds(selected = 'true', overrides = {}) {
     ...Object.fromEntries(aggregateSelectors.map((job) => [job, selected])),
     ...overrides
   }
-  const needs = {
-    code_paths: { result: 'success', outputs },
-    ...Object.fromEntries(
-      aggregateRequiredJobs.map((job) => [
-        job,
-        { result: outputs[job] === 'true' ? 'success' : 'skipped' }
-      ])
-    )
+  const needs = { code_paths: { result: 'success', outputs } }
+  for (const job of aggregateRequiredJobs) {
+    const shouldRun = aggregateEnvironmentExpressions[aggregateJobSelectors.get(job)]
+    needs[job] = {
+      result: shouldRun?.({ needs }).coerceString() === 'true' ? 'success' : 'skipped'
+    }
   }
-  needs.preflight.result =
-    aggregateEnvironmentExpressions.PREFLIGHT_SHOULD_RUN({ needs }).coerceString() === 'true'
-      ? 'success'
-      : 'skipped'
   return needs
 }

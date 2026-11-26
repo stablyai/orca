@@ -1,4 +1,4 @@
-import type { OrcadManagedStopRequest } from '../../../../shared/orcad-stop-request'
+import type { OrcadManagedStopRequest } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { persistOrcadDaemonRetirementRecord } from './orcad-completed-stop-receipt'
 import type { OrcadDaemonRetirement } from '../../daemon/orcad-daemon-retirement'
 import { stopOrcadAutomationScheduler } from '../../host-runtime/orcad-automations'

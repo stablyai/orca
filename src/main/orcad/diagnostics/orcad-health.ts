@@ -1,5 +1,5 @@
 // RPC readiness cannot prove terminal health; cross the daemon socket boundary for its own self-test.
-import { hashOrcadLauncher } from '../../../shared/orcad-build-identity'
+import { hashOrcadLauncher } from '../../../shared/remote-runtime/orcad-distribution/orcad-build-identity'
 import {
   confirmPtyProcessCeiling,
   type PtyProcessCeilingState
@@ -13,9 +13,9 @@ import {
   readDaemonPidRecord
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { OrcadProfileStateAuthoritySelection } from '../profile-state/orcad-profile-state-telemetry'
-import { ORCAD_STOP_REQUESTS_CAPABILITY } from '../../../shared/orcad-stop-request'
-import type { OrcadIdleStopRecord } from '../../../shared/orcad-idle-exit'
-import type { OrcadUnexpectedExit } from '../../../shared/orcad-unexpected-exit'
+import { ORCAD_STOP_REQUESTS_CAPABILITY } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
+import type { OrcadIdleStopRecord } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
+import type { OrcadUnexpectedExit } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-unexpected-exit'
 import { orcadPreviousUnexpectedExit } from '../host-lifecycle/orcad-unexpected-exit'
 
 /** Distinguish real PTY spawn coverage from handshake-only platform probes. */

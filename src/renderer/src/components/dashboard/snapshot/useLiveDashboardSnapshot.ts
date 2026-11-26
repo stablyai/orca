@@ -1,9 +1,10 @@
 import { useMemo, useRef } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import type { DashboardSnapshot } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardSnapshot } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
-import { createWorktreeAgentRowsCache } from '../rows/worktree-agent-rows-cache'
+import { createDashboardSnapshotReuse } from './dashboard-snapshot-reuse'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -12,17 +13,17 @@ import {
 
 /** Build in-window snapshots from the store; pop-out windows instead receive the bridge’s serialized version of the same builder. */
 export function useLiveDashboardSnapshot(): DashboardSnapshot {
-  const rowsCacheRef = useRef<ReturnType<typeof createWorktreeAgentRowsCache>>(undefined!)
-  rowsCacheRef.current ??= createWorktreeAgentRowsCache()
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const statusProjection = useAppStore((s) => s.agentStatusByPaneKey.projection)
+  const statusCursor = useAppStore((s) => s.agentStatusByPaneKey.projection.changeCursor())
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
     (s) => s.runtimeAgentOrchestrationByPaneKey
   )
+  const remoteAgentOrchestrationByHost = useAppStore((s) => s.remoteAgentOrchestrationByHost)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
@@ -40,7 +41,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const restoredRuntimeHostIdByWorkspaceSessionKey = useAppStore(
     (s) => s.restoredRuntimeHostIdByWorkspaceSessionKey
   )
@@ -54,6 +55,9 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
 
+  const reuse = useRef<ReturnType<typeof createDashboardSnapshotReuse>>(undefined!)
+  reuse.current ??= createDashboardSnapshotReuse()
+
   return useMemo(
     // Read the clock when the freshness epoch invalidates this memo, matching row derivation.
     () =>
@@ -66,9 +70,10 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           worktreesByRepo,
           tabsByWorktree,
           unifiedTabsByWorktree,
-          agentStatusByPaneKey,
+          agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
           migrationUnsupportedByPtyId,
           runtimeAgentOrchestrationByPaneKey,
+          remoteAgentOrchestrationByHost,
           terminalLayoutsByTabId,
           ptyIdsByTabId,
           runtimePaneTitlesByTabId,
@@ -93,8 +98,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           agentLaunchConfigByPaneKey: useAppStore.getState().agentLaunchConfigByPaneKey
         },
         Date.now(),
-        // Reuse unchanged worktree rows while assembling cards fresh from current review/host/status slices.
-        { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch }
+        { reuse: reuse.current }
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -102,9 +106,11 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       worktreesByRepo,
       tabsByWorktree,
       unifiedTabsByWorktree,
-      agentStatusByPaneKey,
+      statusProjection,
+      statusCursor,
       migrationUnsupportedByPtyId,
       runtimeAgentOrchestrationByPaneKey,
+      remoteAgentOrchestrationByHost,
       terminalLayoutsByTabId,
       ptyIdsByTabId,
       runtimePaneTitlesByTabId,

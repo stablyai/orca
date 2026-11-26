@@ -1,10 +1,17 @@
 type UsageCalendarRange = '7d' | '30d' | '90d' | 'all'
 
-function formatLocalDay(date: Date): string {
+export function formatLocalDay(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+/** Moves a YYYY-MM-DD day by whole calendar days. */
+export function shiftDay(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
 }
 
 export function getUsageRangeCutoff(range: UsageCalendarRange): string | null {

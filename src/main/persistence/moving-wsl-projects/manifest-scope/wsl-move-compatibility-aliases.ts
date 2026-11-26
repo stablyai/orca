@@ -6,9 +6,13 @@ import type { WslMoveProjectionScope } from './wsl-move-state-projection'
 export function findMissingWslMoveAliases(
   sourceWorktreeIds: readonly string[],
   destinationMeta: Readonly<Record<string, WorktreeMeta>>,
-  scope: Pick<WslMoveProjectionScope, 'distro'>
+  scope: Pick<WslMoveProjectionScope, 'distro' | 'mappedDrives'>
 ): string[] {
-  const normalize = createWslMoveStringNormalizer({ distro: scope.distro, hostAliases: [] })
+  const normalize = createWslMoveStringNormalizer({
+    distro: scope.distro,
+    hostAliases: [],
+    mappedDrives: scope.mappedDrives
+  })
   return sourceWorktreeIds.filter((sourceId) => {
     const destinationId = normalize(sourceId)
     return (

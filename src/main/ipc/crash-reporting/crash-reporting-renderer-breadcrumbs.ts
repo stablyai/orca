@@ -1,8 +1,8 @@
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import {
   sanitizeCrashReportDetails,
   sanitizeCrashReportString
-} from '../../../shared/crash-report-redaction'
+} from '../../../shared/crash-reporting/crash-report-redaction'
 import {
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
@@ -84,6 +84,9 @@ function rendererBreadcrumbCoalesceKey(
   // Preserve distinct GPU failures and atlas-reset triggers while coalescing each storm.
   if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {
     const kind = String(data?.kind ?? '')
+    if (kind === 'webgl-atlas-poisoned') {
+      return `${name}:${kind}:${String(data?.reason ?? '')}:${String(data?.outcome ?? '')}`
+    }
     const reason = kind === 'webgl-atlas-reset' ? data?.reason : undefined
     return reason ? `${name}:${kind}:${String(reason)}` : `${name}:${kind}`
   }

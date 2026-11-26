@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import { getExplorerTreeView } from '@/store/slices/right-sidebar/right-sidebar-route'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -18,7 +19,7 @@ import {
   applyFileExplorerNavigation,
   type SelectionMode
 } from './file-explorer-keyboard-navigation'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
@@ -52,7 +53,7 @@ export function useFileExplorerKeys(opts: {
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
+  const rightSidebarExplorerView = useAppStore(getExplorerTreeView)
   const keybindings = useAppStore((s) => s.keybindings)
 
   const rowProjectionRef = useRef(opts.rowProjection)

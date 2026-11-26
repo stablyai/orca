@@ -4,7 +4,7 @@ import {
   isPendingVmCheckout,
   type PendingVmCheckout,
   type PendingVmCheckoutIndex
-} from '../../../../shared/pending-vm-checkouts'
+} from '../../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 type CheckoutRow = { repoId: string; path: string; isMainWorktree?: boolean }
 

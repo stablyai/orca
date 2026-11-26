@@ -3,7 +3,7 @@ import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { UnrestoredPortForward } from '../../../../../shared/ssh-types'
+import type { UnrestoredPortForward } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** A saved forward that isn't open, e.g. its local port is taken; removable so it stops retrying. */

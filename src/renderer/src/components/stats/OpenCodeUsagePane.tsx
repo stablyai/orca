@@ -4,7 +4,7 @@ import { Activity, Brain, Coins, DatabaseZap, FolderKanban, Sparkles } from 'luc
 import type {
   OpenCodeUsageRange,
   OpenCodeUsageScope
-} from '../../../../shared/opencode-usage-types'
+} from '../../../../shared/agent-usage/analytics/opencode-usage-types'
 import { useAppStore } from '../../store'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { OpenCodeUsageDetails } from './OpenCodeUsageDetails'

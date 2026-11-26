@@ -1,17 +1,17 @@
 import type { TerminalSplitOptions } from './terminal-split-surface'
 import type { SplitPaneInMainOptions, SplitPaneSource } from './terminal-split-in-main'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/explicit-terminal-close-stops'
-import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
+import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/terminal-retirement/explicit-terminal-close-stops'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { randomUUID } from 'node:crypto'
 import {
   RendererSplitLedger,
   splitRetryUnknownError,
   type RendererSplit
 } from './terminal-split-retry'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 
 export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
   protected abstract splitPtyBackedTerminal(
@@ -33,24 +33,14 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
 
   async splitTerminal(
     handle: string,
-    opts: {
-      direction?: 'horizontal' | 'vertical'
-      command?: string
-      env?: Record<string, string>
-      envToDelete?: string[]
-      activate?: boolean
-      // Why: same split as createTerminal — adopt the pane without revealing its
-      // workspace, for splits the user never asked to see.
-      surfaceOwner?: false
-      telemetrySource?: TerminalPaneSplitSource
+    options: TerminalSplitOptions & {
       /** The leaf id a timed-out split reported: wait for that pane instead of splitting again. */
       retrySplit?: string
-      /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
-      wslUserAct?: true
     } = {},
     // Internal creation evidence; RPC and preload callers never supply it.
     createdWorktree?: Worktree
   ): Promise<RuntimeTerminalSplit> {
+    const opts = applyRemoteViewerLaunchEnv(options, options.terminalImageViewerSupported)
     const livePty = this.getLivePtyForHandle(handle)
     if (livePty && opts.retrySplit) {
       // Main starts these splits itself and answers without the window, so none can be pending.
@@ -79,7 +69,8 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
           env: opts.env,
           envToDelete: opts.envToDelete,
           activate: opts.activate,
-          ...(opts.wslUserAct ? { wslUserAct: true } : {})
+          ...(opts.wslUserAct ? { wslUserAct: true } : {}),
+          ...(opts.preAllocatedHandle ? { preAllocatedHandle: opts.preAllocatedHandle } : {})
         }
       )
     }
@@ -98,6 +89,7 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command,
+      ...(opts.terminalImageViewerSupported !== undefined ? { env: opts.env } : {}),
       worktreeId: leaf.worktreeId,
       sourceLeafId: leaf.leafId,
       telemetrySource: opts.telemetrySource,

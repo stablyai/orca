@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
-import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/ipc-events/workspace-catalog/runtime-project-refresh-scheduler'
 import { translate } from '@/i18n/i18n'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '../../../store/index'
@@ -54,7 +54,8 @@ export async function connectRuntimeHostForNavigation(args: {
  */
 export async function connectRuntimeHostAndReloadProjects(
   environmentId: string,
-  failureMessage?: string
+  /** Null: the caller tells the failure itself. */
+  failureMessage?: string | null
 ): Promise<boolean> {
   const store = useAppStore.getState()
   const reachable = await connectRuntimeHostForNavigation({
@@ -64,7 +65,7 @@ export async function connectRuntimeHostAndReloadProjects(
     fetchWorktrees: store.fetchWorktrees,
     fetchLineage: store.fetchWorktreeLineage
   })
-  if (!reachable) {
+  if (!reachable && failureMessage !== null) {
     toast.error(
       failureMessage ??
         translate(

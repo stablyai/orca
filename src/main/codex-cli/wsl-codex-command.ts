@@ -1,9 +1,9 @@
-import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand
-} from '../../shared/wsl-login-shell-command'
+} from '../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 export const WSL_CODEX_AVAILABILITY_TIMEOUT_MS = 5_000

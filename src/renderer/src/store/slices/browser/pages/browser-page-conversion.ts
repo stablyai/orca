@@ -3,8 +3,8 @@ import type {
   BrowserPageConversionOrigin,
   BrowserPageDocLocation,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
-import { browserPageDocLocationsEqual } from '../../../../../../shared/browser-page-doc-location'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { browserPageDocLocationsEqual } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
 import {
   buildBrowserPage,
   findPage,

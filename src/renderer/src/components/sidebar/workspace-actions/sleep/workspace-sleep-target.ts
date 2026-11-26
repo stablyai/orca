@@ -2,13 +2,16 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { authorityKey, SELF_LOCAL_AUTHORITY } from '../../../../../../shared/host-authority'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+} from '../../../../../../shared/execution-host/execution-host'
+import {
+  authorityKey,
+  SELF_LOCAL_AUTHORITY
+} from '../../../../../../shared/execution-host/host-authority'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WorkspaceSleepHost,
   WorkspaceSleepTarget
-} from '../../../../../../shared/workspace-sleep'
+} from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'

@@ -4,7 +4,7 @@
  * folder lists so no caller can mistake one for a normal, editable project.
  */
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import { isLocalWslMoveRow, wslMoveHostDistro } from '../quiescence/wsl-move-scope-guard'
 

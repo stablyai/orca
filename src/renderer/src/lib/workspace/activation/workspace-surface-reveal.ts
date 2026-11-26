@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { markVisited, readPreviousActive } from './worktree-activation-visit'
 import {

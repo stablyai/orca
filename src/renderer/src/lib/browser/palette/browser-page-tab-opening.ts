@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { findPage, findWorkspace } from '@/store/slices/browser/pages/browser-page-records'
-import { redactKagiSessionToken } from '../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
 import { resolveBrowserSourceUnifiedTab } from '../workspace/browser-workspace-source-resolution'
 import type { BrowserLinkPlacement } from '../navigation/visible-browser-link-target'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
@@ -28,6 +28,10 @@ export function openUrlInTabBesideBrowserPage(args: {
     ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
     ...(sourceUnifiedTab?.executionHostId
       ? { executionHostId: sourceUnifiedTab.executionHostId }
+      : {}),
+    // Why: an SSH page is pinned local (null); omitting it would infer the server's streamed pane.
+    ...(sourcePage?.browserRuntimeEnvironmentId !== undefined
+      ? { browserRuntimeEnvironmentId: sourcePage.browserRuntimeEnvironmentId }
       : {}),
     ...(sourceTab
       ? {

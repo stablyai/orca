@@ -1,4 +1,4 @@
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   isPlainObject,
   parseHooksJsonText

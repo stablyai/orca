@@ -1,9 +1,9 @@
-import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult
-} from '../../../../shared/runtime-worktree-contracts'
+} from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   projectPendingWorktreeRemovals,
   type PendingWorktreeRemovals

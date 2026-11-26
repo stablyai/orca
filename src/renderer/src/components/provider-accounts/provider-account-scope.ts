@@ -1,10 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import { translateLocalExecutionHostLabel } from '../sidebar/execution-host-label'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host/execution-host'
+import { translateLocalExecutionHostLabel } from '../../runtime/hosts/display/execution-host-label'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Which host a provider card or budget belongs to, and how to change it. */
 export type ProviderHostScope = {
@@ -12,17 +10,23 @@ export type ProviderHostScope = {
   description: string
 }
 
-function remoteServerScopeLabel(name: string, t: Translate = translate): string {
-  return t(
-    'auto.components.settings.providerAccountScope.remoteServer',
-    'Remote server: {{value0}}',
-    { value0: name }
-  )
+/** Unloaded or removed servers get a bare label: the environment ID is a UUID, not a name. */
+function remoteServerScopeLabel(serverName: string | null, t: Translate): string {
+  const name = serverName?.trim()
+  return name
+    ? t('auto.components.settings.providerAccountScope.remoteServer', 'Remote server: {{value0}}', {
+        value0: name
+      })
+    : t('auto.components.settings.AccountsPane.accountScopeRemoteServerUnnamed', 'Remote server')
 }
 
-function providerHostScopeLabel(target: RuntimeClientTarget, t?: Translate): string {
+function providerHostScopeLabel(
+  target: RuntimeClientTarget,
+  serverName: string | null,
+  t: Translate
+): string {
   return target.kind === 'environment'
-    ? remoteServerScopeLabel(target.environmentId, t)
+    ? remoteServerScopeLabel(serverName, t)
     : translateLocalExecutionHostLabel(getLocalExecutionHostLabel())
 }
 
@@ -31,12 +35,8 @@ export function getRemoteAccountsPaneScope(
   serverName: string | null,
   t: Translate = translate
 ): ProviderHostScope {
-  const name = serverName?.trim()
   return {
-    // Unloaded server names need bare fallback labels; interpolation would repeat Remote server.
-    label: name
-      ? remoteServerScopeLabel(name, t)
-      : t('auto.components.settings.AccountsPane.accountScopeRemoteServerUnnamed', 'Remote server'),
+    label: remoteServerScopeLabel(serverName, t),
     description: t(
       'auto.components.settings.AccountsPane.remoteScopeLocalAccountsKeptHostPicker',
       'Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.'
@@ -45,12 +45,12 @@ export function getRemoteAccountsPaneScope(
 }
 
 export function getProviderAccountScope(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  target: RuntimeClientTarget,
+  serverName: string | null,
   t: Translate = translate
 ): ProviderHostScope {
-  const target = defaultScopeHost(settings)
   return {
-    label: providerHostScopeLabel(target, t),
+    label: providerHostScopeLabel(target, serverName, t),
     description:
       target.kind === 'environment'
         ? t(
@@ -66,11 +66,12 @@ export function getProviderAccountScope(
 
 export function getProviderRateLimitScope(
   target: RuntimeClientTarget,
+  serverName: string | null,
   providerLabel: string,
   t: Translate = translate
 ): ProviderHostScope {
   return {
-    label: providerHostScopeLabel(target, t),
+    label: providerHostScopeLabel(target, serverName, t),
     description:
       target.kind === 'environment'
         ? t(

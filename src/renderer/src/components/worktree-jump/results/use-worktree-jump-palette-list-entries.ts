@@ -22,12 +22,14 @@ import type { WorktreeJumpPaletteWorktrees } from '../workspaces/use-worktree-ju
 import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-palette-local-state'
 
 import type { WorktreeJumpPaletteTaskSearch } from '../tasks/use-worktree-jump-palette-task-search'
+import type { WorktreeJumpPaletteBotScopeEntries } from '../worktree-jump-palette-bot-scope-entries'
 
 type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections &
   Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
   Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl'> &
-  Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'>
+  Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'> &
+  Omit<WorktreeJumpPaletteBotScopeEntries, 'botScopeNote'>
 
 export function useWorktreeJumpPaletteListEntries({
   hasQuery,
@@ -38,11 +40,15 @@ export function useWorktreeJumpPaletteListEntries({
   taskSourceUrl,
   handleExpandSection,
   middleLeadsSections,
-  taskItems
+  taskItems,
+  botScopeEntries
 }: WorktreeJumpPaletteListEntriesInput) {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { listEntries, defaultSelectionStart } = useMemo(() => {
+    if (botScopeEntries) {
+      return { listEntries: botScopeEntries, defaultSelectionStart: 0 }
+    }
     const entries: PaletteListEntry[] = []
     const {
       visibleWorktreeItems,
@@ -243,6 +249,7 @@ export function useWorktreeJumpPaletteListEntries({
     return { listEntries: entries, defaultSelectionStart: 0 }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
+    botScopeEntries,
     handleExpandSection,
     hasQuery,
     middleLeadsSections,

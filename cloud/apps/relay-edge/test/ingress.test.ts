@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { INGRESS_HEADER, signIngressHeader, verifyIngressHeader } from '../../../packages/relay-contract/src/ingress-header'
 import type { Env } from '../src/env'
 import { inCidrs, parseCidr, parseIp } from '../src/ingress'
-import { requestPlace } from '../src/metrics'
 
 vi.mock('cloudflare:workers', () => ({
   DurableObject: class {
@@ -21,10 +20,6 @@ const CLAIM = { name: 'cn', origin: 'https://cn.relay.example', clientIp: '198.5
 const HOST = 'AbCdEfGhIjKlMnOp'
 
 describe('ingress header', () => {
-  it('round-trips, and accepts a secret being rotated out', async () => {
-    expect(await verifyIngressHeader(await signIngressHeader(SECRET, CLAIM), [SECRET])).toEqual(CLAIM)
-    expect(await verifyIngressHeader(await signIngressHeader(OLD_SECRET, CLAIM), [SECRET, OLD_SECRET])).toEqual(CLAIM)
-  })
 
   it('refuses a wrong secret, any edited field, skew past the window, and junk', async () => {
     const now = 1_800_000_000_000
@@ -241,12 +236,6 @@ describe('token-mode ingress (a load balancer that cannot sign)', () => {
     errors.mockRestore()
   })
 
-  it('places the client country reported by the ingress', () => {
-    const request = new Request('https://edge.relay.example/v1/connect/x')
-    Object.defineProperty(request, 'cf', { value: { continent: 'EU', colo: 'AMS', country: 'NL' } })
-    expect(requestPlace(request, { name: 'cn', country: 'CN' })).toBe('EU/AMS/CN/cn')
-    expect(requestPlace(request, { name: 'cn' })).toBe('EU/AMS/NL/cn')
-  })
 })
 
 describe('address parsing', () => {

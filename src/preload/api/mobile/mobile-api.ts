@@ -1,8 +1,8 @@
 import type { MobileRelayStatusDetail } from '../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
-import type { RuntimeAccessGrant } from '../../../shared/runtime-access-grants'
+import type { RuntimeAccessGrant } from '../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 
 export type MobileApi = {
   listNetworkInterfaces: () => Promise<{
@@ -84,6 +84,8 @@ export type MobileApi = {
   revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
   getRelayStatus: () => Promise<MobileRelayStatusDetail>
   onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void) => () => void
+  /** Fires when a paired phone or runtime grant changes so open lists can refetch. */
+  onDevicesChanged: (callback: () => void) => () => void
   consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
   /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
   onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void

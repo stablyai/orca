@@ -9,11 +9,10 @@ import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
 import '../../workspace-status/presentation/workspace-status'
 import { writeWorkspaceDragData } from '../../workspace-status/presentation/workspace-status-drag-data'
-import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardLinkedDetails } from '../details/use-worktree-card-linked-details'
 import type { useWorktreeCardReviewDetails } from '../details/use-worktree-card-review-details'
+import { getUnreadToggleTooltip } from '../surface/WorktreeCardStatusSlot'
 
-type Foundation = ReturnType<typeof useWorktreeCardFoundation>
 type LinkedDetails = ReturnType<typeof useWorktreeCardLinkedDetails>
 type ReviewDetails = ReturnType<typeof useWorktreeCardReviewDetails>
 
@@ -28,7 +27,6 @@ export function useWorktreeCardWorkspaceActions({
   onCardDragEnd,
   onContextMenuSelect,
   folderWorkspaceId,
-  setShowRenameErrorDialog,
   isDeleting,
   showDeleteQuickAction
 }: Pick<
@@ -43,7 +41,6 @@ export function useWorktreeCardWorkspaceActions({
   | 'onCardDragEnd'
   | 'onContextMenuSelect'
 > &
-  Pick<Foundation, 'setShowRenameErrorDialog'> &
   Pick<LinkedDetails, 'isDeleting'> &
   Pick<ReviewDetails, 'folderWorkspaceId'> & {
     showDeleteQuickAction: boolean
@@ -68,17 +65,7 @@ export function useWorktreeCardWorkspaceActions({
     },
     [folderWorkspaceId, worktree.hostId, showDeleteQuickAction, worktree.id]
   )
-  const handleOpenRenameErrorDialog = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-      setShowRenameErrorDialog(true)
-    },
-    [setShowRenameErrorDialog]
-  )
-  const unreadTooltip = worktree.isUnread
-    ? t('auto.components.sidebar.useWorktreeCardWorkspaceActions.markRead', 'Mark read')
-    : t('auto.components.sidebar.useWorktreeCardWorkspaceActions.markUnread', 'Mark unread')
+  const unreadTooltip = getUnreadToggleTooltip(worktree.isUnread)
   const lineageChildAriaLabel = lineageCollapsed
     ? t(
         'auto.components.sidebar.WorktreeList.showChildWorkspaces',
@@ -146,7 +133,6 @@ export function useWorktreeCardWorkspaceActions({
 
   return {
     handleWorkspaceQuickAction,
-    handleOpenRenameErrorDialog,
     unreadTooltip,
     lineageChildAriaLabel,
     childWorkspaceShortLabel,

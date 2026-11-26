@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { WslHostConnectionState } from '../../../../../../../shared/wsl-host-types'
+import type { WslHostConnectionState } from '../../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { PtyTransport } from '../../pty-transport-types'
 
 /**

@@ -17,9 +17,12 @@ export function registerAgentHookTerminalLifecycleHandler(
   }
 }
 
+/** False when no mounted pane owns `paneKey`, so the caller applies the pane effects itself. */
 export function dispatchAgentHookTerminalLifecycle(
   paneKey: string,
   payload: AgentCompletionStatusSnapshot
-): void {
-  handlersByPaneKey.get(paneKey)?.(payload)
+): boolean {
+  const handler = handlersByPaneKey.get(paneKey)
+  handler?.(payload)
+  return handler !== undefined
 }

@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process'
 import { runProcess } from '@orca/process-host'
+import { assertTeamAllowsComputerUse } from '../computer-team-policy'
 import { RuntimeClientError } from '../runtime-client-error'
 import {
   COMPUTER_ERROR_CODES,
   COMPUTER_SCREEN_LOCKED_MESSAGE
-} from '../../../shared/computer-use-runtime-types'
+} from '../../../shared/computer/computer-use-runtime-types'
 import { isHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { readMacosBundleId, resetMacosTccPermission } from '../../macos-permissions/macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from '../macos-native/macos-native-provider-paths'
@@ -15,7 +16,7 @@ import type {
   ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../../shared/computer-use-permissions-types'
+} from '../../../shared/computer/computer-use-permissions-types'
 
 const DEFAULT_COMPUTER_USE_BUNDLE_ID = 'com.stablyai.orca.computer-use'
 
@@ -132,11 +133,13 @@ async function launchSetupHelper(
   if (isHostShuttingDown()) {
     return 'cancelled'
   }
+  assertTeamAllowsComputerUse()
   // Kill and relaunch so a repeated click always brings the helper back to the front.
   await closeExistingPermissionHelpers()
   if (generation !== setupGeneration || isHostShuttingDown()) {
     return 'cancelled'
   }
+  assertTeamAllowsComputerUse()
   const helper = spawn(
     '/usr/bin/open',
     ['-n', request.helperAppPath, '--args', ...request.helperArgs],
@@ -159,6 +162,7 @@ async function openComputerUsePermissionsAsync(
   seq: number,
   generation: number
 ): Promise<ComputerUsePermissionSetupResult> {
+  assertTeamAllowsComputerUse()
   if (process.platform !== 'darwin') {
     return {
       platform: process.platform,
@@ -182,7 +186,9 @@ async function openComputerUsePermissionsAsync(
   while (resetInProgress) {
     await resetInProgress.catch(() => {})
   }
+  assertTeamAllowsComputerUse()
   const status = await computerUsePermissionStatusGate.peek()
+  assertTeamAllowsComputerUse()
   if (status.helperUnavailableReason) {
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
   }

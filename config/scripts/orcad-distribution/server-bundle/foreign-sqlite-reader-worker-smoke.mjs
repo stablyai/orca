@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
-import { ORCAD_FOREIGN_SQLITE_READER_ENTRY } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_FOREIGN_SQLITE_READER_ENTRY } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 // Run reads in child under the runtime orcad ships, which may differ from build Node; trust exit status, not output.
 const PROBE = `

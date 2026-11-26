@@ -1,17 +1,59 @@
 import { z } from 'zod'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalDiffItem,
+  AgentJournalToolCallItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,
+  journalPayload,
   journalToolPayload
 } from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
+import { replacementPatch } from '../../native-chat/agent-session-timeline/provider-timeline-replacement-patch'
 import { piRpcMessageEventSchema, piRpcToolEventSchema } from './rpc-protocol'
 import type { PiRpcContextUsage } from './rpc-context-usage'
 
 const resultSchema = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() }))
 })
+const fileInputSchema = z.object({ path: z.string().min(1), content: z.string().optional() })
+const editResultSchema = z.object({ details: z.object({ patch: z.string().min(1) }) })
+
+/** Prefixing every line costs per line as well as per char, so a larger write keeps the tool row instead of stalling this process. */
+const MAX_WRITE_DIFF_CHARS = 64 * 1024
+const MAX_WRITE_DIFF_LINE_BREAKS = 16 * 1024
+
+function fitsWriteDiff(content: string): boolean {
+  if (content.length > MAX_WRITE_DIFF_CHARS) {
+    return false
+  }
+  let lineBreaks = 0
+  for (let at = content.indexOf('\n'); at !== -1; at = content.indexOf('\n', at + 1)) {
+    lineBreaks += 1
+    if (lineBreaks > MAX_WRITE_DIFF_LINE_BREAKS) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Pi's edit result carries a unified patch and a write carries the whole file, so both close as diffs like Codex file changes. */
+function fileChange(tool: string, input: unknown, result: unknown): AgentJournalDiffItem | null {
+  if (tool !== 'edit' && tool !== 'write') {
+    return null
+  }
+  const file = fileInputSchema.safeParse(input).data
+  const patch =
+    tool === 'edit'
+      ? editResultSchema.safeParse(result).data?.details.patch
+      : file?.content !== undefined && fitsWriteDiff(file.content)
+        ? replacementPatch(file.path, '', file.content)
+        : undefined
+  return file && patch !== undefined
+    ? { kind: 'diff', path: file.path, patch: journalPayload(patch) }
+    : null
+}
 
 /** One row per turn: a second close of the same item is dropped. */
 export function piRpcSkippedEventNotice(turn: string): ProviderTimelineEvent {
@@ -181,7 +223,7 @@ export class PiRpcMessages {
       {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
         item: `tool:${event.toolCallId}`,
-        body
+        body: (state === 'completed' && fileChange(event.toolName, input, result)) || body
       }
     ]
   }

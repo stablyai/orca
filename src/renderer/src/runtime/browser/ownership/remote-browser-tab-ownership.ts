@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 type RemoteBrowserTabOwnershipState = Pick<
   AppState,

@@ -1,5 +1,7 @@
 import type { SetupTrustMismatch } from '../../worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../work-items/task-source-context'
+import type { AutomationRunEvent } from '../../automation-event-triggers'
+import type { AutomationTriggeredBy } from '../../bots/bot-acts-for'
 
 export type AutomationRunStatus =
   | 'pending'
@@ -12,7 +14,7 @@ export type AutomationRunStatus =
   | 'skipped_needs_interactive_auth'
   | 'dispatch_failed'
 
-export type AutomationRunTrigger = 'scheduled' | 'manual'
+export type AutomationRunTrigger = 'scheduled' | 'manual' | 'event'
 
 /** Statuses a run can never leave; only these are safe to evict from history. */
 /**
@@ -120,6 +122,7 @@ export type AutomationRun = {
   workspaceId: string | null
   /** Keep run history understandable after workspace deletion removes live metadata. */
   workspaceDisplayName?: string | null
+  /** 'chat' for a structured-session run (a bot or a chat-surface automation), whose id is chatSessionId. */
   sessionKind: 'terminal' | 'chat'
   chatSessionId: string | null
   terminalSessionId: string | null
@@ -150,6 +153,14 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
+  /** The latest event folded into it; a manual run of an event automation replays the latest one. */
+  event?: AutomationRunEvent
+  /** Who did the event that started it, kept as it was when later events fold in; never whom it acts for. */
+  triggeredBy?: AutomationTriggeredBy
+  /** Keys of the earlier events folded into it, oldest first, so a resend of any is known. */
+  eventKeys?: string[]
+  /** Its event was a message the bot answered: the bot's conversation turn ran it, in that chat. */
+  handledInTurn?: true
   /** Setup was skipped: the new workspace's branch has different setup than the automation approved. */
   setupSkippedReason?: AutomationRunSetupSkippedReason
   /** The skipped setup content, so it can be reviewed and approved for later runs. Older hosts omit it. */
@@ -164,7 +175,7 @@ export type AutomationRunsPage = {
   nextCursor: string | null
 }
 
-export type AutomationDispatchResult = {
+export type AutomationDispatchResult = Pick<AutomationRun, 'handledInTurn'> & {
   runId: string
   sessionKind?: 'terminal' | 'chat'
   chatSessionId?: string | null

@@ -1,5 +1,5 @@
 import type { TerminalPasteRuntime } from './terminal-paste-model'
-import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId

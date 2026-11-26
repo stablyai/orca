@@ -1,6 +1,6 @@
 // Start facts are live-only and expire on a new binding; failures persist until another start unless a later bind supersedes them.
 
-import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/newer-daemon-hold'
+import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import type {
   PaneResumeOutcome,
   PaneStartStatus,

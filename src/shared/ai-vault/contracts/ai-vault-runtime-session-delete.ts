@@ -5,7 +5,7 @@ import {
   type AiVaultDeleteSessionArgs,
   type AiVaultDeleteSessionResult
 } from './ai-vault-session-deletion'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 
 const AiVaultDeleteSessionResultSchema = z.union([
   z.object({ outcome: z.literal('deleted') }),

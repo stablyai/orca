@@ -1,4 +1,4 @@
-import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
+import { structuralValuesEqual } from '../../../../shared/collections/structural-value-equality'
 
 // Why: returning `base` unchanged keeps referential-equality selectors quiet after no-op catalog refreshes.
 export function mergeByIdentity<T>(

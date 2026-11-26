@@ -26,13 +26,15 @@ type AutomationRuntimeDependencies = {
     'getGuestWebContentsId' | 'registerGuest' | 'unregisterGuest'
   >
   getAgentBrowserBridge(): Pick<AgentBrowserBridge, 'onTabClosed'> | null
-  executeRpc(
-    method: BrowserClientAutomationMethod,
-    params: Record<string, unknown>,
-    agent: boolean,
-    signal: AbortSignal
-  ): Promise<unknown>
+  executeRpc: BrowserClientPageAutomationRpc
 }
+
+export type BrowserClientPageAutomationRpc = (
+  method: BrowserClientAutomationMethod,
+  params: Record<string, unknown>,
+  agent: boolean,
+  signal: AbortSignal
+) => Promise<unknown>
 
 type AutomationRegistration = {
   pageHostGeneration: number

@@ -1,30 +1,21 @@
 /** Crashes and older unlink flows can leave runtime session partitions that listings advertise as orphaned hosts. */
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { readEnvironmentStoreRecords } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 
 type SessionHostStore = {
   getWorkspaceSessionHostIds: () => ExecutionHostId[]
   removeWorkspaceSessionHost: (hostId: ExecutionHostId) => void
 }
 
-/** Drop orphaned runtime hosts while preserving local and SSH sessions. */
+/** Drop orphaned runtime hosts while preserving local and SSH sessions; `known` comes from
+ *  readSavedRuntimeEnvironmentIds, and null (removal unproven) drops nothing. */
 export function reconcileOrphanedRuntimeSessions(
   store: SessionHostStore,
-  userDataPath: string
+  known: ReadonlySet<string> | null
 ): ExecutionHostId[] {
-  let known: Set<string>
-  try {
-    // Raw records, not the listing: newer-format and overlay-hidden servers are still saved.
-    const records = readEnvironmentStoreRecords(userDataPath, { requireStoreFile: true })
-    if (records.unreadable.some((record) => record.id === undefined)) {
-      return []
-    }
-    known = new Set([
-      ...records.environments.map((environment) => environment.id),
-      ...records.unreadable.map((record) => record.id ?? '')
-    ])
-  } catch {
-    // Missing or unreadable registry data cannot prove a server was removed.
+  if (!known) {
     return []
   }
   // Runtime sessions are written only after their server is registered.

@@ -1,14 +1,19 @@
-import { resolveRuntimePaneTitleForLeaf } from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleForLeaf } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 /** Undefined preserves single-pane tab-title fallback; null suppresses unattributable split titles so siblings cannot inherit the focused pane’s name. */
 export function resolveAgentRowPaneLiveTitle(
   layout: TerminalLayoutSnapshot | undefined,
   paneTitles: Record<number, string> | undefined,
-  leafId: string | null | undefined
+  leafId: string | null | undefined,
+  runtimePaneId: number | undefined
 ): string | null | undefined {
   if (layout?.root?.type !== 'split') {
     return undefined
+  }
+  // Sparse slots defeat replay-order lookup; a title row already knows its own slot.
+  if (runtimePaneId !== undefined) {
+    return paneTitles?.[runtimePaneId] ?? null
   }
   if (!leafId) {
     return null

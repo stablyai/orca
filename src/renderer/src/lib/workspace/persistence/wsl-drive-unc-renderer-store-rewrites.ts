@@ -11,11 +11,11 @@ import {
   convertedNotebookEnvironment,
   convertedQuickOpenHistoryScope,
   wslDriveUncRendererKeys
-} from '../../../../../shared/wsl-drive-unc-renderer-store-keys'
+} from '../../../../../shared/wsl-move/wsl-drive-unc-renderer-store-keys'
 import type {
   WslDriveUncPendingRendererRewrite,
   WslDriveUncRendererKeys
-} from '../../../../../shared/wsl-drive-unc-renderer-store-keys'
+} from '../../../../../shared/wsl-move/wsl-drive-unc-renderer-store-keys'
 import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS } from '../../../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 
 const APPLIED_STORAGE_KEY = 'orca.wsl-drive-unc.renderer-rewrites.v1'

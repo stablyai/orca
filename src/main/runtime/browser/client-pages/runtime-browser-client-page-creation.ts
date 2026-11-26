@@ -3,7 +3,7 @@ import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../../shared/br
 import '../../../browser/network/execution-routes/browser-network-execution-route'
 import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 type RuntimeBrowserClientPageAuthority = Pick<
   BrowserHostLeaseRegistry,

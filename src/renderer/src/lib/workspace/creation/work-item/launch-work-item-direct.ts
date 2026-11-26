@@ -31,7 +31,7 @@ import * as routing from './launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/workspace/creation/work-item/launch-work-item-direct-route-preparation'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(
   args: LaunchWorkItemDirectArgs

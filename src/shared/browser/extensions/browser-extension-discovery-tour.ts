@@ -1,4 +1,4 @@
-import type { ContextualTour } from '../../contextual-tours'
+import type { ContextualTour } from '../../feature-education/contextual-tours/contextual-tours'
 
 export const BROWSER_EXTENSION_DISCOVERY_TOUR = {
   id: 'browser-extensions',

@@ -1,12 +1,12 @@
-import type { Repo } from '../../../../../src/shared/repo-types'
+import type { Repo } from '../../../../../src/shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../src/shared/execution-host'
+} from '../../../../../src/shared/execution-host/execution-host'
 import {
   getProjectIdentityKey,
   getProjectProviderIdentity
-} from '../../../../../src/shared/project-host-setup-projection'
+} from '../../../../../src/shared/project/host-setup/project-host-setup-projection'
 import { getHostContextLabel } from '../../../../../src/shared/worktree/row-display/host-context-labels'
 
 type WorkspaceRepo = Pick<Repo, 'id' | 'displayName' | 'path'> &

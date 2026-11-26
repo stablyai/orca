@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { lstat, readFile, readlink } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
-import type { CliInstallMethod, CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallMethod, CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import { isAppImageExtractedLauncherPath } from '../appimage/appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import {

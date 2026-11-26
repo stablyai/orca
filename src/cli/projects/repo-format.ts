@@ -2,7 +2,7 @@ import { branchRefLabels } from '../../shared/git/refs/branch-ref-label'
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 
 export function formatRepoList(result: RuntimeRepoList): string {
   if (result.repos.length === 0) {

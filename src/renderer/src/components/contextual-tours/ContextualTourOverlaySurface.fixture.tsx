@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { Import, MoreHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { getContextualTour } from '../../../../shared/contextual-tours'
+import { getContextualTour } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { BrowserExtensionsBanner } from '../../../../shared/browser/extensions/browser-extensions-banner'
 import { withBrowserExtensionsBannerLook } from './browser-extensions-banner-look'
 import {

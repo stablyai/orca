@@ -7,7 +7,7 @@ import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
   type WorkspaceIntentWorkItem
-} from '../workspace-name'
+} from '../workspace/naming/workspace-name'
 import { isWorkItemLookupText } from './work-item-lookup-text'
 
 export type WorkspaceSourceProvider = FolderWorkspaceLinkedTask['provider']

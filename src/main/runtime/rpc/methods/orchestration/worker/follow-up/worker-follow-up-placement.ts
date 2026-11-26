@@ -11,7 +11,7 @@ import {
   structuredWorkerSession
 } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
-import { publishChatTabInBackground } from '../../../../../session-tabs/background-chat-tab-publication'
+import { publishChatTabInBackground } from '../../../../../session-tabs/chat/background-chat-tab-publication'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
@@ -135,7 +135,10 @@ export async function reopenWorkerChat(
   // A `/clear` moved the conversation on; reopen the session that runs it now.
   const running = structuredWorkerSession(identity)
   const sessionId = running.kind === 'here' ? running.sessionId : identity.sessionId
-  const userOpened = host.isSessionTabVisible(sessionId)
+  // A chat Orca's release left asleep stays Orca's; a tab the user brought back or woke is theirs.
+  const userOpened =
+    host.isSessionTabVisible(sessionId) &&
+    host.deps.store.getRecord(sessionId)?.sleptAt === undefined
   await publishChatTabInBackground(runtime, host, sessionId)
   return {
     handle,

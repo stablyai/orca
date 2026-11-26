@@ -7,8 +7,8 @@ import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionSelectedOptionId,
   type AgentSessionQuestionAnswer
-} from '../../../../../../src/shared/agent-session/agent-session-question-answer'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-question-answer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
@@ -24,6 +24,8 @@ import type {
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 
 export function useMobileStructuredPromptResponses(args: {
+  approvalItemId?: string
+  questionItemId?: string
   stateRef: { readonly current: StructuredAgentSessionState }
   mutate: StructuredAgentSessionMutate
   // Older hosts require answers packed into optionId.
@@ -33,13 +35,20 @@ export function useMobileStructuredPromptResponses(args: {
   respondPermission: (optionId: string) => Promise<boolean>
   respondQuestion: (answer: string, rendered?: MobileChatQuestion['prompt']) => Promise<boolean>
 } {
-  const { mutate, onSendError, questionAnswersSupported, stateRef } = args
+  const {
+    approvalItemId,
+    questionItemId,
+    mutate,
+    onSendError,
+    questionAnswersSupported,
+    stateRef
+  } = args
 
   const respondPermission = useCallback(
     async (optionId: string): Promise<boolean> => {
       const target = structuredApprovalResponseTarget(
         optionId,
-        actionableStructuredApproval(stateRef.current)
+        actionableStructuredApproval(stateRef.current, approvalItemId)
       )
       if (!target) {
         return false
@@ -55,7 +64,7 @@ export function useMobileStructuredPromptResponses(args: {
       }
       return result.status === 'accepted'
     },
-    [mutate, onSendError, stateRef]
+    [approvalItemId, mutate, onSendError, stateRef]
   )
 
   const sendAnswers = useCallback(
@@ -82,7 +91,7 @@ export function useMobileStructuredPromptResponses(args: {
         if (questionAnswersSupported === null) {
           return send({ answers })
         }
-        onSendError('Update Orca on your computer to send answers this long')
+        onSendError('Update Orca on this host to send answers this long')
         return Promise.resolve(null)
       }
       return send({ optionId })
@@ -92,7 +101,7 @@ export function useMobileStructuredPromptResponses(args: {
 
   const respondQuestion = useCallback(
     async (answer: string, rendered?: MobileChatQuestion['prompt']): Promise<boolean> => {
-      const prompt = actionableStructuredQuestion(stateRef.current)
+      const prompt = actionableStructuredQuestion(stateRef.current, questionItemId)
       if (prompt?.body.questions) {
         // Claude reuses question ids across prompts, so answers must match the prompt they were picked on.
         const answers = decodeAgentSessionQuestionAnswers(answer)
@@ -136,7 +145,7 @@ export function useMobileStructuredPromptResponses(args: {
       }
       return result.status === 'accepted'
     },
-    [onSendError, sendAnswers, stateRef]
+    [onSendError, questionItemId, sendAnswers, stateRef]
   )
 
   return { respondPermission, respondQuestion }

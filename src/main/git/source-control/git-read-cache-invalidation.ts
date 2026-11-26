@@ -1,6 +1,6 @@
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
-import { InFlightPromiseDedupe } from '../../../shared/in-flight-promise-dedupe'
+import { InFlightPromiseDedupe } from '../../../shared/concurrency/in-flight-promise-dedupe'
 import {
   clearGitStatusLineStatsCache,
   clearGitStatusLineStatsCacheKey,

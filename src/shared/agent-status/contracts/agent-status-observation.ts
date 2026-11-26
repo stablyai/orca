@@ -1,6 +1,6 @@
 // Stamp evidence provenance at ingress: hook and byte-derived rows use distinct clocks/order spaces. Reporters cannot supply their own provenance.
 
-import { createNonSecureContextUuid } from '../../non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 
 /** Where the evidence for a status row came from — the ingress, not the transport.
  *  A hook event relayed over SSH is still `hook`; the relay is a carrier. */

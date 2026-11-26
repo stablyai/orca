@@ -18,7 +18,7 @@ import type {
   RuntimeGitSwitchResult,
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches
-} from '../../../../shared/runtime-worktree-contracts'
+} from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { GitProviderStatusOptions } from '../../../providers/git/status-options'
 import {
   localGitOptionsForTarget,

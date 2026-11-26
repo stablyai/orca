@@ -1,5 +1,5 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'

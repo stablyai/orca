@@ -11,7 +11,7 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   getStructuredLaunchStateBySessionId,
   subscribeStructuredAgentLaunchStatus,
@@ -32,7 +32,7 @@ import type {
   AgentSessionOptionResult
 } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */

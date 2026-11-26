@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../contributions/plugin-command-actions'
-import { parseWorkspaceKey } from '../../workspace-scope'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /**
@@ -185,7 +185,7 @@ const terminalReadResult = z.object({
   truncated: z.boolean()
 })
 
-/** An agent Orca knows: `claude`, `codex`, `gemini`, ... */
+/** An agent Orca knows: `claude`, `codex`, `antigravity`, ... */
 export const pluginAgentSchema = z.string().min(1).max(64).refine(isTuiAgent, 'unknown agent')
 
 const agentLaunchParams = z.strictObject({

@@ -1,11 +1,11 @@
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import {
   navigationTargetsClients,
   navigationTargetsHost
-} from '../../../../shared/runtime-navigation'
-import { toRuntimeActivateWorktreeEvent } from '../../../../shared/runtime-client-events'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import { toRuntimeActivateWorktreeEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { RuntimeWorkspaceCatalogEvents } from '../catalog/runtime-workspace-catalog-events'
 
 export abstract class RuntimeWorkspaceNavigation extends RuntimeWorkspaceCatalogEvents {

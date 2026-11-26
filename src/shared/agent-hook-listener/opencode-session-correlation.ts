@@ -38,7 +38,7 @@ export type SessionOwnership = {
 /** Allow for stamp skew between the process table and the session store. */
 export const OPENCODE_CREATE_SKEW_MS = 2 * 60 * 1000
 
-import { normalizeRuntimePathForComparison } from '../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
 
 /** Fold only macOS /tmp, /var and /etc aliases; stripping every /private prefix would merge distinct roots. */
 function foldMacOsPrivateAlias(directory: string): string {

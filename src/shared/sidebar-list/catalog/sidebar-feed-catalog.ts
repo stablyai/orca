@@ -1,7 +1,7 @@
-import type { ProjectGroup } from '../../project-group-types'
-import type { ServedProjectSections } from '../../project-section-catalog-schema'
-import type { ProjectSectionRepo } from '../../project-section-grouping'
-import type { Repo } from '../../repo-types'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
+import type { ServedProjectSections } from './project-section-catalog-schema'
+import type { ProjectSectionRepo } from '../sections/project-section-grouping'
+import type { Repo } from '../../repository/repo-types'
 import type { SidebarFeedCatalog } from '../feed/sidebar-feed-rows'
 
 /** A repo as a served catalog or a host's repo.list names it, before the builder reads it. */

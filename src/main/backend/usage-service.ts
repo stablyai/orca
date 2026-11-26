@@ -5,7 +5,7 @@ import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import { stopUsageScanWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
-import type { UsageProviderKey } from '../../shared/backend-service-contract'
+import type { UsageProviderKey } from '../../shared/backend/backend-service-contract'
 
 const rangeSchema = z.object({
   scope: z.string().max(4096),

@@ -1,6 +1,6 @@
 import { BrowserClientPageMetadataAck } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export type BrowserClientPageMetadataSender = {
   sendPageMetadataRequest(params: unknown, timeoutMs: number): Promise<RuntimeRpcResponse<unknown>>

@@ -1,8 +1,12 @@
-import { existsSync } from 'node:fs'
+import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
+import {
+  readEnvironmentRegistryFile,
+  invalidateEnvironmentStoreObservation
+} from './runtime-environment-store-observation'
 import { warnUnreadableEnvironmentState } from './runtime-environment-store-records'
 import {
   getPreferredLoopbackRuntimePort,
@@ -10,7 +14,6 @@ import {
   KnownRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
 import { OrcadWslDeploymentLinkSchema } from '../host-catalog/wsl-host-deployment-link'
 
 // Isolate WSL records so older builds cannot reject the entire pairing store.
@@ -19,14 +22,16 @@ export const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 
 /** A managed orcad in a WSL distro. The environment's name is its label; runtime state lives elsewhere. */
 /** A Remove that could not prove the host's server stopped (E11); the host stays until one does. */
-export const WslHostPendingStopSchema = z.object({
-  since: z.number().finite(),
-  reason: z.string().max(4_096),
-  /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
-  reasonCode: z.string().max(128).optional(),
-  reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
-  verdict: z.enum(['live', 'unverifiable'])
-})
+export const WslHostPendingStopSchema = lazyZodSchema(() =>
+  z.object({
+    since: z.number().finite(),
+    reason: z.string().max(4_096),
+    /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
+    reasonCode: z.string().max(128).optional(),
+    reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
+    verdict: z.enum(['live', 'unverifiable'])
+  })
+)
 
 export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
 
@@ -46,10 +51,12 @@ export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend
 export type WslHostDeploymentRecord = z.infer<typeof WslHostDeploymentRecordSchema>
 
 // Records stay opaque so one bad or newer-kind record cannot hide the rest.
-const EnvelopeSchema = z.object({
-  version: z.literal(1),
-  deployments: z.array(z.unknown())
-})
+const EnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    deployments: z.array(z.unknown())
+  })
+)
 
 type StoredRecord = {
   environmentId: string | undefined
@@ -91,15 +98,13 @@ function recordEnvironmentId(raw: unknown): string | undefined {
 
 function readStoredRecords(userDataPath: string): StoredRecord[] {
   const path = getWslHostDeploymentStorePath(userDataPath)
-  if (!existsSync(path)) {
-    return []
-  }
   let text: string
   try {
-    hardenExistingSecureFile(path)
-    text = readNodeFileSyncWithinLimit(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES).buffer.toString(
-      'utf8'
-    )
+    const read = readEnvironmentRegistryFile(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES)
+    if (!read) {
+      return []
+    }
+    text = read.buffer.toString('utf8')
   } catch {
     throw new WslHostDeploymentStoreInvalidError(path)
   }
@@ -178,11 +183,12 @@ export function writeWslHostDeployment(
   if (next && !records.some((record) => record.environmentId === environmentId)) {
     raws.push(next)
   }
+  invalidateEnvironmentStoreObservation(getWslHostDeploymentStorePath(userDataPath))
   writeSecureJsonFileWithinLimit(
     path,
     { version: 1, deployments: raws },
     MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES,
-    { durable: true }
+    { durable: true, onPublished: noteEnvironmentStoreWrite }
   )
 }
 

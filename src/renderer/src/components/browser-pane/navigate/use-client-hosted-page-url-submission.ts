@@ -2,8 +2,8 @@ import type { BrowserPageInitializationAction } from '../../../../../shared/brow
 import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import { useCallback } from 'react'
 import type { MutableRefObject, RefObject } from 'react'
-import { redactKagiSessionToken } from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserAddressBarSubmission } from './browser-address-bar-navigation'
 import { routeWorkspaceDocAddressSubmission } from './workspace-doc-address-submission'
 import { deferBrowserPageNavigation } from './browser-page-deferred-navigation'
@@ -66,7 +66,7 @@ export function useClientHostedPageUrlSubmission(params: {
         return
       }
       // Why: loadURL rejects on any failed navigation; did-fail-load owns error reporting.
-      void issueBrowserGuestNavigation(webview, () => webview.loadURL(submission.url)).catch(
+      void issueBrowserGuestNavigation(webview, () => webview.loadURL(submission.url))?.catch(
         () => {}
       )
     },

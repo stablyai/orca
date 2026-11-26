@@ -1,5 +1,5 @@
 import type { Session } from 'electron'
-import type { MiniMaxEndpoint } from '../../../../shared/global-settings-types'
+import type { MiniMaxEndpoint } from '../../../../shared/settings/global-settings-types'
 import { getMainHttpClient, requirePartitionSession } from '../../../network/http-client'
 
 const MINIMAX_USAGE_PATH = '/v1/api/openplatform/coding_plan/remains'

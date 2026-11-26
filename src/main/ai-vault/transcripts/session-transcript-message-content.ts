@@ -4,8 +4,8 @@ import {
   type DecodedSessionMessage,
   type DecodedToolCall
 } from './session-decoded-message'
-import { sliceAtCodeUnitLimit } from '../../../shared/surrogate-safe-text-slice'
-import { ownRetainedString } from '../../../shared/own-retained-string'
+import { sliceAtCodeUnitLimit } from '../../../shared/text/surrogate-safe-text-slice'
+import { ownRetainedString } from '../../../shared/text/own-retained-string'
 import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
 

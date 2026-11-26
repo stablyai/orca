@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
 

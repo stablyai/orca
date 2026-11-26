@@ -17,7 +17,7 @@ import {
   claudeQuestionItems,
   type ClaudeQuestionItem
 } from './claude-structured-prompt-items'
-import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 
 const ADMITTED = { accepted: true } as const
 

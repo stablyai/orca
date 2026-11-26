@@ -3,6 +3,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import type { JournalSqlScope } from './journal-sql-scope'
 import { removeJournalDomainItem } from './journal-domain-item-removal'
 import { retainedFailures } from './journal-domain-retained-failures'
+import { clearRewoundJournalConnectorReplies } from './connector-replies/journal-connector-replies'
 import {
   JOURNAL_REWIND_CONTEXT,
   JOURNAL_REWIND_JOINS,
@@ -117,6 +118,7 @@ export function removeJournalDomainRewindSuffix(
       )
     }
   }
+  clearRewoundJournalConnectorReplies(db, scope, Date.now())
   db.exec('DELETE FROM journal_rewind_members; DELETE FROM journal_rewind_removals')
   return { childBoundary, failures, removedItemIds, removedTurnIds, items }
 }

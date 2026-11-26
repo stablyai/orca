@@ -38,7 +38,13 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
     permission: 'workspace',
     params: MergePr,
     handler: async (params, { runtime }) =>
-      runtime.mergeRepoPR(params.repo, params.prNumber, params.method, params.prRepo ?? null)
+      runtime.mergeRepoPR(
+        params.repo,
+        params.prNumber,
+        params.method,
+        params.prRepo ?? null,
+        params.expectedHeadSha
+      )
   }),
   defineMethod({
     name: 'github.setPRAutoMerge',

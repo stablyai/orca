@@ -3,15 +3,15 @@ import { join } from 'node:path'
 import {
   isInstalledOpenCodePluginCurrent,
   isOverlayOpenCodePluginCurrent
-} from '../../../shared/opencode-installed-plugin'
+} from '../../../shared/agent-launch/plugins/opencode/opencode-installed-plugin'
 import {
   writeCanonicalOpenCodePluginAtomically,
   writeOverlayOpenCodePluginAtomically
-} from '../../../shared/opencode-plugin-atomic-write'
+} from '../../../shared/agent-launch/plugins/opencode/opencode-plugin-atomic-write'
 import {
   writeOpenCodeTuiPlugin,
   writeOpenCodeTuiPluginDirectory
-} from '../../../shared/opencode-tui-plugin-install'
+} from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
 
 export function writeOpenCodePluginConfig(options: {
   configDir: string

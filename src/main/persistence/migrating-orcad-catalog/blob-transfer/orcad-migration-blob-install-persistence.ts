@@ -1,6 +1,6 @@
 import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { getHistoryRoot } from '../../../pty/history/terminal-history-paths'

@@ -1,7 +1,7 @@
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import {
   composeWorktreeHostIdentity,

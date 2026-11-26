@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 
 export type UpdateMobileDiffCommentInput = {
   id: string

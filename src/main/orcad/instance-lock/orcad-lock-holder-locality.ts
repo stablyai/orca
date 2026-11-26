@@ -6,7 +6,7 @@ import { orcadCloneMachineHint, orcadPeerIsLiveCloneMachine } from './orcad-lock
 import {
   orcadStaleLockReclaimCommand,
   type OrcadReclaimHintRuntime
-} from '../../../shared/orcad-stale-lock-reclaim'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
 
 /** Match machine identity, then legacy boot identity; identity-less records require local-only storage. */
 export function orcadLockHolderLocality(

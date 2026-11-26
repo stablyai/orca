@@ -1,5 +1,5 @@
 import { SPLIT_TERMINAL_PANE_EVENT, type SplitTerminalPaneDetail } from '@/constants/terminal'
-import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../../../terminal/background-terminal-worktree-visibility'
+import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../../../terminal/workspace-mounting/background-terminal-worktree-visibility'
 
 // Why 32: ordinary use has one request; the cap tolerates automation bursts without letting a stalled renderer retain unbounded commands or mount leases.
 export const TERMINAL_PANE_SPLIT_QUEUE_CAPACITY = 32
@@ -207,15 +207,4 @@ export function resolveTerminalPaneSplitSourceId(
   return detail.sourceLeafId
     ? (getNumericIdForLeaf(detail.sourceLeafId) ?? -1)
     : detail.paneRuntimeId
-}
-
-export function _resetTerminalPaneSplitRequestRoutingForTests(): void {
-  queuedRequests.splice(0)
-  for (const lease of splitMountLeasesByTarget.values()) {
-    clearTimeout(lease.timer)
-  }
-  splitMountLeasesByTarget.clear()
-  mountHoldsByTarget.clear()
-  splitMountLeaseListeners.clear()
-  splitMountLeaseTabIds = new Set()
 }

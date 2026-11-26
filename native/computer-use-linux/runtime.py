@@ -63,6 +63,7 @@ TEXT_LIMIT = 500
 MAX_SCREENSHOT_PNG_BYTES = 900_000
 MAX_SCREENSHOT_EDGE = 1280
 MIN_SCREENSHOT_SCALE = 0.25
+JPEG_SCREENSHOT_QUALITY = 80
 SCREENSHOT_SCALE_STEP = 0.85
 BLOCKED_APP_FRAGMENTS = (
     "1password",
@@ -104,6 +105,12 @@ def ensure_desktop_bus():
     missing = [name for name in ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS") if not os.environ.get(name)]
     if missing:
         raise RuntimeError("Linux computer use requires an active desktop session; missing " + ", ".join(missing))
+    # Why init explicitly: without a bus, libatspi's first call g_error()s and aborts past Python's handlers.
+    if Atspi.init() > 1:
+        raise RuntimeError(
+            "unsupported_capability: Linux computer use can't reach the AT-SPI accessibility bus, so nothing was "
+            "sent. Install at-spi2-core, or restart its bus with `systemctl --user restart at-spi-dbus-bus.service`, "
+            "then retry.")
 
 
 def desktop_root():
@@ -1048,14 +1055,14 @@ def within_capture_limit(width, height):
     return width <= 16384 and height <= 16384 and width * height <= 67_108_864
 
 
-def capture_wayland_png(bounds, app, window):
+def capture_wayland_png(bounds, request, app, window):
     backend = wayland_screenshot_backend()
     if backend is None:
         return screenshot_failure(UNSUPPORTED_WAYLAND_SCREENSHOT)
     if app is None or window is None:
         return screenshot_failure("Wayland screenshots need a target window")
     if backend == "kwin":
-        return capture_kwin_png(bounds, app, window)
+        return capture_kwin_png(bounds, request, app, window)
     grim = shutil.which("grim")
     if grim is None or GdkPixbuf is None:
         return screenshot_failure("Wayland screenshots require grim and GdkPixbuf; install them or use --no-screenshot")
@@ -1081,7 +1088,7 @@ def capture_wayland_png(bounds, app, window):
             pixbuf = decode_png(output.read())
             if pixbuf is None or pixbuf.get_width() != width or pixbuf.get_height() != height:
                 return screenshot_failure("grim returned an image with unexpected window dimensions")
-            return bounded_png_payload(pixbuf)
+            return bounded_screenshot_payload(pixbuf, request)
     except Exception as error:
         return screenshot_failure("Wayland screenshot failed: " + str(error)[:200])
 
@@ -1290,7 +1297,7 @@ def crop_workspace_png(data, rect, workspace):
     return window
 
 
-def capture_kwin_png(bounds, app, window):
+def capture_kwin_png(bounds, request, app, window):
     if GdkPixbuf is None:
         return screenshot_failure("KDE Wayland screenshots require GdkPixbuf; install it or use --no-screenshot")
     pid, title = pid_of(app), name_of(window)
@@ -1304,16 +1311,16 @@ def capture_kwin_png(bounds, app, window):
         after, _ = kwin_window_rect(kwin_layout(bus), pid, title, bounds)
         if after != layout:
             return screenshot_failure("Wayland screenshot skipped: the window moved, resized or was covered while capturing; retry")
-        return bounded_png_payload(crop_workspace_png(data, *layout))
+        return bounded_screenshot_payload(crop_workspace_png(data, *layout), request)
     except ValueError as error:
         return screenshot_failure("Wayland screenshot skipped: " + str(error)[:300])
     except Exception as error:
         return screenshot_failure("Wayland screenshot failed: " + str(error)[:200])
 
 
-def capture_png(rect, app=None, window=None):
+def capture_png(rect, request, app=None, window=None):
     if wayland_session():
-        return capture_wayland_png(rect, app, window)
+        return capture_wayland_png(rect, request, app, window)
     if Gdk is None or GdkPixbuf is None or rect is None:
         return None
     screen = Gdk.Screen.get_default()
@@ -1323,50 +1330,58 @@ def capture_png(rect, app=None, window=None):
     pixbuf = Gdk.pixbuf_get_from_window(root, round(rect.x), round(rect.y), max(1, round(rect.width)), max(1, round(rect.height)))
     if pixbuf is None:
         return None
-    return bounded_png_payload(pixbuf)
+    return bounded_screenshot_payload(pixbuf, request)
 
 
-def png_bytes(pixbuf):
-    ok, data = pixbuf.save_to_bufferv("png", [], [])
+def screenshot_request_of(operation):
+    """The size and format the caller asked for; a value the RPC layer would refuse is ignored."""
+    def positive(key):
+        value = operation.get(key)
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0 else None
+    return {
+        "format": "jpeg" if operation.get("screenshotFormat") == "jpeg" else "png",
+        "maxScale": positive("screenshotScale"),
+        "maxEdge": positive("screenshotMaxEdge"),
+    }
+
+
+def image_bytes(pixbuf, image_format):
+    if image_format == "jpeg":
+        ok, data = pixbuf.save_to_bufferv("jpeg", ["quality"], [str(JPEG_SCREENSHOT_QUALITY)])
+    else:
+        ok, data = pixbuf.save_to_bufferv("png", [], [])
     return bytes(data) if ok else None
 
 
-def screenshot_payload(data, width, height, original_width):
+def screenshot_payload(data, image_format, width, height, original_width):
     return {
         "base64": base64.b64encode(data).decode("ascii"),
+        "format": image_format,
         "width": width,
         "height": height,
         "scale": width / max(1, original_width),
     }
 
 
-def bounded_png_payload(pixbuf):
+def bounded_screenshot_payload(pixbuf, request):
     original_width = max(1, pixbuf.get_width())
     original_height = max(1, pixbuf.get_height())
-    data = png_bytes(pixbuf)
-    if data is None:
-        return None
-    if len(data) <= MAX_SCREENSHOT_PNG_BYTES:
-        return screenshot_payload(data, original_width, original_height, original_width)
-
-    # Why: screenshots are sent through JSON/stdout; matching macOS bounds keeps
-    # large or high-DPI windows from multiplying native, base64, and Node memory.
-    scale = min(1.0, MAX_SCREENSHOT_EDGE / max(original_width, original_height))
-    while scale >= MIN_SCREENSHOT_SCALE:
-        width = max(1, round(original_width * scale))
-        height = max(1, round(original_height * scale))
-        if width == original_width and height == original_height:
-            scale *= SCREENSHOT_SCALE_STEP
+    image_format = request["format"]
+    # Captures here are one pixel per window coordinate, so the scale cap is the resize factor itself.
+    requested = min(1.0, request["maxScale"] or 1.0)
+    if request["maxEdge"]:
+        requested = min(requested, request["maxEdge"] / max(original_width, original_height))
+    tried = None
+    for scale in screenshot_scales(requested, original_width, original_height):
+        width, height = pixel_size(original_width, scale), pixel_size(original_height, scale)
+        if (width, height) == tried:
             continue
-        scaled = pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR)
-        if scaled is None:
-            scale *= SCREENSHOT_SCALE_STEP
-            continue
-        candidate = png_bytes(scaled)
-        if candidate is not None:
-            if len(candidate) <= MAX_SCREENSHOT_PNG_BYTES:
-                return screenshot_payload(candidate, width, height, original_width)
-        scale *= SCREENSHOT_SCALE_STEP
+        tried = (width, height)
+        scaled = pixbuf if (width, height) == (original_width, original_height) else pixbuf.scale_simple(
+            width, height, GdkPixbuf.InterpType.BILINEAR)
+        candidate = image_bytes(scaled, image_format) if scaled is not None else None
+        if candidate is not None and len(candidate) <= MAX_SCREENSHOT_PNG_BYTES:
+            return screenshot_payload(candidate, image_format, width, height, original_width)
 
     return {
         "error": {
@@ -1374,6 +1389,22 @@ def bounded_png_payload(pixbuf):
             "message": "screenshot exceeded the computer-use payload cap after downscaling; retry with --no-screenshot or target a smaller window",
         }
     }
+
+
+def pixel_size(length, scale):
+    """Rounds down, so a requested scale or edge is a ceiling; the epsilon keeps an exact product such as 0.5 x 200 whole."""
+    return max(1, math.floor(length * scale + 1e-9))
+
+
+def screenshot_scales(requested, original_width, original_height):
+    """The requested size first, then smaller sizes while the encoded image is over the payload cap."""
+    yield requested
+    # Why: screenshots are sent through JSON/stdout; matching macOS bounds keeps
+    # large or high-DPI windows from multiplying native, base64, and Node memory.
+    scale = min(requested, MAX_SCREENSHOT_EDGE / max(original_width, original_height))
+    while scale >= MIN_SCREENSHOT_SCALE:
+        yield scale
+        scale *= SCREENSHOT_SCALE_STEP
 
 
 def first_descendant(root, predicate, max_nodes=MAX_NODES, max_depth=MAX_DEPTH):
@@ -1441,7 +1472,7 @@ def window_json(app, index, window):
     }
 
 
-def make_snapshot(query, include_screenshot, window_id=None, window_index=None, restore=False, root=None):
+def make_snapshot(query, screenshot_request, window_id=None, window_index=None, restore=False, root=None):
     app = find_app(query)
     window_index, window = choose_window(app, window_id, window_index)
     if restore:
@@ -1466,8 +1497,8 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     selection = selected_text(window)
     app_info = app_json(app)
     window_title = name_of(window)
-    screenshot = capture_png(bounds, app, window) if include_screenshot else None
-    if include_screenshot and bounds is None and placement.window_coords:
+    screenshot = capture_png(bounds, screenshot_request, app, window) if screenshot_request is not None else None
+    if screenshot_request is not None and bounds is None and placement.window_coords:
         screenshot = screenshot_failure("GTK 4 screenshot skipped: Orca can't tell where this window sits on screen; "
                                         "use --no-screenshot and trust the tree")
     geometry = GeometryReader()
@@ -1482,7 +1513,8 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
         "windowId": None,
         "windowIndex": window_index,
         "windowBounds": bounds.to_json() if bounds else None,
-        "screenshotPngBase64": screenshot.get("base64") if screenshot else None,
+        "screenshotBase64": screenshot.get("base64") if screenshot else None,
+        "screenshotFormat": screenshot.get("format") if screenshot else None,
         "screenshotWidth": screenshot.get("width") if screenshot else None,
         "screenshotHeight": screenshot.get("height") if screenshot else None,
         "screenshotScale": screenshot.get("scale") if screenshot else None,
@@ -2500,7 +2532,7 @@ def set_value(node, value):
 def run_operation(operation):
     _x11_windows_by_pid.clear()
     tool = operation.get("tool")
-    include_screenshot = not bool(operation.get("noScreenshot"))
+    screenshot_request = None if operation.get("noScreenshot") else screenshot_request_of(operation)
     if tool == "handshake":
         return {"ok": True, "capabilities": handshake_response()}
     if tool == "list_apps":
@@ -2512,7 +2544,7 @@ def run_operation(operation):
             "ok": True,
             "snapshot": make_snapshot(
                 operation.get("app", ""),
-                include_screenshot,
+                screenshot_request,
                 operation.get("windowId"),
                 operation.get("windowIndex"),
                 bool(operation.get("restoreWindow")),
@@ -2633,7 +2665,7 @@ def run_operation(operation):
     try:
         snapshot = make_snapshot(
             operation.get("app", ""),
-            include_screenshot,
+            screenshot_request,
             operation.get("windowId"),
             operation.get("windowIndex"),
         )
@@ -2641,7 +2673,7 @@ def run_operation(operation):
         if operation.get("windowId") is None and operation.get("windowIndex") is None:
             raise
         action.setdefault("verification", {"state": "unverified", "reason": "window_changed"})
-        snapshot = make_snapshot(operation.get("app", ""), include_screenshot, None, None)
+        snapshot = make_snapshot(operation.get("app", ""), screenshot_request, None, None)
 
     # Why measured: synthetic input needs the window in front, and an app can activate itself after an AT-SPI action.
     took_foreground = ((not was_active[0] and has_state(window, Atspi.StateType.ACTIVE))

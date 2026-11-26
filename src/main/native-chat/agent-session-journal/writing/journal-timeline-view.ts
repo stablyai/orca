@@ -9,7 +9,7 @@ import { journalItemLifecycleState } from '../journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from '../item-lifecycle/journal-subagent-liveness'
 import { personStopDecidesTurn } from '../context-epochs/journal-stop-turn-end'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { spelledProviderTimelineItemKey } from '../../../../shared/provider-timeline-item-key'
+import { spelledProviderTimelineItemKey } from '../../../../shared/agent-session/journal/provider-timeline-item-key'
 
 /** Named selections a timeline resolution reads at its write position; never the whole chat. */
 export type JournalTimelineView = {

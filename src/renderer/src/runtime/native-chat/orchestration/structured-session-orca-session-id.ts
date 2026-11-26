@@ -1,11 +1,11 @@
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationSessionAddressResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /**
  * A chat's Orca session ID: its `/clear` root's, which the host derives from the session records.

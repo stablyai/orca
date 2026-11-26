@@ -13,7 +13,7 @@ export async function listFavouriteFilters(
   signal?: AbortSignal
 ): Promise<JiraFavouriteFilterList> {
   const selection = JiraFavouriteFilterParams.parse({ siteId }).siteId
-  const entries = getClients(selection)
+  const entries = await getClients(selection)
   requireStrictJiraSite(entries, selection, true)
   const entry = entries[0]
   return withJiraDeadline(signal, 25_000, async (deadlineSignal) => {

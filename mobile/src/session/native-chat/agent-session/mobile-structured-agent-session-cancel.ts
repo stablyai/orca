@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { AgentSessionCancelResult } from '../../../../../src/shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { runningStructuredAgentSessionTurnId } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
   joinStructuredAgentSessionStop,

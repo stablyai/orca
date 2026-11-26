@@ -5,7 +5,7 @@ import {
   ORCAD_STOP_REQUEST_FILENAME,
   type OrcadManagedStopContext,
   type OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   orcadManagedStopRequestPath,
   validateOrcadManagedStopRequest
@@ -13,6 +13,7 @@ import {
 import { claimOrcadManagedStopDecision } from './orcad-managed-stop-decision'
 import { withdrawOrcadManagedStopRequest } from './orcad-managed-stop-cancellation'
 import { hasErrorCode } from '../../../daemon/endpoint/identity/daemon-process-inspection'
+import { watchedDirectoryDeletionCheck } from '../../../../shared/file-watch/windows-deleted-directory-watch'
 
 export type OrcadStopRequestListener = { close(): void }
 
@@ -50,9 +51,15 @@ function listenForRequest<T>(
     stop()
     onRequest(request)
   }
+  const isDirectoryDeleted = watchedDirectoryDeletionCheck(dirname(requestPath))
   let watcher: FSWatcher | null = null
   try {
-    watcher = watch(dirname(requestPath), (_event, changed) => {
+    watcher = watch(dirname(requestPath), (event, changed) => {
+      if (isDirectoryDeleted(event, changed)) {
+        // Closing ends libuv's re-arm loop; polling still delivers requests.
+        watcher?.close()
+        return
+      }
       if (!changed || basename(String(changed)) === basename(requestPath)) {
         check()
       }

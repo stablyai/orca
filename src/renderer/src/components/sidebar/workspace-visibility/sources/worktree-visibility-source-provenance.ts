@@ -1,8 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { ExternalWorktreeVisibility, Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
-import { effectiveExternalWorktreeVisibility } from '../../../../../../shared/external-worktree-visibility'
+import type {
+  ExternalWorktreeVisibility,
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repository/repo-types'
+import { effectiveExternalWorktreeVisibility } from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import {
   effectiveDefaultBuiltInWorktreeSourceVisibility,
   effectiveDefaultCustomWorktreeSourceVisibility,

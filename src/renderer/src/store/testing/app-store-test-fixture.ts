@@ -1,3 +1,4 @@
+import { withStatusTransaction } from '../status-transaction/status-transaction-boundary'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
@@ -30,7 +31,7 @@ import { createSshSlice } from '../slices/ssh/create-ssh-slice'
 import { createRuntimeEnvironmentSshSlice } from '../slices/ssh/runtime-environment-ssh'
 import { createWslHostsSlice } from '../slices/wsl/wsl-hosts'
 import { createAgentStatusSlice } from '../slices/agent-status/agent-status'
-import { createPaneForegroundAgentSlice } from '../slices/agent-status/pane-foreground-agent'
+import { createPaneForegroundAgentSlice } from '../slices/agent-status/pane-authority/pane-foreground-agent'
 import { createDiffCommentsSlice } from '../slices/diff-comments/create-diff-comments-slice'
 import { createDetectedAgentsSlice } from '../slices/agent-inventory/create-detected-agents-slice'
 import { createRuntimeDetectedAgentsSlice } from '../slices/agent-inventory/runtime-detected-agents'
@@ -49,21 +50,22 @@ import { createNewIssueDraftSlice } from '../slices/task-creation/new-issue-draf
 import { createFeedbackDraftSlice } from '../slices/feedback/feedback-draft'
 import { createTaskCreationDraftsSlice } from '../slices/task-creation/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from '../slices/runtime-host-updates/remote-server-updates'
+import { createAgentCliUpdatesSlice } from '../slices/runtime-host-updates/agent-cli-updates'
 import { createTerminalQuickCommandHostsSlice } from '../terminals/quick-commands/terminal-quick-command-hosts'
-import { createStructuredSessionLaunchDirectorySlice } from '../slices/agent-status/structured-session-launch-directories'
-import { createStructuredChatSleptAtSlice } from '../slices/agent-status/structured-chat-slept-at'
-import { createStructuredChatCompanionWritesSlice } from '../slices/agent-status/structured-chat-companion-writes'
+import { createStructuredSessionLaunchDirectorySlice } from '../slices/agent-status/structured-sessions/structured-session-launch-directories'
+import { createStructuredChatSleptAtSlice } from '../slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { createStructuredChatCompanionWritesSlice } from '../slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import { createWorkspaceAttentionSlice } from '../slices/workspace-attention/workspace-attention-slice'
 import { createEphemeralVmLifecycleSlice } from '../slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../slices/editor/buffers/editor-buffer-record-lifecycle'
-import { withAgentConversationRetention } from '../slices/agent-status/agent-conversation-retention'
+import { withAgentConversationRetention } from '../slices/agent-status/conversation/agent-conversation-retention'
 import { TEST_REPO } from '../repos/repo.test-fixture'
 import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/observations/provider-runtime-context'
 import { markHydratedBrowserPageHandles } from '../slices/browser/hosts/browser-initialization-presentation-ownership'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
-  withEditorBufferRecords(withAgentConversationRetention(creator), check)
+  withStatusTransaction(withEditorBufferRecords(withAgentConversationRetention(creator), check))
 
 export function createTestStore(
   isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
@@ -120,6 +122,7 @@ export function createTestStore(
         ...createFeedbackDraftSlice(...a),
         ...createTaskCreationDraftsSlice(...a),
         ...createRemoteServerUpdatesSlice(...a),
+        ...createAgentCliUpdatesSlice(...a),
         ...createTerminalQuickCommandHostsSlice(...a),
         ...createStructuredSessionLaunchDirectorySlice(...a),
         ...createStructuredChatSleptAtSlice(...a),

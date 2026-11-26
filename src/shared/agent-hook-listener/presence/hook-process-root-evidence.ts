@@ -7,10 +7,13 @@ import type {
   AgentProcessIdentity,
   AgentProcessVerdict
 } from '../../agent-status/process/agent-process-presence'
-import { hasControllingTty } from '../../posix-controlling-terminal'
-import { unreadableArgvName, type ProcessTableRow } from '../../process-table-snapshot'
+import { hasControllingTty } from '../../terminal/pty/native-process/posix-controlling-terminal'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../process-observation/tables/process-table-snapshot'
 import { isShellProcess } from '../../agent-status/process/shell-process-detection'
-import type { TmuxHookPane } from '../../tmux-client-attachment'
+import type { TmuxHookPane } from './tmux-client-attachment'
 
 /** What the execution host can prove about a hook's process relative to the pane it names.
  *  `root`: the pane's own agent. `nested`: another agent runs it. `competing`: another job or
@@ -74,7 +77,7 @@ export type HookPaneProcessIo = {
   readTmux?: (socket: string, rootPid: number, pane: string) => Promise<TmuxPaneBridge | null>
 }
 
-// Matches the bounded ancestry walk of the common pattern; a pane's agent sits a few levels below its root.
+// Bounded ancestry walk; a pane's agent sits a few levels below its root.
 const MAX_ANCESTRY_DEPTH = 32
 const MAX_TERMINAL_ROWS = 256
 

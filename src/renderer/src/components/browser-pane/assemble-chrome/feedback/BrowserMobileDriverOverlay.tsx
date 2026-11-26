@@ -1,17 +1,22 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
-import type { RuntimeTerminalDriverState } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   driver: RuntimeTerminalDriverState
   onTakeBack: () => void | Promise<void>
+  onTakeBackAll: () => void | Promise<void>
 }
 
 const OVERLAY_TITLE_ID = 'browser-mobile-driver-overlay-title'
 
-export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): ReactElement | null {
+export function BrowserMobileDriverOverlay({
+  driver,
+  onTakeBack,
+  onTakeBackAll
+}: Props): ReactElement | null {
   const t = useTranslate()
   const [pending, setPending] = useState(false)
   const [takeBackFailed, setTakeBackFailed] = useState(false)
@@ -30,14 +35,14 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
     return null
   }
 
-  const handleTakeBack = async (): Promise<void> => {
+  const runTakeBack = async (takeBack: () => void | Promise<void>): Promise<void> => {
     if (pending) {
       return
     }
     setPending(true)
     setTakeBackFailed(false)
     try {
-      await onTakeBack()
+      await takeBack()
     } catch {
       // Show reclaim failure and permit retry when the runtime is gone or the phone still holds the lock.
       if (mountedRef.current) {
@@ -93,9 +98,24 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
             )}
           </div>
         ) : null}
-        <div className="mt-1 flex justify-end">
+        <div className="mt-1 flex justify-end gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => runTakeBack(onTakeBackAll)}
+            disabled={pending}
+          >
+            {t('auto.components.terminal.pane.MobileDriverOverlay.2f7b4d1e95', 'Take back all')}
+          </Button>
           {/* autoFocus puts keyboard users on the recovery action when the lock appears. */}
-          <Button type="button" size="sm" onClick={handleTakeBack} disabled={pending} autoFocus>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => runTakeBack(onTakeBack)}
+            disabled={pending}
+            autoFocus
+          >
             {t('auto.components.browser.pane.BrowserMobileDriverOverlay.a6914ee43f', 'Take back')}
           </Button>
         </div>

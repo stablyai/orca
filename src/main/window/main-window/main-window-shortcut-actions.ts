@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
-import type { WindowShortcutAction } from '../../../shared/window-shortcut-policy'
+import type { WindowShortcutAction } from '../../../shared/keybindings/window-shortcut-policy'
+import { reloadWithRendererCheckpoint } from '../renderer-relays/native-unload-coordinator'
 
 export function sendResolvedWindowShortcutAction(
   mainWindow: BrowserWindow,
@@ -18,8 +19,9 @@ export function sendResolvedWindowShortcutAction(
       mainWindow.webContents.send('ui:openSettings')
       return
     case 'forceReload':
-      onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
-      mainWindow.webContents.reloadIgnoringCache()
+      void reloadWithRendererCheckpoint(mainWindow.webContents, true, onBeforeReload).catch(
+        () => {}
+      )
       return
     case 'toggleLeftSidebar':
       mainWindow.webContents.send('ui:toggleLeftSidebar')

@@ -7,7 +7,7 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { rewriteOrcadMigrationWorktreeId } from '../../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import type { WslMoveDesktopRewriteContext } from './wsl-move-desktop-rewrite-stores'
 

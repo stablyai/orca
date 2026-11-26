@@ -1,4 +1,4 @@
-import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
+import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 
 export type LocaleCatalog = Readonly<Record<string, unknown>>
 

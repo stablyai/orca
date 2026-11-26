@@ -1,7 +1,7 @@
 import {
   DICTATION_TEXT_BLOCK_SELECTOR,
   dictationSeparators
-} from '../../../shared/dictation-transcript-spacing'
+} from '../../../shared/speech/dictation/dictation-transcript-spacing'
 
 // The focused text field of this frame's document, looking through open shadow roots, or null.
 const FOCUSED_FIELD_EXPRESSION = `(() => {

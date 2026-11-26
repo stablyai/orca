@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
-} from '../../../../shared/wsl-login-shell-command'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
 
 export type WslGitReadEnvironment = { gitPath: string; home: string; path: string }
@@ -82,15 +83,16 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
   ].join('\n')
   const captured = buildWslCapturedLoginShellCommand(probeCommand)
   const args = buildWslExecArgs(distro, ['sh', '-lc', captured.command])
+  const wslExe = windowsSystem32Binary('wsl.exe')
   return new Promise((resolve) => {
     try {
-      assertWslDistroAllowed('wsl.exe', args)
+      assertWslDistroAllowed(wslExe, args)
     } catch {
       resolve({ kind: 'rejected' })
       return
     }
     execFile(
-      'wsl.exe',
+      wslExe,
       args,
       {
         encoding: 'utf8',
@@ -165,22 +167,6 @@ export function invalidateWslGitReadEnvironment(distro: string): void {
 export function disableWslGitReadEnvironment(distro: string): void {
   environmentByDistro.set(distro, Promise.resolve(null))
   settledEnvironmentByDistro.set(distro, null)
-  touchDistroState(distro)
-  transientRetryAfterByDistro.delete(distro)
-}
-
-export function resetWslGitReadEnvironmentForTests(): void {
-  environmentByDistro.clear()
-  settledEnvironmentByDistro.clear()
-  transientRetryAfterByDistro.clear()
-}
-
-export function seedWslGitReadEnvironmentForTests(
-  distro: string,
-  environment: WslGitReadEnvironment
-): void {
-  environmentByDistro.set(distro, Promise.resolve(environment))
-  settledEnvironmentByDistro.set(distro, environment)
   touchDistroState(distro)
   transientRetryAfterByDistro.delete(distro)
 }

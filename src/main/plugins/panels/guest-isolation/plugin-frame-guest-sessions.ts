@@ -15,7 +15,7 @@ import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-
 import type { PluginFrameSurface } from '../../../../shared/plugins/frames/plugin-panel-shell'
 import type { ValidDiscoveredPlugin } from '../../discovery/plugin-discovery'
 import { pluginFrameContentRevision } from '../../development/plugin-dev-revision'
-import type { KeybindingOverrides } from '../../../../shared/keybindings'
+import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import { createPluginFrameRequestHandler } from '../plugin-frame-protocol'
 import { pluginFrameAttachKey } from './plugin-frame-request-policy'
 import { applyPluginFrameSessionPolicies } from './plugin-frame-session-policies'

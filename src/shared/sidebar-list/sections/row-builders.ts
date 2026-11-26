@@ -1,4 +1,4 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../../folder-workspaces/folder-workspace-worktree'
@@ -8,7 +8,7 @@ import {
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrence,
   type WorktreeOccurrencePlan
-} from '../../worktree-occurrence-plan'
+} from '../lineage/worktree-occurrence-plan'
 import type { NoticeHostContext } from '../hosts/host-labels'
 import type { RenderableFolderWorkspace } from '../folders/folder-workspace-lanes'
 import type {
@@ -82,33 +82,46 @@ export function appendWorktreeRows(
 ): void {
   const lineageRanges = buildWorktreeLineageRanges(plan)
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
-  const childIdsByParent = new Map<string, string[]>()
-  sectionOccurrences.forEach((occurrence) => {
+  let childIdsByParent: Map<string, string[]> | undefined
+  for (const occurrence of sectionOccurrences) {
     if (occurrence.parent) {
-      const children = childIdsByParent.get(occurrence.parent.key) ?? []
-      children.push(occurrence.row.id)
-      childIdsByParent.set(occurrence.parent.key, children)
+      childIdsByParent ??= new Map<string, string[]>()
+      const children = childIdsByParent.get(occurrence.parent.key)
+      if (children) {
+        children.push(occurrence.row.id)
+      } else {
+        childIdsByParent.set(occurrence.parent.key, [occurrence.row.id])
+      }
     }
-  })
-  const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
-    options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+  }
+  const occurrences =
+    childIdsByParent && options.collapsedGroups.size > 0
+      ? getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
+          options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+        )
+      : sectionOccurrences
+  const needsHostIdentity = Boolean(
+    options.folderPairByIdentity || options.hostContextLabelByWorktreeIdentity
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
-    const folderPair = options.folderPairByIdentity?.get(getWorktreeHostIdentity(worktree))
+    const hostIdentity = needsHostIdentity ? getWorktreeHostIdentity(worktree) : undefined
+    const folderPair = hostIdentity ? options.folderPairByIdentity?.get(hostIdentity) : undefined
     if (folderPair) {
       result.push(
         buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
           collapsedGroups: options.collapsedGroups,
-          childWorktreeIds: childIdsByParent.get(occurrence.key),
+          childWorktreeIds: childIdsByParent?.get(occurrence.key),
           descendantIdentities: lineageRanges.get(occurrence.key),
-          hostContextLabel: options.hostContextLabelByWorktreeIdentity?.get(
-            getWorktreeHostIdentity(worktree)
-          )
+          hostContextLabel: hostIdentity
+            ? options.hostContextLabelByWorktreeIdentity?.get(hostIdentity)
+            : undefined
         })
       )
       continue
     }
+    const lineageGroupKey =
+      occurrence.childCount > 0 ? getWorktreeLineageGroupKey(worktree) : undefined
     result.push({
       type: 'item',
       occurrence,
@@ -120,16 +133,17 @@ export function appendWorktreeRows(
       groupDepth: options.groupDepth,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
-      lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
+      lineageChildWorktreeIds: childIdsByParent?.get(occurrence.key),
       lineageDescendantIdentities: lineageRanges.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
-        options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
-        options.hostContextLabelByRepoId?.get(worktree.repoId),
-      ...(occurrence.childCount > 0
+        (hostIdentity
+          ? options.hostContextLabelByWorktreeIdentity?.get(hostIdentity)
+          : undefined) ?? options.hostContextLabelByRepoId?.get(worktree.repoId),
+      ...(lineageGroupKey
         ? {
-            lineageGroupKey: getWorktreeLineageGroupKey(worktree),
-            lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+            lineageGroupKey,
+            lineageCollapsed: options.collapsedGroups.has(lineageGroupKey)
           }
         : {})
     })

@@ -5,8 +5,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import type {
   AddProjectMenuAction,
   AddRepoDialogEntryRequest

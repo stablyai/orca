@@ -1,12 +1,12 @@
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderSourceRepos } from '../../shared/folder-workspaces/folder-workspace-source-repos'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   type WorkspaceKey
-} from '../../shared/workspace-scope'
+} from '../../shared/workspace/identity/workspace-scope'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'

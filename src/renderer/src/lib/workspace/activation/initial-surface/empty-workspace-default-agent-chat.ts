@@ -6,8 +6,8 @@ import type { AppState } from '@/store/types'
 import {
   getAgentDetectionTargetKeyForWorktree,
   parseAgentDetectionTargetKey
-} from '@/hooks/useAgentDetectionTarget'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+} from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import {
   ensureDetectedAgentsForTarget,
   readDetectedAgentsForTarget
@@ -20,7 +20,7 @@ import {
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'

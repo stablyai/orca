@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/jira/jira-quick-filters'
 import { assertRuntimeEnvironmentCapability } from '../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export async function readJiraQuickFilterState(
   target: RuntimeClientTarget

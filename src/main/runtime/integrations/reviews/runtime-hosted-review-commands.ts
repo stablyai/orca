@@ -7,8 +7,8 @@ import type {
   GitHubPRRefreshReason,
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import {
   admissionTierForRefreshReason,
@@ -88,10 +88,17 @@ export class RuntimeHostedReviewCommands {
     clientKind?: DeviceScope,
     signal?: AbortSignal,
     acceptRevalidationOnly = false,
-    selected = false
+    selected = false,
+    linkedPRUrl?: string
   ): Promise<PRSnapshotReply> {
     const deadline = Date.now() + HOSTED_PR_COMPLETION_WAIT_MS
     const repo = await this.deps.resolveRepo(repoSelector)
+    const recordOutcome = (outcome: PRSnapshotReply): PRSnapshotReply => {
+      if ('kind' in outcome && outcome.kind === 'found') {
+        this.deps.recordCreated(repo.id, outcome.pr.number, outcome.pr.url)
+      }
+      return outcome
+    }
     const lookupOptions: GitHubPRBranchLookupOptions = {
       ...this.deps.getExecutionOptions(
         repo,
@@ -110,6 +117,9 @@ export class RuntimeHostedReviewCommands {
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
     }
+    if (linkedPRUrl) {
+      lookupOptions.linkedPRUrl = linkedPRUrl
+    }
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
     // Legacy phone reads retain their narrower thirty-second reuse contract.
     if (clientKind === 'mobile' && reason === undefined) {
@@ -122,7 +132,7 @@ export class RuntimeHostedReviewCommands {
         lookupOptions
       )
       if (recent) {
-        return recent
+        return recordOutcome(recent)
       }
     }
     const candidate = {
@@ -134,6 +144,7 @@ export class RuntimeHostedReviewCommands {
       connectionId,
       currentHeadOid: lookupOptions.currentHeadOid ?? null,
       linkedPRNumber: linkedPRNumber ?? null,
+      ...(linkedPRUrl ? { linkedPRUrl } : {}),
       fallbackPRNumber: linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
       localGitOptions: lookupOptions.localGitExecOptions,
       isSelected: reason === 'swr' && userRefresh !== true && selected
@@ -147,9 +158,11 @@ export class RuntimeHostedReviewCommands {
       lookupOptions
     )
     if (reason === 'swr' && userRefresh !== true) {
-      return runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
+      return recordOutcome(
+        await runHostedPRSnapshot(candidate, prepared, deadline, signal, acceptRevalidationOnly)
+      )
     }
-    return runHostedPRRead(candidate, prepared)
+    return recordOutcome(await runHostedPRRead(candidate, prepared))
   }
 
   async getHostedReviewForBranch(args: {
@@ -217,6 +230,7 @@ export class RuntimeHostedReviewCommands {
           linkedBitbucketPR: args.linkedBitbucketPR ?? null,
           linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
           linkedGiteaPR: args.linkedGiteaPR ?? null,
+          currentHeadOid: args.currentHeadOid ?? null,
           ...executionOptions
         }),
       {

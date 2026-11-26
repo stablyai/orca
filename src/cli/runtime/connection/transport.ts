@@ -1,18 +1,24 @@
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { findTransport, type RuntimeMetadata } from '../../../shared/runtime-bootstrap'
+import {
+  findTransport,
+  type RuntimeMetadata
+} from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type {
   ExpectedRuntimeSource,
   RuntimeOrchestrationEnvelope,
   RuntimeRequestSelection,
   RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
-import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import {
+  isKeepaliveFrame,
+  RuntimeRpcEnvelopeSchema
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RuntimeClientError, RuntimeRpcFailureError } from './types'
 
-import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/concurrency/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
-import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/local-runtime-rpc-limits'
+import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/remote-runtime/rpc/local-runtime-rpc-limits'
 import { daemonSocketDirIsTrusted } from '../../../main/daemon/endpoint/publication/daemon-socket-endpoint-path'
 
 // Agents read these; a blip must not send them to `orca open`, which raises the window.
@@ -69,6 +75,8 @@ export async function sendRequest<TResult>(
     const statusRequestId = requestSelection ? randomUUID() : null
     let awaitingStatus = statusRequestId !== null
     let selectedParams = params
+    // Until the request itself is written, a timeout proves it never reached the runtime.
+    let requestWritten = false
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -80,7 +88,8 @@ export async function sendRequest<TResult>(
       reject(
         new RuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the Orca runtime to respond.'
+          'Timed out waiting for the Orca runtime to respond.',
+          requestWritten ? undefined : { requestSent: false }
         )
       )
     }, timeoutMs)
@@ -228,16 +237,18 @@ export async function sendRequest<TResult>(
     })
     const send = (id: string, requestedMethod: string, requestedParams: unknown): void => {
       try {
+        // The status pre-request carries no orchestration fields: it must not read as the request.
+        const orchestration = id === requestId ? envelope : undefined
         const serialized = `${JSON.stringify({
           id,
           authToken: metadata.authToken,
           method: requestedMethod,
           params: requestedParams,
-          orchestrationCapability: envelope?.orchestrationCapability,
-          orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId,
-          compatibilityInvocationId: envelope?.compatibilityInvocationId,
-          orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
+          orchestrationCapability: orchestration?.orchestrationCapability,
+          orchestrationContractVersion: orchestration?.orchestrationContractVersion,
+          orchestrationRequestId: orchestration?.orchestrationRequestId,
+          compatibilityInvocationId: orchestration?.compatibilityInvocationId,
+          orchestrationCompatibilityEvidence: orchestration?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource
         })}\n`
         if (Buffer.byteLength(serialized, 'utf8') > MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES) {
@@ -249,6 +260,7 @@ export async function sendRequest<TResult>(
         }
         if (id === requestId) {
           requestSelection?.onDispatch?.()
+          requestWritten = true
         }
         socket.write(serialized)
       } catch (error) {

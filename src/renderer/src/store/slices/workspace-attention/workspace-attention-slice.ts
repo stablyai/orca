@@ -27,10 +27,11 @@ import {
   type HostScopedWorktreeKey
 } from '../../../../../shared/worktree/host-qualified-identity'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
-import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import { getAgentPaneExecutionHost } from '../agent-status/pane-authority/agent-pane-execution-host'
 import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
-import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { hasUnreadAgentSessionTab } from '@/components/terminal-pane/notifications/unread-agent-session-membership'
@@ -42,7 +43,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
   [],
   [],
   WorkspaceAttentionSlice
-> = (set, get) => {
+> = (set, get, api) => {
   const markTabUnread = (tabId: string, reason: AgentAttentionUnreadReason): void => {
     const state = get()
     if (state.unreadTerminalTabs[tabId]) {
@@ -130,7 +131,13 @@ export const createWorkspaceAttentionSlice: StateCreator<
         return
       }
       // Why here too: the bell's marker is written before its delayed banner reaches the attention policy.
-      if (isWorkspaceNotificationMutedBySidebarFilters(get(), worktreeId)) {
+      if (
+        isWorkspaceNotificationMutedBySidebarFilters(
+          get(),
+          runtimeStatusSubscriptionsFor(api).readStatuses(),
+          worktreeId
+        )
+      ) {
         return
       }
       markWorkspaceUnreadFlag(set, get, worktreeId)
@@ -239,7 +246,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
           .map((tab) => [tab.entityId, tab.executionHostId])
       )
       const hostPaneKeys = [...paneKeys].filter((paneKey) => {
-        const entry = state.agentStatusByPaneKey[paneKey]
+        const entry = state.agentStatusByPaneKey.get(paneKey)
         const tabId = paneKeyTabId(paneKey)
         const tab = tabId ? tabsById.get(tabId) : undefined
         return isExecutionHostForWorktree(

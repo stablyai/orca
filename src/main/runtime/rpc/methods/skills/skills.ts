@@ -1,44 +1,45 @@
 import { defineMethod } from '../../core'
 import type { z } from 'zod'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
-import { SkillDeleteRequestSchema } from '../../../../../shared/skill-delete-contract'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
+import { SkillDeleteRequestSchema } from '../../../../../shared/skills/deletion/skill-delete-contract'
 import {
   BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   previewSkillDeleteRequest,
   runSkillDeleteRequest,
   type SkillDeleteRequestDependencies
 } from '../../../../skills/skill-delete/skill-delete-request'
-import type { SkillDiscoveryTargetSchema } from '../../../../../shared/skills'
+import type { SkillDiscoveryTargetSchema } from '../../../../../shared/skills/discovery/skills'
 import {
   SkillInstallPreviewRequestSchema,
   SkillInstallRequestSchema,
   SkillRemoveRequestSchema
-} from '../../../../../shared/skill-install-contract'
+} from '../../../../../shared/skills/installation/skill-install-contract'
 import {
   SkillBundleInstallProgressSchema,
   SkillBundleInstallRequestSchema
-} from '../../../../../shared/skill-bundle-install-contract'
+} from '../../../../../shared/skills/installation/skill-bundle-install-contract'
 import {
   SkillUploadBeginRequestSchema,
   SkillUploadChunkRequestSchema,
   SkillUploadCommitRequestSchema
-} from '../../../../../shared/skill-upload-session-contract'
+} from '../../../../../shared/skills/sharing/skill-upload-session-contract'
 import {
   discoverSkillsOnTarget,
-  resolveSkillDiscoveryTarget
+  resolveSkillDiscoveryTarget,
+  type ResolvedSkillDiscoveryTarget
 } from '../../../../skills/discovery/skill-discovery-target'
-import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../../../../shared/skill-install-capability'
+import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../../../../shared/skills/capabilities/skill-install-capability'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   AgentSkillShareRequestSchema,
   AgentSkillSharingError
-} from '../../../../../shared/agent-skill-sharing-contract'
+} from '../../../../../shared/skills/sharing/agent-skill-sharing-contract'
 import {
   SkillsCancelInstallParams,
   SkillsDiscoverParams,
@@ -77,6 +78,16 @@ async function withWorkspaceCwd(
   return { ...params, cwd: target.worktree.path }
 }
 
+// A bot's chats also load its linked projects' skills, so its home lists them as chat does.
+function withBotLinkedSkills(
+  target: ResolvedSkillDiscoveryTarget,
+  linkedSkillsFolder: string | null
+): ResolvedSkillDiscoveryTarget {
+  return linkedSkillsFolder && target.kind === 'native-host'
+    ? { ...target, linkedSkillsFolder }
+    : target
+}
+
 function skillDeleteDependencies(
   runtime: Pick<OrcaRuntimeService, 'listRepos' | 'resolveSkillDiscoveryProviderRoots'>
 ): SkillDeleteRequestDependencies {
@@ -95,10 +106,11 @@ export const SKILL_METHODS = [
     handler: async (params, { runtime }) =>
       unavailableWhileWslDistroStopped(async () => {
         // Resolve WSL preferences on the executing host; remote clients provide workspace identity, not trusted runtime absence.
-        const resolvedTarget = await resolveDiscoveryTarget(
-          await withWorkspaceCwd(params, runtime),
-          runtime,
-          { refuseStoppedWslDistro: true }
+        const resolvedTarget = withBotLinkedSkills(
+          await resolveDiscoveryTarget(await withWorkspaceCwd(params, runtime), runtime, {
+            refuseStoppedWslDistro: true
+          }),
+          runtime.botLinkedSkillsFolderOfHome(params.worktreeId)
         )
         return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
           providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),

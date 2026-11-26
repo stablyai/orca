@@ -23,7 +23,7 @@
 3 src/main/filesystem/atomic-file-publication.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 1 src/main/git/repositories/discovery/repo-detection-command.ts
-1 src/main/ipc/worktree-logic.ts
+1 src/main/ipc/worktrees/paths/worktree-logic.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 1 src/main/opencode/status-hooks/legacy-plugin-acl-retry.ts
 2 src/main/orcad/native-runtime/node-pty-precondition.ts
@@ -39,6 +39,6 @@
 1 src/main/startup/linux-runtime/linux-secret-service-probe.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 3 src/main/wsl/discovery/distro-catalog.ts
-1 src/shared/fish-binary-requirement.ts
-1 src/shared/openssh-default-shell.ts
+1 src/shared/shell/testing/fish-binary-requirement.ts
+1 src/shared/shell/launch/openssh-default-shell.ts
 1 src/shared/secure-storage/secure-file.ts

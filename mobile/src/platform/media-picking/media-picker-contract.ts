@@ -1,4 +1,4 @@
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard-image'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../src/shared/clipboard/clipboard-image'
 
 // Keep contracts/errors free of Expo imports so a page-side instanceof cannot pull native picker code into the bundle.
 

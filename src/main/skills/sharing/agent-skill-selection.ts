@@ -2,8 +2,8 @@ import {
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
   AgentSkillSharingError
-} from '../../../shared/agent-skill-sharing-contract'
-import type { DiscoveredSkill } from '../../../shared/skills'
+} from '../../../shared/skills/sharing/agent-skill-sharing-contract'
+import type { DiscoveredSkill } from '../../../shared/skills/discovery/skills'
 
 export function selectDiscoveredSkills(
   skills: readonly DiscoveredSkill[],

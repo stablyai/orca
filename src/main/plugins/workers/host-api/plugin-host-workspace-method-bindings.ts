@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { PLUGIN_TERMINAL_READ_MAX_LINES } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
 import { claimPluginReplacedActionRun } from '../../commands/plugin-command-replacement-deadline'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   pluginHostEffect as effect,
   pluginHostRenderer as renderer,
@@ -18,21 +19,31 @@ const api = PLUGIN_HOST_API
 const DEFAULT_READ_LINES = 200
 
 // The parts of each runtime answer a host method reads; anything else is dropped.
-const folderUpdateAnswer = z.object({
-  folderWorkspace: z.object({ name: z.string() }).nullable()
-})
-const worktreeSetAnswer = z.object({ worktree: z.object({ displayName: z.string() }) })
-const terminalCreateAnswer = z.object({ terminal: z.object({ handle: z.string() }) })
-const terminalReadAnswer = z.object({
-  terminal: z.object({
-    tail: z.array(z.string()),
-    truncated: z.boolean().optional(),
-    limited: z.boolean().optional()
+const folderUpdateAnswer = lazyZodSchema(() =>
+  z.object({
+    folderWorkspace: z.object({ name: z.string() }).nullable()
   })
-})
-const agentLaunchAnswer = z.object({
-  outcome: z.object({ kind: z.enum(['structured', 'terminal']), handle: z.string() })
-})
+)
+const worktreeSetAnswer = lazyZodSchema(() =>
+  z.object({ worktree: z.object({ displayName: z.string() }) })
+)
+const terminalCreateAnswer = lazyZodSchema(() =>
+  z.object({ terminal: z.object({ handle: z.string() }) })
+)
+const terminalReadAnswer = lazyZodSchema(() =>
+  z.object({
+    terminal: z.object({
+      tail: z.array(z.string()),
+      truncated: z.boolean().optional(),
+      limited: z.boolean().optional()
+    })
+  })
+)
+const agentLaunchAnswer = lazyZodSchema(() =>
+  z.object({
+    outcome: z.object({ kind: z.enum(['structured', 'terminal']), handle: z.string() })
+  })
+)
 
 function failureDetail(error: unknown): string {
   if (error instanceof PluginHostCallError) {

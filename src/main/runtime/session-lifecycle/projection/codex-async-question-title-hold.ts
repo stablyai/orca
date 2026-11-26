@@ -1,6 +1,6 @@
 import { agentStatusAuthorityObservedAt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/native-chat/input/questions/codex-async-question-input'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 
 /** Codex's title stays working while its async question waits; only the hook sees the question. */

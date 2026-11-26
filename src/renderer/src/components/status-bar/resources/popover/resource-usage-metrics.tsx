@@ -2,7 +2,10 @@ import React, { memo, useMemo } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { AppMemory, UsageValues } from '../../../../../../shared/process-stats-types'
+import type {
+  AppMemory,
+  UsageValues
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type { Metric } from '../workspace-attribution/resource-usage-merge-types'
 
 export const METRIC_COLUMNS_CLS = 'flex items-center shrink-0 tabular-nums'

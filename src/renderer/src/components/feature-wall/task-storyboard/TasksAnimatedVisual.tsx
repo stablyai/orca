@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ArrowRight, CircleDot } from 'lucide-react'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { ClaudeIcon } from '../../status-bar/accounts/provider-icons'
 import { FeatureWallClickRing } from '../storyboard-interaction/FeatureWallClickRing'
 import { translate } from '@/i18n/i18n'

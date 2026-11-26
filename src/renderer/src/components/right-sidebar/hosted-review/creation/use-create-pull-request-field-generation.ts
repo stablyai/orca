@@ -2,7 +2,7 @@ import { textGenerationErrorText } from '@/lib/text-generation/text-generation-e
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store/index'
 import {

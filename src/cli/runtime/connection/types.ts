@@ -2,7 +2,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestSelection,
   RuntimeRpcFailure
-} from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { redactOrchestrationCompatibilitySecrets } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 
 export type RuntimeCallOptions = {
@@ -10,6 +10,8 @@ export type RuntimeCallOptions = {
   legacyTerminalPrompt?: true
   terminalPromptPreflight?: { runtimeId: string | null }
   requestSelection?: RuntimeRequestSelection
+  /** Send under the replay-only contract: the runtime may replay or join this request id, never run it anew. */
+  orchestrationReplayOnly?: true
 } & RuntimeOrchestrationEnvelope
 
 export class RuntimeClientError extends Error {

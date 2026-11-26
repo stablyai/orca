@@ -1,6 +1,6 @@
 import type { ProjectMetadataLoadingModel } from './use-mobile-tasks-project-metadata-loading'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo-types'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import {
@@ -11,6 +11,7 @@ import {
 } from '../../new-workspace/creation/workspace-agent-selection'
 import { deriveWorkspaceSshGate } from '../../new-workspace/creation/workspace-ssh-gate'
 import { parseSparsePresetDirectories } from '../../new-workspace/creation/sparse-preset-draft'
+import { readSparsePresetNameProblem } from '../../../../src/shared/worktree/creation/sparse-preset-draft-rules'
 import { resolveComposerBranchSelection } from '../../new-workspace/source-selection/mobile-composer-branch-selection'
 import { useCallback, useMemo } from 'react'
 import { TUI_AGENT_AUTO_PICK_ORDER as MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../../src/shared/agent-launch/catalog/tui-agent-selection'
@@ -113,22 +114,21 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     [t, workspaceSparseDraft]
   )
   const workspaceSparseDraftName = workspaceSparseDraft?.name.trim() ?? ''
-  const workspaceSparseDraftNameCollision =
-    workspaceSparseDraft && workspaceSparseDraftName
-      ? (workspaceSparsePresets.find(
-          (preset) =>
-            preset.id !== workspaceSparseDraft.presetId &&
-            preset.name.toLowerCase() === workspaceSparseDraftName.toLowerCase()
-        ) ?? null)
-      : null
+  const workspaceSparseDraftNameProblem = workspaceSparseDraft
+    ? readSparsePresetNameProblem(
+        workspaceSparseDraft.name,
+        workspaceSparsePresets,
+        workspaceSparseDraft.presetId
+      )
+    : null
   const workspaceSparseDraftError =
-    workspaceSparseDraft && workspaceSparseDraftName.length === 0
+    workspaceSparseDraftNameProblem?.kind === 'required'
       ? t('tasks.workspaceCreateProjection.nameRequired', 'Name is required.')
-      : workspaceSparseDraftName.length > 80
+      : workspaceSparseDraftNameProblem?.kind === 'too-long'
         ? t('tasks.workspaceCreateProjection.nameTooLong', 'Name must be 80 characters or fewer.')
-        : workspaceSparseDraftNameCollision
+        : workspaceSparseDraftNameProblem?.kind === 'exists'
           ? t('tasks.workspaceCreateProjection.nameAlreadyExists', '"{{name}}" already exists.', {
-              name: workspaceSparseDraftNameCollision.name
+              name: workspaceSparseDraftNameProblem.name
             })
           : (workspaceSparseDraftParsed?.error ?? null)
   const canSaveWorkspaceSparseDraft =
@@ -264,7 +264,6 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     workspaceSparseCheckoutAvailable,
     workspaceSparseDraftParsed,
     workspaceSparseDraftName,
-    workspaceSparseDraftNameCollision,
     workspaceSparseDraftError,
     canSaveWorkspaceSparseDraft,
     workspaceAgentOptions,

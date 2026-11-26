@@ -7,8 +7,11 @@ import {
   parseNormalizedTerminalQuickCommands,
   type TerminalQuickCommandMutation
 } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
-import '../../../../../shared/protocol-version'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'

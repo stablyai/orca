@@ -1,14 +1,12 @@
 import { useCallback, useState } from 'react'
 import type React from 'react'
-import {
-  keybindingMatchesAction,
-  type KeybindingOverrides
-} from '../../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
+import type { KeybindingOverrides } from '../../../../../../shared/keybindings/types'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../../../shared/modifier-double-tap-detector'
-import { textInputOwnsComposition } from '../../../../../../shared/text-input-shortcut-policy'
+} from '../../../../../../shared/keybindings/modifier-double-tap-detector'
+import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import {
   runWorktreeContextMenuDeleteIntent,

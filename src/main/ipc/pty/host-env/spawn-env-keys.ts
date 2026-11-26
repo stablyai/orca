@@ -1,5 +1,6 @@
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
+import { CLAUDE_HOOK_PLUGIN_DIR_ENV } from '../../../../shared/agent-hook-listener/providers/claude/claude-hook-plugin'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/environment/structured-session-marker'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
@@ -12,6 +13,7 @@ export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_VERSION',
   'ORCA_AGENT_HOOK_TRANSPORT',
   'ORCA_AGENT_HOOK_ENDPOINT',
+  CLAUDE_HOOK_PLUGIN_DIR_ENV,
   // Remove the reverted inherited path still present in older PTYs (#2778).
   'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
 ] as const

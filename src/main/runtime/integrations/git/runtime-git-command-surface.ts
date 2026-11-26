@@ -11,6 +11,8 @@ type RuntimeGitCommandName =
   | 'readRuntimeWorktreeAtRiskLocalFiles'
   | 'abortRuntimeGitMerge'
   | 'abortRuntimeGitRebase'
+  | 'continueRuntimeGitRebase'
+  | 'readRuntimeGitRebaseAutoStash'
   | 'switchRuntimeGitBranch'
   | 'checkoutRuntimeGitBranch'
   | 'listRuntimeGitLocalBranches'
@@ -47,6 +49,7 @@ type RuntimeGitCommandName =
   | 'discardRuntimeGitPath'
   | 'getRuntimeGitRemoteFileUrl'
   | 'getRuntimeGitRemoteCommitUrl'
+  | 'getRuntimeGitBlame'
 
 export type RuntimeGitCommandSurface = Pick<RuntimeGitCommands, RuntimeGitCommandName>
 
@@ -66,6 +69,8 @@ export function installRuntimeGitCommandSurface(
       commands.readRuntimeWorktreeAtRiskLocalFiles.bind(commands),
     abortRuntimeGitMerge: commands.abortRuntimeGitMerge.bind(commands),
     abortRuntimeGitRebase: commands.abortRuntimeGitRebase.bind(commands),
+    continueRuntimeGitRebase: commands.continueRuntimeGitRebase.bind(commands),
+    readRuntimeGitRebaseAutoStash: commands.readRuntimeGitRebaseAutoStash.bind(commands),
     switchRuntimeGitBranch: commands.switchRuntimeGitBranch.bind(commands),
     checkoutRuntimeGitBranch: commands.checkoutRuntimeGitBranch.bind(commands),
     listRuntimeGitLocalBranches: commands.listRuntimeGitLocalBranches.bind(commands),
@@ -102,6 +107,7 @@ export function installRuntimeGitCommandSurface(
     bulkDiscardRuntimeGitPaths: commands.bulkDiscardRuntimeGitPaths.bind(commands),
     discardRuntimeGitPath: commands.discardRuntimeGitPath.bind(commands),
     getRuntimeGitRemoteFileUrl: commands.getRuntimeGitRemoteFileUrl.bind(commands),
-    getRuntimeGitRemoteCommitUrl: commands.getRuntimeGitRemoteCommitUrl.bind(commands)
+    getRuntimeGitRemoteCommitUrl: commands.getRuntimeGitRemoteCommitUrl.bind(commands),
+    getRuntimeGitBlame: commands.getRuntimeGitBlame.bind(commands)
   } satisfies RuntimeGitCommandSurface)
 }

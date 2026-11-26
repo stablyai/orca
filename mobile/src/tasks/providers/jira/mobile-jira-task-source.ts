@@ -3,6 +3,10 @@ import type {
   JiraIssueFilter,
   JiraSiteSelection
 } from '../../../../../src/shared/jira/jira-types'
+import {
+  searchJiraIssuesByInput,
+  type JiraInputSearchResult
+} from '../../../../../src/shared/jira/jira-issue-input-search'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
 import { toJiraDetailComments } from './jira-mobile-issue-read'
 import {
@@ -16,28 +20,36 @@ export const JIRA_TASK_LIMIT = 50
 
 const DETAIL_TIMEOUT_MS = 30_000
 
-// Raw JQL replaces the selected preset, matching desktop.
+// A search replaces the selected preset, matching desktop.
 export async function fetchJiraTaskIssues(
   client: UnvalidatedRpcRequestPort,
-  args: { jql: string; filter: JiraIssueFilter; siteId: JiraSiteSelection | null }
-): Promise<JiraIssue[]> {
-  const jql = args.jql.trim()
-  const issues = jql
-    ? jiraIssueSearchRead.interpret(
-        await jiraIssueSearchRead.request(client, {
-          jql,
-          limit: JIRA_TASK_LIMIT,
-          siteId: args.siteId ?? undefined
-        })
-      )
-    : jiraIssueListRead.interpret(
-        await jiraIssueListRead.request(client, {
-          filter: args.filter,
-          limit: JIRA_TASK_LIMIT,
-          siteId: args.siteId ?? undefined
-        })
-      )
-  return [...issues].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  args: { query: string; filter: JiraIssueFilter; siteId: JiraSiteSelection | null }
+): Promise<JiraInputSearchResult> {
+  const query = args.query.trim()
+  const { issues, jqlRejection } = query
+    ? await searchJiraIssuesByInput(query, async (jql) => [
+        ...jiraIssueSearchRead.interpret(
+          await jiraIssueSearchRead.request(client, {
+            jql,
+            limit: JIRA_TASK_LIMIT,
+            siteId: args.siteId ?? undefined
+          })
+        )
+      ])
+    : {
+        issues: jiraIssueListRead.interpret(
+          await jiraIssueListRead.request(client, {
+            filter: args.filter,
+            limit: JIRA_TASK_LIMIT,
+            siteId: args.siteId ?? undefined
+          })
+        ),
+        jqlRejection: null
+      }
+  return {
+    issues: [...issues].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+    jqlRejection
+  }
 }
 
 export async function fetchJiraIssueDetail(

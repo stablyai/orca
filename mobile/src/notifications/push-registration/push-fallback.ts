@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../src/shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../src/shared/concurrency/abort-signal-reason'
 import type { HostPushSupportCompletion } from './host-push-registration-state'
 import { getDevicePushToken } from './push-token'
 

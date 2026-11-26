@@ -1,7 +1,7 @@
 import type {
   RuntimeTerminalWait as RuntimeTerminalWaitResult,
   RuntimeTerminalWaitCondition
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitExitError,
@@ -87,6 +87,8 @@ export class RuntimeTerminalWait {
       launchReadiness?: boolean
       /** Main-internal, never on the wire: see `TerminalWaiter.acceptsMidTurnInput`. */
       acceptsMidTurnInput?: boolean
+      /** Main-internal, never on the wire: see `TerminalWaiter.outlivesRenderer`. */
+      outlivesRenderer?: true
     }
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
@@ -126,7 +128,8 @@ export class RuntimeTerminalWait {
         cancelIdlePoll: null,
         abortCleanup: null,
         ...(options?.launchReadiness ? { launchReadiness: true } : {}),
-        ...(options?.acceptsMidTurnInput ? { acceptsMidTurnInput: true } : {})
+        ...(options?.acceptsMidTurnInput ? { acceptsMidTurnInput: true } : {}),
+        ...(options?.outlivesRenderer ? { outlivesRenderer: true } : {})
       }
       if (!this.waiters.bindAbort(waiter, options?.signal)) {
         reject(new Error('request_aborted'))

@@ -1,8 +1,9 @@
 import { PATH_EXISTENCE_BATCH_MAX } from '../../file-access/path-existence-batch'
 import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../file-listing/file-dir-page'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../../quick-open/quick-open-path-search'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { FileOpen, WorktreeSelector } from './files-target-params'
 
 export const FilePathsExist = WorktreeSelector.extend({
@@ -86,12 +87,14 @@ export const FileDirRead = FileTreePath.extend({
   limit: z.number().int().positive().max(FILE_READ_DIR_MAX_PAGE_ENTRIES).optional()
 })
 
-export const ServerDirectoryBrowse = z.object({
-  path: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string())
-})
+export const ServerDirectoryBrowse = lazyZodSchema(() =>
+  z.object({
+    path: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string())
+  })
+)
 
 export const FileChunkRange = {
   offset: z.number().int().nonnegative(),
@@ -104,7 +107,10 @@ export const FileChunkRange = {
 
 export const FileReadChunk = FileOpen.extend(FileChunkRange)
 
-export const DocPreviewFileReadChunk = DocPreviewFileRead.extend(FileChunkRange)
+export const DocPreviewFileReadChunk = DocPreviewFileRead.extend(FileChunkRange).extend({
+  /** Streams audio/video past the whole-read caps; older hosts drop it and keep refusing media. */
+  media: z.boolean().optional()
+})
 
 export const FileSearch = WorktreeSelector.extend({
   query: z
@@ -131,9 +137,11 @@ export const FileListAll = WorktreeSelector.extend({
   maxResults: z.number().int().positive().optional()
 })
 
-export const FileUnwatch = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
+export const FileUnwatch = lazyZodSchema(() =>
+  z.object({
+    subscriptionId: z
+      .unknown()
+      .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
+      .pipe(z.string().min(1, 'Missing subscriptionId'))
+  })
+)

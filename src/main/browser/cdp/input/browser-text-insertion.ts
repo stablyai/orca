@@ -1,5 +1,5 @@
-import { iterateBrowserTextInsertionChunks } from '../../../../shared/browser-text-insertion-chunks'
-import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+import { iterateBrowserTextInsertionChunks } from '../../../../shared/browser/automation/browser-text-insertion-chunks'
+import { yieldToEventLoop } from '../../../../shared/concurrency/event-loop-yield'
 import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 
 export async function insertTextThroughCdp(

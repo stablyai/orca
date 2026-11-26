@@ -27,7 +27,7 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 type ScopeState = WorktreeOperationRouteState &
   Pick<ReturnType<typeof useAppStore.getState>, 'repos' | 'worktreesByRepo'>
@@ -120,7 +120,9 @@ export function gitGraphUpdateMessage(worktreeId: string, t: Translate = transla
 export async function openGitGraph(
   worktreeId: string,
   // Lazy so a split is created only when a new tab actually opens.
-  resolveTargetGroupId?: () => string | undefined
+  resolveTargetGroupId?: () => string | undefined,
+  /** The workspace showing the tab, e.g. a folder workspace whose repo card owns this worktree. */
+  placementWorkspaceId: string = worktreeId
 ): Promise<void> {
   const supported = await probeGitGraphSupport(worktreeId)
   if (!supported) {
@@ -137,7 +139,7 @@ export async function openGitGraph(
   const id = existing?.entityId ?? `${worktreeId}::git-graph`
   const label = translate('gitGraph.title', 'Git Graph')
   if (state.openFiles.some((file) => file.id === id)) {
-    openWorkspaceEditorItem(state, id, worktreeId, label, 'git-graph')
+    openWorkspaceEditorItem(state, id, placementWorkspaceId, label, 'git-graph')
     return
   }
   state.openFile(
@@ -153,6 +155,6 @@ export async function openGitGraph(
       },
       mode: 'git-graph'
     },
-    { reopenId: id, preview: false, targetGroupId: resolveTargetGroupId?.() }
+    { reopenId: id, preview: false, targetGroupId: resolveTargetGroupId?.(), placementWorkspaceId }
   )
 }

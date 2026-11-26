@@ -10,7 +10,7 @@ import {
 import { isDaemonGoneError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { HISTORY_SEED_TRANSFER_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
-import { NdjsonLineTooLongError } from '../../../../shared/main-process-ndjson-framer'
+import { NdjsonLineTooLongError } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import {
   iterateTerminalHistorySeedChunks,
   measureTerminalHistorySeed,
@@ -124,6 +124,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         env: context.attachOnly ? undefined : opts.env,
         envToDelete: context.attachOnly ? undefined : opts.envToDelete,
         command: context.attachOnly ? undefined : opts.command,
+        ...(!context.attachOnly && opts.startupNotice ? { startupNotice: opts.startupNotice } : {}),
         startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),

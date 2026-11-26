@@ -1,6 +1,6 @@
 import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../../shared/preflight-runtime-capabilities'
+import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 
 export class RuntimeAgentDetectionNeedsServerUpdateError extends Error {
   constructor() {

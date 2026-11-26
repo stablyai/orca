@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { readHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-write'
 import { defaultClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'

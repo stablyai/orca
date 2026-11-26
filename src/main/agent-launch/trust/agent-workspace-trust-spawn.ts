@@ -1,5 +1,5 @@
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { resolveTerminalWorkspacePath } from '../../../shared/shell/launch/terminal-startup-cwd'
 import {
   applyAgentWorkspaceTrust,
@@ -7,8 +7,8 @@ import {
   type AgentTrustSpawnFields
 } from './agent-workspace-trust'
 import { AGENT_TRUST_KEYED_BY_START_FOLDER } from './execution-host-workspace-trust'
-import type { Repo } from '../../../shared/repo-types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   shouldPreTrustAgentWorkspace,

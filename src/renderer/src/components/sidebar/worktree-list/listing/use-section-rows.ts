@@ -1,25 +1,28 @@
-import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
+import { selectWslHostsServing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
-import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import { useEmptyProjectPlaceholderRepoIds } from './use-empty-project-placeholders'
 import {
   deferHostSectionCollapse,
@@ -46,6 +49,7 @@ function createSidebarHostOptionsSelector() {
   let result: SidebarHostOption[] = []
   return (
     state: AppState,
+    statuses: RuntimeStatuses,
     repos: readonly Repo[],
     settings: AppState['settings'],
     hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
@@ -55,7 +59,7 @@ function createSidebarHostOptionsSelector() {
       state.sshTargetLabels,
       state.sshConnectionStates,
       settings,
-      state.runtimeStatusByEnvironmentId,
+      statuses,
       state.runtimeEnvironments,
       hostLabelOverrides,
       state.wslHostStatuses,
@@ -73,7 +77,7 @@ function createSidebarHostOptionsSelector() {
       sshConnectionStates: state.sshConnectionStates,
       settings,
       runtimeEnvironments: state.runtimeEnvironments,
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      runtimeStatusByEnvironmentId: statuses,
       hostLabelOverrides,
       wslHostStatuses: state.wslHostStatuses,
       wslHostsEnabled: selectWslHostsServing(state),
@@ -89,7 +93,7 @@ function createSidebarHostOptionsSelector() {
 
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
@@ -130,8 +134,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const selectHostOptions = useMemo(() => createSidebarHostOptionsSelector(), [])
   const selectHostLabels = useMemo(() => createSidebarHostLabelsSelector(), [])
   useUiLanguageRevision()
-  const hostOptions = useAppStore((state) =>
-    selectHostOptions(state, repos, args.settings, hostLabelOverrides)
+  const hostOptions = useAppStoreWithHostStatuses((state, statuses) =>
+    selectHostOptions(state, statuses, repos, args.settings, hostLabelOverrides)
   )
   const hostLabelById = selectHostLabels(hostOptions)
 
@@ -139,6 +143,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
   const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
+  // PR cache only affects grouping in pr-status mode; avoid re-planning all rows on every PR update in other modes.
+  const prCacheForPlan = args.groupBy === 'pr-status' ? args.prCache : null
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
@@ -147,7 +153,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         worktrees,
         repoMap,
         repoOfWorktree,
-        prGroupOf: createSidebarPRGroupReader(repoMap, args.prCache),
+        prGroupOf: createSidebarPRGroupReader(repoMap, prCacheForPlan),
         repoOrder,
         workspaceStatuses: args.workspaceStatuses,
         projectOrderBy: args.projectOrderBy,
@@ -165,15 +171,17 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         hostLabelById,
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        hiddenProjects: indexHiddenProjects(repos, defaultHostId)
       }),
     [
       args.groupBy,
       args.sortBy,
       worktrees,
+      repos,
       repoMap,
       repoOfWorktree,
-      args.prCache,
+      prCacheForPlan,
       defaultHostId,
       repoOrder,
       args.workspaceStatuses,
@@ -206,7 +214,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     repoMap,
     worktreeMap: args.worktreeMap,
     worktreeLineageById: args.worktreeLineageById,
-    prCache: args.prCache,
+    prCache: prCacheForPlan,
     workspaceStatuses: args.workspaceStatuses,
     projectGroups: args.visibleProjectGroupsForRows,
     projectGrouping: args.projectGrouping,

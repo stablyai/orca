@@ -6,7 +6,7 @@ import {
   REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES,
   retainedRemoteRuntimeJsonStringBytes
 } from '../remote-runtime-memory-limits'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 
 export type RemoteRuntimePreparedRequest = {
   retainedBytes: number

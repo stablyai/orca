@@ -3,7 +3,7 @@ import type { RemoteInstallModel } from './remote-install-model'
 import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { isWindowsRemoteHost } from '../../ssh/remote-host/ssh-remote-platform'
 import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 export const MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES = 64

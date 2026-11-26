@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Info, Loader2, RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
@@ -11,6 +11,9 @@ import { Switch } from '@/components/ui/switch'
 import { getAdvancedSearchEntry } from './advanced-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { matchesSettingsSearch } from '../search/settings-search'
+import { useAppStore } from '../../../store/index'
+import { OrcaUninstallSection } from './uninstall/OrcaUninstallSection'
 
 type AdvancedPaneProps = {
   settings: GlobalSettings
@@ -19,6 +22,7 @@ type AdvancedPaneProps = {
 
 export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): React.JSX.Element {
   const t = useTranslate()
+  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const mountedRef = useMountedRef()
   const http1CompatibilityInitialRef = useRef(Boolean(settings.electronHttp1CompatibilityMode))
   const [http1CompatibilityRelaunching, setHttp1CompatibilityRelaunching] = useState(false)
@@ -137,6 +141,19 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
         )}
       >
         <AdvancedNetworkSettingsSection settings={settings} updateSettings={updateSettings} />
+      </SettingsGroup>
+
+      {/* Hidden, not unmounted, so filtering mid-run keeps the run's progress. */}
+      <SettingsGroup
+        id="advanced-uninstall"
+        title={t('settings.uninstall.groupTitle', 'Uninstall')}
+        className={
+          matchesSettingsSearch(searchQuery, [getAdvancedSearchEntry().uninstall])
+            ? undefined
+            : 'hidden'
+        }
+      >
+        <OrcaUninstallSection />
       </SettingsGroup>
     </div>
   )

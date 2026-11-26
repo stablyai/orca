@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import {
   CLAUDE_SIGN_IN_FAILED_MESSAGE,
   canCopyClaudeSignInLink
-} from '../../../shared/claude-sign-in-link'
+} from '../../../shared/agent-accounts/claude/claude-sign-in-link'
 import type { ClaudeCommandConfig } from './claude-command-process'
 
 const HELPER_NAME = '.orca-sign-in-browser'

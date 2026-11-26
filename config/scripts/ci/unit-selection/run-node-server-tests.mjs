@@ -7,12 +7,12 @@ import {
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_VERSION_FILENAME
-} from '../../../../src/shared/orcad-artifacts.ts'
-import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
+import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   parseOrcadProfilePreflight
-} from '../../../../src/shared/orcad-profile-preflight.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-profile-preflight.ts'
 import { packagedNodeRuntimePath } from '../../orcad-distribution/prebuilds/build-orcad-node.mjs'
 import { ensurePinnedNodeExecutable } from '../../orcad-distribution/prebuilds/pinned-node-downloads.mjs'
 import { currentTarget } from '../../orcad-distribution/prebuilds/server-build-target.mjs'
@@ -20,7 +20,6 @@ import { UNIT_INCLUDE } from './dependency-graph/ci-unit-files.mjs'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
 import {
-  CROSS_RUNTIME_TEST_PATHS,
   nodeServerTestPaths,
   REQUIRED_TEST_INPUTS_ENV
 } from '../../node-server/qualification/node-server-test-paths.mjs'
@@ -93,12 +92,11 @@ run(runtimePath, [
 
 function defaultTestArgs() {
   // Vitest 5 ignores CLI --exclude for inline projects; resolve/filter substring selectors first. Electron probes belong in desktop jobs, not displayless containers.
-  const selectors = nodeServerTestPaths({ artifact, crossRuntime })
-  const skipped = new Set(crossRuntime ? [] : CROSS_RUNTIME_TEST_PATHS)
+  const selectors = nodeServerTestPaths()
   return globSync(UNIT_INCLUDE, { cwd: root })
     .map((path) => path.replaceAll('\\', '/'))
     .filter((path) => selectors.some((selector) => path.includes(selector)))
-    .filter((path) => !path.endsWith('.electron.test.ts') && !skipped.has(path))
+    .filter((path) => !path.endsWith('.electron.test.ts'))
     .sort()
 }
 

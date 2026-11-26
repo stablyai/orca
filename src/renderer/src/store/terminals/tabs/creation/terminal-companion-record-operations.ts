@@ -1,4 +1,4 @@
-import { recordDraft } from '../../../keyed-record-transitions'
+import { recordDraft } from '../../../record-transitions/keyed-record-transitions'
 
 /** Ordered set/delete operations (null deletes); returns `previous` when none changed it. */
 export function applyRecordOperations<V>(

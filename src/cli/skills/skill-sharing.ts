@@ -1,20 +1,20 @@
 import type {
   AgentSkillShareOperation,
   AgentSkillShareResult
-} from '../../shared/agent-skill-sharing-contract'
+} from '../../shared/skills/sharing/agent-skill-sharing-contract'
 import {
   AGENT_SKILL_SHARING_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_MESSAGE,
   AGENT_SKILL_SHARING_DISABLED_NEXT_STEPS
-} from '../../shared/agent-skill-sharing-gate'
-import { normalizeSkillBundleName } from '../../shared/skill-bundle-name'
-import type { SkillCloudOperation } from '../../shared/skill-cloud-contract'
-import type { SkillDiscoveryResult } from '../../shared/skills'
+} from '../../shared/skills/sharing/agent-skill-sharing-gate'
+import { normalizeSkillBundleName } from '../../shared/skills/packages/skill-bundle-name'
+import type { SkillCloudOperation } from '../../shared/skills/sharing/skill-cloud-contract'
+import type { SkillDiscoveryResult } from '../../shared/skills/discovery/skills'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRepeatedStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const SHARE_TIMEOUT_MS = 10 * 60_000
 

@@ -1,6 +1,6 @@
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { createSetActiveWorktree } from './set-active-worktree'
 

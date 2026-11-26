@@ -1,10 +1,13 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import { formatResetDuration } from '../../../../../shared/rate-limit-reset-format'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatPlanLabel } from './usage-roster-formatting'
 
 export type UsageFormatValues = Record<string, string>
@@ -53,9 +56,6 @@ const WINDOW_KEYS: readonly [
   ['30d', 43200, (p) => p.monthly]
 ]
 
-// Same subset and order the built-in Gemini rendering shows.
-const BUCKET_ORDER = ['Flash', 'Pro', '1.5 Pro']
-
 /** Window percentage in the user's Used/Remaining preference. */
 function percent(window: RateLimitWindow, display: UsagePercentageDisplay): string {
   return `${getDisplayedUsagePercentage(window.usedPercent, display)}%`
@@ -78,7 +78,7 @@ export function buildUsageFormatValues(
 ): UsageFormatValues {
   const values: UsageFormatValues = {
     provider: getProviderDisplayName(p.provider),
-    plan: formatPlanLabel(p.planType) ?? ''
+    plan: formatPlanLabel(p.planType, p.provider) ?? ''
   }
   for (const [key, minutes, pick] of WINDOW_KEYS) {
     const candidate = pick(p)
@@ -88,10 +88,7 @@ export function buildUsageFormatValues(
       window?.resetsAt != null ? formatResetDuration(window.resetsAt - options.now) : ''
     values[`${key}.resetAt`] = window?.resetsAt != null ? resetClock(window.resetsAt, options) : ''
   }
-  const buckets = (p.buckets ?? [])
-    .filter((bucket) => BUCKET_ORDER.includes(bucket.name))
-    .sort((a, b) => BUCKET_ORDER.indexOf(a.name) - BUCKET_ORDER.indexOf(b.name))
-  values.buckets = buckets
+  values.buckets = (p.buckets ?? [])
     .map((bucket) => `${bucket.name} ${percent(bucket, options.display)}`)
     .join(' · ')
   return values

@@ -2,7 +2,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type {
   AntigravityAccountUsage,
   ProviderRateLimits
-} from '../../../../../shared/rate-limit-types'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,7 +60,6 @@ export const savedAccounts = defineFixture({
           <AntigravityUsageMenu
             antigravity={live}
             accounts={accounts}
-            compact={false}
             triggerContent="Antigravity"
             onManageAccounts={() => {}}
           />

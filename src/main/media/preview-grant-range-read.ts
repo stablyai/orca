@@ -6,7 +6,7 @@ import {
   revokeGrant,
   type PreviewSender
 } from './preview-grant-registry'
-import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../ipc/renderer-requests/renderer-lifetime-abort'
 import {
   RemotePreviewPairingChangedError,
   readRemotePreviewRange

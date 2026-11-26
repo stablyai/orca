@@ -4,7 +4,7 @@ import {
   ORCHESTRATION_CLI_COMMAND_LOOP_MS,
   ORCHESTRATION_CLI_COMMAND_TIMINGS_MS
 } from '@/components/feature-wall/agents-orchestration/orchestration-types'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTranslate } from '@/i18n/use-translate'
 
 const CLI_AGENT_COMMANDS = [

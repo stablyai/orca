@@ -5,9 +5,9 @@ import {
   assertClipboardTextWriteWithinLimitWithYield,
   CLIPBOARD_TEXT_WRITE_MAX_BYTES,
   CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
-} from '../../../shared/clipboard-text'
-import { CLIPBOARD_IMAGE_MAX_BASE64_CHARS } from '../../../shared/clipboard-image'
-import { isLinuxWaylandSession } from '../../../shared/linux-wayland-session'
+} from '../../../shared/clipboard/clipboard-text'
+import { CLIPBOARD_IMAGE_MAX_BASE64_CHARS } from '../../../shared/clipboard/clipboard-image'
+import { isLinuxWaylandSession } from '../../../shared/app-lifecycle/launch/linux-wayland-session'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { stageClipboardPublisher } from './clipboard-publisher-executable'
 import { envWithoutAppImageRuntime } from '../../pty/shell-startup/appimage-terminal-env'
@@ -30,7 +30,7 @@ type ClipboardTextPublisherDeps = {
   helperPath: () => string | Promise<string>
   run: typeof runProcess
   clearCache: () => void
-  write: (text: string, kind: ClipboardTextWriteKind) => void
+  write: (text: string, kind: ClipboardTextWriteKind) => void | Promise<void>
   validate: (text: string) => Promise<string>
 }
 
@@ -74,22 +74,21 @@ export function createClipboardPublisher(deps: ClipboardTextPublisherDeps) {
     if (text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES) {
       return Promise.reject(new Error(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR))
     }
-    const wayland = deps.isWayland()
-    if (wayland) {
-      if (
-        count >= MAX_PENDING_CLIPBOARD_WRITES ||
-        text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES - queuedCodeUnits
-      ) {
-        return Promise.reject(new Error('Too many pending clipboard writes'))
-      }
-      count += 1
-      queuedCodeUnits += text.length
+    // Native writes are async too, so every queued write counts against the cap.
+    if (
+      count >= MAX_PENDING_CLIPBOARD_WRITES ||
+      text.length > CLIPBOARD_TEXT_WRITE_MAX_BYTES - queuedCodeUnits
+    ) {
+      return Promise.reject(new Error('Too many pending clipboard writes'))
     }
+    count += 1
+    queuedCodeUnits += text.length
+    const wayland = deps.isWayland()
     return enqueue(async () => {
       try {
         const safeText = await deps.validate(text)
         if (!wayland) {
-          deps.write(safeText, kind)
+          await deps.write(safeText, kind)
           return
         }
         const result = await deps.run({
@@ -104,10 +103,8 @@ export function createClipboardPublisher(deps: ClipboardTextPublisherDeps) {
         // Discard any rejected Chromium source after the helper has established the actual owner.
         deps.clearCache()
       } finally {
-        if (wayland) {
-          count -= 1
-          queuedCodeUnits -= text.length
-        }
+        count -= 1
+        queuedCodeUnits -= text.length
       }
     })
   }
@@ -160,12 +157,7 @@ export const { publish: publishClipboardOperation, publishText: publishClipboard
     helperPath: publisherPath,
     run: (spec) => runProcess({ ...spec, env: envWithoutAppImageRuntime(process.env) }),
     clearCache: () => clipboard.clear(),
-    write: (text, kind) => {
-      if (kind === 'terminal') {
-        writeClipboardTextAndVerify(text)
-      } else {
-        clipboard.writeText(text)
-      }
-    },
+    write: (text, kind) =>
+      kind === 'terminal' ? writeClipboardTextAndVerify(text) : clipboard.writeText(text),
     validate: assertClipboardTextWriteWithinLimitWithYield
   })

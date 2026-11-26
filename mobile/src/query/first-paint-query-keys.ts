@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import {
   HOST_LIST_TARGET,

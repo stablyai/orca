@@ -1,8 +1,11 @@
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { translate } from '../../../i18n/mobile-i18n'
 import { MOBILE_AGENT_CATALOG } from '../../../agents/mobile-agent-catalog'
-import { isMobileTuiAgentEnabled } from '../../../agents/mobile-tui-agents'
-import { pickWorkspaceAgent } from '../workspace-agent-selection'
+import {
+  normalizeWorkspaceAgent,
+  pickWorkspaceAgent,
+  resolveWorkspaceAgentSelection
+} from '../workspace-agent-selection'
 
 export type NewWorktreeRuntimeSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
@@ -46,20 +49,6 @@ export function pickPreferredNewWorktreeAgent(
   )
 }
 
-function isSelectableAgent(
-  agent: NewWorktreeAgentOption,
-  settings: NewWorktreeRuntimeSettings | null,
-  detectedAgentIds: Set<string> | null
-): boolean {
-  if (agent.id === '__blank__') {
-    return true
-  }
-  if (!isMobileTuiAgentEnabled(agent.id, settings?.disabledTuiAgents)) {
-    return false
-  }
-  return detectedAgentIds === null || detectedAgentIds.has(agent.id)
-}
-
 export function resolveNewWorktreeAgentSelection({
   visible,
   selectedAgent,
@@ -73,21 +62,20 @@ export function resolveNewWorktreeAgentSelection({
   runtimeSettings: NewWorktreeRuntimeSettings | null
   detectedAgentIds: Set<string> | null
 }): { selectedAgent: NewWorktreeAgentOption; agentOverridden: boolean } {
-  if (!visible) {
-    return { selectedAgent, agentOverridden }
+  const agent = normalizeWorkspaceAgent(selectedAgent.id)
+  const resolved = resolveWorkspaceAgentSelection({
+    selectionActive: visible,
+    settings: {
+      defaultTuiAgent: runtimeSettings?.defaultTuiAgent,
+      disabledTuiAgents: runtimeSettings?.disabledTuiAgents
+    },
+    detectedAgentIds,
+    agent,
+    overridden: agentOverridden
+  })
+  return {
+    selectedAgent:
+      resolved.agent === agent ? selectedAgent : newWorktreeAgentOptionFor(resolved.agent),
+    agentOverridden: resolved.overridden
   }
-
-  const preferred = pickPreferredNewWorktreeAgent(runtimeSettings, detectedAgentIds)
-  if (!agentOverridden) {
-    return { selectedAgent: preferred, agentOverridden: false }
-  }
-
-  if (
-    detectedAgentIds !== null &&
-    !isSelectableAgent(selectedAgent, runtimeSettings, detectedAgentIds)
-  ) {
-    return { selectedAgent: preferred, agentOverridden: false }
-  }
-
-  return { selectedAgent, agentOverridden: true }
 }

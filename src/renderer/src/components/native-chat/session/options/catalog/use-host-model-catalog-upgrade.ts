@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import {
   readAgentSessionUnavailable,
   type AgentSessionUnavailable
-} from '../../../../../../../shared/agent-session/agent-session-availability'
+} from '../../../../../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentSessionModelCatalogResult } from '../../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
@@ -10,7 +10,7 @@ import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
 } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
@@ -21,9 +21,9 @@ import type { StructuredAgentSessionOptionRecord } from '../../../../../../../sh
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
-} from '../../../../../../../shared/host-model-listing-waits'
+} from '../../../../../../../shared/agent-session/options/model-catalog/host-model-listing-waits'
 import { usesModelSpecificAcpEfforts } from '../../../../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
-import { AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY } from '../../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY } from '../../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 
 /** Warm visible chats from the host catalog and share one listing wait per chat. Recheck held unavailability on agent changes, focus and turn edges. */
 export function useHostModelCatalogUpgrade(args: {
@@ -86,7 +86,8 @@ export function useHostModelCatalogUpgrade(args: {
   const unavailable = verdict?.key === waitKey ? verdict.unavailable : null
   const [rereads, setRereads] = useState(0)
   const recheck = useCallback(() => setRereads((count) => count + 1), [])
-  const said = unavailable !== null
+  // Rechecking a refused Command spawns a login shell, so focus and turn edges leave it to picker opens.
+  const said = unavailable !== null && unavailable.reason !== 'agentCommandNotRunnable'
   const turnWhileSaid = said ? (args.turnId ?? null) : null
   const reportedUnpickedModel = args.reportedUnpickedModel === true
   // Agent start/stop invalidates reasons derived from its previous run.

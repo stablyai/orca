@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-host-api-agent-history'
 import { pluginAgentSessionIdSchema } from '../../../../shared/plugins/workers/plugin-host-api-panel-methods'
 import { pluginWorkspaceId } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
   aiVaultHistoryAgents,
   isAiVaultAgent

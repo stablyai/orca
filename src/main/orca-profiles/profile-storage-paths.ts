@@ -1,8 +1,8 @@
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import {
   getOrcaProfileDataFile as getSharedOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile as getSharedOrcaProfileStateDatabaseFile
-} from '../../shared/profile-state-storage-paths'
+} from '../../shared/orca-profiles/profile-state-storage-paths'
 import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/database/profile-state-storage-classification'
 import { join } from 'node:path'
 

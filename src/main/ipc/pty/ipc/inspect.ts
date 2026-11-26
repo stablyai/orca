@@ -10,9 +10,9 @@ import {
   tryGetProviderForPty,
   type ResolvedPtyHost
 } from '../provider/registry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { installPtySessionListingIpcHandler } from './session-listing'
 import { ptySizes } from '../delivery/visibility-state'
 import { isValidPaneKey } from '../pane/key-state'
@@ -145,6 +145,8 @@ export function installPtyInspectIpcHandlers(deps: {
         expectedIncarnationId?: string
         scanChildProcesses?: boolean
         steadyState?: boolean
+        jobMembershipOnly?: boolean
+        foregroundOnly?: boolean
       }
     ) => {
       // Another host's PTY remains unverifiable here.
@@ -156,16 +158,26 @@ export function installPtyInspectIpcHandlers(deps: {
       if (!hasPtyProviderForInspection(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
+      const provider = getProviderForPty(args.id)
+      // A provider without fenced foreground reads (SSH, old daemons) would answer with slower, unfenced ones.
+      if (
+        args.foregroundOnly === true &&
+        provider.supportsForegroundObservation?.(args.id) !== true
+      ) {
+        return clientOnlyUnverifiableInspection('old_host')
+      }
       const options = {
+        ...(args.foregroundOnly === true ? { foregroundOnly: true } : {}),
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),
         ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
-        ...(args.steadyState === true ? { steadyState: true } : {})
+        ...(args.steadyState === true ? { steadyState: true } : {}),
+        ...(args.jobMembershipOnly === true ? { jobMembershipOnly: true } : {})
       }
       return Object.keys(options).length > 0
-        ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)
-        : inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
+        ? inspectPtyProviderProcessForRenderer(provider, args.id, options)
+        : inspectPtyProviderProcessForRenderer(provider, args.id)
     }
   )
 

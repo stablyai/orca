@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 import type { WorktreeDisplayNameSource } from '../row-presentation/worktree-display-name'
 
 // Consumers guard these fields; salvage unreadable records as absent rather than failing unrelated reads.

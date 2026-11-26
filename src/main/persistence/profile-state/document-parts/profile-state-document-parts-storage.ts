@@ -189,62 +189,87 @@ export function clearProfileStateDocumentParts(db: Database.Database): void {
     DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_META_TABLE};`)
 }
 
+/** A stored part row as last committed. */
+export type StoredPartRow = { ordinal: number; hash: string }
+
+export type HashedProfileStatePart = ProfileStateDocumentPart & { hash: string }
+
+/** What a split write stored, so the writer can patch it next without reading it back. */
+export type StoredProfileStateDomainParts = {
+  parts: readonly HashedProfileStatePart[]
+  rows: Map<string, StoredPartRow>
+}
+
 /**
- * Write only the parts whose content or position changed. Returns false when the payload
+ * Write only the parts whose content or position changed. Returns undefined when the payload
  * cannot be split losslessly; the caller then stores it as an ordinary legacy row.
  */
 export function writeProfileStateDomainParts(
   db: Database.Database,
   args: {
     domain: string
-    payload: string
-    /** Already-parsed payload, when the caller has it. */
-    value?: unknown
     payloadHash: string
     domainVersion: number
     revision: number
     updatedAt: number
     /** Legacy row revision after this write; parts stay authoritative only while it matches. */
     legacyRevision: number
-    /** Existing parts are a valid base to diff against. */
-    diffExisting: boolean
-  }
-): boolean {
+  } & (
+    | {
+        payload: string
+        /** Already-parsed payload, when the caller has it. */
+        value?: unknown
+        /** Existing parts are a valid base to diff against. */
+        diffExisting: boolean
+      }
+    | {
+        /** Parts the writer patched, diffed against the rows it last committed. */
+        hashedParts: readonly HashedProfileStatePart[]
+        storedRows: ReadonlyMap<string, StoredPartRow>
+      }
+  )
+): StoredProfileStateDomainParts | undefined {
   if (!hasProfileStateDocumentPartsTables(db)) {
-    return false
+    return undefined
   }
   const depth = PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(args.domain)
   if (depth === undefined) {
-    return false
+    return undefined
   }
-  const parts = splitProfileStateDomainValue(
-    args.value === undefined ? JSON.parse(args.payload) : args.value,
-    depth
-  )
-  // Non-canonical JSON (whitespace, escapes) would not round-trip byte-for-byte.
-  if (assembleProfileStateDomainPayload(parts) !== args.payload) {
-    deleteProfileStateDomainParts(db, args.domain)
-    return false
-  }
-  const existing = new Map<string, { ordinal: number; contentHash: string }>()
-  if (args.diffExisting) {
-    for (const row of db
-      .prepare(
-        `SELECT part_key, ordinal, content_hash FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
-         WHERE domain = ?`
-      )
-      .iterate(args.domain)) {
-      if (isRecord(row) && typeof row.part_key === 'string') {
-        existing.set(row.part_key, {
-          ordinal: Number(row.ordinal),
-          contentHash: String(row.content_hash)
-        })
-      }
-    }
+  let parts: readonly HashedProfileStatePart[]
+  let existing: ReadonlyMap<string, StoredPartRow>
+  if ('hashedParts' in args) {
+    parts = args.hashedParts
+    existing = args.storedRows
   } else {
-    db.prepare(`DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} WHERE domain = ?`).run(
-      args.domain
+    const split = splitProfileStateDomainValue(
+      args.value === undefined ? JSON.parse(args.payload) : args.value,
+      depth
     )
+    // Non-canonical JSON (whitespace, escapes) would not round-trip byte-for-byte.
+    if (assembleProfileStateDomainPayload(split) !== args.payload) {
+      deleteProfileStateDomainParts(db, args.domain)
+      return undefined
+    }
+    parts = split.map((part) => ({ ...part, hash: hashProfileStatePart(part.payload) }))
+    const read = new Map<string, StoredPartRow>()
+    if (args.diffExisting) {
+      for (const row of db
+        .prepare(
+          `SELECT part_key, ordinal, content_hash FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
+           WHERE domain = ?`
+        )
+        .iterate(args.domain)) {
+        if (isRecord(row) && typeof row.part_key === 'string') {
+          read.set(row.part_key, { ordinal: Number(row.ordinal), hash: String(row.content_hash) })
+        }
+      }
+    } else {
+      db.prepare(`DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} WHERE domain = ?`).run(
+        args.domain
+      )
+    }
+    existing = read
   }
   const ordinals = assignProfileStatePartOrdinals(
     parts.map(({ key }) => key),
@@ -264,22 +289,21 @@ export function writeProfileStateDomainParts(
   const remove = db.prepare(
     `DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} WHERE domain = ? AND part_key = ?`
   )
-  const seen = new Set<string>()
+  const rows = new Map<string, StoredPartRow>()
   parts.forEach((part, index) => {
-    seen.add(part.key)
     const ordinal = ordinals[index]!
     const previous = existing.get(part.key)
-    const contentHash = hashProfileStatePart(part.payload)
     if (!previous) {
-      insert.run(args.domain, part.key, ordinal, part.payload, contentHash)
-    } else if (previous.contentHash !== contentHash) {
-      updatePayload.run(ordinal, part.payload, contentHash, args.domain, part.key)
+      insert.run(args.domain, part.key, ordinal, part.payload, part.hash)
+    } else if (previous.hash !== part.hash) {
+      updatePayload.run(ordinal, part.payload, part.hash, args.domain, part.key)
     } else if (previous.ordinal !== ordinal) {
       updateOrdinal.run(ordinal, args.domain, part.key)
     }
+    rows.set(part.key, { ordinal, hash: part.hash })
   })
   for (const key of existing.keys()) {
-    if (!seen.has(key)) {
+    if (!rows.has(key)) {
       remove.run(args.domain, key)
     }
   }
@@ -301,5 +325,5 @@ export function writeProfileStateDomainParts(
     args.payloadHash,
     args.legacyRevision
   )
-  return true
+  return { parts, rows }
 }

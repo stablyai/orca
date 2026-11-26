@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Clock, KeyRound, ServerOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { tailscalePingCommand } from '../../../../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import {
   remoteRuntimeDownForLabel,

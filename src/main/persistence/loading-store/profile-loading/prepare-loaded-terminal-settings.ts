@@ -1,16 +1,16 @@
 import { migrateActionPermissionArgs } from '../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import { homedir } from 'node:os'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { WorktreeVisibilityDefaults, Repo } from '../../../../shared/repo-types'
-import { getDefaultPersistedState } from '../../../../shared/constants'
-import { migrateExternalWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { WorktreeVisibilityDefaults, Repo } from '../../../../shared/repository/repo-types'
+import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
+import { migrateExternalWorktreeVisibilityDefaults } from '../../../../shared/worktree/visibility/external-worktree-visibility'
 import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
 import { sourceControlAiSettingsFromLegacy } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   normalizeOsc52ClipboardDefaultOn,
   osc52ClipboardDefaultOnOverridesPersistedOff
-} from '../../../../shared/osc52-clipboard-settings'
+} from '../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import { migrateWindowsTerminalFontWeight } from '../../../../shared/terminal/appearance/terminal-font-weight-windows-regular'
 import {

@@ -1,97 +1,61 @@
-import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalProducerLinkage } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionAppendOptions } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { afterEach, expect, it, vi } from 'vitest'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
-import type {
-  ClaudeSubagentLinkageSource,
-  ClaudeSubagentLinkageVerdict
-} from '../../subagents/claude-subagent-linkage'
+import { ClaudeSubagentIdentities } from '../../subagents/claude-subagent-identities'
+import { claudeStreamingMessageBody } from './claude-structured-item-translation'
 
-function identityOf(uuid: string): AgentJournalItemIdentity {
-  return { provider: 'claude', sessionId: 'claude-session', uuid }
-}
+afterEach(() => vi.useRealTimers())
 
-/** Scopeless blocks are root-owned and must never consult the child resolver. */
-const unconsultedProducer: ClaudeSubagentLinkageSource = {
-  linkageFor: () => {
-    throw new Error('resolver consulted for a block with no scope')
-  },
-  settledLinkageFor: () => {
-    throw new Error('resolver consulted for a block with no scope')
-  }
-}
+const textOf = (item: AgentJournalRenderItem): string =>
+  item.body.kind === 'message' && item.body.blocks[0]?.type === 'text'
+    ? item.body.blocks[0].text
+    : ''
 
-const CHILD_LINKAGE: AgentJournalProducerLinkage = {
-  agentId: 'task-1',
-  providerParentRef: 'toolu_1',
-  producerKind: 'agent'
-}
-
-/** Resolve announcements mid-stream; use the raw reference if no announcement arrives. */
-function scriptedProducer() {
-  let verdict: ClaudeSubagentLinkageVerdict = { kind: 'pending' }
-  const settledFallback: Extract<ClaudeSubagentLinkageVerdict, { kind: 'linked' }> = {
-    kind: 'linked',
-    linkage: { agentId: 'toolu_1', providerParentRef: 'toolu_1', producerKind: 'agent' }
-  }
-  return {
-    source: {
-      linkageFor: () => verdict,
-      settledLinkageFor: () => (verdict.kind === 'pending' ? settledFallback : verdict)
-    } satisfies ClaudeSubagentLinkageSource,
-    resolve: (linkage: AgentJournalProducerLinkage) => {
-      verdict = { kind: 'linked', linkage }
-    }
-  }
-}
-
-function checkpoints(producer: ClaudeSubagentLinkageSource = unconsultedProducer) {
-  const rows: { uuid: string; text: string }[] = []
-  const stamps: StructuredAgentSessionAppendOptions[] = []
-  let scheduled: (() => void) | null = null
-  const store = createClaudeStreamedTextCheckpoints({
-    producer,
-    persist: (identity, text, options) => {
-      rows.push({ uuid: 'uuid' in identity ? identity.uuid : '', text })
-      stamps.push(options)
-    },
-    schedule: (run) => {
-      scheduled = run
-      return () => {
-        scheduled = null
+it('shows a long reply’s paused tail but saves it only when the reply ends', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  let read: (epoch: string) => readonly AgentJournalRenderItem[] = () => []
+  const shown: string[] = []
+  const saved: string[] = []
+  const checkpoints = createClaudeStreamedTextCheckpoints({
+    producer: new ClaudeSubagentIdentities({}).linkage,
+    sink: {
+      bindLiveText: (source) => {
+        read = source.read
+        return () => {}
+      },
+      publishLiveText: () => {
+        shown.push(...read('epoch').map(textOf))
+        return { accepted: true }
       }
+    },
+    liveBody: claudeStreamingMessageBody,
+    persist: (_identity, text, _options, _ended, onCommitted) => {
+      saved.push(text)
+      onCommitted?.(
+        {
+          itemId: 'reply',
+          revision: saved.length,
+          sequence: 7,
+          observedAt: 1,
+          body: claudeStreamingMessageBody(text)
+        },
+        'epoch'
+      )
     }
   })
-  return {
-    store,
-    rows,
-    stamps,
-    runWindow: () => {
-      const run = scheduled as (() => void) | null
-      run?.()
-    }
-  }
-}
-
-describe('claude streamed text checkpoints', () => {
-  it('writes a checkpoint at once while the producing agent is provisional', () => {
-    const producer = scriptedProducer()
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'partial', 'toolu_1')
-    runWindow()
-    expect(rows).toEqual([{ uuid: 'block-1', text: 'partial' }])
-    expect(stamps.at(-1)).toMatchObject({ agentId: 'toolu_1' })
-
-    // Flush advances text; reattribute corrects linkage even when text is unchanged.
-    producer.resolve(CHILD_LINKAGE)
-    store.flush()
-    expect(stamps.at(-1)).toMatchObject({ agentId: 'toolu_1' })
-
-    store.reattribute()
-
-    expect(rows.at(-1)).toEqual({ uuid: 'block-1', text: 'partial' })
-    expect(stamps.at(-1)).toEqual(CHILD_LINKAGE)
-  })
+  const identity = { provider: 'orca' as const, clientMessageId: 'reply' }
+  const prefix = 'a'.repeat(20000)
+  checkpoints.append(identity, prefix)
+  vi.advanceTimersByTime(60)
+  expect(saved).toEqual([prefix])
+  checkpoints.append(identity, ' paused tail')
+  vi.advanceTimersByTime(60)
+  expect(shown).toEqual([`${prefix} paused tail`])
+  expect(saved).toEqual([prefix])
+  vi.advanceTimersByTime(60_000)
+  expect(saved).toEqual([prefix])
+  checkpoints.append(identity, ' final tail')
+  checkpoints.finish({ completedAt: 2000 })
+  expect(saved).toEqual([prefix, `${prefix} paused tail final tail`])
+  checkpoints.dispose()
 })

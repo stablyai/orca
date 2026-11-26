@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { LinearProjectOverview } from '@/components/linear-project-view-surfaces'
+import { LinearProjectOverview } from '@/components/task-page/linear/projects/linear-project-view-surfaces'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearProjectOverview({
   model

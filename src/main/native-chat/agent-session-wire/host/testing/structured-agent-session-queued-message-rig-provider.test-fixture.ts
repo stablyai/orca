@@ -1,10 +1,10 @@
 import type { AgentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { vi, type Mock } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -62,6 +62,8 @@ export function createQueuedRigProvider(
   const closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>> = vi.fn(
     async () => true
   )
+  const releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>> =
+    vi.fn(async () => true)
   let events: StructuredAgentSessionEventSink | undefined
   let proveOpen: (() => void) | null = null
 
@@ -127,7 +129,7 @@ export function createQueuedRigProvider(
       }
     }),
     closeSession,
-    releaseAcquisition: vi.fn(async () => true),
+    releaseAcquisition,
     compact,
     cancelTurn,
     answerPrompt: vi.fn(async ({ commit }) => commit()),
@@ -224,6 +226,7 @@ export function createQueuedRigProvider(
     cancelTurn,
     setOption,
     closeSession,
+    releaseAcquisition,
     finishCompact,
     providerEvents
   }
@@ -237,4 +240,6 @@ export type RigSendOptions = {
   internal?: true
   from?: AgentMessageSource
   carried?: Readonly<Record<string, string>>
+  /** The runtime fence the client last saw; the rig's first one otherwise. */
+  fence?: number
 }

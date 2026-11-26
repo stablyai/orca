@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { setRendererUiLanguage } from '@/i18n/i18n'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   DropdownMenu,
   DropdownMenuContent,

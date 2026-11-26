@@ -1,12 +1,4 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-  type Stats
-} from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, type Stats } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import {
   hasAppImagePathEnvironment,
@@ -20,6 +12,7 @@ import {
   ensureAppImageStableLauncher,
   removeAppImageLegacyLiveEndpoint
 } from '../appimage/appimage-stable-launcher'
+import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { getBundledLauncherPath } from '../packaged-assets/bundled-cli-launcher-path'
 import { buildBareOrcaCliScript } from './linux-bare-orca-dispatcher'
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
@@ -181,7 +174,8 @@ function ensureShimForScript(userDataPath: string, script: string): string | nul
   try {
     if (readShim(shimPath) !== script) {
       mkdirSync(shimDir, { recursive: true })
-      writeFileSync(shimPath, script, 'utf8')
+      // Bash reads scripts incrementally; an in-place rewrite can run a half-old, half-new shim.
+      writeFileAtomically(shimPath, script, { mode: 0o755 })
     }
     chmodSync(shimPath, 0o755)
   } catch {

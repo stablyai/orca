@@ -1,10 +1,12 @@
 import { useAppStore } from '@/store'
+import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-actions'
 import { structuredAttentionReadObservation } from '../../attention/structured-attention-read-observation'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { StructuredAgentSessionReadSnapshot } from './structured-agent-session-read-owner-contract'
 
 function useReadOwnerSnapshot(
@@ -18,6 +20,7 @@ function useReadOwnerSnapshot(
     () => getStructuredAgentSessionReadOwner(sessionId, target),
     [sessionId, target]
   )
+  useNativeChatPaneLifetimeEffect(useCallback(() => owner.retain(), [owner]))
   const snapshot = useSyncExternalStore(owner.subscribe, owner.getSnapshot, owner.getSnapshot)
   return { owner, snapshot }
 }
@@ -27,24 +30,31 @@ export function useStructuredAgentSessionRead(args: {
   target: RuntimeClientTarget
   isVisible?: boolean
   isViewed?: boolean
+  /** Draws reply and reasoning text (a transcript), so a shown window takes live text. */
+  showsReplyText?: boolean
 }) {
-  const { sessionId, target, isVisible = true } = args
+  const { sessionId, target, isVisible = true, showsReplyText = false } = args
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
   const isViewed = args.isViewed ?? isVisible
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const observationKey = structuredAttentionReadObservation(snapshot.state)
   const lastView = useRef<{ owner: typeof owner; observationKey: string } | null>(null)
+  // Read at start; a change re-runs the read so the host learns whether this reader shows them.
+  const showsPromptSuggestions = useAppStore((state) =>
+    nativeChatShowsPromptSuggestions(state.settings)
+  )
 
   useEffect(() => {
     if (isVisible) {
       return owner.activate({
         getState: useAppStore.getState,
+        showsReplyText,
         subscribeRetryNow: (retry) =>
           environmentId ? subscribeRuntimeHostContactRegained(environmentId, retry) : () => {}
       })
     }
     return undefined
-  }, [isVisible, owner, environmentId])
+  }, [isVisible, owner, environmentId, showsPromptSuggestions, showsReplyText])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {

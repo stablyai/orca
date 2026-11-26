@@ -1,4 +1,4 @@
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 /** Bare-shell OMP can run inside a Pi-kind pane; every approval-aware extension needs runtime detection. */
 export function getPiOmpRuntimeDetectionSourceLines(configuredHookPath: string): string[] {

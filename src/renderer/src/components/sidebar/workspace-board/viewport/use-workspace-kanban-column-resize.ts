@@ -3,7 +3,7 @@ import type React from 'react'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_STEP,
   clampWorkspaceBoardColumnWidth
-} from '../../../../../../shared/workspace-statuses'
+} from '../../../../../../shared/workspace/status/workspace-statuses'
 
 type UseWorkspaceKanbanColumnResizeResult = {
   columnWidth: number

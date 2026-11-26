@@ -15,7 +15,7 @@ import {
   IntegrationCardGroup,
   IntegrationCardPresentationProvider
 } from '@/components/integrations/presentation/integration-card-presentation'
-import { useIntegrationProviderStatusRefresh } from '@/hooks/use-integration-provider-status-refresh'
+import { useIntegrationProviderStatusRefresh } from '@/runtime/hosts/observations/use-integration-provider-status-refresh'
 import { IntegrationStep } from './connect-integration-step'
 import {
   deriveIntegrationFlowState,

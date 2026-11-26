@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
@@ -16,29 +16,22 @@ import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
 import { useFileExplorerRootNavigation } from '../navigation/use-file-explorer-root-navigation'
 import { useFileExplorerScopeTransition } from '../navigation/use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
-import { cn } from '@/lib/class-names'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerFilesTreePane } from '../tree/FileExplorerFilesTreePane'
-import { FileExplorerNameFilter } from './FileExplorerNameFilter'
-import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
-import { SearchFilters } from '../content-search/SearchFilters'
-import { SearchQueryRow } from '../content-search/SearchQueryRow'
-import { SearchResultsPane } from '../content-search/SearchResultsPane'
-import { useFileSearchPanel } from '../content-search/useFileSearchPanel'
 import {
-  getNameFilterCollapsedPathsAfterExpand,
-  getNextNameFilterCollapsedPaths
-} from '../tree/file-explorer-name-filter-projection'
+  FileExplorerSearchPane,
+  type FileExplorerSearchControl
+} from '../combined-search/FileExplorerSearchPane'
+import { useNameMatchRowActions } from '../combined-search/use-name-match-row-actions'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from '../tree/useFileExplorerTree'
 import { getFileExplorerOperationOwnerFromState } from '../navigation/file-explorer-operation-owner'
 import { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from '../tree/useFileExplorerVisibleRowProjection'
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
-import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
 import { useWslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
 import { useWslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
@@ -49,9 +42,6 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 function FileExplorerFiles(): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
-  const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
-  const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
-  const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const runtimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
@@ -88,9 +78,13 @@ function FileExplorerFiles(): React.JSX.Element {
   const worktreePath = activeWorktree?.path ?? null
   const displayRootPath = getExplorerDisplayRootPath(worktreePath, rootChoice)
   const displayDepth = getExplorerDisplayDepth(worktreePath, displayRootPath)
-  const isFilesViewActive = explorerView === 'files'
+  // Search results cover the tree; treat that like the old search view so hidden tree work pauses.
+  const searchActive = useAppStore((s) =>
+    activeWorktreeId ? s.fileSearchStateByWorktree[activeWorktreeId]?.active === true : false
+  )
+  const treeView = searchActive ? 'search' : 'files'
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
-    explorerView,
+    explorerView: treeView,
     rightSidebarOpen,
     worktreePath
   })
@@ -108,52 +102,30 @@ function FileExplorerFiles(): React.JSX.Element {
     [expanded, visibleFilesWorktreePath, displayRootPath, worktreePath]
   )
   const tree = useFileExplorerTree(worktreePath, effectiveExpanded, activeWorktreeId)
-  const {
-    nameFilterQuery,
-    setNameFilterQuery,
-    nameFilterCollapsedPaths,
-    setNameFilterCollapsedPaths,
-    hasNameFilter,
-    nameFilterFiles,
-    nameFilterSource,
-    handleClearNameFilter
-  } = useFileExplorerNameFilter({ isFilesViewActive, activeWorktreeId })
+  const searchControlRef = useRef<FileExplorerSearchControl>(null)
+  const clearSearch = useCallback(() => searchControlRef.current?.clear(), [])
+  const hasNameFilter = searchActive
 
-  const {
-    rowProjection,
-    ignoredByRelativePath,
-    showGitIgnoredFiles,
-    nameFilterExpandedPaths,
-    toggleGitIgnoredFiles
-  } = useFileExplorerVisibleRowProjection(
-    activeWorktreeId,
-    visibleFilesWorktreePath,
-    tree.dirCache,
-    expanded,
-    activeRepoSupportsGit && isFilesViewActive,
-    showDotfiles,
-    nameFilterSource,
-    hasNameFilter ? nameFilterCollapsedPaths : null,
-    visibleFilesWorktreePath ? displayRootPath : null
-  )
-  const rowExpandedPaths = useMemo(
-    () =>
-      hasNameFilter
-        ? nameFilterExpandedPaths
-        : nameFilterExpandedPaths.size > 0
-          ? new Set([...expanded, ...nameFilterExpandedPaths])
-          : expanded,
-    [expanded, hasNameFilter, nameFilterExpandedPaths]
-  )
+  const { rowProjection, ignoredByRelativePath, showGitIgnoredFiles, toggleGitIgnoredFiles } =
+    useFileExplorerVisibleRowProjection(
+      activeWorktreeId,
+      visibleFilesWorktreePath,
+      tree.dirCache,
+      expanded,
+      activeRepoSupportsGit,
+      showDotfiles,
+      visibleFilesWorktreePath ? displayRootPath : null
+    )
+  const rowExpandedPaths = expanded
   const visibleRowCount = rowProjection.getVisibleCount()
   const manualRefresh = useFileExplorerManualRefresh(tree.refreshTree)
-  const canCollapseAll = isFilesViewActive && !hasNameFilter && expanded.size > 0
+  const canCollapseAll = !hasNameFilter && expanded.size > 0
   const handleCollapseAll = useCallback(() => {
-    if (!activeWorktreeId || !isFilesViewActive || hasNameFilter) {
+    if (!activeWorktreeId || hasNameFilter) {
       return
     }
     collapseAllDirs(activeWorktreeId)
-  }, [activeWorktreeId, collapseAllDirs, hasNameFilter, isFilesViewActive])
+  }, [activeWorktreeId, collapseAllDirs, hasNameFilter])
   const handleToggleDotfiles = useCallback(() => {
     if (activeWorktreeId) {
       toggleShowDotfilesForWorktree(activeWorktreeId)
@@ -164,22 +136,6 @@ function FileExplorerFiles(): React.JSX.Element {
   const selectedNode = selection.selectedPath
     ? rowProjection.getRowByPath(selection.selectedPath)
     : null
-  const handleToggleNameFilterDir = useCallback(
-    (_worktreeId: string, dirPath: string) => {
-      setNameFilterCollapsedPaths((current) =>
-        getNextNameFilterCollapsedPaths(current, dirPath, rowExpandedPaths.has(dirPath))
-      )
-    },
-    [rowExpandedPaths, setNameFilterCollapsedPaths]
-  )
-  const handleExpandNameFilterDir = useCallback(
-    (dirPath: string) => {
-      setNameFilterCollapsedPaths((current) =>
-        getNameFilterCollapsedPathsAfterExpand(current, dirPath)
-      )
-    },
-    [setNameFilterCollapsedPaths]
-  )
   // Keep effects above the null-path return so transient missing ownership cannot reset cache guards or SSH generations.
   const paneState = useFileExplorerTreePaneState({
     onRevealOutsideRoot: rootNavigation.revealOutsideRoot,
@@ -192,9 +148,8 @@ function FileExplorerFiles(): React.JSX.Element {
     expanded,
     activeFileId,
     openFiles,
-    hasNameFilter,
-    setNameFilterQuery,
-    handleToggleNameFilterDir,
+    hasNameFilterQuery: searchActive,
+    clearNameFilter: clearSearch,
     tree,
     selection,
     selectedNode,
@@ -225,15 +180,32 @@ function FileExplorerFiles(): React.JSX.Element {
     setBgMenuOpen
   })
 
+  const nameRowActions = useNameMatchRowActions({
+    activeWorktreeId,
+    searchActive,
+    clearSearch,
+    rowProjection,
+    pathOwner: openInOwner,
+    displayRootPath,
+    connectionId: activeRepo?.connectionId ?? null,
+    runtimeDownloadContext: paneState.runtimeDownloadContext,
+    deleteShortcutLabel: paneState.deletion.deleteShortcutLabel,
+    canOpenInOrcaBrowser: paneState.canOpenWorkspaceFileBrowserForPath,
+    openNode: paneState.handlers.handleClick,
+    pinNode: paneState.handlers.handleDoubleClick,
+    startNewInTree: inlineInputState.startNew,
+    startRenameInTree: inlineInputState.startRename,
+    duplicate: paneState.nodeCommands.handleDuplicate,
+    requestDelete: paneState.deletion.requestDelete
+  })
+
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        {explorerView === 'search'
-          ? t('auto.components.right.sidebar.Search.98c8435e36', 'Select a workspace to search')
-          : t(
-              'auto.components.right.sidebar.FileExplorer.79b1537dd3',
-              'Select a workspace to browse files'
-            )}
+        {t(
+          'auto.components.right.sidebar.FileExplorer.79b1537dd3',
+          'Select a workspace to browse files'
+        )}
       </div>
     )
   }
@@ -254,7 +226,7 @@ function FileExplorerFiles(): React.JSX.Element {
           {...getRouteForLocalPathOpenOwner(openInOwner)}
           workspaceId={activeWorktreeId}
           refresh={manualRefresh}
-          canRefresh={isFilesViewActive}
+          canRefresh={!searchActive}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
           showGitIgnoredFilesToggle={activeRepoSupportsGit}
@@ -266,7 +238,7 @@ function FileExplorerFiles(): React.JSX.Element {
         {activeWorktree?.isSparse && (
           <FileExplorerScopeNotice
             rootSelect={
-              isFilesViewActive && rootOptions
+              rootOptions
                 ? {
                     options: rootOptions,
                     value: rootChoice,
@@ -282,72 +254,45 @@ function FileExplorerFiles(): React.JSX.Element {
             disabled={
               Boolean(paneState.dragDrop.dragSourcePath) || paneState.dragDrop.isNativeDragOver
             }
-            searching={!isFilesViewActive}
             sparse={!!activeWorktree?.isSparse}
           />
         )}
-        <FileExplorerQueryStrip view={explorerView} onSelectView={setRightSidebarExplorerView}>
-          {/* Keep query rows mounted to preserve input selection when switching modes. */}
-          <div className="relative min-h-8">
-            <div hidden={explorerView !== 'files'}>
-              <FileExplorerNameFilter
-                query={nameFilterQuery}
-                scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
-                loading={nameFilterFiles.loading}
-                onQueryChange={setNameFilterQuery}
-                onClear={handleClearNameFilter}
-              />
-            </div>
-            <div hidden={explorerView !== 'search'}>
-              <SearchQueryRow {...searchPanel.queryRowProps} />
-            </div>
-            <div hidden={explorerView !== 'search'}>
-              <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
-            </div>
-          </div>
-        </FileExplorerQueryStrip>
-        {/* Layer Files/Contents in one body slot to retain heavy virtualized panes at full height. */}
-        <div className="relative min-h-0 flex-1 overflow-hidden">
-          <FileExplorerFilesTreePane
-            displayRootPath={displayRootPath}
-            activeRepo={activeRepo}
-            worktreePath={worktreePath}
-            explorerView={explorerView}
-            activeFileId={activeFileId}
-            hasNameFilter={hasNameFilter}
-            nameFilterSource={nameFilterSource}
-            nameFilterFiles={nameFilterFiles}
-            handleExpandNameFilterDir={handleExpandNameFilterDir}
-            tree={tree}
-            selection={selection}
-            paneState={paneState}
-            rowProjection={rowProjection}
-            ignoredByRelativePath={ignoredByRelativePath}
-            rowExpandedPaths={rowExpandedPaths}
-            visibleRowCount={visibleRowCount}
-            handleExplorerBackgroundContextMenuCapture={handleExplorerBackgroundContextMenuCapture}
-            handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
-            wslHostUnavailable={wslHostUnavailable}
-            stoppedWslHost={stoppedWslHost}
-          />
-          <div
-            className={cn(
-              'absolute inset-0 flex min-h-0 flex-col',
-              explorerView !== 'search' && 'pointer-events-none invisible'
-            )}
-          >
-            {searchPanel.activeWorktreeId ? (
-              <SearchResultsPane {...searchPanel.resultsProps} />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                {t(
-                  'auto.components.right.sidebar.Search.98c8435e36',
-                  'Select a workspace to search'
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <FileExplorerSearchPane
+          // Local worktrees share one owner key, so the draft is owned per worktree here.
+          key={activeWorktreeId ?? ''}
+          controlRef={searchControlRef}
+          activeWorktreeId={activeWorktreeId}
+          worktreePath={worktreePath}
+          displayRootPath={displayRootPath}
+          showDotfiles={showDotfiles}
+          showGitIgnoredFiles={showGitIgnoredFiles}
+          activeRepoSupportsGit={activeRepoSupportsGit}
+          scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
+          rowActions={nameRowActions}
+          tree={
+            // Kept mounted under results so clearing the query restores its scroll and caches.
+            <FileExplorerFilesTreePane
+              displayRootPath={displayRootPath}
+              activeRepo={activeRepo}
+              worktreePath={worktreePath}
+              explorerView={treeView}
+              activeFileId={activeFileId}
+              tree={tree}
+              selection={selection}
+              paneState={paneState}
+              rowProjection={rowProjection}
+              ignoredByRelativePath={ignoredByRelativePath}
+              rowExpandedPaths={rowExpandedPaths}
+              visibleRowCount={visibleRowCount}
+              handleExplorerBackgroundContextMenuCapture={
+                handleExplorerBackgroundContextMenuCapture
+              }
+              handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
+              wslHostUnavailable={wslHostUnavailable}
+              stoppedWslHost={stoppedWslHost}
+            />
+          }
+        />
       </div>
 
       <FileExplorerBackgroundMenu

@@ -132,13 +132,15 @@ export function removeSystemManagedHookTrustEntries(
 
 export function removeRuntimeManagedHookTrustEntries(
   configPath: string,
-  codexHashes: readonly CodexHookHashes[]
+  codexHashes: readonly CodexHookHashes[],
+  runtimeHomePath: string = getOrcaManagedCodexHomePath()
 ): void {
   try {
     removeCodexManagedHookTrustEntries({
       codexHashes,
-      tomlPath: getCodexConfigTomlPath(),
-      runtimeHomePath: getOrcaManagedCodexHomePath(),
+      // A per-account home keeps its own trust and ledger; never touch the default home's.
+      tomlPath: getCodexConfigTomlPath(runtimeHomePath),
+      runtimeHomePath,
       sourcePaths: [configPath],
       command: getManagedCommand(getManagedScriptPath()),
       managedEventLabels: CODEX_MANAGED_EVENT_LABELS,

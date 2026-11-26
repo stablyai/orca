@@ -1,5 +1,5 @@
 import { findAutomationRepo } from '../../../shared/automations/ownership/automation-repo-target'
-import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
+import { findProjectHostSetup } from '../../../shared/project/host-setup/project-host-setup-target'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import { getAutomationLegacyRepoId } from '../../../shared/automations/history/automation-run-identity'
@@ -8,9 +8,12 @@ import {
   type AutomationCapturedHostIssue
 } from '../../../shared/automations/ownership/automation-list-scope'
 import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../shared/automations/ownership/automation-owner-conflict'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import type { ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import {
   buildWorkspaceRunContext,
@@ -26,9 +29,18 @@ import {
   managedOrcadHostOf,
   ORCAD_FENCED_AUTOMATION
 } from './orcad-fenced-automation'
+import { resolveBotAutomationRunTarget, type AutomationBotRunTarget } from '../bot-run-target'
+
+export type AutomationRepoRunTarget = {
+  ok: true
+  cwd: string
+  repo: Repo
+  setup?: ProjectHostSetup
+}
 
 export type AutomationRunTargetResult =
-  | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
+  | AutomationRepoRunTarget
+  | AutomationBotRunTarget
   | ({ ok: false } & AutomationRunFailure)
 
 // Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
@@ -75,7 +87,7 @@ function resolveAutomationOwnerRefusal(
 function resolveLegacyAutomationRunTarget(
   store: Store,
   automation: Automation
-): AutomationRunTargetResult {
+): AutomationRepoRunTarget | { ok: false; error: string } {
   const repoId = getAutomationLegacyRepoId(automation)
   const rows = store.getRepos().filter((entry) => entry.id === repoId)
   // Reject twin repos before getRepo or owner resolution silently selects one host.
@@ -100,7 +112,7 @@ function findLegacyAutomationRunContextStamp(
   automation: Automation,
   options: AutomationRunTargetOptions
 ): WorkspaceRunContext | null {
-  if (automation.runContext) {
+  if (automation.runContext || automation.bot) {
     return null
   }
   const legacy = resolveLegacyAutomationRunTarget(store, automation)
@@ -125,6 +137,7 @@ function findLegacyAutomationRunContextStamp(
   }
   const captured = resolveAutomationRunTarget(store, { ...automation, runContext }, options)
   return captured.ok &&
+    'repo' in captured &&
     captured.cwd === legacy.cwd &&
     getRepoExecutionHostId(captured.repo) === repoHostId
     ? runContext
@@ -157,6 +170,9 @@ export function resolveAutomationRunTarget(
   automation: Automation,
   options: AutomationRunTargetOptions = {}
 ): AutomationRunTargetResult {
+  if (automation.bot) {
+    return resolveBotAutomationRunTarget(store, automation.bot)
+  }
   const managedHost = managedOrcadHostOf(store, automation)
   if (managedHost) {
     return { ok: false, ...automationRunFailure('managedHostServer', { host: managedHost.label }) }

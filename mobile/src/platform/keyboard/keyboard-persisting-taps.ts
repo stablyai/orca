@@ -23,11 +23,12 @@ function isPressableInside(container: HTMLElement, target: Element): boolean {
 }
 
 // RN Web ignores keyboardShouldPersistTaps; prevent mousedown focus theft by Pressables to keep the IME open.
+// A touch long press focuses the Pressable without a mousedown; its blur would end a held press.
 export function keepTextFocusThroughTaps(
   container: HTMLElement,
   mode: KeyboardPersistingTaps
 ): () => void {
-  const onMouseDown = (event: MouseEvent) => {
+  const keepFocus = (event: MouseEvent) => {
     const target = event.target instanceof Element ? event.target : null
     if (!isTextField(document.activeElement) || !target || isTextField(target)) {
       return
@@ -37,8 +38,18 @@ export function keepTextFocusThroughTaps(
     }
     event.preventDefault()
   }
-  container.addEventListener('mousedown', onMouseDown, true)
-  return () => container.removeEventListener('mousedown', onMouseDown, true)
+  // Touch only: RN Web starts touch presses on touchstart, but mouse presses on the mousedown a canceled pointerdown suppresses.
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') {
+      keepFocus(event)
+    }
+  }
+  container.addEventListener('mousedown', keepFocus, true)
+  container.addEventListener('pointerdown', onPointerDown, true)
+  return () => {
+    container.removeEventListener('mousedown', keepFocus, true)
+    container.removeEventListener('pointerdown', onPointerDown, true)
+  }
 }
 
 export function useKeyboardPersistingTaps(mode: KeyboardPersistingTaps) {

@@ -2,8 +2,8 @@
 import type {
   OrcadManagedConversionResult,
   OrcadManagedDeployResult
-} from '../../../shared/orcad-managed-runtime'
-import type { SshTarget } from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
 import { classifyOrcadHostUnavailable } from '../../orcad/diagnostics/orcad-host-unavailable'
 

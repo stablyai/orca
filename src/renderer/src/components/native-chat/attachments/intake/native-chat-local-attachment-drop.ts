@@ -9,7 +9,7 @@ import {
 } from './native-chat-attachment-notices'
 import type { NativeChatAttachmentOwner } from '../uploads/native-chat-attachment-owner'
 import { stageNativeChatDraftFile } from '../../drafts/native-chat-draft-attachment-staging'
-import { isAgentInlineImagePath } from '../../../../../../shared/agent-inline-image-types'
+import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { nativeChatPendingAttachmentScope } from '../chips/native-chat-pending-attachment-scopes'
 import type {
   NativeChatAttachmentFocusOptions,

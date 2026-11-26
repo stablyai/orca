@@ -3,8 +3,8 @@ import { ChevronDown, ChevronRight, Globe, Trash2, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
-import { ORPHAN_WORKTREE_ID } from '../../../../../../shared/constants'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { ORPHAN_WORKTREE_ID } from '../../../../../../shared/terminal/pty/orphan-worktree-id'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { UNATTRIBUTED_REPO_ID } from '../workspace-attribution/merge-snapshot-and-sessions'
 import type {
@@ -13,18 +13,61 @@ import type {
 } from '../workspace-attribution/resource-usage-merge-types'
 import { MetricPair, ROW_TRAILING_GUTTER_CLS, Sparkline } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
+import { ChatRows } from './resource-usage-chat-row'
+import { firstRuntimePaneTitle } from '../workspace-attribution/resource-session-labels'
+import { useAppStore } from '@/store/index'
 
+type SessionRowProps = {
+  session: UnifiedSessionRow
+  worktreeId: string
+  onNavigate: (tabId: string, paneKey: string | null) => void
+  onKill: (session: UnifiedSessionRow) => void
+}
+
+type RuntimePaneTitles = ReturnType<typeof useAppStore.getState>['runtimePaneTitlesByTabId']
+const RuntimePaneTitlesContext = React.createContext<RuntimePaneTitles>({})
+
+/** One store selection for every live-titled label; only those labels read it. */
+export function RuntimePaneTitlesProvider({
+  children
+}: {
+  children: React.ReactNode
+}): React.JSX.Element {
+  // oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- one selection serves every live-titled label in the open panel; a change re-renders only those labels.
+  const titles = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  return (
+    <RuntimePaneTitlesContext.Provider value={titles}>{children}</RuntimePaneTitlesContext.Provider>
+  )
+}
+
+/** A label named by a live pane title; a title change re-renders just these labels. */
+function LiveTitleLabel({
+  tabId,
+  fallback
+}: {
+  tabId: string
+  fallback: string
+}): React.JSX.Element {
+  const liveTitle = firstRuntimePaneTitle(React.useContext(RuntimePaneTitlesContext)[tabId])
+  return <>{liveTitle || fallback}</>
+}
+
+/** The row's label as shown now, read when an action needs it. */
+function currentLabel(session: UnifiedSessionRow): string {
+  const tabId = session.liveTitleTabId
+  const liveTitle = tabId
+    ? firstRuntimePaneTitle(useAppStore.getState().runtimePaneTitlesByTabId[tabId])
+    : undefined
+  return liveTitle || session.label
+}
+
+// The row keeps one element type whether or not its label is live, so a sample never remounts it.
 export function SessionRow({
   session,
   worktreeId,
   onNavigate,
   onKill
-}: {
-  session: UnifiedSessionRow
-  worktreeId: string
-  onNavigate: (tabId: string, paneKey: string | null) => void
-  onKill: (session: UnifiedSessionRow) => void
-}): React.JSX.Element {
+}: SessionRowProps): React.JSX.Element {
   const t = useTranslate()
   const clickable = session.tabId !== null && session.bound
   const handleClick = (): void => {
@@ -61,7 +104,11 @@ export function SessionRow({
         )}
       />
       <span className="text-[11px] text-muted-foreground truncate min-w-0 flex-1">
-        {session.label}
+        {session.liveTitleTabId ? (
+          <LiveTitleLabel tabId={session.liveTitleTabId} fallback={session.label} />
+        ) : (
+          session.label
+        )}
       </span>
       <MetricPair cpu={session.cpu} memory={session.memory} size="small" />
       {/* Reserve the kill gutter for alignment; paired samples are read-only, while bound local rows reveal actions on hover/focus. */}
@@ -71,7 +118,8 @@ export function SessionRow({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              onKill(session)
+              const label = currentLabel(session)
+              onKill(label === session.label ? session : { ...session, label })
             }}
             className={cn(
               'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
@@ -104,36 +152,41 @@ function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Eleme
   )
 }
 
-export function WorktreeRow({
+/** Memoized: an unchanged workspace row skips redrawing when another workspace or machine updates. */
+export const WorktreeRow = React.memo(function WorktreeRow({
   worktree,
   storeRecord,
-  activeWorktreeId,
+  isActive,
   isCollapsed,
   onToggle,
   onNavigate,
   onDelete,
   onKillSession,
-  navigateToTab
+  navigateToTab,
+  onOpenChat
 }: {
   worktree: UnifiedWorktreeRow
   storeRecord: Worktree | null
-  activeWorktreeId: string | null
+  isActive: boolean
   isCollapsed: boolean
-  onToggle: () => void
-  onNavigate: () => void
-  onDelete: () => void
+  onToggle: (worktreeId: string) => void
+  onNavigate: (worktreeId: string) => void
+  onDelete: (worktreeId: string) => void
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
+  onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
+  const hasResources =
+    worktree.sessions.length > 0 ||
+    (worktree.chats?.length ?? 0) > 0 ||
+    worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
   const isNavigable = !isSynthetic
   // Why: Delete needs a sidebar worktree record; hidden for synthetic/SSH-only rows and the active worktree, but the row stays navigable.
-  const showWorktreeActions =
-    !isSynthetic && storeRecord !== null && worktree.worktreeId !== activeWorktreeId
+  const showWorktreeActions = !isSynthetic && storeRecord !== null && !isActive
   const isMainWorktree = storeRecord?.isMainWorktree ?? false
   const rowLabel = storeRecord?.displayName?.trim() || worktree.worktreeName
 
@@ -143,7 +196,7 @@ export function WorktreeRow({
         {hasResources ? (
           <button
             type="button"
-            onClick={onToggle}
+            onClick={() => onToggle(worktree.worktreeId)}
             className="pl-2 py-2 pr-0.5 shrink-0"
             aria-label={
               isCollapsed
@@ -171,7 +224,7 @@ export function WorktreeRow({
         )}
         <button
           type="button"
-          onClick={onNavigate}
+          onClick={() => onNavigate(worktree.worktreeId)}
           aria-label={t(
             'auto.components.status.bar.ResourceUsageStatusSegment.d659d71d2d',
             'Resume workspace {{value0}}',
@@ -209,7 +262,7 @@ export function WorktreeRow({
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={onDelete}
+                      onClick={() => onDelete(worktree.worktreeId)}
                       disabled={isMainWorktree}
                       aria-label={t(
                         'auto.components.status.bar.ResourceUsageStatusSegment.16bc3c998a',
@@ -250,6 +303,15 @@ export function WorktreeRow({
         </div>
       </div>
 
+      {!isCollapsed && worktree.chats && (
+        <ChatRows
+          chats={worktree.chats}
+          worktreeId={worktree.worktreeId}
+          runtimeHostId={worktree.runtimeHostId}
+          unplaced={worktree.unplaced}
+          onOpenChat={onOpenChat}
+        />
+      )}
       {!isCollapsed &&
         worktree.sessions.map((session) => (
           <SessionRow
@@ -264,4 +326,4 @@ export function WorktreeRow({
         worktree.browsers.map((browser) => <BrowserRow key={browser.id} browser={browser} />)}
     </div>
   )
-}
+})

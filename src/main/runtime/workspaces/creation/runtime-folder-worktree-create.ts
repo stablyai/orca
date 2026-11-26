@@ -1,14 +1,14 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
+import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import { randomUUID } from 'node:crypto'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-display-name'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
+import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktrees/creation/worktree-display-name'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
@@ -234,22 +234,10 @@ export async function createRuntimeFolderWorktree(args: {
       console.warn(`[worktree-create] ${warning}`)
     }
   }
-  if (shouldActivate) {
-    deps.activate(
-      repo.id,
-      worktree.id,
-      undefined,
-      // Main retains failed startup presentation; the window must not take it over.
-      ORCA_LAYOUT_OWNER_IS_MAIN
-        ? undefined
-        : args.startup && !didSpawnStartup
-          ? args.startup
-          : undefined,
-      ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])
-    )
-  }
   if (
-    (!shouldActivate || deps.terminals.provisionInBackground?.() === true) &&
+    (!shouldActivate ||
+      (!args.startup && request.terminalImageViewerSupported !== undefined) ||
+      deps.terminals.provisionInBackground?.() === true) &&
     deps.terminals.canSpawn &&
     shouldSeedWorktreePrimaryTerminal({
       // Failed agents retain their panes; do not seed a shell beside them.
@@ -271,6 +259,20 @@ export async function createRuntimeFolderWorktree(args: {
         : initialWarning
       console.warn(`[worktree-create] ${warning}`)
     }
+  }
+  if (shouldActivate) {
+    deps.activate(
+      repo.id,
+      worktree.id,
+      undefined,
+      // Main retains failed startup presentation; the window must not take it over.
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? undefined
+        : args.startup && !didSpawnStartup
+          ? args.startup
+          : undefined,
+      ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])
+    )
   }
   return {
     worktree: folderCreateResultWorktree(worktree),

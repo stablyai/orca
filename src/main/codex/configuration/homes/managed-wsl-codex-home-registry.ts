@@ -3,7 +3,7 @@ import {
   foldWslUncPathCaseInsensitiveParts,
   parseWslUncPath,
   toWindowsWslPath
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 
 type ManagedWslCodexHome = {
   runtimeHomePath: string

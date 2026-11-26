@@ -1,18 +1,20 @@
+import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/saved-conversation-title-publication'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/chat/saved-conversation-title-publication'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
-import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
+import { projectTabsWithBotHomePins } from './bot-home-pinned-projection'
+import { inlineRuntimeBrowserTabFavicons } from './browser-tab-favicon-data-urls'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
@@ -22,18 +24,22 @@ import type {
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressing/groups/structured-worker-group-addressing'
 import {
   retitleStructuredConversationTabs,
   titleStructuredConversationTabs
-} from '../../session-tabs/structured-conversation-tab-title'
-import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
-import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
+} from '../../session-tabs/chat/structured-conversation-tab-title'
+import { structuredConversationTabNamer } from '../../session-tabs/chat/structured-conversation-tab-namer'
+import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
+  private readonly hostMobileTerminalTheme = hostMobileTerminalTheme(this.store, () =>
+    this.notifyMobileSessionTabSnapshots()
+  )
+
   protected pruneMobileSessionTabGroupLayout(
     layout: TabGroupLayoutNode | null | undefined,
     validGroupIds: ReadonlySet<string>
@@ -82,11 +88,11 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
     snapshot = titleStructuredConversationTabs(
-      snapshot,
-      (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId),
+      inlineRuntimeBrowserTabFavicons(this, this.settleOwedMobileSessionSnapshotVersion(snapshot)),
+      structuredConversationTabNamer(snapshot.worktree, this.savedWorkspaceTabs(snapshot.worktree)),
       structuredConversationForked
     )
-    return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+    return projectTabsWithBotHomePins(this.store, snapshot, this.getMobileSessionProjectionHost())
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
@@ -96,13 +102,17 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     }
     // An older fork's shown name reads its source's, so the source's open forks retitle with it.
     const store = getStructuredAgentSessionHost()?.deps?.store
-    const names = new Map([[sessionId, this.structuredConversationTabName(workspaceId, sessionId)]])
+    const nameFor = structuredConversationTabNamer(
+      workspaceId,
+      this.savedWorkspaceTabs(workspaceId)
+    )
+    const names = new Map([[sessionId, nameFor(sessionId)]])
     for (const tab of snapshot.tabs) {
       if (
         tab.type === 'agent-session' &&
         store?.getConversation(tab.sessionId)?.forkedFrom?.sessionId === sessionId
       ) {
-        names.set(tab.sessionId, this.structuredConversationTabName(workspaceId, tab.sessionId))
+        names.set(tab.sessionId, nameFor(tab.sessionId))
       }
     }
     const next = retitleStructuredConversationTabs(snapshot, names, structuredConversationForked)
@@ -111,22 +121,14 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     }
   }
 
-  /** The desktop tab's rename, else the chat's saved name; null leaves the agent's default label. */
-  private structuredConversationTabName(workspaceId: string, sessionId: string): string | null {
-    const record = getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)
-    const customLabel = this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[
-      workspaceId
-    ]?.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)?.customLabel
-    const store = getStructuredAgentSessionHost()?.deps?.store
-    const conversationName =
-      store && record?.location.workspaceId === workspaceId
-        ? agentSessionRecordShownName(store, record)
-        : null
-    return structuredChatDisplayName(customLabel, conversationName, '') || null
+  private savedWorkspaceTabs(workspaceId: string) {
+    return () => this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[workspaceId]
   }
 
   protected getMobileSessionProjectionHost(): RuntimeMobileSessionProjectionHost {
     return {
+      getRendererStatus: (paneKey) =>
+        this.authoritativeWindowId !== 0 ? rendererStatusReplica(this).get(paneKey) : undefined,
       tabs: this.tabs,
       leaves: this.leaves,
       ptysById: this.ptysById,
@@ -137,7 +139,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
-      getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      getStatusRows: (paneKey, terminalHandle) =>
+        this.publicPaneStatusFn?.(paneKey, terminalHandle) ?? [],
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
@@ -152,7 +155,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       sanitizeGroups: (groups, tabs) => this.sanitizeMobileSessionTabGroups(groups, tabs),
       pruneGroupLayout: (layout, validGroupIds) =>
         this.pruneMobileSessionTabGroupLayout(layout, validGroupIds),
-      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs)
+      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs),
+      hostTerminalTheme: this.hostMobileTerminalTheme
     }
   }
 

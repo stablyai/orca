@@ -9,22 +9,27 @@ import { MobileMarkdownRemoteImage } from './blocks/MobileMarkdownRemoteImage'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { MarkdownLinkHandlerContext } from './links/markdown-link-handler'
 import { useMobileMarkdownTree } from './parsing/use-mobile-markdown-tree'
+import { MobileMarkdownSlackPeopleContext } from './parsing/mobile-markdown-mentions'
 import {
   MobileMarkdownLinksContext,
   useNativeChatFileLinkExistsFrom
 } from './links/mobile-markdown-links-context'
-import type { NativeChatVisualDirective } from '../../../../src/shared/native-chat/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 
 type Props = {
   content?: string
   fallback?: string
-  /** Enables iOS range selection for native-chat transcript prose. */
+  /** Makes paragraphs selectable; on native Android it instead turns block selection off. */
   rangeSelectable?: boolean
   /** Forward long presses from interactive Android transcript spans to the message. */
   onLongPress?: () => void
   /** Multiplier for every text size. Defaults to 1; the chat view passes >1 so its prose reads
    *  larger than the compact base. */
   textScale?: number
+  /** Multiplies the prose's line heights; code keeps its own. */
+  lineSpacing?: number
+  /** The prose's face; code keeps mono. */
+  fontFamily?: string
   // File targets call this with relative/absolute path and optional :line(:col); omit on screens without viewer to leave paths plain.
   onOpenFile?: (pathText: string) => void
   // Enable ::orca-visual directives only in assistant native-chat prose; keep callback identity stable for memoization.
@@ -39,6 +44,8 @@ type Props = {
   chatMath?: boolean
   /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: keyof typeof MARKDOWN_TONES
+  /** The content is a Slack message's drawn form: its mention links draw as mentions. */
+  slackMentions?: boolean
 }
 
 /** Without a surface's own image renderer, https images draw from the web (GitHub text). */
@@ -53,31 +60,40 @@ function MobileMarkdownContent({
   fallback = '',
   rangeSelectable = false,
   textScale = 1,
+  lineSpacing = 1,
+  fontFamily,
   onOpenFile,
   renderVisual,
   renderImage,
   growing = false,
   streaming = false,
   chatMath = false,
-  tone: toneName = 'default'
+  tone: toneName = 'default',
+  slackMentions = false
 }: Props) {
   useMobileColorScheme()
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
   const onOpenLink = useContext(MarkdownLinkHandlerContext)
   const links = useContext(MobileMarkdownLinksContext)
+  const slackPeople = useContext(MobileMarkdownSlackPeopleContext)
   const fileLinkExists = useNativeChatFileLinkExistsFrom(
     links?.fileLinks ?? null,
     onOpenFile !== undefined,
     streaming
   )
   const text = content?.trim() ?? ''
-  const { root, directives } = useMobileMarkdownTree(
+  const { root, directives, cards } = useMobileMarkdownTree(
     text,
     renderVisual !== undefined,
     growing,
     chatMath,
-    { fileLinkExists, githubRepo: links?.githubRepo }
+    {
+      fileLinkExists,
+      githubRepo: links?.githubRepo,
+      slackMentions,
+      slackPeople
+    }
   )
   if (!text) {
     return fallback ? (
@@ -87,6 +103,7 @@ function MobileMarkdownContent({
     ) : null
   }
   const tone = MARKDOWN_TONES[toneName]
+  const face = fontFamily ? { fontFamily } : null
   const ctx: MarkdownBlockContext = {
     growing,
     chatMath,
@@ -95,14 +112,22 @@ function MobileMarkdownContent({
     filePathsLinkedInTree: fileLinkExists !== undefined,
     tone,
     textScale,
-    listText: [styles.listText, scaledMarkdownText(styles.listText, textScale), tone.text],
+    lineSpacing,
+    fontFamily,
+    listText: [
+      styles.listText,
+      scaledMarkdownText(styles.listText, textScale, lineSpacing),
+      face,
+      tone.text
+    ],
     listMarker: [
       styles.listMarker,
-      scaledMarkdownText(styles.listMarker, textScale),
+      scaledMarkdownText(styles.listMarker, textScale, lineSpacing),
       tone.secondary
     ],
     rowLongPress: setup.androidTranscript ? setup.onLongPress : undefined,
     directives,
+    cards,
     renderVisual,
     renderImage: renderImage ?? renderRemoteImage,
     mermaidOccurrences: new Map()
@@ -111,7 +136,12 @@ function MobileMarkdownContent({
   return (
     <View style={styles.root}>
       {renderBlocks(root.children, ctx, {
-        style: [styles.paragraph, scaledMarkdownText(styles.paragraph, textScale), tone.text],
+        style: [
+          styles.paragraph,
+          scaledMarkdownText(styles.paragraph, textScale, lineSpacing),
+          face,
+          tone.text
+        ],
         selectable: rangeSelectable
       })}
     </View>

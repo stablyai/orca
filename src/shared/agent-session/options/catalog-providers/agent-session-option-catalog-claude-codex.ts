@@ -8,7 +8,7 @@ import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
-} from '../../../claude-model-list-probe'
+} from '../model-catalog/claude-model-list-probe'
 
 const STANDARD_EFFORT_CHOICES = [
   { value: 'low', label: 'Low' },

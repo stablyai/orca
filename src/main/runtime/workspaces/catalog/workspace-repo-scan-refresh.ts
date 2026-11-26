@@ -1,5 +1,5 @@
 import { RuntimeWorkspaceCatalog } from './workspace-catalog'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveWorktreeScanCacheTtlMs,
@@ -16,7 +16,7 @@ import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoSshConnectionId } from '../../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
 import {
   blockedWslDistroForPath,
   wslDistroForPath

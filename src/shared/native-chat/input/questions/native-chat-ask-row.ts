@@ -1,7 +1,7 @@
 // Shared desktop i18n fallbacks and direct mobile copy keep pending-question rows consistent.
 
 import { isAskUserQuestionTool } from '../../../agent-status/lifecycle/agent-question-answered-intent'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from './codex-async-question-input'
 import { parseAskFromToolInput } from '../native-chat-ask'
 import { isToolCallBlock, type NativeChatBlock } from '../../native-chat-types'
 import { pairToolBlocks } from '../../tools/native-chat-tool-pairs'

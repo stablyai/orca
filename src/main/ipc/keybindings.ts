@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, shell } from 'electron'
-import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings'
+import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings/types'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 

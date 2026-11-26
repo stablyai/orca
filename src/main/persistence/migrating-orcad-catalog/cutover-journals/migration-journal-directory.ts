@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeSecureJsonFileWithinLimit } from '../../../../shared/secure-storage/bounded-secure-json-file'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { readNodeFileSyncWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { syncDirectoryDurablySync } from '../../../filesystem/durable-file-write'
 
@@ -30,8 +30,8 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
   /** Remove other processes' writes that died before their rename (the WSL move journal only). */
   sweepOrphanedTemporaries?: boolean
 }): MigrationJournalDirectory<T> {
-  // Frequent hidden-row checks would otherwise reparse full manifests.
-  const parsed = new Map<string, { key: string; records: T[] }>()
+  // Frequent hidden-row checks would otherwise reparse full manifests; cache per file so one write spares the rest.
+  const parsed = new Map<string, Map<string, { version: string; record: T }>>()
   const swept = new Set<string>()
   const directory = (userDataPath: string): string => join(userDataPath, options.directoryName)
   const fileVersion = (path: string): string => {
@@ -68,6 +68,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
     list: (userDataPath) => {
       const dir = directory(userDataPath)
       if (!existsSync(dir)) {
+        parsed.delete(dir)
         return []
       }
       let names: string[]
@@ -90,14 +91,21 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
         }
         files.push({ name, path: join(dir, name) })
       }
-      const key = files.map((file) => `${file.name}:${fileVersion(file.path)}`).join('|')
-      const cached = parsed.get(dir)
-      if (cached?.key === key) {
-        return [...cached.records]
+      const prev = parsed.get(dir)
+      const next = new Map<string, { version: string; record: T }>()
+      const records: T[] = []
+      for (const file of files) {
+        const version = fileVersion(file.path)
+        const cached = prev?.get(file.name)
+        const record =
+          cached?.version === version
+            ? cached.record
+            : readFile(file.path, file.name.slice(0, -'.json'.length))
+        next.set(file.name, { version, record })
+        records.push(record)
       }
-      const records = files.map((file) => readFile(file.path, file.name.slice(0, -'.json'.length)))
-      parsed.set(dir, { key, records })
-      return [...records]
+      parsed.set(dir, next)
+      return records
     },
     write: (userDataPath, record) => {
       const valid = options.parse(record)
@@ -118,7 +126,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
       if (created) {
         syncDirectoryDurablySync(userDataPath)
       }
-      parsed.delete(dir)
+      parsed.get(dir)?.delete(`${valid.migrationId}.json`)
       changed(userDataPath)
     },
     remove: (userDataPath, migrationId) => {
@@ -127,7 +135,7 @@ export function createMigrationJournalDirectory<T extends { migrationId: string 
       }
       const dir = directory(userDataPath)
       rmSync(join(dir, `${migrationId}.json`), { force: true })
-      parsed.delete(dir)
+      parsed.get(dir)?.delete(`${migrationId}.json`)
       if (existsSync(dir)) {
         syncDirectoryDurablySync(dir)
       }

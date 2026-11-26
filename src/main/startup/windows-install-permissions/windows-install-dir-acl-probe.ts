@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import { sanitizeCrashReportString } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { loadWindowsSecurity } from '../../../shared/windows-security-addon'
+import { loadWindowsSecurity } from '../../../shared/secure-storage/windows-security-addon'
 import type { WindowsDacl } from '@orca/windows-security'
 import {
   ACCESS_ALLOWED_ACE_TYPE,
   ACCESS_DENIED_ACE_TYPE,
   INHERIT_ONLY_ACE
-} from '../../../shared/windows-secure-dacl'
+} from '../../../shared/secure-storage/windows-secure-dacl'
 import { RESTRICTED_APP_PACKAGES_SID } from './windows-install-dir-package-acl-grant'
 
 /** Read-only evidence for electron/electron#51761: orphan package ACEs without either well-known package grant reproduced child-init 0x80000003. Either grant launched clean on Windows 10.0.26200/Electron 43.4.1; report restricted-grant presence separately. */
@@ -129,10 +129,6 @@ function runProbe(options: WindowsInstallDirAclProbeOptions): void {
 
 // Probe once per process despite window reopen; ordinary install DACL is stable within a session.
 let probeStarted = false
-
-export function resetWindowsInstallDirAclProbeForTest(): void {
-  probeStarted = false
-}
 
 /** Defer Windows-only reads until after window creation; observability is ready. Return whether dispatched so reopen callers cannot await an onDone the process latch prevents. */
 export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOptions = {}): boolean {

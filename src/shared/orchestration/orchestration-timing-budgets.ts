@@ -1,4 +1,4 @@
-import { MAX_TIMER_DELAY_MS } from '../timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../concurrency/timer-delay'
 
 export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 30_000
 export const ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS = 5_000

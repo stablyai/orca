@@ -3,7 +3,7 @@ import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
 } from '../../../shared/terminal-themes/terminal-custom-themes'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
   TerminalConfigImportPreview,
   TerminalConfigImportSource

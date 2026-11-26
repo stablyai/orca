@@ -1,6 +1,6 @@
 // Apply replies wait for their named stream frame, never a timer. Track local main and each paired environment separately because reply positions belong to the issuing main.
 
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type Waiter = { seq: number; run: () => void }
 

@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
-import { expandWindowsEnvironmentVariables } from '../../../../shared/windows-environment-expansion'
+import { expandWindowsEnvironmentVariables } from '../../../../shared/shell/launch/windows-environment-expansion'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   loadWindowsNativeRegistry,

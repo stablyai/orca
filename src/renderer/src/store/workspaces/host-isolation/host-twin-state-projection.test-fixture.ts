@@ -1,5 +1,5 @@
 /** What one twin owns, read back out of a host-twin fixture's store and module stores. */
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft

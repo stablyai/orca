@@ -1,4 +1,4 @@
-import type { OrcadManagedDeferral } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedDeferral } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 
 type RecordedDeferral = OrcadManagedDeferral & { deferredAt: string }

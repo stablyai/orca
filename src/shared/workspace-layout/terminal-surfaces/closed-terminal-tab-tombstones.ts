@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { RuntimeSessionTabCloseReason } from '../../runtime-session-contracts'
+import type { RuntimeSessionTabCloseReason } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 const TERMINAL_TAB_CLOSE_REASONS = [
   'user',

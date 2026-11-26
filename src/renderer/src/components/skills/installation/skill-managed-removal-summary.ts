@@ -1,5 +1,5 @@
-import type { SkillInstallResult } from '../../../../../shared/skill-install-contract'
-import type { SkillRemoveOperation } from '../../../../../shared/skill-sharing-contract'
+import type { SkillInstallResult } from '../../../../../shared/skills/installation/skill-install-contract'
+import type { SkillRemoveOperation } from '../../../../../shared/skills/sharing/skill-sharing-contract'
 import { translate } from '@/i18n/i18n'
 
 function managedRemovalNotice(removed: number, preserved: number): string {

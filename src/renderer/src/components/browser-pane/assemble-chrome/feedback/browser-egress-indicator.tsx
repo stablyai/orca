@@ -10,12 +10,26 @@ import {
   BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID
 } from '@/components/settings/navigation/settings-navigation-types'
 import {
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getHostSettingOverride } from '../../../../../../shared/host-setting-overrides'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getHostSettingOverride } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+
+function runtimeHostLabel(
+  settings: GlobalSettings | null,
+  environmentId: string,
+  environmentName: string | undefined
+): string {
+  return (
+    getHostSettingOverride(settings, toRuntimeExecutionHostId(environmentId), 'displayLabel') ??
+    environmentName ??
+    environmentId
+  )
+}
 
 /** Use the shared globe slot to expose egress location because local and remotely routed pages otherwise look identical. */
 function EgressIndicatorButton({
@@ -100,18 +114,29 @@ export function SshEgressIndicator({
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const settings = useAppStore((s) => s.settings)
-  const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(executionHostId, settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const host = parseExecutionHostId(executionHostId)
+  const environment =
+    host?.kind === 'runtime'
+      ? runtimeEnvironments.find((candidate) => candidate.id === host.environmentId)
+      : undefined
+  const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(
+    executionHostId,
+    settings,
+    runtimeEnvironments
+  )
   if (!routeEligibility) {
-    return <Globe className="size-4 shrink-0 text-muted-foreground" />
+    return <Globe className="size-3.5 shrink-0 text-muted-foreground" />
   }
   const { targetId, eligible: routed } = routeEligibility
-  const hostLabel =
-    getHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel') ??
-    sshTargetLabels.get(targetId) ??
-    targetId
+  const hostLabel = environment
+    ? runtimeHostLabel(settings, environment.id, environment.name)
+    : (getHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel') ??
+      sshTargetLabels.get(targetId) ??
+      targetId)
   return (
     <EgressIndicatorButton
-      icon={routed ? <Server className="size-4" /> : <Monitor className="size-4" />}
+      icon={routed ? <Server className="size-3.5" /> : <Monitor className="size-3.5" />}
       egress={routed ? 'ssh' : 'local'}
       description={
         routed
@@ -149,18 +174,11 @@ export function RemoteRuntimeEgressIndicator({
     (s) =>
       s.runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name
   )
-  const hostLabel =
-    getHostSettingOverride(
-      settings,
-      toRuntimeExecutionHostId(runtimeEnvironmentId),
-      'displayLabel'
-    ) ??
-    environmentName ??
-    runtimeEnvironmentId
+  const hostLabel = runtimeHostLabel(settings, runtimeEnvironmentId, environmentName)
   const clientHosted = presentation === 'client-hosted'
   return (
     <EgressIndicatorButton
-      icon={<Server className="size-4" />}
+      icon={<Server className="size-3.5" />}
       egress="remote"
       description={
         clientHosted

@@ -3,7 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { collectHostTwinPurgeScopes } from '@/store/slices/worktrees/teardown/host-twin-purge-scopes'

@@ -3,32 +3,42 @@ import { ChevronRight, Plus } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
-import type { PortForwardEntry, UnrestoredPortForward } from '../../../../../shared/ssh-types'
+import type {
+  PortForwardEntry,
+  UnrestoredPortForward
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { SshForwardedPortRow } from './ssh-forwarded-port-row'
 import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
-import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
+import type { PortForwardDialogState } from './ssh-port-forward-dialog'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
+import { portForwardOwnerKey, type PortForwardOwner } from './port-forward-owner'
+import { openForwardedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
 
 const NO_FORWARDS: readonly PortForwardEntry[] = []
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
 
 export function SshForwardedPortsSection({
-  connectionId
+  owner,
+  canAdd,
+  onOpenDialog
 }: {
-  connectionId: string
+  owner: PortForwardOwner
+  /** The owner's connection can start a forward now. */
+  canAdd: boolean
+  onOpenDialog: (state: PortForwardDialogState) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const connectionId = portForwardOwnerKey(owner)
   const forwards = useAppStore((s) => s.portForwardsByConnection[connectionId] ?? NO_FORWARDS)
-  const unrestored = useAppStore(
-    (s) => s.unrestoredPortForwardsByConnection[connectionId] ?? NO_UNRESTORED
+  // Only SSH hosts save forwards across restarts, so only they have saved forwards that didn't start.
+  const unrestored = useAppStore((s) =>
+    owner.kind === 'ssh'
+      ? (s.unrestoredPortForwardsByConnection[connectionId] ?? NO_UNRESTORED)
+      : NO_UNRESTORED
   )
   const count = forwards.length + unrestored.length
-  const connected = useAppStore(
-    (s) => s.sshConnectionStates.get(connectionId)?.status === 'connected'
-  )
   const [collapsed, setCollapsed] = useState(false)
-  const [dialogState, setDialogState] = useState<PortForwardDialogState>({ mode: 'closed' })
 
   return (
     <div className="px-3 pt-2" data-ssh-forwarded-ports="">
@@ -52,8 +62,8 @@ export function SshForwardedPortsSection({
           type="button"
           variant="ghost"
           size="xs"
-          disabled={!connected}
-          onClick={() => setDialogState({ mode: 'add', defaults: { targetId: connectionId } })}
+          disabled={!canAdd}
+          onClick={() => onOpenDialog({ mode: 'add', owner, defaults: {} })}
         >
           <Plus />
           {t('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
@@ -65,11 +75,16 @@ export function SshForwardedPortsSection({
             {forwards.map((entry) => (
               <SshForwardedPortRow
                 key={entry.id}
+                owner={owner}
                 entry={entry}
-                onEdit={() => setDialogState({ mode: 'edit', entry })}
+                onEdit={() => onOpenDialog({ mode: 'edit', owner, entry })}
                 // Use the system browser: this forward listens locally, while Orca’s browser may run on another host.
                 onOpenInBrowser={() =>
-                  void window.api.shell.openUrl(browserUrlForPortForwardEntry(entry))
+                  void openForwardedUrlInSystemBrowser(
+                    browserUrlForPortForwardEntry(entry),
+                    entry,
+                    owner.kind === 'ssh' ? 'ssh' : 'paired'
+                  )
                 }
               />
             ))}
@@ -89,11 +104,6 @@ export function SshForwardedPortsSection({
             )}
           </p>
         ))}
-      <SshPortForwardDialog
-        state={dialogState}
-        activeConnectionId={connectionId}
-        onClose={() => setDialogState({ mode: 'closed' })}
-      />
     </div>
   )
 }

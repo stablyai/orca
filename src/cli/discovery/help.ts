@@ -1,3 +1,4 @@
+import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 import type { CommandSpec } from './command-spec'
 import {
   findCommandSpec,
@@ -12,26 +13,37 @@ import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
 
 const ROOT_HELP_TEXT = [ROOT_HELP_TEXT_PRIMARY, ROOT_HELP_TEXT_SECONDARY].join('\n')
+// Command lines only: leaves `name:orca`, paths, `orca://`, `orca-ide` and quoted `orca` names intact.
+const CLI_COMMAND_WORD = /(^|[\s`(])orca(?=\s|$)/gm
 
 export function printHelp(specs: CommandSpec[], commandPath: string[] = []): void {
+  console.log(formatHelp(specs, commandPath))
+}
+
+function formatHelp(specs: CommandSpec[], commandPath: string[]): string {
   const exactSpec = findCommandSpec(specs, commandPath)
   if (exactSpec) {
-    console.log(formatCommandHelp(exactSpec))
-    return
+    return withInvokedCliCommand(formatCommandHelp(exactSpec))
   }
 
   if (isCommandGroup(specs, commandPath)) {
-    console.log(formatGroupHelp(specs, commandPath))
-    return
+    return withInvokedCliCommand(formatGroupHelp(specs, commandPath))
   }
 
   if (commandPath.length > 0) {
     const { nextSteps } = unknownCommandData(specs, commandPath)
     const recovery = nextSteps.map((step) => `Next step: ${step}`).join('\n')
-    console.log(`Unknown command: ${commandPath.join(' ')}${recovery ? `\n${recovery}` : ''}\n`)
+    return `Unknown command: ${commandPath.join(' ')}${recovery ? `\n${recovery}` : ''}\n\n${withInvokedCliCommand(ROOT_HELP_TEXT)}`
   }
 
-  console.log(ROOT_HELP_TEXT)
+  return withInvokedCliCommand(ROOT_HELP_TEXT)
+}
+
+function withInvokedCliCommand(text: string): string {
+  const command = resolveInvokedCliCommand()
+  return command === 'orca'
+    ? text
+    : text.replace(CLI_COMMAND_WORD, (_match, prefix: string) => `${prefix}${command}`)
 }
 
 export function formatCommandHelp(spec: CommandSpec): string {
@@ -70,14 +82,14 @@ export function formatCommandHelp(spec: CommandSpec): string {
 export function formatGroupHelp(specs: CommandSpec[], groupPath: string[]): string {
   const group = groupPath.join(' ')
   const lines = [`orca ${group}`, '', `Usage: orca ${group} <command> [options]`, '', 'Commands:']
-  for (const spec of specs) {
-    if (
-      spec.hidden === true ||
-      spec.path.length <= groupPath.length ||
-      !matches(spec.path.slice(0, groupPath.length), groupPath)
-    ) {
-      continue
-    }
+  const members = specs.filter(
+    (spec) =>
+      spec.path.length > groupPath.length &&
+      matches(spec.path.slice(0, groupPath.length), groupPath)
+  )
+  const visible = members.filter((spec) => spec.hidden !== true)
+  // A group of only hidden commands was typed by name, so it lists them.
+  for (const spec of visible.length > 0 ? visible : members) {
     lines.push(`  ${spec.path.slice(groupPath.length).join(' ').padEnd(18)} ${spec.summary}`)
   }
   lines.push('', `Run \`orca ${group} <command> --help\` for command-specific usage.`)

@@ -1,11 +1,19 @@
 import type { AppState } from '@/store/types'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
+type PlacementInputs = Pick<
+  AppState,
+  | 'agentStatusByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'agentConversationsByPaneKey'
+  | 'terminalLayoutsByTabId'
+>
+
 type TitleFact =
-  | AppState['agentStatusByPaneKey'][string]
+  | NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>
   | AppState['sleepingAgentSessionsByPaneKey'][string]
   | AppState['agentConversationsByPaneKey'][string]
 
@@ -17,15 +25,15 @@ export function titleRelevant(entry: TitleFact | undefined): boolean {
   )
 }
 
-function paneHasTitleFact(state: AppState, key: string): boolean {
+function paneHasTitleFact(state: PlacementInputs, key: string): boolean {
   return [
-    state.agentStatusByPaneKey[key],
+    state.agentStatusByPaneKey.get(key),
     state.sleepingAgentSessionsByPaneKey[key],
     state.agentConversationsByPaneKey?.[key]
   ].some(titleRelevant)
 }
 
-export function placedPanesEqual(current: AppState, previous: AppState): boolean {
+export function placedPanesEqual(current: PlacementInputs, previous: PlacementInputs): boolean {
   const changes = readRecordChanges(current.terminalLayoutsByTabId, previous.terminalLayoutsByTabId)
   const tabs =
     changes?.kind === 'addressed'
@@ -67,7 +75,9 @@ export function placedPanesEqual(current: AppState, previous: AppState): boolean
         state.sleepingAgentSessionsByPaneKey,
         state.agentConversationsByPaneKey ?? {}
       ]) {
-        for (const entry of Object.values(record)) {
+        for (const entry of record === state.agentStatusByPaneKey
+          ? state.agentStatusByPaneKey.values()
+          : Object.values(record)) {
           if (!titleRelevant(entry)) {
             continue
           }

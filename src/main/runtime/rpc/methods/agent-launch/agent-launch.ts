@@ -66,7 +66,7 @@ async function runAgentLaunch(
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
-  const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
+  const callerNavigationId = agentLaunchCallerNavigationId(context)
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
@@ -75,13 +75,14 @@ async function runAgentLaunch(
       context,
       replaySafe?.attachOperationId,
       replaySafe?.callerKey,
-      callerNavigationId !== null,
+      // Worktree creation keeps host-wide chat activation, so a windowless host's other clients open the new worktree on the chat.
+      callerNavigationId !== null && intent.target.kind !== 'create-worktree',
       replaySafe?.terminalSpawn,
       view
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
-    onSurfacePublished: (surface) => {
+    onSurfacePublished: async (surface) => {
       try {
         context.agentLaunchPolicy?.onSurfacePublished?.(surface)
       } catch (error) {
@@ -89,7 +90,7 @@ async function runAgentLaunch(
       }
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
-      selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
+      await selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
     }
   })
   return withPlacement(result, view)

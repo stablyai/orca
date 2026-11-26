@@ -21,9 +21,9 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
-} from '../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
-import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
+} from '../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { RuntimeTerminalSend } from '../../shared/terminal/runtime/runtime-terminal-send-contract'
 
 export function formatTerminalList(
   result: WithAnnotatedHostScope<RuntimeTerminalListResult>

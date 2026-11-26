@@ -1,4 +1,4 @@
-import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../shared/claude-sign-in-link'
+import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../shared/agent-accounts/claude/claude-sign-in-link'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
 import { prepareClaudeSignInBrowser, type ClaudeSignInBrowser } from './claude-sign-in-browser'
 

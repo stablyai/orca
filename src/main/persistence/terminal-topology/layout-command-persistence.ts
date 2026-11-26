@@ -16,7 +16,7 @@ import type {
   DurableProfileStateMutation,
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   applyLayout,
   applyEditorFileRenamesInPartitions,
@@ -28,7 +28,7 @@ import {
   isTerminalClose,
   keptOnWriteFailure
 } from './command-application/terminal-close-write-failure'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { moveTabAcrossPartitions } from './pane-moves/cross-partition-tab-move'
 import { writeRestorable } from './command-application/restorable-write'
 import { raisingBindingGenerations } from './pane-ownership/layout-command-binding-generations'
@@ -47,7 +47,12 @@ function writingOnly<T>(
   hostIds: readonly ExecutionHostId[],
   mutate: () => DurableProfileStateMutation<T>
 ): () => DurableProfileStateMutation<T> {
-  return () => ({ ...mutate(), writtenHostIds: hostIds })
+  return () => {
+    const result = mutate()
+    // A refusal reports no workspaces and writes nothing.
+    const refused = result.persist === false && !result.writtenWorkspaces
+    return { ...result, writtenHostIds: refused ? [] : hostIds }
+  }
 }
 
 type LayoutCommandRuntime = Pick<

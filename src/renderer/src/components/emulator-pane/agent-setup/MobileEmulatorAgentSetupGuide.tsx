@@ -124,7 +124,7 @@ export function MobileEmulatorAgentSetupGuide({
             >
               {t(
                 'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.3f003507f4',
-                'Open full setup in Settings'
+                'Open setup'
               )}
             </button>
           </div>

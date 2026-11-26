@@ -8,7 +8,7 @@ import type { TerminalPastePlan } from './terminal-paste-model'
 import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
-} from '../../../../../../shared/utf8-byte-limits'
+} from '../../../../../../shared/text/utf8-byte-limits'
 
 const TERMINAL_PASTE_ESCAPE_CODE_POINT = 0x1b
 const TERMINAL_PASTE_INERT_ESCAPE_CODE_POINT = 0x241b

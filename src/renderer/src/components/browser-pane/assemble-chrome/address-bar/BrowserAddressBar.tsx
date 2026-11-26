@@ -6,8 +6,9 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
-import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../../shared/browser-url'
-import type { BrowserPageDocLocation } from '../../../../../../shared/browser-workspace-types'
+import { DEFAULT_SEARCH_ENGINE } from '../../../../../../shared/browser/navigation/browser-url'
+import type { SearchEngine } from '../../../../../../shared/browser/navigation/browser-url'
+import type { BrowserPageDocLocation } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
 import { useBrowserAddressBarInlineCompletion } from './use-browser-address-bar-inline-completion'
 import { useBrowserAddressBarSwitchToTab } from './use-browser-address-bar-switch-to-tab'
@@ -348,7 +349,7 @@ export default function BrowserAddressBar({
             ref={setAddressBarFormRef}
             data-orca-browser-address-bar-overlay={overlay ? 'true' : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-lg bg-muted px-2.5 transition-colors focus-within:bg-background focus-within:ring-[3px] focus-within:ring-ring/50',
+              'flex items-center gap-2 rounded-lg border border-transparent bg-muted px-2.5 transition-colors focus-within:border-border',
               // Position against the toolbar row so the overlay spans it, not the squeezed slot.
               overlay
                 ? 'absolute inset-x-2 top-1/2 z-30 h-8 -translate-y-1/2 bg-background shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
@@ -361,7 +362,7 @@ export default function BrowserAddressBar({
               submitTypedValue()
             }}
           >
-            {leadingIcon ?? <Globe className="size-4 shrink-0 text-muted-foreground" />}
+            {leadingIcon ?? <Globe className="size-3.5 shrink-0 text-muted-foreground" />}
             <Input
               ref={inputRef}
               value={value}

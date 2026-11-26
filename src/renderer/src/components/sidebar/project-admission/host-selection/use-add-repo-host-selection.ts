@@ -6,8 +6,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { SshConnectionState } from '../../../../../../shared/ssh-types'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { SshConnectionState } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { isEphemeralVmRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
 import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'

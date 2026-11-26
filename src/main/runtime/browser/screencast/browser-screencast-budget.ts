@@ -1,30 +1,8 @@
 import type {
   BrowserScreencastFrameBudget,
-  BrowserScreencastSession,
   BrowserScreencastViewport
 } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
-import {
-  browserScreencastFrameBudgetsEqual,
-  mergeBrowserScreencastFrameBudgets
-} from '../../../browser/cdp/screencast/browser-screencast-frame-budget'
-import type {
-  BrowserScreencastParams,
-  ActiveBrowserScreencastPage
-} from './browser-screencast-contracts'
-
-export async function applySharedScreencastFrameBudget(
-  active: Pick<ActiveBrowserScreencastPage, 'subscribers' | 'appliedBudget'>,
-  session: BrowserScreencastSession
-): Promise<void> {
-  const merged = mergeBrowserScreencastFrameBudgets(
-    Array.from(active.subscribers.values(), (subscriber) => subscriber.budget)
-  )
-  if (!merged || browserScreencastFrameBudgetsEqual(merged, active.appliedBudget)) {
-    return
-  }
-  active.appliedBudget = merged
-  await session.updateFrameBudget(merged)
-}
+import type { BrowserScreencastParams } from './browser-screencast-contracts'
 
 export function normalizeScreencastViewport(
   params: BrowserScreencastParams

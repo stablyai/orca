@@ -3,6 +3,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { agentJournalItemSubagentId } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { namedSubagents } from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import { offPageSubagentRoster } from '../agent-session-wire/publication/history/agent-session-history-subagent-roster'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 /** One indexed lookup per unnamed page subagent finds its earliest visible naming row. */
 export function readJournalDomainHistoryRoster(
@@ -42,7 +43,7 @@ export function readJournalDomainHistoryRoster(
   const named = [...naming]
     .sort(([, a], [, b]) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
     .slice(0, ROSTER_ROWS)
-    .map(([itemId]) => JSON.parse(String(body.get(...prefix, itemId)!.payload_json)))
+    .map(([itemId]) => readJournalStoredItem(db, prefix, body.get(...prefix, itemId)!.payload_json))
   return offPageSubagentRoster(named, page)
 }
 

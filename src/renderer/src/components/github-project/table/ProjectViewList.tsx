@@ -23,7 +23,7 @@ import type {
   GitHubProjectSortDirection,
   GitHubProjectTable
 } from '../../../../../shared/github/projects/project-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 
 type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }

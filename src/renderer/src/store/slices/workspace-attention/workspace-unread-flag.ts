@@ -5,20 +5,20 @@ import {
   getWorktreeIdFromHostIdentity,
   parseWorktreeHostIdentity
 } from '../../../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { applyWorktreeUpdates } from '../worktrees/metadata/worktree-meta-update-application'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById
 } from '../worktrees/listing/detected-worktree-meta'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktree-owner-settings'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { workspaceHasLiveMarkerForHost } from './workspace-marker-host'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ownerHostOwnsSidebarInputs } from '../worktrees/listing/owner-host-sidebar-inputs'
 import { folderRowOnHost, folderRowToMark, isWorkspaceFlagSet } from './workspace-unread-flag-reads'
 

@@ -1,5 +1,5 @@
 // For unregistered row repos, use slug-addressed edits and Project-cache updates without repo-backed Files, Checks or review threads.
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import React from 'react'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'

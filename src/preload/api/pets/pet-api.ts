@@ -1,5 +1,5 @@
-import type { CustomPet } from '../../../shared/pet-types'
-import type { PetImportFailure } from '../../../shared/pet-import-failure-copy'
+import type { CustomPet } from '../../../shared/pets/pet-types'
+import type { PetImportFailure } from '../../../shared/pets/pet-import-failure-copy'
 
 export type PetApi = {
   import: () => Promise<CustomPet | PetImportFailure | null>

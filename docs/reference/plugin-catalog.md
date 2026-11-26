@@ -108,7 +108,7 @@ One thing the release adds to Orca.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"hooks"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"fonts"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` \| `"settings"` \| `"statusBarItems"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
+| `kind` | `"panels"` \| `"commands"` \| `"events"` \| `"hooks"` \| `"languagePacks"` \| `"keybindings"` \| `"vmRecipes"` \| `"themes"` \| `"terminalThemes"` \| `"iconThemes"` \| `"fonts"` \| `"syntaxes"` \| `"customEditors"` \| `"newFiles"` \| `"settings"` \| `"statusBarItems"` \| `"mcpServers"` | yes | 1.4.245 | Contribution point. Example: `"themes"` |
 | `name` | string | yes | 1.4.245 | What the item is called in Orca. Example: `"Dusk"` |
 | `detail` | string | no | 1.4.245 | Extra context, such as file extensions. |
 
@@ -125,6 +125,13 @@ One thing the release adds to Orca.
 - **Reserved names install only from Orca's official catalog.** The publishers `stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca` (any case), and ids starting `orca-`, are refused from any other catalog, a Git URL or a local folder. A catalog that lists one is refused whole. `pnpm validate:plugin` rejects these publishers except `stablyai`.
 - **Trust comes from the catalog's address.** Orca labels a plugin with where it came from: the Official mark for Orca's catalog, otherwise the catalog's name and the owner in its Git URL (`github.com/acme`, `gitlab.com/acme/tools`), never the manifest's text. Development folders show `Dev · unverified`, Git URL installs `Unverified`.
 - **An install stays with its catalog.** Orca records the catalog each plugin was installed from and updates it only from there. When another catalog lists the same id, the plugin page says so, and switching means removing the plugin and installing it again.
+
+## Categories
+
+Orca's plugin browser folds related `categories` slugs into one filter and shows an unknown slug as its own. Pick the slug for what the plugin adds:
+
+- **Languages:** `languages`, `syntaxes`, `syntax`. Syntax highlighting and grammars for programming languages.
+- **Translations:** `language-packs`, `localization`, `i18n`, `translations`. Language packs that show Orca's interface in another language.
 
 ## One repository can hold many plugins
 

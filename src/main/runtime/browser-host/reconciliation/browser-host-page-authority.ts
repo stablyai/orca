@@ -3,7 +3,7 @@ import type {
   BrowserClientPageAuthority,
   BrowserHostPagePlacementRegistry
 } from './browser-host-page-placement'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export function requireLiveBrowserClientPage(
   placements: BrowserHostPagePlacementRegistry,

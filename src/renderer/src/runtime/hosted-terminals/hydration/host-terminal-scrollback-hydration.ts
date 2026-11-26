@@ -3,7 +3,6 @@ import {
   planHostScrollbackHydration,
   fetchHostScrollback,
   HOST_TERMINAL_SCROLLBACK_HOLD_MS,
-  resetHostTerminalScrollbackReadsForTests,
   type HostTerminalScrollbackHydrationDeps,
   type LocalScrollbackSnapshots
 } from './host-terminal-scrollback-reads'
@@ -151,9 +150,4 @@ export function startHostTerminalScrollbackHydration(
       snapshots = {}
     }
   }
-}
-
-export function resetHostTerminalScrollbackHydrationForTests(): void {
-  localReads.clear()
-  resetHostTerminalScrollbackReadsForTests()
 }

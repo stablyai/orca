@@ -1,5 +1,8 @@
-import type { PersistedState } from '../../persisted-state-types'
-import { normalizeWorkspaceSessionKeyToWorkspaceId, parseWorkspaceKey } from '../../workspace-scope'
+import type { PersistedState } from '../../orca-profiles/persisted-state-types'
+import {
+  normalizeWorkspaceSessionKeyToWorkspaceId,
+  parseWorkspaceKey
+} from '../../workspace/identity/workspace-scope'
 import { getWorktreePathBasenameFromId } from '../id'
 
 type MoveSourceState = Pick<

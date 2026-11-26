@@ -7,6 +7,7 @@ import {
 } from './terminal-ime-kitty-commit-encoding'
 import { getLayoutCharacterForCode } from '../../../../lib/keyboard-layout/layout-base-character'
 import { installTerminalImeRetainedHangulCommit } from './terminal-ime-retained-hangul-commit'
+import { installTerminalImeCompositionTransaction } from './terminal-ime-composition-transaction'
 
 // Claim plain printable keydowns so native input commits supply substituted text before xterm can cancel it; Linux fcitx4 candidate picks need the same path (#28213). Match key length, never source identity or character tables.
 
@@ -56,9 +57,6 @@ export type ImeNativeTextKeyEvent = {
   isComposing?: boolean
   getModifierState?: (key: string) => boolean
 }
-
-export const XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT = 'xterm-composition-transaction-accepted'
-export const XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT = 'xterm-composition-transaction-settled'
 
 export type TerminalImeNativeTextForwarder = IDisposable & {
   /** Claim the key lifecycle by bypassing xterm; input later forwards the committed text through sendInput. */
@@ -112,7 +110,6 @@ export function installTerminalImeNativeTextForwarder(args: {
   }
 
   const terminalElement = args.terminalElement
-  let compositionTransactionPending = false
   let pendingCommit: PendingCommit | null = null
   // Rollover and repeat leave multiple keys held; each needs its own release record.
   const claimedKeyRecords = new Map<string, ClaimedKeyRecord>()
@@ -120,6 +117,10 @@ export function installTerminalImeNativeTextForwarder(args: {
     terminalElement,
     sendInput: args.sendInput,
     getKittyKeyboardFlags: () => args.getKittyKeyboardFlags?.() ?? 0
+  })
+  const compositionTransaction = installTerminalImeCompositionTransaction({
+    terminalElement,
+    sendInput: args.sendInput
   })
 
   const findClaimedRecordId = (event: ImeNativeTextKeyEvent): string | null => {
@@ -177,14 +178,6 @@ export function installTerminalImeNativeTextForwarder(args: {
     if (commit.keyup) {
       settleRelease(recordId, commit.keyup)
     }
-  }
-
-  const markCompositionTransactionAccepted = (): void => {
-    compositionTransactionPending = true
-  }
-
-  const markCompositionTransactionSettled = (): void => {
-    compositionTransactionPending = false
   }
 
   const claimKeyEvent = (event: ImeNativeTextKeyEvent): boolean => {
@@ -267,11 +260,11 @@ export function installTerminalImeNativeTextForwarder(args: {
   }
 
   const forwardCommittedText = (event: Event): void => {
-    if (!(event instanceof InputEvent)) {
+    if (!(event instanceof InputEvent) || compositionTransaction.claimLateCommit(event)) {
       return
     }
     // Accepted transactions already own claimed commits; leave unclaimed input to xterm’s dedup or Linux Process commits can be lost.
-    if (compositionTransactionPending && event.inputType === 'insertText' && pendingCommit) {
+    if (compositionTransaction.isPending() && event.inputType === 'insertText' && pendingCommit) {
       settleCommit(pendingCommit, null)
       pendingCommit = null
       event.stopImmediatePropagation()
@@ -310,21 +303,10 @@ export function installTerminalImeNativeTextForwarder(args: {
 
   // Blur/dispose discard records without invented releases after this element stops receiving keys.
   const cancelPending = (): void => {
-    compositionTransactionPending = false
     pendingCommit = null
     claimedKeyRecords.clear()
   }
 
-  terminalElement.addEventListener(
-    XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
-    markCompositionTransactionAccepted,
-    true
-  )
-  terminalElement.addEventListener(
-    XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT,
-    markCompositionTransactionSettled,
-    true
-  )
   terminalElement.addEventListener('input', forwardCommittedText, true)
   terminalElement.addEventListener('blur', cancelPending, true)
 
@@ -333,16 +315,7 @@ export function installTerminalImeNativeTextForwarder(args: {
     dispose: () => {
       cancelPending()
       retainedHangulCommit.dispose()
-      terminalElement.removeEventListener(
-        XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
-        markCompositionTransactionAccepted,
-        true
-      )
-      terminalElement.removeEventListener(
-        XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT,
-        markCompositionTransactionSettled,
-        true
-      )
+      compositionTransaction.dispose()
       terminalElement.removeEventListener('input', forwardCommittedText, true)
       terminalElement.removeEventListener('blur', cancelPending, true)
     }

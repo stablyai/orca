@@ -1,5 +1,5 @@
-import { agentImagePasteWrites } from '../../../../../../src/shared/agent-image-paste'
-import { agentImagePastePath } from '../../../../../../src/shared/agent-image-paste-path'
+import { agentImagePasteWrites } from '../../../../../../src/shared/native-chat/input/composer/agent-image-paste'
+import { agentImagePastePath } from '../../../../../../src/shared/native-chat/input/composer/agent-image-paste-path'
 import { buildNativeChatImagePasteBytes } from '../../../../../../src/shared/native-chat/input/composer/native-chat-paste-bytes'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,

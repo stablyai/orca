@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { abortWhenRendererGone } from '../../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 
 export function captureWatcherSenderLifetime(

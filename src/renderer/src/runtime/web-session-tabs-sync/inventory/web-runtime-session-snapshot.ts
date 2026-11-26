@@ -1,7 +1,7 @@
 import type { WebSessionTabsSnapshotApplyOptions } from '../state'
-import { recordBrowserInitializationReceipt } from '../browser-initialization-presentation'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import { recordBrowserInitializationReceipt } from '../tab-projection/browser-initialization-presentation'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { useAppStore } from '../../../store/index'
 import {
@@ -13,25 +13,25 @@ import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentCall } from '../identity/web-runtime-session-environment'
 import { throwIfE2eWebRuntimeBrowserReconciliationFails } from '../../browser/creation/testing/web-runtime-browser-creation-e2e-fault'
-import { getSessionTabsRuntimeIdFromResponse } from '../publisher-identity-fences'
-import { WEB_SESSION_TABS_FRAME_OUTRANKED } from '../tracking-decisions'
+import { getSessionTabsRuntimeIdFromResponse } from '../tracking/publisher-identity-fences'
+import { WEB_SESSION_TABS_FRAME_OUTRANKED } from '../tracking/tracking-decisions'
 // Static import is required: receipt ordering gates this path and cannot be omitted by a caller’s module mock.
 import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
-} from '../tracking'
-import { recoverMirroredTerminalOrphansBeforeApply } from '../mirror-terminal-orphan-recovery'
-import { applyReceivedAgentSenderPublications } from '../received-agent-sender-publications'
+} from '../tracking/tracking'
+import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/mirror-terminal-orphan-recovery'
+import { applyReceivedAgentSenderPublications } from '../tracking/received-agent-sender-publications'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
 
 function importSessionTabsApplyModules() {
   return Promise.all([
-    import('../snapshot-api'),
-    import('../store-patch'),
-    import('../tracking-decisions'),
-    import('../tracking-lifecycle'),
+    import('../snapshots/snapshot-api'),
+    import('../snapshots/store-patch'),
+    import('../tracking/tracking-decisions'),
+    import('../tracking/tracking-lifecycle'),
     import('../state')
   ])
 }
@@ -44,11 +44,6 @@ function loadSessionTabsApplyModules(): ReturnType<typeof importSessionTabsApply
     throw error
   })
   return sessionTabsApplyModules
-}
-
-/** Lets a test pay this lazy load before a timed wait instead of inside it. */
-export async function loadWebRuntimeSessionTabsApplyModulesForTests(): Promise<void> {
-  await loadSessionTabsApplyModules()
 }
 
 type SnapshotRefreshOptions = {
@@ -210,9 +205,10 @@ async function reconcileWebRuntimeSessionTabs(
               recovered,
               environmentId,
               undefined,
-              options.reconcileBrowserPage
-                ? { reconcileBrowserPage: options.reconcileBrowserPage }
-                : undefined,
+              {
+                requestReceivedFrame: receivedFrame,
+                reconcileBrowserPage: options.reconcileBrowserPage
+              },
               changedAgentPaneKeys
             )
           : state

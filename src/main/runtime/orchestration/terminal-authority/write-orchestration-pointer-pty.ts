@@ -1,23 +1,28 @@
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
+import { unmountedSleptLeafHandle } from '../mailbox/routing/unmounted-slept-leaf'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox/terminal-pointer/mailbox-pointer-pty-write'
-import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import {
+  getWindowsInputRecordPasteBurstMs,
+  resolveAgentPromptSubmitDelayForAgent
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import type { OrchestrationPointerPty } from '../mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
 import type { RuntimeLeafRecord } from '../../terminal/records/runtime-terminal-state-records'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { selectRuntimeHookAgentRowForPane } from '../../session-lifecycle/projection/runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolvePublishedPaneAgentIdentity } from '../../../../shared/published-pane-agent-identity'
-import type { RuntimeTerminalSummary } from '../../../../shared/runtime-terminal-contracts'
+import { resolvePublishedPaneAgentIdentity } from '../../../../shared/agent-status/identity/published-pane-agent-identity'
+import type { RuntimeTerminalSummary } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getLatestLeafTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../mailbox/terminal-pointer/mailbox-pointer-submit'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
 
@@ -27,15 +32,27 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     context?: TerminalIdentityReadContext
   ): string
 
-  protected writeOrchestrationPointerPty(
-    ptyId: string,
-    data: string
-  ): WriteSettlement | Promise<WriteSettlement> {
-    return writeOrchestrationPointerWithSettlement({
-      ptyId,
-      data,
-      controller: this.ptyController
-    })
+  protected orchestrationPointerPty(): OrchestrationPointerPty {
+    return {
+      writePty: (ptyId, data) =>
+        writeOrchestrationPointerWithSettlement({ ptyId, data, controller: this.ptyController }),
+      getWindowsPointerEnterDelayMs: (ptyId, pointer) =>
+        this.getWindowsPointerEnterDelayMs(ptyId, pointer)
+    }
+  }
+
+  /** On a Windows host, a pointer's Enter waits as a sent prompt's does: an input-record TUI such as
+   *  Codex reads the text a key at a time and keeps an early Enter as a newline. */
+  private getWindowsPointerEnterDelayMs(ptyId: string, pointer: string): number | null {
+    const platform = this.getPtyWriteHostPlatform(ptyId)
+    if (platform !== 'win32') {
+      return null
+    }
+    const agent = this.getPtyAgent(ptyId)
+    return (
+      resolveAgentPromptSubmitDelayForAgent(platform, pointer, agent) +
+      getWindowsInputRecordPasteBurstMs(platform, agent, pointer)
+    )
   }
 
   /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */
@@ -96,8 +113,14 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
   ): RuntimeTerminalSummary {
     const worktree = worktreesById.get(leaf.worktreeId)
     const tab = this.tabs.get(leaf.tabId) ?? null
+    // An unmounted slept agent's pane carries its saved name; minting one would bind a placeholder.
+    const handle = unmountedSleptLeafHandle(leaf) ?? this.issueHandle(leaf)
+    // Agent Sleep's stopped process stands in for the idle agent it will resume.
+    const sleptAgent = this.sleptAgentHandle(handle)
+    const slept = sleptAgent ? (sleptAgent.pty ?? { lastOutputAt: null, preview: '' }) : null
 
-    const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+    const pty =
+      (leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined) ?? sleptAgent?.pty ?? undefined
     const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
     const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
     // Demote only controller-proven local absence; remote inventory gaps are unknown, and hasPty rescues spawn/list races.
@@ -112,9 +135,9 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ? (startedMainTerminalSurfaces(this)?.paneOf(leaf.tabId, leaf.leafId) ?? null)
       : null
     return {
-      handle: this.issueHandle(leaf),
+      handle,
       ptyId: leaf.ptyId,
-      incarnationId: pty?.incarnationId ?? null,
+      incarnationId: slept ? null : (pty?.incarnationId ?? null),
       orphaned: false,
       worktreeId: leaf.worktreeId,
       worktreePath: worktree?.path ?? '',
@@ -123,14 +146,14 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       leafId: leaf.leafId,
       title,
       ...(paneTitle ? { paneTitle } : {}),
-      connected: provenAbsent ? false : leaf.connected,
-      writable: provenAbsent ? false : leaf.writable,
+      connected: slept ? true : provenAbsent ? false : leaf.connected,
+      writable: slept ? true : provenAbsent ? false : leaf.writable,
       // A pane with a status is never connected; its verdict says what the host knows.
       ...(ORCA_LAYOUT_OWNER_IS_MAIN && mainPane?.hasStatus
         ? { connected: false, writable: false }
         : {}),
-      lastOutputAt: leaf.lastOutputAt,
-      preview: leaf.preview,
+      lastOutputAt: slept ? slept.lastOutputAt : leaf.lastOutputAt,
+      preview: slept ? slept.preview : leaf.preview,
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
       ...this.resolvePaneAgentIdentityField(

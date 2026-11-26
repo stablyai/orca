@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { toast } from 'sonner'
-import type { CodexRateLimitAccountsState } from '../../../../../shared/managed-account-types'
+import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { AppState } from '../../../store/types'
 import { translate } from '@/i18n/i18n'
 import {
@@ -17,9 +17,11 @@ type CodexSignInActionDependencies = {
   fetchSettings: AppState['fetchSettings']
   isSwitching: boolean
   mountedRef: MutableRefObject<boolean>
+  /** False once the account owner changes; gates work for the old owner's menu. */
+  ownerMountedRef: MutableRefObject<boolean>
   reauthenticatingAccountId: string | null
   recordFeatureInteraction: AppState['recordFeatureInteraction']
-  setAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
+  setAccounts: (next: CodexRateLimitAccountsState) => void
   setReauthenticatingAccountId: Dispatch<SetStateAction<string | null>>
 }
 
@@ -35,6 +37,7 @@ export async function signInCodexAccount(
     fetchSettings,
     isSwitching,
     mountedRef,
+    ownerMountedRef,
     reauthenticatingAccountId,
     recordFeatureInteraction,
     setAccounts,
@@ -71,7 +74,7 @@ export async function signInCodexAccount(
         owner: { kind: 'local' },
         target
       })
-    } else if (mountedRef.current && menuOpenRef.current) {
+    } else if (ownerMountedRef.current && menuOpenRef.current) {
       await fetchInactiveCodexAccountUsage()
     }
     toast.success(

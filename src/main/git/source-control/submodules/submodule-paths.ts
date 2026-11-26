@@ -7,7 +7,8 @@ import {
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
 import { gitRuntimeOptionsKey } from '../git-runtime-options-cache-key'
-import { iterateNulDelimitedFields } from '../../../../shared/nul-delimited-fields'
+import { iterateNulDelimitedFields } from '../../../../shared/git/commands/nul-delimited-fields'
+import { bulkPathspecCommands, gitReportedPath } from '../git-pathspec'
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
@@ -15,18 +16,10 @@ type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
 let submodulePathsCacheGeneration = 0
 
-export function clearSubmodulePathsCacheForTests(): void {
-  clearSubmodulePathsCache()
-}
-
 export function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
   // Prevent pre-mutation reads from repopulating this cache.
   submodulePathsCacheGeneration += 1
-}
-
-export function getSubmodulePathsCacheCountForTests(): number {
-  return submodulePathsCache.size
 }
 
 function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOptions): string {
@@ -125,6 +118,55 @@ export async function listSubmodulePaths(
     rememberSubmodulePaths(cacheKey, paths, Date.now())
   }
   return paths
+}
+
+// The trailing `*` matches the directory's own entry (and same-level names), never its subtree.
+function directoryEntryPathspec(directory: string): string {
+  return `:(glob)${directory.replace(/[*?[\\]/g, '\\$&')}*`
+}
+
+/** Drop paths under an indexed gitlink: Git refuses them as pathspecs, and they are the submodule's. */
+export async function withoutPathsInsideSubmodules(
+  worktreePath: string,
+  relativePaths: readonly string[],
+  options: GitRuntimeOptions = {}
+): Promise<string[]> {
+  const gitPaths = relativePaths.map((relativePath) =>
+    gitReportedPath(relativePath, worktreePath, options).replace(/\/+$/, '')
+  )
+  const parentDirectories = new Set<string>()
+  for (const gitPath of gitPaths) {
+    for (let slash = gitPath.indexOf('/'); slash > 0; slash = gitPath.indexOf('/', slash + 1)) {
+      parentDirectories.add(gitPath.slice(0, slash))
+    }
+  }
+  if (parentDirectories.size === 0) {
+    return [...relativePaths]
+  }
+  const gitlinks: string[] = []
+  for (const args of bulkPathspecCommands(
+    ['ls-files', '--stage', '-z', '--'],
+    [...parentDirectories],
+    worktreePath,
+    options,
+    directoryEntryPathspec
+  )) {
+    const { stdout } = await gitExecFileAsync(args, {
+      ...gitOptionsForWorktree(worktreePath, options),
+      env: gitOptionalLocksDisabledEnv()
+    })
+    for (const record of iterateNulDelimitedFields(stdout)) {
+      const entryPath = record.slice(record.indexOf('\t') + 1)
+      if (record.startsWith('160000 ') && parentDirectories.has(entryPath)) {
+        gitlinks.push(entryPath)
+      }
+    }
+  }
+  return gitlinks.length === 0
+    ? [...relativePaths]
+    : relativePaths.filter(
+        (_, index) => !gitlinks.some((gitlink) => gitPaths[index].startsWith(`${gitlink}/`))
+      )
 }
 
 export function findContainingSubmodule(submodulePaths: string[], filePath: string): string | null {

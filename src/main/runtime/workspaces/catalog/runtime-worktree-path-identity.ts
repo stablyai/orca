@@ -4,7 +4,7 @@ import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/type
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   splitWorktreeId,

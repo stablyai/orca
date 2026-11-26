@@ -1,5 +1,5 @@
 import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../src/shared/gitlab/gitlab-types'
 import { normalizeGitHubLinkQuery } from '../../../../src/shared/new-workspace/github-links'
 import {
   parseGitHubIssueOrPRLink,

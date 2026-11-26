@@ -1,4 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { getExplorerTreeView } from '@/store/slices/right-sidebar/right-sidebar-route'
 import type { SourceControlScope } from '../panel/worktree-scope'
 import {
   sourceControlFileWatchRuntimeEnvironmentId,
@@ -8,7 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import {
@@ -74,7 +75,7 @@ export function useWorktreeGitStatusObservation(
   const openFiles = useAppStore((s) => (owner ? NO_OWNER_FILES : s.openFiles))
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
+  const rightSidebarExplorerView = useAppStore(getExplorerTreeView)
   const pollingAllowed = useAppStore((s) =>
     owner
       ? options.enabled === true
@@ -83,7 +84,7 @@ export function useWorktreeGitStatusObservation(
           worktreePath: activeWorktree?.path ?? null,
           rightSidebarOpen: s.rightSidebarOpen,
           rightSidebarTab: s.rightSidebarTab,
-          rightSidebarExplorerView: s.rightSidebarExplorerView,
+          rightSidebarExplorerView: getExplorerTreeView(s),
           openFiles: s.openFiles
         })
   )
@@ -95,7 +96,7 @@ export function useWorktreeGitStatusObservation(
           worktreePath: activeWorktree?.path ?? null,
           rightSidebarOpen: s.rightSidebarOpen,
           rightSidebarTab: s.rightSidebarTab,
-          rightSidebarExplorerView: s.rightSidebarExplorerView,
+          rightSidebarExplorerView: getExplorerTreeView(s),
           openFiles: s.openFiles
         })
   )

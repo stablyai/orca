@@ -14,6 +14,7 @@ import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { assertJournalFence } from './writing/journal-write-guards'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -72,7 +73,7 @@ export function removeJournalDomainItem(
     return { itemId, revision, removed: null, items: [] }
   }
   const removed: AgentJournalRenderItem | null =
-    row.payload_json === null ? null : JSON.parse(String(row.payload_json))
+    row.payload_json === null ? null : readJournalStoredItem(db, prefix, row.payload_json)
   if (
     row.turn_marker ||
     row.prompt ||

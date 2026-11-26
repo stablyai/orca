@@ -1,3 +1,4 @@
+import { dropReaderlessRunQuestions } from '../questions/readerless-run-questions'
 import type { OrchestrationDb } from '../orchestration-db'
 
 /** Mail a settling helper creator never handled, now owned by its Run's mailbox. */
@@ -50,6 +51,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
     )
     .run(handBack.mailbox, JSON.stringify(handBack.messageIds))
   db.fenceUnacknowledgedMailboxDeliveries(mailbox)
+  dropReaderlessRunQuestions(db, runId)
   db.pendingMailHandBacks.push(handBack)
   if (db.pendingMailHandBacks.length === 1) {
     // Synchronous settlement lets this microtask run after the outermost commit or rollback.

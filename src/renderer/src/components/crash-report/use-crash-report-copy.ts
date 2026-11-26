@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type {
   CrashReportCopySubmissionFailure,
   CrashReportRecord
-} from '../../../../shared/crash-reporting'
+} from '../../../../shared/crash-reporting/crash-reporting'
 
 export const CRASH_REPORT_COPY_FAILURE_TOAST_ID = 'crash-report-copy-failure'
 

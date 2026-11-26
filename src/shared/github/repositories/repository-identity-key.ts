@@ -1,4 +1,4 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 
 // Share github.com/GHES detection across cache identity, quota scoping and execution routing.
 export function isDefaultGitHubHost(host?: string): boolean {

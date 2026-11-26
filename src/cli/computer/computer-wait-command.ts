@@ -1,7 +1,7 @@
 import {
   COMPUTER_WAIT_DEFAULT_TIMEOUT_MS,
   COMPUTER_WAIT_MAX_TIMEOUT_MS
-} from '../../shared/computer-wait-timeout'
+} from '../../shared/computer/computer-wait-timeout'
 import {
   formatComputerWaitSnapshot,
   formatComputerWaitWindows,

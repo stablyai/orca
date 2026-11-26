@@ -3,7 +3,7 @@ import { printResult } from '../output/command-result-output'
 import { formatOrchestrationErrorLine } from '../output/cli-error'
 import { renderCommand } from './recovery/orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from './recovery/orchestration-recovery-command'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { withReceiptNext } from './receipt-next-text'
 import { escapeTerminalControlCharacters } from '../../shared/terminal/output/terminal-control-character-escape'
 

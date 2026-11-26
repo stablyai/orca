@@ -5,7 +5,7 @@ import { PendingPtyGroupSweep } from '../../pty/process-retirement/pending-pty-g
 import { killConptyNow, terminatePtyJob } from '../../windows/windows-pty-job'
 import { SessionTerminationController } from '../sessions/session-termination-controller'
 import { shutdownOwnedTerminalProcess } from '../terminal-host/terminal-host-session-shutdown'
-import { createGitBashConsoleCapacityDetector } from '../../../shared/git-bash-console-capacity'
+import { createGitBashConsoleCapacityDetector } from '../../../shared/terminal/pty/lifecycle/git-bash-console-capacity'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
 import { resolveProcessExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { withInitialOutputDiagnostic } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'

@@ -13,12 +13,16 @@ export type SlashCommandSuggestion = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<objective>`. */
   argumentHint?: string
+  /** Other lowercase names the picker finds it by, matched like the name in every language. */
+  aliases?: readonly string[]
   kindUnspecified?: true
   builtin?: true
   /** Declared only on curated rows; a surface that cannot show the reply drops the row. */
   reply?: NativeChatCommandReply
   /** The desktop chat runs it itself: it hides an agent command of the same name, never a skill. */
   orcaOwned?: true
+  /** Sent bare, it opens a TUI screen the chat cannot show, so a terminal-backed chat switches to Terminal. */
+  opensInTerminal?: true
 }
 
 // Curated stable commands: CLIs provide no machine-readable catalog.
@@ -45,21 +49,21 @@ const OPENCLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
 const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'model', description: 'Choose the model and reasoning effort' },
   { name: 'ide', description: 'Include IDE context' },
-  { name: 'permissions', description: 'Choose what Codex is allowed to do' },
-  { name: 'keymap', description: 'Remap TUI shortcuts' },
+  { name: 'permissions', description: 'Choose what Codex is allowed to do', opensInTerminal: true },
+  { name: 'keymap', description: 'Remap TUI shortcuts', opensInTerminal: true },
   { name: 'vim', description: 'Toggle Vim mode' },
-  { name: 'experimental', description: 'Toggle experimental features' },
+  { name: 'experimental', description: 'Toggle experimental features', opensInTerminal: true },
   { name: 'approve', description: 'Approve one auto-review retry' },
-  { name: 'memories', description: 'Configure memory use' },
-  { name: 'skills', description: 'Manage and use skills' },
+  { name: 'memories', description: 'Configure memory use', opensInTerminal: true },
+  { name: 'skills', description: 'Manage and use skills', opensInTerminal: true },
   { name: 'import', description: 'Import setup from Claude Code' },
   { name: 'hooks', description: 'View lifecycle hooks' },
-  { name: 'review', description: 'Review the current changes' },
-  { name: 'rename', description: 'Rename the current thread' },
+  { name: 'review', description: 'Review the current changes', opensInTerminal: true },
+  { name: 'rename', description: 'Rename the current thread', opensInTerminal: true },
   { name: 'new', description: 'Start a new chat' },
   { name: 'archive', description: 'Archive this session and exit' },
   { name: 'delete', description: 'Delete this session and exit' },
-  { name: 'resume', description: 'Resume a saved chat' },
+  { name: 'resume', description: 'Resume a saved chat', opensInTerminal: true },
   { name: 'fork', description: 'Fork the current chat' },
   { name: 'app', description: 'Continue in Codex Desktop' },
   { name: 'init', description: 'Create an AGENTS.md file' },
@@ -74,37 +78,46 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'mention', description: 'Mention a file' },
   { name: 'status', description: 'Show session configuration and usage' },
   { name: 'usage', description: 'View account usage' },
-  { name: 'title', description: 'Configure the terminal title' },
-  { name: 'statusline', description: 'Configure the status line' },
-  { name: 'theme', description: 'Choose a syntax highlighting theme' },
-  { name: 'pets', description: 'Choose or hide the terminal pet' },
+  { name: 'title', description: 'Configure the terminal title', opensInTerminal: true },
+  { name: 'statusline', description: 'Configure the status line', opensInTerminal: true },
+  { name: 'theme', description: 'Choose a syntax highlighting theme', opensInTerminal: true },
+  { name: 'pets', description: 'Choose or hide the terminal pet', opensInTerminal: true },
   { name: 'mcp', description: 'List configured MCP tools' },
-  { name: 'plugins', description: 'Browse plugins' },
+  { name: 'plugins', description: 'Browse plugins', opensInTerminal: true },
   { name: 'logout', description: 'Log out of Codex' },
   { name: 'exit', description: 'Exit Codex' },
-  { name: 'feedback', description: 'Send logs to maintainers' },
+  { name: 'feedback', description: 'Send logs to maintainers', opensInTerminal: true },
   { name: 'ps', description: 'List background terminals' },
   { name: 'stop', description: 'Stop all background terminals' },
   { name: 'clear', description: 'Clear the terminal and start a new chat' },
   { name: 'personality', description: 'Choose a communication style' },
-  { name: 'subagents', description: 'Switch the active agent thread' }
+  { name: 'subagents', description: 'Switch the active agent thread', opensInTerminal: true }
 ]
 
 // OMP built-in registry; interactive commands still execute in its terminal.
 const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'model', description: 'Open the model selector in Terminal' },
+  { name: 'model', description: 'Open the model selector in Terminal', opensInTerminal: true },
   {
     name: 'switch',
-    description: 'Open the temporary model selector in Terminal'
+    description: 'Open the temporary model selector in Terminal',
+    opensInTerminal: true
   },
   { name: 'plan', description: 'Toggle plan mode' },
   { name: 'compact', description: 'Compact conversation context' },
   { name: 'clear', description: 'Clear context while keeping the session' },
   { name: 'new', description: 'Start a new session' },
-  { name: 'resume', description: 'Resume a session; without arguments, choose in Terminal' },
-  { name: 'fork', description: 'Fork from a previous message in Terminal' },
-  { name: 'branch', description: 'Rewind to a previous message in Terminal' },
-  { name: 'tree', description: 'Browse the session tree in Terminal' },
+  {
+    name: 'resume',
+    description: 'Resume a session; without arguments, choose in Terminal',
+    opensInTerminal: true
+  },
+  { name: 'fork', description: 'Fork from a previous message in Terminal', opensInTerminal: true },
+  {
+    name: 'branch',
+    description: 'Rewind to a previous message in Terminal',
+    opensInTerminal: true
+  },
+  { name: 'tree', description: 'Browse the session tree in Terminal', opensInTerminal: true },
   { name: 'session', description: 'Show session information and controls' },
   { name: 'rename', description: 'Rename the session' },
   // Why: OMP paints this in its TUI and records nothing the chat could show.
@@ -113,18 +126,49 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'fast', description: 'Toggle priority service tier' },
   { name: 'tools', description: 'Show tools visible to the agent' },
   { name: 'jobs', description: 'Show background jobs' },
-  { name: 'git', description: 'Open the Git viewer in Terminal' },
+  { name: 'git', description: 'Open the Git viewer in Terminal', opensInTerminal: true },
   { name: 'export', description: 'Export the session to HTML' },
-  { name: 'settings', description: 'Open settings in Terminal' },
-  { name: 'extensions', description: 'Open the extension dashboard in Terminal' },
-  { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
+  { name: 'settings', description: 'Open settings in Terminal', opensInTerminal: true },
+  {
+    name: 'extensions',
+    description: 'Open the extension dashboard in Terminal',
+    opensInTerminal: true
+  },
+  { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal', opensInTerminal: true }
+]
+
+// Flagged rows open a TUI dialog on OpenCode 1.19.0 or 2.3.0.
+const OPENCODE_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'clear', description: 'Clear the conversation' },
+  { name: 'models', description: 'Open the model selector in Terminal', opensInTerminal: true },
+  { name: 'agents', description: 'Choose the agent in Terminal', opensInTerminal: true },
+  { name: 'sessions', description: 'Switch sessions in Terminal', opensInTerminal: true },
+  { name: 'skills', description: 'Browse skills in Terminal', opensInTerminal: true },
+  { name: 'mcps', description: 'Manage MCP servers in Terminal', opensInTerminal: true },
+  { name: 'connect', description: 'Connect a provider in Terminal', opensInTerminal: true },
+  { name: 'status', description: 'View status in Terminal', opensInTerminal: true },
+  { name: 'themes', description: 'Choose a theme in Terminal', opensInTerminal: true },
+  { name: 'diff', description: 'Open the diff viewer in Terminal', opensInTerminal: true },
+  { name: 'editor', description: 'Open your editor in Terminal', opensInTerminal: true },
+  { name: 'debug', description: 'View debug info in Terminal', opensInTerminal: true },
+  { name: 'help', description: 'Show help in Terminal', opensInTerminal: true },
+  { name: 'fork', description: 'Fork the session in Terminal', opensInTerminal: true },
+  { name: 'rename', description: 'Rename the session in Terminal', opensInTerminal: true },
+  {
+    name: 'timeline',
+    description: 'Browse the session timeline in Terminal',
+    opensInTerminal: true
+  },
+  { name: 'export', description: 'Export the session in Terminal', opensInTerminal: true }
 ]
 
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: OPENCLAUDE_COMMANDS,
   codex: CODEX_COMMANDS,
-  omp: OMP_COMMANDS
+  omp: OMP_COMMANDS,
+  opencode: OPENCODE_COMMANDS,
+  opencode2: OPENCODE_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

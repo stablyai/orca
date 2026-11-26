@@ -1,7 +1,7 @@
 import { getStatus } from '../../git/source-control/status/status-read'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { PRCacheView } from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
@@ -36,9 +36,17 @@ export type WorkspaceCleanupGitEvidence = {
   upstreamAhead: number | null
   upstreamBehind: number | null
   checkedAt: number | null
+  dirtyFileCount?: number | null
   merge?: WorkspaceCleanupMergeEvidence
   atRiskLocalFiles: WorktreeAtRiskLocalFiles | null
   blockers: WorkspaceCleanupBlocker[]
+}
+
+/** Unique changed paths; null when the status read was capped, since the total is then unknown. */
+export function countWorkspaceCleanupDirtyFiles(
+  status: Pick<GitStatusResult, 'entries' | 'didHitLimit'>
+): number | null {
+  return status.didHitLimit ? null : new Set(status.entries.map((entry) => entry.path)).size
 }
 
 export function createEmptyWorkspaceCleanupGitEvidence(): WorkspaceCleanupGitEvidence {
@@ -149,6 +157,7 @@ export async function readWorkspaceCleanupGitEvidence(
     upstreamAhead,
     upstreamBehind,
     checkedAt,
+    dirtyFileCount: countWorkspaceCleanupDirtyFiles(status),
     ...(merge ? { merge } : {}),
     atRiskLocalFiles,
     blockers: uniqueWorkspaceCleanupGitBlockers(blockers)

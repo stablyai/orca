@@ -1,0 +1,3 @@
+export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
+
+export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false

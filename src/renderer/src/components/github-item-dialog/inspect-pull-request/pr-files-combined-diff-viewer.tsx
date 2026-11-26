@@ -8,7 +8,7 @@ import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/secti
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {

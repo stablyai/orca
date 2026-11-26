@@ -1,6 +1,10 @@
 import { legacyEditorTabs } from './legacy-editor-tab-hydration'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { resolveTabGroupOwners } from '../../../../../shared/workspace-layout/tab-groups/tab-group-owners'

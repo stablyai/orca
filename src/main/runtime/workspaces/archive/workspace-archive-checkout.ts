@@ -1,6 +1,9 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import type { Repo } from '../../../../shared/repo-types'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'

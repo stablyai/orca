@@ -1,5 +1,5 @@
 import type { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/issues/linear-issue-lookups'
-import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../../shared/work-items/issue-mutation-types'
 import type { LinearCreateFieldIntent } from './linear-create-field-intent'
 import { sameStringSet } from './linear-label-id-equality'
 import { linearError } from '../../../linear/issues/context/linear-access-errors'

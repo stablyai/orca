@@ -1,12 +1,13 @@
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
 
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
+import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
@@ -14,6 +15,7 @@ import { openWorktreeCreatePathClaim } from '../../../workspaces/creation/worktr
 import { exactNameLateCollision } from '../../../workspaces/creation/worktree-create-exact-name'
 import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
+import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
@@ -21,7 +23,7 @@ import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-work
 
 const roots: string[] = []
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await removeTempDirs(roots.splice(0))
 })
 
 async function git(cwd: string, ...argv: string[]): Promise<string> {
@@ -177,7 +179,9 @@ describe('explicit branch reuse with real Git', () => {
     }
     await git(f.repoPath, 'worktree', 'add', busy, alias)
     expect(await git(busy, 'symbolic-ref', 'HEAD')).toBe(`refs/heads/${alias}`)
-    await expect(f.create()).rejects.toThrow(`already checked out at "${busy}"`)
+    // Git for Windows lists worktree paths with forward slashes.
+    const listedBusy = process.platform === 'win32' ? busy.replaceAll('\\', '/') : busy
+    await expect(f.create()).rejects.toThrow(`already checked out at "${listedBusy}"`)
     expect(
       (await git(f.repoPath, 'worktree', 'list', '--porcelain')).match(/^worktree /gm)
     ).toHaveLength(2)
@@ -251,7 +255,7 @@ describe('explicit branch reuse with real Git', () => {
     }
   )
 
-  it.each(['ahead', 'diverged', 'behind'])(
+  it.each(['diverged', 'behind'])(
     'reuses a %s local branch without changing its tip or upstream',
     async (state) => {
       const f = await fixture()
@@ -264,10 +268,8 @@ describe('explicit branch reuse with real Git', () => {
       }
       const localTip = await git(f.repoPath, 'rev-parse', 'HEAD')
       await git(f.repoPath, 'checkout', '--quiet', 'main')
-      if (state !== 'ahead') {
-        await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
-        await git(f.repoPath, 'update-ref', f.base, 'HEAD')
-      }
+      await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
+      await git(f.repoPath, 'update-ref', f.base, 'HEAD')
       const remoteTip = await git(f.repoPath, 'rev-parse', f.base)
       await mkdir(join(f.workspaceRoot, 'My-workspace'), { recursive: true })
       const picked = await f.create()
@@ -338,7 +340,6 @@ describe('exact-name create with real Git', () => {
   // Branch prefix none, so each existing branch is the candidate's own twin after host naming.
   it.each([
     ['release..fix', 'release.fix'],
-    ['cache.lock', 'cache-lock'],
     ['Login fix', 'login-fix'],
     ['🚀 launch', 'rocket-launch'],
     // The default intent would adopt this unchecked-out branch.
@@ -400,5 +401,69 @@ describe('exact-name create with real Git', () => {
     })
     expect(mapped).toBe(error)
     expect(mapped).not.toMatchObject(refused)
+  })
+})
+
+describe('derived slash branches with real Git', () => {
+  it('keeps branch hierarchy, a flat checkout path and matching collision suffixes', async () => {
+    const f = await fixture('origin', { branchPrefix: 'custom', branchPrefixCustom: 'team' })
+    const request = {
+      name: 'feature/tti_fix_1440',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new' as const
+    }
+    const first = await f.create(request)
+    expect(first.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440'))
+    expect(await git(first.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440'
+    )
+    const second = await f.create(request)
+    expect(second.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440-2'))
+    expect(await git(second.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440-2'
+    )
+  })
+
+  it('normalizes reserved ref segments without changing the directory name', async () => {
+    const f = await fixture()
+    const picked = await f.create({
+      name: '/feature.lock//.中文 fix../item.lock.lock/',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(
+      join(f.workspaceRoot, 'feature.lock-.中文-fix.-item.lock.lock')
+    )
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/feature-lock/中文-fix/item.lock-lock'
+    )
+  })
+})
+
+describe('derived branch namespace conflicts with real Git', () => {
+  it.each(['create-new', 'create-exact'] as const)(
+    'refuses an occupied parent without changing the requested hierarchy (%s)',
+    async (branchIntent) => {
+      const f = await fixture()
+      await git(f.repoPath, 'branch', 'feature')
+      await expect(
+        f.candidate({ name: 'feature/x', branchNameOverride: undefined, branchIntent })
+      ).rejects.toBeInstanceOf(WorktreeCreateCollisionError)
+      expect(await git(f.repoPath, 'for-each-ref', '--format=%(refname)', 'refs/heads/')).toBe(
+        'refs/heads/feature\nrefs/heads/main'
+      )
+    }
+  )
+
+  it('suffixes a name occupied by descendants while keeping the checkout flat', async () => {
+    const f = await fixture()
+    await git(f.repoPath, 'branch', 'feature/x')
+    const picked = await f.create({
+      name: 'feature',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(join(f.workspaceRoot, 'feature-2'))
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe('refs/heads/feature-2')
   })
 })

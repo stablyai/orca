@@ -2,7 +2,7 @@ import type {
   ScopedExternalAutomationRequest,
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../../shared/external-automation-scope'
+} from '../../../shared/automations/external/external-automation-scope'
 import {
   resolveExternalAutomationScope,
   type DesktopSshTargetRegistry,
@@ -43,9 +43,10 @@ export function createScopedExternalAutomations(
       const key = { ownerKey: scope.ownerKey, provider: scope.provider }
       return await deps.cache.resolve(
         key,
-        () =>
+        (ownerGeneration) =>
           deps.scheduler.schedule({
-            key: externalAutomationManagerCacheKey(key),
+            // A probe begun before an action must not answer reads that start after it.
+            key: `${externalAutomationManagerCacheKey(key)}#${ownerGeneration}`,
             scopeKey: scope.ownerKey,
             run: () =>
               scope.sshTarget

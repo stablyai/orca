@@ -10,7 +10,7 @@ import {
 } from './speech-model-download-response'
 import { isRetryableDownloadError, type HttpStatusError } from '../network/transient-download-error'
 import { SpeechModelHttpDownload } from './speech-model-http-download'
-import { delayUnlessAborted } from '../../shared/abort-aware-delay'
+import { delayUnlessAborted } from '../../shared/concurrency/abort-aware-delay'
 
 export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownload {
   protected getPartialDownloadBytes(filePath: string): number {

@@ -1,4 +1,4 @@
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import type { HangDetectionMarker } from './hang-detection-marker'
 import {
   listNativeHangCaptures,

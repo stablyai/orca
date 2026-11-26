@@ -49,11 +49,3 @@ export function resolveRendererOwnedAgentStatusTiming(
     ? { allowOlderTimestamp: true }
     : undefined
 }
-
-export function _getRendererOwnedAgentStatusPaneCountForTest(): number {
-  return panesByPaneKey.size
-}
-
-export function resetRendererOwnedAgentStatusPanesForTests(): void {
-  panesByPaneKey.clear()
-}

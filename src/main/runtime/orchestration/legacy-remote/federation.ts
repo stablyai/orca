@@ -1,12 +1,16 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { waitForWorkerAgentReady } from '../../terminal/wait/launched-agent-composer-readiness'
-import { describeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
+import { agentStartupBlockedMessage } from '../../terminal/wait/agent-startup-blocked-message'
 import { buildDispatchPreamble } from '../workers/launch/worker-dispatch-preamble'
 import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../orchestration-error'
 import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
 import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/start/placement/folder-worktree-placement'
+import {
+  refuseUnmatchedWorkerSelector,
+  workerStartTargetLabel
+} from '../../rpc/methods/orchestration/worker/start/worker-start-selector-refusal'
 import type { FederationEffect } from './federation-effects'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
 import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
@@ -28,6 +32,7 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/o
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
+import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineOrchestrationMethod({
@@ -62,18 +67,32 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      const { agent, launch } = await prepareFederationWorkerLaunchOnHost({
-        params,
+      const targetLabel = workerStartTargetLabel({
+        ...params,
         createsWorktree,
-        runtime
+        requestedWorktree: params.worktree
       })
+      const { agent, launch } = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+        prepareFederationWorkerLaunchOnHost({ params, createsWorktree, runtime })
+      )
       if (createsWorktree) {
-        await assertOrchestrationWorktreeCreationSupported({
-          runtime,
-          repoSelector: params.repo as string,
-          existingPlacement: 'an exact existing folder workspace'
-        })
+        await refuseUnmatchedWorkerSelector(targetLabel, () =>
+          assertOrchestrationWorktreeCreationSupported({
+            runtime,
+            repoSelector: params.repo as string,
+            existingPlacement: 'an exact existing folder workspace'
+          })
+        )
       }
+      // The same installed-agent check as every start, before anything is created here.
+      await refuseUninstalledWorkerAgent(runtime, {
+        agent,
+        terminal: params.terminal,
+        repoSelector: createsWorktree
+          ? params.repo
+          : (await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => undefined))
+              ?.repoId
+      })
 
       const db = runtime.getOrchestrationDb()
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
@@ -205,7 +224,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           }
           throw new Error(
             wait.blockedReason
-              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
+              ? await agentStartupBlockedMessage(runtime, terminalHandle, wait.blockedReason)
               : `Agent did not become ready (${wait.status}).`
           )
         }
@@ -240,7 +259,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
               subWorkersInOwnRun: true,
-              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+              ...runtime.getTerminalOrchestrationCliTarget(terminalHandle)
             })
           }
         }).finally(() => briefGuard?.dispose())

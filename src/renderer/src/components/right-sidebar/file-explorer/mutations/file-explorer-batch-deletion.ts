@@ -1,7 +1,7 @@
 import {
   createNormalizedPathInsideOrEqualMatcher,
   normalizeRuntimePathForComparison
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { TreeNode } from '../tree/file-explorer-types'
 
 // Delete selected ancestors only; separate descendant requests would race missing paths and report spurious errors.

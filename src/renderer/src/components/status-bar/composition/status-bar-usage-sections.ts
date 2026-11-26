@@ -1,10 +1,13 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { isCursorUsageBucket } from '../../../../../shared/cursor-usage-buckets'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { formatRateLimitWindowChipLabel } from '../../../../../shared/rate-limit-window-label'
-import { getUsageHeadlineSection } from '../usage/usage-headline-sections'
+import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
+import { getUsageHeadlineSection, isScopedUsageWindow } from '../usage/usage-headline-sections'
 
 export type StatusBarUsageSection = {
   key: string
@@ -12,8 +15,6 @@ export type StatusBarUsageSection = {
   label: string
   labelFirst?: boolean
 }
-
-const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 export function getStatusBarUsageSections(
   p: ProviderRateLimits | null,
@@ -24,16 +25,31 @@ export function getStatusBarUsageSections(
     return []
   }
   if (mode === 'compact') {
-    const headline = getUsageHeadlineSection(p, t)
-    return headline ? [{ key: 'headline', ...headline }] : []
+    // Why 'all': the status bar keeps its original headline, Fable included.
+    const headline = getUsageHeadlineSection(p, t, 'all')
+    if (!headline) {
+      return []
+    }
+    // Why: named pools read "Cursor Models 64%" in Detailed, so Compact keeps that order.
+    const isNamedBucket = p.buckets?.some((bucket) => bucket === headline.window) ?? false
+    // Why: Compact shows the percent only; names (Fable, pools) stay, reset countdowns live in the tooltip.
+    const isTimeWindow =
+      !isNamedBucket &&
+      !isScopedUsageWindow(p, headline.window) &&
+      [p.session, p.weekly, p.monthly].includes(headline.window)
+    return [
+      {
+        key: 'headline',
+        ...headline,
+        label: isTimeWindow ? '' : headline.label,
+        labelFirst: isNamedBucket
+      }
+    ]
   }
   if (p.buckets?.length) {
-    // Antigravity pool names vary by account tier; Gemini's experimental pools stay hidden.
+    // Antigravity pool names vary by account tier.
     const buckets = p.buckets.filter(
-      (bucket) =>
-        p.provider === 'antigravity' ||
-        STATUS_BAR_BUCKET_NAMES.has(bucket.name) ||
-        isCursorUsageBucket(bucket.name)
+      (bucket) => p.provider === 'antigravity' || isCursorUsageBucket(bucket.name)
     )
     if (buckets.length > 0) {
       return buckets.map((bucket) => ({

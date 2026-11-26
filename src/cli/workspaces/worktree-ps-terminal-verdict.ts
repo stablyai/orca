@@ -1,4 +1,4 @@
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 
 type TerminalCounts = Pick<
   RuntimeWorktreePsSummary,

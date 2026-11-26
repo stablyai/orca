@@ -23,7 +23,7 @@ import {
   hasErrorCode,
   isProcessAlive
 } from '../../daemon/endpoint/identity/daemon-process-inspection'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 // Read legacy keyring records only for migration.
 export type StoredKeyState =

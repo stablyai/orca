@@ -1,7 +1,7 @@
 import type {
   BundledSkillInstallResult,
   BundledSkillPlan
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import { BUNDLED_SKILL_SOURCES } from './bundled-skill-sources'
 import {
   autoUpdateBundledSkills,

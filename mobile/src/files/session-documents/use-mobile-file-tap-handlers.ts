@@ -1,4 +1,4 @@
-import { isCommittedChatAttachmentCandidate } from '../../../../src/shared/native-chat-text-attachment-references'
+import { isCommittedChatAttachmentCandidate } from '../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { createMobileFilePreviewHref } from '../preview/mobile-file-preview-route'
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
@@ -37,7 +37,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   options: MobileFileTapHandlerOptions<T>
 ): {
   handleFileTap: (handle: string, candidates: readonly ParsedFileLinkLocation[]) => void
-  handleNativeChatFileTap: (pathText: string) => void
+  handleNativeChatFileTap: (pathText: string, cwd?: string) => void
 } {
   const {
     activeHandleRef,
@@ -159,7 +159,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     []
   )
 
-  const handleNativeChatFileTap = useCallback((pathText: string) => {
+  const handleNativeChatFileTap = useCallback((pathText: string, cwd?: string) => {
     const current = optionsRef.current
     if (current.structuredAttachments && isCommittedChatAttachmentCandidate(pathText)) {
       ++activationSeqRef.current
@@ -188,6 +188,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       worktreeId: current.worktreeId,
       worktreeName: current.worktreeName,
       pathText,
+      ...(cwd ? { cwd } : {}),
       nativeChatContext:
         nativeChatSessionId && nativeChatTabId
           ? { tabId: nativeChatTabId, sessionId: nativeChatSessionId }

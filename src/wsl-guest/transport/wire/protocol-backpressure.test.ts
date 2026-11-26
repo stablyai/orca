@@ -3,8 +3,11 @@ import { FrameDecoder } from './relay-frame-decoder'
 import {
   FrameDecoderContinuationError,
   type DecodedFrame
-} from '../../../shared/relay-frame-decoder-contract'
-import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../../shared/relay-frame-decoder'
+} from '../../../shared/remote-runtime/relay/relay-frame-decoder-contract'
+import {
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE
+} from '../../../shared/remote-runtime/relay/relay-frame-decoder'
 import { MessageType, encodeFrame } from './protocol'
 
 function createScheduler(): {

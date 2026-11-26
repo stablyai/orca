@@ -1,6 +1,7 @@
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { MobileRelayHostsListResult } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import type { RelayPhoneReader } from './mobile-relay-host-rows-announcer'
 
 // A phone holding the list reads it at least every 60 s (its backstop); three missed reads means none is left.
 export const PHONE_LIST_IDLE_MS = 3 * 60_000
@@ -19,17 +20,31 @@ type Watching = { announced: string; stop: () => void; idle: ReturnType<typeof s
 export class RelayHostListAnnouncer {
   private watching: Watching | null = null
   private disposed = false
+  // Phones that read the list and listen for relayHostsChanged without polling it: watched until they close.
+  private readonly holders = new Set<string>()
 
   constructor(
     private readonly hosts: MobileDesktopRelayHosts,
-    private readonly describe: () => MobileRelayHostsListResult,
+    private readonly describe: () =>
+      | MobileRelayHostsListResult
+      | Promise<MobileRelayHostsListResult>,
     private readonly sources: RelayHostListAnnouncerSources
   ) {}
 
-  /** A phone just read `result`. */
-  listed(result: MobileRelayHostsListResult): void {
+  /** A phone just read `result`; a `reader` keeps the watch until its connection closes. */
+  listed(result: MobileRelayHostsListResult, reader?: RelayPhoneReader): void {
     if (this.disposed) {
       return
+    }
+    if (reader && !this.holders.has(reader.connectionId)) {
+      this.holders.add(reader.connectionId)
+      reader.onClose(() => {
+        this.holders.delete(reader.connectionId)
+        if (this.holders.size === 0 && this.watching) {
+          clearTimeout(this.watching.idle)
+          this.watching.idle = this.idleTimer()
+        }
+      })
     }
     if (this.watching) {
       clearTimeout(this.watching.idle)
@@ -50,7 +65,11 @@ export class RelayHostListAnnouncer {
   }
 
   private idleTimer(): ReturnType<typeof setTimeout> {
-    const timer = setTimeout(() => this.stopWatching(), PHONE_LIST_IDLE_MS)
+    const timer = setTimeout(() => {
+      if (this.holders.size === 0) {
+        this.stopWatching()
+      }
+    }, PHONE_LIST_IDLE_MS)
     timer.unref?.()
     return timer
   }
@@ -66,23 +85,39 @@ export class RelayHostListAnnouncer {
 
   private watch(): () => void {
     let queued = false
+    let requested = false
     const check = (): void => {
+      requested = true
       if (queued) {
         return
       }
       queued = true
       // One change can reach several sources, e.g. a retirement and its new status owner.
       queueMicrotask(() => {
-        queued = false
-        const watching = this.watching
-        if (!watching) {
-          return
+        const run = async (): Promise<void> => {
+          try {
+            while (requested) {
+              requested = false
+              const watching = this.watching
+              if (!watching) {
+                return
+              }
+              const next = await this.describeForAnnouncement()
+              if (this.watching !== watching) {
+                return
+              }
+              if (next !== watching.announced) {
+                watching.announced = next
+                this.sources.changed()
+              }
+            }
+          } finally {
+            queued = false
+          }
         }
-        const next = this.describeForAnnouncement()
-        if (next !== watching.announced) {
-          watching.announced = next
-          this.sources.changed()
-        }
+        void run().catch((error) =>
+          console.warn('[mobile-relay] Host list announcement failed', error)
+        )
       })
     }
     const stops = [
@@ -107,9 +142,9 @@ export class RelayHostListAnnouncer {
   }
 
   // A store that can't be read must not throw here, outside any request; phones re-read and get the error.
-  private describeForAnnouncement(): string {
+  private async describeForAnnouncement(): Promise<string> {
     try {
-      return JSON.stringify(this.describe())
+      return JSON.stringify(await this.describe())
     } catch {
       return 'unreadable'
     }

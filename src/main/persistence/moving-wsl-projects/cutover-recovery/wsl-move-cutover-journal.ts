@@ -68,33 +68,40 @@ function parseVerifiedWslMoveCutover(value: unknown): WslMoveCutover {
   return cutover
 }
 
+function orderWslMoveCutoverChain<T extends Readonly<WslMoveCutover>>(
+  entries: readonly T[],
+  journalKey: string
+): T[] {
+  return orderMigrationJournalChain(
+    entries.filter((cutover) => cutover.journalKey === journalKey),
+    (detail) => new WslMoveJournalUnreadableError(detail),
+    journalKey
+  )
+}
+
 /** Oldest-first delta chain; forks and gaps fail closed. */
 export function listWslMoveCutoverChain(
   userDataPath: string,
   journalKey: string
 ): WslMoveCutover[] {
-  const matches = listWslMoveCutovers(userDataPath).filter(
-    (cutover) => cutover.journalKey === journalKey
-  )
-  return orderMigrationJournalChain(
-    matches,
-    (detail) => new WslMoveJournalUnreadableError(detail),
-    journalKey
+  return orderWslMoveCutoverChain(scanWslMoveCutovers(userDataPath), journalKey).map((cutover) =>
+    structuredClone(cutover)
   )
 }
 
 /** Durably advance one phase at a time; only a finished chain head permits a new distro move. */
 export function writeWslMoveCutover(userDataPath: string, cutover: WslMoveCutover): void {
   const parsed = parseVerifiedWslMoveCutover(cutover)
+  const all = scanWslMoveCutovers(userDataPath)
   // Migration-ID filenames must never conflate two distros.
   if (
-    listWslMoveCutovers(userDataPath).some(
+    all.some(
       (entry) => entry.migrationId === parsed.migrationId && entry.journalKey !== parsed.journalKey
     )
   ) {
     throw new Error('wsl_move_id_in_use')
   }
-  const chain = listWslMoveCutoverChain(userDataPath, parsed.journalKey)
+  const chain = orderWslMoveCutoverChain(all, parsed.journalKey)
   const existing = chain.find((entry) => entry.migrationId === parsed.migrationId)
   const head = chain.at(-1)
   // A stale writer must not recreate a removed fence.
@@ -136,7 +143,9 @@ function assertWslMoveUpdate(
 ): void {
   if (
     next.manifestSha256 !== existing.manifestSha256 ||
-    next.supersedesMigrationId !== existing.supersedesMigrationId
+    next.supersedesMigrationId !== existing.supersedesMigrationId ||
+    // Recovery maps the moved paths with these, so they never change after `prepared`.
+    JSON.stringify(next.mappedDrives) !== JSON.stringify(existing.mappedDrives)
   ) {
     throw new Error('wsl_move_binding_changed')
   }
@@ -210,6 +219,15 @@ function assertWslMoveLedgerUpdate(existing: WslMoveCutover, next: WslMoveCutove
   ) {
     throw new Error('wsl_move_ledger_changed')
   }
+  const reenabledBefore = existing.reenabledAutomationIds ?? []
+  const reenabledAfter = new Set(next.reenabledAutomationIds ?? [])
+  if (
+    !reenabledBefore.every((id) => reenabledAfter.has(id)) ||
+    (reenabledAfter.size > reenabledBefore.length &&
+      (existing.phase !== 'destination-committed' || next.phase !== 'destination-committed'))
+  ) {
+    throw new Error('wsl_move_ledger_changed')
+  }
   if (
     existing.phase === 'destination-committed' &&
     next.phase === 'client-rewritten' &&
@@ -228,9 +246,8 @@ const REMOVABLE_IN_FLIGHT_PHASES: ReadonlySet<WslMoveCutover['phase']> = new Set
 
 /** Retain unfinished fences after quiesce until resume or a cancel proves the destination empty. */
 export function removeWslMoveCutover(userDataPath: string, migrationId: string): void {
-  const record = listWslMoveCutovers(userDataPath).find(
-    (entry) => entry.migrationId === migrationId
-  )
+  const all = scanWslMoveCutovers(userDataPath)
+  const record = all.find((entry) => entry.migrationId === migrationId)
   if (
     record &&
     !REMOVABLE_IN_FLIGHT_PHASES.has(record.phase) &&
@@ -238,21 +255,22 @@ export function removeWslMoveCutover(userDataPath: string, migrationId: string):
   ) {
     throw new Error('wsl_move_in_flight')
   }
-  removeNewestInChain(userDataPath, record)
+  removeNewestInChain(userDataPath, all, record)
 }
 
 /**
  * Only the newest move of a distro goes: a later move names this one as what it supersedes, so
  * removing it would break the chain and leave every project of that distro unreadable.
  */
-function removeNewestInChain(userDataPath: string, record: WslMoveCutover | undefined): void {
+function removeNewestInChain(
+  userDataPath: string,
+  all: readonly Readonly<WslMoveCutover>[],
+  record: Readonly<WslMoveCutover> | undefined
+): void {
   if (!record) {
     return
   }
-  if (
-    listWslMoveCutoverChain(userDataPath, record.journalKey).at(-1)?.migrationId !==
-    record.migrationId
-  ) {
+  if (orderWslMoveCutoverChain(all, record.journalKey).at(-1)?.migrationId !== record.migrationId) {
     throw new Error('wsl_move_superseded')
   }
   journals.remove(userDataPath, record.migrationId)
@@ -263,9 +281,8 @@ function removeNewestInChain(userDataPath: string, record: WslMoveCutover | unde
  * holds no commit of it (wsl-move-reset). Its fence and session freeze lift with the record.
  */
 export function removeUncommittedWslMoveCutover(userDataPath: string, migrationId: string): void {
-  const record = listWslMoveCutovers(userDataPath).find(
-    (entry) => entry.migrationId === migrationId
-  )
+  const all = scanWslMoveCutovers(userDataPath)
+  const record = all.find((entry) => entry.migrationId === migrationId)
   if (
     record &&
     WSL_MOVE_CUTOVER_PHASES.indexOf(record.phase) >=
@@ -273,7 +290,7 @@ export function removeUncommittedWslMoveCutover(userDataPath: string, migrationI
   ) {
     throw new Error('wsl_move_committed')
   }
-  removeNewestInChain(userDataPath, record)
+  removeNewestInChain(userDataPath, all, record)
 }
 
 /**
@@ -281,9 +298,8 @@ export function removeUncommittedWslMoveCutover(userDataPath: string, migrationI
  * they were before it. Its fence, retained marks (reconcile) and stale-window re-apply end with it.
  */
 export function removeCommittedWslMoveCutover(userDataPath: string, migrationId: string): void {
-  const record = listWslMoveCutovers(userDataPath).find(
-    (entry) => entry.migrationId === migrationId
-  )
+  const all = scanWslMoveCutovers(userDataPath)
+  const record = all.find((entry) => entry.migrationId === migrationId)
   if (
     record &&
     WSL_MOVE_CUTOVER_PHASES.indexOf(record.phase) <
@@ -291,5 +307,5 @@ export function removeCommittedWslMoveCutover(userDataPath: string, migrationId:
   ) {
     throw new Error('wsl_move_not_committed')
   }
-  removeNewestInChain(userDataPath, record)
+  removeNewestInChain(userDataPath, all, record)
 }

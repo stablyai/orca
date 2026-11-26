@@ -1,8 +1,8 @@
 import {
   sanitizeCrashReportDetails,
   sanitizeCrashReportString
-} from '../../../shared/crash-report-redaction'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import { flushActiveSink, startSpan } from '../../observability/tracer'
 import { recordCoalescedCrashBreadcrumb, recordCrashBreadcrumb } from './crash-breadcrumb-store'
 import { getMainProcessLifecycleIdentity } from '../process-exits/main-process-lifecycle-identity'

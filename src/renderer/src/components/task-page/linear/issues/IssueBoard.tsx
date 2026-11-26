@@ -6,7 +6,7 @@ import {
 } from './task-page-linear-issue-empty-state'
 import { Button } from '@/components/ui/button'
 import { LinearIcon } from '@/components/task-page/task-page-localized-options'
-import { isIntegrationCredentialDecryptionError } from '../../../../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../../../../shared/secure-storage/integration-credential-errors'
 import {
   clampLinearIssueListLimit,
   LINEAR_ISSUE_LIST_MAX

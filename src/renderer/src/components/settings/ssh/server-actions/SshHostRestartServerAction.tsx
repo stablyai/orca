@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { OrcadManagedRestartResult } from '../../../../../../shared/orcad-managed-runtime'
-import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
+import type { OrcadManagedRestartResult } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import type { SshManagedServerStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'

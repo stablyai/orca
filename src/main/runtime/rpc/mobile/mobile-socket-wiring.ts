@@ -9,7 +9,8 @@ import type { E2EEKeypair } from '../server/pairing/e2ee-keypair'
 import { E2EEChannel } from './e2ee/e2ee-channel'
 import type { E2EEAuthenticatedDevice } from '../server/mobile-e2ee-authenticated-device'
 import { createMobileE2EEOutboundMemoryBudget } from './e2ee/mobile-e2ee-outbound-memory-budget'
-import type { RuntimeCapability } from '../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
+import { countIdleBlockingConnections } from './mobile-socket-idle-passive'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import type { NetworkSourceClass } from '../transports/websocket/source-admission/network-source-class'
 
@@ -75,6 +76,7 @@ function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
 }
 
 export class MobileSocketWiring {
+  private closedWith: { code: number; reason: string } | null = null
   private readonly deviceRegistry: DeviceRegistry
   private readonly e2eeKeypair: E2EEKeypair
   private readonly onText: MobileSocketWiringOptions['onText']
@@ -164,6 +166,26 @@ export class MobileSocketWiring {
     return this.connectionIds.size
   }
 
+  /** Connections that keep a managed server from idling out; passive watchers don't, but a
+   *  socket still in its handshake does, since it can't have declared itself yet. */
+  get idleBlockingConnectionCount(): number {
+    return countIdleBlockingConnections(this.connectionIds.keys(), (ws) =>
+      this.authenticatedSockets.get(ws)
+    )
+  }
+
+  /** Closes every socket, direct and relayed, with one code, and every later one the same way. */
+  closeAllConnections(code: number, reason: string): void {
+    this.closedWith = { code, reason }
+    for (const ws of Array.from(this.connectionIds.keys())) {
+      try {
+        ws.close(code, reason)
+      } catch {
+        // A socket already torn down needs no close frame.
+      }
+    }
+  }
+
   terminateDeviceConnections(deviceId: string): number {
     let terminated = 0
     for (const transport of this.transports) {
@@ -178,6 +200,10 @@ export class MobileSocketWiring {
     message: MobileSocketPayload,
     metadata: MobileSocketTransportMetadata
   ): void {
+    if (this.closedWith) {
+      ws.close(this.closedWith.code, this.closedWith.reason)
+      return
+    }
     const socket = this.authenticatedSockets.get(ws)
     if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
       ws.close(4001, 'Unauthorized')

@@ -1,4 +1,4 @@
-import type { HostMachine } from '../../../../shared/host-machine-line'
+import type { HostMachine } from '../../../../shared/execution-host/host-machine-line'
 
 // Firmware placeholders vendors leave in DMI/CIM model fields.
 const PLACEHOLDER_MODEL =

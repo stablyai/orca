@@ -1,11 +1,11 @@
 import * as z from 'zod'
-import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
+import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import { SHA256_PATTERN } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
   MobileWebBundleLocaleCatalogResultSchema
 } from '../../../src/shared/mobile-web-bundle/locale-catalog-contract'
-import { withTimeoutResult } from '../../../src/shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../src/shared/concurrency/promise-timeout-fallback'
 import {
   decodeDeviceStoreValue,
   encodeDeviceStoreValue

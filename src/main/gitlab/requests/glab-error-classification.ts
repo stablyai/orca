@@ -1,5 +1,5 @@
-import type { ClassifiedError } from '../../../shared/classified-error'
-import { classifiedCodeHostError as classified } from '../../../shared/code-host-failure-copy'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
+import { classifiedCodeHostError as classified } from '../../../shared/source-control/code-host-failure-copy'
 import { GlabNonListResponseError } from './glab-api-response'
 
 export function classifyGlabError(stderr: string): ClassifiedError {

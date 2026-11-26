@@ -2,7 +2,7 @@ import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/
 import type { FolderWorkspaceCreateInput } from '../../../../../../shared/folder-workspaces/folder-workspace-create'
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 import type { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
-import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 
 type FolderStartupPayloadInput = Pick<

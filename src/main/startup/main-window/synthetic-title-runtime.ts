@@ -15,7 +15,7 @@ import {
 import { shouldSendSyntheticTitleFrame } from '../../runtime/terminal/title/synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from '../../runtime/terminal/title/synthetic-title-frame-routing'
 import { mainProcessState as state } from '../main-process-state'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/native-chat/input/questions/codex-async-question-input'
 
 // Agent redraws can overwrite one-shot OSC titles; reassert at Pi's 80ms cadence.
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
@@ -56,7 +56,7 @@ function sendSyntheticTitle(
     return
   }
   // Feed the tracker before checking for windows; fabricated bytes must never enter emulator/tails/transcripts/stats.
-  state.runtime?.ingestSyntheticTitleFrame(ptyId, data)
+  state.core.runtime?.ingestSyntheticTitleFrame(ptyId, data)
   const window = state.mainWindow
   if (!deliverToWindow || !window || window.isDestroyed()) {
     return
@@ -191,7 +191,7 @@ export function driveSyntheticTitleFromHook(
 // as at rest for the whole next turn, to tui-idle, mailbox delivery and the tab alike.
 function retractSyntheticRestTitle(paneKey: string, profile: SyntheticAgentTitleProfile): void {
   const ptyId = getPtyIdForPaneKey(paneKey)
-  const title = ptyId ? state.runtime?.getTrackedPtyTitle(ptyId) : null
+  const title = ptyId ? state.core.runtime?.getTrackedPtyTitle(ptyId) : null
   if (
     !ptyId ||
     !title ||

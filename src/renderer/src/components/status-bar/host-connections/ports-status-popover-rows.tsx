@@ -19,7 +19,7 @@ import type { WorkspacePortGroup } from '@/lib/workspace-ports/workspace-port-gr
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useAppStore } from '@/store/index'
-import type { WorkspacePort } from '../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 

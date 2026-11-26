@@ -1,6 +1,9 @@
 import { runProcess } from '@orca/process-host'
-import { parseWslUncPath, type WslUncPathInfo as WslPathInfo } from '../../../shared/wsl-paths'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import {
+  parseWslUncPath,
+  type WslUncPathInfo as WslPathInfo
+} from '../../../shared/file-access/wsl-paths'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { WSL_PROBE_TIMEOUT_MS, runWslExe, wslExeProcessSpec } from '../execution/wsl-exe-process'
 import {
   getWslDirectoryProbeArgs,

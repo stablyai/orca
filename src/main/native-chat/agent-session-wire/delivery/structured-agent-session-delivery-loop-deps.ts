@@ -12,6 +12,7 @@ import type { StructuredAgentSessionLogger } from '../host/structured-agent-sess
 import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { StructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
+import type { StructuredAgentSessionTurnContext } from '../structured-agent-session-turn-context'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
@@ -43,6 +44,9 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
   retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
+  /** Orca changed this chat's tools since its child launched and it owes no work (see
+   *  `launchToolsRefreshDue`): the input needs a child that has them. */
+  launchToolsRefreshDue?: (sessionId: string, continuingId: string) => Promise<boolean>
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -70,4 +74,22 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   now: () => number
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   recordRanOptions?: StructuredAgentSessionRanRecorder
+  turnContext?: StructuredAgentSessionTurnContext | undefined
+}
+
+/**
+ * `launchTools.outdated` (no I/O) says Orca wrote some tools a chat may use since its child launched;
+ * only `changed` says they are this chat's, so an edit to tools it doesn't get never restarts it.
+ */
+export function launchToolsRefreshDue(
+  launchTools: {
+    outdated: (sessionId: string) => boolean
+    changed: (sessionId: string) => Promise<boolean>
+  },
+  owesWork: (sessionId: string, continuingId: string) => Promise<boolean>
+): (sessionId: string, continuingId: string) => Promise<boolean> {
+  return async (sessionId, continuingId) =>
+    launchTools.outdated(sessionId) &&
+    !(await owesWork(sessionId, continuingId)) &&
+    (await launchTools.changed(sessionId))
 }

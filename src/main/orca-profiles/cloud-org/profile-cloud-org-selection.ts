@@ -2,7 +2,7 @@ import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-confi
 import { OrcaCloudRequestError, selectOrcaCloudOrg } from '../cloud-auth/profile-cloud-client'
 import { forceRefreshOrcaCloudSession } from '../cloud-session/profile-cloud-session-refresh'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
-import type { OrcaProfileListState } from '../../../shared/orca-profiles'
+import type { OrcaProfileListState } from '../../../shared/orca-profiles/orca-profiles'
 import {
   beginCloudSessionRelink,
   commitCloudSessionRelink,

@@ -1,4 +1,4 @@
-import type { QueuedEditLeaseLoss } from '../../../../../../src/shared/queued-message-edit-lease'
+import type { QueuedEditLeaseLoss } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-lease'
 import { createMobileQueuedEdit } from './mobile-queued-message-edit-open'
 import {
   useCallback,
@@ -11,13 +11,13 @@ import {
 } from 'react'
 import type { AgentSessionQueuedMessageUpdateResult } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import { agentSessionSendBodyFingerprint } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
-import { queuedMessageWithEdit } from '../../../../../../src/shared/queued-message-edit'
+import { queuedMessageWithEdit } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit'
 import {
   mobileQueuedEditValueKey,
   snapshotMobileQueuedEditInputs
 } from './mobile-queued-message-edit-value'
 import { settleMobileQueuedEdit } from './mobile-queued-message-edit-outcome'
-import { queuedEditPublicationKey } from '../../../../../../src/shared/queued-message-edit-publication'
+import { queuedEditPublicationKey } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-publication'
 import { startMobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import {
   useMobileNativeChatDraftInputs,

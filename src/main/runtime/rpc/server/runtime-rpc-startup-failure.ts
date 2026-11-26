@@ -1,9 +1,7 @@
-import { dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
-
-import type { RuntimeRpcStartErrorClass } from '../../../../shared/telemetry-daemon-event-schemas'
+// @protected-copy: this copy fills the native "Orca CLI unavailable" message box.
+import type { RuntimeRpcStartErrorClass } from '../../../../shared/telemetry/schemas/telemetry-daemon-event-schemas'
 import { translateMain } from '../../../i18n/main-i18n'
 import { track } from '../../../telemetry/client'
-import { waitForWindowToShow } from '../../../window/visibility/wait-for-window-to-show'
 
 const MAX_VISIBLE_CAUSE_LENGTH = 500
 
@@ -91,7 +89,20 @@ const GUIDANCE_BY_ERROR_CLASS: Readonly<
   }
 }
 
-function createRuntimeRpcStartupFailureDialogOptions(error: unknown): MessageBoxOptions {
+export type RuntimeRpcStartupFailureDialog = {
+  type: 'error'
+  buttons: string[]
+  defaultId: number
+  cancelId: number
+  noLink: boolean
+  title: string
+  message: string
+  detail: string
+}
+
+export function createRuntimeRpcStartupFailureDialogOptions(
+  error: unknown
+): RuntimeRpcStartupFailureDialog {
   const cause = describeRuntimeRpcStartFailure(error)
   const { key, fallback } = GUIDANCE_BY_ERROR_CLASS[classifyRuntimeRpcStartFailure(error)]
   return {
@@ -121,19 +132,5 @@ export function recordRuntimeRpcStartFailure(error: unknown): void {
     })
   } catch (telemetryError) {
     console.error('[runtime] Failed to record RPC startup failure telemetry:', telemetryError)
-  }
-}
-
-export async function showRuntimeRpcStartupFailureDialog(
-  parentWindow: BrowserWindow,
-  error: unknown
-): Promise<void> {
-  if (!(await waitForWindowToShow(parentWindow))) {
-    return
-  }
-  try {
-    await dialog.showMessageBox(parentWindow, createRuntimeRpcStartupFailureDialogOptions(error))
-  } catch (dialogError) {
-    console.error('[runtime] Failed to show RPC startup failure dialog:', dialogError)
   }
 }

@@ -2,10 +2,10 @@ import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
-import { expandWindowsEnvironmentVariables } from '../../../shared/windows-environment-expansion'
+import { expandWindowsEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 import { resolveSafePtyDefaultCwd } from '../working-directory/default-cwd'
-import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
-import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/clipboard/remote-viewer-clipboard-env'
+import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import { isLocalCounterPtyId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const PANE_IDENTITY_ENV_KEYS = [

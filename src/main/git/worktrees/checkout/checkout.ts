@@ -1,5 +1,5 @@
 import { snapshotLocalBranchMetadata } from '../../refs/snapshot/branch-ref-snapshot'
-import type { RuntimeGitLocalBranches } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeGitLocalBranches } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { BranchSwitchCreation } from '../../../../shared/git/branch-switch-target'
 
 import {

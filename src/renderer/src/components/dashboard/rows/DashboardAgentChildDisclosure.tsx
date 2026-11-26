@@ -83,7 +83,7 @@ export function DashboardAgentChildDisclosure({
         <ChevronDown
           className={cn(
             'size-3 transition-transform duration-150',
-            childAgentsExpanded && 'rotate-180'
+            !childAgentsExpanded && '-rotate-90'
           )}
           aria-hidden
         />

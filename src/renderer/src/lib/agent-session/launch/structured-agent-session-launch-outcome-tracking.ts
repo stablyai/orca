@@ -49,7 +49,8 @@ function cleanupUnmaterializedLaunch(state: StructuredLaunchState): boolean {
     removeStructuredLaunchSlot(
       useAppStore.getState(),
       state.intent.worktreeId,
-      state.intent.sessionId
+      state.intent.sessionId,
+      state.intent.params.tabId
     )
     if (deleteStructuredLaunchStateIfCurrent(state)) {
       forgetStructuredSessionSelection(state.intent.sessionId, state.intent.target)

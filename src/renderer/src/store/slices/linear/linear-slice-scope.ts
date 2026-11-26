@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'

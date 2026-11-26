@@ -1,6 +1,6 @@
 import type { Dirent, Stats } from 'node:fs'
 import { lstat, readdir, realpath, rm, stat } from 'node:fs/promises'
-import type { SkillPackageManifestV1 } from '../../../shared/skill-package-manifest'
+import type { SkillPackageManifestV1 } from '../../../shared/skills/packages/skill-package-manifest'
 import { renameSkillPathWithWindowsRetry } from './skill-windows-rename-retry'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
 import {

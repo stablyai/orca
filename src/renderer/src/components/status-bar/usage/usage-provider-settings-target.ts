@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export function getUsageProviderAccountsSectionId(
   provider: ProviderRateLimits['provider']
@@ -9,8 +9,6 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-claude'
     case 'codex':
       return 'accounts-codex'
-    case 'gemini':
-      return 'accounts-gemini'
     case 'opencode-go':
       return 'accounts-opencode-go'
     case 'minimax':

@@ -1,5 +1,9 @@
 import { join } from 'node:path'
-import { loadWindowsSecurity } from '../../shared/windows-security-addon'
+import {
+  loadWindowsSecurity,
+  loadWindowsSecurityAsync,
+  type WindowsSecurityAddon
+} from '../../shared/secure-storage/windows-security-addon'
 import {
   decodeAntigravityWindowsToken,
   parseAntigravityWindowsSnapshot,
@@ -37,9 +41,25 @@ class NativeCredentialReadFailure extends Error {
 }
 
 function readNativeBytes(target: string): Uint8Array | null {
+  return readNativeBytesWith(security(), target)
+}
+
+/** Whether Credential Manager holds agy's login; loads the addon without blocking, never prompts. */
+export async function hasAntigravityWindowsCredential(target = nativeTarget): Promise<boolean> {
+  const loaded = await loadWindowsSecurityAsync()
+  if ('error' in loaded) {
+    throw new Error('The Antigravity Windows credential store is unavailable.')
+  }
+  return readNativeBytesWith(loaded.addon, target) !== null
+}
+
+function readNativeBytesWith(
+  addon: Pick<WindowsSecurityAddon, 'readGenericCredential'>,
+  target: string
+): Uint8Array | null {
   let bytes: Uint8Array | null
   try {
-    bytes = security().readGenericCredential(target)
+    bytes = addon.readGenericCredential(target)
   } catch (error) {
     if (
       error instanceof Error &&

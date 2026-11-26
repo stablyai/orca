@@ -25,7 +25,7 @@ import {
   claudeStreamTurnSource,
   isRootClaudeFrame
 } from '../turns/claude-turn-opening'
-import { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import { ClaudeOpenTurn, withClaudePromptSuggestions } from '../turns/claude-open-turn'
 import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../turns/claude-command-turn'
 import { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
@@ -33,13 +33,14 @@ import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from '../../subagents/claude-child-tool-queries'
 import { journalClaudeMessage, journalClaudeStream } from './claude-message-journaling'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
-import { journalClaudeResult } from './claude-result-journaling'
-import type { ClaudeResultJournalContext } from './claude-result-journaling'
+import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
+import { endClaudeStreams } from './claude-open-stream-endings'
 import { ClaudeAssistantFailures } from './claude-assistant-failures'
 import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
+import { journalClaudeFullAccessRefusal } from '../permissions/claude-full-access-refusal-notice'
 import {
   journalClaudePluginInputFailure,
   settleClaudeInterruptedTurn
@@ -63,7 +64,7 @@ export function createClaudeJournalTranslator(
     sink: deps.sink,
     // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
-    endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
+    endOpenWork: (...e) => endClaudeStreams(streamedThinking, streamedText, streamedBlocks, ...e),
     onOpen: () => context.markActivity()
   })
   const context = new ClaudeContextFacts(turn, deps.sink)
@@ -102,13 +103,11 @@ export function createClaudeJournalTranslator(
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
-    persist: (identity, text, options, ended) => {
-      const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, {
-        ...options,
-        turnScope: turnScope(),
-        ...(ended ? { lifecycle: true } : {})
-      })
+    sink: deps.sink,
+    liveBody: (text) => claudeStreamingMessageBody(text),
+    persist: (identity, text, options, ended, onCommitted) => {
+      const scoped = { ...options, turnScope: turnScope(), ...(ended ? { lifecycle: true } : {}) }
+      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), scoped, onCommitted)
       deps.sink.publish()
     }
   })
@@ -144,7 +143,8 @@ export function createClaudeJournalTranslator(
     prompts,
     context,
     goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable'),
-    acceptStartupFailure: deps.acceptStartupFailure
+    acceptStartupFailure: deps.acceptStartupFailure,
+    steerAwaitingEcho: deps.steerAwaitingEcho ?? (() => false)
   }
 
   const finish = (
@@ -185,6 +185,8 @@ export function createClaudeJournalTranslator(
             event.message.is_api_error_message !== true ||
             event.startedSend != null
         }
+        // Checked on every root frame: an approved plan settles the fallback without a new init.
+        journalClaudeFullAccessRefusal(deps, turnScope())
       }
     }
     if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
@@ -197,7 +199,7 @@ export function createClaudeJournalTranslator(
       return
     }
     // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
-    const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
+    const announced = event.type === 'message' && subagents.observeFrame(event.message)
     // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
     if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
       flush()
@@ -217,7 +219,7 @@ export function createClaudeJournalTranslator(
     } else if (event.type === 'message') {
       backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
       messageContext.usageLimits.observe(event.message, turn.command?.rejections)
-      const kind = claudeProviderFrameKind(event.message)
+      messageContext.assistantFailures.authRetry(event.message, turn.command ? null : turn.id)
       if (
         !journalClaudeMessage(
           messageContext,
@@ -229,7 +231,7 @@ export function createClaudeJournalTranslator(
         )
       ) {
         providerFallback.append(
-          kind,
+          claudeProviderFrameKind(event.message),
           event.message,
           undefined,
           undefined,
@@ -250,8 +252,9 @@ export function createClaudeJournalTranslator(
       publishClaudeTurnActivity(turn, deps.sink, event)
     }
   })
+  const handleTurnFrames = withClaudePromptSuggestions(turn, deps.sink, handle)
   return {
-    handle: (event) => delivery.interpret(event, handle),
+    handle: (event) => delivery.interpret(event, handleTurnFrames),
     journalPrompts: prompts,
     get currentTurnId() {
       return turn.id
@@ -263,9 +266,7 @@ export function createClaudeJournalTranslator(
     beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start)),
     forgetCommand: (turnId) => turn.forgetCommand(turnId),
     commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
-    get openTurnInLiveProviderCycle() {
-      return turn.openedInLiveProviderCycle
-    },
+    turnCycle: turn,
     get openTurnHasInputWork() {
       return turn.isOpen && turn.inputChoiceWorkObserved
     },

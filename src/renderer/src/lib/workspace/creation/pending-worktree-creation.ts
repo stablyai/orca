@@ -1,6 +1,6 @@
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type {
   WorkspaceLinkedItem as FolderWorkspaceLinkedTask,
@@ -9,7 +9,7 @@ import type {
   WorkspaceStatus
 } from '../../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace/creation/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
   CreateWorktreeArgs,
@@ -27,7 +27,7 @@ import type {
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { EnvironmentDoctorCheck } from '../../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 

@@ -1,4 +1,4 @@
-import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import type { AutomationsChangedPayload } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AutomationOwnerPrecondition,
   AutomationDestination,
@@ -45,6 +45,13 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
   ): AutomationRun[] {
     return this.readAutomationRuns(automationId, expectedOwner, () =>
       this.automation.listRuns(automationId)
+    )
+  }
+
+  /** Bare reads, like the unscoped listAutomationRuns: no owner precondition to fence. */
+  listAutomationRunsByAutomation(automationIds: readonly string[]): Map<string, AutomationRun[]> {
+    return this.automation.withExternalProbePriority(() =>
+      this.automation.listRunsByAutomation(automationIds)
     )
   }
 

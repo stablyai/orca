@@ -1,21 +1,26 @@
 import { posix as pathPosix } from 'node:path'
-import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../../../shared/wsl-paths'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import {
+  parseWslUncPath,
+  toLinuxPath,
+  toWindowsWslUncPath
+} from '../../../../shared/file-access/wsl-paths'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../../../wsl/discovery/distro-catalog'
 import { getCachedWslHome } from '../../../wsl/discovery/wsl-home-cache'
 import { isWslDistroRunning } from '../../../wsl/discovery/wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
-  syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
+import { syncWslCodexConfigInDistro } from '../../../codex/configuration/settings/wsl-codex-config-sync'
+import { codexHookService } from '../../../codex/hooks/installation/hook-service'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
   getWslSelectionKey,
   type CodexAccountSelectionTarget
-} from '../../../../shared/codex-selection-lane'
+} from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/configuration/homes/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
@@ -23,7 +28,7 @@ import {
 } from '../../../codex/configuration/homes/codex-pane-account-registry'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../managed-homes/host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from '../legacy-host/legacy-shared-config-compatibility'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type { CodexRateLimitHomeResolution } from '../runtime-home-service-types'
 import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home'
 
@@ -209,39 +214,29 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return home ? this.joinWslPath(home, '.codex') : null
   }
 
-  protected finishWslLaunchPreparation(
-    target: CodexAccountSelectionTarget,
-    homePath: string | null
-  ): void {
-    this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
-  }
-
-  protected syncWslConfigAndGlobalInstructionsForLaunch(
+  /** Syncs settings and instructions inside the distro (one helper run) before Codex spawns. */
+  protected async syncWslConfigAndGlobalInstructionsForLaunch(
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
-  ): void {
-    if (!runtimeHomePath) {
+  ): Promise<void> {
+    const runtimeHome = runtimeHomePath ? parseWslUncPath(runtimeHomePath) : null
+    if (!runtimeHomePath || !runtimeHome) {
       return
     }
-    const distro =
-      parseWslUncPath(runtimeHomePath)?.distro || target.wslDistro?.trim() || getDefaultWslDistro()
+    const distro = runtimeHome.distro || target.wslDistro?.trim() || getDefaultWslDistro()
     if (!distro) {
       return
     }
     const systemHomePath = this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
-    if (!systemHomePath || systemHomePath === runtimeHomePath) {
+    const systemHome = systemHomePath ? parseWslUncPath(systemHomePath) : null
+    if (!systemHome || systemHome.linuxPath === runtimeHome.linuxPath) {
       return
     }
-    // Distro-local homes need the guest user's instructions, which host resource mirroring cannot supply.
-    syncCodexGlobalInstructionsIntoManagedHome({
-      systemHomePath,
-      managedHomePath: runtimeHomePath
-    })
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath,
-      systemHomePath,
-      systemConfigDir: toLinuxPath(systemHomePath)
+    await syncWslCodexConfigInDistro({
+      distro,
+      linuxSystemHome: systemHome.linuxPath,
+      homes: [{ runtimeHomePath, linuxRuntimeHome: runtimeHome.linuxPath }],
+      forLaunch: true
     })
   }
 
@@ -251,17 +246,18 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     pinnedWslDistro?: string
   ): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
-      return {
-        kind: 'ready',
-        codexHomePath: this.getPreparedWslRateLimitHomePath(target, pinnedWslDistro)
-      }
+      return this.getPreparedWslRateLimitHome(target, pinnedWslDistro)
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
         // Quota probes read account auth in place; resource synchronization belongs to launch prep.
-        return { kind: 'ready', codexHomePath: resolved.homePath }
+        return {
+          kind: 'ready',
+          codexHomePath: resolved.homePath,
+          readingAccount: { accountId: selfContainedAccount.id, runtime: 'host', wslDistro: null }
+        }
       }
       if (resolved.kind === 'indeterminate') {
         return { kind: 'skip' }
@@ -281,15 +277,23 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   /** Sync shared-mirror credentials for catalog probes; per-account homes already own their auth. */
-  prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+  async prepareHostCodexHomeForReadOnlyAppServer(
+    homePath: string,
+    launchEnv?: NodeJS.ProcessEnv
+  ): Promise<void> {
+    const mirrorHome = resolveOrcaManagedCodexHomePath()
     if (
       this.getSelfContainedManagedHostAccount() ||
-      normalizeRuntimePathForComparison(homePath) !==
-        normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+      normalizeRuntimePathForComparison(homePath) !== normalizeRuntimePathForComparison(mirrorHome)
     ) {
       return
     }
-    this.syncMirrorForReadOnlyAppServer(launchEnv)
+    this.syncForCurrentSelection(undefined, launchEnv)
+    syncSystemCodexResourcesIntoManagedHome()
+    // Launch preparation already mirrored these exact files; repeating it costs a full TOML merge.
+    if (!(await codexHookService.isConfigPreparationCurrent(mirrorHome))) {
+      syncSystemConfigIntoManagedCodexHome()
+    }
   }
 
   private syncMirrorForReadOnlyAppServer(launchEnv?: NodeJS.ProcessEnv): void {

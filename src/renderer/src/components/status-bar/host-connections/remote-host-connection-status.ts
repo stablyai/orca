@@ -1,10 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeCompatVerdict } from '../../../../../shared/protocol-compat'
+import type { RuntimeCompatVerdict } from '../../../../../shared/remote-runtime/protocol/protocol-compat'
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {

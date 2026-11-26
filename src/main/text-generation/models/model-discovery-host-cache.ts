@@ -1,7 +1,10 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { InFlightPromiseDedupe, stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
-import { setBoundedScopeCacheEntry } from '../../../shared/native-chat/native-chat-scope-cache'
-import { PRIMARY_AGENT_DIR_ENV_BY_KIND } from '../../../shared/pi-agent-kind'
+import {
+  InFlightPromiseDedupe,
+  stableInFlightKey
+} from '../../../shared/concurrency/in-flight-promise-dedupe'
+import { setBoundedScopeCacheEntry } from '../../../shared/native-chat/input/composer/native-chat-scope-cache'
+import { PRIMARY_AGENT_DIR_ENV_BY_KIND } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 import { onAgentsRefreshedOnHost } from '../../preflight/agents-refreshed-on-host'
 import type { CommitMessageModelDiscoveryLocalOptions } from './commit-message-model-discovery'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../execution/source-control-generation-limits'

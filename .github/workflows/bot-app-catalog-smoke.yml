@@ -1,0 +1,38 @@
+name: Bot App Check
+
+# Weekly live probe of the Add to <bot> apps (config/scripts/bot-apps/README.md). Not a PR gate.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 13 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bot-app-catalog-smoke
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # The check reads discovery documents with the MCP SDK's own schemas.
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Check the listed apps
+        run: node config/scripts/bot-apps/bot-app-catalog-smoke.mjs bot-app-check-report.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bot-app-check-report
+          path: bot-app-check-report.json
+          if-no-files-found: ignore

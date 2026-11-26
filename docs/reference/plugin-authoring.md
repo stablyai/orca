@@ -198,6 +198,27 @@ Everything else, such as `node:` builtins, resolves exactly as Node resolves it 
 worker. `orca/worker` holds only types, so import it with `import type`; a value import fails when
 the worker starts.
 
+A worker does not inherit Orca's full environment: tokens, shell-rc variables and display variables
+(`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, the login name (`USER`,
+`LOGNAME`, `USERNAME`), locale and temp-dir variables, plus `XDG_RUNTIME_DIR`,
+`DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
+environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
+Orca started in. `ORCA_USER_DATA_PATH` names the profile Orca runs from, and on Windows the
+worker also keeps `APPDATA` and `LOCALAPPDATA`, so the `orca` CLI reaches the running app. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking
+for a password.
+This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A
+worker runs as you and can read your files, saved logins and SSH keys like any other program.
+
+The worker always runs on the desktop machine, even when the agent does not: a workspace on an SSH
+host or a `runtime:<environment>` host (a WSL distro, a paired machine), a workspace whose path is
+inside WSL, or a project on a Windows drive whose runtime is set to WSL. An agent there cannot run
+scripts by their desktop paths or reach a socket the worker opens. Before an `agent.launch.before`
+hook adds such paths to a command, look the workspace up in `workspace.list` and leave the launch
+unchanged unless `hostId` is `local` or null (this machine) and `path` does not start with
+`\\wsl.localhost\`, `\\wsl$\` or `//wsl.localhost/` (compared case-insensitively). Also leave it
+unchanged when `workspaceId` is null or the lookup finds no workspace. A Windows-drive project
+running in WSL still reports `local` with a `C:\` path, so a hook cannot tell it apart yet.
+
 ### Panels, workers and data
 
 A plugin's panels, custom editors and worker are one program. A panel asks its own worker, the
@@ -413,6 +434,31 @@ test('keeps an agent write', async () => {
 })
 ```
 
+### MCP servers
+
+`contributes.mcpServers` gives the agents Orca launches on a host your MCP servers, next to the
+ones the user added themselves. Each one has a `name` and either a `url` (a remote server) or a
+`command` with optional `args` and `env` (a local stdio server):
+
+```json
+"execution": "declarative",
+"contributes": {
+  "mcpServers": [
+    { "name": "acme", "url": "https://mcp.acme.dev/mcp" },
+    { "name": "acme-local", "command": "npx", "args": ["-y", "@acme/mcp-server"] }
+  ]
+}
+```
+
+- They appear in Settings → MCP servers under **From plugins**, on each host where the plugin is
+  installed and enabled. The user picks the agents and workspaces each one is on for; the address
+  and command stay yours.
+- A server that asks for a sign-in gets Orca's own sign-in, which every agent then uses. Don't put
+  keys or tokens in the manifest: it is public, and `headers` aren't accepted.
+- The servers are bound to the reviewed manifest, so changing one asks the user to approve the
+  update again. Disabling or uninstalling the plugin removes them and signs them out.
+- When a name is already taken on that host, Orca gives yours a free one (`acme-2`).
+
 ## 2. Load it while you work
 
 From the plugin folder, run:
@@ -621,6 +667,20 @@ checks that listed images exist and fit. It warns when the manifest still declar
 `publisher`, and, in a Git repository, when that value is not the owner of the `origin` remote.
 Warnings do not fail the check. Run it in CI for the plugin and catalog repositories.
 
+It also reads the host calls in the code the worker, panel and editor entries ship (their
+imports and `<script src>` files, literal `orca.host.call('name')` names only, as bundlers keep
+them; comments are ignored). A call fails the check when this Orca has no such method
+(unreleased or misspelled), unless the plugin calls `orca.host.has` anywhere, or when it is
+still proposed, unless the plugin checks that name with a literal `orca.host.has('name')`; then
+it is a warning. A method newer than your
+`engines.orca` or one that surface cannot call is a warning, because a text scan cannot see
+guards or which code a surface runs: raise `engines.orca` to the release it names, or guard the
+call with `orca.host.has(name)`. Guards count plugin-wide, not per call. A deprecated method is
+a warning starting `deprecated host method <name>`. The Orca plugin directory runs this
+against the latest Orca release, so a method that release does not have holds your listing
+until it ships, and it shows you the warnings. Each minor's first release is in the
+[host API reference](plugin-host-api.md#stability-and-deprecation).
+
 The two report failure with different exit codes. `pnpm validate:plugin` exits `0` when every
 file is valid, `1` when any is invalid or missing, and `2` when no path is given.
 `orca plugin` commands exit `0` ok, `1` error (such as a missing path), `2` the plugin is
@@ -707,12 +767,10 @@ arbitrary plugin UI:
 - `connections`: account providers with a host-run sign-in.
 - `agentHarnesses`: new coding-agent harnesses described as data.
 - `sidebarCards`: declarative left-sidebar cards whose values a worker updates.
-- `mcpServers`: MCP server definitions offered to the agents Orca launches.
 - `skills`: agent skills shipped as files.
 - `hooks`: agent lifecycle hooks for the agents Orca launches.
 
-`skills`, `mcpServers` and `hooks` will mean what they mean in agent-plugin formats such as
-Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
+`skills` and `hooks` will mean what they mean in agent-plugin formats such as Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
 
 See [the manifest reference](plugin-manifest.md#planned-contribution-points) for details.
 

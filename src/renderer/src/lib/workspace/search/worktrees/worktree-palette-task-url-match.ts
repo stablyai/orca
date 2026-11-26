@@ -20,7 +20,7 @@ import {
   parseLinearIssueUrlIntent,
   type LinearIssueUrlIntent
 } from '../../../../../../shared/linear/links'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { normalizeLinearIdentifier } from '../../../work-items/linear/linear-issue-workspace-attachment'

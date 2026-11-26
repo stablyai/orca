@@ -1,7 +1,7 @@
 import {
   RELAY_HOST_CLOSE_REASON,
   type RelayHostCloseReason
-} from '../../../../shared/relay-host-close-reason'
+} from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { relayStatusCellUrl } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type * as RelayStatus from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { RelayAccessTokenRefresh } from '../session-lifecycle/relay-session-broker-contract'
@@ -26,12 +26,12 @@ export type CoordinatedRelayBroker = {
 }
 
 type RelayAuthCoordinatorOptions = {
-  readContext: () => Promise<RelayAuthContext | null>
+  readContext: (authOrigin?: string) => Promise<RelayAuthContext | null>
   hasDemand?: (context: RelayAuthContext) => boolean
   openBroker: (input: {
     context: RelayAuthContext
     isCurrent: () => boolean
-    refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
+    refreshAccessToken: (authOrigin?: string) => Promise<RelayAccessTokenRefresh>
   }) => Promise<CoordinatedRelayBroker>
   onStatus: RelayStatus.MobileRelayStatusPublisher
   lingerMs?: number
@@ -239,7 +239,7 @@ export class RelayAuthCoordinator {
         broker = await this.options.openBroker({
           context,
           isCurrent,
-          refreshAccessToken: () => this.refreshAccessToken(ownership, nextIdentityKey)
+          refreshAccessToken: this.refreshAccessToken.bind(this, ownership, nextIdentityKey)
         })
       } finally {
         this.pendingOwnerships.delete(ownership)
@@ -283,13 +283,14 @@ export class RelayAuthCoordinator {
 
   private async refreshAccessToken(
     ownership: { valid: boolean },
-    expectedIdentityKey: string
+    expectedIdentityKey: string,
+    authOrigin?: string
   ): Promise<RelayAccessTokenRefresh> {
     if (!ownership.valid || this.stopped) {
       return { accessToken: null }
     }
     const epoch = this.authEpoch
-    const context = await this.options.readContext()
+    const context = await this.options.readContext(authOrigin)
     if (!ownership.valid || !this.isEpochCurrent(epoch)) {
       return { accessToken: null }
     }

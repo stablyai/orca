@@ -1,4 +1,4 @@
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { lineageStoreKeyOfRow, OWN_LINEAGE_STORE_KEY } from './cross-store-lineage-resolution'
 import type { WorkspaceLineageEdge } from '../lineage-types'
 import type { Worktree } from '../types'

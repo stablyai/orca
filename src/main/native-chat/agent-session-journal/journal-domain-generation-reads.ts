@@ -13,6 +13,7 @@ import {
 } from './journal-domain-item-normalization'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 /** Select current lifecycle obligations and their named turn/opener evidence, in render order. */
 export function readJournalDomainGeneration(
@@ -28,7 +29,7 @@ export function readJournalDomainGeneration(
     { item: AgentJournalRenderItem; ordinal: number; fence: number | undefined }
   >()
   const include = (row: Record<string, unknown>) => {
-    const item: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+    const item: AgentJournalRenderItem = readJournalStoredItem(db, prefix, row.payload_json)
     selected.set(item.itemId, {
       item,
       ordinal: Number(row.ordinal),

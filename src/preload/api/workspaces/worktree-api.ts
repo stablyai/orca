@@ -1,3 +1,4 @@
+import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
 import type {
   FolderWorkspaceCreateInput,
   FolderWorkspaceCreateResult
@@ -13,10 +14,19 @@ import type {
   ListDetectedWorktreesArgs,
   ListKnownWorktreesForExecutionHostArgs,
   ProviderRequestId
-} from '../../../shared/detected-worktree-provider-contract'
+} from '../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../../shared/workspace-sleep'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type {
+  BranchAutoRenameAttemptEvent,
+  BranchAutoRenameRetryAvailability,
+  BranchAutoRenameDismissResult,
+  BranchAutoRenameRetryResult
+} from '../../../shared/worktree/branch-auto-rename-attempt'
+import type {
+  WorkspaceSleepOutcome,
+  WorkspaceSleepRequest
+} from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type { RetiredNameRegistry } from '../../../shared/worktree/naming/retired-name-registry'
 import type {
   FolderWorkspacePathStatus,
@@ -137,7 +147,7 @@ export type WorktreeApi = {
   updateMeta: (args: {
     worktreeId: string
     executionHostId?: ExecutionHostId
-    updates: Partial<WorktreeMeta>
+    updates: Partial<WorktreeMeta> & DiffCommentBaseMutation
   }) => Promise<Worktree | null>
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
@@ -151,10 +161,33 @@ export type WorktreeApi = {
     worktreeId: string
     parentWorktreeId?: string
     noParent?: boolean
+    /** Apply only while the current parent is this workspace key. */
+    ifParentWorkspace?: string
   }) => Promise<{ lineage: WorktreeLineage | null; workspaceLineage?: WorkspaceLineage | null }>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
+  /** This app's own workspaces; paired-server workspaces go through the runtime's worktree.autoName methods. */
+  getBranchAutoRenameRetryAvailability: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<BranchAutoRenameRetryAvailability>
+  retryBranchAutoRename: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<BranchAutoRenameRetryResult>
+  /** Keeps the current name: clears the error and stops automatic attempts, persisted. */
+  dismissBranchAutoRename: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<BranchAutoRenameDismissResult>
+  /** Resolves when that running attempt finishes; null when it already had. */
+  waitBranchAutoRenameAttempt: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    attemptId: number
+  }) => Promise<BranchAutoRenameRetryResult | null>
+  onBranchAutoRenameAttempt: (callback: (event: BranchAutoRenameAttemptEvent) => void) => () => void
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
   onGitStatusMetadataChanged: (
     callback: (data: GitStatusMetadataChangedEvent) => void
@@ -194,7 +227,8 @@ export type FolderWorkspacesApi = {
         | 'lastActivityAt'
         | 'diffComments'
       >
-    >
+    > &
+      DiffCommentBaseMutation
   }) => Promise<FolderWorkspace | null>
   delete: (args: {
     folderWorkspaceId: string

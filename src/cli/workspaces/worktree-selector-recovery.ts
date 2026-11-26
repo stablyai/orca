@@ -1,4 +1,4 @@
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
 
@@ -44,7 +44,23 @@ function suggestForms(selector: string): string[] {
     : [`id:${selector}::<absolute-path>`, `name:${selector}`, `branch:${selector}`]
 }
 
-export function worktreeSelectorRecovery(selector: string): WorktreeSelectorRecovery {
+export function worktreeSelectorRecovery(
+  selector: string,
+  errorData?: unknown
+): WorktreeSelectorRecovery | undefined {
+  // Creation modes name no workspace, so selector forms would not help.
+  if (selector === 'new-child' || selector === 'new-top-level') {
+    return undefined
+  }
+  // A worker-start refusal names its failing flag; older servers name none, so --worktree is assumed.
+  if (
+    errorData &&
+    typeof errorData === 'object' &&
+    'flag' in errorData &&
+    errorData.flag !== '--worktree'
+  ) {
+    return undefined
+  }
   const suggestions = suggestForms(selector)
   return {
     selector,

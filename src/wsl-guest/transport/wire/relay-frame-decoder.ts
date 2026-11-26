@@ -1,8 +1,8 @@
-import { FrameDecoder as SharedFrameDecoder } from '../../../shared/relay-frame-decoder'
+import { FrameDecoder as SharedFrameDecoder } from '../../../shared/remote-runtime/relay/relay-frame-decoder'
 import type {
   DecodedFrame,
   FrameDecoderOptions
-} from '../../../shared/relay-frame-decoder-contract'
+} from '../../../shared/remote-runtime/relay/relay-frame-decoder-contract'
 
 // Default faults to stderr because standalone relays have no renderer to surface them.
 export class FrameDecoder extends SharedFrameDecoder {

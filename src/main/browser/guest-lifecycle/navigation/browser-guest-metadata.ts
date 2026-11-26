@@ -1,7 +1,8 @@
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import { isChromiumInternalErrorUrl } from '../manager/navigation/browser-main-frame-navigation'
+import { isBrowserPageFirstLoadHeld } from '../../extensions/profile-sessions/browser-extension-page-start'
 
 const projections = new WeakMap<
   Electron.WebContents,
@@ -38,7 +39,7 @@ export function installBrowserGuestMetadata({
   let navigationRevision = 0
   let committedUrl = isChromiumInternalErrorUrl(guest.getURL()) ? '' : guest.getURL()
   let title = committedUrl ? guest.getTitle() : ''
-  let loading = guest.isLoadingMainFrame()
+  let loading = guest.isLoadingMainFrame() || isBrowserPageFirstLoadHeld(guest)
   let previous: BrowserGuestMetadata | null = null
   const read = (kind: BrowserGuestMetadata['kind'] = 'snapshot'): BrowserGuestMetadata | null => {
     const browserPageId = resolveOwner()
@@ -163,7 +164,7 @@ export function installBrowserGuestMetadata({
       if (guest.isDestroyed()) {
         return null
       }
-      loading = guest.isLoadingMainFrame()
+      loading = guest.isLoadingMainFrame() || isBrowserPageFirstLoadHeld(guest)
       return publish()
     },
     publish: () => {

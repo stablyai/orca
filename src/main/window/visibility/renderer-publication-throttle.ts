@@ -17,6 +17,26 @@ export class RendererPublicationThrottle {
     RendererPublicationThrottleTarget,
     ReturnType<typeof setTimeout>
   >()
+  private readonly observers = new Map<
+    RendererPublicationThrottleTarget,
+    Set<(leased: boolean) => void>
+  >()
+
+  /** Tells an owner when the target's first lease starts and its last one ends. */
+  observe(
+    target: RendererPublicationThrottleTarget,
+    onChange: (leased: boolean) => void
+  ): () => void {
+    const observers = this.observers.get(target) ?? new Set()
+    observers.add(onChange)
+    this.observers.set(target, observers)
+    return () => {
+      observers.delete(onChange)
+      if (observers.size === 0 && this.observers.get(target) === observers) {
+        this.observers.delete(target)
+      }
+    }
+  }
 
   acquire(target: RendererPublicationThrottleTarget): () => void {
     const pendingRestore = this.pendingRestores.get(target)
@@ -27,6 +47,7 @@ export class RendererPublicationThrottle {
     const leaseCount = this.leasesByTarget.get(target) ?? 0
     if (leaseCount === 0) {
       target.setBackgroundThrottling(false)
+      this.notify(target, true)
     }
     this.leasesByTarget.set(target, leaseCount + 1)
     let released = false
@@ -41,6 +62,7 @@ export class RendererPublicationThrottle {
         return
       }
       this.leasesByTarget.delete(target)
+      this.notify(target, false)
       // Debugger detach drains promise callbacks inside native destruction, before isDestroyed flips.
       const restore = setTimeout(() => {
         this.pendingRestores.delete(target)
@@ -59,6 +81,12 @@ export class RendererPublicationThrottle {
         }
       }, 0)
       this.pendingRestores.set(target, restore)
+    }
+  }
+
+  private notify(target: RendererPublicationThrottleTarget, leased: boolean): void {
+    for (const onChange of this.observers.get(target) ?? []) {
+      onChange(leased)
     }
   }
 }

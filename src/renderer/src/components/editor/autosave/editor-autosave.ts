@@ -1,12 +1,12 @@
 import { joinPath } from '@/lib/path'
-import { areLocalWindowsWslPathAliases } from '../../../../../shared/cross-platform-path'
+import { areLocalWindowsWslPathAliases } from '../../../../../shared/file-access/cross-platform-path'
 import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
-} from '../../../../../shared/constants'
+} from '../../../../../shared/editor/saving/editor-auto-save-delay'
 import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { isAutosavePausedForNonUtf8File } from './editor-non-utf8-autosave-pause'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'

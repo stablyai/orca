@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { realpath } from 'node:fs/promises'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import { toWindowsWslPath } from '../../../../shared/wsl-paths'
+import { toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 
 export async function kittyTemporaryRoots(worktreePath: string): Promise<string[]> {
   const roots = new Set<string>([tmpdir()])

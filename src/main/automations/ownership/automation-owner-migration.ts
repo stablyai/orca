@@ -1,10 +1,10 @@
 import { automationRequiresHostReselection } from '../../../shared/automations/ownership/automation-repo-target'
 import type { Automation } from '../../../shared/automations/automation-definition'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   resolveAutomationWorkspaceSshTargetId,
   resolveAutomationWorkspaceHost,
@@ -19,7 +19,7 @@ import {
   nextSshTargetGeneration,
   resolveSshTargetGenerationHighWaterMark,
   sanitizeSshTargetGeneration
-} from '../../../shared/ssh-target-generation'
+} from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 
 export type AutomationOwnerClassification = 'owned' | 'orphan' | 'ambiguous'
 

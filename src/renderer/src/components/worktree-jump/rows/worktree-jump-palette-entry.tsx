@@ -1,5 +1,6 @@
 import { WorktreeJumpPaletteTaskRow } from '../tasks/worktree-jump-palette-task-row'
 import type React from 'react'
+import { LayoutTemplate, Search } from 'lucide-react'
 import { flushSync } from 'react-dom'
 import { CommandItem } from '@/components/ui/command'
 import { cn } from '@/lib/class-names'
@@ -34,6 +35,23 @@ export function WorktreeJumpPaletteEntry({
       <div className="mx-0.5 mt-3 mb-1 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
         {entry.label}
       </div>
+    )
+  }
+  if (entry.type === 'bot-scope-action') {
+    const Icon = entry.action === 'browse-templates' ? LayoutTemplate : Search
+    return (
+      <CommandItem
+        value={renderKey}
+        onSelect={() => controller.handleSelectItem(entry)}
+        shape="palette-row"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex h-5 w-4 shrink-0 items-center justify-center">
+            <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+          </div>
+          <span className="min-w-0 truncate text-[13px] text-foreground">{entry.label}</span>
+        </div>
+      </CommandItem>
     )
   }
   if (entry.type === 'hint') {

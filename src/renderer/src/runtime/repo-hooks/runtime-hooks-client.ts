@@ -1,11 +1,11 @@
-import type { GroupHookCheckResult } from '../../../../shared/project-group-hooks'
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { GroupHookCheckResult } from '../../../../shared/project/groups/project-group-hooks'
+import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '../rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { repoHooksCheckWakeParams } from '../../../../shared/repo-hooks-check-wake'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { repoHooksCheckWakeParams } from '../../../../shared/workspace-setup/hooks/repo-hooks-check-wake'
 import type { SetupHooksCreateSource } from '../../../../shared/worktree/setup-hooks-create-source'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
@@ -118,7 +118,7 @@ export async function writeRuntimeIssueCommand(
   )
 }
 
-export type { GroupHookCheckResult } from '../../../../shared/project-group-hooks'
+export type { GroupHookCheckResult } from '../../../../shared/project/groups/project-group-hooks'
 
 export async function checkRuntimeGroupHooks(
   hostId: ExecutionHostId,

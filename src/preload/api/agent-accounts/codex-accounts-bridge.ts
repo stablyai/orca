@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../../shared/codex-auth-errors'
+import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../../shared/agent-accounts/codex/codex-auth-errors'
 import type { PreloadApi } from '../../api-types'
 
 export const codexAccountsApi = {
@@ -18,6 +18,8 @@ export const codexAccountsApi = {
   reauthenticate: (args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
     ipcRenderer.invoke('codexAccounts:reauthenticate', args),
   remove: (args: { accountId: string }) => ipcRenderer.invoke('codexAccounts:remove', args),
+  rename: (args: { accountId: string; displayName: string | null }) =>
+    ipcRenderer.invoke('codexAccounts:rename', args),
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'

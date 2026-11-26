@@ -1,15 +1,15 @@
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { hasUndoneContextualTourAction } from '../../../../shared/contextual-tour-action-steps'
+import { hasUndoneContextualTourAction } from '../../../../shared/feature-education/contextual-tours/contextual-tour-action-steps'
 import { useAppStore } from '@/store/index'
 import { runActiveNativeChatSplit } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import {
   getContextualTour,
   type ContextualTourId,
   type ContextualTourStepAction
-} from '../../../../shared/contextual-tours'
-import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { ContextualTourOutcome } from '../../../../shared/feature-education/feature-education-telemetry'
 import {
   trackContextualTourOutcome,
   trackContextualTourShown
@@ -28,7 +28,7 @@ import {
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
+import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/pane-actions/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'

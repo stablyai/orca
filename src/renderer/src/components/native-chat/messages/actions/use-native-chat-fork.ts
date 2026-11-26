@@ -1,14 +1,15 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useHostStructuredAgent } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-} from '../../../../../../shared/agent-session/agent-session-create-capabilities'
+} from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
-} from '../../../../../../shared/agent-session/agent-session-context-clear'
+} from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
 import type {
@@ -18,14 +19,14 @@ import type {
 import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   nativeChatForkInventory,
   nativeChatForkRequiresInheritedOriginal,
   nativeChatForkSupport,
   nativeChatLatestForkItemId,
   type NativeChatForkSupport
-} from '../../../../../../shared/native-chat/native-chat-fork-offer'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-fork-offer'
 import {
   launchNativeChatFork,
   nativeChatForkSurfaceAddress,
@@ -148,14 +149,20 @@ export function useNativeChatFork(input: {
     },
     []
   )
+  // The floor and inventory read no reply text, so they hold while a reply streams.
+  const structure = rowsBesideStreamedText(input.items)
+  const clearedThrough = useMemo(
+    () => latestAgentSessionContextClearSequence(structure),
+    [structure]
+  )
   const contextFloorSequence = Math.max(
-    latestAgentSessionContextClearSequence(input.items),
+    clearedThrough,
     agentSessionContextFloorSequence(input.contextFloor, input.epoch)
   )
   // Streaming replaces the items array on every commit; keep the set while its members hold, so the
   // context and every offered row's `fork` stay the same objects.
   const forkableRef = useRef<ReadonlySet<string>>(new Set())
-  const inventory = useMemo(() => nativeChatForkInventory(input.items), [input.items])
+  const inventory = useMemo(() => nativeChatForkInventory(structure), [structure])
   const { inheritedThroughSequence } = inventory
   const forkableItemIds = useMemo(() => {
     const next = inventory.forkableItemIds

@@ -1,6 +1,6 @@
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { LinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
-import type { LinearIssueUpdate } from '../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../shared/work-items/issue-mutation-types'
 import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
 import type {
   LinearCustomViewModel,

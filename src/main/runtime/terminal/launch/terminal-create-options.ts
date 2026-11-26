@@ -9,9 +9,9 @@ import type { SessionOptionValue } from '../../../../shared/native-chat/input/na
 import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { AgentLaunchTabViewerRule } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 

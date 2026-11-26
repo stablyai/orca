@@ -6,7 +6,7 @@ import {
   injectedSessionAddress,
   readInjectedAgentSessionId
 } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 
 export function refuseConflictingSessionCallerFlags(
   spec: CommandSpec | undefined,

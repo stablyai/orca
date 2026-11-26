@@ -4,7 +4,7 @@ import {
   parseProgramStatusBody,
   type ProgramStatusMessage
 } from './protocol'
-import { ownRetainedString } from '../own-retained-string'
+import { ownRetainedString } from '../text/own-retained-string'
 
 /** Everything in a PTY stream that touches OSC 7501 records, in byte order. `offset` is the index
  *  in the chunk just past the sequence (0 when it ended inside carried bytes). */

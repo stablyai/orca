@@ -1,5 +1,5 @@
 import type { AiVaultAgent, AiVaultSession } from '../contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 
 export type AiVaultConversationCopy = {
   sessionId: string

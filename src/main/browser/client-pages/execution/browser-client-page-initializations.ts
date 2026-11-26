@@ -1,5 +1,5 @@
 import type { BrowserClientInitializationOwner } from '../../client-hosts/commands/browser-client-host-command-state'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent
@@ -122,7 +122,8 @@ export class BrowserClientPageInitializations {
         return { status: 'completed' }
       },
       release: () => {
-        if (this.operations.get(browserPageId) === initializer) {
+        // A failed cleanup stays owned: inventory still lists the page, and only its exact close can retry it.
+        if (this.operations.get(browserPageId) === initializer && !initializer.failedCleanup) {
           this.operations.delete(browserPageId)
         }
       }

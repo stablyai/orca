@@ -11,13 +11,13 @@ import {
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { createAttachmentTextPreviewHook } from '../../../../../../shared/attachment-text/use-attachment-text-preview'
 import { ATTACHMENT_TEXT_COPY_MAX_BYTES } from '../../../../../../shared/attachment-text/attachment-text-source'
 import { AttachmentTextScrollView } from './AttachmentTextScrollView'
 import { formatAttachmentPreviewError } from './native-chat-text-attachment-error'
 import { createChatAttachmentReader } from './native-chat-text-attachment-read'
-import { chatTextAttachmentName } from '../../../../../../shared/native-chat-text-attachment-references'
+import { chatTextAttachmentName } from '../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 
 const useAttachmentTextPreview = createAttachmentTextPreviewHook({
   useState,

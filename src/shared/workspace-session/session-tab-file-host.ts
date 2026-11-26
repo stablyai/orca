@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionFileTab } from '../runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionFileTab } from '../remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 /** Names the paired server a row's file or page lives on, for runtimes to keep from other runtimes (#33424). */
 export function editorRowHost(file: {

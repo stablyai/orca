@@ -2,13 +2,19 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type {
   BrowserGrabPayload,
   BrowserGrabRejectReason,
-  BrowserGrabScreenshot
+  BrowserGrabResult,
+  BrowserGrabScreenshot,
+  BrowserSetGrabModeResult
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboard'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useGuestEscape } from '../../host-guest/input/use-guest-escape'
+import {
+  ipcBrowserGuestToolsTransport,
+  type BrowserGuestToolsTransport
+} from '../browser-guest-tools-transport'
 
 export type GrabModeState = 'idle' | 'armed' | 'awaiting' | 'confirming' | 'error'
 
@@ -24,6 +30,9 @@ export type GrabModeHook = {
   rearm: () => void
   /** Called after Attach to AI — exits grab mode entirely. */
   exit: () => void
+  getOperationToken: () => number
+  isCurrentOperationToken: (token: number) => boolean
+  transport: BrowserGuestToolsTransport
 }
 
 let opIdCounter = 0
@@ -56,7 +65,10 @@ function getGrabEnableError(reason: BrowserGrabRejectReason): string {
   }
 }
 
-export function useGrabMode(browserPageId: string): GrabModeHook {
+export function useGrabMode(
+  browserPageId: string,
+  transport: BrowserGuestToolsTransport = ipcBrowserGuestToolsTransport
+): GrabModeHook {
   const [state, setState] = useState<GrabModeState>('idle')
   const [payload, setPayload] = useState<BrowserGrabPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +78,16 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   const armGenerationRef = useRef(0)
   const browserTabIdRef = useRef(browserPageId)
   const mountedRef = useMountedRef()
+
+  const getOperationToken = useCallback((): number => armGenerationRef.current, [])
+  const isCurrentOperationToken = useCallback(
+    (token: number): boolean =>
+      mountedRef.current &&
+      armGenerationRef.current === token &&
+      grabTabIdRef.current !== null &&
+      grabTabIdRef.current === browserTabIdRef.current,
+    [mountedRef]
+  )
 
   useLayoutEffect(() => {
     browserTabIdRef.current = browserPageId
@@ -77,13 +99,13 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       const grabTabId = grabTabIdRef.current
       if (grabTabId) {
         armGenerationRef.current += 1
-        void window.api.browser.setGrabMode({ browserPageId: grabTabId, enabled: false })
-        void window.api.browser.cancelGrab({ browserPageId: grabTabId })
+        void transport.setGrabMode({ browserPageId: grabTabId, enabled: false })
+        void transport.cancelGrab({ browserPageId: grabTabId })
         grabTabIdRef.current = null
         activeOpIdRef.current = null
       }
     }
-  }, [browserPageId])
+  }, [browserPageId, transport])
 
   const armAndAwait = useCallback(async () => {
     const tabId = browserPageId
@@ -91,10 +113,10 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     grabTabIdRef.current = tabId
     setState('armed')
 
-    const setResult = await window.api.browser.setGrabMode({
-      browserPageId: tabId,
-      enabled: true
-    })
+    // A rejected invoke (lost reply) must end in the error state, not a stuck 'armed'.
+    const setResult = await transport
+      .setGrabMode({ browserPageId: tabId, enabled: true })
+      .catch((): BrowserSetGrabModeResult => ({ ok: false, reason: 'injection-failed' }))
     if (
       !mountedRef.current ||
       armGenerationRef.current !== armGeneration ||
@@ -104,8 +126,8 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       const supersededBySameTab =
         armGenerationRef.current !== armGeneration && grabTabIdRef.current === tabId
       if (!supersededBySameTab) {
-        void window.api.browser.setGrabMode({ browserPageId: tabId, enabled: false })
-        void window.api.browser.cancelGrab({ browserPageId: tabId })
+        void transport.setGrabMode({ browserPageId: tabId, enabled: false })
+        void transport.cancelGrab({ browserPageId: tabId })
         if (grabTabIdRef.current === tabId) {
           grabTabIdRef.current = null
         }
@@ -123,10 +145,9 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     activeOpIdRef.current = opId
 
     setState('awaiting')
-    const result = await window.api.browser.awaitGrabSelection({
-      browserPageId: tabId,
-      opId
-    })
+    const result = await transport
+      .awaitGrabSelection({ browserPageId: tabId, opId })
+      .catch((): BrowserGrabResult => ({ opId, kind: 'error', reason: 'Selection failed' }))
 
     if (!mountedRef.current || activeOpIdRef.current !== opId || grabTabIdRef.current !== tabId) {
       return
@@ -137,7 +158,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     if (result.kind === 'selected' || result.kind === 'context-selected') {
       let screenshot: BrowserGrabScreenshot | null = null
       try {
-        const ssResult = await window.api.browser.captureSelectionScreenshot({
+        const ssResult = await transport.captureSelectionScreenshot({
           browserPageId: tabId,
           rect: result.payload.target.rectViewport
         })
@@ -167,27 +188,30 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       setState('error')
       setError(result.reason)
     }
-  }, [browserPageId, mountedRef])
+  }, [browserPageId, mountedRef, transport])
 
   const cancel = useCallback(() => {
-    const targetTabId = grabTabIdRef.current ?? browserPageId
+    const targetTabId = grabTabIdRef.current
     armGenerationRef.current += 1
-    void window.api.browser.setGrabMode({
-      browserPageId: targetTabId,
-      enabled: false
-    })
-    if (activeOpIdRef.current) {
-      void window.api.browser.cancelGrab({
-        browserPageId: targetTabId
+    // Navigation cancels every page's capture; an idle page has nothing in main to tear down.
+    if (targetTabId !== null) {
+      void transport.setGrabMode({
+        browserPageId: targetTabId,
+        enabled: false
       })
-      activeOpIdRef.current = null
+      if (activeOpIdRef.current) {
+        void transport.cancelGrab({
+          browserPageId: targetTabId
+        })
+      }
     }
+    activeOpIdRef.current = null
     grabTabIdRef.current = null
     setState('idle')
     setPayload(null)
     setError(null)
     setContextMenu(false)
-  }, [browserPageId])
+  }, [transport])
 
   const toggle = useCallback(() => {
     if ((state === 'idle' || state === 'error') && grabTabIdRef.current === null) {
@@ -213,7 +237,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   const exit = useCallback(() => {
     const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
     armGenerationRef.current += 1
-    void window.api.browser.setGrabMode({
+    void transport.setGrabMode({
       browserPageId: targetTabId,
       enabled: false
     })
@@ -224,7 +248,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     setPayload(null)
     setError(null)
     setContextMenu(false)
-  }, [])
+  }, [transport])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
@@ -253,5 +277,17 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   // Includes the copy toast's wait before rearming, while the page still has focus.
   useGuestEscape(browserPageId, state !== 'idle', cancel)
 
-  return { state, payload, error, contextMenu, toggle, cancel, rearm, exit }
+  return {
+    state,
+    payload,
+    error,
+    contextMenu,
+    toggle,
+    cancel,
+    rearm,
+    exit,
+    getOperationToken,
+    isCurrentOperationToken,
+    transport
+  }
 }

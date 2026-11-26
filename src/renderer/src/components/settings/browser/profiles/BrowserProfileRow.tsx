@@ -4,7 +4,7 @@ import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cook
 import type {
   BrowserCookieImportSummary,
   BrowserSessionProfile
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { Button } from '../../../ui/button'
 import {
   DropdownMenu,
@@ -17,10 +17,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
-import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
-import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
+import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from './BrowserCookieImportMachineNotice'
+import type { BrowserSshPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
 import { useAppStore } from '../../../../store/index'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import { useTranslate } from '@/i18n/use-translate'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
@@ -44,7 +45,8 @@ export type BrowserProfileRowProps = {
   } | null
   isActive: boolean
   onSelect: () => void
-  isDefault?: boolean
+  /** Settings' selected host when it is an SSH host: imports fill that host's jar. */
+  sshRoute?: BrowserSshPageCookieImportRoute | null
 }
 
 export function BrowserProfileRow({
@@ -53,7 +55,7 @@ export function BrowserProfileRow({
   importState,
   isActive,
   onSelect,
-  isDefault
+  sshRoute = null
 }: BrowserProfileRowProps): React.JSX.Element {
   const t = useTranslate()
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
@@ -177,7 +179,7 @@ export function BrowserProfileRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <BrowserCookieImportMachineNotice />
+            <BrowserCookieImportMachineNotice settingsSshRoute={sshRoute} />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
@@ -219,27 +221,8 @@ export function BrowserProfileRow({
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
-        {isDefault ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 text-muted-foreground hover:text-destructive"
-            disabled={!profile.source}
-            onClick={async () => {
-              const ok = await useAppStore.getState().clearDefaultSessionCookies()
-              if (ok) {
-                toast.success(
-                  t(
-                    'auto.components.settings.BrowserProfileRow.2d4bea7f35',
-                    'Default cookies cleared.'
-                  )
-                )
-              }
-            }}
-          >
-            <Trash2 className="size-3" />
-          </Button>
-        ) : (
+        {/* An SSH host shows this computer's profiles; removing one there would delete it everywhere. */}
+        {profile.scope === 'default' || sshRoute ? null : (
           <Button
             variant="ghost"
             size="icon"

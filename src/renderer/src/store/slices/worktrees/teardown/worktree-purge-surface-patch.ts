@@ -26,7 +26,16 @@ export function buildWorktreePurgeSurfacePatch(
     omitByPageId,
     omitByFileId
   } = omitters
-  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey, changedPaneKeys)
+  const removedStatusKeys = new Set<string>()
+  for (const key of s.agentStatusByPaneKey.keys()) {
+    if (doomedTabIds.has(key.slice(0, key.indexOf(':')))) {
+      removedStatusKeys.add(key)
+      changedPaneKeys?.add(key)
+    }
+  }
+  const nextAgentStatusByPaneKey = s.agentStatusByPaneKey.replace(
+    Array.from(removedStatusKeys, (key) => [key, null] as const)
+  )
   return {
     localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),

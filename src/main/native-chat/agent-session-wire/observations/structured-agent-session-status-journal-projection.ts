@@ -207,7 +207,8 @@ export class StructuredAgentSessionJournalProjections {
     journal: SqlAgentSessionJournal,
     capture: () => CapturedWork | null,
     invalidated: () => void,
-    observed?: (projection: StructuredAgentSessionJournalProjection) => void
+    observed?: (projection: StructuredAgentSessionJournalProjection) => void,
+    turnEnd?: StructuredAgentSessionTurnEndPolicy
   ): Promise<StructuredAgentSessionJournalProjection | null> {
     const captured = capture()
     if (!captured) {
@@ -233,7 +234,8 @@ export class StructuredAgentSessionJournalProjections {
       authority,
       start: sameContext?.submissionCount ?? 0,
       floor: sameContext ? 0 : undefined,
-      firstInputSubmissionKey: sameContext?.firstInputSubmissionKey ?? null
+      firstInputSubmissionKey: sameContext?.firstInputSubmissionKey ?? null,
+      ...(turnEnd?.botSession ? { botSession: true as const } : {})
     }
     const key = JSON.stringify({
       cursor,
@@ -279,7 +281,7 @@ export class StructuredAgentSessionJournalProjections {
       workRevision: authority.operationalRevision,
       stopRevision: authority.stopRevision,
       usageLimitCut: result.usageLimitCut,
-      state: result.state,
+      state: withHostTurnEnd(result.state, turnEnd?.quietEnd, result.usageLimitCut !== null),
       ...result.indicators,
       authority,
       work: result.work
@@ -295,4 +297,29 @@ export class StructuredAgentSessionJournalProjections {
     observed?.(projection)
     return projection
   }
+}
+
+/** A bot host's rules for a chat's settled turns: its preview skips quiet markers, and some endings
+ *  are no news. */
+export type StructuredAgentSessionTurnEndPolicy = {
+  botSession: boolean
+  quietEnd: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean
+}
+
+/** Whether its alert stays quiet: a turn that succeeded on a bot's quiet marker, or one that ended
+ *  in a way its host keeps quiet (a look-around that already failed last time). */
+export function withHostTurnEnd(
+  state: StructuredAgentSessionStatusState,
+  quietEnd?: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean,
+  usageLimited = false
+): StructuredAgentSessionStatusState {
+  const outcome = state.summary.turnOutcome
+  const request = state.latestRequest
+  const quiet =
+    outcome === 'failure'
+      ? quietEnd?.('failure', usageLimited) === true
+      : request?.kind === 'turn' &&
+        request.outcome === 'success' &&
+        (state.quietAnswer === true || quietEnd?.('success') === true)
+  return quiet ? { ...state, quiet: true } : state
 }

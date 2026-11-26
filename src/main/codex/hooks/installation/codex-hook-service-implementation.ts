@@ -245,6 +245,9 @@ export class CodexHookService {
       configPreparation
     )
   }
+  isConfigPreparationCurrent(runtimeHomePath: string): Promise<boolean> {
+    return this.localLaunchPreparation.isConfigPreparationCurrent(runtimeHomePath)
+  }
   refreshRuntimeUserHooksForLaunchPrep(
     runtimeHomePath?: string,
     configPreparation?: CodexLaunchConfigPreparation

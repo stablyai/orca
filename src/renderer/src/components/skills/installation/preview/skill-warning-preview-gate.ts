@@ -1,4 +1,4 @@
-import type { SkillCloudVersion } from '../../../../../../shared/skill-cloud-contract'
+import type { SkillCloudVersion } from '../../../../../../shared/skills/sharing/skill-cloud-contract'
 
 export const SKILL_WARNING_PREVIEW_SHARE_ID = 'dev-warning-preview'
 

@@ -4,7 +4,7 @@ import { DictationIndicator } from './DictationIndicator'
 import { publishDictationMeter, resetDictationMeter } from './dictation-meter-store'
 import type { DictationFailureKind } from './dictation-toasts'
 import type { SpeechModelUpdateTarget } from './speech-model-update-target'
-import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
+import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech/speech-types'
 import type { DictationQueuedSendKind } from './use-dictation-queued-send'
 import type { DictationCleanupNotice } from './use-dictation-cleanup'
 

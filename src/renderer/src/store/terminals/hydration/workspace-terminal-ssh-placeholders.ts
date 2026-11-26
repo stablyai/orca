@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
@@ -9,7 +9,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 type PlaceholderOwner = Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
 

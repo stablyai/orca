@@ -18,9 +18,13 @@ import {
   stopReportId
 } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-report'
 import type { z } from 'zod'
+import type {
+  DispatchContextRow,
+  MessageRow
+} from '../../../../orchestration/db/orchestration-records'
 import type { RpcContext } from '../../../core'
 import { workerApprovalAccess, type WorkerApprovalAccess } from '../access/worker-approval-access'
-import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { formatOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 
 export type WorkerApprovalAnswerReceipt = {
   approvalId: string
@@ -28,7 +32,7 @@ export type WorkerApprovalAnswerReceipt = {
   decision: 'allow' | 'deny'
   /** The worker's own label for the option Orca picked. */
   option: string
-  /** The agent's prompt takes no message, so a deny's reason went to the worker as mail. */
+  /** The agent's answer could not carry the coordinator's reason, so it went to the worker as mail. */
   reasonMessageId: string | null
 }
 
@@ -51,9 +55,10 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
  *  gone; the access check decided who may answer and with what reason. */
 export async function answerWorkerApproval(
   params: z.infer<typeof ApprovalAnswerParams>,
-  { runtime, orchestrationCaller }: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>,
+  ctx: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>,
   access: WorkerApprovalAccess
 ): Promise<WorkerApprovalAnswerReceipt> {
+  const { runtime } = ctx
   const db = runtime.getOrchestrationDb()
   const dispatch = db.getDispatchContextById(params.dispatch)
   const worker = dispatch?.assignee_handle
@@ -99,6 +104,11 @@ export async function answerWorkerApproval(
       }
       throw new OrchestrationError(answered.code, answered.message, { effectsApplied: false })
     }
+    // Claude's hook answer carries a deny's message; an allow takes none.
+    const reasonMessage =
+      params.decision === 'allow'
+        ? mailApprovalReason(params, ctx, access, dispatch, answered.approval.summary.title)
+        : null
     reportWorkerApprovalClosed(
       db,
       dispatch,
@@ -107,7 +117,8 @@ export async function answerWorkerApproval(
         approval: closedApproval(answered.approval, {
           by: access.answeredBy,
           decision: params.decision,
-          reason: access.reason,
+          // Told only when it reached the worker, as the chat path does.
+          reason: params.decision === 'deny' || reasonMessage ? access.reason : null,
           reasonDelivered: params.decision === 'deny'
         })
       },
@@ -118,7 +129,7 @@ export async function answerWorkerApproval(
       dispatchId: dispatch.id,
       decision: params.decision,
       option: params.decision === 'allow' ? 'Allow' : 'Deny',
-      reasonMessageId: null
+      reasonMessageId: reasonMessage?.id ?? null
     }
   }
   const answered = await answerChatWorkerApproval({
@@ -142,28 +153,14 @@ export async function answerWorkerApproval(
     }
     throw new OrchestrationError(answered.code, answered.message, { effectsApplied: false })
   }
-  // Chat prompts take no deny message, so a coordinator's reason reaches the worker as its next
-  // mail, once. A person's Deny needs none: the agent was already told the user denied it.
-  const reasonId = stopReportId(dispatch.id, `approval:${params.prompt}:reason`)
-  const reasonMessage =
-    params.decision === 'deny' && access.answeredBy === 'coordinator' && access.reason
-      ? (db.getMessageById(reasonId) ??
-        db.insertMessage({
-          id: reasonId,
-          from:
-            params.from ??
-            (orchestrationCaller?.orcaSessionId
-              ? formatOrcaSessionAddress(orchestrationCaller.orcaSessionId)
-              : `run:${dispatch.run_id}`),
-          to: `dispatch:${dispatch.id}`,
-          subject: `Denied: ${answered.prompt.body.displayName ?? answered.prompt.body.title}`,
-          body: access.reason,
-          runId: dispatch.run_id
-        }))
-      : null
-  if (reasonMessage) {
-    notify(reasonMessage.to_handle, reasonMessage.type)
-  }
+  // Chat prompts take no message.
+  const reasonMessage = mailApprovalReason(
+    params,
+    ctx,
+    access,
+    dispatch,
+    answered.prompt.body.displayName ?? answered.prompt.body.title
+  )
   reportWorkerApprovalClosed(
     db,
     dispatch,
@@ -194,4 +191,36 @@ export async function answerWorkerApproval(
     option: answered.optionLabel,
     reasonMessageId: reasonMessage?.id ?? null
   }
+}
+
+/** A coordinator's reason the agent's answer could not carry reaches the worker as its next mail,
+ *  once. A person's needs none: the agent was already told the user decided. */
+function mailApprovalReason(
+  params: z.infer<typeof ApprovalAnswerParams>,
+  { runtime, orchestrationCaller }: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>,
+  access: WorkerApprovalAccess,
+  dispatch: DispatchContextRow,
+  title: string
+): MessageRow | null {
+  if (access.answeredBy !== 'coordinator' || !access.reason) {
+    return null
+  }
+  const db = runtime.getOrchestrationDb()
+  const id = stopReportId(dispatch.id, `approval:${params.prompt}:reason`)
+  const message =
+    db.getMessageById(id) ??
+    db.insertMessage({
+      id,
+      from:
+        params.from ??
+        (orchestrationCaller?.orcaSessionId
+          ? formatOrcaSessionAddress(orchestrationCaller.orcaSessionId)
+          : `run:${dispatch.run_id}`),
+      to: `dispatch:${dispatch.id}`,
+      subject: `${params.decision === 'allow' ? 'Allowed' : 'Denied'}: ${title}`,
+      body: access.reason,
+      runId: dispatch.run_id
+    })
+  runtime.notifyMessageArrived(message.to_handle, message.type)
+  return message
 }

@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from '../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../text/utf8-byte-limits'
 
 export const ORCA_INTERNAL_FILE_DRAG_TYPE = 'text/x-orca-file-path'
 

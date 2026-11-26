@@ -134,6 +134,10 @@ function mirrorDeclarationInputs(passes, root, output) {
 // Sequential: two declaration producers, then the strict check of the test bodies.
 export function runNodeTestsTypecheck({ root = repoRoot, run = runProcessSync } = {}) {
   const expected = readNodeTestRoots(root)
+  // No test bodies, nothing to check: the declaration producers alone take gigabytes.
+  if (expected.length === 0) {
+    return { ok: true, expected, programTestFiles: [], failures: [], problems: [] }
+  }
   const output = ownOutputDirectory(root)
   try {
     const producers = []

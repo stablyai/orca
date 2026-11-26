@@ -2,8 +2,8 @@ import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/re
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
@@ -19,7 +19,7 @@ import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { supportsFolderParent } from '../../../../../../shared/worktree-runtime-capabilities'
+import { supportsFolderParent } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 type ParentCandidateArgs = {

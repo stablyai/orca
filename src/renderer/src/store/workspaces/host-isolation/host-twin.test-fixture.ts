@@ -1,7 +1,7 @@
 /** Seed same-ID repo/folder twins on two hosts with live/dormant shells, dirty drafts and sleeping agents. Raw-ID buckets are shared; host-twin-state-projection.test-fixture.ts attributes survivors. */
 import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toAppSshPtyId } from '../../../../../shared/ssh-pty-id'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { toAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeOpenFile } from '../../slices/editor/types/open-file.test-fixture'
 import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
@@ -15,9 +15,9 @@ import {
   markHugeRepoWarningDismissed
 } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import type { HugeRepoWarningProbe } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export type HostTwinKind =

@@ -52,6 +52,8 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerCo
       hookEventName?: string
       isReplay?: boolean
       hasExplicitPrompt?: boolean
+      /** A new native turn id opened a turn ahead of its prompt event. */
+      opensTurn?: boolean
       launchToken?: string
       /** Host/workspace provenance matched internally to a retained authority commitment. */
       retainedLaunchTokenHash?: string
@@ -113,7 +115,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerCo
     // Reusable panes revive on provider boundaries; older missing sources and future unknown sources need distinct fallbacks.
     const isNewTurn =
       event?.source !== undefined
-        ? isNewTurnEvent(event.source, event.hookEventName)
+        ? event.opensTurn === true || isNewTurnEvent(event.source, event.hookEventName)
         : typeof event?.rawSource === 'string' && event.rawSource.trim().length > 0
           ? // Unknown providers may use any boundary; false revival expires, but permanent suppression strands the pane.
             true

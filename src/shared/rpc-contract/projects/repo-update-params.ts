@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { normalizeRepoSourceControlAiOverrides } from '../../source-control/ai/settings/source-control-ai-repo-settings'
-import { normalizeRepoBadgeColor } from '../../repo-badge-color'
-import { sanitizeRepoIcon } from '../../repo-icon'
+import { normalizeRepoBadgeColor } from '../../repository/appearance/repo-badge-color'
+import { sanitizeRepoIcon } from '../../repository/appearance/repo-icon'
 import { normalizeGhAccountBinding } from '../../github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../jira/jira-project-reference'
 import {
@@ -9,35 +10,41 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../worktree/visibility/visibility-sources'
 import { OptionalFiniteNumber, OptionalString } from '../rpc-param-primitives'
-import { editorFormatterSchema } from '../../editor-formatter'
-import { normalizeDictationTerms } from '../../dictation-dictionary'
+import { editorFormatterSchema } from '../../editor/formatting/editor-formatter'
+import { normalizeDictationTerms } from '../../speech/dictation/dictation-dictionary'
 import { RepoWorkspaceCleanupPolicyParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 
-export const RepoSourceControlAiOverrides = z
-  .unknown()
-  .optional()
-  .transform((value) =>
-    value === undefined
-      ? undefined
-      : value === null
-        ? null
-        : normalizeRepoSourceControlAiOverrides(value)
-  )
+export const RepoSourceControlAiOverrides = lazyZodSchema(() =>
+  z
+    .unknown()
+    .optional()
+    .transform((value) =>
+      value === undefined
+        ? undefined
+        : value === null
+          ? null
+          : normalizeRepoSourceControlAiOverrides(value)
+    )
+)
 
-export const RepoBadgeColor = z
-  .unknown()
-  .optional()
-  .transform((value) =>
-    value === undefined ? undefined : (normalizeRepoBadgeColor(value) ?? undefined)
-  )
+export const RepoBadgeColor = lazyZodSchema(() =>
+  z
+    .unknown()
+    .optional()
+    .transform((value) =>
+      value === undefined ? undefined : (normalizeRepoBadgeColor(value) ?? undefined)
+    )
+)
 
-export const RepoUpstream = z
-  .object({
-    owner: z.string().min(1),
-    repo: z.string().min(1)
-  })
-  .nullable()
-  .optional()
+export const RepoUpstream = lazyZodSchema(() =>
+  z
+    .object({
+      owner: z.string().min(1),
+      repo: z.string().min(1)
+    })
+    .nullable()
+    .optional()
+)
 
 // Infer the return type: an explicit ZodObject annotation erases named update fields into an open record.
 export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodType>>>(
@@ -54,6 +61,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .optional(),
       upstream: RepoUpstream,
       hookSettings: z.unknown().optional(),
+      // Changes only this hook setting on the row as saved now; older hosts strip it and change nothing.
+      setupAgentStartupPolicy: z.enum(['start-immediately', 'wait-for-setup']).optional(),
       editorFormatter: editorFormatterSchema.optional(),
       worktreeBaseRef: OptionalString,
       worktreeBasePath: OptionalString,
@@ -93,6 +102,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       hiddenAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
+      browserProfileId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
       sourceControlAi: RepoSourceControlAiOverrides,
       workspaceCleanupPolicy: RepoWorkspaceCleanupPolicyParam.optional()

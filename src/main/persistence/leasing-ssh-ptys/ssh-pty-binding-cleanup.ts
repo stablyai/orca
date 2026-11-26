@@ -1,7 +1,7 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
 export type SshPtyBindingCleanupOperations = {
   state: PersistedState
@@ -72,23 +72,25 @@ export function clearSshRemotePtyBindingsForLeases(
     )
   }
   let changed = false
-  const sessions = new Set(
-    [
-      operations.state.workspaceSession,
-      operations.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
-    ].filter((session): session is WorkspaceSessionState => Boolean(session))
-  )
-  for (const session of sessions) {
+  const hostId = toSshExecutionHostId(targetId)
+  const clearBindings = (session: WorkspaceSessionState): WorkspaceSessionState => {
+    let next = session
+    // Replace, never edit, saved entries: incremental saves compare them by identity.
+    let rows: WorkspaceSessionState['tabsByWorktree'] | undefined
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-      for (const tab of tabs) {
-        if (
-          tab.ptyId &&
-          referencesBinding({ ptyId: tab.ptyId, worktreeId, targetId, tabId: tab.id })
-        ) {
-          tab.ptyId = null
-          changed = true
-        }
+      const bound = (tab: (typeof tabs)[number]): boolean =>
+        Boolean(
+          tab.ptyId && referencesBinding({ ptyId: tab.ptyId, worktreeId, targetId, tabId: tab.id })
+        )
+      if (tabs.some(bound)) {
+        const nextTabs = tabs.map((tab) => (bound(tab) ? { ...tab, ptyId: null } : tab))
+        rows ??= { ...session.tabsByWorktree }
+        rows[worktreeId] = nextTabs
+        changed = true
       }
+    }
+    if (rows) {
+      next = { ...next, tabsByWorktree: rows }
     }
     const worktreeIdByTabId = new Map<string, string>()
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -98,6 +100,7 @@ export function clearSshRemotePtyBindingsForLeases(
         }
       }
     }
+    let layouts: WorkspaceSessionState['terminalLayoutsByTabId'] | undefined
     for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
       const bindings = layout.ptyIdsByLeafId
       if (!bindings) {
@@ -110,9 +113,24 @@ export function clearSshRemotePtyBindingsForLeases(
         )
       )
       if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
-        layout.ptyIdsByLeafId = nextBindings
+        layouts ??= { ...session.terminalLayoutsByTabId }
+        layouts[tabId] = { ...layout, ptyIdsByLeafId: nextBindings }
         changed = true
       }
+    }
+    if (layouts) {
+      next = { ...next, terminalLayoutsByTabId: layouts }
+    }
+    return next
+  }
+  // Publish replacements: rollback of an in-flight session write keeps the previous objects.
+  operations.state.workspaceSession = clearBindings(operations.state.workspaceSession)
+  const partition = operations.state.workspaceSessionsByHostId?.[hostId]
+  const clearedPartition = partition && clearBindings(partition)
+  if (clearedPartition && clearedPartition !== partition) {
+    operations.state.workspaceSessionsByHostId = {
+      ...operations.state.workspaceSessionsByHostId,
+      [hostId]: clearedPartition
     }
   }
   if (changed) {

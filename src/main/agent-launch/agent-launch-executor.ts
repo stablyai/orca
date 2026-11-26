@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
@@ -35,6 +35,7 @@ import {
 import {
   assertLegacyHostTarget,
   createLaunchPromptInputs,
+  createdWorkspaceReport,
   legacyHostCreateResult
 } from './agent-launch-legacy-host'
 import {
@@ -118,7 +119,7 @@ export async function openAgentLaunch(
         },
         worktreeId: placed.worktreeId,
         receipt: preflight,
-        ...(placed.warning ? { warning: placed.warning } : {}),
+        ...createdWorkspaceReport(placed),
         ...promptReceipt(intent, settledAtCreation(intent, placed))
       })
       surfacePublished = true
@@ -158,7 +159,7 @@ export async function openAgentLaunch(
         : await resolveAgentLaunchModeOnHost(
             runtime,
             preflight,
-            placed.worktreeId,
+            { worktreeId: placed.worktreeId },
             intent.agent,
             vocabulary,
             settlement
@@ -189,7 +190,7 @@ export async function openAgentLaunch(
       outcome: created.outcome,
       worktreeId: placed.worktreeId,
       receipt: settled,
-      ...(warning ? { warning } : {}),
+      ...createdWorkspaceReport({ warning, setupTrustMismatch: placed.setupTrustMismatch }),
       ...promptReceipt(intent, settledAtCreation(intent, created))
     })
     surfacePublished = true

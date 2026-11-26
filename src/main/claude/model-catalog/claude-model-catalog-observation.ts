@@ -1,4 +1,4 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentModelCatalogSuccess } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import {
   isCompleteClaudeModelListing,

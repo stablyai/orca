@@ -5,12 +5,13 @@ import type {
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatSettledTurns } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentHostClock } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentHostClock } from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../../../shared/agent-session/view/structured-agent-session-turn-timing'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
-} from '../../../../../../shared/structured-agent-turn-clock-anchor'
+} from '../../../../../../shared/native-chat/transcript/turns/structured-agent-turn-clock-anchor'
 
 /** Use journal durations and latch host-to-client clock conversion once per live turn to avoid clock skew. */
 export function useStructuredAgentTurnTiming(
@@ -27,9 +28,11 @@ export function useStructuredAgentTurnTiming(
   },
   turnId: string | null
 ): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
+  // Turn timing never reads reply text, so a streaming reply keeps the memo.
+  const rows = rowsBesideStreamedText(items)
   const { settledTurns, runningTiming } = useMemo(
-    () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
-    [items, submissions, turnId, latestTurn]
+    () => selectStructuredAgentTurnBars(rows, submissions, turnId, latestTurn),
+    [rows, submissions, turnId, latestTurn]
   )
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   // Derive during render so the first paint of each turn already uses its correct start.

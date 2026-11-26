@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
   withoutUnprovenNewLaunchDefault

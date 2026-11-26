@@ -3,7 +3,7 @@ import type {
   RuntimeHostStatusSnapshot
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/hosts/connections/runtime-status-probe-diagnostics'
@@ -11,6 +11,7 @@ import { extractRuntimeTransportDiagnostics } from '@/runtime/hosts/connections/
 export async function refreshRuntimeEnvironmentStatus(
   environmentId: string,
   timeoutMs: number,
+  force: boolean,
   publish: (status: RuntimeEnvironmentStatus) => void,
   // Snapshots carry the host verdict; applyRuntimeHostStatusSnapshot alone decides whether to null status.
   applySnapshot: (snapshot: RuntimeHostStatusSnapshot) => void
@@ -19,7 +20,8 @@ export async function refreshRuntimeEnvironmentStatus(
   try {
     const response = await window.api.runtimeEnvironments.getStatus({
       selector: environmentId,
-      timeoutMs
+      timeoutMs,
+      ...(force ? { force: true as const } : {})
     })
     if (window.api.runtimeEnvironments.getStatusSnapshots) {
       try {

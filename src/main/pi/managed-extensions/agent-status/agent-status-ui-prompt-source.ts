@@ -1,4 +1,4 @@
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 /** Mirrors the titlebar extension's dialog tracking so both agree on when the wait ends. */
 export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): string[] {

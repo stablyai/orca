@@ -1,4 +1,4 @@
-import type { MemorySnapshot, WorktreeMemory } from '../../shared/process-stats-types'
+import type { MemorySnapshot, WorktreeMemory } from '../../shared/diagnostics/process-stats-types'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
@@ -22,6 +22,9 @@ export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
       `renderer ${formatByteCount(snapshot.app.renderer.memory)},`,
       `other ${formatByteCount(snapshot.app.other.memory)})`
     ].join(' '),
+    ...(snapshot.agentProcesses
+      ? [`agentProcesses: ${formatByteCount(snapshot.agentProcesses.memory)}`]
+      : []),
     `worktrees: ${snapshot.worktrees.length}`
   ]
 

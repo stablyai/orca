@@ -1,14 +1,14 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
-import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { getPRForBranch } from '../../../github/client/lookup/get-pr-for-branch'
 import {
   computeWorktreePath,
   ensurePathWithinWorkspace,
   sanitizeWorktreeName,
+  sanitizeWorktreeBranchName,
   type getWorktreePathSettings
-} from '../../../ipc/worktree-logic'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-display-name'
+} from '../../../ipc/worktrees/paths/worktree-logic'
+import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktrees/creation/worktree-display-name'
 import {
   getBranchConflictKind,
   getBranchConflictKindStrict
@@ -26,7 +26,10 @@ import {
 import { isGeneratedWorktreeCreateName } from '../../../../shared/new-workspace/worktree-create-retry-policy'
 import { createRetiredNameLookup } from '../../../../shared/worktree/naming/retired-name-registry'
 import { getRetiredNameRegistryForRepo } from '../../../workspaces/removal/retirement/worktree-name-retirement'
-import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import type {
+  RuntimeManagedWorktreeCreateArgs,
+  RuntimeLocalWorktreeCreateCandidate
+} from './runtime-managed-worktree-create-types'
 import {
   getSelectedReviewBranch,
   isAllowedPushTargetRemoteConflict,
@@ -48,16 +51,6 @@ import type { RemoteTrackingBase } from '../../repositories/runtime-remote-fetch
 import { resolveLegacyRemoteBranch } from './runtime-local-worktree-create-legacy-branch'
 import { resolveExplicitReuseBranch } from './runtime-local-worktree-create-explicit-reuse'
 
-export type RuntimeLocalWorktreeCreateCandidate = {
-  effectiveRequestedName: string
-  requestedDisplayName?: string
-  displayNameKind: CreateWorktreeArgs['displayNameKind']
-  effectiveSanitizedName: string
-  branchName: string
-  checkoutExistingBranch: boolean
-  worktreePath: string
-}
-
 export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo
@@ -76,6 +69,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   pathClaim: WorktreeCreatePathClaim
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
   const sanitizedName = sanitizeWorktreeName(args.request.name)
+  const branchSafeName = sanitizeWorktreeBranchName(args.request.name)
   let effectiveRequestedName = args.request.name
   let effectiveSanitizedName = sanitizedName
   let branchName = ''
@@ -114,7 +108,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         (await resolveCreateBranchName(
           args.repo.path,
           undefined,
-          sanitizedName,
+          branchSafeName,
           args.settings,
           args.username,
           args.localWorktreeGitOptions
@@ -174,7 +168,9 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.repo.path,
       selectedExistingLocalBranchName ??
         getBranchNameOverrideCandidate(args.request.branchNameOverride, suffix),
-      effectiveSanitizedName,
+      shouldRetireGeneratedName
+        ? effectiveSanitizedName
+        : getWorktreeCreateCandidate(branchSafeName, suffix),
       args.settings,
       args.username,
       args.localWorktreeGitOptions

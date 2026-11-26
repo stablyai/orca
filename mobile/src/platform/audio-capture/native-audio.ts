@@ -9,7 +9,7 @@ import {
 import { MAX_DICTATION_AUDIO_CHUNK_BYTES as BRIDGE_AUDIO_RING_MAX_BYTES } from '../../../../src/shared/rpc-contract/speech/speech-params'
 import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
-import { bytesToBase64 } from '../../hooks/mobile-dictation-session-state'
+import { encodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 import type { MicrophoneScreenLock } from './microphone-screen-lock'
 
 // Keep transcription protocol in the page so it can update without a binary release; the shell owns only microphone permission and PCM capture.
@@ -204,7 +204,7 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
     const interruption = live.interruption
     live.interruption = null
     return {
-      base64: bytesToBase64(drained.bytes),
+      base64: encodeBase64Bytes(drained.bytes),
       droppedBytes: drained.droppedBytes,
       recording: live.recording,
       interruption
@@ -226,7 +226,7 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
         const drained = capture?.ring.drain(BRIDGE_AUDIO_RING_MAX_BYTES)
         return {
           stopped: end(),
-          base64: drained === undefined ? '' : bytesToBase64(drained.bytes),
+          base64: drained === undefined ? '' : encodeBase64Bytes(drained.bytes),
           droppedBytes: drained?.droppedBytes ?? 0
         }
       })

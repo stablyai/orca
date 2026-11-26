@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { taskSourceRuntimeTarget } from '../../../lib/work-items/task-source-runtime-target'
 
 type DefaultHostSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
@@ -22,8 +22,8 @@ export function defaultCreationHost(settings: DefaultHostSettings): RuntimeClien
 }
 
 /**
- * Initial host of a row-less source (Linear, Jira, the status-bar account switchers) or a settings
- * scope, until the page's own host picker overrides it.
+ * Initial host of a row-less source (Linear, Jira) or a settings scope, until the page's own host
+ * picker overrides it.
  */
 export function defaultScopeHost(settings: DefaultHostSettings): RuntimeClientTarget {
   return readDefaultHost(settings)

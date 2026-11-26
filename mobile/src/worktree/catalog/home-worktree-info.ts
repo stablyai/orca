@@ -1,5 +1,9 @@
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
-import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/runtime-worktree-contracts'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import type { WorkspaceLineage } from '../../../../src/shared/worktree/lineage-types'
+import type { Worktree } from '../workspace-list/workspace-list-types'
+import type { WorktreeCatalogSnapshot } from './worktree-catalog-snapshot-client'
 
 export type HomeWorktreeSummary = {
   worktreeId: string
@@ -25,7 +29,13 @@ export type HomeAgentEntry = Readonly<{
   repo: string
   branch: string
   agent: RuntimeWorktreeAgentRow
+  /** Set when the agent is a bot's chat in its home: the row names and pictures the bot. */
+  bot?: HomeAgentBot
+  /** Set when the agent runs on a server the desktop relays to, not on the desktop itself. */
+  executionHost?: Readonly<{ id: ExecutionHostId; label: string }>
 }>
+
+export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
 
 export type HostWorktreeInfo = {
   hostId: string
@@ -33,6 +43,11 @@ export type HostWorktreeInfo = {
   activeCount: number
   /** Every agent from this connection's latest list read. */
   agents?: readonly HomeAgentEntry[]
+  /** This connection's rows and folder records from its latest list read, for its bots' workers. */
+  rows?: readonly Worktree[]
+  workspaceLineage?: Readonly<Record<string, WorkspaceLineage>>
+  /** This connection's unread rows, by worktree id. */
+  unreadWorktreeIds?: readonly string[]
   /** The agents of a read the connection has since lost: what they were, not what they are. */
   lastSeenAgents?: readonly HomeAgentEntry[]
   catalogUnavailable?: boolean
@@ -42,24 +57,43 @@ export type HostWorktreeInfo = {
   countsProvenAt?: number
 }
 
-export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): HomeAgentEntry[] {
-  return worktrees.flatMap((worktree) =>
-    Array.isArray(worktree.agents)
-      ? worktree.agents.map((agent) => ({
-          worktreeId: worktree.worktreeId,
-          workspaceName: worktree.displayName || worktree.repo,
-          repo: worktree.repo,
-          branch: worktree.branch,
-          agent
-        }))
-      : []
-  )
+export function homeAgentEntries(
+  worktrees: readonly Pick<
+    HomeWorktreeSummary,
+    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents'
+  >[],
+  botByHomeId: ReadonlyMap<string, HomeAgentBot> = new Map()
+): HomeAgentEntry[] {
+  return worktrees.flatMap((worktree) => {
+    if (!Array.isArray(worktree.agents)) {
+      return []
+    }
+    const bot = botByHomeId.get(worktree.worktreeId)
+    return worktree.agents.map((agent) => ({
+      worktreeId: worktree.worktreeId,
+      workspaceName: bot?.name || worktree.displayName || worktree.repo,
+      repo: worktree.repo,
+      branch: worktree.branch,
+      agent,
+      ...(bot ? { bot } : {})
+    }))
+  })
 }
 
 /** One desktop's counts read, as its card and the Agents list see it. */
 export type HomeWorktreeRead = {
   data:
-    | { totalWorktrees: number; activeCount: number; agents: readonly HomeAgentEntry[] }
+    | {
+        totalWorktrees: number
+        activeCount: number
+        agents: readonly HomeAgentEntry[]
+        unreadWorktreeIds?: readonly string[]
+        catalog?: WorktreeCatalogSnapshot
+        folderRecords?: {
+          ids: string | null
+          records: Readonly<Record<string, WorkspaceLineage>> | undefined
+        }
+      }
     | undefined
   dataUpdatedAt: number
   // The latest read failed; counts it had stay, as stale ones.
@@ -89,6 +123,11 @@ export function homeWorktreeInfo(
     totalWorktrees: data.totalWorktrees,
     activeCount: data.activeCount,
     ...(live ? { agents: data.agents } : agents ? { lastSeenAgents: agents } : {}),
+    ...(live && data.unreadWorktreeIds ? { unreadWorktreeIds: data.unreadWorktreeIds } : {}),
+    ...(live && data.catalog ? { rows: data.catalog.worktrees } : {}),
+    ...(live && data.folderRecords?.records
+      ? { workspaceLineage: data.folderRecords.records }
+      : {}),
     ...(failed ? { catalogUnavailable: true, staleCounts: true } : {}),
     countsProvenAt: read.dataUpdatedAt
   }

@@ -5,12 +5,16 @@ import {
   waitForPendingWorktreeRemoval,
   type RemovalSettlement
 } from './worktree-removal-settlement'
+export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal-gitdir-identity'
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,
   finishAcceptedWorktreeRemoval
 } from './worktree-removal-settlement'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { normalizeLocalBranchRef } from '../../git/worktrees/worktree-operation-options'
@@ -30,18 +34,13 @@ import {
   recordWorktreeRemoval,
   setWorktreeRemovalRecordsDirectory
 } from './worktree-removal-table'
-import {
-  worktreeRemovalLifetime,
-  _resetWorktreeRemovalLifetimeForTests
-} from './worktree-removal-lifetime'
+import { worktreeRemovalLifetime } from './worktree-removal-lifetime'
 
 export type BackgroundWorktreeRemovalJob = {
   /** Abort only the checkout delete on orderly quit. */
   run: (stopSignal: AbortSignal) => Promise<RemoveWorktreeResult>
   /** Publish on acceptance and after removing the pending entry. */
   publish: () => void
-  /** Clean the push-target remote even when Git partially fails. */
-  cleanupPushTargetRemote?: () => Promise<void>
   /** Release teardown fences when durable admission fails before run can take ownership. */
   admissionFailed?: () => Promise<void>
 }
@@ -103,7 +102,7 @@ export function startBackgroundWorktreeRemoval(
   args: {
     removal: Pick<
       WorktreeRemovalRecord,
-      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force'
+      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force' | 'gitdir'
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {
@@ -258,7 +257,7 @@ async function settleBackgroundWorktreeRemoval(
     console.warn(`[worktrees] background removal of ${record.worktreePath} failed`, error)
     settle = (settlement) => settlement.reject(error)
     // Git may drop registration before file deletion fails; keep the leftover listed for an explicit retry.
-    failure = await failureLeftByGit(record, error, job.cleanupPushTargetRemote)
+    failure = await failureLeftByGit(record, error)
   } finally {
     // A resumed job that ended before taking its own gate still holds the fence loading gave it.
     releaseStartupRemovalFence(record.worktreeId)
@@ -293,12 +292,6 @@ function publishSafely(publish: () => void): void {
   }
 }
 
-export async function _settlePendingWorktreeRemovalsForTests(): Promise<void> {
-  while (jobsByWorktreeId.size > 0) {
-    await Promise.all(jobsByWorktreeId.values())
-  }
-}
-
 export async function drainBackgroundWorktreeRemovals(): Promise<void> {
   const results = await Promise.allSettled(jobsByWorktreeId.values())
   await closeWorktreeRemovalRecords()
@@ -306,17 +299,4 @@ export async function drainBackgroundWorktreeRemovals(): Promise<void> {
   if (errors.length > 0) {
     throw new AggregateError(errors, 'Could not finish stopping workspace deletion.')
   }
-}
-
-export function _resetPendingWorktreeRemovalsForTests(): void {
-  _resetWorktreeRemovalLifetimeForTests()
-  pendingWorktreeRemovals.clear()
-  failedWorktreeRemovals.clear()
-  jobsByWorktreeId.clear()
-  settlementsByWorktreeId.clear()
-  for (const fence of startupFencesByWorktreeId.values()) {
-    fence.release()
-  }
-  startupFencesByWorktreeId.clear()
-  setWorktreeRemovalRecordsDirectory(null)
 }

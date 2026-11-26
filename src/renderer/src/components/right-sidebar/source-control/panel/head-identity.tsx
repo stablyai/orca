@@ -1,5 +1,5 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'

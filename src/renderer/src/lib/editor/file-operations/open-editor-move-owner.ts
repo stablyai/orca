@@ -1,6 +1,9 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import { parseExecutionHostId, toSshExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import {
   getFileExplorerOperationOwnerFromState,
   type FileExplorerOwnerState
