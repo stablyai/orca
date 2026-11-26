@@ -151,6 +151,14 @@ function regionDropped(tag: string, region: string): boolean {
   }
 }
 
+// Maps iterate in insertion order, so the first key is the oldest.
+function dropOldest(map: Map<string, unknown>): void {
+  for (const key of map.keys()) {
+    map.delete(key)
+    return
+  }
+}
+
 type LocalePlan = {
   tag: string
   hourCycle: OsDateTimeRegion['hourCycle']
@@ -174,7 +182,7 @@ function localePlan(uiLocale: string): LocalePlan {
       fromOs: region !== null || forced !== null
     }
     if (plans.size >= MAX_PLANS) {
-      plans.delete(plans.keys().next().value as string)
+      dropOldest(plans)
     }
     plans.set(key, plan)
   }
@@ -241,7 +249,7 @@ export function regionalDateTimeFormat(
   if (!formatter) {
     formatter = createRegionalDateTimeFormat(timeZone ? { ...options, timeZone } : options, locale)
     if (byKey.size >= MAX_KEYS_PER_OPTIONS) {
-      byKey.delete(byKey.keys().next().value as string)
+      dropOldest(byKey)
     }
     byKey.set(key, formatter)
   }
