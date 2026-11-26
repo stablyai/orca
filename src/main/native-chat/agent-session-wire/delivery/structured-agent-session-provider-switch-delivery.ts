@@ -39,22 +39,16 @@ export function wireStructuredChatProviderSwitch(
     if (outcome === 'failed' && session.child) {
       await host.stop(id)
     }
-    const body =
+    const item =
       outcome === 'delivered'
-        ? await session.journal.reads.itemBody(agentJournalSubmissionKey(clientMessageId))
+        ? await session.journal.reads.item(agentJournalSubmissionKey(clientMessageId))
         : undefined
-    let deferContextThrough: typeof switching.through | undefined
-    if (
-      body?.kind === 'message' &&
-      isNativeProviderCommand(body, current.provider, host.deps.adapter.readCommands?.(id))
-    ) {
-      const accepted = await session.journal.reads.submission(clientMessageId)
-      // The command is saved history by the time its deferred prose can run.
-      deferContextThrough = {
-        ...switching.through,
-        sequence: Math.max(switching.through.sequence, accepted?.acceptedSequence ?? 0)
-      }
-    }
+    // Handover moves the command's journal row after the original switch cut.
+    const deferContextThrough =
+      item?.body.kind === 'message' &&
+      isNativeProviderCommand(item.body, current.provider, host.deps.adapter.readCommands?.(id))
+        ? { ...switching.through, sequence: Math.max(switching.through.sequence, item.sequence) }
+        : undefined
     const record = await host.deps.store.updateRecord(id, {
       kind: 'settle-provider-switch',
       clientMessageId,
