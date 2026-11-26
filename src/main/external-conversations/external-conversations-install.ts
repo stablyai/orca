@@ -155,7 +155,7 @@ export function installExternalConversations(
               const { source, externalId, title, asker } = thread
               const key = { source, externalId }
               if (!findLink(store, key)) {
-                seam?.linkChat(key, chat, title, asker)
+                seam?.linkChat(key, chat, { title }, asker)
               }
             }
           )

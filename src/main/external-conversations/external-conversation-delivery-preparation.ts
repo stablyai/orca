@@ -45,6 +45,10 @@ export class DeliveryPreparation {
     private readonly msLeft?: () => number
   ) {}
 
+  pollRetired(): boolean {
+    return this.pollSignal?.aborted === true
+  }
+
   expired(): boolean {
     return (this.msLeft?.() ?? Infinity) <= 0
   }

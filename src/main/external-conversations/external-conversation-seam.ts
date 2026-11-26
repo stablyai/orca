@@ -302,11 +302,11 @@ export class ExternalConversationSeam {
   linkChat(
     key: ConversationKey,
     chat: LinkableChat,
-    text?: string,
+    opening?: string | { title: string },
     asker?: Pick<ConnectorAsker, 'app' | 'name' | 'place' | 'role'>
   ): void {
     const fresh = findLink(this.deps.store, key) === null
-    const written = writeChatLink(this.deps.store, key, chat, text)
+    const written = writeChatLink(this.deps.store, key, chat, opening)
     const linked = (asker && this.deps.slackMirror?.()?.opened(written, asker, fresh)) || written
     if (linked) {
       this.events?.linked(linked, this.deps.actsForOf?.(chat.sessionId))

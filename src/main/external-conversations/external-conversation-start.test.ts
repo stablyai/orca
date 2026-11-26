@@ -22,6 +22,7 @@ const ID = 'delivery'
 const TARGET = { kind: 'bot' as const, botId: 'bot-1' }
 const INPUT = { agent: 'codex', target: TARGET, prompt: 'request' }
 const HOME_ID = 'fixture-home'
+const TITLE = 'Look at <https://example.invalid|literal-label> in the image'
 
 it.each(['accepted', 'unknown', 'rejected'] as const)(
   'recovers a %s admission that was interrupted before writing the thread link',
@@ -52,7 +53,7 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
         preparation.restoreThreadOnRestart({
           ...KEY,
           botId: TARGET.botId,
-          title: INPUT.prompt,
+          title: TITLE,
           asker: {
             role: 'owner',
             name: 'Fixture Owner',
@@ -93,7 +94,7 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
         (attempt) =>
           recoverConnectorAdmission(attempt, undefined, (key, chat) => {
             if (!seam.linkedChat(key)) {
-              seam.linkChat(key, chat, key.title, key.asker)
+              seam.linkChat(key, chat, { title: key.title }, key.asker)
             }
           })
       )
@@ -144,6 +145,7 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
         await expect(receipts.recorded(KEY, ID)).resolves.toMatchObject({ outcome: 'unknown' })
         expect(seam.linkedChat(KEY)).toEqual({ sessionId, worktreeId: workspaceId })
         expect(folder.externalConversations[0]).toMatchObject({
+          title: TITLE,
           opener: { role: 'owner', name: 'Fixture Owner' },
           mirror: true
         })

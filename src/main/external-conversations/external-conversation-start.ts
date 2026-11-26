@@ -103,7 +103,7 @@ export async function startConnectorConversation(
           }
           throw error
         } finally {
-          if (fresh && abandoned) {
+          if (fresh && abandoned && !preparation?.pollRetired()) {
             await host.bots?.forgetUnusedStart?.(deliveryChatId(key, target, deliveryId))
           }
         }
