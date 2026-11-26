@@ -28,6 +28,9 @@ const CUT_FADE = spacing.md
  */
 const STATUS_COLUMN_SLACK = 22
 
+/** The rings in a rail of their own (a tablet's), sized for its larger screen. */
+export const STANDALONE_RING_DIAMETER = 60
+
 /** The host's usage rings for the Duo side rail; empty until it reports a provider. */
 export function HostRailUsageStack({ hostId }: { hostId: string }): React.JSX.Element | null {
   const { client } = useHostClient(hostId)
@@ -50,9 +53,12 @@ function useRailRingCenter(strip: SideRailStrip | null): number {
 
 /** A scrolling column of usage rings; a tap opens the usage pop-up on that provider. */
 export function RailUsageStack({
-  snapshot
+  snapshot,
+  standalone = false
 }: {
   snapshot: AccountsSnapshot | null
+  /** Centred in its own column rather than on the Duo status glyph's axis. */
+  standalone?: boolean
 }): React.JSX.Element | null {
   const usages = listRailUsage(snapshot)
   // Ticks at each ring's next label change, like the composer bar, so the two flip together.
@@ -66,9 +72,11 @@ export function RailUsageStack({
   const center = useRailRingCenter(strip)
   // The band the rail gives the stack; a chat's composer can leave less than the whole column.
   const [room, setRoom] = useState<number | null>(null)
-  const lift = useContext(RailBandAtStripTopContext) ? STATUS_COLUMN_SLACK : 0
+  const atStripTop = useContext(RailBandAtStripTopContext)
+  // A tablet's own rail has the room it needs; only the Duo's column rises and fits.
+  const lift = !standalone && atStripTop ? STATUS_COLUMN_SLACK : 0
   const fit = railRingStackFit({
-    count: usages.length,
+    count: standalone ? 0 : usages.length,
     room,
     ring: DUO_STATUS_RING_DIAMETER,
     overhang: RING_LABEL_OVERHANG,
@@ -78,7 +86,7 @@ export function RailUsageStack({
     paddingBottom: COLUMN_PADDING_BOTTOM,
     peek: CUT_FADE
   })
-  if (usages.length === 0 || strip === null) {
+  if (usages.length === 0 || (strip === null && !standalone)) {
     return null
   }
   const sheetUsage = usages.find((usage) => usage.provider === shown) ?? usages[0]
@@ -96,11 +104,13 @@ export function RailUsageStack({
           style={fit.height === null ? styles.scroll : { flexGrow: 0, height: fit.height }}
           contentContainerStyle={[
             styles.column,
-            {
-              paddingLeft: center - DUO_STATUS_RING_DIAMETER / 2,
-              gap: fit.gap,
-              paddingBottom: fit.paddingBottom
-            }
+            standalone
+              ? styles.centered
+              : {
+                  paddingLeft: center - DUO_STATUS_RING_DIAMETER / 2,
+                  gap: fit.gap,
+                  paddingBottom: fit.paddingBottom
+                }
           ]}
           showsVerticalScrollIndicator={false}
           // Shown in part, the stack rests on whole rings.
@@ -113,6 +123,7 @@ export function RailUsageStack({
               key={usage.provider}
               usage={usage}
               now={now}
+              diameter={standalone ? STANDALONE_RING_DIAMETER : undefined}
               onPress={() => open(usage.provider)}
             />
           ))}
@@ -148,6 +159,11 @@ const styles = themedStyleSheet(() => ({
   column: {
     alignItems: 'flex-start',
     paddingTop: COLUMN_PADDING_TOP
+  },
+  centered: {
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingBottom: COLUMN_PADDING_BOTTOM
   },
   cut: {
     position: 'absolute',
