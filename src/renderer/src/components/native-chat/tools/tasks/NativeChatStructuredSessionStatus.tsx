@@ -22,6 +22,7 @@ import {
 import { pairedHostClientCapabilities } from '@/runtime/rpc/targets/paired-host-client-capabilities'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
+import { workerDockOpenerPane } from './dock/worker-dock-focus-return'
 import { structuredReadOwnerKey } from '../../session/structured/read/structured-agent-session-read-owner-registry'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
@@ -166,6 +167,7 @@ export function NativeChatStructuredSessionStatus(props: {
     opener: HTMLElement
     /** The session and host it was opened for; another one closes it. */
     owner: string
+    pane: Element | null
   } | null>(null)
   const detailsOwner = structuredReadOwnerKey(props.sessionId, target)
   // Another session or host closes the dialog during render, so it never shows the old one's text.
@@ -272,7 +274,12 @@ export function NativeChatStructuredSessionStatus(props: {
         currentAgentId={props.currentAgentId ?? null}
         onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
         onShowProviderDetails={(row, opener) =>
-          setProviderDetails({ row, opener, owner: detailsOwner })
+          setProviderDetails({
+            row,
+            opener,
+            owner: detailsOwner,
+            pane: workerDockOpenerPane(opener)
+          })
         }
       />
       {shownDetails ? (
@@ -280,6 +287,7 @@ export function NativeChatStructuredSessionStatus(props: {
           <WorkerDockProviderDetailsDialog
             row={shownDetails.row}
             opener={shownDetails.opener}
+            openerPane={shownDetails.pane}
             sessionId={props.sessionId}
             target={target}
             onClose={() => setProviderDetails(null)}

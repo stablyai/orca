@@ -1,4 +1,8 @@
-import { returnWorkerDockFocus, workerDockOpenerPane } from './worker-dock-focus-return'
+import {
+  currentWorkerDockOpener,
+  returnWorkerDockFocus,
+  workerDockOpenerPane
+} from './worker-dock-focus-return'
 import { useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -21,17 +25,21 @@ import { useWorkerDockCommandDetail } from './use-worker-dock-command-detail'
 export function WorkerDockProviderDetailsDialog({
   row,
   opener,
+  openerPane,
   sessionId,
   target,
   onClose
 }: {
   row: WorkerDockRowView
   opener: HTMLElement
+  /** The opener's chat pane, found when it was clicked. */
+  openerPane?: Element | null
   sessionId: string
   target: RuntimeClientTarget
   onClose: () => void
 }) {
-  const [pane] = useState(() => workerDockOpenerPane(opener))
+  // The pane as of the click: a dialog shown again after a crew left has a detached opener.
+  const [pane] = useState(() => openerPane ?? workerDockOpenerPane(opener))
   // The held row as opened: output lookup and exact text never retarget while the dialog is up.
   const [held] = useState(row)
   const t = useTranslate()
@@ -95,7 +103,7 @@ export function WorkerDockProviderDetailsDialog({
         scrollable
         onCloseAutoFocus={(event) => {
           event.preventDefault()
-          returnWorkerDockFocus(opener, pane)
+          returnWorkerDockFocus(currentWorkerDockOpener(opener, pane, held.id), pane)
         }}
       >
         <DialogHeader>
@@ -115,10 +123,7 @@ export function WorkerDockProviderDetailsDialog({
           <p className="text-sm text-muted-foreground">
             {row.reason ??
               (row.kind === 'command'
-                ? t(
-                    'components.native-chat.workerDock.commandOutputPending',
-                    'Command output is not available yet.'
-                  )
+                ? t('components.native-chat.workerDock.commandOutputPending', 'No output yet.')
                 : t(
                     'components.native-chat.workerDock.resultUnavailable',
                     'Worker result unavailable'

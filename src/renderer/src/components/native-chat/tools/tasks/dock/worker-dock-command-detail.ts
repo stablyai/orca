@@ -7,6 +7,11 @@ import type { CommandDetailOpening } from '../../../../../../../shared/agent-ses
 import { findStructuredAgentSessionReadOwner } from '../../../session/structured/read/structured-agent-session-read-owner-registry'
 import { callRuntimeRpcResponse } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { observedRuntimeEnvironmentRuntimeId } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import {
+  readRuntimeStatuses,
+  subscribeAppStoreWithStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { lastVerifiedRuntimeStatus } from '../../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
@@ -25,8 +30,18 @@ export type WorkerDockCommandDetail = {
 
 class CommandDetailRefused extends Error {}
 
+/** Every runtime this pairing has been seen to answer as: the accepted status the store keeps
+ *  (durable across a compatibility cache clear) and the cached compatibility probe. */
+function acceptedRuntimeIds(environmentId: string): (string | undefined)[] {
+  return [
+    lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))?.runtimeId,
+    observedRuntimeEnvironmentRuntimeId(environmentId)
+  ]
+}
+
 /** Target, runtime incarnation and authenticated runtime the opening was made under: a re-pair,
- *  reconnect, or any status or reply naming another runtime ends it, and the loss is sticky. */
+ *  reconnect, or any accepted status or reply naming another runtime ends it, and the loss is
+ *  sticky for this opening. */
 function pinTarget(
   target: RuntimeClientTarget,
   runtimeId: () => string | undefined
@@ -50,8 +65,8 @@ function pinTarget(
     pairingRevision,
     mismatch,
     current: () => {
-      const observed = observedRuntimeEnvironmentRuntimeId(environmentId)
-      if (observed !== undefined && observed !== runtimeId()) {
+      const opened = runtimeId()
+      if (acceptedRuntimeIds(environmentId).some((id) => id !== undefined && id !== opened)) {
         mismatched = true
       }
       return (
@@ -61,10 +76,6 @@ function pinTarget(
       )
     }
   }
-}
-
-function timeout(ms: number): Promise<'timeout'> {
-  return new Promise((resolve) => setTimeout(() => resolve('timeout'), ms))
 }
 
 /** Null when this reader holds no current credit for the tuple: the dialog shows the preview. */
@@ -95,6 +106,19 @@ export function openWorkerDockCommandDetail(input: {
     opening.close()
     return null
   }
+  // A status naming another runtime ends the opening when it is accepted, not at the next click.
+  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  const stopStatusWatch = environmentId
+    ? subscribeAppStoreWithStatuses((_state, _previous, statuses, previousStatuses) => {
+        if (statuses.get(environmentId) !== previousStatuses.get(environmentId)) {
+          opening.check()
+        }
+      })
+    : () => {}
+  opening.onLost(stopStatusWatch)
+  const timeoutMs = input.timeoutMs ?? WORKER_DOCK_COMMAND_DETAIL_TIMEOUT_MS
+  /** The opening's one read gives up at this deadline; an unsent request may not leave after it. */
+  let expired = false
   const call = input.call ?? callRuntimeRpcResponse
   let text: string | null = null
   let reading: Promise<string | null> | null = null
@@ -103,6 +127,13 @@ export function openWorkerDockCommandDetail(input: {
     if (!opening.check()) {
       return null
     }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => {
+        expired = true
+        resolve('timeout')
+      }, timeoutMs)
+    })
     try {
       const reply = await Promise.race([
         call<{ command: unknown }>(
@@ -114,7 +145,7 @@ export function openWorkerDockCommandDetail(input: {
             invocation: { invocationId: tuple.invocationId, generation: tuple.generation }
           },
           {
-            timeoutMs: input.timeoutMs ?? WORKER_DOCK_COMMAND_DETAIL_TIMEOUT_MS,
+            timeoutMs,
             ...(pinned.pairingRevision !== undefined
               ? { expectedEnvironmentPairingRevision: pinned.pairingRevision }
               : {}),
@@ -122,15 +153,15 @@ export function openWorkerDockCommandDetail(input: {
             ...(target.kind === 'environment'
               ? { expectedEnvironmentRuntimeId: openedRuntimeId }
               : {}),
-            // After any compatibility await, before the request leaves.
+            // After any compatibility await, before the request leaves: never past the deadline.
             beforeSend: () => {
-              if (!opening.check()) {
+              if (expired || !opening.check()) {
                 throw new CommandDetailRefused()
               }
             }
           }
         ),
-        timeout(input.timeoutMs ?? WORKER_DOCK_COMMAND_DETAIL_TIMEOUT_MS)
+        deadline
       ])
       // A reply from any other runtime is discarded, and this opening cannot recover.
       if (
@@ -153,6 +184,8 @@ export function openWorkerDockCommandDetail(input: {
     } catch {
       // Older hosts answer method-not-found; every failure is the approved fallback.
       return null
+    } finally {
+      clearTimeout(timer)
     }
   }
   return {
@@ -167,6 +200,9 @@ export function openWorkerDockCommandDetail(input: {
       await write(exact)
       return true
     },
-    close: () => opening.close()
+    close: () => {
+      stopStatusWatch()
+      opening.close()
+    }
   }
 }

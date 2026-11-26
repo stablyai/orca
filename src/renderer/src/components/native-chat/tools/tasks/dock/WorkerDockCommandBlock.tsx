@@ -20,6 +20,19 @@ export function WorkerDockCommandBlock({
   const [overflows, setOverflows] = useState(false)
   const [copied, setCopied] = useState(false)
   const reset = useRef<number | null>(null)
+  const root = useRef<HTMLDivElement>(null)
+  const hadExact = useRef(exact)
+  // Copy withdrawn while it held focus leaves focus on the page or the bare dialog: hand it to
+  // Close, so focus stays visible. Focus anywhere else in the dialog stays where it is.
+  useLayoutEffect(() => {
+    const withdrawn = hadExact.current && !exact
+    hadExact.current = exact
+    const dialog = withdrawn ? root.current?.closest<HTMLElement>('[role="dialog"]') : null
+    const active = document.activeElement
+    if (dialog && (!active || active === document.body || active === dialog)) {
+      dialog.querySelector<HTMLElement>('[data-slot="dialog-close"]')?.focus()
+    }
+  }, [exact])
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) {
@@ -60,7 +73,7 @@ export function WorkerDockCommandBlock({
     ? t('components.native-chat.copyMessage.copied', 'Copied')
     : t('components.native-chat.workerDock.copyCommand', 'Copy command')
   return (
-    <div className="relative min-w-0" data-worker-dock-command="">
+    <div ref={root} className="relative min-w-0" data-worker-dock-command="">
       <DialogDescription asChild>
         <pre
           ref={scroller}
@@ -81,7 +94,8 @@ export function WorkerDockCommandBlock({
           aria-label={label}
           title={label}
           className={cn(
-            'absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            // Centred on the block's right edge, the same column as the dialog's Close.
+            'absolute top-1.5 -right-3 flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             copied && 'text-status-success'
           )}
         >

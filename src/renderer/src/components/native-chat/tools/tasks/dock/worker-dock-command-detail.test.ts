@@ -13,13 +13,16 @@ const hoisted = vi.hoisted((): { owner: unknown; observedRuntime: string | undef
 vi.mock('../../../session/structured/read/structured-agent-session-read-owner-registry', () => ({
   findStructuredAgentSessionReadOwner: () => hoisted.owner
 }))
-vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
+vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', async (original) => ({
+  ...(await original<object>()),
   getRuntimeEnvironmentRevision: () => 4
 }))
-vi.mock('@/store/slices/runtime-status/runtime-status-connection-generation', () => ({
+vi.mock('@/store/slices/runtime-status/runtime-status-connection-generation', async (original) => ({
+  ...(await original<object>()),
   getRuntimeEnvironmentConnectionGeneration: () => 1
 }))
-vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-cache', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-cache', async (original) => ({
+  ...(await original<object>()),
   observedRuntimeEnvironmentRuntimeId: () => hoisted.observedRuntime
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpcResponse: vi.fn() }))

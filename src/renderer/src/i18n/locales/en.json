@@ -23039,7 +23039,7 @@
         "staysDefault": "{{email}} stays the default"
       },
       "workerDock": {
-        "commandOutputPending": "Command output is not available yet.",
+        "commandOutputPending": "No output yet.",
         "copyCommand": "Copy command",
         "notNow": "Not now",
         "retry": "Retry",

@@ -132,17 +132,21 @@ function holdReplies(): { answer: (value: unknown) => void } {
 
 function renderStrip() {
   let sessionId = SESSION
-  // A fresh element each time: React skips a rerender of the identical element object.
+  let target: RuntimeClientTarget = LOCAL
+  // A fresh element each time: React skips a rerender of the identical element object. The
+  // wrapper is the chat pane root, as in the app.
   const view = () => (
     <TooltipProvider>
-      <NativeChatStructuredSessionStatus
-        sessionId={sessionId}
-        target={LOCAL}
-        paneKey="pane-synthetic"
-        isVisible
-        backgroundTasks={tasks}
-        stop={{ stoppingTaskIds: new Set(), stoppingAll: false, onStop: vi.fn() }}
-      />
+      <div data-native-chat-root="">
+        <NativeChatStructuredSessionStatus
+          sessionId={sessionId}
+          target={target}
+          paneKey="pane-synthetic"
+          isVisible
+          backgroundTasks={tasks}
+          stop={{ stoppingTaskIds: new Set(), stoppingAll: false, onStop: vi.fn() }}
+        />
+      </div>
     </TooltipProvider>
   )
   const rendered = render(view())
@@ -152,6 +156,14 @@ function renderStrip() {
     again: () => rendered.rerender(view()),
     switchSession: (next: string) => {
       sessionId = next
+      rendered.rerender(view())
+    },
+    switchTarget: (next: RuntimeClientTarget) => {
+      target = next
+      rendered.rerender(view())
+    },
+    crew: (on: boolean) => {
+      hoisted.crew = on ? { summary: { status: 'ok', agents: 1 }, rows: [] } : null
       rendered.rerender(view())
     }
   }
@@ -315,5 +327,73 @@ describe('Worker Dock command dialog', () => {
     await screen.findByRole('button', { name: 'Copy command' })
     expect(pre()).toBe(EXACT)
     expect(commandReads()).toHaveLength(2)
+  })
+
+  it('a target switch and switch back while a crew hides the dialog never revive it or its held reply', async () => {
+    credit()
+    const held = holdReplies()
+    const strip = renderStrip()
+    await openRow()
+    await waitFor(() => expect(commandReads()).toHaveLength(1))
+    strip.crew(true)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    strip.switchTarget({ kind: 'environment', environmentId: 'env-synthetic' })
+    strip.switchTarget(LOCAL)
+    strip.crew(false)
+    await act(async () => held.answer({ command: EXACT }))
+    // Closed by the target change while hidden: it does not come back, and nothing was copied.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(writes).toEqual([])
+    // A fresh opening on current credit recovers.
+    hoisted.rpc.mockImplementation(async (_target, method) =>
+      method === 'agentSession.backgroundCommand' ? { command: EXACT } : { ok: false }
+    )
+    await openRow()
+    await screen.findByRole('button', { name: 'Copy command' })
+    expect(pre()).toBe(EXACT)
+  })
+
+  for (const how of ['Escape', 'Close'] as const) {
+    it(`after a crew comes and goes, ${how} returns focus to the row now on screen, never the page`, async () => {
+      credit()
+      const strip = renderStrip()
+      const dialog = await openRow()
+      await screen.findByRole('button', { name: 'Copy command' })
+      strip.crew(true)
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      strip.crew(false)
+      const again = await screen.findByRole('dialog')
+      expect(again).not.toBe(dialog)
+      if (how === 'Escape') {
+        fireEvent.keyDown(again, { key: 'Escape' })
+      } else {
+        fireEvent.click(again.querySelector('[data-slot="dialog-close"]')!)
+      }
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      const row = [...document.querySelectorAll<HTMLElement>('[data-worker-dock-open]')].find(
+        (candidate) => candidate.dataset.workerDockOpen?.includes(TUPLE.childWorkId)
+      )
+      await waitFor(() => expect(document.activeElement).toBe(row))
+      expect(document.activeElement).not.toBe(document.body)
+    })
+  }
+
+  it('Copy withdrawn while it has focus hands focus to Close', async () => {
+    credit()
+    renderStrip()
+    const dialog = await openRow()
+    const copy = await screen.findByRole('button', { name: 'Copy command' })
+    act(() => copy.focus())
+    expect(document.activeElement).toBe(copy)
+    act(() => authority.observe(scope, frame(4), RUNTIME))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Copy command' })).toBeNull())
+    expect(document.activeElement).toBe(dialog.querySelector('[data-slot="dialog-close"]'))
+  })
+
+  it('without output yet, says so in a short line', async () => {
+    credit()
+    renderStrip()
+    await openRow()
+    expect(await screen.findByText('No output yet.')).toBeInTheDocument()
   })
 })

@@ -228,6 +228,8 @@ function CommandStrip({ scene, credited }: { scene: Scene; credited: boolean }) 
   return (
     <NativeChatCrewContext.Provider value={crew}>
       <div
+        // The chat pane root, as in the app: focus returns are scoped to it.
+        data-native-chat-root=""
         className="native-chat-appearance bg-chat-canvas p-3"
         style={nativeChatAppearanceStyle({})}
       >
