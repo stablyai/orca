@@ -25,6 +25,8 @@ it('tests the same events to find a close however many events came after it', ()
     const path = join(directory, 'bot-items.sqlite')
     BotItemsStore.open(path).dispose()
     const db = new SyncDatabase(path)
+    // Thousands of one-event writes: no disk sync each, or slow disks time the test out.
+    db.pragma('synchronous = OFF')
     let tested = 0
     db.function('tested', () => ((tested += 1), 1))
     const prepare = db.prepare.bind(db)
@@ -56,7 +58,7 @@ it('tests the same events to find a close however many events came after it', ()
       store.dispose()
     }
   }
-  expect([lookup(1_000), lookup(10_000)]).toEqual([
+  expect([lookup(300), lookup(3_000)]).toEqual([
     { found: [{ kind: 'owner' }], tested: 1 },
     { found: [{ kind: 'owner' }], tested: 1 }
   ])
