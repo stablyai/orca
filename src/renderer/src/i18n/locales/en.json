@@ -23178,7 +23178,8 @@
         "annotateTooLarge": "This image is too large to draw notes on (over 33 megapixels).",
         "sendWhileEditing": "Close the image you’re editing notes on, then send.",
         "undoUnsaved": "Couldn’t undo: the earlier notes couldn’t be saved. These stay in your message.",
-        "alreadyAdded": "These notes were already added to your message from another window."
+        "alreadyAdded": "These notes were already added to your message from another window.",
+        "editedElsewhere": "This image is open for editing in another window. Finish there first; your notes are still here."
       }
     },
     "tab": {

@@ -23000,7 +23000,8 @@
         "annotateTooLarge": "Bu görsel not çizmek için çok büyük (33 megapikselden fazla).",
         "sendWhileEditing": "Notlarını düzenlediğiniz görseli kapatın, sonra gönderin.",
         "undoUnsaved": "Geri alınamadı: önceki notlar kaydedilemedi. Bu notlar mesajınızda kalıyor.",
-        "alreadyAdded": "Bu notlar başka bir pencereden mesajınıza zaten eklendi."
+        "alreadyAdded": "Bu notlar başka bir pencereden mesajınıza zaten eklendi.",
+        "editedElsewhere": "Bu görsel başka bir pencerede düzenleniyor. Önce orada bitirin; notlarınız hâlâ burada."
       }
     },
     "tab": {

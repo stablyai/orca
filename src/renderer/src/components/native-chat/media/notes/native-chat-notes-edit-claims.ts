@@ -174,3 +174,16 @@ export function nativeChatNotesEditClaimed(scopeKey: string, id: string): boolea
   void reapAbandonedClaims(claims)
   return true
 }
+
+/** Whether a window other than this one has this marked image open for editing. */
+export function nativeChatNotesEditClaimedElsewhere(scopeKey: string, id: string): boolean {
+  const claims = claimsOf(scopeKey, id).filter(({ token }) => !token.startsWith(`${windowToken}-`))
+  if (claims.length === 0) {
+    return false
+  }
+  if (!locks()) {
+    return claims.some(({ at }) => at > Date.now() - CLAIM_WITHOUT_LOCKS_MS)
+  }
+  void reapAbandonedClaims(claims)
+  return true
+}

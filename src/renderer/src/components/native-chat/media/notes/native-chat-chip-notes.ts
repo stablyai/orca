@@ -8,7 +8,8 @@ import { removeImageWithReferences } from '../../composer/editor/native-chat-com
 import { whenNativeChatComposerDraftSaved } from '../../drafts/native-chat-composer-draft-saved'
 import {
   claimNativeChatNotesEdit,
-  nativeChatNotesEditClaimed
+  nativeChatNotesEditClaimed,
+  nativeChatNotesEditClaimedElsewhere
 } from './native-chat-notes-edit-claims'
 import {
   appendToNativeChatComposerDraft,
@@ -90,6 +91,15 @@ export function markNativeChatNotedImageEditing(scopeKey: string, id: string): (
       editingImages.delete(scopeKey)
     }
   }
+}
+
+/** Whether another viewer, here or in another window, also has this marked image open: replacing it
+ *  from one viewer would take it from under the other. */
+export function nativeChatNotedImageEditedByOthers(scopeKey: string, id: string): boolean {
+  return (
+    (editingImages.get(scopeKey)?.get(id) ?? 0) > 1 ||
+    nativeChatNotesEditClaimedElsewhere(scopeKey, id)
+  )
 }
 
 /** Whether the draft holds a marked image whose notes are open for editing, here or in another

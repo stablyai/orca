@@ -31,11 +31,26 @@ if (typeof document !== 'undefined') {
   )
 }
 
+// Named by whatever opens the viewer from elsewhere: the chat's image set closes before handing an
+// image over, so neither focus nor the last pressed control (in the closed set) is its tile.
+let nominated: Element | null = null
+
+/** The control the next viewer to open returns focus to on close. */
+export function nominateNativeChatMediaViewerOpener(opener: Element | null | undefined): void {
+  nominated = opener ?? null
+}
+
+/** Nominates the tile of a message's image `at`: each image's tile is a child of its group. */
+export function nominateNativeChatMediaViewerTile(group: Element | null, at: number): void {
+  nominateNativeChatMediaViewerOpener(group?.children[at]?.querySelector('button'))
+}
+
 function openBody(session: NativeChatMediaViewerFocusSession, event: Event): void {
   // The first image records the opener; a stepped-to image finds focus already inside the viewer.
   if (session.opener === null) {
     const active = document.activeElement
-    session.opener = active && active !== document.body ? active : pressed
+    session.opener = nominated ?? (active && active !== document.body ? active : pressed)
+    nominated = null
   }
   event.preventDefault()
 }

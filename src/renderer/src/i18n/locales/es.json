@@ -21020,7 +21020,8 @@
         "annotateTooLarge": "Esta imagen es demasiado grande para dibujar notas (más de 33 megapíxeles).",
         "sendWhileEditing": "Cierra la imagen cuyas notas estás editando y luego envía.",
         "undoUnsaved": "No se pudo deshacer: no se pudieron guardar las notas anteriores. Estas se quedan en tu mensaje.",
-        "alreadyAdded": "Estas notas ya se añadieron a tu mensaje desde otra ventana."
+        "alreadyAdded": "Estas notas ya se añadieron a tu mensaje desde otra ventana.",
+        "editedElsewhere": "Esta imagen se está editando en otra ventana. Termina allí primero; tus notas siguen aquí."
       }
     },
     "tab": {

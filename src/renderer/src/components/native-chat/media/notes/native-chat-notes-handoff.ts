@@ -18,6 +18,7 @@ import {
   type NativeChatNotesSource
 } from './native-chat-attachment-notes'
 import { drawNativeChatNotesImage } from './native-chat-media-notes-draw'
+import { nativeChatNotedImageEditedByOthers } from './native-chat-chip-notes'
 import { NATIVE_CHAT_NOTES_MAX_SOURCE_PIXELS } from './native-chat-notes-reasons'
 import {
   handOffHeldNativeChatNotes,
@@ -66,6 +67,32 @@ export class NativeChatNotesUnsavedError extends Error {
 export class NativeChatNotesAlreadyAddedError extends Error {
   constructor() {
     super('These held notes were already added from another viewer.')
+  }
+}
+
+/** Another viewer still has the chip these notes would replace open for editing. */
+export class NativeChatNotesEditedElsewhereError extends Error {
+  constructor() {
+    super('The image is open for editing in another viewer.')
+  }
+}
+
+/** Whether the notes are exactly these: same marks, words, numbers and times, in the same order. */
+export function sameNativeChatNotes(
+  notes: readonly NativeChatMediaNote[],
+  other: readonly NativeChatMediaNote[]
+): boolean {
+  return JSON.stringify(notes) === JSON.stringify(other)
+}
+
+/** Replacing a reopened chip while another viewer edits it would end that edit under it: refused,
+ *  with the words kept here. */
+export function assertNativeChatNotesSoleEditor(
+  scopeKey: string,
+  replacedId: string | undefined
+): void {
+  if (replacedId && nativeChatNotedImageEditedByOthers(scopeKey, replacedId)) {
+    throw new NativeChatNotesEditedElsewhereError()
   }
 }
 

@@ -9,6 +9,7 @@ import {
   useNativeChatFollowedImage
 } from './native-chat-captured-image'
 import { NativeChatMediaViewer } from '../notes/NativeChatMediaViewer'
+import { nominateNativeChatMediaViewerTile } from '../notes/use-native-chat-media-viewer-focus'
 import { nativeChatSentNotesNumberMax } from '../notes/native-chat-media-notes'
 import {
   nativeChatNotesMediaKey,
@@ -342,6 +343,8 @@ export function NativeChatImageAttachments({
               return false
             }
             setAnnotateOnOpen(true)
+            // Esc in the viewer returns to this image's tile.
+            nominateNativeChatMediaViewerTile(group.current, at)
             setViewing(at, latestImages.current)
             return true
           }

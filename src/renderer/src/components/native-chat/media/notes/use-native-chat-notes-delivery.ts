@@ -21,7 +21,10 @@ import {
   nativeChatNotesScopeKey,
   nativeChatNotesStillInDraft,
   NativeChatNotesSupersededError,
+  assertNativeChatNotesSoleEditor,
+  sameNativeChatNotes,
   settleNativeChatHeldHandOff,
+  NativeChatNotesEditedElsewhereError,
   settleNativeChatNotesReplacement,
   NativeChatNotesAlreadyAddedError,
   NativeChatNotesTooLargeError,
@@ -149,12 +152,20 @@ export function useNativeChatNotesDelivery({
     !busy &&
     Boolean(composer && loaded)
 
+  // Ordinary closing and hand-off settle the viewer; going away without them keeps new notes.
+  const kept = useNativeChatNotesKeptOnUnmount({
+    notes,
+    keep: !initialNotes,
+    scopeKey: composer?.scopeKey,
+    mediaKey
+  })
   const handOff = useCallback(
     async (send: boolean): Promise<boolean> => {
       if (!composer || !loaded || notes.length === 0 || busyRef.current) {
         return false
       }
       busyRef.current = true
+      kept.begin()
       // Send goes to this message box with this draft, as they are now, or not at all.
       const approved = send ? captureNativeChatNotesSend(opener, composer) : null
       setBusy(true)
@@ -162,6 +173,8 @@ export function useNativeChatNotesDelivery({
       editor.setLocked(true)
       let handed = false
       try {
+        // Another viewer editing the chip this would replace keeps it: refused, words kept here.
+        assertNativeChatNotesSoleEditor(composer.scopeKey, replacesAttachmentId)
         const ids = await attachNativeChatNotes({
           composer,
           mediaName: title,
@@ -213,34 +226,41 @@ export function useNativeChatNotesDelivery({
         showError(
           error instanceof NativeChatNotesUnsavedError
             ? unsavedMessage
-            : error instanceof NativeChatNotesAlreadyAddedError
+            : error instanceof NativeChatNotesEditedElsewhereError
               ? t(
-                  'components.native-chat.notes.alreadyAdded',
-                  'These notes were already added to your message from another window.'
+                  'components.native-chat.notes.editedElsewhere',
+                  'This image is open for editing in another window. Finish there first; your notes are still here.'
                 )
-              : error instanceof NativeChatNotesTooLargeError
+              : error instanceof NativeChatNotesAlreadyAddedError
                 ? t(
-                    'components.native-chat.notes.annotateTooLarge',
-                    'This image is too large to draw notes on (over 33 megapixels).'
+                    'components.native-chat.notes.alreadyAdded',
+                    'These notes were already added to your message from another window.'
                   )
-                : error instanceof NativeChatNotesSupersededError
+                : error instanceof NativeChatNotesTooLargeError
                   ? t(
-                      'components.native-chat.notes.imageChanged',
-                      'This image left the message box. Your notes are still here.'
+                      'components.native-chat.notes.annotateTooLarge',
+                      'This image is too large to draw notes on (over 33 megapixels).'
                     )
-                  : t(
-                      'components.native-chat.notes.prepareFailed',
-                      'Couldn’t prepare the marked image. Your notes are still here.'
-                    )
+                  : error instanceof NativeChatNotesSupersededError
+                    ? t(
+                        'components.native-chat.notes.imageChanged',
+                        'This image left the message box. Your notes are still here.'
+                      )
+                    : t(
+                        'components.native-chat.notes.prepareFailed',
+                        'Couldn’t prepare the marked image. Your notes are still here.'
+                      )
         )
       }
       busyRef.current = false
+      kept.end(handed)
       setBusy(false)
       editor.setLocked(false)
       return handed
     },
     [
       composer,
+      kept,
       editor,
       loaded,
       mediaKey,
@@ -257,13 +277,6 @@ export function useNativeChatNotesDelivery({
     ]
   )
 
-  // Ordinary closing and hand-off settle the viewer; going away without them keeps new notes.
-  const kept = useNativeChatNotesKeptOnUnmount({
-    notes,
-    keep: !initialNotes,
-    scopeKey: composer?.scopeKey,
-    mediaKey
-  })
   const finish = (): void => {
     kept.settle()
     onOpenChange(false)
@@ -304,6 +317,8 @@ export function useNativeChatNotesDelivery({
       // Every held note was removed: the hold ends with them.
       releaseHeldNativeChatNotes(heldIn.current)
       heldIn.current = null
+    } else if (initialNotes && sameNativeChatNotes(notes, initialNotes)) {
+      // Reopened and left as it was: the chip stays as it is, with nothing to export.
     } else if (notes.length > 0 && loaded && !(await handOff(false))) {
       return
     }
