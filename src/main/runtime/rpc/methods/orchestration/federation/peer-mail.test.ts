@@ -398,8 +398,8 @@ describe('agent mail between paired Orca servers', () => {
         'question',
         ...(threadId ? ['--thread-id', threadId] : [])
       )
-    const first = (await ask('Which branch?')).result.message.id as string
-    const second = (await ask('Which port?', first)).result.message.id as string
+    const first: string = (await ask('Which branch?')).result.message.id
+    const second: string = (await ask('Which port?', first)).result.message.id
     expect(mailFor(b, 'term_b').map((m) => m.id)).toEqual([first, second])
 
     await cli(b, 'reply', '--id', second, '--body', '5173', '--from', 'term_b')

@@ -8,7 +8,6 @@ import type { MessageRow } from '../../db/orchestration-records'
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { peerMailLocalRecipient } from './peer-mail-delivery'
 import { settlePeerQuestionsOut } from './peer-questions-out'
-import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 
 /** Stores a reply on a conversation this Orca opened, once; a replay finds the stored row. Pulled
  *  from a paired server, or returned by a paired computer whose agents this Orca's agents asked. */
@@ -23,27 +22,22 @@ export function storePeerReply(
   // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
   const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
   const { from, body, ...carried } = presentImportedPeerItem({ kind: 'peer_mail', ...payload })
-  // The reply and the question it settles commit together, so a replay finds both done.
-  const stored = runLifecycleWriteTransaction(db.db, 'peer_reply_store', () => {
-    const inserted = db.insertPeerMailMessage({
-      conversationId: conversation.conversation_id,
-      remoteParty: payload.fromAddress,
-      message: {
-        id: messageId,
-        from,
-        to: recipient.ok ? recipient.to : handle,
-        subject: payload.subject,
-        body,
-        threadId: payload.threadId ?? undefined,
-        replyTo: payload.replyTo,
-        runId: recipient.ok ? recipient.runId : undefined,
-        ...carried
-      }
-    })
-    if (!inserted.duplicate) {
-      settlePeerQuestionsOut(db, conversation.conversation_id, payload)
-    }
-    return inserted
+  const stored = db.insertPeerMailMessage({
+    conversationId: conversation.conversation_id,
+    remoteParty: payload.fromAddress,
+    message: {
+      id: messageId,
+      from,
+      to: recipient.ok ? recipient.to : handle,
+      subject: payload.subject,
+      body,
+      threadId: payload.threadId ?? undefined,
+      replyTo: payload.replyTo,
+      runId: recipient.ok ? recipient.runId : undefined,
+      ...carried
+    },
+    // The reply and the question it settles commit together, so a replay finds both done.
+    onFirstStore: () => settlePeerQuestionsOut(db, conversation.conversation_id, payload)
   })
   return stored.duplicate ? undefined : stored.message
 }
