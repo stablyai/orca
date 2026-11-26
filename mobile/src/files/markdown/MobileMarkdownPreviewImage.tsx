@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -17,14 +17,23 @@ type Props = {
   documentPath: string
   href: string
   alt: string
+  width?: number
+  onOpenLink?: () => void
 }
 
-export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, href, alt }: Props) {
+export function MobileMarkdownPreviewImage({
+  client,
+  worktreeId,
+  documentPath,
+  href,
+  alt,
+  width,
+  onOpenLink
+}: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
   const [attempt, setAttempt] = useState(0)
-  const [aspectRatio, setAspectRatio] = useState(16 / 9)
   const [expanded, setExpanded] = useState(false)
   useEffect(() => {
     let cancelled = false
@@ -32,15 +41,6 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
       (uri) => {
         if (!cancelled) {
           setLoad({ uri })
-          Image.getSize(
-            uri,
-            (width, height) => {
-              if (!cancelled && width > 0 && height > 0) {
-                setAspectRatio(width / height)
-              }
-            },
-            () => {}
-          )
         }
       },
       (error: unknown) => {
@@ -59,6 +59,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
     }
   }, [client, worktreeId, documentPath, href, attempt])
 
+  const label = alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')
   return (
     <View style={styles.frame}>
       {load.error ? (
@@ -71,20 +72,22 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
         />
       ) : load.uri ? (
         <Pressable
-          style={({ pressed }) => pressed && pressedStyle}
-          onPress={() => setExpanded(true)}
-          accessibilityRole="button"
+          style={({ pressed }) => [styles.imageButton, pressed && pressedStyle]}
+          onPress={onOpenLink ?? (() => setExpanded(true))}
+          accessibilityRole={onOpenLink ? 'link' : 'button'}
           accessibilityLabel={
-            alt
-              ? t('files.markdownPreviewImage.expandImage', 'Expand {{alt}}', { alt })
-              : t('files.markdownPreviewImage.expandFallback', 'Expand image')
+            onOpenLink
+              ? label
+              : alt
+                ? t('files.markdownPreviewImage.expandImage', 'Expand {{alt}}', { alt })
+                : t('files.markdownPreviewImage.expandFallback', 'Expand image')
           }
         >
-          <Image
-            source={{ uri: load.uri }}
-            accessibilityLabel={alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')}
-            resizeMode="contain"
-            style={{ width: '100%', aspectRatio }}
+          <img
+            src={load.uri}
+            alt={label}
+            width={width}
+            style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
             onError={() =>
               setLoad({
                 error: translate('files.markdownPreviewImage.loadFailed', 'Unable to load image')
@@ -99,7 +102,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
       {expanded && load.uri ? (
         <MobileImageViewer
           uri={load.uri}
-          label={alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')}
+          label={label}
           actions={MobileImageViewerActions}
           onClose={() => setExpanded(false)}
         />
@@ -110,5 +113,6 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
 
 const styles = themedStyleSheet(() => ({
   frame: { gap: spacing.xs },
+  imageButton: { alignSelf: 'flex-start', maxWidth: '100%' },
   caption: { color: colors.textSecondary, fontSize: typography.metaSize }
 }))

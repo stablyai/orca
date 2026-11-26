@@ -8,6 +8,28 @@ import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-
 import { loadMobileFilePreview } from '../preview/mobile-file-preview-request'
 import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'
 import { svgMarkupDataUri } from '../../../../src/shared/file-preview/svg-document'
+import { z } from 'zod'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
+import { translate } from '../../i18n/mobile-i18n'
+
+const readRemoteImage = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'linkPreview.image-or-skip',
+    method: 'linkPreview.image',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'link-preview-image',
+      z.object({
+        dataUri: z
+          .string()
+          .regex(/^data:image\/[a-z0-9.+-]+;base64,/i)
+          .nullable()
+      })
+    )
+  })
+)
 
 // Absolute paths leave the workspace; an external-file tab's document has no workspace images.
 function isOutsideWorkspace(path: string): boolean {
@@ -21,7 +43,14 @@ export async function loadMarkdownPreviewImage(
   href: string
 ): Promise<string> {
   if (/^https?:\/\//i.test(href)) {
-    return href
+    if (!client) {
+      throw new Error('Waiting for host…')
+    }
+    const result = readRemoteImage.interpret(await readRemoteImage.request(client, { url: href }))
+    if (result.accepted && result.value.dataUri) {
+      return result.value.dataUri
+    }
+    throw new Error(translate('files.markdownPreviewImage.loadFailed', 'Unable to load image'))
   }
   const link = routeMarkdownHref(href)
   if (link.kind !== 'file') {

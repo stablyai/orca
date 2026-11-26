@@ -2,7 +2,7 @@ import type { Image, PhrasingContent } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { MarkdownText } from '../mobile-markdown-text'
-import { renderInline } from '../parsing/mobile-markdown-inline'
+import { openMarkdownHref, renderInline } from '../parsing/mobile-markdown-inline'
 import { styles } from '../mobile-markdown-styles'
 import type { MarkdownBlockContext, ParagraphText } from './mobile-markdown-blocks'
 
@@ -37,9 +37,15 @@ export function renderImageParagraph(
     run = []
   }
   for (const child of children) {
+    const linkHref = child.type === 'image' ? child.data?.linkHref : undefined
     const image =
       child.type === 'image' && eligibleImages.has(child)
-        ? renderImage(child.url, child.alt ?? '', child.data?.width)
+        ? renderImage(
+            child.url,
+            child.alt ?? '',
+            child.data?.width,
+            linkHref ? () => openMarkdownHref(linkHref, ctx) : undefined
+          )
         : null
     if (image === null || image === undefined) {
       run.push(child)

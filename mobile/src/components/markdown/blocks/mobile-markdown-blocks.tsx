@@ -62,7 +62,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   /** Bot cards the reply's lines name, by their placeholder index. */
   cards: readonly NativeChatDirectiveBotCard[]
   /** Null or undefined leaves the image a link. */
-  renderImage?: (href: string, alt: string, width?: number) => ReactNode
+  renderImage?: (href: string, alt: string, width?: number, onOpenLink?: () => void) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   mermaidOccurrences: Map<string, number>
 }
