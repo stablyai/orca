@@ -87,6 +87,20 @@ describe('regionalDateTimeFormat', () => {
     expect(format.formatToParts(Number.NaN)).toEqual([{ type: 'literal', value: 'Invalid Date' }])
   })
 
+  it('follows a system time zone change instead of keeping the old zone', () => {
+    const zone = process.env.TZ
+    const at = Date.UTC(2026, 10, 26, 20, 5)
+    const hour = { hour: 'numeric', hourCycle: 'h23' } as const
+    try {
+      process.env.TZ = 'UTC'
+      expect(regionalDateTimeFormat(hour, 'en').format(at)).toBe('20')
+      process.env.TZ = 'America/New_York'
+      expect(regionalDateTimeFormat(hour, 'en').format(at)).toBe('15')
+    } finally {
+      process.env.TZ = zone
+    }
+  })
+
   it('keeps a bounded number of formatters per options as languages come and go', () => {
     const options = { hour: 'numeric' } as const
     const first = regionalDateTimeFormat(options, 'en')

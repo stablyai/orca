@@ -184,16 +184,25 @@ export function createRegionalDateTimeFormat(
 }
 
 // Keyed by options identity, then language and OS region. Live keys are the UI language, its English
-// fallback and the runtime default; the cap drops ones left behind by language switches.
+// fallback and the runtime default; the cap drops ones left behind by language or zone changes.
 const MAX_KEYS_PER_OPTIONS = 4
+const JANUARY = new Date(2026, 0, 1)
+const JULY = new Date(2026, 6, 1)
+
+// A formatter keeps the zone it was built in; the offsets change when the system zone does.
+function systemZoneKey(options: Intl.DateTimeFormatOptions): string {
+  return options.timeZone === undefined
+    ? `${JANUARY.getTimezoneOffset()}/${JULY.getTimezoneOffset()}`
+    : ''
+}
 const formats = new WeakMap<Intl.DateTimeFormatOptions, Map<string, RegionalDateTimeFormat>>()
 
-/** Cached per options object (pass module constants) and rebuilt when the language or OS region changes. */
+/** Cached per options object (pass module constants) and rebuilt when the language, OS region or zone changes. */
 export function regionalDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   locale?: string
 ): RegionalDateTimeFormat {
-  const key = `${locale}|${osDateTimeRegionKey()}`
+  const key = `${locale}|${osDateTimeRegionKey()}|${systemZoneKey(options)}`
   let byKey = formats.get(options)
   if (!byKey) {
     byKey = new Map()
