@@ -90,7 +90,7 @@ export async function toolsHomeFor(
     if (!program) {
       throw new InvalidArgumentError(`${agent} isn't available on this computer.`)
     }
-    const { command, prefixArgs, env } = program.resolve(sources.env, sources.commandSettings)
+    const { command, prefixArgs, env } = await program.resolve(sources.env, sources.commandSettings)
     const home = requireLegacyAgentSessionAccountHome(sources.accountHome).path
     // As a chat's launch pins it: only a non-default home; the CLI then reads the config dir its env names.
     const cliEnv = agent === 'claude' ? { ...env, ...claudeConfigDirEnvPatch(home, { env }) } : env

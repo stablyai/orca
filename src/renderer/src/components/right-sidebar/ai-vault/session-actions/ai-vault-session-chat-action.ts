@@ -43,6 +43,7 @@ export function resolveAiVaultSessionRowChatActions(args: {
     resumeWorktreeId:
       args.structuredSessionOpen || resumeDisabled ? null : (args.resumeState?.worktreeId ?? null),
     resumeInNewChatWorkspaceId: searchResumeAllowed ? targets.resumeInNewChatWorkspaceId : null,
+    resumeInNewChatRoute: searchResumeAllowed ? targets.resumeInNewChatRoute : null,
     resumeInNewCliWorktreeId: searchResumeAllowed ? targets.resumeInNewCliWorktreeId : null
   }
 }

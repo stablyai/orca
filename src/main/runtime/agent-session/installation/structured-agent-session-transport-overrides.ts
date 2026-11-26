@@ -7,6 +7,8 @@ import type { AgentCliVersionReader } from '../../../agent-launch/preflight/agen
 import type { StructuredAgentSessionStartupLimits } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import type { PiRpcSessionDeps } from '../../../pi/rpc/rpc-session'
 import type { PiRpcSessionAdapterDeps } from '../../../pi/rpc/rpc-session-adapter'
+import type { ZcodeStructuredSessionAdapterDeps } from '../../../zcode/zcode-structured-session-state'
+import type { ZcodeStructuredLaunchPartDeps } from '../../../zcode/zcode-structured-launch-resolution'
 
 /** Provider transports are overridden only to drive the runtime against scripted children. */
 export type StructuredAgentSessionTransportOverrides = {
@@ -22,6 +24,8 @@ export type StructuredAgentSessionTransportOverrides = {
   /** Replace command lookup/version probing for scripted ACP children; unset uses the real binary. */
   acpLaunchCommand?: Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'probeVersion'>
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
+  openZcodeConnection?: ZcodeStructuredSessionAdapterDeps['openConnection']
+  resolveZcodeInvocation?: ZcodeStructuredLaunchPartDeps['resolveInvocation']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   /** The shipped startup limits unless a test shortens them. */

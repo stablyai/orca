@@ -1,6 +1,5 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { delimiter, isAbsolute, posix, resolve as resolvePath, win32 } from 'node:path'
-import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   expandHomeArgs,
@@ -25,10 +24,13 @@ import {
   guestNativePathEnv,
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
+import type { StructuredAgentCommandSettings } from './structured-agent-command-settings'
 import {
   isManagedAgentCopyPath,
   managedAgentCommandFor
 } from '../../managed-agent-cli/managed-agent-cli-registry'
+
+export type { StructuredAgentCommandSettings }
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -48,9 +50,6 @@ export function assertStructuredAgentResolutionCurrent(
   }
 }
 
-export type StructuredAgentCommandSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv' | 'antigravityManagedAgyEnabled'>
->
 type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>
 

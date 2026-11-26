@@ -70,7 +70,7 @@ export async function observeStructuredAgentLaunch(
   // last read counts and a found one never waits.
   const launch = await resolveAgainAfterRefreshOnMissingProgram(
     async () =>
-      check.resolveLaunch(
+      await check.resolveLaunch(
         await resolveHostStructuredAgentLaunchEnvironment(agent, settings),
         settings
       ),
