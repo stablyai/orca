@@ -2,13 +2,12 @@ import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { providerRelayRunLiveness } from '../../provider-relay/app-provider-relays'
+import { providerRelayRoute } from '../../provider-relay/provider-relay-route'
 import { peekOpenedAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-slot'
 import { agentSessionRunPlacement } from '../../../shared/agent-session/lifecycle/agent-session-run-placement'
 
 /** Removals run this many at a time, so a large leftover folder doesn't hold the launch long. */
 const REMOVE_BATCH = 16
-/** A launch writes its folder just before it spawns the agent. */
-const SPAWN_SLACK_MS = 2_000
 /** Per root, until its clear runs: chats this run wrote instructions for, by folder name. */
 const launched = new Map<string, Set<string>>()
 /** Per root: the clear in flight. */
@@ -16,16 +15,8 @@ const clearing = new Map<string, Promise<boolean>>()
 /** Roots whose clear ran this run. */
 const cleared = new Set<string>()
 
-/**
- * Per-launch folders (`<chat>-<uuid>`) of each chat but its newest and, for a kept chat, the newest
- * written before its agent spawned: that agent reads it, even if a later launch (a conversation
- * copy that never ended) left a newer one.
- */
-async function olderLaunches(
-  root: string,
-  names: string[],
-  spawnedAt: ReadonlyMap<string, number>
-): Promise<string[]> {
+/** Per-launch folders (`<chat>-<uuid>`) of each of `names`' chats but its newest. */
+async function olderLaunches(root: string, names: string[]): Promise<string[]> {
   const length = nativeChatScratchFolderName('').length
   const launches: { name: string; chat: string; at: number | null }[] = []
   for (const name of names.filter((entry) => entry.charAt(length) === '-')) {
@@ -39,23 +30,13 @@ async function olderLaunches(
       })
     )
   }
-  const keep = new Map<string, { name: string; at: number }>()
-  const pick = (key: string, name: string, at: number): void => {
-    if ((keep.get(key)?.at ?? -1) < at) {
-      keep.set(key, { name, at })
-    }
-  }
+  const newest = new Map<string, { name: string; at: number }>()
   for (const { name, chat, at } of launches) {
-    if (at === null) {
-      continue
-    }
-    pick(`newest:${chat}`, name, at)
-    const spawned = spawnedAt.get(chat)
-    if (spawned !== undefined && at <= spawned + SPAWN_SLACK_MS) {
-      pick(`spawned:${chat}`, name, at)
+    if (at !== null && (newest.get(chat)?.at ?? -1) < at) {
+      newest.set(chat, { name, at })
     }
   }
-  const kept = new Set([...keep.values()].map((launch) => launch.name))
+  const kept = new Set([...newest.values()].map((launch) => launch.name))
   // One whose time can't be read may be the one an agent reads: it stays.
   return launches
     .filter((launch) => launch.at !== null && !kept.has(launch.name))
@@ -63,58 +44,67 @@ async function olderLaunches(
 }
 
 /**
- * Chats whose last run went to a terminal host and isn't proven gone, by folder name: their agent
- * may still read these. Only the run's own daemon start decides, as for every kept chat.
+ * Chats (by folder name, among `present`) whose last run went to a terminal host and isn't proven
+ * gone: their agent may still read any of their folders. Only the run's own daemon start decides,
+ * asked without touching the chat's recovery state; with no relay route here, none can say.
  */
-async function relayedRunsNotGone(present: ReadonlySet<string>) {
+async function liveRelayedChats(present: ReadonlySet<string>): Promise<Set<string> | null> {
   const store = peekOpenedAgentSessionRecordStore()
   if (!store) {
     return null
   }
-  const spawnedAt = new Map<string, number>()
   const relayed = store.listRecords().flatMap((record) => {
-    const placement = agentSessionRunPlacement(record)
+    if (agentSessionRunPlacement(record)?.kind !== 'relayed') {
+      return []
+    }
     const folder = nativeChatScratchFolderName(record.sessionId)
-    return placement?.kind === 'relayed' && present.has(folder)
-      ? [{ folder, record, placement }]
-      : []
+    return present.has(folder) ? [{ folder, record }] : []
   })
+  const live = new Set<string>()
+  const routed = providerRelayRoute() !== null
   for (let at = 0; at < relayed.length; at += REMOVE_BATCH) {
     await Promise.all(
-      relayed.slice(at, at + REMOVE_BATCH).map(async ({ folder, record, placement }) => {
-        if ((await providerRelayRunLiveness(record)) !== 'gone') {
-          // Without a start time the chat keeps its newest folder only.
-          spawnedAt.set(folder, placement.agent.processStartTimeMs ?? Number.POSITIVE_INFINITY)
+      relayed.slice(at, at + REMOVE_BATCH).map(async ({ folder, record }) => {
+        if (!routed || (await providerRelayRunLiveness(record, { observe: true })) !== 'gone') {
+          live.add(folder)
         }
       })
     )
   }
-  return spawnedAt
+  return live
 }
 
-/** An earlier run's leftovers go, except those of chats whose agent the terminal host kept running
- *  (that agent still reads them) and of chats this run launched. One host holds a profile. */
+/** An earlier run's leftovers go, except every folder of a chat whose relayed run may still go
+ *  (its agent reads them) and the newest of chats this run launched. One host holds a profile. */
 async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
   const length = nativeChatScratchFolderName('').length
-  const present = new Set(
-    (await readdir(root).catch(() => [])).map((name) => name.slice(0, length))
+  const listed = await readdir(root).then(
+    (names) => names,
+    (error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? [] : null)
   )
-  const spawnedAt = await relayedRunsNotGone(present)
+  // An unreadable root names no chats, so none could be asked about: a later launch tries again.
+  if (!listed) {
+    return false
+  }
+  const live = await liveRelayedChats(new Set(listed.map((name) => name.slice(0, length))))
   // Without the records no chat's run is known; a later launch tries again.
-  if (!spawnedAt) {
+  if (!live) {
     return false
   }
   // Read live: a launch that didn't wait for this names its chat before writing its folder.
-  const keptBy = (name: string): boolean => {
-    const chat = name.slice(0, length)
-    return (
-      (spawnedAt.has(chat) || launched.get(root)?.has(chat) === true) &&
-      ['', '.', '-'].includes(name.charAt(length))
+  const ownedBy = (name: string, chats: (chat: string) => boolean): boolean =>
+    chats(name.slice(0, length)) && ['', '.', '-'].includes(name.charAt(length))
+  const isLive = (name: string) => ownedBy(name, (chat) => live.has(chat))
+  const keptBy = (name: string) =>
+    isLive(name) || ownedBy(name, (chat) => launched.get(root)?.has(chat) === true)
+  // Only names read before the asks: a folder written since belongs to a launch of this run.
+  const older = new Set(
+    await olderLaunches(
+      root,
+      listed.filter((n) => keptBy(n) && !isLive(n))
     )
-  }
-  const names = await readdir(root).catch(() => [])
-  const older = new Set(await olderLaunches(root, names.filter(keptBy), spawnedAt))
-  const gone = [...names.filter((name) => !keptBy(name)), ...older]
+  )
+  const gone = [...listed.filter((name) => !keptBy(name)), ...older]
   for (let at = 0; at < gone.length; at += REMOVE_BATCH) {
     // Checked again per batch: a launch since names its chat before its first write.
     const batch = gone

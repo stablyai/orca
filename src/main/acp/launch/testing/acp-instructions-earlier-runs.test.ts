@@ -20,6 +20,7 @@ vi.mock('../../../provider-relay/app-provider-relays', () => ({
   providerRelayRunLiveness: async ({ sessionId }: { sessionId: string }) =>
     sessionId === 'kept-chat' ? 'unknown' : 'gone'
 }))
+vi.mock('../../../provider-relay/provider-relay-route', () => ({ providerRelayRoute: () => ({}) }))
 vi.mock('../../../runtime/agent-session/records/agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => ({
     listRecords: () => [relayedRun('kept-chat'), relayedRun('gone-chat')]
@@ -29,7 +30,7 @@ vi.mock('../../../runtime/agent-session/records/agent-session-record-store-slot'
 const { clearEarlierRunsOnce } = await import('../acp-instructions-earlier-runs')
 
 describe('clearing earlier runs’ instruction folders', () => {
-  it("keeps the kept agent's own launch folder, even beside a newer copy's, and drops the rest", async () => {
+  it('keeps every folder of a chat whose relayed run may still go, and drops the rest', async () => {
     const root = await mkdtemp(join(tmpdir(), 'acp-instructions-'))
     const kept = nativeChatScratchFolderName('kept-chat')
     const gone = nativeChatScratchFolderName('gone-chat')
@@ -44,7 +45,7 @@ describe('clearing earlier runs’ instruction folders', () => {
       await utimes(join(root, name), at / 1000, at / 1000)
     }
     await clearEarlierRunsOnce(root, 'new-chat', (path) => rm(path, { recursive: true }))
-    expect((await readdir(root)).sort()).toEqual([`${kept}-agent`, `${kept}-copy`])
+    expect((await readdir(root)).sort()).toEqual([`${kept}-agent`, `${kept}-copy`, `${kept}-old`])
     await rm(root, { recursive: true })
   })
 })
