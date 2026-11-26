@@ -22,7 +22,7 @@ import { createBot, useHostBots } from '@/lib/bot-catalog'
 import { handleScreenFormSubmitKey } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
 import { botCreateErrorMessage } from './bot-presentation'
-import { BotRunsOnPicker } from './BotRunsOnPicker'
+import { BotRunsOnPicker, useBotAgentFieldPlaceholder } from './BotRunsOnPicker'
 import { NewBotDialogFooter } from './NewBotDialogFooter'
 import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
@@ -138,6 +138,7 @@ export function NewBotDialog({
   const menu = useNewBotAgentMenu(hostId, open)
   // A bot from someone else's link starts on Ask, whatever the owner's chats do.
   const agentSetup = useBotAgentSetup(menu, hostId, initialAgent, fromShare && 'ask')
+  const agentPlaceholder = useBotAgentFieldPlaceholder(hostChoice, menu.model, menu.choices)
   const [creating, setCreating] = useState(false)
   const createInFlight = useRef(false)
   const [submitted, setSubmitted] = useState(false)
@@ -407,6 +408,7 @@ export function NewBotDialog({
           </div>
           <NewBotDialogFooter
             setup={agentSetup.setup}
+            agentPickerShown={!agentPlaceholder}
             onSetupChange={agentSetup.setSetup}
             onTemplate={
               showTemplateLink

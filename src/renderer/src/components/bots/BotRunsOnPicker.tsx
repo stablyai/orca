@@ -66,6 +66,19 @@ function BotFolderPreview({ name, host }: { name: string; host: BotCreateHostCho
   )
 }
 
+/** Whether New bot's Agent field shows a placeholder (no agents, or a WSL distro being set up or
+ *  waking) instead of the picker, so nothing offers to change a setup the owner cannot see. */
+export function useBotAgentFieldPlaceholder(
+  { host, wslSetup }: BotCreateHostChoice,
+  model: NewTabAgentMenuModel,
+  choices: readonly BotAgent[]
+): boolean {
+  const wslDistro = useWslHostDistro(host.hostId)
+  const noAgents = model.state === 'settled' && choices.length === 0
+  const hostWaking = Boolean(host.sleeping || host.waking)
+  return wslSetup.state.phase !== 'idle' || noAgents || (hostWaking && Boolean(wslDistro))
+}
+
 export function BotRunsOnPicker({
   hostChoice,
   setup,
@@ -123,6 +136,7 @@ export function BotRunsOnPicker({
   const setupState = wslSetup.state
   const settingUp = setupState.phase !== 'idle'
   const wslDistro = useWslHostDistro(host.hostId)
+  const placeholder = useBotAgentFieldPlaceholder(hostChoice, model, choices)
   const addedHostReady =
     setupState.phase === 'finding-agents' &&
     host.environmentId === setupState.environmentId &&
@@ -218,7 +232,7 @@ export function BotRunsOnPicker({
               : undefined
           }
         >
-          {fields && (settingUp || noAgents || (hostWaking && wslDistro)) ? (
+          {fields && placeholder ? (
             <div
               className={cn(
                 COMBOBOX_FIELD_SHELL,

@@ -12,6 +12,7 @@ import { NewBotShareBack } from './sharing/NewBotFromShareParts'
 
 export function NewBotDialogFooter({
   setup,
+  agentPickerShown,
   onSetupChange,
   onTemplate,
   shareSource,
@@ -19,6 +20,8 @@ export function NewBotDialogFooter({
   hostBusy
 }: {
   setup: BotAgentSetup
+  /** False while the Agent field shows a placeholder; the link resets only a setup on screen. */
+  agentPickerShown: boolean
   onSetupChange: (setup: BotAgentSetup, permissionPicked?: boolean) => void
   /** Offered only before anything is typed or picked, since it closes the dialog. */
   onTemplate?: () => void
@@ -27,7 +30,7 @@ export function NewBotDialogFooter({
   hostBusy: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const chatDefaults = botAgentSetupOnDefaults(setup, true)
+  const chatDefaults = agentPickerShown ? botAgentSetupOnDefaults(setup, true) : undefined
   const createRef = useRef<HTMLButtonElement>(null)
   return (
     <DialogFooter
