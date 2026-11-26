@@ -72,6 +72,7 @@ export const ReplyParams = z.object({
 })
 
 export const InboxParams = z.object({
+  report: z.string().min(1).optional(),
   limit: OptionalFiniteNumber,
   // Filter inbox by handle to agree with check --all.
   terminal: OptionalString,

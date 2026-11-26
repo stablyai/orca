@@ -6,6 +6,7 @@ import { openAsBlob } from 'node:fs'
 import { open, stat, unlink, type FileHandle } from 'node:fs/promises'
 import { basename, extname, resolve } from 'node:path'
 import type { ConnectorActionArgs } from '../../shared/connector-action-contract'
+import { refuseForwardedShell } from '../arguments/local-file-input'
 import { RuntimeClientError } from '../runtime/connection/types'
 
 /** A file to attach, as found where the bot's agent named it; its bytes are read only to send them. */
@@ -24,15 +25,7 @@ export type DownloadedFile = {
 
 type Fetch = typeof fetch
 
-// A forwarded shell's files are on another machine, out of this process's reach.
-export function refuseForwardedShell(): void {
-  if (process.env.ORCA_CLI_CWD) {
-    throw new RuntimeClientError(
-      'invalid_environment',
-      "This shell forwards orca to another machine, whose files this command can't reach. Run it from a shell on the machine that has them."
-    )
-  }
-}
+export { refuseForwardedShell }
 
 /** The file to attach, found here, where the bot's agent named it. */
 export async function localFile(cwd: string, path: string): Promise<LocalFile> {

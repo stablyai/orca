@@ -8,11 +8,14 @@ import { RuntimeClientError } from '../../runtime/connection/types'
  * the replay only if that runtime enforces replay-only. A release without the contract fence
  * would run the replay as a new send, so an unproven recipient gets nothing.
  */
-export function replayOnlyRecipientCheck(params: unknown): RuntimeRequestSelection {
+export function replayOnlyRecipientCheck(
+  params: unknown,
+  selection?: RuntimeRequestSelection
+): RuntimeRequestSelection {
   return {
     paramsForStatus: (status) => {
       if (advertisesReplayOnly(status)) {
-        return params
+        return selection ? selection.paramsForStatus(status) : params
       }
       throw new RuntimeClientError(
         RETRY_NOT_REPLAYABLE_CODE,
