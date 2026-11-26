@@ -62,9 +62,11 @@ export function RemoteServerOutageCard({
   const visible = reveal.visible && (speakingNow || !down)
   usePublishRemoteServerNoticeShowing(environmentId, visible)
   const [shown, setShown] = useState<ShownCard | null>(null)
+  // Keep the last outage state while the healthy hold and exit fade finish.
   if (
     visible &&
-    (shown === null || shown.downSince !== reveal.downSince || shown.stopped !== stopped)
+    (shown === null ||
+      (down && (shown.downSince !== reveal.downSince || shown.stopped !== stopped)))
   ) {
     setShown({ downSince: reveal.downSince, stopped })
   }

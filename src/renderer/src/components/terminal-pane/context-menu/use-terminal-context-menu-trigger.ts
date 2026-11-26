@@ -26,10 +26,6 @@ type TerminalContextMenuTrigger = {
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
 }
 
-function isVeilTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest('[data-remote-server-pane-veil]') !== null
-}
-
 export function useTerminalContextMenuTrigger({
   managerRef,
   containerRef,
@@ -104,20 +100,14 @@ export function useTerminalContextMenuTrigger({
     return manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
   }
 
-  const { onMouseDownCapture: captureRightClickPaste } = createTerminalRightClickPasteCapture({
+  const { onMouseDownCapture } = createTerminalRightClickPasteCapture({
     rightClickToPaste,
     findClickedPane
   })
 
-  const onMouseDownCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
-    if (!isVeilTarget(event.target)) {
-      captureRightClickPaste(event)
-    }
-  }
-
   const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
     const target = event.target
-    if (!managerRef.current || !(target instanceof Node) || isVeilTarget(target)) {
+    if (!managerRef.current || !(target instanceof Node)) {
       event.preventDefault()
       contextPaneIdRef.current = null
       return
