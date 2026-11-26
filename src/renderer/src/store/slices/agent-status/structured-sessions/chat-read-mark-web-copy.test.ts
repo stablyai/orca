@@ -396,23 +396,26 @@ it('copies a closed chat delivered only in an outranked paired reply', async () 
   expect(marks.stored().chatReadMarksCopiedHere).toBe(true)
 })
 
-it('bounds stored cutoffs on every flush across reloads', () => {
+it('keeps unrelated cutoffs when clearing and undoing at the hydration limit', () => {
+  const original = Object.fromEntries(
+    Array.from({ length: 500 }, (_, i) => [`terminal-${i}:pane-0`, i + 1])
+  )
   const marks = load({
     chatReadMarksCopiedHere: true,
-    activityClearedAtByPaneKey: Object.fromEntries(
-      Array.from({ length: 500 }, (_, i) => [`terminal-${i}:pane-0`, i + 1])
-    )
+    activityClearedAtByPaneKey: original
   })
-  let store = marks.store
-  for (const edit of [501, 502, 503]) {
-    const baseline = store.getState().persistedUIWriteBaseline!
-    const key = `new-terminal-${edit}:pane-0`
-    store.getState().applyActivityClearedAt({ [key]: edit })
-    writeWebChatReadMarkEdits(diffPersistedUIWriteFields(store.getState(), baseline), baseline)
-    const stored = marks.stored().activityClearedAtByPaneKey!
-    expect(Object.keys(stored)).toHaveLength(500)
-    expect(stored[key]).toBe(edit)
-    store = marks.reload()
-    expect(store.getState().activityClearedAtByPaneKey).toEqual(stored)
-  }
+  marks.replaceStored({
+    ...marks.stored(),
+    activityClearedAtByPaneKey: { ...original, 'other-tab:pane-0': 600 }
+  })
+  const clearBaseline = marks.store.getState().persistedUIWriteBaseline!
+  marks.store.getState().applyActivityClearedAt({ [TERMINAL]: 501 })
+  const cleared = marks.store.getState()
+  writeWebChatReadMarkEdits(diffPersistedUIWriteFields(cleared, clearBaseline), clearBaseline)
+
+  marks.store.getState().applyActivityClearedAt({ [TERMINAL]: null })
+  writeWebChatReadMarkEdits(diffPersistedUIWriteFields(marks.store.getState(), cleared), cleared)
+
+  expect(marks.stored().activityClearedAtByPaneKey).toEqual(original)
+  expect(marks.reload().getState().activityClearedAtByPaneKey).toEqual(original)
 })

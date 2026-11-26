@@ -21,7 +21,7 @@ export const CONSUMERS = new Map([
     {
       coldPaths: new Set(['rebuildFromSnapshot']),
       helpers: { rebuildFromSnapshot: ['advance'] },
-      imports: new Set(['chatPaneKey', 'isStructuredTab', 'readTabMapChanges'])
+      imports: new Set(['chatPaneKey', 'isStructuredTab', 'readTabMapChanges', 'readTabRowChanges'])
     }
   ],
   [

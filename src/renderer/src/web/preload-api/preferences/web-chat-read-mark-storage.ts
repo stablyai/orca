@@ -47,7 +47,8 @@ export function mergeWebChatReadMarkEdits(
     const current = changes[field]
     if (current) {
       stored[field] = sanitizePaneKeyTimestampRecord(
-        applyWebChatReadMarkEdits(storedMarkRecord(stored[field]), current, baseline[field])
+        applyWebChatReadMarkEdits(storedMarkRecord(stored[field]), current, baseline[field]),
+        current
       )
     }
   }
@@ -101,7 +102,7 @@ export function commitWebChatReadMarkCopy(
     }
   }
   for (const field of CHAT_READ_MARK_FIELDS) {
-    marks[field] = sanitizePaneKeyTimestampRecord(marks[field])
+    marks[field] = sanitizePaneKeyTimestampRecord(marks[field], changes[field] ?? baseline[field])
   }
   const result = { ...marks, chatReadMarksCopiedHere: true as const }
   writeJson(UI_STORAGE_KEY, { ...stored, ...result })

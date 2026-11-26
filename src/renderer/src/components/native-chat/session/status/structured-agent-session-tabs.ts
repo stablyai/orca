@@ -1,6 +1,7 @@
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { readTabRowChanges } from '@/store/record-transitions/keyed-tab-row-changes'
 import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
@@ -28,7 +29,7 @@ type Lineage = {
   /** The last materialized list, reused when a rebuild yields the same chats. */
   stale: readonly StructuredTab[] | null
   /** Open tabs per conversation pane key, kept with `chats` so a close never walks every tab. */
-  byConversation: Map<string, Set<StructuredTab>>
+  byConversation: Map<string, Map<string, Tab>>
 }
 let lineage: Lineage | null = null
 
@@ -81,22 +82,38 @@ function placeInOrder(target: Lineage, worktreeId: string, present: boolean): vo
   }
 }
 
-function indexConversations(
-  byConversation: Map<string, Set<StructuredTab>>,
-  tabs: readonly StructuredTab[],
-  present: boolean
+function updateConversationTab(
+  { byConversation }: Lineage,
+  worktreeId: string,
+  tabId: string,
+  before: Tab | undefined,
+  after: Tab | undefined
 ): void {
-  for (const tab of tabs) {
-    const key = chatPaneKey(tab.entityId)
+  if (
+    before === after ||
+    (before?.contentType !== 'agent-session' && after?.contentType !== 'agent-session')
+  ) {
+    return
+  }
+  const slot = `${worktreeId}\0${tabId}`
+  if (
+    before?.contentType === 'agent-session' &&
+    (after?.contentType !== 'agent-session' || before.entityId !== after.entityId)
+  ) {
+    const key = chatPaneKey(before.entityId)
     const showing = byConversation.get(key)
-    if (present) {
-      if (showing) {
-        showing.add(tab)
-      } else {
-        byConversation.set(key, new Set([tab]))
-      }
-    } else if (showing?.delete(tab) && showing.size === 0) {
+    if (showing?.delete(slot) && showing.size === 0) {
       byConversation.delete(key)
+    }
+  }
+  if (after?.contentType === 'agent-session') {
+    const key = chatPaneKey(after.entityId)
+    const showing = byConversation.get(key)
+    if (showing) {
+      // Refresh row metadata in place without changing its conversation membership.
+      showing.set(slot, after)
+    } else {
+      byConversation.set(key, new Map([[slot, after]]))
     }
   }
 }
@@ -106,8 +123,6 @@ function setChats(target: Lineage, worktreeId: string, tabs: readonly Structured
   if (tabs === before) {
     return
   }
-  indexConversations(target.byConversation, before, false)
-  indexConversations(target.byConversation, tabs, true)
   if (!before.length !== !tabs.length) {
     placeInOrder(target, worktreeId, tabs.length > 0)
   }
@@ -134,10 +149,13 @@ function rebuildFromSnapshot(source: TabsByWorktree, previous: Lineage | null): 
   }
   for (const worktreeId of Object.keys(source)) {
     rebuilt.rank.set(worktreeId, rebuilt.nextRank++)
-    const tabs = structuredTabsOf(source[worktreeId] ?? [], previous?.chats.get(worktreeId))
+    const bucket = source[worktreeId] ?? []
+    const tabs = structuredTabsOf(bucket, previous?.chats.get(worktreeId))
     if (tabs.length) {
       rebuilt.chats.set(worktreeId, tabs)
-      indexConversations(rebuilt.byConversation, tabs, true)
+    }
+    for (const tab of bucket) {
+      updateConversationTab(rebuilt, worktreeId, tab.id, undefined, tab)
     }
   }
   return rebuilt
@@ -155,8 +173,32 @@ function applyAddressed(
   for (const worktreeId of changes.addedWorkspaceIds) {
     target.rank.set(worktreeId, target.nextRank++)
   }
+  const changedRows = readTabRowChanges(source, target.source)
   for (const worktreeId of changes.workspaceIds) {
     const bucket = Object.hasOwn(source, worktreeId) ? source[worktreeId] : undefined
+    if (changedRows === 'unknown') {
+      // A reorder can hide row provenance, but the changed tab IDs are still available.
+      const previous = Object.hasOwn(target.source, worktreeId) ? target.source[worktreeId] : []
+      const before = new Map<string, Tab>()
+      for (const tab of previous) {
+        if (changes.tabIds.has(tab.id) && tab.contentType === 'agent-session') {
+          before.set(tab.id, tab)
+        }
+      }
+      for (const tab of bucket ?? []) {
+        if (changes.tabIds.has(tab.id) && tab.contentType === 'agent-session') {
+          updateConversationTab(target, worktreeId, tab.id, before.get(tab.id), tab)
+          before.delete(tab.id)
+        }
+      }
+      for (const [tabId, tab] of before) {
+        updateConversationTab(target, worktreeId, tabId, tab, undefined)
+      }
+    } else {
+      for (const [tabId, row] of changedRows?.get(worktreeId) ?? []) {
+        updateConversationTab(target, worktreeId, tabId, row.before, row.after)
+      }
+    }
     setChats(
       target,
       worktreeId,
@@ -195,14 +237,27 @@ function materialize(current: Lineage): readonly StructuredTab[] {
   return current.list
 }
 
-const NO_CONVERSATION_TABS: ReadonlySet<StructuredTab> = new Set()
+const NO_CONVERSATION_TABS: ReadonlyMap<string, Tab> = new Map()
 
 /** Every open tab showing the conversation with this pane key, in any workspace. */
-export function structuredTabsShowingConversation(
+export function chatTabsShowingConversation(
   unifiedTabsByWorktree: TabsByWorktree,
   paneKey: string
-): ReadonlySet<StructuredTab> {
-  return advance(unifiedTabsByWorktree).byConversation.get(paneKey) ?? NO_CONVERSATION_TABS
+): Iterable<Tab> {
+  return (
+    advance(unifiedTabsByWorktree).byConversation.get(paneKey) ?? NO_CONVERSATION_TABS
+  ).values()
+}
+
+export function* structuredTabsShowingConversation(
+  unifiedTabsByWorktree: TabsByWorktree,
+  paneKey: string
+): IterableIterator<StructuredTab> {
+  for (const tab of chatTabsShowingConversation(unifiedTabsByWorktree, paneKey)) {
+    if (isStructuredTab(tab)) {
+      yield tab
+    }
+  }
 }
 
 /** Structured-session tabs; the same list while no chat tab changed, so non-chat tab writes stay quiet. */

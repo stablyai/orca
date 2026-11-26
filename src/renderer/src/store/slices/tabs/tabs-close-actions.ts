@@ -5,7 +5,10 @@ import {
   chatPaneAddressTabId,
   chatPaneKey
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { structuredTabsShowingConversation } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import {
+  chatTabsShowingConversation,
+  structuredTabsShowingConversation
+} from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
   landsOnEmptiedWorktree,
   emptiedWorktreeLandingPatch,
@@ -63,6 +66,24 @@ function closedChatPaneTabIds(
   return [chatPaneAddressTabId(closed.entityId)]
 }
 
+function anotherChatTabInWorktree(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  closed: Tab,
+  worktreeId: string,
+  matches?: (tab: Tab) => boolean
+): boolean {
+  const showing = chatTabsShowingConversation(
+    state.unifiedTabsByWorktree,
+    chatPaneKey(closed.entityId)
+  )
+  for (const tab of showing) {
+    if (tab.id !== closed.id && tab.worktreeId === worktreeId && (!matches || matches(tab))) {
+      return true
+    }
+  }
+  return false
+}
+
 export function createTabsCloseActions(
   set: TabsSliceSet,
   get: TabsSliceGet
@@ -98,13 +119,13 @@ export function createTabsCloseActions(
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0
       const retainedChatView =
+        tab.contentType === 'agent-session' &&
         opts?.preserveAgentSession &&
-        (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-          (other) =>
-            other.id !== tab.id &&
-            other.contentType === 'agent-session' &&
-            other.entityId === tab.entityId &&
-            other.executionHostId === tab.executionHostId
+        anotherChatTabInWorktree(
+          state,
+          tab,
+          worktreeId,
+          (other) => other.executionHostId === tab.executionHostId
         )
       if (tab.contentType === 'agent-session' && !retainedChatView) {
         const provisional =
@@ -171,12 +192,9 @@ export function createTabsCloseActions(
               return false
             })
             if (closed?.contentType === 'agent-session') {
-              const sessionId = closed.entityId
               retireNativeChatTab(
                 closed,
-                nextTabs.some(
-                  (other) => other.contentType === 'agent-session' && other.entityId === sessionId
-                )
+                anotherChatTabInWorktree(current, closed, worktreeId)
               )
             }
             // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.

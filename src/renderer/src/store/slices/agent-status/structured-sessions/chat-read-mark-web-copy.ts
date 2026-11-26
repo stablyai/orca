@@ -304,6 +304,37 @@ export function receiveWebChatReadMarkCandidates(
   }
 }
 
+export function retireWebChatReadMarkWorkspace(
+  environmentId: string,
+  worktreeId: string,
+  runtimeId: string | undefined,
+  trackingRecord: object | undefined,
+  readState: () => CopyState,
+  censusMember: boolean
+): CopyPatch | undefined {
+  const copy = migration
+  if (!copy) {
+    return
+  }
+  if (trackingRecord) {
+    copy.receipts.delete(trackingRecord)
+  }
+  const census = copy.census
+  if (census?.environmentId !== environmentId || !census.listed.delete(worktreeId)) {
+    return
+  }
+  if (
+    census.uncovered.delete(worktreeId) &&
+    census.uncovered.size === 0 &&
+    census.listed.size > 0 &&
+    census.runtimeId === runtimeId &&
+    !censusMember &&
+    !copy.writeFailed
+  ) {
+    return completeFromTabs(copy, readState())
+  }
+}
+
 export function forgetWebChatReadMarkCensus(environmentId: string): void {
   if (migration?.census?.environmentId === environmentId) {
     delete migration.census

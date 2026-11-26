@@ -82,7 +82,7 @@ function botSessionStandIn(
     // A tab in any workspace shows it, so that tab, not a stand-in, carries its status.
     if (
       tabbed.has(sessionId) ||
-      structuredTabsShowingConversation(unifiedTabsByWorktree, chatPaneKey(sessionId)).size > 0
+      !structuredTabsShowingConversation(unifiedTabsByWorktree, chatPaneKey(sessionId)).next().done
     ) {
       return null
     }

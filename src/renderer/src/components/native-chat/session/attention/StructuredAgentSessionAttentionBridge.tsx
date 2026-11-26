@@ -253,11 +253,6 @@ function isLaterCursor(candidate: AgentJournalCursor, current: AgentJournalCurso
   return candidate.epoch !== current.epoch || candidate.sequence > current.sequence
 }
 
-function oneTabPerConversation(tabs: readonly StructuredTab[]): StructuredTab[] {
-  const seen = new Set<string>()
-  return tabs.filter((tab) => !seen.has(tab.entityId) && Boolean(seen.add(tab.entityId)))
-}
-
 export function StructuredAgentSessionAttentionBridge(): React.JSX.Element {
   const tabs = useAppStore(
     useShallow((state) => getStructuredAgentSessionTabs(state.unifiedTabsByWorktree))
@@ -267,13 +262,18 @@ export function StructuredAgentSessionAttentionBridge(): React.JSX.Element {
     readBotBackgroundSessionTabs,
     readBotBackgroundSessionTabs
   )
+  const seen = new Set<string>()
   return (
     <>
       {/* A bot's thread or run has no tab until it is opened, and still notifies. One bridge per
           conversation: its read capture is registered under the conversation's pane key. */}
-      {oneTabPerConversation([...tabs, ...background]).map((tab) => (
-        <StructuredAgentSessionAttention key={`${tab.id}:${tab.entityId}`} tab={tab} />
-      ))}
+      {[...tabs, ...background].map((tab) => {
+        if (seen.has(tab.entityId)) {
+          return null
+        }
+        seen.add(tab.entityId)
+        return <StructuredAgentSessionAttention key={`${tab.id}:${tab.entityId}`} tab={tab} />
+      })}
     </>
   )
 }

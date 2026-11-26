@@ -34,9 +34,11 @@ import {
   isWebChatReadMarkCopyPending,
   receiveWebChatReadMarkCandidates,
   receiveWebChatReadMarkCensus,
-  receiveWebChatReadMarkFrame
+  receiveWebChatReadMarkFrame,
+  retireWebChatReadMarkWorkspace
 } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
+import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import { collectCancelledStructuredSessionIds } from '../../native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import type { TerminalOrphanRecoveryOptions } from '../../hosted-terminals/recovery/web-session-terminal-orphan-recovery-options'
 
@@ -119,7 +121,7 @@ export function recordReceivedWebSessionTabsSnapshot(
   }
   recordReceivedWebSessionTabsEnvironmentFrame(environmentId, frame)
   const publicationEpoch = snapshot.publicationEpoch
-  const isRetraction = 'removed' in snapshot && snapshot.removed === true
+  const isRetraction = isWebSessionTabsWorktreeRemovalFrame(snapshot)
   const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
   // Fence retired lineages, not strings; merged predecessors otherwise become current and retire the live successor.
   if (isRetiredSessionTabsPublicationEpoch(key, publicationEpoch)) {
@@ -166,7 +168,15 @@ export function recordReceivedWebSessionTabsSnapshot(
     (entry) => entry.receivedFrame
   )
   if (isRetraction) {
-    recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame, publicationEpoch)
+    recordReceivedWebSessionTabsRemoval(
+      environmentId,
+      snapshot.worktree,
+      frame,
+      publicationEpoch,
+      runtimeId,
+      censusMember
+    )
+    return frame
   }
   if (
     !isWebChatReadMarkCopyPending() ||
@@ -181,7 +191,7 @@ export function recordReceivedWebSessionTabsSnapshot(
     worktreeId: snapshot.worktree,
     runtimeId,
     trackingRecord: sessionTabsPublicationEpochHistoryByWorktree.get(key),
-    affirmsChats: !isRetraction && hostSnapshotAffirmsAgentSessions(snapshot),
+    affirmsChats: hostSnapshotAffirmsAgentSessions(snapshot),
     tabs: snapshot.tabs,
     censusMember,
     // Share the stream's pre-recovery tab walk with cancelled-chat detection.
@@ -243,8 +253,9 @@ export function recordWebSessionTabsCensusForChatReadMarks(
     environmentId,
     runtimeId,
     (function* () {
-      for (const { worktree } of snapshots) {
-        if (isHostMirroredWorktree(worktree)) {
+      for (const snapshot of snapshots) {
+        const { worktree } = snapshot
+        if (isHostMirroredWorktree(worktree) && !isWebSessionTabsWorktreeRemovalFrame(snapshot)) {
           yield [
             worktree,
             sessionTabsPublicationEpochHistoryByWorktree.get(
@@ -271,12 +282,15 @@ export function recordReceivedWebSessionTabsRemoval(
   environmentId: string,
   worktreeId: string,
   receivedFrame: number,
-  publicationEpoch: string
+  publicationEpoch: string,
+  runtimeId?: string,
+  censusMember = false
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   const latest = latestReceivedSessionTabsSnapshotByWorktree.get(key)
+  const recordsLatestReceipt = !latest || latest.receivedFrame <= receivedFrame
   // Retraction is fresh evidence. Record its receipt plus a persistent watermark: later republication overwrites the slot but must not erase the pre-close fence.
-  if (!latest || latest.receivedFrame <= receivedFrame) {
+  if (recordsLatestReceipt) {
     setBoundedSessionTabsReceipt(
       latestReceivedSessionTabsSnapshotByWorktree,
       key,
@@ -287,6 +301,33 @@ export function recordReceivedWebSessionTabsRemoval(
   const watermark = sessionTabsRemovalWatermarkByWorktree.get(key) ?? 0
   if (receivedFrame > watermark) {
     sessionTabsRemovalWatermarkByWorktree.set(key, receivedFrame)
+    if (recordsLatestReceipt) {
+      retireWebSessionTabsReadMarkWorkspace(environmentId, worktreeId, runtimeId, censusMember)
+    }
+  }
+}
+
+export function retireWebSessionTabsReadMarkWorkspace(
+  environmentId: string,
+  worktreeId: string,
+  runtimeId?: string,
+  censusMember = false
+): void {
+  if (!isWebChatReadMarkCopyPending()) {
+    return
+  }
+  const copied = retireWebChatReadMarkWorkspace(
+    environmentId,
+    worktreeId,
+    runtimeId,
+    sessionTabsPublicationEpochHistoryByWorktree.get(
+      sessionTabsFreshnessKey(environmentId, worktreeId)
+    ),
+    useAppStore.getState,
+    censusMember
+  )
+  if (copied) {
+    useAppStore.setState(copied)
   }
 }
 

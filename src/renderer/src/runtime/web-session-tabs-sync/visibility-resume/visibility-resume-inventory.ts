@@ -65,7 +65,8 @@ export function recordVisibilityResumeInventoryReceipt(args: {
       environmentId,
       missing.snapshot.worktree,
       inventoryReceivedFrame,
-      missing.snapshot.publicationEpoch
+      missing.snapshot.publicationEpoch,
+      runtimeId
     )
     return {
       environmentId,

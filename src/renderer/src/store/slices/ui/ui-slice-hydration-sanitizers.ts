@@ -115,7 +115,10 @@ export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosit
 // read state is never age-pruned; the newest entries bound growth instead.
 const PANE_KEY_TIMESTAMP_MAX_ENTRIES = 500
 
-export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, number> {
+export function sanitizePaneKeyTimestampRecord(
+  value: unknown,
+  current?: Readonly<Record<string, number>>
+): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
@@ -139,15 +142,25 @@ export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, n
   const conversationLeaves = new Set(
     entries.flatMap(([key]) => (chatPaneKeySessionId(key) === null ? [] : [leaf(key)]))
   )
-  const groups = new Map<string, { at: number; keys: [string, number][] }>()
+  const groups = new Map<string, { at: number; keys: [string, number][]; retained: boolean }>()
+  const retained: [string, number][] = []
+  let retainedGroups = 0
   for (const entry of entries) {
     const group = conversationLeaves.has(leaf(entry[0])) ? `\0${leaf(entry[0])}` : entry[0]
+    const keep = current !== undefined && Object.hasOwn(current, entry[0])
     const found = groups.get(group)
+    if (keep) {
+      retained.push(entry)
+      if (!found?.retained) {
+        retainedGroups += 1
+      }
+    }
     if (found) {
       found.keys.push(entry)
       found.at = Math.max(found.at, entry[1])
+      found.retained ||= keep
     } else {
-      groups.set(group, { at: entry[1], keys: [entry] })
+      groups.set(group, { at: entry[1], keys: [entry], retained: keep })
     }
   }
   if (
@@ -156,14 +169,21 @@ export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, n
   ) {
     return out
   }
-  // A group is a chat's few keys; the newest keys overall still bound a hand-built record.
-  return Object.fromEntries(
-    [...groups.values()]
-      .toSorted((left, right) => right.at - left.at)
-      .slice(0, PANE_KEY_TIMESTAMP_MAX_ENTRIES)
-      .flatMap(({ keys }) => keys.toSorted((left, right) => right[1] - left[1]))
-      .slice(0, 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES)
-  )
+  // Web writes reserve space for this tab's marks before applying the hydration limits.
+  const available = 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES - retained.length
+  if (available <= 0) {
+    return Object.fromEntries(retained)
+  }
+  const remaining = [...groups.values()]
+    .toSorted((left, right) => Number(right.retained) - Number(left.retained) || right.at - left.at)
+    .slice(0, Math.max(PANE_KEY_TIMESTAMP_MAX_ENTRIES, retainedGroups))
+    .flatMap(({ keys }) =>
+      keys
+        .filter(([key]) => current === undefined || !Object.hasOwn(current, key))
+        .toSorted((left, right) => right[1] - left[1])
+    )
+    .slice(0, available)
+  return Object.fromEntries([...retained, ...remaining])
 }
 
 export function sanitizeWorkspaceCleanupDismissals(
