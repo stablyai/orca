@@ -6,6 +6,7 @@ import type {
   RateLimitState
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
+import { readKimchiUsageAuth } from '../providers/kimchi/kimchi-auth'
 import { fetchKimchiRateLimits } from '../providers/kimchi/kimchi-fetcher'
 import { RateLimitService } from './rate-limit-service'
 
@@ -31,6 +32,7 @@ vi.mock('../providers/opencode-go/opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: unavailable('opencode-go')
 }))
 vi.mock('../providers/kimi/kimi-fetcher', () => ({ fetchKimiRateLimits: vi.fn() }))
+vi.mock('../providers/kimchi/kimchi-auth', () => ({ readKimchiUsageAuth: vi.fn() }))
 vi.mock('../providers/kimchi/kimchi-fetcher', () => ({ fetchKimchiRateLimits: vi.fn() }))
 vi.mock('../providers/minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: unavailable('minimax')
@@ -61,6 +63,11 @@ vi.mock('../../minimax/minimax-api-key-store', () => ({ hasMiniMaxApiKey: async 
 vi.mock('../../zcode/zcode-plan-api-key-store', () => ({ hasZcodePlanApiKey: async () => false }))
 
 beforeEach(() => {
+  vi.mocked(readKimchiUsageAuth).mockReset()
+  vi.mocked(readKimchiUsageAuth).mockResolvedValue({
+    status: 'missing',
+    error: 'No Kimchi sign-in'
+  })
   vi.mocked(fetchKimchiRateLimits).mockReset()
   vi.mocked(fetchKimchiRateLimits).mockImplementation(unavailable('kimchi'))
 })
@@ -174,6 +181,65 @@ it('waits out Kimchi Retry-After in automatic full cycles but allows manual refr
 
     await service.refresh()
     expect(vi.mocked(fetchKimchiRateLimits)).toHaveBeenCalledTimes(2)
+  } finally {
+    service.stop()
+  }
+})
+
+it('discards Kimchi usage when credentials change while sibling providers settle', async () => {
+  let resolveKimi: ((value: ProviderRateLimits) => void) | undefined
+  vi.mocked(fetchKimiRateLimits).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveKimi = resolve
+      })
+  )
+  vi.mocked(fetchKimchiRateLimits).mockResolvedValue({
+    provider: 'kimchi',
+    session: null,
+    weekly: null,
+    monthly: {
+      usedPercent: 16,
+      windowMinutes: 43_200,
+      resetsAt: null,
+      resetDescription: null
+    },
+    updatedAt: Date.now(),
+    error: null,
+    status: 'ok',
+    usageMetadata: { source: 'cli', authProvenance: 'old-account' }
+  })
+  vi.mocked(readKimchiUsageAuth).mockResolvedValue({
+    status: 'ok',
+    auth: {
+      apiKey: 'new-key',
+      apiBaseUrl: 'https://api.cast.ai',
+      credentialSource: 'config',
+      authProvenance: 'new-account'
+    }
+  })
+  const service = new RateLimitService()
+
+  try {
+    const refreshing = service.refresh()
+    await vi.waitFor(() => expect(fetchKimchiRateLimits).toHaveBeenCalledTimes(1))
+    expect(readKimchiUsageAuth).not.toHaveBeenCalled()
+    resolveKimi?.(await unavailable('kimi')())
+
+    await expect(refreshing).resolves.toMatchObject({
+      kimchi: {
+        provider: 'kimchi',
+        session: null,
+        weekly: null,
+        monthly: null,
+        status: 'error',
+        error: 'Kimchi account changed during refresh',
+        usageMetadata: {
+          authProvenance: 'new-account',
+          failureKind: 'missing-credentials'
+        }
+      }
+    })
   } finally {
     service.stop()
   }

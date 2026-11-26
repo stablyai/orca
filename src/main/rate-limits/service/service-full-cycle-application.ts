@@ -1,5 +1,6 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { isZcodeUsageCredentialCurrent } from '../providers/zcode/zcode-usage-credentials'
+import { ensureKimchiUsageCredentialCurrent } from '../providers/kimchi/kimchi-usage-credentials'
 import {
   settleSiblingProviderResult,
   type SettledProviderResult
@@ -209,7 +210,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
-    const kimchi = settleSiblingProviderResult('kimchi', kimchiSettled)
+    const settledKimchi = settleSiblingProviderResult('kimchi', kimchiSettled)
+    const kimchi = kimchiFetchGated
+      ? settledKimchi
+      : await ensureKimchiUsageCredentialCurrent(settledKimchi)
+    if (signal.aborted) {
+      return
+    }
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const zcode = isZcodeUsageCredentialCurrent(settledZcode)
       ? settledZcode
