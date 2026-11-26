@@ -15,7 +15,6 @@ import {
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
-const WSL_AGENT_RECHECK_TTL_MS = 30_000
 const wslAgentRechecks = new Map<string, Promise<string | undefined>>()
 
 export type WslPreflightTarget = {
@@ -63,13 +62,8 @@ export function recheckWslAgentPath(
   if (existing) {
     return waitForPromiseWithSignal(existing, signal)
   }
-  const recheck = probeWslAgentPath(distro, candidate).then((value) => {
-    if (value === undefined) {
-      wslAgentRechecks.delete(key)
-    } else {
-      setTimeout(() => wslAgentRechecks.delete(key), WSL_AGENT_RECHECK_TTL_MS).unref()
-    }
-    return value
+  const recheck = probeWslAgentPath(distro, candidate).finally(() => {
+    wslAgentRechecks.delete(key)
   })
   wslAgentRechecks.set(key, recheck)
   return waitForPromiseWithSignal(recheck, signal)

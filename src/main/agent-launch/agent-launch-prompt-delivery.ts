@@ -56,14 +56,11 @@ export function settledAtCreation(
     return structuredLaunchSubmitText(intent) === undefined ? NOT_DELIVERED : UNCONFIRMED
   }
   const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
-  if (gate && created.promptRodeLaunchCommand) {
-    return UNCONFIRMED
-  }
   if (gate?.verified === false) {
     return NOT_DELIVERED
   }
   if (created.promptRodeLaunchCommand) {
-    return HANDED_TO_TERMINAL
+    return gate ? UNCONFIRMED : HANDED_TO_TERMINAL
   }
   return intent.prompt?.delivery === 'submit' ? UNCONFIRMED : NOT_DELIVERED
 }
@@ -73,7 +70,7 @@ export async function settleLaunchPromptDisposal(
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
   const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
-  if (gate && created.promptRodeLaunchCommand) {
+  if (gate?.verified && created.promptRodeLaunchCommand) {
     const started = await waitForPromiseWithSignal(gate.started, execution.signal).catch(
       () => undefined
     )

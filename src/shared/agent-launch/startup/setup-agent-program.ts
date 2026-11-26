@@ -54,15 +54,19 @@ export function buildSetupAgentRecheck(
 export function buildPosixSetupAgentRecheck(timeoutSeconds: number): string[] {
   return [
     'supervisor=;',
+    'trap \'kill -TERM "$supervisor" 2>/dev/null; exit 129\' HUP;',
     'trap \'kill -TERM "$supervisor" 2>/dev/null; exit 130\' INT;',
     'trap \'kill -TERM "$supervisor" 2>/dev/null; exit 143\' TERM;',
     'exec 3< <(',
     '  exec 2>/dev/null;',
-    '  worker=;',
-    '  cleanup() { [ -z "$worker" ] || kill -KILL -- "-$worker" || :; };',
-    "  trap 'cleanup; exit 1' INT TERM;",
+    '  interrupted=;',
+    "  trap 'interrupted=1' HUP INT TERM;",
     '  set -m;',
     `  (set +m; eval "$${SETUP_AGENT_RECHECK_ENV}") </dev/null & worker=$!;`,
+    `  (set +m; command -p sleep ${timeoutSeconds} && kill -KILL -- "-$worker") </dev/null & watchdog=$!;`,
+    '  cleanup() { kill -KILL -- "-$worker" "-$watchdog" || :; };',
+    "  trap 'cleanup; exit 1' HUP INT TERM;",
+    '  [ -z "$interrupted" ] || { cleanup; exit 1; };',
     // Complete the pipe record only after the worker exits successfully.
     '  recheck_status=0; wait "$worker" || recheck_status=$?;',
     '  cleanup;',
@@ -72,7 +76,7 @@ export function buildPosixSetupAgentRecheck(timeoutSeconds: number): string[] {
     `  ${SETUP_AGENT_ARGV0_ENV}=\${checked%%/*};`,
     `  ${SETUP_AGENT_EXECUTABLE_ENV}=/\${checked#*/};`,
     'else kill -TERM "$supervisor" 2>/dev/null || :; fi;',
-    'exec 3<&-; trap - INT TERM;'
+    'exec 3<&-; trap - HUP INT TERM;'
   ]
 }
 
@@ -115,6 +119,7 @@ function buildPosixRecheck(path: string): string {
     'pin=${pin%.}',
     '[ -f "$pin" ] && [ -x "$pin" ] || exit 1',
     'magic=; LC_ALL=C IFS= read -r -n 2 -d "" magic < "$pin" || :',
+    // Preserve script basename and sidecar lookup, accepting that the checked spelling may be retargeted before exec.
     'if [ "$magic" = "#!" ]; then pin=$program; fi',
     'printf "%s%s" "${program##*/}" "$pin"'
   ].join('\n')

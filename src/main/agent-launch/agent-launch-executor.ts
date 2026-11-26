@@ -50,18 +50,19 @@ import {
   recoverCreatedWorkspace
 } from './agent-launch-created-workspace'
 
-import { opening, type AgentLaunchOpening } from './agent-launch-opening'
+import {
+  opening,
+  launchResult,
+  type AgentLaunchOpening,
+  type DeferredSetupPrompt
+} from './agent-launch-opening'
 
 export type { AgentLaunchExecution } from './agent-launch-execution'
 
 export async function executeAgentLaunch(
-  execution: AgentLaunchExecution
+  execution: AgentLaunchExecution & { deferredSetupPrompt?: DeferredSetupPrompt }
 ): Promise<AgentLaunchResult> {
-  const settled = await (await openAgentLaunch(execution)).settlement
-  if (settled.status === 'rejected') {
-    throw settled.reason
-  }
-  return settled.value
+  return launchResult(await openAgentLaunch(execution), execution.deferredSetupPrompt)
 }
 
 /** Resolve once the surface is published; prompt delivery continues in `settlement`. */

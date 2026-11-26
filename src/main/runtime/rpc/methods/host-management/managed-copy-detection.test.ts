@@ -481,7 +481,7 @@ it('launches from each scan while unrelated installer reads are still pending', 
     successorHeld.resolve()
     await expect(refresh).resolves.toEqual(new Set(['claude']))
     await expect(readLocalTerminalAgentProgram('claude', shell)).resolves.toEqual({
-      kind: 'by-name',
+      kind: 'full-path',
       path: replacement
     })
     expect(fixture.enumerate).toHaveBeenCalledTimes(2)

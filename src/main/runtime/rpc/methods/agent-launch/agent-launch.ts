@@ -58,20 +58,22 @@ import {
 } from './agent-launch-tab-publication'
 
 type HostLaunchContext = RpcContext & {
+  deferSetupPrompt?: true
   agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
 }
 
-async function runAgentLaunch(
+function runAgentLaunch(
   { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
   context: HostLaunchContext,
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
   const callerNavigationId = agentLaunchCallerNavigationId(context)
-  const result = await executeAgentLaunch({
+  return executeAgentLaunch({
     runtime: context.runtime,
     intent,
     decidedMode,
+    deferredSetupPrompt: context.deferSetupPrompt && (replaySafe?.deferPrompt ?? true),
     surfaces: agentLaunchSurfaceFactory(
       context,
       replaySafe?.attachOperationId,
@@ -93,8 +95,7 @@ async function runAgentLaunch(
       replaySafe?.recordSurface(withPlacement(surface, view))
       await selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
     }
-  })
-  return withPlacement(result, view)
+  }).then((result) => withPlacement(result, view))
 }
 
 /** Legacy unnamed launches retain the 60-second create dedupe cache (repo/mutation id, no caller partition).
@@ -207,7 +208,8 @@ async function executeAdmittedAgentLaunch(
       attachOperationId: admission.attachOperationId,
       callerKey: admission.callerKey,
       terminalSpawn,
-      recordSurface: (provisional) => void settleQuietly(admission.record(provisional))
+      recordSurface: (provisional) => void settleQuietly(admission.record(provisional)),
+      deferPrompt: admission.deferPrompt
     })
   } catch (error) {
     if (view.early?.closedByUser()) {
@@ -227,9 +229,7 @@ async function executeAdmittedAgentLaunch(
     // The user closed its tab after the spawn left: the agent stops, as any closed tab's does.
     await settleLaunchWhoseTabWasClosed(context, view.early, admission)
   }
-  // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
-  await settleQuietly(admission.settle(result))
-  return handedOff(result)
+  return settleQuietly(admission.settle(result, handedOff)).then(() => result)
 }
 
 function runReplaySafeAgentLaunch(
@@ -264,7 +264,8 @@ export const AGENT_LAUNCH_METHODS = [
     requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
     params: AgentLaunchReplay,
-    handler: async (params, context): Promise<AgentLaunchResult> => {
+    handler: async (params, rpc): Promise<AgentLaunchResult> => {
+      const context: HostLaunchContext = { ...rpc, deferSetupPrompt: true }
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_replay_unsupported')
       }
@@ -296,14 +297,14 @@ export const AGENT_LAUNCH_METHODS = [
     requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
     params: AgentLaunch,
-    handler: (params, context) => launchAgentOnHost(params, context)
+    handler: (params, context) => launchAgentOnHost(params, { ...context, deferSetupPrompt: true })
   })
 ]
 
 /** In-process schedules and RPC callers share admission, factories and prompt settlement. */
 export async function launchAgentOnHost(
   { operationId, ...params }: AgentLaunchParams,
-  context: RpcContext,
+  context: HostLaunchContext,
   policy?: HostLaunchContext['agentLaunchPolicy']
 ): Promise<AgentLaunchResult> {
   const host = { ...context, agentLaunchPolicy: policy }
