@@ -85,27 +85,27 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
     }
-    const tellWake = () => {
-      if (wakeNote) {
-        process.stderr.write(`${wakeNote}\n`)
-      }
-    }
+    // Once a start was sent, the note prints however it ends: started, recovered or thrown.
     const result = await callOrchestrationMutation<WorkerStartAgentReceipt>(
       client,
       flags,
       'orchestration.workerStart',
       params
-    ).catch(async (error: unknown) => {
-      if (!flags.has('retry-request')) {
-        const recovered = await reconcileWorkerStartTimeout(client, error)
-        if (recovered) {
-          return recovered
+    )
+      .catch(async (error: unknown) => {
+        if (!flags.has('retry-request')) {
+          const recovered = await reconcileWorkerStartTimeout(client, error)
+          if (recovered) {
+            return recovered
+          }
         }
-      }
-      tellWake()
-      throw await explainOlderRuntimeRunRequired(client, error)
-    })
-    tellWake()
+        throw await explainOlderRuntimeRunRequired(client, error)
+      })
+      .finally(() => {
+        if (wakeNote) {
+          process.stderr.write(`${wakeNote}\n`)
+        }
+      })
     if (result.result.state !== 'ready') {
       process.exitCode = 1
     }
