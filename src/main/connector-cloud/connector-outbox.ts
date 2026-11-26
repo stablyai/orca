@@ -2,7 +2,7 @@ import { CONNECTOR_MAX_RETRY_AFTER_MS, type ConnectorFailure } from './connector
 
 const RETRY_BASE_MS = 1_000
 const RETRY_MAX_MS = 30_000
-const DEFERRED_LANE_RETRY_MS = 30_000
+const DEFERRED_ANSWER_RETRY_MS = 30_000
 
 /** Random doubling from 1 s to 30 s (or maxMs); a cloud's Retry-After wins when longer, up to 10 minutes. */
 export function connectorRetryDelayMs(
@@ -32,7 +32,8 @@ export type ConnectorOutboxHead<T> = { stamp: ConnectorStamp; batch: T[] }
 export class ConnectorOutbox<T> {
   private items: T[]
   private stamp: ConnectorStamp | null = null
-  private deferredLanes: Set<string> | null = null
+  private readonly deferredItems = new Set<T>()
+  private readonly sizeRefusedItems = new Set<T>()
   private deferredRetry: ReturnType<typeof setTimeout> | undefined
 
   constructor(
@@ -50,9 +51,17 @@ export class ConnectorOutbox<T> {
       onStamped?: (batch: readonly T[], stamp: ConnectorStamp) => void
       /** A refused head was halved, keeping its number. */
       onSplit?: (batch: readonly T[], from: ConnectorStamp, to: ConnectorStamp) => void
-      /** A refused lane stays owed while unrelated lanes go on. */
-      lane?: (item: T) => string | undefined
-      deferRefused?: (item: T, failure?: ConnectorFailure) => boolean
+      /** Keep a refused answer while later events can proceed. */
+      deferRefused?: (
+        item: T,
+        failure?: ConnectorFailure
+      ) =>
+        | {
+            answer: T
+            stateOnly?: T
+            untilChange?: boolean
+          }
+        | undefined
       deferredReady?: () => void
       /** A single refused item was dropped, with why the cloud refused it. */
       onDropped?: (item: T, stamp: ConnectorStamp, failure?: ConnectorFailure) => boolean | void
@@ -74,10 +83,13 @@ export class ConnectorOutbox<T> {
     this.replace([...this.items, ...items])
   }
 
-  retryDeferred(): void {
+  retryDeferred(capabilityChanged = false): void {
     clearTimeout(this.deferredRetry)
     this.deferredRetry = undefined
-    this.deferredLanes = null
+    this.deferredItems.clear()
+    if (capabilityChanged) {
+      this.sizeRefusedItems.clear()
+    }
   }
 
   /** Numbering starts again from 0 with `first` in front, keeping what `keep` accepts. */
@@ -108,16 +120,15 @@ export class ConnectorOutbox<T> {
   }
 
   private readyItems(): readonly T[] {
-    const lanes = this.deferredLanes
-    const lane = this.options.lane
-    if (!lanes || !lane) {
+    if (this.deferredItems.size === 0 && this.sizeRefusedItems.size === 0) {
       return this.items
     }
     const ready: T[] = []
     const deferred: T[] = []
     for (const item of this.items) {
-      const key = lane(item)
-      ;(key !== undefined && lanes.has(key) ? deferred : ready).push(item)
+      const target =
+        this.deferredItems.has(item) || this.sizeRefusedItems.has(item) ? deferred : ready
+      target.push(item)
     }
     this.items = [...ready, ...deferred]
     return ready
@@ -148,15 +159,22 @@ export class ConnectorOutbox<T> {
       return null
     }
     const head = this.items[0]
-    const lane = head === undefined ? undefined : this.options.lane?.(head)
-    if (head !== undefined && lane !== undefined && this.options.deferRefused?.(head, failure)) {
-      ;(this.deferredLanes ??= new Set()).add(lane)
-      this.stamp = { ...stamp, size: 0 }
-      if (!this.deferredRetry) {
+    const held = head === undefined ? undefined : this.options.deferRefused?.(head, failure)
+    if (held) {
+      this.items.shift()
+      this.items.push(held.answer)
+      if (held.stateOnly !== undefined) {
+        this.items.unshift(held.stateOnly)
+      }
+      this.stamp = { ...stamp, size: held.stateOnly === undefined ? 0 : 1 }
+      const waiting = held.untilChange ? this.sizeRefusedItems : this.deferredItems
+      waiting.add(held.answer)
+      this.notify()
+      if (!held.untilChange && !this.deferredRetry) {
         this.deferredRetry = setTimeout(() => {
           this.retryDeferred()
           this.options.deferredReady?.()
-        }, DEFERRED_LANE_RETRY_MS)
+        }, DEFERRED_ANSWER_RETRY_MS)
         this.deferredRetry.unref?.()
       }
       return null

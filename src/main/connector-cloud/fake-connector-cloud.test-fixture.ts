@@ -24,6 +24,7 @@ export class FakeConnectorCloud {
   /** A mixed receiver still accepts ordinary events but requires a hello for rich ones. */
   refusePresentedEvents = false
   refusePresentedVersion = false
+  presentedEventStatus: 400 | 413 | undefined
   online = true
   /** How long a poll answer takes to arrive once it is ready. */
   pollReplyDelayMs = 0
@@ -307,6 +308,9 @@ export class FakeConnectorCloud {
         fields.v === SLACK_PRESENTATION_TURN_END_VERSION
       if (presented && path === CONNECTOR_PATHS.events && this.refusePresentedVersion) {
         return { status: 400, body: { error: 'invalid_request' } }
+      }
+      if (presented && this.presentedEventStatus) {
+        return { status: this.presentedEventStatus, body: { error: 'invalid_request' } }
       }
       if (this.refusePresentedEvents && presented) {
         return { status: 409, body: { error: 'hello_required', reason: 'features' } }

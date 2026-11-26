@@ -1,7 +1,13 @@
 import {
   CONNECTOR_CLIENT_LIMITS,
+  CONNECTOR_REPLIES_OUTBOX_FEATURE,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+} from '../../shared/connectors/slack-answer-presentation'
 import { jsonBytes } from './connector-snapshot'
 
 const MAX_TURN_ENDS = 200
@@ -10,10 +16,50 @@ const MAX_LIVE_EVENTS = 500
 // Room for the request's own fields around its events.
 const EVENTS_BUDGET_BYTES = CONNECTOR_CLIENT_LIMITS.maxRequestBytes - 1024
 
+export function presentationTransportChanged(
+  before: ReadonlySet<string>,
+  after: ReadonlySet<string>
+): boolean {
+  return [
+    CONNECTOR_SLACK_PRESENTATION_FEATURE,
+    CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+    CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
+    CONNECTOR_REPLIES_OUTBOX_FEATURE
+  ].some((feature) => before.has(feature) !== after.has(feature))
+}
+
+export function reportedTurnEnds(events: readonly ConnectorEvent[]): ConnectorEvent[] {
+  return events.filter((event) => !('preparedStateOnly' in event))
+}
+
 type TurnEnded = Extract<ConnectorEvent, { kind: 'turn-ended' }>
 
 export const isTurnEnded = (event: ConnectorEvent): event is TurnEnded =>
   event.kind === 'turn-ended'
+export const isPreparedTurnEnd = (
+  event: ConnectorEvent
+): event is TurnEnded & {
+  presentation: NonNullable<TurnEnded['presentation']>
+} => isTurnEnded(event) && event.presentation !== undefined
+
+export function deferPreparedTurnEnd(event: ConnectorEvent, status?: number | null) {
+  if (!isPreparedTurnEnd(event)) {
+    return undefined
+  }
+  const untilChange = status === 413
+  if (untilChange) {
+    console.warn('[connector] a prepared Slack answer exceeds the receiver limit and remains owed')
+  }
+  if ('stateOnlyQueued' in event) {
+    return { answer: event, untilChange }
+  }
+  const { lastAssistantMessage: _words, presentation: _body, links: _links, ...state } = event
+  return {
+    answer: { ...event, stateOnlyQueued: true },
+    stateOnly: { ...state, stateOnly: true as const, preparedStateOnly: true },
+    untilChange
+  }
+}
 // Reply events are the journal's rows in transit: never trimmed, never stored here.
 const isLive = (event: ConnectorEvent): boolean =>
   event.kind !== 'turn-ended' && event.kind !== 'snapshot' && event.kind !== 'reply'
@@ -51,13 +97,16 @@ export function newestActivities(events: ConnectorEvent[], sent: number): Connec
  * and disk hold the same set. A snapshot is never dropped: it opens its hello.
  */
 export function boundEvents(events: ConnectorEvent[], sent: number): ConnectorEvent[] {
-  let turnEndsOver = events.filter(isTurnEnded).length - MAX_TURN_ENDS
+  let turnEndsOver =
+    events.filter((event) => isTurnEnded(event) && !isPreparedTurnEnd(event)).length - MAX_TURN_ENDS
   let liveOver = events.filter(isLive).length - MAX_LIVE_EVENTS
   if (turnEndsOver <= 0 && liveOver <= 0) {
     return events
   }
   return events.filter(
     (event, index) =>
-      index < sent || (isTurnEnded(event) ? turnEndsOver-- <= 0 : !isLive(event) || liveOver-- <= 0)
+      index < sent ||
+      isPreparedTurnEnd(event) ||
+      (isTurnEnded(event) ? turnEndsOver-- <= 0 : !isLive(event) || liveOver-- <= 0)
   )
 }

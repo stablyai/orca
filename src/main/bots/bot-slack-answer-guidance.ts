@@ -2,13 +2,17 @@ import type { AgentJournalMessageItem } from '../../shared/agent-session/journal
 import { BOT_ORCA_CLI } from './bot-preamble'
 
 // Only the result watcher owns a run's destination and lifetime.
-const slackRuns = new Set<string>()
+const slackRuns = new Map<string, (() => boolean) | undefined>()
 
-export function keepSlackRunAnswer(runId: string): () => void {
-  slackRuns.add(runId)
+export function keepSlackRunAnswer(runId: string, reserve?: () => boolean): () => void {
+  slackRuns.set(runId, reserve)
   return () => {
     slackRuns.delete(runId)
   }
+}
+
+export function reserveSlackRunAnswer(runId: string): boolean {
+  return slackRuns.get(runId)?.() ?? true
 }
 
 export function slackAnswerRoute(message: AgentJournalMessageItem): 'thread' | 'run' | null {

@@ -152,6 +152,14 @@ export function answerFor(
   event: ConnectorEvent,
   cloudFeatures: ReadonlySet<string>
 ): ConnectorEvent {
+  if (event.kind === 'turn-ended' && 'preparedStateOnly' in event) {
+    const { preparedStateOnly: _, ...wire } = event
+    return wire
+  }
+  if (event.kind === 'turn-ended' && 'stateOnlyQueued' in event) {
+    const { stateOnlyQueued: _, ...wire } = event
+    return answerFor(wire, cloudFeatures)
+  }
   // One already within the cap goes as the same object: what binds to a sent event still finds it.
   if (event.kind === 'turn-ended' && event.lastAssistantMessage !== undefined) {
     if (event.presentation) {

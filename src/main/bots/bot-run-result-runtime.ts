@@ -42,13 +42,37 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
         return watchBotTurnEnds(host)
       }
       const watched = watchBotTurnEnds(host, !linkedThread)
-      const release = keepSlackRunAnswer(slackRunId)
+      let releaseSlot: (() => void) | null = null
+      const release = keepSlackRunAnswer(
+        slackRunId,
+        linkedThread
+          ? () =>
+              Boolean(
+                (releaseSlot ??=
+                  runtime.getConnectorCloud()?.reservePreparedSlackTurnEnd(slackRunId) ?? null)
+              )
+          : undefined
+      )
       return {
         dispose: () => {
           release()
+          releaseSlot?.()
           watched.dispose()
         },
-        next: (send) => watched.next(send).finally(release)
+        next: async (send) => {
+          try {
+            const ended = await watched.next(send)
+            if ('unavailable' in ended || ended.outcome !== 'success') {
+              releaseSlot?.()
+            }
+            return ended
+          } catch (error) {
+            releaseSlot?.()
+            throw error
+          } finally {
+            release()
+          }
+        }
       }
     },
     couldNotStart: (bot, automation, notStarted) => {

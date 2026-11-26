@@ -54,6 +54,8 @@ export async function tellCompletedTurn(
   const emit = mirror ? mirror.release : end.emit
   const presentation =
     !mirror && origin === 'delivery' ? linkedSlackRunAnswer(end, link, turn, words) : undefined
+  const opener = turn.opener?.body
+  const slackAnswerRunId = opener?.kind === 'message' ? opener.automationRun?.runId : undefined
   emit({
     ...end.ended,
     ...end.turnFor(turn),
@@ -62,6 +64,7 @@ export async function tellCompletedTurn(
       ? { lastAssistantMessage: presentation === null ? SLACK_PRESENTATION_UNCONFIRMED : words }
       : {}),
     ...(presentation ? { presentation } : {}),
+    ...(slackAnswerRunId ? { slackAnswerRunId } : {}),
     ...turnFailure(end, turn),
     ...(workLinks.length > 0 ? { links: workLinks } : {})
   })

@@ -1,5 +1,13 @@
 import { isReplyEvent, replyDeliveryIds } from './connector-reply-events'
-import { boundEvents, eventsHeadSize, isTurnEnded, newestActivities } from './connector-event-queue'
+import {
+  boundEvents,
+  deferPreparedTurnEnd,
+  eventsHeadSize,
+  isTurnEnded,
+  newestActivities,
+  presentationTransportChanged,
+  reportedTurnEnds
+} from './connector-event-queue'
 // The seam's watch, as the cloud reads it. Turn ends wait in an owner-only file so a restart still reports them.
 import { join } from 'node:path'
 import {
@@ -10,8 +18,6 @@ import {
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import {
-  CONNECTOR_SLACK_PRESENTATION_FEATURE,
-  CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
   CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
   takesSlackAnswerPresentation
 } from '../../shared/connectors/slack-answer-presentation'
@@ -40,7 +46,6 @@ import {
 } from './connector-reply-outbox'
 
 const TURN_OUTBOX_FILE = 'connector-turn-outbox.json'
-const NO_CLOUD_FEATURES: ReadonlySet<string> = new Set()
 /** The reply outbox's journal, the kill switch's /replies post, and a cold start's wake. */
 export type ConnectorTurnEventsReplies = Pick<ConnectorReplyClient, 'post' | 'hostName'> & {
   journal: () => ConnectorReplyJournal | null
@@ -69,7 +74,7 @@ export class ConnectorTurnEvents {
   private dropped = false
   private warnedTrimmed = false
   // From the current hello's answer; empty before one.
-  private cloudFeatures = NO_CLOUD_FEATURES
+  private cloudFeatures: ReadonlySet<string> = new Set()
   presentationGeneration = 0
   private readonly requestVersions = new Map<number, 1 | 2>()
   private readonly replies: ConnectorReplyOutbox
@@ -108,14 +113,12 @@ export class ConnectorTurnEvents {
       onAccepted: (batch, stamp) => {
         this.trace.accepted(batch, stamp)
         // A leave's line follows its turn's answer, once the cloud took it and its rows are sent.
-        void this.replies.accepted(batch).then(() => installedLeaveLines()?.turnEndsTaken(batch))
+        void this.replies
+          .accepted(batch)
+          .then(() => installedLeaveLines()?.turnEndsTaken(reportedTurnEnds(batch)))
       },
       onSplit: (batch) => this.trace.split(batch),
-      lane: (event) =>
-        'conversation' in event
-          ? JSON.stringify([event.conversation.source, event.conversation.externalId])
-          : undefined,
-      deferRefused: (event) => isTurnEnded(event) && event.presentation !== undefined,
+      deferRefused: (event, failure) => deferPreparedTurnEnd(event, failure?.status),
       deferredReady: () => this.replyFlush?.(),
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
@@ -124,7 +127,7 @@ export class ConnectorTurnEvents {
           return true
         }
         // A turn end the cloud won't take lets its leave's line go.
-        if (isTurnEnded(item)) {
+        if (isTurnEnded(item) && !('preparedStateOnly' in item)) {
           installedLeaveLines()?.turnEndsTaken([item])
         }
         // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
@@ -175,16 +178,9 @@ export class ConnectorTurnEvents {
 
   /** Set before the hello's watch starts, so its events match what that cloud reads. */
   useCloudFeatures(features: ReadonlySet<string>, helloRev?: number): void {
-    if (
-      [
-        CONNECTOR_SLACK_PRESENTATION_FEATURE,
-        CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
-        CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
-        CONNECTOR_REPLIES_OUTBOX_FEATURE
-      ].some((feature) => this.cloudFeatures.has(feature) !== features.has(feature))
-    ) {
+    if (presentationTransportChanged(this.cloudFeatures, features)) {
       this.presentationGeneration++
-      this.outbox.retryDeferred()
+      this.outbox.retryDeferred(true)
     }
     this.cloudFeatures = features
     // Under a hello without it (the kill switch), this hello's snapshot lets replies in transit go,
@@ -305,6 +301,9 @@ export class ConnectorTurnEvents {
       this.restart([built.snapshot], this.carried)
       return
     }
+    if (event.kind === 'turn-ended') {
+      this.stored.releasePrepared(event.slackAnswerRunId)
+    }
     const wire = toConnectorEvent(event, this.cloudFeatures)
     if (event.kind === 'turn-ended' && event.turnId === null) {
       // Its start predates the watch, so the cloud can't place it and nothing posts.
@@ -317,6 +316,10 @@ export class ConnectorTurnEvents {
       this.publications.bind(event, wire)
       this.outbox.push(wire)
     }
+  }
+
+  reservePrepared(runId: string): (() => void) | null {
+    return this.stored.reservePrepared(runId) ? () => this.stored.releasePrepared(runId) : null
   }
 
   next(helloRev: number): ConnectorOutboxHead<ConnectorEvent> | null {
@@ -350,7 +353,7 @@ export class ConnectorTurnEvents {
     this.stored.clear()
     this.replies.retire()
     this.setAside.clear()
-    this.outbox.retryDeferred()
+    this.outbox.retryDeferred(true)
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

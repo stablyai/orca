@@ -87,7 +87,7 @@ export class ConnectorEventRequests {
     }
     const generation = this.deps.events.presentationGeneration
     let failure = await this.deps.post(body, helloRev, events, presented)
-    if (failure?.status === 400 && presented && events.length === 1) {
+    if ((failure?.status === 400 || failure?.status === 413) && presented && events.length === 1) {
       const compatible = await this.deps.post(
         body,
         helloRev,
@@ -102,8 +102,9 @@ export class ConnectorEventRequests {
     if (failure?.status === 400) {
       // An older receiver rejects the version before it can apply any event.
       if (presented && this.presentationRehelloGeneration !== generation) {
-        this.presentationRehelloGeneration = generation
-        this.rehello(helloRev, failure)
+        if (this.rehello(helloRev, failure)) {
+          this.presentationRehelloGeneration = generation
+        }
       } else if (
         !presented &&
         v === CONNECTOR_AUDIENCE_EVENTS_VERSION &&
@@ -115,12 +116,13 @@ export class ConnectorEventRequests {
     return failure
   }
 
-  private rehello(helloRev: number, failure: ConnectorFailure): void {
+  private rehello(helloRev: number, failure: ConnectorFailure): boolean {
     const pause = this.deps.rejected(helloRev, failure)
     if (pause) {
       this.pause = pause
       this.stop()
       this.deps.events.resetLive()
     }
+    return pause !== null
   }
 }

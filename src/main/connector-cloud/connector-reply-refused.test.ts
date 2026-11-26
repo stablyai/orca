@@ -27,6 +27,7 @@ import {
   settle
 } from './connector-poll-client.test-fixture'
 import type { ConversationEvent } from '../external-conversations/external-conversation-events'
+import { fakeSeam } from './fake-connector-seam.test-fixture'
 import Database from '../sqlite/sync-database'
 import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/database/journal-domain-migrations'
 import {
@@ -336,7 +337,9 @@ it('keeps a prepared turn across a receiver downgrade and restart while an unrel
   expect(h.fake.events).toContainEqual(
     expect.objectContaining({ lastAssistantMessage: 'An independent answer.' })
   )
-  expect(h.fake.events).not.toContainEqual(expect.objectContaining({ turnId: preparedEnd.turnId }))
+  expect(h.fake.events).toContainEqual(
+    expect.objectContaining({ turnId: preparedEnd.turnId, stateOnly: true })
+  )
   first.client.stop()
   await ConnectorTurnEvents.settled()
   h.fake.features = [
@@ -347,10 +350,169 @@ it('keeps a prepared turn across a receiver downgrade and restart while an unrel
   onTestFinished(() => second.client.stop())
   await settle()
   expect(
-    h.fake.events.filter((event) => isRecord(event) && event.turnId === preparedEnd.turnId)
+    h.fake.events.filter(
+      (event) => isRecord(event) && event.turnId === preparedEnd.turnId && !event.stateOnly
+    )
   ).toEqual([
     expect.objectContaining({
       lastAssistantMessage: preparedEnd.lastAssistantMessage,
+      presentation: typedAnswer
+    })
+  ])
+})
+
+it('drains a real journal page and a later turn and approval while a prepared end is refused', async () => {
+  const db = new Database(join(h.userDataPath, 'journal.db'))
+  onTestFinished(() => db.close())
+  migrateJournalDomainSchema(db)
+  const events = new ConnectorTurnEvents(h.userDataPath, 'ada', undefined, {
+    journal: () => ({
+      read: async (sessionId) => readJournalConnectorReplies(db, sessionId),
+      readOwed: async (account, after, limit, includePresentations) =>
+        readOwedJournalConnectorReplies(db, account, after, limit, includePresentations),
+      fillOutcomes: async () => false,
+      sent: async (keys) => sentJournalConnectorReplies(db, keys, SERVER_NOW)
+    }),
+    onOwed: () => {},
+    post: async () => refusal(500, 'unexpected_direct_reply'),
+    hostName: () => 'laptop'
+  })
+  h.fake.features = [
+    CONNECTOR_REPLIES_OUTBOX_FEATURE,
+    CONNECTOR_SLACK_PRESENTATION_FEATURE,
+    CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+  ]
+  h.fake.presentedEventStatus = 400
+  const { client, emit } = h.startClient(fakeSeam(), events)
+  onTestFinished(() => client.stop())
+  await settle()
+  emit(preparedEnd)
+  await settle()
+  const nextTurn = preparedEnd.turnId + 1
+  emit({
+    kind: 'turn-started',
+    conversation: preparedEnd.conversation,
+    worktreeId: preparedEnd.worktreeId,
+    paneKey: preparedEnd.paneKey,
+    at: nextTurn
+  })
+  emit({
+    kind: 'prompt',
+    conversation: preparedEnd.conversation,
+    worktreeId: preparedEnd.worktreeId,
+    paneKey: preparedEnd.paneKey,
+    prompt: { kind: 'approval', promptId: 'confirm', tool: 'Bash', options: [] }
+  })
+  const turn = { sessionId: row.sessionId, epoch: row.epoch, turnItemId: 'later-turn' }
+  db.prepare(`INSERT INTO journal_items
+    (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,kind,lifecycle_state,payload_json)
+    VALUES(?,?,?,1,1,1,0,0,'turn','running','{}')`).run(turn.sessionId, turn.epoch, turn.turnItemId)
+  const fills = Array.from({ length: 201 }, (_, index) => {
+    const deliveryId = `later-${String(index).padStart(3, '0')}`
+    recordJournalConnectorReplies(db, turn, deliveryId, false, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Another question' }],
+      connectorDelivery: {
+        account: row.account,
+        conversation: index === 0 ? preparedEnd.conversation : row.conversation,
+        deliveryId
+      }
+    })
+    return {
+      account: row.account,
+      deliveryId,
+      answerDeliveryId: deliveryId,
+      outcome: 'answered' as const,
+      prose: 'An independent answer.',
+      turnStartedAt: nextTurn,
+      turnItemId: turn.turnItemId
+    }
+  })
+  expect(fillJournalConnectorReplies(db, fills, SERVER_NOW)).toBe(201)
+  await events.drainReplies()
+  await settle()
+  expect(h.fake.events.filter((event) => isRecord(event) && event.kind === 'reply')).toHaveLength(
+    201
+  )
+  expect(readOwedJournalConnectorReplies(db, 'ada', null, 1, true)).toEqual([])
+  const threadEvents = h.fake.events.filter(
+    (event) =>
+      isRecord(event) &&
+      isRecord(event.conversation) &&
+      event.conversation.externalId === preparedEnd.conversation.externalId &&
+      event.kind !== 'reply'
+  )
+  expect(threadEvents).toEqual([
+    expect.objectContaining({ kind: 'turn-ended', turnId: preparedEnd.turnId, stateOnly: true }),
+    expect.objectContaining({ kind: 'turn-started', at: nextTurn }),
+    expect.objectContaining({
+      kind: 'prompt',
+      prompt: expect.objectContaining({ promptId: 'confirm' })
+    })
+  ])
+  h.fake.presentedEventStatus = undefined
+  h.fake.features = h.fake.features.map((feature) =>
+    feature === CONNECTOR_SLACK_PRESENTATION_FEATURE
+      ? CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE
+      : feature
+  )
+  client.stop()
+  const compatible = h.startClient(fakeSeam(), events)
+  onTestFinished(() => compatible.client.stop())
+  await settle()
+  expect(h.fake.events.filter((event) => isRecord(event) && event.presentation)).toEqual([
+    expect.objectContaining({ turnId: preparedEnd.turnId, presentation: typedAnswer })
+  ])
+})
+
+it('parks a 413 and keeps the prepared answer through live end pressure and restart', async () => {
+  h.fake.features = [
+    CONNECTOR_SLACK_PRESENTATION_FEATURE,
+    CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+  ]
+  h.fake.presentedEventStatus = 413
+  const events = new ConnectorTurnEvents(h.userDataPath, 'ada')
+  const first = h.startClient(fakeSeam(), events)
+  onTestFinished(() => first.client.stop())
+  await settle()
+  first.emit(preparedEnd)
+  await settle()
+  const compatibleRequests = () => h.fake.requestsTo(CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH)
+  expect(compatibleRequests()).toHaveLength(1)
+  await settle(61_000)
+  expect(compatibleRequests()).toHaveLength(1)
+  first.client.stop()
+  // Accumulate the pressure without transport receipts consuming the ordinary queue.
+  for (let index = 1; index <= 201; index++) {
+    events.observe({
+      ...preparedEnd,
+      turnId: preparedEnd.turnId + index,
+      presentation: undefined,
+      lastAssistantMessage: 'Ordinary words.'
+    })
+  }
+  await ConnectorTurnEvents.settled()
+  const restarted = new ConnectorTurnEvents(h.userDataPath, 'ada')
+  const release = Array.from({ length: 199 }, (_, index) =>
+    restarted.reservePrepared(`reserved-${index}`)
+  )
+  expect(release.every(Boolean)).toBe(true)
+  expect(restarted.reservePrepared('overflow')).toBeNull()
+  release.forEach((free) => free?.())
+  h.fake.presentedEventStatus = undefined
+  h.fake.features = [
+    CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+    CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+  ]
+  const second = h.startClient(fakeSeam(), restarted)
+  onTestFinished(() => second.client.stop())
+  await settle()
+  expect(h.fake.events.filter((event) => isRecord(event) && event.presentation)).toEqual([
+    expect.objectContaining({
+      turnId: preparedEnd.turnId,
+      conversation: preparedEnd.conversation,
+      lastAssistantMessage: slackAnswerText(typedAnswer),
       presentation: typedAnswer
     })
   ])

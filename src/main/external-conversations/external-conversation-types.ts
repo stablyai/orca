@@ -27,6 +27,8 @@ export type ConversationTurnEnd = ConversationPane &
     /** Null when the turn began before this watch. */
     turnId: number | null
     stopReason: AgentTurnOutcome | null
+    /** Host-only capacity reservation consumed when this run's turn end joins the connector. */
+    slackAnswerRunId?: string
   }
 
 export function conversationPane(

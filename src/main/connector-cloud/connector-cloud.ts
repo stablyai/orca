@@ -331,6 +331,11 @@ export class ConnectorCloud {
     return this.client?.cloudFeatures ?? null
   }
 
+  reservePreparedSlackTurnEnd(runId: string): (() => void) | null {
+    const events = this.events
+    return events && events.account === this.activeAccount() ? events.reservePrepared(runId) : null
+  }
+
   /** The signed-in Orca account's name, as a mirrored Slack post names its author. */
   orcaAccountName(): string {
     return connectorAccountName(this.options.userDataPath)
@@ -369,11 +374,8 @@ export class ConnectorCloud {
     this.client?.reply(...args) ?? null
 
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */
-  postAsBot(
-    ...args: Parameters<ConnectorPollClient['postAsBot']>
-  ): ReturnType<ConnectorPollClient['postAsBot']> | null {
-    return this.client?.postAsBot(...args) ?? null
-  }
+  readonly postAsBot = (...args: Parameters<ConnectorPollClient['postAsBot']>) =>
+    this.client?.postAsBot(...args) ?? null
 
   private stopClient(): void {
     const neededSignIn = this.needsSignIn()

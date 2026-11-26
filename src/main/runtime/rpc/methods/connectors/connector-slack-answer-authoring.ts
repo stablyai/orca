@@ -3,7 +3,7 @@ import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
   slackAnswerText
 } from '../../../../../shared/connectors/slack-answer-presentation'
-import { slackAnswerRoute } from '../../../../bots/bot-slack-answer-guidance'
+import { reserveSlackRunAnswer, slackAnswerRoute } from '../../../../bots/bot-slack-answer-guidance'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { matchingSlackPresentation } from '../../../../connector-cloud/connector-slack-text'
@@ -47,6 +47,13 @@ export const CONNECTOR_PREPARE_SLACK_ANSWER_METHOD = defineMethod({
     const text = slackAnswerText(presentation)
     if (!matchingSlackPresentation(presentation, text)) {
       throw new Error('invalid_slack_presentation')
+    }
+    if (
+      presentation.visual &&
+      opener.automationRun &&
+      !reserveSlackRunAnswer(opener.automationRun.runId)
+    ) {
+      throw new Error('slack_answer_queue_full')
     }
     const saved = await host.deps.store
       .connectorReplies()
