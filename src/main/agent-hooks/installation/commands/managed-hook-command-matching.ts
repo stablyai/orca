@@ -92,7 +92,10 @@ export function removeManagedCommands(
   })
 }
 
-function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
+export function hookHasManagedCommand(
+  hook: HookCommandConfig,
+  matches: (value?: string) => boolean
+): boolean {
   if (!isPlainObject(hook)) {
     return false
   }

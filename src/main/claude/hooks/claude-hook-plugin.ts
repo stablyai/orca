@@ -4,6 +4,11 @@ import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { CLAUDE_HOOK_PLUGIN_NAME } from '../../../shared/agent-hook-listener/providers/claude/claude-hook-plugin'
 import type { HooksConfig } from '../../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  hookDefinitionHasManagedCommand,
+  hookHasManagedCommand
+} from '../../agent-hooks/installation/commands/managed-hook-command-matching'
 import { writeHooksJsonAsync } from '../../agent-hooks/installation/configuration/hooks-json-write-async'
 
 const PLUGIN_MANIFEST = {
@@ -41,10 +46,36 @@ export function getClaudeHookPluginDir(userDataPath: string): string {
   return join(userDataPath, 'claude-hook-plugin', CLAUDE_HOOK_PLUGIN_NAME)
 }
 
+/** Orca's own entries from merged settings, so a user's async opt-out carries over and their own hooks never do. */
+function managedHooksOnly(
+  hooks: HooksConfig['hooks'],
+  scriptFileName: string
+): NonNullable<HooksConfig['hooks']> {
+  const isManaged = createManagedCommandMatcher(scriptFileName)
+  const managed: NonNullable<HooksConfig['hooks']> = {}
+  for (const [event, definitions] of Object.entries(hooks ?? {})) {
+    const kept = (Array.isArray(definitions) ? definitions : [])
+      .filter((definition) => hookDefinitionHasManagedCommand(definition, isManaged))
+      .map((definition) =>
+        Array.isArray(definition.hooks)
+          ? {
+              ...definition,
+              hooks: definition.hooks.filter((hook) => hookHasManagedCommand(hook, isManaged))
+            }
+          : definition
+      )
+    if (kept.length > 0) {
+      managed[event] = kept
+    }
+  }
+  return managed
+}
+
 /** A Claude started with a config folder Orca never hooked loads these through its pane's shell function. */
 export function publishClaudeHookPlugin(
   agent: AgentHookInstallStatus['agent'],
-  buildHooks: () => HooksConfig['hooks']
+  settings: HooksConfig,
+  scriptFileName: string
 ): void {
   if (agent !== 'claude') {
     return
@@ -52,7 +83,9 @@ export function publishClaudeHookPlugin(
   const root = getClaudeHookPluginDir(getAppEnvironment().getPath('userData'))
   enqueue('publish', async () => {
     await writeHooksJsonAsync(join(root, '.claude-plugin', 'plugin.json'), PLUGIN_MANIFEST)
-    await writeHooksJsonAsync(join(root, 'hooks', 'hooks.json'), { hooks: buildHooks() ?? {} })
+    await writeHooksJsonAsync(join(root, 'hooks', 'hooks.json'), {
+      hooks: managedHooksOnly(settings.hooks, scriptFileName)
+    })
   })
 }
 

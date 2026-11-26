@@ -39,7 +39,6 @@ import { getManagedStatusLineScript } from './hooks/statusline-script'
 import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './hooks/statusline-install'
 import { refuseProfileAtDefaultHome } from './hooks/claude-profile-hook-target'
 import { publishClaudeHookPlugin, removeClaudeHookPlugin } from './hooks/claude-hook-plugin'
-import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   applyManagedHooks,
   CLAUDE_HOOK_SETTINGS,
@@ -204,15 +203,14 @@ export class ClaudeHookService {
     const plan = this.managedHookPlan(options)
     const exePath = this.usesWindowsEntry ? installWindowsClaudeHookExecutable(scriptPath) : null
     const execForm = claudeAcceptsExecFormHooks(options.claudeVersion)
-    const applyPlan = (target: HooksConfig): HooksConfig =>
-      applyManagedHooks(
-        target,
-        (eventName) =>
-          getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
-        getManagedScriptFileName(this.options.settings),
-        plan,
-        process.platform !== 'win32'
-      )
+    let nextConfig = applyManagedHooks(
+      config,
+      (eventName) =>
+        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
+      getManagedScriptFileName(this.options.settings),
+      plan,
+      process.platform !== 'win32'
+    )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
       installWindowsClaudeHookFiles(scriptPath, payload)
@@ -220,9 +218,12 @@ export class ClaudeHookService {
       writeManagedScript(scriptPath, payload)
     }
     if (options.configDir === undefined) {
-      publishClaudeHookPlugin(this.options.agent, () => applyPlan({}).hooks)
+      publishClaudeHookPlugin(
+        this.options.agent,
+        nextConfig,
+        getManagedScriptFileName(this.options.settings)
+      )
     }
-    let nextConfig = applyPlan(config)
     // Profiles inherit statusLine from the default-home settings copy.
     if (options.configDir === undefined && plan.statusLine === 'install') {
       nextConfig = installClaudeManagedStatusLine(nextConfig, this.options.settings)
