@@ -103,7 +103,8 @@ function closing(input: {
   } as unknown as OrcaRuntimeService
   return {
     close: () => closingTurnActsFor(runtime, { sessionId: CHAT, actor: { chatId: CHAT } }),
-    closeWithoutTurn: () => closingChatActsFor(runtime, { actor: { chatId: CHAT } })
+    closeWithoutTurn: () => closingChatActsFor(runtime, { actor: { chatId: CHAT } }),
+    records
   }
 }
 
@@ -139,7 +140,7 @@ describe('whom a close keeps its closing turn acting for', () => {
   })
 
   it("keeps a teammate chat's turn as the teammate's, by its first message when there is no record", async () => {
-    const { close, closeWithoutTurn } = closing({
+    const { close, closeWithoutTurn, records } = closing({
       journal: [
         message('asked', {
           origin: 'connector',
@@ -156,14 +157,15 @@ describe('whom a close keeps its closing turn acting for', () => {
     // A set to the status the item already has reads no turn, but still its chat's first message.
     expect(await closeWithoutTurn()).toEqual([KEPT])
     expect(await close()).toEqual([KEPT])
+    // A close names no workspace, so what it read is not kept as the chat's record.
+    expect(records.size).toBe(0)
     // With no record and the chat at rest, unknown, and nothing opened.
     const atRest = closing({})
     host.journals.clear()
     expect([await atRest.closeWithoutTurn(), host.opened]).toEqual([[{ kind: 'unknown' }], []])
   })
 
-  it("keeps the chat's record when only the whole chat could place the turn", async () => {
-    const { close } = closing({ record: { actsFor: [DANA] }, journal: [message('typed')] })
+  it('keeps whom the chat acts for when only the whole chat could place the turn', async () => {
     const reads = host.journalReads
     host.journalReads = async (id: string) => ({
       ...(await reads(id)),
@@ -171,7 +173,23 @@ describe('whom a close keeps its closing turn acting for', () => {
         throw Object.assign(new Error('not indexed'), { name: 'JournalWindowNotIndexed' })
       }
     })
-    expect(await close().finally(() => (host.journalReads = reads))).toEqual([KEPT])
+    const asked = message('asked', {
+      origin: 'connector',
+      asker: {
+        source: 'slack',
+        userId: 'U_DANA',
+        name: 'Dana',
+        role: 'member',
+        place: { kind: 'public_channel', id: 'C1' }
+      }
+    })
+    const results = [
+      await closing({ record: { actsFor: [DANA] }, journal: [message('typed')] }).close(),
+      // No record: the open chat's first message, as closes read it before they read turns.
+      await closing({ journal: [asked] }).close()
+    ]
+    host.journalReads = reads
+    expect(results).toEqual([[KEPT], [KEPT]])
   })
 
   it("keeps the chat's record, opening nothing, when the chat is at rest", async () => {
