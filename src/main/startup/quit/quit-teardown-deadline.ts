@@ -1,15 +1,29 @@
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 
-// A Windows update exit must finish inside WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS (8 s); this leaves
-// room for the final saves and the bounded telemetry and trace flushes that follow the teardown.
+// A Windows update exit must finish inside WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS (8 s), whose
+// watchdog starts slightly before quit does: teardown plus the worker-store save stay 2 s under it.
 export const WINDOWS_UPDATE_QUIT_TEARDOWN_DEADLINE_MS = 4_000
+export const WINDOWS_UPDATE_WORKER_STORE_DEADLINE_MS = 2_000
+
+function isWindowsUpdateQuit(updateQuit: boolean, platform: NodeJS.Platform): boolean {
+  return updateQuit && platform === 'win32'
+}
 
 export function quitTeardownDeadlineMs(
   updateQuit: boolean,
   platform: NodeJS.Platform = process.platform
 ): number {
-  return updateQuit && platform === 'win32'
+  return isWindowsUpdateQuit(updateQuit, platform)
     ? WINDOWS_UPDATE_QUIT_TEARDOWN_DEADLINE_MS
+    : WILL_QUIT_TEARDOWN_DEADLINE_MS
+}
+
+export function quitWorkerStoreDeadlineMs(
+  updateQuit: boolean,
+  platform: NodeJS.Platform = process.platform
+): number {
+  return isWindowsUpdateQuit(updateQuit, platform)
+    ? WINDOWS_UPDATE_WORKER_STORE_DEADLINE_MS
     : WILL_QUIT_TEARDOWN_DEADLINE_MS
 }
 
@@ -49,8 +63,9 @@ export async function finishQuitTeardown(input: {
   deadlineMs: number
   /** Unbounded, as their old synchronous will-quit saves were. */
   closeDataStores: () => Promise<unknown>
-  /** A worker that a stalled disk can wedge; bounded by deadlineMs so quit cannot hang (#9447). */
+  /** A worker that a stalled disk can wedge; bounded so quit cannot hang (#9447). */
   closeWorkerStores: () => Promise<unknown>
+  workerStoreDeadlineMs: number
   shutdownDiagnostics: () => Promise<unknown>
 }): Promise<void> {
   const pendingTeardowns = await settleTeardownWithinDeadline(input.teardowns, input.deadlineMs)
@@ -58,7 +73,7 @@ export async function finishQuitTeardown(input: {
     console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
   }
   await Promise.all([
-    settleWithinMs(input.closeWorkerStores(), input.deadlineMs).then((result) => {
+    settleWithinMs(input.closeWorkerStores(), input.workerStoreDeadlineMs).then((result) => {
       if (result.outcome === 'timed-out') {
         console.warn('[shutdown] Worker store close deadline reached')
       }

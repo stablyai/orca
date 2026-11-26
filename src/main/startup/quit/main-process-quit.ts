@@ -7,6 +7,7 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import {
   finishQuitTeardown,
   quitTeardownDeadlineMs,
+  quitWorkerStoreDeadlineMs,
   type NamedQuitTeardown
 } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
@@ -146,6 +147,7 @@ function installWillQuitHandler(): void {
           closeBrowserExtensionProfileStateStore()
         ]),
       closeWorkerStores: closeEnvironmentStore,
+      workerStoreDeadlineMs: quitWorkerStoreDeadlineMs(updateQuitInProgress),
       shutdownDiagnostics: async () => {
         await shutdownTelemetry()
         await shutdownObservability()

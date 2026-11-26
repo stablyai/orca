@@ -8,6 +8,7 @@ import { updateInstallExitTimeoutMs } from './update-install-exit-watchdog'
 import {
   finishQuitTeardown,
   quitTeardownDeadlineMs,
+  quitWorkerStoreDeadlineMs,
   settleWithinMs
 } from '../startup/quit/quit-teardown-deadline'
 
@@ -30,7 +31,9 @@ describe('Windows update exit budget', () => {
     expect(updateInstallExitTimeoutMs('linux')).toBe(20_000)
   })
 
-  it('saves the final stores before the exit watchdog even when a teardown hangs', async () => {
+  // The watchdog arms when the install commits, slightly before quit starts, so the data saves
+  // keep a 2 s margin under it even when the teardown and the environment store both hang.
+  it('finishes the final saves 2 s before the exit watchdog when everything hangs', async () => {
     vi.useFakeTimers()
     const events: string[] = []
     void finishQuitTeardown({
@@ -39,8 +42,9 @@ describe('Windows update exit budget', () => {
       closeDataStores: async () => {
         events.push(`stores@${Date.now()}`)
       },
-      closeWorkerStores: async () => {},
-      // Telemetry and the trace sink each bound their flush; model one that never answers.
+      closeWorkerStores: () => new Promise(() => {}),
+      workerStoreDeadlineMs: quitWorkerStoreDeadlineMs(true, 'win32'),
+      // Diagnostics start only once both store phases have finished.
       shutdownDiagnostics: async () => {
         events.push(`diagnostics@${Date.now()}`)
         await settleWithinMs(new Promise(() => {}), DIAGNOSTICS_SHUTDOWN_BOUND_MS)
@@ -49,15 +53,17 @@ describe('Windows update exit budget', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const start = Date.now()
 
-    // Everything must have happened before the watchdog would call app.exit(0).
     await vi.advanceTimersByTimeAsync(updateInstallExitTimeoutMs('win32') - 1)
 
     const at = (name: string): number =>
       Number(events.find((event) => event.startsWith(`${name}@`))?.split('@')[1]) - start
-    expect(events.map((event) => event.split('@')[0])).toEqual(['stores', 'diagnostics', 'quit'])
-    expect(at('quit')).toBeLessThan(updateInstallExitTimeoutMs('win32'))
+    expect(events.map((event) => event.split('@')[0]).slice(0, 2)).toEqual([
+      'stores',
+      'diagnostics'
+    ])
+    expect(at('diagnostics')).toBeLessThanOrEqual(updateInstallExitTimeoutMs('win32') - 2_000)
     expect(quitTeardownDeadlineMs(true, 'darwin')).toBe(20_000)
-    expect(quitTeardownDeadlineMs(false, 'win32')).toBe(20_000)
+    expect(quitWorkerStoreDeadlineMs(false, 'win32')).toBe(20_000)
   })
 
   // #9447: no store may hold quit open forever; a wedged environment-store worker is cut at the
@@ -73,10 +79,11 @@ describe('Windows update exit budget', () => {
         events.push('extension-stores')
       },
       closeWorkerStores: () => new Promise(() => {}),
+      workerStoreDeadlineMs: quitWorkerStoreDeadlineMs(false, 'darwin'),
       shutdownDiagnostics: async () => {}
     }).then(() => events.push('quit'))
 
-    await vi.advanceTimersByTimeAsync(quitTeardownDeadlineMs(false, 'darwin') - 1)
+    await vi.advanceTimersByTimeAsync(quitWorkerStoreDeadlineMs(false, 'darwin') - 1)
     expect(events).toEqual(['extension-stores'])
     await vi.advanceTimersByTimeAsync(1)
     expect(events).toEqual(['extension-stores', 'quit'])

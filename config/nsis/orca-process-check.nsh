@@ -79,7 +79,10 @@
               StrCpy $R5 $R5 $R6
               ${If} $R5 == "$INSTDIR\"
                 IntOp $R7 $R7 + 1
+                ; $0 is set only after a pass that found something (and, on a manual install,
+                ; after the user agreed), so nothing is terminated before that.
                 ${If} $1 >= 0
+                ${AndIf} $0 != ""
                   ${If} $2 == ""
                     StrCpy $2 $3
                   ${EndIf}
