@@ -36,23 +36,27 @@ function run(
   options: {
     outcome?: CodexHistoryMoveOutcome
     open?: (paths: string[]) => Set<string> | null
-    beforeHold?: () => void
+    beforeDelete?: () => void
   } = {}
 ) {
   return cleanUpCodexAccountCopies({
     homes: [home],
     storeHome: store,
     platform: 'darwin',
+    managedAccountsRoot: join(root, 'codex-accounts'),
     version: `test-${Math.random()}`,
     moveOutcome: () => options.outcome ?? 'moved',
     shouldStop: () => false,
     findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),
     worker: {
       call: async (request) => {
-        if (request.op === 'hold') {
-          options.beforeHold?.()
+        if (request.op === 'delete') {
+          options.beforeDelete?.()
         }
-        return runCodexAccountCopiesRequest(request)
+        return runCodexAccountCopiesRequest(request).catch((error: unknown) => ({
+          ok: false as const,
+          message: String(error)
+        }))
       },
       stop: async () => {}
     }
@@ -61,9 +65,10 @@ function run(
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-codex-copies-'))
-  home = join(root, 'account')
+  home = join(root, 'codex-accounts', 'acct-1', 'home')
   store = join(root, 'codex')
-  mkdirSync(home)
+  mkdirSync(home, { recursive: true })
+  writeFileSync(join(home, '.orca-managed-home'), 'acct-1\n')
 })
 
 afterEach(() => {
@@ -110,12 +115,30 @@ describe('cleanUpCodexAccountCopies', () => {
     const whole = zstdCompressSync(Buffer.from(LINE_1 + LINE_2.repeat(20_000)))
     put(`${storeFile(damagedRel)}.zst`, whole.subarray(0, -64))
     const readable = put(setAside(damagedRel), LINE_1)
+    // A `.zst` copy against a plain original: only its first frame could be compared.
+    const framesRel = REL.replace('0199a1b2', '0199a1b5')
+    put(storeFile(framesRel), LINE_1)
+    const frames = put(
+      `${setAside(framesRel)}.zst`,
+      Buffer.concat([zstdCompressSync(Buffer.from(LINE_1)), zstdCompressSync(Buffer.from(LINE_2))])
+    )
 
     await run()
 
     expect(existsSync(prefix)).toBe(false)
     expect(existsSync(extra)).toBe(true)
     expect(existsSync(readable)).toBe(true)
+    expect(existsSync(frames)).toBe(true)
+  })
+
+  it('touches nothing in a folder that is not an Orca account home', async () => {
+    rmSync(join(home, '.orca-managed-home'))
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+
+    await run()
+
+    expect(existsSync(copy)).toBe(true)
   })
 
   it('never follows a link out of the home', async () => {
@@ -153,7 +176,7 @@ describe('cleanUpCodexAccountCopies', () => {
     put(storeFile(), LINE_1 + LINE_2)
     const copy = put(conflictCopy(), LINE_1)
 
-    await run({ beforeHold: () => appendFileSync(copy, LINE_2.replace('second', 'other')) })
+    await run({ beforeDelete: () => appendFileSync(copy, LINE_2.replace('second', 'other')) })
 
     expect(existsSync(copy)).toBe(true)
   })

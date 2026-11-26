@@ -14,12 +14,15 @@ import type {
 } from './codex-account-copies-worker-protocol'
 
 const WORKER_FILENAME = 'codex-account-copies-worker-entry.js'
-// One launch reads at most this much of the copies (and as much of their originals); the rest
+// One launch reads at most this much of the copies and their originals; the rest
 // waits for later launches, so a heavy history costs a few idle minutes spread over runs.
 const MAX_BYTES_PER_LAUNCH = 4 * 1024 ** 3
 const MAX_MS_PER_LAUNCH = 3 * 60_000
 const GAP_BETWEEN_HOMES_MS = 1_000
 const STOP_WAIT_MS = 10_000
+// One `lsof` per batch: the window between a copy's open check and its unlink stays a fraction of
+// a second, without a process per file.
+const OPEN_CHECK_BATCH = 64
 
 export type CodexAccountCopiesWorker = {
   call(request: CodexAccountCopiesRequest): Promise<CodexAccountCopiesResponse>
@@ -79,6 +82,8 @@ export async function cleanUpCodexAccountCopies(args: {
   platform?: NodeJS.Platform
   /** This Orca's version; each home settled under it is skipped. */
   version: string
+  /** Where Orca keeps account homes: the worker confirms each home is one of them. */
+  managedAccountsRoot: string
 }): Promise<(CopiesTally & { homes: number }) | null> {
   const platform = args.platform ?? process.platform
   if (platform !== 'darwin' && platform !== 'win32') {
@@ -96,64 +101,64 @@ export async function cleanUpCodexAccountCopies(args: {
     if (!moved(accountHome)) {
       continue
     }
+    if (bytesLeft === 0 || Date.now() > deadline) {
+      // Later homes wait for a later launch.
+      total.deferred += 1
+      break
+    }
     const checked = await args.worker.call({
       op: 'verify',
       accountHome,
       storeHome: args.storeHome,
-      budget: { maxBytes: bytesLeft, deadline },
-      version: args.version
+      budget: { maxBytes: bytesLeft, deadline, admitOversized: bytesLeft === MAX_BYTES_PER_LAUNCH },
+      version: args.version,
+      managedAccountsRoot: args.managedAccountsRoot
     })
-    if (!checked.ok) {
+    if (!checked.ok || checked.op !== 'verify') {
       if (args.shouldStop()) {
         return null
       }
-      console.warn('[codex-account-history] Old copies were not checked:', checked.message)
-      total.error += 1
-      continue
-    }
-    if (checked.op !== 'verify') {
+      console.warn(
+        '[codex-account-history] Old copies were not checked:',
+        checked.ok ? checked.op : checked.message
+      )
       total.error += 1
       continue
     }
     total.homes += 1
     bytesLeft = Math.max(0, bytesLeft - checked.bytesRead)
     addTally(total, checked.tally)
-    if (checked.verified.length === 0 || !moved(accountHome) || args.shouldStop()) {
-      total.open += moved(accountHome) ? 0 : checked.verified.length
-      continue
-    }
-    const held = await args.worker.call({ op: 'hold', accountHome, copies: checked.verified })
-    if (!held.ok || held.op !== 'hold') {
-      // Stopped or failed: whatever it held goes back on the next launch's check.
+    for (let start = 0; start < checked.verified.length; start += OPEN_CHECK_BATCH) {
+      const batch = checked.verified.slice(start, start + OPEN_CHECK_BATCH)
+      // The open check runs right before its batch's unlinks; a pass due meanwhile keeps them all.
+      const open = moved(accountHome)
+        ? await findOpen(
+            batch.map((copy) => copy.copy),
+            { shouldStop: args.shouldStop }
+          )
+        : null
       if (args.shouldStop()) {
         return null
       }
-      total.error += checked.verified.length
-      continue
-    }
-    addTally(total, held.tally)
-    if (held.held.length === 0) {
-      continue
-    }
-    const open = await findOpen(
-      held.held.map((copy) => copy.held),
-      { shouldStop: args.shouldStop }
-    )
-    // A pass started meanwhile, or the check couldn't tell: every held copy goes back.
-    const finished = await args.worker.call({
-      op: 'finish',
-      accountHome,
-      storeHome: args.storeHome,
-      held: held.held,
-      open: open && moved(accountHome) && !args.shouldStop() ? open : null
-    })
-    if (finished.ok && finished.op === 'finish') {
-      addTally(total, finished.tally)
-    } else {
-      if (args.shouldStop()) {
-        return null
+      const closed = open && moved(accountHome) ? batch.filter((copy) => !open.has(copy.copy)) : []
+      total.open += batch.length - closed.length
+      if (closed.length === 0) {
+        continue
       }
-      total.error += held.held.length
+      const deleted = await args.worker.call({
+        op: 'delete',
+        accountHome,
+        storeHome: args.storeHome,
+        copies: closed
+      })
+      if (deleted.ok && deleted.op === 'delete') {
+        addTally(total, deleted.tally)
+      } else {
+        if (args.shouldStop()) {
+          return null
+        }
+        total.error += closed.length
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_HOMES_MS).unref?.())
   }

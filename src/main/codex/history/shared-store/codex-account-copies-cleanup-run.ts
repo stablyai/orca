@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { join } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { isCodexAccountHistoryWorkStopping } from './codex-account-history-index'
@@ -26,6 +27,7 @@ export class CodexAccountCopiesCleanupRun {
   constructor(
     private readonly deps: {
       passRunning: () => boolean
+      /** The homes the launch's census listed; read without touching the disk. */
       homes: () => string[]
       moveOutcome: (accountHome: string) => CodexHistoryMoveOutcome | null
       markerPath: () => string
@@ -72,7 +74,8 @@ export class CodexAccountCopiesCleanupRun {
         moveOutcome: (home) => (this.worker === worker ? this.deps.moveOutcome(home) : null),
         shouldStop: () => this.worker !== worker || isCodexAccountHistoryWorkStopping(),
         worker,
-        version: getAppEnvironment().getVersion()
+        version: getAppEnvironment().getVersion(),
+        managedAccountsRoot: join(getAppEnvironment().getPath('userData'), 'codex-accounts')
       })
       if (tally && tally.deleted > 0) {
         forgetCodexHistoryDiskUsage()

@@ -1,8 +1,11 @@
-import { type BigIntStats, readdirSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { type BigIntStats, readFileSync, readdirSync } from 'node:fs'
+import { basename, dirname, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { MERGE_PENDING_SUFFIX } from '../../../filesystem/merged-directory-link'
-import { SET_ASIDE_ROLLOUTS_DIR } from './codex-account-history-cleanup-manifest'
+import {
+  HISTORY_CLEANUP_MANIFEST,
+  SET_ASIDE_ROLLOUTS_DIR
+} from './codex-account-history-cleanup-manifest'
 import {
   COMPRESSED_ROLLOUT_SUFFIX,
   rolloutTwinPath
@@ -11,15 +14,14 @@ import { OutOfTime, originalHoldsCopy } from './codex-account-copy-content'
 import { readKeptCopies, writeKeptCopies, type KeptCopies } from './codex-account-copies-kept'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
 import {
+  deleteCheckedCopies,
   fileKey,
-  finishHeldCopies,
-  holdVerifiedCopies,
   isInsideHome,
   lstatOrNull,
-  releaseLeftoverHeldCopies,
   removeEmptyFolders,
   type VerifiedCopy
-} from './codex-account-copies-hold'
+} from './codex-account-copies-delete'
+import { assertOwnedHostCodexManagedHomePath } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import type {
   CodexAccountCopiesRequest,
   CodexAccountCopiesResponse
@@ -34,7 +36,28 @@ const MERGE_FOLDER = new RegExp(
 )
 const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst)?$/
 
-export type VerifyBudget = { maxBytes: number; deadline: number }
+/**
+ * `maxBytes`: what this home may still read of copies and originals together; `admitOversized`:
+ * nothing has been read yet this launch, so one file larger than the whole budget may go first.
+ */
+export type VerifyBudget = { maxBytes: number; deadline: number; admitOversized: boolean }
+
+// The share streak's start: sharing turned off and on again can leave new conflict copies.
+function sharedSince(accountHome: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(
+      readFileSync(join(accountHome, HISTORY_CLEANUP_MANIFEST), 'utf8')
+    )
+    return parsed &&
+      typeof parsed === 'object' &&
+      'firstSharedAt' in parsed &&
+      typeof parsed.firstSharedAt === 'string'
+      ? parsed.firstSharedAt
+      : null
+  } catch {
+    return null
+  }
+}
 
 function realDirectory(path: string): boolean {
   const stats = lstatOrNull(path)
@@ -118,14 +141,23 @@ export async function verifyCodexAccountCopies(args: {
   accountHome: string
   storeHome: string
   budget: VerifyBudget
-  /** This Orca's version: a home this version already settled is not walked again. */
+  /** This Orca's version: a home this version settled, in the same share streak, isn't walked. */
   version: string
+  managedAccountsRoot: string
 }): Promise<{ verified: VerifiedCopy[]; tally: CopiesTally; bytesRead: number }> {
   const tally = emptyTally()
   const verified: VerifiedCopy[] = []
-  releaseLeftoverHeldCopies(args.accountHome)
+  // Throws unless this is Orca's own account home (its marker names its account).
+  assertOwnedHostCodexManagedHomePath({
+    candidatePath: args.accountHome,
+    managedAccountsRoot: args.managedAccountsRoot,
+    systemCodexHomePath: args.storeHome,
+    expectedAccountId: basename(dirname(args.accountHome))
+  })
+  const since = sharedSince(args.accountHome)
+  const stamp = since === null ? null : `${args.version}|${since}`
   const record = readKeptCopies(args.accountHome)
-  if (record.settled === args.version) {
+  if (stamp !== null && record.settled === stamp) {
     return { verified, tally, bytesRead: 0 }
   }
   const kept = record.differs
@@ -170,14 +202,25 @@ export async function verifyCodexAccountCopies(args: {
         const sameForm =
           copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX) ===
           original.path.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-        if (kept[name] === key || (sameForm && copyStats.size > original.stats.size)) {
+        const compressedCopy = copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
+        // A `.zst` copy is deleted only for an identical `.zst`: decoding stops after its first
+        // frame, so a later frame's content could never be compared.
+        if (
+          kept[name] === key ||
+          (sameForm && copyStats.size > original.stats.size) ||
+          (compressedCopy && !sameForm)
+        ) {
           nextKept[name] = key
           tally.differs += 1
           continue
         }
-        const size = Number(copyStats.size)
-        // A copy larger than the whole budget goes first in its launch rather than never.
-        if (bytesRead > 0 && bytesRead + size > args.budget.maxBytes) {
+        // The copy, plus as much of a plain original or all of a compressed one.
+        const size =
+          Number(copyStats.size) * 2 +
+          (sameForm ? 0 : Number(original.stats.size) - Number(copyStats.size))
+        // A pair larger than the whole budget goes first in its launch rather than never.
+        const oversizedFirst = args.budget.admitOversized && bytesRead === 0
+        if (!oversizedFirst && bytesRead + size > args.budget.maxBytes) {
           tally.deferred += 1
           if (kept[name]) {
             nextKept[name] = kept[name]
@@ -234,8 +277,10 @@ export async function verifyCodexAccountCopies(args: {
     }
   }
   const settled =
-    verified.length === 0 && tally.deferred + tally.changed + tally.error + tally.open === 0
-  writeKeptCopies(args.accountHome, { differs: nextKept, settled: settled ? args.version : null })
+    stamp !== null &&
+    verified.length === 0 &&
+    tally.deferred + tally.changed + tally.error + tally.missing_original === 0
+  writeKeptCopies(args.accountHome, { differs: nextKept, settled: settled ? stamp : null })
   return { verified, tally, bytesRead }
 }
 
@@ -256,14 +301,12 @@ export async function runCodexAccountCopiesRequest(
   switch (request.op) {
     case 'verify':
       return { ok: true, op: 'verify', ...(await verifyCodexAccountCopies(request)) }
-    case 'hold':
-      return { ok: true, op: 'hold', ...holdVerifiedCopies(request.accountHome, request.copies) }
-    case 'finish': {
-      const tally = finishHeldCopies(request.accountHome, request.held, request.open)
+    case 'delete': {
+      const tally = deleteCheckedCopies(request.accountHome, request.copies)
       if (tally.deleted > 0) {
         removeEmptiedCopyFolders(request.accountHome, request.storeHome)
       }
-      return { ok: true, op: 'finish', tally }
+      return { ok: true, op: 'delete', tally }
     }
   }
 }

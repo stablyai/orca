@@ -58,6 +58,8 @@ export class CodexAccountHistoryPasses {
   ) {}
 
   private censusWaiting = false
+  // The newest shared listing a census ran, as given; the copies cleanup reads it, never relisting.
+  private listedSharedHomes: string[] = []
   // The newest listing, which the waiting move census reports on; empty once sharing went off.
   private censusHomes: string[] = []
   private readonly moveReport = new CodexHistoryMoveReport({
@@ -114,7 +116,7 @@ export class CodexAccountHistoryPasses {
   private startedPasses = 0
   private readonly copiesCleanup = new CodexAccountCopiesCleanupRun({
     passRunning: () => this.activePasses > 0,
-    homes: () => this.homes.sharedHomes() ?? [],
+    homes: () => this.listedSharedHomes,
     moveOutcome: (home) => this.moveOutcomeNow(home),
     markerPath: () =>
       join(getOrcaUserDataPath(), 'codex-account-history', 'copies-cleanup-sent.json')
@@ -177,6 +179,7 @@ export class CodexAccountHistoryPasses {
     this.censusHomes = shared
       ? accountHomes.map((home) => normalizeRuntimePathForComparison(home))
       : []
+    this.listedSharedHomes = shared ? accountHomes : []
     // One census waits at a time and reports the newest shared listing: a pass that never
     // settles must not gather one per launch.
     if (!shared || this.censusWaiting) {
@@ -289,14 +292,11 @@ export class CodexAccountHistoryPasses {
     }
   }
 
-  // Moved: this run's pass shared it, it should still be shared, and no pass is due.
+  // Moved: this run's pass shared it and no pass is due. Turning sharing off or changing the
+  // account queues a pass, and a pass stops the cleanup before it runs; no listing is reread.
   private moveOutcomeNow(accountHome: string): CodexHistoryMoveOutcome | null {
     const key = normalizeRuntimePathForComparison(accountHome)
-    return this.settledThisRun.get(key) === true &&
-      this.isStillShared(accountHome) &&
-      !this.requests.has(key)
-      ? 'moved'
-      : null
+    return this.settledThisRun.get(key) === true && !this.requests.has(key) ? 'moved' : null
   }
 
   private cancelRetry(key: string): void {

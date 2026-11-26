@@ -4,7 +4,6 @@ import { COMPRESSED_ROLLOUT_SUFFIX } from '../rollouts/codex-rollout-compressed-
 
 // Sync reads on purpose: this runs on the copies cleanup's own worker thread.
 const CHUNK_BYTES = 1024 * 1024
-const NEWLINE = 0x0a
 const ZSTD_MAGIC = 0xfd2fb528
 
 /**
@@ -106,7 +105,6 @@ export async function originalHoldsCopy(
   try {
     let pending: Buffer = Buffer.alloc(0)
     let consumed = 0
-    let lastByte: number | undefined
     for await (const mine of read(copy)) {
       inTime()
       let offset = 0
@@ -117,7 +115,6 @@ export async function originalHoldsCopy(
             return false
           }
           pending = next.value
-          lastByte = pending.at(-1) ?? lastByte
           continue
         }
         const length = Math.min(mine.length - offset, pending.length)
@@ -136,14 +133,13 @@ export async function originalHoldsCopy(
     if (compressed) {
       // The decoder ends a truncated frame quietly, so the whole original is measured.
       let total = BigInt(consumed + pending.length)
-      let last = pending.at(-1) ?? lastByte
       for (let next = await theirs.next(); !next.done; next = await theirs.next()) {
         inTime()
         total += BigInt(next.value.length)
-        last = next.value.at(-1) ?? last
       }
       const declared = zstdDeclaredSize(original)
-      return declared === total || ((declared === null || total > declared) && last === NEWLINE)
+      // Only a size the frame declares proves it complete: the decoder ends a cut frame quietly.
+      return declared === total
     }
     return true
   } finally {
