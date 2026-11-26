@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
@@ -14,6 +14,7 @@ import { DeliveryPreparation, DeliveryReceipts } from './external-conversation-d
 import { ExternalConversationSeam } from './external-conversation-seam'
 import { SlackMirror } from './slack-mirror'
 import type { ExternalConversationLinkStore } from './external-conversation-links'
+import { startConnectorConversation } from './external-conversation-start'
 import { runtimeChatHost } from './external-conversation-chat'
 import type { Delivery } from './external-conversation-types'
 
@@ -182,3 +183,57 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
     }
   }
 )
+
+it('cleans up a retired thread after its retry expires without delivering', async () => {
+  const db = new OrchestrationDb(':memory:')
+  const forget = vi.fn(async () => {})
+  const poll = new AbortController()
+  const retiredPoll = new DeliveryPreparation(poll.signal, () => 30_000)
+  const signal = new AbortController().signal
+  const deliver = vi.fn(async (): Promise<Delivery> => {
+    poll.abort()
+    return { outcome: 'refused', reason: 'connectors_disabled' }
+  })
+  const deps = {
+    store: {
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: () => {},
+      getRepos: () => []
+    },
+    receipts: new DeliveryReceipts(() => db),
+    enqueue: (run: (signal: AbortSignal) => Promise<Delivery>) => run(signal),
+    deliver,
+    link: () => {}
+  }
+  const host = {
+    bots: {
+      refusal: () => null,
+      open: async () => ({
+        sessionId: deliveryChatId(KEY, TARGET, ID),
+        agent: 'codex' as const,
+        worktreeId: folderWorkspaceKey(HOME_ID)
+      }),
+      workLinks: async () => [],
+      forgetUnusedStart: forget
+    }
+  }
+  try {
+    const retired = await startConnectorConversation(deps, host, KEY, ID, INPUT, retiredPoll)
+    expect(retired.initial.outcome).toBe('refused')
+    expect(forget).not.toHaveBeenCalled()
+    const expired = await startConnectorConversation(
+      deps,
+      host,
+      KEY,
+      ID,
+      INPUT,
+      new DeliveryPreparation(undefined, () => 0)
+    )
+    expect(expired.initial).toEqual({ outcome: 'expired' })
+    expect(forget).toHaveBeenCalledExactlyOnceWith(deliveryChatId(KEY, TARGET, ID))
+    expect(deliver).toHaveBeenCalledTimes(1)
+  } finally {
+    db.close()
+  }
+})

@@ -34,7 +34,9 @@ export async function startConnectorConversation(
   preparation?: DeliveryPreparation
 ): Promise<ConversationStart> {
   const { agent, target, prompt, ...message } = input
-  if (preparation && target.kind === 'bot') {
+  const preparedThread =
+    preparation && target.kind === 'bot' ? deliveryChatId(key, target, deliveryId) : undefined
+  if (preparation && preparedThread) {
     preparation.restoreThreadOnRestart({
       ...key,
       botId: target.botId,
@@ -52,16 +54,17 @@ export async function startConnectorConversation(
         const deliverySignal = preparation?.signal(signal) ?? signal
         const stopped = preparation?.stopped(deliverySignal)
         if (stopped) {
+          if (preparedThread && !preparation?.pollRetired()) {
+            await host.bots?.forgetUnusedStart?.(preparedThread)
+          }
           return stopped
         }
         if (!isBotAgent(agent)) {
           return refused('unsupported_agent')
         }
         let stagedImages: StagedConnectorImages | undefined
-        let fresh = false
         let abandoned = false
         const beforeCreate = async (agent: NativeChatAgent) => {
-          fresh = true
           if (message.asker && deps.askerImages) {
             stagedImages = await stageInitialImages(deps.askerImages, {
               agent,
@@ -81,7 +84,13 @@ export async function startConnectorConversation(
             host.bots,
             key,
             target,
-            preparation ? { deliveryId, signal: deliverySignal, beforeCreate } : undefined
+            preparation
+              ? {
+                  deliveryId,
+                  signal: deliverySignal,
+                  beforeCreate
+                }
+              : undefined
           )
           const delivered =
             'outcome' in chat
@@ -103,8 +112,8 @@ export async function startConnectorConversation(
           }
           throw error
         } finally {
-          if (fresh && abandoned && !preparation?.pollRetired()) {
-            await host.bots?.forgetUnusedStart?.(deliveryChatId(key, target, deliveryId))
+          if (preparedThread && abandoned && !preparation?.pollRetired()) {
+            await host.bots?.forgetUnusedStart?.(preparedThread)
           }
         }
       }),
@@ -112,12 +121,12 @@ export async function startConnectorConversation(
   )
   if (
     preparation &&
-    target.kind === 'bot' &&
+    preparedThread &&
     (initial.outcome === 'accepted' || initial.outcome === 'unknown') &&
     !findLink(deps.store, key)
   ) {
     // The journal may have committed before the thread link was written.
-    const sessionId = deliveryChatId(key, target, deliveryId)
+    const sessionId = preparedThread
     const chat = host.chat?.current()?.deps.store.getConversation(sessionId)
     if (chat?.location && chat.provider && isBotAgent(chat.provider)) {
       deps.link(
