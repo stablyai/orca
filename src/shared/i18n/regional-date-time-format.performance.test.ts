@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { regionalDateTimeFormat, setOsDateTimeRegion } from './regional-date-time-format'
 
-// Guards #49899: dates are formatted per row and per render, so the shared formatter must build
+// Guards #50045 (issue #49899): dates are formatted per row and per render, so the shared formatter must build
 // each formatter and locale plan once, and keep a bounded number of them.
 afterEach(() => setOsDateTimeRegion(null))
 
