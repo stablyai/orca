@@ -114,6 +114,7 @@ export async function getHostedReviewCreationEligibility(
   const provider = await detectHostedReviewProvider({
     repoPath: args.repoPath,
     executionHostId: args.executionHostId,
+    branch,
     ...hostedReviewExecutionContext(args)
   })
   // Preview may replace a local-only parent candidate with a remotely resolvable default.
@@ -270,6 +271,7 @@ export async function createHostedReview(
   const provider = await getForgeProviderForRepository({
     repoPath,
     executionHostId,
+    ...(input.head ? { branch: stripRefPrefix(input.head).trim() } : {}),
     ...hostedReviewExecutionContext(options)
   })
   if (provider?.id !== input.provider || !provider.createReview) {

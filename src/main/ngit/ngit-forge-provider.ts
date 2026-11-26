@@ -15,7 +15,8 @@ export const ngitForgeProvider = {
     getNgitRepoSlug(
       context.repoPath,
       hostedReviewSshConnectionId(context.executionHostId),
-      getHostedReviewLocalGitOptions(context)
+      getHostedReviewLocalGitOptions(context),
+      context.branch
     ),
   async getReviewForBranch(input) {
     // An unanswered relay read is unavailable, never proof no pull request exists.

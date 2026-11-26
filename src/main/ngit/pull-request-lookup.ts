@@ -10,9 +10,10 @@ const DEFAULT_BRANCH_NAMES = new Set(['main', 'master'])
 export async function getNgitRepoSlug(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  branch?: string
 ): Promise<NostrRepoRef | null> {
-  return getPrimaryNostrRepoRef(repoPath, connectionId, localGitOptions)
+  return getPrimaryNostrRepoRef(repoPath, connectionId, localGitOptions, branch)
 }
 
 /**
@@ -74,9 +75,10 @@ async function readPrimaryItems(
   repoPath: string,
   connectionId: string | null | undefined,
   localGitOptions: LocalGitExecOptions,
-  force: boolean
+  force: boolean,
+  branch: string
 ): Promise<ProjectedWorkItem[] | null> {
-  const ref = await getPrimaryNostrRepoRef(repoPath, connectionId, localGitOptions)
+  const ref = await getPrimaryNostrRepoRef(repoPath, connectionId, localGitOptions, branch)
   if (!ref) {
     return null
   }
@@ -100,7 +102,8 @@ export async function getNgitPullRequestForBranchOrThrow(
     repoPath,
     connectionId,
     options.localGitExecOptions ?? {},
-    options.userRefresh === true
+    options.userRefresh === true,
+    branch
   )
   return items
     ? findPullRequestForBranch(items, branch, {

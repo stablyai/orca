@@ -33,23 +33,21 @@ export async function createNgitPullRequest(
     )
   }
   const localGit = getHostedReviewLocalGitOptions(options)
-  const ref = await getPrimaryNostrRepoRef(repoPath, null, localGit)
-  if (!ref) {
-    return failed('Create PR failed: this repository has no nostr remote.')
-  }
   const cwd = input.worktreePath ?? repoPath
-  const base = normalizeHostedReviewBaseRef(input.base)
   const title = input.title.trim()
+  const git = async (args: string[]): Promise<string> =>
+    (await gitExecFileAsync(args, { cwd, ...localGit })).stdout.trim()
+  const branch = await git(['rev-parse', '--abbrev-ref', 'HEAD'])
+  const ref = await getPrimaryNostrRepoRef(repoPath, null, localGit, branch)
+  if (!ref) {
+    return failed('Create PR failed: this branch does not push to a nostr remote.')
+  }
+  const base = normalizeHostedReviewBaseRef(input.base).replace(`${ref.remoteName}/`, '')
   if (!base || !title) {
     return failed('Create PR failed: choose a base branch and enter a title.')
   }
-  const git = async (args: string[]): Promise<string> =>
-    (await gitExecFileAsync(args, { cwd, ...localGit })).stdout.trim()
   try {
-    const [headOid, branch] = await Promise.all([
-      git(['rev-parse', 'HEAD']),
-      git(['rev-parse', '--abbrev-ref', 'HEAD'])
-    ])
+    const headOid = await git(['rev-parse', 'HEAD'])
     const stdout = await exec(
       [
         '--repo',

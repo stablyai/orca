@@ -119,6 +119,7 @@ export async function readHostedReviewForBranch(
         const provider = await getForgeProviderForRepository({
           repoPath: input.repoPath,
           executionHostId: input.executionHostId,
+          branch: branchName,
           ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
         })
         if (!provider) {

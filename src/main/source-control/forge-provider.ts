@@ -54,6 +54,8 @@ export type ForgeProviderRepositoryContext = HostedReviewExecutionOptions & {
   repoPath: string
   /** Resolved, never null: `local` and "unresolved" are no longer the same value. */
   executionHostId: ExecutionHostId
+  /** The branch being asked about; a repository with several forges answers per branch. */
+  branch?: string
 }
 
 export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {

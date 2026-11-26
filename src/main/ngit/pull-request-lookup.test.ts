@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { findPullRequestForBranch } from './pull-request-lookup'
+import { pickBranchRemote } from './repository-ref'
 import { ngitPullRequestWorkspaceName } from './pull-request-worktree-base'
 import type { ProjectedWorkItem } from './work-item-projection'
 
@@ -67,5 +68,17 @@ describe('ngit pull request for a branch', () => {
   it('hides a finished pull request once its branch name moves on', () => {
     expect(findPullRequestForBranch([merged], 'pr/splicing', { headOid: 'newer' })).toBeNull()
     expect(findPullRequestForBranch([merged], 'pr/splicing', { headOid: 'old' })).toBe(merged)
+  })
+})
+
+describe('the remote a branch belongs to', () => {
+  const config = ['branch.master.remote nostr', 'branch.fix.remote origin'].join('\n')
+
+  it('follows the branch, else the default branch, with push settings first', () => {
+    expect(pickBranchRemote(config, 'fix')).toBe('origin')
+    expect(pickBranchRemote(config, 'new-work')).toBe('nostr')
+    expect(pickBranchRemote(`${config}\nremote.pushdefault nostr`, 'fix')).toBe('nostr')
+    expect(pickBranchRemote(`${config}\nbranch.fix.pushremote nostr`, 'fix')).toBe('nostr')
+    expect(pickBranchRemote('', 'fix')).toBeNull()
   })
 })

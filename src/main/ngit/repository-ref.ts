@@ -19,17 +19,57 @@ export function _resetNostrRepoRefCache(): void {
 export type NostrRepoRef = NostrRepositoryAddress & { remoteName: string }
 
 /**
- * The repository's own forge: `origin`, or any remote when there is no `origin`. A second nostr
- * mirror beside a GitHub origin must not take over that branch's pull request status.
+ * The forge of one branch. Git config decides first: where the branch pushes or, for a branch with no
+ * upstream yet, where the default branch does. Without that, `origin`, or any remote when there is no
+ * `origin`, so a second nostr mirror never takes over a GitHub branch.
  */
 export async function getPrimaryNostrRepoRef(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  branch?: string
 ): Promise<NostrRepoRef | null> {
   const remotes = await listCachedRemoteNames(repoPath, connectionId, localGitOptions)
-  const candidates = remotes && !remotes.includes('origin') ? remotes : ['origin']
+  const hasOrigin = !remotes || remotes.includes('origin')
+  const configured =
+    remotes && remotes.length > 1 ? await readBranchRemote(repoPath, branch, localGitOptions) : null
+  const candidates = configured ? [configured] : hasOrigin ? ['origin'] : remotes
   return firstNostrRemote(repoPath, candidates, connectionId, localGitOptions)
+}
+
+async function readBranchRemote(
+  repoPath: string,
+  branch: string | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<string | null> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['config', '--get-regexp', '^(remote\\.pushdefault|branch\\..*\\.(remote|pushremote))$'],
+      { cwd: repoPath, ...localGitOptions }
+    )
+    return pickBranchRemote(stdout, branch)
+  } catch {
+    // Git exits 1 when nothing matches.
+    return null
+  }
+}
+
+/** Git's own push precedence over `git config --get-regexp` output. */
+export function pickBranchRemote(configLines: string, branch: string | undefined): string | null {
+  const values = new Map(
+    configLines.split(/\r?\n/).flatMap((line) => {
+      const space = line.indexOf(' ')
+      return space > 0 ? [[line.slice(0, space), line.slice(space + 1).trim()] as const] : []
+    })
+  )
+  const name = branch?.replace(/^refs\/heads\//, '')
+  const of = (target: string): string | undefined =>
+    values.get(`branch.${target}.pushremote`) ??
+    values.get('remote.pushdefault') ??
+    values.get(`branch.${target}.remote`)
+  const picked = (name ? of(name) : values.get('remote.pushdefault')) ?? of('main') ?? of('master')
+  // `.` marks a branch tracking another local branch, which names no forge.
+  return picked && picked !== '.' ? picked : null
 }
 
 /** Any nostr remote, else the checkout's `maintainers.yaml`; what the Tasks page reads. */

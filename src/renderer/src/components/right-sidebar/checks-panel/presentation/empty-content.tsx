@@ -161,6 +161,9 @@ export function ChecksPanelEmptyContent({
     const emptyReviewIsGitLab =
       linkedGitLabMR !== null || hostedReviewCreation?.provider === 'gitlab'
     const emptyReviewCopy = localizedHostedReviewCopy(emptyReviewIsGitLab ? 'gitlab' : 'github', t)
+    // ngit publishes the commits when it opens the pull request, so no upstream is needed first.
+    const reviewHasUpstream =
+      hostedReviewCreation?.provider === 'ngit' ? true : publishActionRemoteStatus?.hasUpstream
     const canPushCreate = hostedReviewCreation?.blockedReason === 'needs_push'
     const shouldPushBeforeCreateReview = createPrPushFirst || canPushCreate
     const canPublishBranch =
@@ -168,7 +171,7 @@ export function ChecksPanelEmptyContent({
       (!publishActionHasUncommittedChanges &&
         shouldShowChecksPanelPublishBranchAction({
           hostedReviewBlockedReason: hostedReviewCreation?.blockedReason,
-          hasUpstream: publishActionRemoteStatus?.hasUpstream,
+          hasUpstream: reviewHasUpstream,
           hasCurrentBranch: Boolean(branch)
         }))
     // Keep GitHub hard errors sticky so retry state cannot briefly restore the composer.
@@ -206,7 +209,7 @@ export function ChecksPanelEmptyContent({
         confirmedNeedsPush: confirmedReadiness.needsPush,
         refresh: emptyRefreshInput,
         gitStatusPhase: emptyGitStatusPhase,
-        hasUpstream: publishActionRemoteStatus?.hasUpstream,
+        hasUpstream: reviewHasUpstream,
         hasCurrentBranch: Boolean(branch)
       },
       t
