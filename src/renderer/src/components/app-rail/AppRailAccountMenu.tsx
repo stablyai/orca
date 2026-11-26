@@ -174,10 +174,10 @@ export function AppRailAccountMenu({
               viewAtOpenRef.current !== 'settings'
             ) {
               event.preventDefault()
-            } else {
-              // A dismissing click on blank space leaves focus on the body; hand it back, as the rail's other menus do.
-              refocusTriggerIfFocusLost(triggerRef.current)
             }
+            // If nothing took focus a frame later, hand it back to the button: a deep link (Keyboard Shortcuts) turns
+            // off the page's search autofocus and its pane takes none, and a click on blank space leaves the body.
+            refocusTriggerIfFocusLost(triggerRef.current)
           }}
         >
           {account ? (

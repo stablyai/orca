@@ -214,6 +214,23 @@ export const keyboard = defineFixture({
     />
   )
 })
+const HASH = 'sha256:9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7'
+// A hash in Done means and the close note wraps in place: the page never scrolls sideways.
+export const longTokens = defineFixture({
+  width: 260,
+  render: () => (
+    <Pane
+      state={walk(3, 14)}
+      shown={{
+        ...item,
+        status: 'done',
+        doneMeans: `Checksum equals ${HASH}`,
+        closeNote: `Verified ${HASH}`
+      }}
+      tall
+    />
+  )
+})
 
 const AT = 1_700_000_000_000
 const named = { ...item, owner: { ...item.owner, name: 'Builder' } }

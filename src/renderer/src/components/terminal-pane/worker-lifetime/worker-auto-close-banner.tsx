@@ -1,9 +1,9 @@
-import { Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { workerKeepOpenLabel } from '@/runtime/agent-orchestration/worker-auto-close'
 import type { Translate } from '@/i18n/use-translate'
 import {
   formatWorkerAutoCloseCountdown,
+  WORKER_AUTO_CLOSE_GRACE_MS,
   type WorkerAutoCloseState
 } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import type { PaneTopBannerProps } from '../appearance/pane-top-banner/PaneTopWarningBanner'
@@ -27,12 +27,13 @@ export function workerAutoCloseBannerProps(
   ) : countdown === null ? (
     t(
       'components.orchestration.workerAutoClose.bannerRunning',
-      'Orchestration worker · Closes 2 minutes after it finishes'
+      'Closes {{minutes}} min after finishing',
+      { minutes: Math.round(WORKER_AUTO_CLOSE_GRACE_MS / 60_000) }
     )
   ) : (
     t(
       'components.orchestration.workerAutoClose.bannerFinished',
-      'Orchestration worker finished · Closes in {{countdown}}',
+      'Finished · closes in {{countdown}}',
       { countdown }
     )
   )
@@ -44,13 +45,16 @@ export function workerAutoCloseBannerProps(
         ? ''
         : t(
             'components.orchestration.workerAutoClose.bannerFinishedStatus',
-            'Orchestration worker finished · Closes soon'
+            'Worker finished · closes soon'
           ),
-    tone: state.closesAt === null ? 'accent' : 'warning',
-    icon: Timer,
+    tone: 'quiet',
     title,
+    progress:
+      state.closesAt === null
+        ? undefined
+        : (Date.parse(state.closesAt) - nowMs) / WORKER_AUTO_CLOSE_GRACE_MS,
     primaryAction: (
-      <Button type="button" variant="default" size="xs" onClick={keepOpen}>
+      <Button type="button" variant="ghost-muted" size="xs-compact" onClick={keepOpen}>
         {workerKeepOpenLabel(t)}
       </Button>
     )

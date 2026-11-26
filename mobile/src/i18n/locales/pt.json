@@ -4733,11 +4733,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} de {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "Verificando host",
       "connectToDownload": "Conecte-se a este host para baixar a versão mais recente do app",
       "documentLoadFailed": "Não foi possível abrir o app baixado.",
       "downloadFailed": "Não foi possível baixar a versão mais recente do app deste host.",
+      "downloadProgressFromHost": "de {{host}} · {{progress}}",
+      "downloadingLatestApp": "Baixando a versão mais recente do app",
       "hostProfileUnreadable": "Não foi possível ler os dados deste host no seu dispositivo. Tente novamente.",
       "isolationUnavailable": "O WebView deste dispositivo é antigo demais para abrir o espaço de trabalho com segurança.",
       "openingWorkspace": "Abrindo espaço de trabalho",
@@ -5102,6 +5107,12 @@
                 "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Atualiza quando o Codex é executado",
+                "message": "O uso do Codex será atualizado na próxima vez que ele for executado."
+              }
+            },
             "1804cd8c3f": "Atualizando login",
             "bf2e739f18": "Login indisponível",
             "f8f0f9d8cc": "Problema de rede",
@@ -5304,7 +5315,9 @@
       "ask": {
         "replaced": "O agente fez uma nova pergunta. Leia e responda.",
         "replacedByNewer": "Substituída por uma pergunta mais recente",
-        "skipped": "Ignoradas"
+        "skipped": "Ignoradas",
+        "heldImagesLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} fotos. Remova algumas e tente novamente.",
+        "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Remova algumas e tente novamente."
       }
     },
     "needs": {
@@ -5870,5 +5883,8 @@
     "cardSlot": {
       "working": "Trabalhando"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqueado pelas configurações do Claude da sua organização"
   }
 }

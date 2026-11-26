@@ -4166,11 +4166,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} sur {{total}} Mo"
+    },
     "shellStateScreen": {
       "checkingHost": "Vérification de l'hôte",
       "connectToDownload": "Connectez-vous à cet hôte pour télécharger la dernière version de l'application",
       "documentLoadFailed": "Impossible d'ouvrir l'application téléchargée.",
       "downloadFailed": "Impossible de télécharger la dernière version de l'application depuis cet hôte.",
+      "downloadProgressFromHost": "depuis {{host}} · {{progress}}",
+      "downloadingLatestApp": "Téléchargement de la dernière version",
       "hostProfileUnreadable": "Impossible de lire les informations de cet hôte sur votre appareil. Réessayez.",
       "isolationUnavailable": "La WebView de cet appareil est trop ancienne pour ouvrir l'espace de travail en toute sécurité.",
       "openingWorkspace": "Ouverture de l'espace de travail",
@@ -4528,6 +4533,12 @@
                 "message": "L'utilisation de Claude se met à jour la prochaine fois que Claude s'exécute."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se met à jour quand Codex s'exécute",
+                "message": "L'utilisation de Codex se met à jour la prochaine fois que Codex s'exécute."
+              }
+            },
             "1804cd8c3f": "Actualisation de la connexion",
             "bf2e739f18": "Connexion indisponible",
             "f8f0f9d8cc": "Problème de réseau",
@@ -4730,7 +4741,9 @@
       "ask": {
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
         "replacedByNewer": "Remplacée par une question plus récente",
-        "skipped": "Ignorées"
+        "skipped": "Ignorées",
+        "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} photos. Retirez-en quelques-unes et réessayez.",
+        "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Retirez-en quelques-uns et réessayez."
       }
     },
     "needs": {
@@ -5296,5 +5309,8 @@
     "cardSlot": {
       "working": "En activité"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqué par les paramètres Claude de votre organisation"
   }
 }

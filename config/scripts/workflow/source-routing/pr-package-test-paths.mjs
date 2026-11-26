@@ -40,6 +40,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'electron.vite.config.ts',
   'config/electron-builder',
   'config/packaged-runtime',
+  'config/scripts/runtime-verification/packaged-main/',
   'config/packaged-native-build-entries',
   'config/dark-build-switches.',
   'config/build-plugins/',
@@ -84,9 +85,9 @@ const SHARED_PACKAGE_PREFIXES = [
   'resources/skills/',
   // The packaged CLI ships tsc output beside node_modules, so any CLI module's imports can break it (#48778).
   'src/cli/',
-  // `orca mcp connect`'s bundled bridge; its imports are checked only in the packaged app.
-  'src/main/mcp-servers/agent-files/mcp-connect-bridge',
-  'src/main/mcp-servers/agent-files/mcp-no-tools-server',
+  // The MCP SDK is a bundled devDependency here: `orca mcp connect`'s bridge and the shared server
+  // processes import it, and only the packaged app checks what that pulls in (#48770 shipped ajv).
+  'src/main/mcp-servers/',
   // Packaged CLI launch and Electron entry/native loading.
   'src/main/cli/',
   'src/main/index.ts',
@@ -204,7 +205,8 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
-  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts'
+  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts',
+  'src/main/runtime/files/watch/windows-file-watch.win32.test.ts'
 ]
 
 const WINDOWS_BOUNDARY_PREFIXES = [
@@ -239,8 +241,10 @@ const WINDOWS_BOUNDARY_PREFIXES = [
   'src/main/codex/hooks/',
   'src/main/orca-profiles/',
   'src/main/persistence/profile-state/',
+  'src/main/runtime/files/watch/windows-file-watch',
   'src/main/runtime/rpc/server/pairing/',
   'src/main/windows/',
+  'src/shared/file-watch/windows-',
   'src/shared/file-write/windows-',
   'src/shared/orca-profiles/',
   'src/shared/secure-storage/'

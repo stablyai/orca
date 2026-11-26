@@ -1,5 +1,6 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
+import type { LiveTextReaders } from './structured-agent-session-event-sink'
 
 /** How a conversation's owner delivers saved facts and holds reading across a replacement. */
 export type StructuredAgentSessionSnapshotRecipient = {
@@ -13,12 +14,12 @@ export type StructuredAgentSessionSnapshotSource = (
 /** One acquisition's saved facts, replaced whole per epoch, and the holds a replacement places. */
 export class StructuredAgentSessionSinkSnapshots {
   private readonly liveSources = new Set<{
-    read(epoch: string): readonly AgentJournalRenderItem[]
+    read(epoch: string, readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
     flush(): void
   }>()
 
   bindLiveText = (source: {
-    read(epoch: string): readonly AgentJournalRenderItem[]
+    read(epoch: string, readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
     flush(): void
   }): (() => void) => {
     this.liveSources.add(source)
@@ -26,8 +27,10 @@ export class StructuredAgentSessionSinkSnapshots {
       this.liveSources.delete(source)
     }
   }
-  readLiveText = (epoch: string): readonly AgentJournalRenderItem[] =>
-    this.held || this.closed ? [] : [...this.liveSources].flatMap((source) => source.read(epoch))
+  readLiveText = (epoch: string, readers?: LiveTextReaders): readonly AgentJournalRenderItem[] =>
+    this.held || this.closed
+      ? []
+      : [...this.liveSources].flatMap((source) => source.read(epoch, readers))
   flushLiveText = (): void => {
     this.liveSources.forEach((source) => source.flush())
   }

@@ -80,14 +80,23 @@ function readFileText(path: string): string | null {
 const readSealed = (folder: string): Stored =>
   parseBotToolCredentialFile(folder, readFileText(botToolCredentialsPath(folder)))
 
-const entryOf = (stored: Stored, id: string): Entry | null => stored[id]?.entry ?? null
+const entryOf = (stored: Stored, id: string): Entry | null =>
+  Object.hasOwn(stored, id) ? stored[id]!.entry : null
 
-export async function readBotToolCredentialSnapshot(folder: string) {
+/** The store as read once off the event loop; each entry is opened only when first asked for. */
+export type BotToolCredentialSnapshot = BotToolCredentialsReader & {
+  /** `botToolCredentialFingerprints`'s answer from this read. */
+  fingerprints: (ids: ReadonlySet<string>) => Map<string, unknown>
+}
+
+export async function readBotToolCredentialSnapshot(
+  folder: string
+): Promise<BotToolCredentialSnapshot> {
   const { stored } = await readBotToolCredentialFile(folder, botToolCredentialsPath(folder))
   return {
-    credential: (id: string) => credentialOf(entryOf(stored, id)),
-    oauth: (id: string) => oauthOf(entryOf(stored, id)),
-    fingerprint: (ids: ReadonlySet<string>) => credentialFingerprint(stored, ids)
+    credential: (id) => credentialOf(entryOf(stored, id)),
+    oauth: (id) => oauthOf(entryOf(stored, id)),
+    fingerprints: (ids) => credentialFingerprints(stored, ids)
   }
 }
 
@@ -122,7 +131,27 @@ export function botToolCredentialWriteTransaction<T>(
 
 /** One header or source credential, opened and checked against its folder and id; null for none or a sign-in. */
 export function readBotToolCredential(folder: string, id: string): BotToolCredential | null {
-  return credentialOf(entryOf(readSealed(folder), id))
+  return botToolCredentialsReader(folder).credential(id)
+}
+
+/** The sign-in a credential id holds, or null when it holds none or something else. */
+export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
+  return botToolCredentialsReader(folder).oauth(id)
+}
+
+type BotToolCredentialsReader = {
+  credential: (id: string) => BotToolCredential | null
+  oauth: (id: string) => BotToolOAuthEntry | null
+}
+
+/**
+ * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, taken on
+ * the first id asked for, so a caller with none reads nothing. Only the entries asked for are opened.
+ */
+export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
+  let sealed: Stored | undefined
+  const entry = (id: string) => entryOf((sealed ??= readSealed(folder)), id)
+  return { credential: (id) => credentialOf(entry(id)), oauth: (id) => oauthOf(entry(id)) }
 }
 
 function credentialOf(entry: Entry | null): BotToolCredential | null {
@@ -134,11 +163,6 @@ function credentialOf(entry: Entry | null): BotToolCredential | null {
     ...(entry.kind === 'source' ? { source: entry.source } : {}),
     headers: { ...entry.headers }
   }
-}
-
-/** The sign-in a credential id holds, or null when it holds none or something else. */
-export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
-  return oauthOf(entryOf(readSealed(folder), id))
 }
 
 function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
@@ -159,19 +183,31 @@ function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
  * address and sign-in for an app Orca signs in to, so a refreshed token restarts no chat.
  */
 export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<string>): string {
-  return credentialFingerprint(readSealed(folder), ids)
+  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)()])
 }
 
-function credentialFingerprint(sealed: Stored, ids: ReadonlySet<string>): string {
-  return JSON.stringify([...credentialFingerprints(sealed, ids)])
-}
-
-/** `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store. */
+/**
+ * `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store taken
+ * now; its entries are opened only the first time the answer is asked for, so a reader that never
+ * needs it opens none.
+ */
 export function botToolCredentialFingerprints(
   folder: string,
   ids: ReadonlySet<string>
-): Map<string, unknown> {
-  return credentialFingerprints(readSealed(folder), ids)
+): () => Map<string, unknown> {
+  if (ids.size === 0) {
+    return () => new Map()
+  }
+  // Let go of once the answer is made, so no opened entry outlives it.
+  let sealed: Stored | undefined = readSealed(folder)
+  let fingerprints: Map<string, unknown> | undefined
+  return () => {
+    if (!fingerprints) {
+      fingerprints = credentialFingerprints(sealed!, ids)
+      sealed = undefined
+    }
+    return fingerprints
+  }
 }
 
 function credentialFingerprints(sealed: Stored, ids: ReadonlySet<string>): Map<string, unknown> {
@@ -318,7 +354,7 @@ export function forgetBotToolCredentials(folder: string): Promise<BotToolOAuthEn
 
 /** A stored tool as an edit starts from, keeping the credential id only for Orca's own sign-in. */
 export function withSavedBotToolHeaders(
-  credentials: Awaited<ReturnType<typeof readBotToolCredentialSnapshot>>,
+  credentials: BotToolCredentialsReader,
   server: BotToolServer
 ): BotToolServer {
   if (!('url' in server) || !server.credential || credentials.oauth(server.credential)) {

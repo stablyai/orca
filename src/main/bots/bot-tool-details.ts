@@ -11,17 +11,17 @@ import { readBotToolsSnapshot, type BotToolsSnapshot } from './bot-tools-file'
 import { isBotVaultSource } from './bot-tool-vault-source'
 
 export async function readBotToolDetails(folder: string, name: string): Promise<BotToolDetails> {
-  const { servers, version, credentials } = await readBotToolsSnapshot(folder)
+  const { servers, version, saved } = await readBotToolsSnapshot(folder)
   const server = servers.find((entry) => entry.name === name)
   if (!server) {
     throw new BotFailureError('toolGone')
   }
-  return botToolDetailsOf(credentials, server, version)
+  return botToolDetailsOf(saved, server, version)
 }
 
 /** `server` for the editor, its saved values masked; `credentials` is its folder's store. */
 export function botToolDetailsOf(
-  credentials: BotToolsSnapshot['credentials'],
+  credentials: BotToolsSnapshot['saved'],
   server: BotToolServer,
   version: string
 ): BotToolDetails {

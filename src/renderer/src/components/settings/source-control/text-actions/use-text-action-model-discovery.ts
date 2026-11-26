@@ -30,6 +30,8 @@ function discoveryContext(hostKey: string, repoId: string | undefined): RuntimeG
   return worktree ? resolveWorktreeModelDiscoveryRuntime(state, worktree.id) : null
 }
 
+const LISTING_RENEW_MS = 60 * 60 * 1000
+
 function listTextModels(
   agent: TuiAgent,
   hostKey: string,
@@ -42,13 +44,17 @@ function listTextModels(
       if (!result.success || !result.models.length || !settings) {
         return
       }
-      const saved = getDiscoveredModels(
-        normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi),
-        settings.commitMessageAi,
-        hostKey,
-        agent
+      const source = normalizeSourceControlAiSettings(
+        settings.sourceControlAi,
+        settings.commitMessageAi
       )
-      if (JSON.stringify(saved) === JSON.stringify(savedDiscoveredModels(result.models))) {
+      const saved = getDiscoveredModels(source, settings.commitMessageAi, hostKey, agent)
+      const listedAt = source.discoveredAtByAgentByHost?.[hostKey]?.[agent] ?? 0
+      // An unchanged list still renews its listing time, at most hourly, so it keeps bounding generation.
+      if (
+        JSON.stringify(saved) === JSON.stringify(savedDiscoveredModels(result.models)) &&
+        Date.now() - listedAt < LISTING_RENEW_MS
+      ) {
         return
       }
       return writeSourceControlAiSettings((current) =>

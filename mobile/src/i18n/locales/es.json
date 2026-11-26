@@ -4166,11 +4166,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} de {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "Comprobando el host",
       "connectToDownload": "Conéctate a este host para descargar la última versión de la aplicación",
       "documentLoadFailed": "No se pudo abrir la aplicación descargada.",
       "downloadFailed": "No se pudo descargar la última versión de la aplicación desde este host.",
+      "downloadProgressFromHost": "desde {{host}} · {{progress}}",
+      "downloadingLatestApp": "Descargando la última versión",
       "hostProfileUnreadable": "No se pudo leer la información de este host en tu dispositivo. Inténtalo de nuevo.",
       "isolationUnavailable": "La versión de WebView de este dispositivo es demasiado antigua para abrir el espacio de trabajo de forma segura.",
       "openingWorkspace": "Abriendo espacio de trabajo",
@@ -4528,6 +4533,12 @@
                 "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se actualiza cuando Codex se ejecuta",
+                "message": "El uso de Codex se actualizará la próxima vez que ejecutes Codex."
+              }
+            },
             "1804cd8c3f": "Actualizando inicio de sesión",
             "bf2e739f18": "Inicio de sesión no disponible",
             "f8f0f9d8cc": "Problema de red",
@@ -4730,7 +4741,9 @@
       "ask": {
         "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
         "replacedByNewer": "Sustituida por una pregunta más reciente",
-        "skipped": "Omitidas"
+        "skipped": "Omitidas",
+        "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} fotos. Quita algunas e inténtalo de nuevo.",
+        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Quita algunas e inténtalo de nuevo."
       }
     },
     "needs": {
@@ -5296,5 +5309,8 @@
     "cardSlot": {
       "working": "Trabajando"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqueado por la configuración de Claude de tu organización"
   }
 }

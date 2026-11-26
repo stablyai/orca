@@ -1,4 +1,4 @@
-// Derive settled-turn answers from the last assistant prose or system failure, plus prose before a steer, Stop-hook send-back, question or another reply; the journal has no answer marker.
+// Derive settled-turn answers from the last assistant prose or system failure, plus prose before a steer, Stop-hook send-back, question or another reply, and a words reply right before an advisor card; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 // Failed hooks never fail the turn: those that end it stay visible below the answer, earlier ones fold as work.
 
@@ -8,6 +8,7 @@ import { AGENT_SESSION_GOAL_CHECK_PRESENTATION } from '../../../agent-session/th
 import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../turns/native-chat-thread-goal-rows'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
+import { NATIVE_CHAT_ADVISOR_PRESENTATION } from '../notices/native-chat-notice'
 import {
   deriveNativeChatRowContent,
   nativeChatRowRendersContent
@@ -44,6 +45,8 @@ export type NativeChatTurnFoldRow = {
   explainsTurn: boolean
   /** A person's steer or a Stop hook's send-back interrupts the turn, so the prose before this row is an answer too. */
   endsAnswer: boolean
+  /** An advisor card can land mid-run, so it marks only a reply drawn right before it that no work followed. */
+  endsWordsReply: boolean
   /** The row puts a question to the person, who answers from the words that led up to it. */
   asks: boolean
   /** How an agent's spoken reply ends; a row draws its tool calls after its words, so `work` means work followed them. */
@@ -136,6 +139,9 @@ function deriveTurnFoldRow(
           (block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION ||
             block.presentation === AGENT_SESSION_GOAL_CHECK_PRESENTATION)
       ),
+    endsWordsReply: message.blocks.some(
+      (block) => block.type === 'text' && block.presentation === NATIVE_CHAT_ADVISOR_PRESENTATION
+    ),
     failedHook: message.blocks.some(isFailedHookBlock),
     asks: hasNativeChatAskCall(message.blocks)
   }
@@ -179,7 +185,11 @@ export function nativeChatTurnAnswerRows(
     }
     const answer = latest.get(row.turnKey)
     const previous = previousDrawn.get(row.turnKey)
-    if (row.endsAnswer && answer !== undefined) {
+    if (
+      answer !== undefined &&
+      (row.endsAnswer ||
+        (row.endsWordsReply && previous === answer && rows[answer]?.replyEnd === 'words'))
+    ) {
       answers.add(answer)
       latest.delete(row.turnKey)
     }

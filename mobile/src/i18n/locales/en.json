@@ -1027,7 +1027,9 @@
       "tryAgain": "Try again",
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
-      "checkingHost": "Checking host"
+      "checkingHost": "Checking host",
+      "downloadingLatestApp": "Downloading the latest app",
+      "downloadProgressFromHost": "from {{host}} · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Update Orca",
@@ -1035,6 +1037,9 @@
       "updateMessageNoHost": "This screen needs a newer Orca.",
       "serverTitle": "Can’t reach this server",
       "serverMessage": "Your phone can’t reach this workspace’s server through {{host}}."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} of {{total}} MB"
     }
   },
   "navigation": {
@@ -6624,7 +6629,9 @@
         "replaced": "The agent asked a new question. Read it, then reply.",
         "replacedByNewer": "Replaced by a newer question",
         "skipped": "Skipped",
-        "notNow": "Not now"
+        "notNow": "Not now",
+        "heldImagesLimit": "Your answers go as one comment, which takes up to {{max}} photos. Remove some and try again.",
+        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Remove some and try again."
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
@@ -7971,7 +7978,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "pairedServers": {
       "heading": "Paired servers",
@@ -8341,6 +8351,12 @@
                 "message": "Claude usage updates the next time Claude runs."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Updates when Codex runs",
+                "message": "Codex usage updates the next time Codex runs."
+              }
+            },
             "1804cd8c3f": "Refreshing sign-in",
             "bf2e739f18": "Sign-in unavailable",
             "f8f0f9d8cc": "Network issue",
@@ -8620,6 +8636,7 @@
     "agents": "Agents",
     "turnAllOn": "Turn all on",
     "agentsUnread": "Couldn’t read the agents on this computer.",
+    "agentBlocked": "Blocked by your organization’s Claude settings",
     "advanced": "Advanced",
     "sharedProcess": "Share one process across agents",
     "sharedProcessNote": "Uses less memory. Runs outside the workspace folder.",
