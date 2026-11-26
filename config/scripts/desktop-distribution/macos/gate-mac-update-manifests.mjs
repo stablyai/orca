@@ -5,7 +5,7 @@
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { darwinVersionForMacos } from '../../../../src/shared/macos-darwin-floor.ts'
+import { darwinVersionForMacos } from '../../../../src/shared/updater/requirements/macos-darwin-floor.ts'
 
 export function withMinimumSystemVersion(manifest, darwinVersion) {
   const lines = manifest

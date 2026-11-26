@@ -1,6 +1,6 @@
 import { jiraGetIssue } from '@/runtime/jira/runtime-jira-client'
 import { jiraLookupIssueSummary } from '@/runtime/jira/runtime-jira-summary-client'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { JiraSlice, JiraSliceGet, JiraSliceSet } from './jira-slice-contract'
 import {

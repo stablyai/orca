@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import { admitOutcomeFormat1, type AdmittedOutcome } from './journal-outcome-format-1'
 import {
@@ -9,18 +10,22 @@ import {
 } from '../durable-rows/journal-storage-strict'
 
 export const JOURNAL_OUTCOME_FORMAT_2 = 2
-const ordinal = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-const coordinate = z.object({ epoch: z.string().min(1), sequence: ordinal })
-export const inputEntrySchema = z.object({
-  context: z.object({ source: coordinate, basis: z.enum(['observed', 'legacy']), cut: ordinal }),
-  witnessCardId: z.string().min(1).optional()
-})
-export const inputCardSchema = z.object({
-  introduced: ordinal,
-  baseline: z.object({ coordinate: coordinate.nullable() }).optional()
-})
-const entries = z.tuple([z.string().min(1), inputEntrySchema])
-const cards = z.tuple([z.string().min(1), inputCardSchema])
+const ordinal = lazyZodSchema(() => z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER))
+const coordinate = lazyZodSchema(() => z.object({ epoch: z.string().min(1), sequence: ordinal }))
+export const inputEntrySchema = lazyZodSchema(() =>
+  z.object({
+    context: z.object({ source: coordinate, basis: z.enum(['observed', 'legacy']), cut: ordinal }),
+    witnessCardId: z.string().min(1).optional()
+  })
+)
+export const inputCardSchema = lazyZodSchema(() =>
+  z.object({
+    introduced: ordinal,
+    baseline: z.object({ coordinate: coordinate.nullable() }).optional()
+  })
+)
+const entries = lazyZodSchema(() => z.tuple([z.string().min(1), inputEntrySchema]))
+const cards = lazyZodSchema(() => z.tuple([z.string().min(1), inputCardSchema]))
 const native = new Map<string, z.ZodType>([
   ['inputEntries', strictStorage(entries)],
   ['inputCards', strictStorage(cards)]
@@ -59,10 +64,12 @@ export function admitOutcomeFormat2(value: {
   return { entryKey: key, kept }
 }
 
-const admittedEntry =
+const admittedEntry = lazyZodSchema(() =>
   z.custom<[string, JournalReducerState['inputEntries'] extends Map<string, infer V> ? V : never]>()
-const admittedCard =
+)
+const admittedCard = lazyZodSchema(() =>
   z.custom<[string, JournalReducerState['inputCards'] extends Map<string, infer V> ? V : never]>()
+)
 
 // Admission walked the declared schema once; these views keep the exact admitted bytes' value.
 export function decodeNativeOutcome(

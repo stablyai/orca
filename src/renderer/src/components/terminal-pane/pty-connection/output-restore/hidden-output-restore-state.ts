@@ -1,11 +1,12 @@
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
-import { cancelTerminalScrollIntentBufferRebuildCompletions } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+import { cancelTerminalScrollIntentBufferRebuildCompletions } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
 import {
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS,
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX
 } from './hidden-output-restore-limits'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
+import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
+import { hasHiddenGraphicsOutputGap } from '../output/hidden-graphics-delivery'
 
 export function initializeHiddenOutputRestoreState(session: ConnectPanePtySession): void {
   session.hiddenOutputRestoreNeeded = false
@@ -63,6 +64,30 @@ export function bindHiddenOutputRestoreDemand(session: ConnectPanePtySession): v
     if (shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
       session.requestHiddenOutputRestoreIfNeeded()
     }
+  }
+
+  session.markHiddenOutputRestoreAfterGap = (
+    ptyId: string | null = session.transport.getPtyId(),
+    generation: number = session.transportStreamGeneration
+  ): boolean => {
+    if (
+      session.disposed ||
+      ptyId !== session.transport.getPtyId() ||
+      generation !== session.transportStreamGeneration ||
+      session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport ||
+      !session.canUseHiddenOutputSnapshot(ptyId)
+    ) {
+      return false
+    }
+    const revoked = session.revokeHiddenGraphicsAfterGap(ptyId)
+    // The legacy relay owns its replay and sends the screen before later data.
+    if (
+      ptyId !== session.legacyRelayBridgePtyId ||
+      !hasHiddenGraphicsOutputGap(session.transport, ptyId)
+    ) {
+      session.markHiddenOutputRestoreNeeded()
+    }
+    return revoked
   }
 }
 

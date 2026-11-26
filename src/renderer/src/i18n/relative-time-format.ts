@@ -26,6 +26,19 @@ export function formatUiRelativeTime(diffMs: number, intlLocale?: string): strin
   return formatter.format(Math.round(diffHours / 24), 'day')
 }
 
+// Like formatUiRelativeTime, but rolls days up into months and years ("3 months ago").
+export function formatUiCoarseRelativeTime(diffMs: number, intlLocale?: string): string {
+  const diffDays = diffMs / 86_400_000
+  if (Math.abs(diffDays) < 30) {
+    return formatUiRelativeTime(diffMs, intlLocale)
+  }
+  const formatter = getUiRelativeTimeFormatter(intlLocale)
+  if (Math.abs(diffDays) < 365) {
+    return formatter.format(Math.round(diffDays / 30), 'month')
+  }
+  return formatter.format(Math.round(diffDays / 365), 'year')
+}
+
 export function formatUiRelativeTimeFromDate(
   input: string,
   fallback = 'recently',

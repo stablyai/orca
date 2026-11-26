@@ -3,7 +3,7 @@
 import type { Automation } from '../automation-definition'
 import { AUTOMATION_ORPHAN_ISSUES } from './automation-list-scope'
 import { getAutomationRunRepoId } from '../history/automation-run-identity'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 
 export type LegacyAutomationSelector =
   | { kind: 'self' }

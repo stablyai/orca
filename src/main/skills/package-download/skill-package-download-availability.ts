@@ -1,4 +1,4 @@
-import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skill-install-failure'
+import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skills/installation/skill-install-failure'
 import { SkillInstallOperationError } from '../install/skill-install-operation-error'
 
 const MAX_TIMEOUT_DELAY_MS = 2_147_483_647

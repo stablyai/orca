@@ -1,25 +1,35 @@
+import { undeliveredInboxQuery, type UndeliveredInboxOptions } from './undelivered-inbox-query'
+import { noteQuestionEdge } from './question-edges'
 import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
+import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
+import { runOwnsDirectMessageSql } from '../runs/run-coordinator-mail-routing'
+import { stampQuestionTakes, type MailTaker } from './mail-taker'
+import { MESSAGE_ID_UPDATE_BATCH_SIZE, unreadMailboxesOf } from './message-read-mailboxes'
 
-const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 
 function runBatchedMessageMutation(
   db: OrchestrationDb,
   ids: string[],
   sqlForPlaceholders: (placeholders: string) => string,
-  leadingBindings: string[] = []
+  leadingBindings: string[] = [],
+  beforeBatch: (batch: string[]) => void = () => {},
+  consuming = false
 ): void {
   if (ids.length === 0) {
     return
   }
+  const readMailboxes =
+    consuming && db.mailReadListener && db.mailReadWanted() ? unreadMailboxesOf(db, ids) : []
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
       const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
       const placeholders = batch.map(() => '?').join(',')
+      beforeBatch(batch)
       db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingBindings, ...batch)
     }
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
@@ -28,33 +38,34 @@ function runBatchedMessageMutation(
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
     throw error
   }
+  if (readMailboxes.length > 0) {
+    try {
+      db.mailReadListener?.(readMailboxes)
+    } catch {
+      // A listener fault cannot undo a committed read.
+    }
+  }
 }
 
 export function getUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
-  types?: MessageType[]
+  types?: MessageType[],
+  options?: { excludeRunOwnedDirect?: boolean }
 ): MessageRow[] {
-  if (types && types.length > 0) {
-    const placeholders = types.map(() => '?').join(',')
-    return exposeMessageListTimestamps(
-      this.db
-        .prepare(
-          `SELECT * FROM messages
-           WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
-             AND type IN (${placeholders}) ORDER BY sequence`
-        )
-        .all(toHandle, ...types) as MessageRow[]
-    )
-  }
+  const typeSql = types?.length ? ` AND type IN (${types.map(() => '?').join(',')})` : ''
+  const runOwnedSql = options?.excludeRunOwnedDirect
+    ? ` AND NOT ${runOwnsDirectMessageSql('messages')}`
+    : ''
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
       .prepare(
         `SELECT * FROM messages
-         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'${typeSql}${runOwnedSql}
          ORDER BY sequence`
       )
-      .all(toHandle) as MessageRow[]
+      .all(toHandle, ...(types ?? [])) as MessageRow[]
   )
 }
 
@@ -92,41 +103,27 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; excludeIds?: readonly string[]; limit?: number }
+  options?: UndeliveredInboxOptions
 ): MessageRow[] {
-  const conditions = [
-    'to_handle = ?',
-    'read = 0',
-    'delivered_at IS NULL',
-    'pointer_enter_pending = 0',
-    "delivery_contract = 'current_delivery'"
-  ]
-  const params: (string | number)[] = [toHandle]
-  if (types?.length) {
-    conditions.push(`type IN (${types.map(() => '?').join(',')})`)
-    params.push(...types)
-  }
-  if (options?.excludeTypes?.length) {
-    conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
-    params.push(...options.excludeTypes)
-  }
-  if (options?.excludeIds?.length) {
-    conditions.push(`id NOT IN (${options.excludeIds.map(() => '?').join(',')})`)
-    params.push(...options.excludeIds)
-  }
-  const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
-  if (options?.limit !== undefined) {
-    params.push(Math.max(1, Math.floor(options.limit)))
-  }
+  const query = undeliveredInboxQuery(toHandle, types, options)
   return exposeMessageListTimestamps(
-    this.db
-      .prepare(
-        `SELECT * FROM messages
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY sequence${limitSql}`
-      )
-      .all(...params) as MessageRow[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared predicate changes selection only; SELECT * still returns the messages schema.
+    this.db.prepare(`SELECT * ${query.sql}`).all(...query.params) as MessageRow[]
   )
+}
+
+export function getUndeliveredUnreadSequence(
+  this: OrchestrationDb,
+  toHandle: string,
+  options: UndeliveredInboxOptions
+): number | undefined {
+  const query = undeliveredInboxQuery(toHandle, undefined, {
+    ...options,
+    newestFirst: true,
+    limit: 1
+  })
+  const row = this.db.prepare(`SELECT sequence ${query.sql}`).get(...query.params)
+  return typeof row?.sequence === 'number' ? row.sequence : undefined
 }
 
 export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): string[] {
@@ -151,26 +148,20 @@ export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 
 }
 
 export function getMessageById(this: OrchestrationDb, id: string): MessageRow | undefined {
-  const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
-    | MessageRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  const message = this.db
+    .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
+    .get(id) as MessageRow | undefined
   return message ? exposeMessageTimestamps(message) : undefined
 }
 
-export function markAsRead(this: OrchestrationDb, ids: string[]): void {
-  runBatchedMessageMutation(
-    this,
-    ids,
-    (placeholders) =>
-      `UPDATE messages
-       SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
-           pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
-  )
+/** `taker` is who this read hands any agent question to, stamped in the same write. */
+export function markAsRead(this: OrchestrationDb, ids: string[], taker: MailTaker): void {
+  markRead(this, ids, taker, '')
 }
 
-// Use the table's UTC timestamp format and mailbox-fence late delivery stamps.
 export function markAsDelivered(this: OrchestrationDb, ids: string[], mailboxHandle: string): void {
+  noteQuestionEdge({ kind: 'mail', ids })
   runBatchedMessageMutation(
     this,
     ids,
@@ -213,24 +204,35 @@ export function areUnreadMessages(this: OrchestrationDb, toHandle: string, ids: 
 }
 
 // Superseded lifecycle mail must not be consumed or injected after Dispatch settlement.
-export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): void {
+export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[], taker: MailTaker) {
+  markRead(this, ids, taker, "delivered_at = COALESCE(delivered_at, datetime('now')),")
+}
+
+function markRead(db: OrchestrationDb, ids: string[], taker: MailTaker, delivered: string): void {
+  noteQuestionEdge({ kind: 'mail', ids })
   runBatchedMessageMutation(
-    this,
+    db,
     ids,
     (placeholders) =>
       `UPDATE messages
-       SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')),
-           pointer_enter_pending = 0, pointer_pty_id = NULL,
+       SET read = 1, ${delivered} pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE id IN (${placeholders})`,
+    [],
+    (batch) => stampQuestionTakes(db, batch, taker),
+    true
   )
 }
 
-export function getInbox(this: OrchestrationDb, limit = 20): MessageRow[] {
+export function getInbox(this: OrchestrationDb, limit = 20, runId?: string): MessageRow[] {
   return exposeMessageListTimestamps(
-    this.db
-      .prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?')
-      .all(limit) as MessageRow[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
+    (runId === undefined
+      ? this.db.prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?').all(limit)
+      : // Why: an `(? IS NULL OR run_id = ?)` predicate hides idx_messages_run_sequence and scans the table.
+        this.db
+          .prepare('SELECT * FROM messages WHERE run_id = ? ORDER BY sequence DESC LIMIT ?')
+          .all(runId, limit)) as MessageRow[]
   )
 }
 
@@ -239,22 +241,19 @@ export function getAllMessagesForHandle(
   this: OrchestrationDb,
   toHandle: string,
   limit = 100,
-  types?: MessageType[]
+  types?: MessageType[],
+  runId?: string
 ): MessageRow[] {
-  if (types && types.length > 0) {
-    const placeholders = types.map(() => '?').join(',')
-    return exposeMessageListTimestamps(
-      this.db
-        .prepare(
-          `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
-        )
-        .all(toHandle, ...types, limit) as MessageRow[]
-    )
-  }
+  const typed = types && types.length > 0
+  const typeFilter = typed ? `AND type IN (${types.map(() => '?').join(',')})` : ''
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
-      .all(toHandle, limit) as MessageRow[]
+      .prepare(
+        `SELECT * FROM messages WHERE to_handle = ? AND (? IS NULL OR run_id = ?) ${typeFilter}
+         ORDER BY sequence DESC LIMIT ?`
+      )
+      .all(toHandle, runId ?? null, runId ?? null, ...(typed ? types : []), limit) as MessageRow[]
   )
 }
 
@@ -284,6 +283,7 @@ export function getThreadMessagesFor(
 export type MessageInboxMethods = {
   getUnreadMessages: typeof getUnreadMessages
   convertLifecycleMessageToRejection: typeof convertLifecycleMessageToRejection
+  getUndeliveredUnreadSequence: typeof getUndeliveredUnreadSequence
   getUndeliveredUnreadMessages: typeof getUndeliveredUnreadMessages
   getUndeliveredUnreadMailboxHandles: typeof getUndeliveredUnreadMailboxHandles
   getAllMessages: typeof getAllMessages
@@ -302,6 +302,7 @@ export function attachMessageInbox(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     getUnreadMessages,
     convertLifecycleMessageToRejection,
+    getUndeliveredUnreadSequence,
     getUndeliveredUnreadMessages,
     getUndeliveredUnreadMailboxHandles,
     getAllMessages,

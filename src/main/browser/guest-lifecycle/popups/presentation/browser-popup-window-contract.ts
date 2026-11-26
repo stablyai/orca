@@ -4,6 +4,8 @@ export type PopupChildWindowOptions = Electron.BrowserWindowConstructorOptions &
   nativeWindow?: Electron.BrowserWindow
   // Cmd/Ctrl+Shift-click supplies no page; only GET requests can be reloaded by URL.
   loadInitialUrl?: boolean
+  // An agent's input opened it: create hidden, shown once the user is in Orca so it never takes focus.
+  showWhenAppActive?: boolean
 }
 
 export type PopupOriginBarWindow = {

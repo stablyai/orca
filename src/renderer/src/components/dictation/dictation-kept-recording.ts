@@ -1,12 +1,12 @@
 import {
   CLOUD_DICTATION_MAX_SECONDS,
   DICTATION_SAMPLE_RATE
-} from '../../../../shared/rpc-contract/speech-params'
-import type { DictationContext } from '../../../../shared/speech-types'
+} from '../../../../shared/rpc-contract/speech/speech-params'
+import type { DictationContext } from '../../../../shared/speech/speech-types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
 import type { DictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { trimLandedOverlap } from './dictation-retry-overlap'
-import { appendDictationText } from '../../../../shared/dictation-transcript-spacing'
+import { appendDictationText } from '../../../../shared/speech/dictation/dictation-transcript-spacing'
 import { showRetryOverlapUnmatchedToast } from './dictation-toasts'
 
 // The cloud cap, ten minutes, is about 38 MB of 16 kHz float audio.

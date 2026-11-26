@@ -3,7 +3,6 @@ import {
   durableDraftRow,
   durableDraftRowKey,
   pageDraftRowBackend,
-  resetDurableDraftRowsForTests,
   type DurableDraftRow
 } from '../drafts/durable-draft-rows'
 import type { AutomationDraft } from './automation-draft'
@@ -26,6 +25,7 @@ const editsSchema = z
     timezone: z.string(),
     baseBranch: z.string(),
     setupDecision: z.enum(['inherit', 'run', 'skip']),
+    setupTrustHash: z.string(),
     reuseSession: z.boolean(),
     extraAgentArgs: z.string(),
     precheckCommand: z.string(),
@@ -135,9 +135,4 @@ export function discardAutomationEditorDraft(key: string): void {
 
 export function dropAutomationEditorDraft(executionHost?: string, automationId?: string): void {
   discardAutomationEditorDraft(automationEditorDraftKey(executionHost, automationId))
-}
-
-export function resetAutomationEditorDraftsForTests(): void {
-  slots.clear()
-  resetDurableDraftRowsForTests()
 }

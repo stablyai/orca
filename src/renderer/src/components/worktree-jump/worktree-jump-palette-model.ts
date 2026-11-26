@@ -11,7 +11,7 @@ import type {
   CmdJProjectSearchResult,
   CmdJRankedProjectSearchResult
 } from '@/components/cmd-j/palette-project-results'
-import type { RecentWorkspaceTabRow } from '@/lib/recent-workspace-tab-rows'
+import type { RecentWorkspaceTabRow } from '@/lib/workspace/search/palette/recent-workspace-tab-rows'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actions'
 import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
@@ -72,6 +72,13 @@ export type ExtraPaletteItem = {
 }
 
 export type SectionHeader = { id: string; type: 'section-header'; label: string }
+/** Rows that change what the palette searches rather than opening something. */
+export type BotScopeActionItem = {
+  id: string
+  type: 'bot-scope-action'
+  action: 'show-everything' | 'browse-templates'
+  label: string
+}
 export type HintRow = {
   id: string
   type: 'hint'
@@ -93,6 +100,7 @@ export type PaletteItem =
   | SimulatorPaletteItem
   | WorkspaceTabPaletteItem
   | ExtraPaletteItem
+  | BotScopeActionItem
 
 export type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 export type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceTabPaletteItem

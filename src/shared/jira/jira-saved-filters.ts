@@ -1,4 +1,4 @@
-import { isUtf8ByteLengthWithinLimit } from '../utf8-byte-limits'
+import { isUtf8ByteLengthWithinLimit } from '../text/utf8-byte-limits'
 export const MAX_JIRA_SAVED_FILTERS = 50
 export const MAX_JIRA_SAVED_FILTER_ID_LENGTH = 128
 export const MAX_JIRA_SAVED_FILTER_NAME_LENGTH = 80

@@ -2,11 +2,13 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
+import { getWorktreeGitHubIssueRepository } from '../../../../../shared/worktree/github-issue-repository'
+import { rightSidebarShowsPullRequestData } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { issueCacheKey } from '../cache/cache-identity'
 import { CACHE_TTL } from '../cache/cache-policy'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 export const createStaleWorktreeRefreshActions = (
   get: Parameters<StateCreator<AppState>>[1]
@@ -35,7 +37,7 @@ export const createStaleWorktreeRefreshActions = (
     const cardProps = state.worktreeCardProperties ?? []
     const shouldRefreshPR =
       state.groupBy === 'pr-status' ||
-      (state.settings?.experimentalNewWorktreeCardStyle === true
+      (selectDrawsNewWorktreeCards(state)
         ? cardProps.includes('status')
         : cardProps.includes('pr') || cardProps.some((property: string) => property === 'ci')) ||
       rightSidebarShowsPullRequestData(state)
@@ -45,6 +47,7 @@ export const createStaleWorktreeRefreshActions = (
     }
 
     if ((state.worktreeCardProperties ?? []).includes('issue') && worktree.linkedIssue) {
+      const ownerRepo = getWorktreeGitHubIssueRepository(worktree)
       const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
       const issueKey = issueCacheKey(
         repo.path,
@@ -53,11 +56,12 @@ export const createStaleWorktreeRefreshActions = (
         ownerSettings,
         repo.connectionId,
         repo.executionHostId,
-        true
+        true,
+        ownerRepo
       )
       const issueEntry = state.issueCache[issueKey]
       if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
-        void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+        void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id, ownerRepo })
       }
     }
   }

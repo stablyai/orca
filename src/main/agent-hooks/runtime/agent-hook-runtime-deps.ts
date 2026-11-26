@@ -16,15 +16,31 @@ export function agentHookRuntimeDeps(
     onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),
     onClaudeTerminalEvidence: (paneKey, evidence) =>
       server.observeClaudeTerminalEvidence(paneKey, evidence),
+    getPaneAgentIdentity: (paneKey, savedRecord) => server.paneAgentIdentity(paneKey, savedRecord),
     getAgentStatusSnapshot: () =>
-      server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+      server.getStatusSnapshot().flatMap((row) => {
+        if (row.structuredHost) {
+          return [row]
+        }
+        // Resume-only rows carry identity for recovery, never status.
+        if (row.providerSessionOnly) {
+          return []
+        }
+        const identity = server.paneAgentIdentity(row.paneKey)
+        return identity && !identity.ended ? [identity.status] : []
+      }),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+    getPublicAgentStatusSnapshotForPane: (paneKey: string, terminalHandle?: string | null) =>
+      server.getPublicStatusSnapshotForPane(paneKey, terminalHandle),
     // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
     getAgentProviderSessionSnapshot: (tabId) =>
       tabId === undefined
         ? server.getStatusSnapshot()
         : server.getProviderSessionSourceRowsForTab(tabId),
-    getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+    getAgentProviderSessionRowsForPane: (paneKey: string, terminalHandle?: string | null) =>
+      server.getStatusRowsForPaneOrHandle(paneKey, terminalHandle),
+    getAgentProviderSessionRowsForSession: (agent, session) =>
+      server.getProviderSessionSourceRowsForSession(agent, session),
     getAcceptedAgentReply: (paneKey, leadTurnKey) => server.getAcceptedReply(paneKey, leadTurnKey),
     subscribeAgentStatusRowChanges: (listener) =>
       server.subscribeStatusRowMutations(({ before, after }) => {
@@ -34,7 +50,25 @@ export function agentHookRuntimeDeps(
         }
       }),
     subscribeAgentProviderSessionChanges: (listener) =>
-      server.subscribeProviderSessionChanges(listener),
+      server.subscribeStatusRowMutations(({ before, after }) => {
+        const paneKey = after?.paneKey ?? before?.paneKey
+        if (
+          !paneKey ||
+          (before?.providerSession?.id === after?.providerSession?.id &&
+            before?.providerSession?.key === after?.providerSession?.key &&
+            before?.agentType === after?.agentType &&
+            before?.providerSession?.transcriptPath === after?.providerSession?.transcriptPath)
+        ) {
+          return
+        }
+        listener(
+          server
+            .getStatusSnapshotForPane(paneKey)
+            .flatMap((row) =>
+              row.providerSession ? [{ paneKey, sessionId: row.providerSession.id }] : []
+            )
+        )
+      }),
     // Use identity captured at observation; resolving now could attribute cached rows to a new process.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     // Structured chats publish here directly because they have no hooks.
@@ -49,12 +83,24 @@ export function agentHookRuntimeDeps(
       readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
     },
     readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
-    checkHookAgentPresence: (paneKey, exitedSince) =>
-      exitedSince === undefined
-        ? server.checkAgentPresence(paneKey)
-        : server.checkAgentPresenceSince(paneKey, exitedSince),
-    reconcileAgentStatusForEndedProcess: (paneKeys) =>
-      server.reconcileEndedProcessForPaneKeys(paneKeys),
+    // A command mark retires the pane's launch and proves an agent's exit, on every host.
+    retireAgentHookCompatibilityAuthority: (paneKey, options) =>
+      server.retireProcessAuthority(paneKey, options),
+    checkHookAgentPresence: (paneKey, exitedSince, options) =>
+      options?.settleForSleep
+        ? server.settleExitProofForSleep(paneKey)
+        : exitedSince === undefined
+          ? server.checkAgentPresence(paneKey)
+          : server.checkAgentPresenceSince(paneKey, exitedSince),
+    reconcileAgentStatusForEndedProcess: (paneKeys, sleep) => {
+      const keys = [...paneKeys]
+      if (sleep) {
+        for (const paneKey of keys) {
+          server.settleTerminalPaneSleep(paneKey, sleep.ptyId, sleep.incarnationId)
+        }
+      }
+      server.reconcileEndedProcessForPaneKeys(keys)
+    },
     forgetHookAgentExit: (paneKeys) => {
       for (const paneKey of paneKeys) {
         server.forgetAgentExit(paneKey)

@@ -9,10 +9,10 @@ import {
 import { resetSessionParseCacheForTests } from '../../../../src/main/ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../../../../src/main/ai-vault/transcripts/session-transcript-consumers'
 import { requestWholeTranscriptRead } from '../../../../src/main/ai-vault/transcripts/session-transcript-reader'
-import { registerSessionSearchIndexConsumer } from '../../../../src/main/ai-vault-search/session-search-index-consumer'
-import { SessionSearchStore } from '../../../../src/main/ai-vault-search/session-search-store'
-import { writeSyntheticTranscriptCorpus } from '../../../../src/main/ai-vault-search/session-search-synthetic-corpus'
-import { sessionCandidate } from '../../../../src/main/ai-vault-search/session-search-transcript-fixtures'
+import { registerSessionSearchIndexConsumer } from '../../../../src/main/ai-vault-search/indexing/session-search-index-consumer'
+import { SessionSearchStore } from '../../../../src/main/ai-vault-search/storage/session-search-store'
+import { writeSyntheticTranscriptCorpus } from '../../../../src/main/ai-vault-search/indexing/session-search-synthetic-corpus'
+import { sessionCandidate } from '../../../../src/main/ai-vault-search/indexing/session-search-transcript-fixtures'
 import SyncDatabase from '../../../../src/main/sqlite/sync-database'
 
 // Measures the real transcript reader and search store over a synthetic corpus.

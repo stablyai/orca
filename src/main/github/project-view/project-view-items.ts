@@ -1,6 +1,10 @@
-import type { GitHubProjectOwnerType, GitHubProjectRow } from '../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import { projectGhExecOptions, runGraphql } from './internals'
+import type {
+  GitHubProjectOwnerType,
+  GitHubProjectRow
+} from '../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql } from './project-graphql'
 import { driftError, unsupportedItemFieldsFromErrors } from './project-error-classification'
 import {
   getUnsupportedItemFields,

@@ -1,17 +1,15 @@
-import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
   routesFreshSpawnsToLocalProvider,
   beginPtySpawnForWorktree
 } from '../host-env/fresh-spawn-routing'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
-import {
-  assemblePtySpawnEnvDeletions,
-  assemblePtySpawnLaunchOptions,
-  seedPtySpawnSize
-} from '../spawn-options-assembly'
+import { assemblePtySpawnLaunchOptions, seedPtySpawnSize } from '../spawn/spawn-options-assembly'
+import { assemblePtySpawnEnvDeletions } from '../spawn/spawn-env-deletions'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
@@ -84,13 +82,18 @@ export async function buildRuntimePtySpawnOptions(
     sessionId: ctx.sessionId,
     spawnIntent: ctx.preAdoptedStablePane ? undefined : args.spawnIntent,
     historyIsolationEnabled,
+    headlessHost: ctx.deps.runtime?.servesWithoutWindow?.() === true,
     getSettings: ctx.deps.getSettings,
     store: ctx.deps.store,
     claudeAuth: ctx.claudeAuth
   })
   ctx.spawnOptions = launch.spawnOptions
   ctx.env = launch.env
+  if (launch.env) {
+    ctx.deps.runtime?.shareClaudeAgentTeamsLeadMcpEnv(launch.env)
+  }
   ctx.launchCommand = launch.launchCommand
+  ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.sessionId,
     sessionAppId: ctx.effectiveSessionAppId,

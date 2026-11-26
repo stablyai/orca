@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
-import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { getLocalPreflightContext } from '@/lib/local-preflight-context'
+import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
@@ -26,7 +27,7 @@ export function useTaskPageStoreBindings() {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const repoMap = useRepoMap()
   const allWorktrees = useAllWorktrees()
   const openModal = useAppStore((s) => s.openModal)

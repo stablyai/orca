@@ -30,12 +30,18 @@ wss.on('connection', (ws) => {
     const e2ee = connectionState.get(ws)
 
     if (!e2ee) {
-      let hello: { type?: string; publicKeyB64?: string }
+      let hello: { type?: string; v?: number; publicKeyB64?: string }
       try {
         hello = JSON.parse(msg)
       } catch {
         ws.send(JSON.stringify({ type: 'e2ee_error', message: 'Invalid JSON' }))
         ws.close()
+        return
+      }
+
+      // Answer a v2 hello as an older host does (4001), so the phone retries with the legacy handshake.
+      if (hello.type === 'e2ee_hello' && hello.v === 2) {
+        ws.close(4001)
         return
       }
 

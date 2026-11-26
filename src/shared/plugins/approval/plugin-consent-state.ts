@@ -13,17 +13,23 @@ export type PluginConsentLists = {
   /** Qualified key → consent fingerprint. */
   pluginConsents: Readonly<Record<string, string>>
   disabledPlugins: readonly string[]
+  requiredPlugins?: readonly string[]
 }
 
 export function getPluginActivationState(
   qualifiedKey: string,
   currentConsentFingerprint: string,
-  lists: PluginConsentLists
+  lists: PluginConsentLists,
+  honorTeamRequirement = true
 ): PluginActivationState {
-  if (lists.disabledPlugins.includes(qualifiedKey)) {
+  const approved = lists.pluginConsents[qualifiedKey] === currentConsentFingerprint
+  if (
+    lists.disabledPlugins.includes(qualifiedKey) &&
+    (!approved || !honorTeamRequirement || !lists.requiredPlugins?.includes(qualifiedKey))
+  ) {
     return 'disabled'
   }
-  return lists.pluginConsents[qualifiedKey] === currentConsentFingerprint ? 'approved' : 'pending'
+  return approved ? 'approved' : 'pending'
 }
 
 /** Prior consent with changed capabilities needs reapproval rather than first-install prompting. */

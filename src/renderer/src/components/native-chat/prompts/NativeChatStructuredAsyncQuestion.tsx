@@ -3,27 +3,36 @@ import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-sessi
 import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
-import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
 import { useMemo, useState } from 'react'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
 import {
   nativeChatAnswerOperationPending,
   type NativeChatAnswerOperation,
   formatAskAnswer
-} from '../../../../../shared/native-chat/input/native-chat-ask-answer'
-import { nativeChatAnswerSendIntent } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+} from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import { nativeChatAnswerSendIntent } from '../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
+import { projectionBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  useStructuredAgentSessionAsyncQuestionSkip,
+  type StructuredAgentSessionAsyncQuestionSkip
+} from './use-structured-agent-session-async-question-skip'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
-/** Async questions leave the composer usable; the next ordinary send answers them and Cancel only hides them. */
+type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
+
+/** Async questions leave the composer usable; the next ordinary send answers them, and Skip hides
+ *  them on every device where the host saves it, else on this screen only. */
 export function NativeChatStructuredAsyncQuestion({
   paneKey,
+  skip,
   session,
   sourceKey,
   sourceScope,
@@ -34,6 +43,8 @@ export function NativeChatStructuredAsyncQuestion({
   submissions = NO_SUBMISSIONS
 }: {
   paneKey: string
+  /** The host's saved Skip; absent on a host that keeps none. */
+  skip?: StructuredAgentSessionAsyncQuestionSkip
   sourceKey: string
   sourceScope: string
   blocked?: boolean
@@ -43,6 +54,7 @@ export function NativeChatStructuredAsyncQuestion({
   queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
   submissions?: readonly AgentJournalSubmission[]
 }): React.JSX.Element | null {
+  const [operation, setOperation] = useState<PromptAnswerOperation | null>(null)
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const { prompt, dismiss, ownerKey, answerPending } = useNativeChatAsyncQuestions({
     paneKey,
@@ -51,46 +63,26 @@ export function NativeChatStructuredAsyncQuestion({
     viewKey: paneKey,
     messages: session.messages,
     settled: session.readPhase === 'ready' && !blocked,
-    queuedTexts
+    queuedTexts,
+    skip
   })
+  // A send's evidence is its own row or submission, never a streamed reply's text.
+  const structure = projectionBesideStreamedText(session.messages)
+  const operationPending = useMemo(
+    () => nativeChatAnswerOperationPending(operation, structure, submissions),
+    [operation, structure, submissions]
+  )
   if (!prompt) {
     return null
   }
-  return (
-    <NativeChatAsyncQuestionForm
-      key={JSON.stringify([ownerKey, nativeChatAskDismissKey(prompt)])}
-      {...{ prompt, session, send, sendFollowUp, submissions, answerPending }}
-      onCancel={dismiss}
-    />
-  )
-}
-
-function NativeChatAsyncQuestionForm({
-  prompt,
-  session,
-  send,
-  sendFollowUp,
-  submissions,
-  answerPending,
-  onCancel
-}: {
-  prompt: AskPrompt
-  session: Pick<NativeChatLiveSession, 'messages'>
-  send: NativeChatStructuredComposerTransport['send']
-  sendFollowUp?: NativeChatStructuredComposerTransport['sendFollowUp']
-  submissions: readonly AgentJournalSubmission[]
-  answerPending: boolean
-  onCancel: () => void
-}): React.JSX.Element {
-  const [operation, setOperation] = useState<NativeChatAnswerOperation | null>(null)
+  const promptKey = JSON.stringify([ownerKey, nativeChatAskDismissKey(prompt)])
   return (
     <NativeChatQuestionCard
+      key={promptKey}
       prompt={prompt}
-      isSubmitting={
-        answerPending || nativeChatAnswerOperationPending(operation, session.messages, submissions)
-      }
+      isSubmitting={answerPending || (operation?.promptKey === promptKey && operationPending)}
       onAnswer={(selections) => {
-        const current: NativeChatAnswerOperation = { inFlight: true }
+        const current: PromptAnswerOperation = { promptKey, inFlight: true }
         const sent = send(formatAskAnswer(prompt, selections), [], {
           ...nativeChatAnswerSendIntent(sendFollowUp),
           callerKeepsText: true,
@@ -106,9 +98,21 @@ function NativeChatAsyncQuestionForm({
           setOperation(current)
         }
       }}
-      onCancel={onCancel}
+      onCancel={dismiss}
     />
   )
+}
+
+function NativeChatHostAsyncQuestion({
+  target,
+  sessionId,
+  ...props
+}: Omit<React.ComponentProps<typeof NativeChatStructuredAsyncQuestion>, 'skip'> & {
+  target: RuntimeClientTarget
+  sessionId: string
+}): React.JSX.Element | null {
+  const skip = useStructuredAgentSessionAsyncQuestionSkip(target, sessionId)
+  return <NativeChatStructuredAsyncQuestion {...props} skip={skip} />
 }
 
 export function nativeChatStructuredAsyncQuestion(
@@ -124,7 +128,9 @@ export function nativeChatStructuredAsyncQuestion(
   const { agent, sessionId } = props
   const { epoch } = controller
   return (
-    <NativeChatStructuredAsyncQuestion
+    <NativeChatHostAsyncQuestion
+      target={props.target}
+      sessionId={sessionId}
       paneKey={structuredAgentSessionPaneKey(props.tabId, sessionId)}
       session={session}
       submissions={controller.submissions}

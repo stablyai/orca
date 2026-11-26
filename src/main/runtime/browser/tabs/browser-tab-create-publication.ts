@@ -1,9 +1,11 @@
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
+import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 import {
+  navigationTargetsClients,
   navigationTargetsHost,
   resolveRuntimeNavigationTarget,
   type RuntimeNavigationTarget
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 export type BrowserTabCreatePlacementKind = 'client' | 'offscreen' | 'renderer'
 
@@ -20,11 +22,12 @@ type BrowserTabCreatePublicationBridge = Pick<
 
 export type BrowserTabCreatePublicationHost = {
   getAgentBrowserBridge(): BrowserTabCreatePublicationBridge | null
+  getRuntimeBrowserPageRegistry(): Pick<RuntimeBrowserPageRegistry, 'yieldSelection'>
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
 }
 
@@ -32,8 +35,8 @@ export type BrowserSessionTabSelectionOptions = {
   targetGroupId?: string
   /** Required to force each caller to decide whether shared host selection moves. */
   focusesHost: boolean
-  /** Paired origin and navigation audience travel together; absent for local creates. */
-  caller?: { clientNavigationId: string; navigation: RuntimeNavigationTarget; follows?: boolean }
+  /** Navigation audience, with the paired origin when a client asked; a local caller has no id. */
+  caller?: { clientNavigationId?: string; navigation: RuntimeNavigationTarget; follows?: boolean }
 }
 
 export type BrowserTabCreatePublication = {
@@ -159,26 +162,28 @@ export function browserTabSwitchTakesFocus(focus: boolean | undefined): boolean 
   return focus === true
 }
 
-export function publishSwitchedBrowserSessionTab(
+export async function publishSwitchedBrowserSessionTab(
   host: BrowserTabCreatePublicationHost,
   publication: BrowserTabSwitchPublication
-): void {
+): Promise<void> {
   const rules = BROWSER_TAB_SWITCH_PUBLICATION_RULES[publication.placementKind]
   if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
   if (rules.marksSessionTabFocus && browserTabSwitchTakesFocus(publication.focus)) {
-    // Switch has no navigation audience yet; preserve its existing host-facing semantics.
-    host.markHeadlessBrowserSessionTabActive?.(publication.worktreeId, publication.browserPageId, {
-      focusesHost: true
-    })
+    // Only the CLI asks a switch for focus, and it has no screen: every screen shows the tab.
+    await host.markHeadlessBrowserSessionTabActive?.(
+      publication.worktreeId,
+      publication.browserPageId,
+      { focusesHost: true, caller: { navigation: 'all' } }
+    )
   }
 }
 
-export function publishCreatedBrowserSessionTab(
+export async function publishCreatedBrowserSessionTab(
   host: BrowserTabCreatePublicationHost,
   publication: BrowserTabCreatePublication
-): void {
+): Promise<void> {
   const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[publication.placementKind]
   // A page link no client brought forward must not take over the agent's routing, yet must still appear.
   const leavesAgentTab = publication.opensPageLink === true && !publication.focus.selects
@@ -194,25 +199,37 @@ export function publishCreatedBrowserSessionTab(
       ?.getRegisteredTabs(publication.worktreeId)
       .get(publication.browserPageId)
     if (bridge && webContentsId != null) {
+      // Pageless commands prefer an active client page, so the new engine tab must take over from it.
+      // Yield first so the bridge's own tabs-changed publication carries the cleared client row.
+      if (publication.focus.startsActive) {
+        host.getRuntimeBrowserPageRegistry().yieldSelection(publication.worktreeId)
+      }
       bridge.setActiveTab(webContentsId, publication.worktreeId)
     }
   }
   // Caller-only creates still need this call to place the tab in the requested group.
   if (rules.marksSessionTabFocus && publication.focus.selects) {
-    host.markHeadlessBrowserSessionTabActive?.(publication.worktreeId, publication.browserPageId, {
-      ...(publication.targetGroupId !== undefined
-        ? { targetGroupId: publication.targetGroupId }
-        : {}),
-      focusesHost: publication.focus.focusesHost,
-      ...(publication.clientNavigationId !== undefined
-        ? {
-            caller: {
-              clientNavigationId: publication.clientNavigationId,
-              navigation: publication.focus.navigation,
-              ...(publication.opensPageLink ? { follows: true } : {})
+    await host.markHeadlessBrowserSessionTabActive?.(
+      publication.worktreeId,
+      publication.browserPageId,
+      {
+        ...(publication.targetGroupId !== undefined
+          ? { targetGroupId: publication.targetGroupId }
+          : {}),
+        focusesHost: publication.focus.focusesHost,
+        ...(publication.clientNavigationId !== undefined
+          ? {
+              caller: {
+                clientNavigationId: publication.clientNavigationId,
+                navigation: publication.focus.navigation,
+                ...(publication.opensPageLink ? { follows: true } : {})
+              }
             }
-          }
-        : {})
-    })
+          : navigationTargetsClients(publication.focus.navigation)
+            ? // A windowless host's own CLI has no screen; its clients are where the tab is seen.
+              { caller: { navigation: publication.focus.navigation } }
+            : {})
+      }
+    )
   }
 }

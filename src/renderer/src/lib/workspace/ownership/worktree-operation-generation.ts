@@ -1,5 +1,8 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import { authorityKey, type HostAuthority } from '../../../../../shared/host-authority'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  authorityKey,
+  type HostAuthority
+} from '../../../../../shared/execution-host/host-authority'
 import {
   getEnvironmentSshStateGeneration,
   getEnvironmentSshTargetConnectionGeneration

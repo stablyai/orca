@@ -5,41 +5,37 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
-  type ReactNode
+  useState
 } from 'react'
-import { MessageSquarePlus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { useTranslate } from '@/i18n/use-translate'
+import type { ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
-import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
+import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
-import {
-  buildAgentSessionContinuationPrompt,
-  type AgentSessionContinuationRequest
-} from '@/lib/agent-session/context/agent-session-continuation'
-import { ClaudeSwitcherMenu } from '@/components/status-bar/ClaudeSwitcherMenu'
-import { ProviderAccountChatButton } from '@/components/status-bar/ProviderAccountChatButton'
+import { buildAgentSessionContinuationPrompt } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import { ClaudeSwitcherMenu } from '@/components/status-bar/accounts/ClaudeSwitcherMenu'
+import { ProviderAccountChatButton } from '@/components/status-bar/accounts/ProviderAccountChatButton'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
-import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import {
-  NativeChatOrcaStopContext,
-  type NativeChatOrcaStopView
-} from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
+import { NativeChatOrcaStopContext } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
+import type { NativeChatOrcaStopView } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
+import { resolveNativeChatSessionContext } from '@/components/native-chat/pane/routing/native-chat-session-context'
+import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatFileLinkContext } from '@/components/native-chat/links/actions/native-chat-file-link-context'
-import { nativeChatMessageCopyText } from '../../../../../shared/native-chat/transcript/native-chat-message-copy-text'
 
-type UsageLimitActions = {
+export type UsageLimitActions = {
   account: ReactNode
   handOff?: () => void
   disabled: boolean
+  /** Hand off is gathering the chat's context. */
+  preparing: boolean
 }
-const UsageLimitActionsContext = createContext<UsageLimitActions | null>(null)
+/** Exported for fixtures and tests; the provider below is the only production writer. */
+export const UsageLimitActionsContext = createContext<UsageLimitActions | null>(null)
 
 export function NativeChatUsageLimitActionsProvider({
   pane,
@@ -84,7 +80,8 @@ export function NativeChatUsageLimitActionsProvider({
       }
     }
   }, [intentKey])
-  const disabled = loading || preparing === intentKey
+  const handOffPreparing = preparing === intentKey
+  const disabled = loading || handOffPreparing
   const chatTab = useAppStore((state) =>
     directory
       ? structuredChatTabById(state.unifiedTabsByWorktree, directory.worktreeId, pane.tabId)
@@ -100,6 +97,7 @@ export function NativeChatUsageLimitActionsProvider({
   const canHandOff =
     active &&
     pane.isVisible &&
+    recovery.epoch &&
     directory &&
     isTuiAgent(pane.agent) &&
     directory.runtimeEnvironmentId ===
@@ -107,13 +105,12 @@ export function NativeChatUsageLimitActionsProvider({
   let account: ReactNode = null
   if (pane.agent === 'claude' && active && pane.isVisible) {
     if (canSwitchAccount === undefined) {
-      account = <ProviderAccountChatButton provider="claude" target={pane.target} disabled />
+      account = <ProviderAccountChatButton provider="claude" target={pane.target} disabled busy />
     } else if (canSwitchAccount) {
       account = (
         <ClaudeSwitcherMenu
           key={executionHostIdForStructuredTarget(pane.target)}
           claude={null}
-          compact
           iconOnly
           chatAction={{
             target: pane.target,
@@ -135,7 +132,7 @@ export function NativeChatUsageLimitActionsProvider({
     }
   }
   const openHandOff = useCallback(async (): Promise<void> => {
-    if (!canHandOff || !directory || !isTuiAgent(pane.agent)) {
+    if (!canHandOff || !directory || !recovery.epoch || !isTuiAgent(pane.agent)) {
       return
     }
     const current = intent.current
@@ -145,30 +142,28 @@ export function NativeChatUsageLimitActionsProvider({
     current.pending = true
     setPreparing(current.key)
     const onStarted = view.onUsageLimitHandOffStarted
-    const options = await callStructuredAgentSession<AgentSessionOptionsResult>(
-      pane.target,
-      'agentSession.options',
-      { sessionId: pane.sessionId }
-    ).catch((error: unknown) => {
-      console.warn('Could not read saved chat context for hand-off', error)
-      return null
+    const context = await resolveNativeChatSessionContext({
+      target: pane.target,
+      sessionId: pane.sessionId,
+      worktreeId: directory.worktreeId,
+      epoch: recovery.epoch,
+      messages
     })
     if (intent.current !== current) {
       return
     }
     setPreparing(null)
-    const transcriptPath = options?.transcriptPath
+    if (!context) {
+      current.pending = false
+      return
+    }
     const source = {
       sourceKind: 'chat' as const,
       sourceAgent: pane.agent,
       sourceTitle: chatTab?.customLabel?.trim() || conversationName || chatTab?.label,
-      sourceWorkingDirectory: directory.worktreePath,
-      transcriptPath,
-      capturedText: transcriptPath
-        ? ''
-        : messages
-            .map((message) => `${message.role}: ${nativeChatMessageCopyText(message)}`)
-            .join('\n\n')
+      // The folder the chat runs in, which its transcript's relative paths name.
+      sourceWorkingDirectory: directory.pathBase ?? directory.worktreePath,
+      ...context
     }
     if (buildAgentSessionContinuationPrompt(source, 'focused')) {
       setPrepared({
@@ -194,6 +189,7 @@ export function NativeChatUsageLimitActionsProvider({
     pane.groupId,
     pane.sessionId,
     pane.target,
+    recovery.epoch,
     chatTab,
     conversationName,
     messages,
@@ -203,6 +199,7 @@ export function NativeChatUsageLimitActionsProvider({
     () => ({
       account,
       disabled,
+      preparing: handOffPreparing,
       ...(canHandOff || (loading && isTuiAgent(pane.agent))
         ? {
             handOff: () => {
@@ -211,7 +208,7 @@ export function NativeChatUsageLimitActionsProvider({
           }
         : {})
     }),
-    [account, canHandOff, disabled, loading, openHandOff, pane.agent]
+    [account, canHandOff, disabled, handOffPreparing, loading, openHandOff, pane.agent]
   )
   const stopView = useMemo(
     () => ({
@@ -247,36 +244,7 @@ export function NativeChatUsageLimitActionsProvider({
   )
 }
 
-export function NativeChatUsageLimitActions(): React.JSX.Element | null {
-  const t = useTranslate()
-  const actions = useContext(UsageLimitActionsContext)
-  if (!actions || (!actions.account && !actions.handOff)) {
-    return null
-  }
-  return (
-    <div className="ml-6 flex flex-wrap items-center gap-2 text-chat-foreground-faint">
-      <p className="text-xs">
-        {t(
-          'components.native-chat.usageLimitActions.leadIn',
-          'Continue this chat without waiting:'
-        )}
-      </p>
-      {actions.account ? <div className="w-32 shrink-0 empty:hidden">{actions.account}</div> : null}
-      {actions.handOff ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={actions.disabled}
-          onClick={actions.handOff}
-        >
-          <MessageSquarePlus />
-          {t(
-            'components.agentSessionContinuation.handOffToAnotherAgent',
-            'Hand Off to Another Agent'
-          )}
-        </Button>
-      ) : null}
-    </div>
-  )
+/** The account switcher and Hand off a usage-limit row offers; null outside a structured chat. */
+export function useNativeChatUsageLimitActions(): UsageLimitActions | null {
+  return useContext(UsageLimitActionsContext)
 }

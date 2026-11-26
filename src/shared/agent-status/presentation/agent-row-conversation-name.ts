@@ -6,7 +6,8 @@ import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from '../title/providers/jcode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
 import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
-import { resolveTabNameSource } from '../../tab-title-resolution'
+import { resolveTabNameSource } from '../../workspace-layout/tab-groups/tab-title-resolution'
+import { aiVaultTitleOfSession } from '../../ai-vault/contracts/ai-vault-session-title'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
@@ -26,8 +27,7 @@ const SYNTHETIC_STATUS_TITLES_LOWER: ReadonlySet<string> = new Set(
 const FALLBACK_TAB_TITLE_LOWER = 'agent'
 
 const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> = {
-  claude: ['claude code'],
-  gemini: ['gemini cli']
+  claude: ['claude code']
 }
 
 const STATUS_WITH_CONTEXT_RE = /^(?:ready|idle|done)(?:\s+\([^)]*\))?$/i
@@ -111,19 +111,12 @@ export function getAgentRowConversationName(
 ): string | null {
   const liveTitle =
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
-  // Provider titles belong to their session, not every pane in the tab.
-  const aiVaultTitle = tab.aiVaultTitle
   const named = resolveTabNameSource(
     {
       customTitle: tab.customTitle,
       quickCommandLabel: tab.quickCommandLabel,
       liveTitle,
-      sessionTitle:
-        aiVaultTitle &&
-        aiVaultTitle.agent === agentType &&
-        aiVaultTitle.sessionId === providerSessionId
-          ? aiVaultTitle
-          : null,
+      sessionTitle: aiVaultTitleOfSession(tab.aiVaultTitle, agentType, providerSessionId),
       generatedTitle: tab.generatedTitle
     },
     generatedTitlesEnabled

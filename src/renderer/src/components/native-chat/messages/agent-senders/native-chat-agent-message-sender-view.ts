@@ -2,19 +2,20 @@ import { useCallback, useMemo } from 'react'
 import {
   useAgentMessageSenderSource,
   useAgentMessageSenderSources,
-  useLeasedSenderSelector
+  useLeasedSenderSelector,
+  useStableSenderTarget
 } from './native-chat-agent-message-sender-source'
 import type { AgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
 import type { AppState } from '@/store/types'
-import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   agentMessageSenderCandidateLocation,
   agentMessageSenderOpens,
   resolveAgentMessageSenderTarget
 } from './native-chat-agent-message-sender-target'
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
-import { agentMessageSavedKind } from '../../../../../../shared/agent-session/agent-message-presentation'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
+import { agentMessageSavedKind } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 
 /** A terminal may outlive its sender; only a saved actor reference selects current activity. */
 function activitySender(
@@ -64,17 +65,7 @@ function useSenderLocation(
   const sessionId = sender?.party.orcaSessionId
   const handle = sender?.party.terminalHandle
   const savedAgent = agentMessageSavedKind(sender)
-  const targetKind = target?.kind
-  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
-  const stableTarget = useMemo<RuntimeClientTarget | undefined>(
-    () =>
-      targetKind === 'local'
-        ? { kind: 'local' }
-        : environmentId !== undefined
-          ? { kind: 'environment', environmentId }
-          : undefined,
-    [targetKind, environmentId]
-  )
+  const stableTarget = useStableSenderTarget(target)
   const identity = useMemo<AgentMessageSender | undefined>(
     () =>
       address
@@ -183,15 +174,8 @@ export function useAgentMessageSenderViews(
   inputs: readonly AgentMessageSenderInput[],
   target?: RuntimeClientTarget
 ) {
-  const targetKind = target?.kind
-  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
+  const stable = useStableSenderTarget(target)
   const lookups = useMemo(() => {
-    const stable: RuntimeClientTarget | undefined =
-      targetKind === 'local'
-        ? { kind: 'local' }
-        : environmentId !== undefined
-          ? { kind: 'environment', environmentId }
-          : undefined
     return inputs.map(({ sender, worktreeId }) => ({
       locate: (state: AppState) => {
         const resolved = sender
@@ -209,6 +193,6 @@ export function useAgentMessageSenderViews(
           : undefined,
       savedAgent: agentMessageSavedKind(sender)
     }))
-  }, [inputs, targetKind, environmentId])
+  }, [inputs, stable])
   return useAgentMessageSenderSources(lookups)
 }

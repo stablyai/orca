@@ -1,19 +1,20 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
+import { planBrowserPageConversion } from './browser-page-conversion'
+import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from './browser-page-records'
+import { assertManagedBrowserMaterializationAllowed } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
+import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
+import { isLocalBrowserPageOwner } from '../hosts/browser-host-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
+import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
 import type {
   BrowserSlice,
   BrowserSliceGet,
   BrowserSliceSet,
   RemoteBrowserPageHandle
 } from '../browser-slice-contract'
-import type { BrowserPage } from '../../../../../../shared/browser-workspace-types'
-import { planBrowserPageConversion } from './browser-page-conversion'
-import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from './browser-page-records'
-import { assertManagedBrowserMaterializationAllowed } from '@/lib/client-creation-action-policy'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
-import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
-import { isLocalBrowserPageOwner } from '../hosts/browser-host-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
+import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,
@@ -58,7 +59,10 @@ export function createBrowserPageConversionActions(
           if (remoteHandle) {
             remotePageToClose = { worktreeId: plan.oldPage.worktreeId, handle: remoteHandle }
           }
-          const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
+          const nextRemoteBrowserPageHandlesByPageId = copyBrowserPageHandles(
+            s.remoteBrowserPageHandlesByPageId,
+            [plan.oldPage.id]
+          )
           delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
           const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }
@@ -137,10 +141,13 @@ export function createBrowserPageConversionActions(
           get,
           sentPlan.workspace.worktreeId,
           {
-            type: 'replaceBrowserPage',
-            browserTabId: sentPlan.workspace.id,
-            pageId,
-            newPageId: sentPlan.newPage.id
+            type: 'replaceTabContent',
+            replacement: {
+              kind: 'browser-page',
+              browserTabId: sentPlan.workspace.id,
+              pageId,
+              newPageId: sentPlan.newPage.id
+            }
           },
           {
             here: () => convertHere(sentPlan.newPage.id),

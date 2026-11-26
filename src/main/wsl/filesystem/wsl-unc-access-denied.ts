@@ -4,7 +4,7 @@
  * can list a distro's `\home` and `\mnt` but get EPERM inside `\mnt\<drive>`.
  */
 import { readdir } from 'node:fs/promises'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { wslHostsOptedIn } from '../host-lifecycle/wsl-host-gate'
 
 /** The message to show instead of "not a git repository"; null when access wasn't the problem. */

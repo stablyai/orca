@@ -1,4 +1,5 @@
-import type { EnvironmentDoctorCheck } from '../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../shared/workspace-setup/environment-doctor/environment-doctor-types'
+import { getGitCurrentBranchName } from '../../shared/git/refs/git-current-branch'
 import {
   check,
   PROBE_TIMEOUT_MS,
@@ -122,8 +123,7 @@ async function resolvePushRemote(git: GitRunner): Promise<string | null> {
     const value = result.stdout.trim()
     return result.code === 0 && value && value !== '.' ? value : null
   }
-  const branch = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'])
-  const name = branch.code === 0 ? branch.stdout.trim() : ''
+  const name = await getGitCurrentBranchName(git)
   const configured =
     (name ? await config(`branch.${name}.pushRemote`) : null) ??
     (await config('remote.pushDefault')) ??

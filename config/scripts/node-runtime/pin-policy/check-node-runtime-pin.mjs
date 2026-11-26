@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Static, offline consistency gate for src/shared/node-runtime-pin.ts; update-node-runtime-pin.mjs owns the network.
+// Static, offline consistency gate for src/shared/node-runtime/node-runtime-pin.ts; update-node-runtime-pin.mjs owns the network.
 
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -21,7 +21,7 @@ const {
   NODE_RUNTIME_COMPAT_ASSETS,
   NODE_RUNTIME_PIN,
   SERVER_TARGETS
-} = createRequire(import.meta.url)('../../../../src/shared/node-runtime-pin.ts')
+} = createRequire(import.meta.url)('../../../../src/shared/node-runtime/node-runtime-pin.ts')
 
 const SHA256 = /^[0-9a-f]{64}$/
 const ASSET_SOURCES = new Set(['official', 'unofficial'])

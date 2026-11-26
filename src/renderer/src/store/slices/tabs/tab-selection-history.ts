@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /** Pick the nearest neighbor in visual order (right first, then left). */
 export function pickNeighbor(tabOrder: string[], closingTabId: string): string | null {

@@ -2,7 +2,8 @@
 // Reads/replays and the offer’s own continuation/start never withdraw it.
 
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import { isRestartContinuationOf } from './structured-agent-session-restart-continuation-envelope'
@@ -24,26 +25,40 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   now: () => number
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
 }) {
-  const movedOn = (marker: AgentSessionResumeMarker): boolean => {
+  /** Legacy offers lack cursors, so only proven startup can withdraw them. */
+  const sentSince = async (
+    marker: AgentSessionResumeMarker,
+    counts: (submission: AgentJournalSubmission) => boolean
+  ): Promise<boolean> => {
+    const session = deps.sessions.get(marker.sessionId)
+    const taken = marker.journalCursor
+    if (!session || !taken) {
+      return false
+    }
+    const progress = await session.journal.reads.restartProgress(taken)
+    return (
+      progress !== undefined &&
+      (progress.epoch !== taken.epoch ||
+        progress.acceptedInputs.some(
+          (submission) => (submission.acceptedSequence ?? 0) > taken.sequence && counts(submission)
+        ))
+    )
+  }
+
+  const movedOn = async (marker: AgentSessionResumeMarker): Promise<boolean> => {
     const session = deps.sessions.get(marker.sessionId)
     if (!session) {
       return false
     }
-    const taken = marker.journalCursor
-    // Legacy offers lack cursors, so only proven startup can withdraw them.
-    const accepted =
-      taken !== undefined &&
-      (session.journal.cursor().epoch !== taken.epoch ||
-        session.journal.inputOrder.acceptedInputsAfter(taken.sequence).some(
-          (submission) =>
-            (submission.acceptedSequence ?? 0) > taken.sequence &&
-            // Own queued/rejected continuations allow retry; handover may have delivered despite no answer.
-            !(
-              (isQueuedAgentJournalSubmission(submission) ||
-                submission.dispatchState === 'rejected') &&
-              isRestartContinuationOf(marker, submission.clientMessageId)
-            )
-        ))
+    // Own queued/rejected continuations allow retry; handover may have delivered despite no answer.
+    const accepted = await sentSince(
+      marker,
+      (submission) =>
+        !(
+          (isQueuedAgentJournalSubmission(submission) || submission.dispatchState === 'rejected') &&
+          isRestartContinuationOf(marker, submission.clientMessageId)
+        )
+    )
     // Require proven startup and its immutable opening-send identity, even after rejection.
     const started =
       session.child?.phase === 'ready'
@@ -60,6 +75,9 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
 
   return {
     movedOn,
+    /** A provider-accepted message since the restart, unlike movedOn's admitted-but-unanswered sends, settles a failure. */
+    deliveredSince: (marker: AgentSessionResumeMarker): Promise<boolean> =>
+      sentSince(marker, (submission) => submission.dispatchState === 'accepted'),
     /** Retire offer/failure after independent proven startup; failures log without blocking. */
     onAgentStarted: (sessionId: string): void => {
       const session = deps.sessions.get(sessionId)

@@ -7,7 +7,7 @@ const {
   realpathSync,
   rmSync
 } = require('node:fs')
-const { dirname, join, resolve } = require('node:path')
+const { basename, dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 const {
   PE_MACHINE,
@@ -16,6 +16,9 @@ const {
 const { adoptPackagedNativeBuildEntries } = require('./packaged-native-build-entries.cjs')
 const { runtimePackageExcludeFilter } = require('./packaged-windows-only-runtime-files.cjs')
 const { missingTranscribeCppPackages } = require('./packaged-transcribe-cpp.cjs')
+const {
+  missingBareImports
+} = require('./scripts/runtime-verification/packaged-main/packaged-main-bare-imports.cjs')
 const {
   NATIVE_BUILD_PACKAGES,
   TRANSIENT_NATIVE_BUILD_ENTRY_FILTER
@@ -47,11 +50,13 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
 const DARWIN_PACKAGED_RUNTIME_PACKAGE_ROOTS = ['serve-sim']
 /** The compiled binary each workspace Windows addon loads, relative to its package. */
 const WORKSPACE_WINDOWS_ADDON_BINARIES = [
+  ['@orca/windows-notifications', 'build/Release/orca_windows_notifications.node'],
   ['@orca/windows-registry', 'build/Release/orca_windows_registry.node'],
   ['@orca/windows-security', 'build/Release/orca_windows_security.node']
 ]
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
+  '@orca/windows-notifications',
   '@orca/windows-registry',
   '@orca/windows-security'
 ]
@@ -105,6 +110,29 @@ function isPackagedExternalSpecifier(specifier) {
   )
 }
 
+function findPackageRootJsonPath(packageName, startDir) {
+  let dir = startDir
+  let firstFound = null
+  // Why: nested markers (hono's dist/cjs {"type":"commonjs"}, or an exports './*' wildcard
+  // mapping <pkg>/package.json onto one) must not shadow the root; only a matching name
+  // proves it. Never climb out of the package's node_modules.
+  while (dir !== dirname(dir) && basename(dir) !== 'node_modules') {
+    const packageJsonPath = join(dir, 'package.json')
+    if (existsSync(packageJsonPath)) {
+      try {
+        if (JSON.parse(readFileSync(packageJsonPath, 'utf8')).name === packageName) {
+          return packageJsonPath
+        }
+      } catch {
+        // An unreadable package.json cannot prove the root; keep climbing.
+      }
+      firstFound ??= packageJsonPath
+    }
+    dir = dirname(dir)
+  }
+  return firstFound
+}
+
 function resolvePackageJsonPath(packageName, fromDir = projectDir) {
   const nested = join(fromDir, 'node_modules', packageName, 'package.json')
   if (existsSync(nested)) {
@@ -117,25 +145,23 @@ function resolvePackageJsonPath(packageName, fromDir = projectDir) {
       return direct
     }
   }
+  let startDir
   try {
-    return requireFromProject.resolve(`${packageName}/package.json`, { paths: [fromDir] })
+    startDir = dirname(
+      requireFromProject.resolve(`${packageName}/package.json`, { paths: [fromDir] })
+    )
   } catch {
-    let entryPath
     try {
-      entryPath = requireFromProject.resolve(packageName, { paths: [fromDir] })
+      startDir = dirname(requireFromProject.resolve(packageName, { paths: [fromDir] }))
     } catch {
       throw new Error(`Could not resolve package ${packageName} from ${fromDir}`)
     }
-    let dir = dirname(entryPath)
-    while (dir !== dirname(dir)) {
-      const packageJsonPath = join(dir, 'package.json')
-      if (existsSync(packageJsonPath)) {
-        return packageJsonPath
-      }
-      dir = dirname(dir)
-    }
+  }
+  const packageJsonPath = findPackageRootJsonPath(packageName, startDir)
+  if (!packageJsonPath) {
     throw new Error(`Could not find package.json for ${packageName}`)
   }
+  return packageJsonPath
 }
 
 function readPackage(packageName, fromDir = projectDir) {
@@ -310,19 +336,13 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     // backslashes, and extractFile expects that same host-style path.
     const internalPath = entry.replace(/^[\\/]+/, '')
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
-    // Exclude member require/import calls but admit spread operands; missing a real import blinds the guard.
-    // Known limit: embedded source-string specifiers count too (ssh-relay-deploy’s node-pty); distinguishing them needs a parser.
-    for (const match of source.matchAll(
-      /(?:(?<![.\w])|(?<=\.\.\.))(?:require|import)\s*\(\s*(["'`])([^"'`$]+)\1\s*\)/g
-    )) {
-      const specifier = match[2]
-      if (!isPackagedExternalSpecifier(specifier)) {
-        continue
-      }
-      const packageName = packageNameFromSpecifier(specifier)
-      if (!existsSync(join(resourcesDir, 'node_modules', ...packageName.split('/')))) {
-        missing.add(packageName)
-      }
+    const isMissing = (specifier) =>
+      isPackagedExternalSpecifier(specifier) &&
+      !existsSync(
+        join(resourcesDir, 'node_modules', ...packageNameFromSpecifier(specifier).split('/'))
+      )
+    for (const specifier of missingBareImports(source, internalPath, isMissing)) {
+      missing.add(packageNameFromSpecifier(specifier))
     }
   }
 

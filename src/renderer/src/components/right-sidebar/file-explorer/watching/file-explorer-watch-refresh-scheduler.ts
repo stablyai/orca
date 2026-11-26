@@ -1,6 +1,6 @@
 import type { FileExplorerTreeRefreshOutcome } from '../tree/file-explorer-types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
-import { forEachWithConcurrency } from '../../../../../../shared/map-with-concurrency'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
+import { forEachWithConcurrency } from '../../../../../../shared/concurrency/map-with-concurrency'
 
 export type FileExplorerWatchRefreshScheduler = {
   requestFullRefresh: () => void

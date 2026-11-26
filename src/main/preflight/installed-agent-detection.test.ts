@@ -1,35 +1,36 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-vi.mock('../ipc/command-path/agent-detection-shell-path', () => ({
-  hydrateShellPathForAgentDetection: vi.fn()
-}))
-
+import { afterEach, expect, it, vi } from 'vitest'
+import { detectAgentCommandsOnHost } from './agent-command-detection'
 import { detectInstalledAgents } from './installed-agent-detection'
 
-describe('detectInstalledAgents command overrides', () => {
-  let dir: string
-  beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), 'orca agent override '))
-  })
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true })
-  })
+vi.mock('./agent-command-detection', () => ({
+  detectAgentCommandsOnHost: vi.fn(async () => new Set(['claude', 'codex', 'gemini']))
+}))
+vi.mock('./managed-agent-detection', () => ({
+  readInstalledManagedAgents: vi.fn(async () => [])
+}))
 
-  it('lists an agent outside PATH only when its override executable exists', async () => {
-    const executable = path.join(dir, process.platform === 'win32' ? 'ante.exe' : 'ante')
-    await writeFile(executable, '#!/bin/sh\n')
-    await chmod(executable, 0o755)
+const platform = process.platform
+afterEach(() => {
+  Object.defineProperty(process, 'platform', { value: platform })
+  vi.mocked(detectAgentCommandsOnHost).mockClear()
+})
 
-    await expect(
-      detectInstalledAgents(undefined, { agentCmdOverrides: { ante: `"${executable}"` } })
-    ).resolves.toContain('ante')
-    await expect(
-      detectInstalledAgents(undefined, {
-        agentCmdOverrides: { ante: `"${path.join(dir, 'missing', 'ante')}"` }
-      })
-    ).resolves.not.toContain('ante')
+const probed = () => vi.mocked(detectAgentCommandsOnHost).mock.calls[0]?.[0]
+
+it("checks one agent by probing only that agent's commands", async () => {
+  await expect(detectInstalledAgents(undefined, { onlyTuiAgent: 'codex' })).resolves.toEqual([
+    'codex'
+  ])
+  expect(probed()).toEqual(['codex'])
+})
+
+it("checks one agent in a WSL project by probing only that agent's commands in the guest", async () => {
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  await expect(
+    detectInstalledAgents({ wslDistro: 'Ubuntu' }, { onlyTuiAgent: 'claude' })
+  ).resolves.toEqual(['claude'])
+  expect(probed()).toEqual(['claude'])
+  expect(vi.mocked(detectAgentCommandsOnHost).mock.calls[0]?.[1]).toEqual({
+    context: { wslDistro: 'Ubuntu' }
   })
 })

@@ -5,7 +5,7 @@ import { EDIT_TOOL_NAMES } from './native-chat-diff'
 import { isCommandToolName } from './native-chat-tool-activity'
 import { toolInputCommand } from './native-chat-tool-summary'
 import { nativeChatFullCommand } from './native-chat-tool-input-text'
-import { parseOrcaBrowserCommand } from '../../orca-browser-cli-commands'
+import { parseOrcaBrowserCommand } from '../../browser/automation/orca-browser-cli-commands'
 
 export type NativeChatToolCategory =
   | 'read'

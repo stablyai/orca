@@ -4,7 +4,7 @@ import {
   normalizeAgentModelOptionChoices
 } from '../choices/agent-launch-choices'
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import {
   agentPermissionEnv,
   hasTypedAgentPermission,

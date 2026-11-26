@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { WslOrcadHostTarget } from '../../wsl/orcad/wsl-orcad-host-target'
 import type { RemoteInstallTransport } from './remote-install-transport'
 import type { OrcadLaunchDetach } from './orcad-remote-launch'
@@ -18,6 +18,8 @@ export type OrcadHostTransport = RemoteInstallTransport & {
   readonly orcadLaunchEnv?: (
     launch: OrcadLaunchEnvRequest
   ) => Promise<readonly OrcadLaunchEnvEntry[]>
+  /** WSL only: a transport whose every host command first runs the POSIX `fence` statement. */
+  readonly withCommandFence?: (fence: string) => OrcadHostTransport
 }
 
 /** The slot being launched; entries only its own build understands must check the version. */

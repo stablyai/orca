@@ -1,5 +1,4 @@
 import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
-import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type {
   RuntimeFileDownloadResult,
   RuntimeFileOperationArgs,
@@ -8,13 +7,11 @@ import type {
 } from '../runtime-file-client-types'
 import {
   assertExternalSshReadOwnership,
-  canReadRelativeRuntimeFile,
   getRemoteFileArgs,
   hasRemoteRuntimeOwner,
-  localAccess
+  localAccess,
+  workspaceOrScratchFileAddress
 } from '../runtime-file-routing'
-import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
-import { chatScratchFileAddress } from '../addressing/runtime-chat-scratch-file-address'
 import { readRemoteFileContent } from './runtime-remote-file-content'
 import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
 import { decodeSvgBase64, isSvgFilePath } from '../../../../../shared/file-preview/svg-document'
@@ -25,12 +22,8 @@ import {
   readHostFileOutsideWorkspaces
 } from '../grants/runtime-terminal-artifact-read'
 import { readRemoteFilePreview } from './runtime-paged-file-read'
-import {
-  downloadRemoteFileViaPreview,
-  readRemoteDownloadChunk,
-  remoteChunkedDownloadAvailable,
-  streamDownloadedFile
-} from './runtime-remote-file-download'
+import { readRuntimeAttachmentPreview } from './runtime-attachment-preview-read'
+import { downloadRemoteRuntimeFile } from './runtime-remote-file-download'
 
 /** SVG opens as editable markup; hosts send it as image bytes, or as a URL if a viewer asks. */
 export async function readRuntimeFileContent(
@@ -89,19 +82,13 @@ async function readRuntimeFileContentAsStored({
       pageOversizedBinary: pageOversizedBinary === true
     })
   }
-  // A workspace path first; a chat's scratch file is the absolute path no workspace contains.
-  const scratch = canReadRelativeRuntimeFile(relativePath) ? null : chatScratchFileAddress(filePath)
-  const readPath = scratch?.relativePath ?? relativePath
-  if (!canReadRelativeRuntimeFile(readPath)) {
+  const address = workspaceOrScratchFileAddress(worktreeId, relativePath, filePath)
+  if (!address) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }
 
   return readRemoteFileContent(
-    {
-      target,
-      worktree: scratch?.worktreeSelector ?? toRuntimeWorktreeSelector(worktreeId),
-      relativePath: readPath
-    },
+    { target, worktree: address.worktreeSelector, relativePath: address.relativePath },
     { pageOversizedBinary: pageOversizedBinary === true }
   )
 }
@@ -118,20 +105,16 @@ export async function readRuntimeFilePreview(
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   const { target: runtimeTarget, worktreeId } = context
-  // Paired-server chat attachments live outside worktrees; owning server reads them. Older method_not_found keeps preview fallback.
+  // Paired-server chat attachments live outside worktrees; the owning server reads them.
   if (
     !remoteArgs &&
     runtimeTarget.kind === 'environment' &&
     isAgentSessionAttachmentStorePath(filePath)
   ) {
-    return callRuntimeRpc<RuntimeFilePreviewResult>(
+    return readRuntimeAttachmentPreview(
       runtimeTarget,
-      'agentSessionAttachment.read',
-      { path: filePath },
-      {
-        timeoutMs: 15_000,
-        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
-      }
+      filePath,
+      context.expectedEnvironmentPairingRevision
     )
   }
   if (!remoteArgs) {
@@ -189,11 +172,5 @@ export async function downloadRuntimeFile(
     })
   }
 
-  if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
-    return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
-  }
-
-  return streamDownloadedFile(suggestedName, (offset) =>
-    readRemoteDownloadChunk(remoteArgs, offset)
-  )
+  return downloadRemoteRuntimeFile(remoteArgs, suggestedName)
 }

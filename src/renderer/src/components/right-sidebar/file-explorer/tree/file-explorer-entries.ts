@@ -1,5 +1,5 @@
 import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
-import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
+import { splitPathSegments } from '../../../../../../shared/file-access/cross-platform-path'
 
 export function shouldIncludeFileExplorerEntry(entry: DirEntry): boolean {
   return entry.name !== '.git' && entry.name !== 'node_modules'

@@ -1,19 +1,22 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import {
+  getWorktreeIdsWithLiveAgent,
+  isInactiveWorkspace
+} from '@/lib/workspace/activity/worktree-activity-state'
 import { getWorktreeIdsWithStructuredChat } from '../../worktree-list/listing/visible-worktree-activity-inputs'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   hasUnknownStructuredChat,
   type StructuredChatSleptAtByPaneKey
-} from '@/store/slices/agent-status/structured-chat-slept-at'
+} from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
 
 type TabLike = { id: string }
 
 // Partial store mocks may omit slices; shared predicates treat absence as empty.
 type SleepStateInput = {
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry> | null
+  agentStatusByPaneKey?: ReadonlyMap<string, AgentStatusEntry> | null
   agentStatusEpoch?: number
   tabsByWorktree?: Record<string, readonly TabLike[]> | null
   ptyIdsByTabId?: Record<string, string[]> | null
@@ -32,7 +35,7 @@ type LiveAgentGeneration = {
 let liveAgentGeneration: LiveAgentGeneration | null = null
 
 // Cache the whole-store live-agent scan across cards by relevant snapshots and freshness epoch.
-function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<string> {
+export function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<string> {
   const agentStatusNow = getAgentStatusEpochNow(state.agentStatusEpoch ?? 0)
   if (
     liveAgentGeneration &&
@@ -56,7 +59,7 @@ function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<str
   return worktreeIds
 }
 
-/** Use the hide-sleeping predicate; retained done status alone cannot establish whether a workspace is asleep. */
+/** Use the hide-sleeping predicate; done status alone cannot establish whether a workspace is asleep. */
 export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: string): boolean {
   if (
     hasUnknownStructuredChat(
@@ -81,8 +84,4 @@ export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: str
 
 export function useIsSleepingWorktree(worktreeId: string): boolean {
   return useAppStore((state) => selectIsSleepingWorktree(state, worktreeId))
-}
-
-export function resetWorktreeSleepStateCacheForTests(): void {
-  liveAgentGeneration = null
 }

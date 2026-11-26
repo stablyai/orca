@@ -4,7 +4,7 @@ import type {
   LocalBundledSkillExecuteRequest,
   BundledSkillPlan,
   LocalBundledSkillPlanRequest
-} from '../../../../shared/bundled-skill-plan'
+} from '../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   localBundledSkillInput,
   type BundledSkillSelection
@@ -67,10 +67,14 @@ export async function executeLocalBundledSkills(
 
 export async function autoUpdateLocalBundledSkills(
   host: RuntimeSkillCommandHost,
-  { names }: BundledSkillAutoUpdateRequest
+  { names, recordOnly }: BundledSkillAutoUpdateRequest
 ): Promise<BundledSkillInstallResult> {
   const input = await appInput(host, {})
-  const result = await autoUpdateInstalledBundledSkills({ ...input, names })
+  const result = await autoUpdateInstalledBundledSkills({
+    ...input,
+    names,
+    ...(recordOnly ? { recordOnly } : {})
+  })
   clearSkillDiscoveryCaches()
   return result
 }

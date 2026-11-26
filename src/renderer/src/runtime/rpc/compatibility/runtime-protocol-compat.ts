@@ -1,10 +1,10 @@
-import { evaluateRuntimeCompat } from '../../../../../shared/protocol-compat'
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { evaluateRuntimeCompat } from '../../../../../shared/remote-runtime/protocol/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /** Marker on the compat-gate block error. Tagged as a `.code` on a plain Error
  *  (not a subclass) so the gate keeps throwing an `Error` — its other consumer,

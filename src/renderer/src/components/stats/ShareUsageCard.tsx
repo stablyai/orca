@@ -1,6 +1,6 @@
 import { forwardRef } from 'react'
-import type { ClaudeUsageSummary } from '../../../../shared/claude-usage-types'
-import type { CodexUsageSummary } from '../../../../shared/codex-usage-types'
+import type { ClaudeUsageSummary } from '../../../../shared/agent-usage/analytics/claude-usage-types'
+import type { CodexUsageSummary } from '../../../../shared/agent-usage/analytics/codex-usage-types'
 import {
   BackgroundGlows,
   CardFooter,

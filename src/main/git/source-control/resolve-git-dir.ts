@@ -5,7 +5,7 @@ import {
   resolveWorktreeHostPath
 } from '../../../shared/git/metadata/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../../shared/git/metadata/gitdir-marker-payload'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 export async function resolveGitDir(
   worktreePath: string,

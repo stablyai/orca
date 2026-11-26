@@ -1,4 +1,4 @@
-import type { SshTarget, SshConnectionState } from '../../../shared/ssh-types'
+import type { SshTarget, SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { SshConnection, type SshCachedCredentials } from './ssh-connection'
 import type { SshConnectionCallbacks } from './ssh-connection-callbacks'
 import { recordSshConnectionOpened, recordSshConnectionReused } from './ssh-connection-attribution'
@@ -7,7 +7,7 @@ import {
   isSshCredentialDeclined
 } from '../authentication/ssh-credential-decline'
 import { createSshUserDisconnectedError, isSshUserDisconnected } from './ssh-user-disconnect'
-import { SSH_CONNECT_IN_PROGRESS_SUFFIX } from '../../../shared/ssh-sign-in-required-copy'
+import { SSH_CONNECT_IN_PROGRESS_SUFFIX } from '../../../shared/remote-runtime/ssh/ssh-sign-in-required-copy'
 import { markSshSessionStartFailure } from './ssh-session-start-failure'
 import { createSshHostAsleepError, isSshHostHeldAsleep } from './ssh-host-sleep-hold'
 

@@ -1,7 +1,7 @@
 import {
   chatWorkspaceByTabId,
   chatWorkspaceByTabId as findTerminalTabWorktreeId
-} from '../../../../lib/structured-chat-tab-index'
+} from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
 import type { AppState } from '../../../../store/types'
 
 type NativeChatTabOwnerState = Pick<AppState, 'tabsByWorktree'> & {

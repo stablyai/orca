@@ -1,6 +1,11 @@
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import type { AppState } from '../../../types'
-import '../../../../../../shared/constants'
+import {
+  assignBrowserPageLoadingOwner,
+  preserveBrowserPageLoadingOwner,
+  revokeBrowserPageLoadingOwner
+} from '@/lib/browser/browser-page-loading-ownership'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import {
   browserWorkspaceMirrorFieldsEqual,
@@ -11,8 +16,18 @@ import {
   normalizeUrl
 } from './browser-page-records'
 import { normalizeBrowserHistoryUrl } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
-import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  linkRecordWrite,
+  replaceTabBuckets
+} from '../../../record-transitions/keyed-record-transitions'
+import {
+  browserCertificateFailureEqual,
+  browserPageEqual
+} from '@/runtime/web-session-tabs-sync/snapshots/state-equality-tabs'
 
+// Navigation and page-state writes replace one workspace's browser bucket. Naming it in the record's
+// change journal lets journal readers (the bot sidebar attention reader) skip a scan of every
+// browser workspace; the spread keeps surviving keys in order, as linkRecordWrite requires.
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -25,9 +40,10 @@ export function createBrowserPageStateActions(
   | 'setBrowserPageUrl'
 > {
   return {
-    updateBrowserTabPageState: (pageId, updates) => get().updateBrowserPageState(pageId, updates),
+    updateBrowserTabPageState: (pageId, updates, loadingOwner) =>
+      get().updateBrowserPageState(pageId, updates, loadingOwner),
 
-    updateBrowserPageState: (pageId, updates) => {
+    updateBrowserPageState: (pageId, updates, loadingOwner) => {
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
         if (!page) {
@@ -58,13 +74,12 @@ export function createBrowserPageStateActions(
             : -1
         const unifiedLabelNeedsRepair =
           unifiedIndex !== -1 && unifiedTabs[unifiedIndex]?.label !== nextPage.title
-        const pageStateUnchanged =
-          nextPage.title === page.title &&
-          nextPage.loading === page.loading &&
-          nextPage.faviconUrl === page.faviconUrl &&
-          nextPage.canGoBack === page.canGoBack &&
-          nextPage.canGoForward === page.canGoForward &&
-          nextPage.loadError === page.loadError
+        const pageStateUnchanged = browserPageEqual(nextPage, page)
+        if (updates.loading === undefined) {
+          preserveBrowserPageLoadingOwner(page, pageStateUnchanged ? page : nextPage)
+        } else {
+          assignBrowserPageLoadingOwner(page, pageStateUnchanged ? page : nextPage, loadingOwner)
+        }
         const currentPages = s.browserPagesByWorkspace[workspace.id] ?? []
         const mirroredWorkspace = pageStateUnchanged
           ? mirrorWorkspaceFromActivePage(workspace, currentPages)
@@ -84,6 +99,9 @@ export function createBrowserPageStateActions(
                 (tab) => (tab.id === workspace.id ? mirroredWorkspace : tab)
               )
             }
+            linkRecordWrite(nextState.browserTabsByWorktree, s.browserTabsByWorktree, [
+              workspace.worktreeId
+            ])
           }
           if (unifiedLabelNeedsRepair) {
             nextState.unifiedTabsByWorktree = replaceTabBuckets(s.unifiedTabsByWorktree, [
@@ -123,6 +141,9 @@ export function createBrowserPageStateActions(
               (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
             )
           }
+          linkRecordWrite(nextState.browserTabsByWorktree, s.browserTabsByWorktree, [
+            workspace.worktreeId
+          ])
         }
         if (
           workspace.activePageId === pageId &&
@@ -158,7 +179,10 @@ export function createBrowserPageStateActions(
           delete nextFailures[pageId]
           return { browserCertificateFailuresByPageId: nextFailures }
         }
-        if (!findPage(s.browserPagesByWorkspace, pageId) || current === failure) {
+        if (
+          !findPage(s.browserPagesByWorkspace, pageId) ||
+          browserCertificateFailureEqual(current, failure)
+        ) {
           return s
         }
         return {
@@ -191,6 +215,7 @@ export function createBrowserPageStateActions(
         }
         // Keep document URL blank at navigation sink too; committing grants here leaks to persistence, publication and address bar.
         const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
+        revokeBrowserPageLoadingOwner(page)
         const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
           entry.id === pageId
             ? {
@@ -204,7 +229,7 @@ export function createBrowserPageStateActions(
             : entry
         )
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-        return {
+        const nextState = {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
             [workspace.id]: nextPages
@@ -216,8 +241,14 @@ export function createBrowserPageStateActions(
             )
           }
         }
+        linkRecordWrite(nextState.browserTabsByWorktree, s.browserTabsByWorktree, [
+          workspace.worktreeId
+        ])
+        return nextState
       })
-      get().setBrowserPageCertificateFailure(pageId, null)
+      if (!options?.preserveLoadError) {
+        get().setBrowserPageCertificateFailure(pageId, null)
+      }
     }
   }
 }

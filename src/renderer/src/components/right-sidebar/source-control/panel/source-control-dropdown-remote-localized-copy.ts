@@ -158,6 +158,12 @@ export function localizedRemoteCopy(t: Translate = translate): RemoteDropdownCop
         'Rebase from {{baseRef}}',
         { baseRef }
       ),
+    rebaseOntoNamedBase: (baseRef) =>
+      t(
+        'auto.components.right.sidebar.source.control.dropdown.items.rebaseOntoNamedBase',
+        'Rebase onto {{base}}',
+        { base: baseRef }
+      ),
     rebaseFromBase: t(
       'auto.components.right.sidebar.source.control.dropdown.items.rebaseFromBase',
       'Rebase from Base'
@@ -165,6 +171,10 @@ export function localizedRemoteCopy(t: Translate = translate): RemoteDropdownCop
     rebaseChooseRemoteBase: t(
       'auto.components.right.sidebar.source.control.dropdown.items.rebaseChooseRemoteBase',
       'Choose a remote base branch to rebase from'
+    ),
+    rebaseCommitOrStashFirst: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.rebaseCommitOrStashFirst',
+      'Commit or stash changes first'
     ),
     rebaseDirtyHint: t(
       'auto.components.right.sidebar.source.control.dropdown.items.rebaseDirtyHint',
@@ -203,6 +213,40 @@ export function localizedRemoteCopy(t: Translate = translate): RemoteDropdownCop
     syncCounts: localizedSyncCounts,
     forcePushWithLease: localizedForcePushWithLease,
     manualForcePush: localizedManualForcePush,
-    unpublishedForcePush: localizedUnpublishedForcePush
+    unpublishedForcePush: localizedUnpublishedForcePush,
+    statusUpToDate: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusUpToDate',
+      'Up to date'
+    ),
+    statusSetsUpstream: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusSetsUpstream',
+      'Sets upstream'
+    ),
+    statusNotPublished: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusNotPublished',
+      'Not published'
+    ),
+    statusNoBranch: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusNoBranch',
+      'No branch'
+    ),
+    statusMayFail: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusMayFail',
+      'May fail'
+    ),
+    statusPublished: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusPublished',
+      'Published'
+    ),
+    statusStashFirst: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusStashFirst',
+      'Stash first'
+    ),
+    statusReplaces: (behind) =>
+      t(
+        'auto.components.right.sidebar.source.control.dropdown.items.statusReplaces',
+        'Replaces ↓{{behind}}',
+        { behind }
+      )
   }
 }

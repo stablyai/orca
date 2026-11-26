@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { getManagedScriptPath } from '../definitions/codex-hook-definition'
 
 // Enumerate retired forms to avoid deleting live hooks shared with other builds.

@@ -3,7 +3,7 @@ import type {
   SetupDecision,
   SetupTrustMismatch
 } from '../../../../shared/worktree/create-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { loadHooks, runHook } from '../../../workspace-hooks/hooks'
 import {
   createSetupRunnerScript,
@@ -20,8 +20,8 @@ import {
   folderSharedSetupLacksApproval
 } from '../../../workspace-hooks/created-worktree-setup-trust'
 import type { HookWorkspaceIdentity } from '../../../workspace-hooks/setup-hook-env-vars'
-import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { scopeHooksToRepoKind } from '../../../../shared/folder-workspaces/folder-workspace-hooks'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
@@ -37,7 +37,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     RuntimeManagedWorktreeCreateArgs,
     'runHooks' | 'setupDecision' | 'approvedSetupHash' | 'approvedSetupHashes'
   >
-  repo: Repo
+  repo: WorkspaceHookOwner
   worktreePath: string
   settings: ReturnType<RuntimeStore['getSettings']>
   runtimeTarget: { wslDistro?: string } | undefined

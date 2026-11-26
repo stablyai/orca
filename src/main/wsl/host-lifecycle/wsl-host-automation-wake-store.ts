@@ -50,7 +50,10 @@ function parseDue(value: unknown): WslHostAutomationDue | null {
           {
             rrule: schedule.rrule,
             dtstart: schedule.dtstart,
-            missedRunGraceMinutes: schedule.missedRunGraceMinutes
+            missedRunGraceMinutes: schedule.missedRunGraceMinutes,
+            ...('timezone' in schedule && typeof schedule.timezone === 'string'
+              ? { timezone: schedule.timezone }
+              : {})
           }
         ]
       : []

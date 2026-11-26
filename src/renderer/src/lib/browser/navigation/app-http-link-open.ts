@@ -1,15 +1,10 @@
-import type { AppState } from '@/store/types'
-import {
-  canNativeChatOpenOwnedBrowser,
-  resolveNativeChatHttpLinkSourceOwner
-} from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
-import { getWorkspaceClientCreationActionPolicy } from '../../client-creation-action-policy'
-import {
-  openOwnedHttpLink,
-  type HttpLinkDestination,
-  type HttpLinkSourceOwner
-} from './http-link-routing'
+import { resolveNativeChatHttpLinkSourceOwner } from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '../workspace/workspace-browser-route-eligibility'
+import { getWorkspaceClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
+import { openOwnedHttpLink } from './http-link-routing'
+import type { HttpLinkDestination, HttpLinkSourceOwner } from './http-link-routing'
 import { getShortcutPlatform } from '../../keyboard/shortcut-platform'
+import type { AppState } from '@/store/types'
 
 // The store registers itself so link buttons need not import it.
 let appStateAccessor: (() => AppState) | null = null
@@ -25,6 +20,10 @@ export type OpenAppHttpLinkOptions = {
   worktreeId?: string | null
   /** The click, so the setting's Shift escape modifier applies. */
   event?: AppHttpLinkClick
+  /** Opens in the workspace's browser whatever the link setting says. */
+  forceInApp?: boolean
+  /** Explicit destination override when a surface bypasses the link setting. */
+  destination?: 'orca' | 'system'
 }
 
 function isEscapeModifierClick(event: AppHttpLinkClick | undefined): boolean {
@@ -45,11 +44,28 @@ export function openAppHttpLink(
   const state = appStateAccessor?.()
   const hostWorktreeId = options.worktreeId || state?.activeWorktreeId
   const host = state && hostWorktreeId ? resolveBrowserHost(state, hostWorktreeId) : null
+  if (options.destination === 'system') {
+    return openOwnedHttpLink(url, {
+      worktreeId: host?.worktreeId ?? null,
+      sourceOwner: host?.owner ?? LOCAL_OWNER,
+      forceSystemBrowser: true
+    })
+  }
+  if (options.destination === 'orca') {
+    return openOwnedHttpLink(url, {
+      worktreeId: host?.worktreeId ?? null,
+      sourceOwner: host?.owner ?? LOCAL_OWNER,
+      allowRemoteInApp: Boolean(host),
+      forceInApp: Boolean(host),
+      forceSystemBrowser: !host
+    })
+  }
   return openOwnedHttpLink(url, {
     worktreeId: host?.worktreeId ?? null,
     sourceOwner: host?.owner ?? LOCAL_OWNER,
     allowRemoteInApp: true,
-    modifierHeld: isEscapeModifierClick(options.event)
+    modifierHeld: isEscapeModifierClick(options.event),
+    ...(options.forceInApp ? { forceInApp: true } : {})
   })
 }
 
@@ -65,7 +81,7 @@ function resolveBrowserHost(
     owner.kind === 'local'
       ? getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
         'enabled'
-      : canNativeChatOpenOwnedBrowser(state, worktreeId, owner)
+      : canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, owner)
   return canHost ? { worktreeId, owner } : null
 }
 

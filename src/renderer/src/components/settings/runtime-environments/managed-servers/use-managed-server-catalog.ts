@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { OrcadManagedPendingMigrationRow } from '../../../../../../shared/orcad-managed-runtime'
+import type { OrcadManagedPendingMigrationRow } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getManagedOrcadApi } from '@/runtime/hosts/installation/managed-orcad-api-availability'
 import { managedServerOutcomeLabel } from './managed-server-copy'

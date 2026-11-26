@@ -1,8 +1,8 @@
 import { webContents } from 'electron'
-import { BrowserManagerDownloadLifecycle } from '../downloads/browser-manager-download-lifecycle'
+import { BrowserManagerRemoteDownloads } from '../downloads/browser-manager-remote-downloads'
 import type { BrowserDevToolsDockBounds } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 
-export abstract class BrowserManagerDevTools extends BrowserManagerDownloadLifecycle {
+export abstract class BrowserManagerDevTools extends BrowserManagerRemoteDownloads {
   async openDevTools(
     browserTabId: string,
     inspectAt?: { x: number; y: number },

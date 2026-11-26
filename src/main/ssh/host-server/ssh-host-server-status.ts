@@ -1,4 +1,4 @@
-import type { SshManagedServerStatus } from '../../../shared/ssh-types'
+import type { SshManagedServerStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 const statuses = new Map<string, SshManagedServerStatus>()
 let servedListener: ((targetId: string) => void) | null = null

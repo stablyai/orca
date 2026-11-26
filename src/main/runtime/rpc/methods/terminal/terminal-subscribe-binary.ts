@@ -3,7 +3,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
-import type { TerminalOutputMeta } from '../../terminal-output-frame-chunks'
+import type { TerminalOutputMeta } from '../../terminal/terminal-output-frame-chunks'
 import { iterateStreamOutputFrames } from './terminal-stream-resume-ledger'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
@@ -12,7 +12,7 @@ import {
   type TerminalReplyQuerySequence
 } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
+import { measureTerminalStreamByteLength } from '../../terminal/terminal-stream-byte-length'
 import { createTerminalOutputBatcher, type TerminalOutputBatcher } from './terminal-output-batcher'
 import { trimPendingOutputToBudget } from './terminal-stream-replay'
 import { allocateTerminalSubscriptionStreamId } from './terminal-subscription-stream-id'
@@ -32,7 +32,7 @@ import {
 } from './terminal-output-credit'
 import { registerTerminalStreamToken } from './terminal-stream-tokens'
 export async function runTerminalBinarySubscription(args: TerminalSubscriptionArgs): Promise<void> {
-  const { runtime, registration, sendBinary, ptyId, clientId, viewerDeviceId, isMobile } = args
+  const { runtime, registration, sendBinary, ptyId, clientId, viewer, isMobile } = args
   if (!sendBinary) {
     throw new Error('binary_terminal_stream_required')
   }
@@ -196,7 +196,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     undefined,
     isMobile ? clientId : undefined,
     false,
-    viewerDeviceId
+    viewer
   )
   unsubscribeData = () => {
     releaseViewSubscriber()

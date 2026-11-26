@@ -1,4 +1,4 @@
-import type { TabContentType } from '../../../../../../shared/tab-types'
+import type { TabContentType } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceTabContentType } from './workspace-tab-search-types'
 
 // Why exclusion: browser and simulator tabs have their own palette rows; every other tab kind is a

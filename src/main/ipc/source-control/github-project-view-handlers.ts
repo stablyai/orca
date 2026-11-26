@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { runAsDefaultWslCliUserAct } from '../../git/command-runner/default-wsl-cli-fallback'
+import { runAsDefaultWslCliUserAct } from '../../git/command-runner/hosted-cli/default-wsl-cli-fallback'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -18,7 +18,7 @@ import type {
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs,
   WakeWslDistroArg
-} from '../../../shared/github/project-request-types'
+} from '../../../shared/github/projects/project-request-types'
 import {
   addIssueCommentBySlug,
   deleteIssueCommentBySlug,

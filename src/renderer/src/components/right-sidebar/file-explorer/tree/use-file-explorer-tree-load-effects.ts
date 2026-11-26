@@ -1,11 +1,10 @@
-import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { shouldResetFileExplorerForVisibleWorktree } from '../navigation/file-explorer-reset'
 import { decideExpandedDirLoad } from '../watching/file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from '../mutations/fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
-import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
+import { splitPathSegments } from '../../../../../../shared/file-access/cross-platform-path'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
@@ -28,7 +27,8 @@ type UseFileExplorerTreeLoadEffectsParams = {
   refreshTree: () => Promise<unknown>
   resetAndLoad: (options?: { wakeWslDistro?: boolean }) => void
   resetSelection: () => void
-  setNameFilterQuery: Dispatch<SetStateAction<string>>
+  /** Clears the search query when the workspace path really changes (not on the first load). */
+  clearNameFilter: () => void
 }
 
 export function useFileExplorerTreeLoadEffects({
@@ -44,7 +44,7 @@ export function useFileExplorerTreeLoadEffects({
   refreshTree,
   resetAndLoad,
   resetSelection,
-  setNameFilterQuery
+  clearNameFilter
 }: UseFileExplorerTreeLoadEffectsParams): void {
   const [completedStaleRefreshes, setCompletedStaleRefreshes] = useState(0)
   const staleRefreshRef = useRef<{
@@ -60,12 +60,12 @@ export function useFileExplorerTreeLoadEffects({
   const followSymlinks = useAppStore((s) => s.settings?.followSymlinkedDirectories ?? false)
   const lastFollowSymlinks = useRef(followSymlinks)
   useEffect(() => {
-    if (lastFollowSymlinks.current !== followSymlinks) {
-      lastFollowSymlinks.current = followSymlinks
-      if (visibleFilesWorktreePath) {
-        resetAndLoad()
-      }
+    // Why: keep a change pending while search hides the tree, so the restored tree reloads.
+    if (!visibleFilesWorktreePath || lastFollowSymlinks.current === followSymlinks) {
+      return
     }
+    lastFollowSymlinks.current = followSymlinks
+    resetAndLoad()
   }, [followSymlinks, visibleFilesWorktreePath, resetAndLoad])
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
 
@@ -89,9 +89,12 @@ export function useFileExplorerTreeLoadEffects({
     ) {
       return
     }
+    // Why: the first load must keep a query seeded by the same commit (search selection on open).
+    if (lastResetWorktreePathRef.current !== null) {
+      clearNameFilter()
+    }
     lastResetWorktreePathRef.current = visibleFilesWorktreePath
     resetSelection()
-    setNameFilterQuery('')
     // Only the user's own switch here may start its stopped WSL distro (E9), once per switch.
     const wake = workspaceKey !== null && takeRecentWorkspaceSwitchWake(workspaceKey, 'explorer')
     resetAndLoad(wake ? { wakeWslDistro: true } : undefined)

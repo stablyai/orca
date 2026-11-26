@@ -5,9 +5,9 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
 import type { AutomationDraft } from './AutomationEditorDialog'
-import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 type AutomationSetupDecisionFieldProps = {
   draft: AutomationDraft

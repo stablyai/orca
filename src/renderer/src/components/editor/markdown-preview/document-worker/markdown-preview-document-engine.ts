@@ -1,6 +1,6 @@
 import type { Root } from 'hast'
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
 import '../search/markdown-preview-search'
 import {
   findTextMatchRanges,

@@ -1,9 +1,6 @@
-import type { BrowserPageCreationPlacement } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { BrowserTabCreateResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { translate } from '../../../i18n/i18n'
 import { useAppStore } from '../../../store/index'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
@@ -19,9 +16,10 @@ import {
   rehomeWebRuntimeBrowserCreation,
   resolveWebRuntimeBrowserClientTargetGroupId,
   restageWebRuntimeBrowserCreation,
-  stageWebRuntimeBrowserCreation,
-  type CreateWebRuntimeSessionBrowserTabArgs
+  stageWebRuntimeBrowserCreation
 } from './web-runtime-browser-creation-context'
+import type { CreateWebRuntimeSessionBrowserTabArgs } from './web-runtime-browser-creation-context'
+import { browserCreateErrorForLog } from './web-runtime-browser-create-failure-code'
 import {
   finishWebRuntimeBrowserCreationFailure,
   prepareWebRuntimeBrowserCreationFailure
@@ -36,7 +34,10 @@ import { registerPairedBrowserTabCreator } from '../../../store/slices/browser/t
 import {
   forgetStagedBrowserTabHandover,
   wasStagedBrowserTabHandedToFrames
-} from '@/lib/staged-browser-frame-handover'
+} from '@/runtime/browser/creation/staged-browser-frame-handover'
+import type { BrowserPageCreationPlacement } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { BrowserTabCreateResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 
 export async function createWebRuntimeSessionBrowserTab(
   args: CreateWebRuntimeSessionBrowserTabArgs
@@ -45,7 +46,15 @@ export async function createWebRuntimeSessionBrowserTab(
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
-  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+  return environmentId ? createWebRuntimeSessionBrowserTabOnHost(args, environmentId) : false
+}
+
+/** Creates the tab on the named runtime, for callers that already route by the page's owner. */
+export async function createWebRuntimeSessionBrowserTabOnHost(
+  args: CreateWebRuntimeSessionBrowserTabArgs,
+  environmentId: string
+): Promise<boolean> {
+  if (!isWebRuntimeSessionActive(environmentId)) {
     return false
   }
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)
@@ -66,7 +75,10 @@ export async function createWebRuntimeSessionBrowserTab(
           preference: placementPreference
         })
       } catch (error) {
-        console.warn('[web-runtime-session] failed to prepare client browser host:', error)
+        console.warn(
+          '[web-runtime-session] failed to prepare client browser host:',
+          browserCreateErrorForLog(args.failureLogMode, error)
+        )
         throw new Error(
           translate(
             'browser.clientHosted.preparationFailed',
@@ -75,6 +87,10 @@ export async function createWebRuntimeSessionBrowserTab(
           { cause: error }
         )
       }
+    }
+    // An explicit move here must not quietly become another streamed page.
+    if (placementPreference === 'client' && placement.kind !== 'client') {
+      throw new Error('browser_client_host_unavailable')
     }
     restageWebRuntimeBrowserCreation(context, placement.kind === 'client')
     context.createAttempted = true
@@ -118,7 +134,7 @@ export async function createWebRuntimeSessionBrowserTab(
         .catch((error) => {
           console.warn(
             '[web-runtime-session] created browser tab navigation failed:',
-            error instanceof Error ? error.message : String(error)
+            browserCreateErrorForLog(args.failureLogMode, error)
           )
         })
     }
@@ -207,6 +223,9 @@ export async function createWebRuntimeSessionBrowserTab(
       throw new StagedWebRuntimeBrowserTabCancelledError()
     }
     // Materialized rows belong to the snapshot; later failures must not unwind them as staging.
+    if (placement.kind === 'client') {
+      markDesktopPlacedClientPage(environmentId, created.browserPageId)
+    }
     completeWebRuntimeBrowserCreation(context)
     materializedPageId = created.browserPageId
   } catch (error) {
@@ -252,7 +271,7 @@ export async function createWebRuntimeSessionBrowserTab(
           failure.recoveryError = cleanupError
           console.warn(
             '[web-runtime-session] failed to clean up unreconciled browser tab:',
-            cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+            browserCreateErrorForLog(args.failureLogMode, cleanupError)
           )
         }
       }
@@ -270,3 +289,17 @@ export async function createWebRuntimeSessionBrowserTab(
 }
 
 registerPairedBrowserTabCreator(createWebRuntimeSessionBrowserTab)
+
+/** Local proof that this desktop asked for the page here; snapshot rebuilds keep it, a server never sets it. */
+function markDesktopPlacedClientPage(environmentId: string, remotePageId: string): void {
+  const state = useAppStore.getState()
+  for (const [pageId, handle] of Object.entries(state.remoteBrowserPageHandlesByPageId)) {
+    if (handle.environmentId === environmentId && handle.remotePageId === remotePageId) {
+      // Only on the server's own word that it landed here.
+      if (!handle.placedHere && handle.placement?.kind === 'client') {
+        state.setRemoteBrowserPageHandle(pageId, { ...handle, placedHere: true })
+      }
+      return
+    }
+  }
+}

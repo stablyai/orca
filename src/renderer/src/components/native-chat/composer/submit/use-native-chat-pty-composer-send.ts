@@ -22,10 +22,10 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import { isSlashCommandDraft } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
+import { isSlashCommandDraft } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { NativeChatPickerState } from '../pickers/use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from '../../session/terminal/send/use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from '../../session/terminal/delivery/native-chat-optimistic-send-outcome'
 import {
   answerNativeChatCommandInComposer,
@@ -47,6 +47,7 @@ export function useNativeChatPtyComposerSend(args: {
   onOptimisticSend?: (text: string, imagePaths?: string[], recovery?: boolean) => string | undefined
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string, output?: string) => void
+  onCommandSent?: (command: string, delivery: NativeChatSendHandle) => void
   answerCommandLocally?: NativeChatLocalCommandAnswer
   onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
@@ -140,6 +141,9 @@ export function useNativeChatPtyComposerSend(args: {
         if (classification === 'command') {
           args.onSlashCommand?.(text.trim())
           args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
+          if (pendingHandle) {
+            args.onCommandSent?.(text.trim(), pendingHandle)
+          }
         }
       } else {
         pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)

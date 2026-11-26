@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 import {
   SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,

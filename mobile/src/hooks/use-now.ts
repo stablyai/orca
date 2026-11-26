@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
+import { currentAppStateStatus } from '../platform/app-state-status'
 
 const appStateListeners = new Set<() => void>()
 // Read on first subscribe, so importing this module never touches AppState.
@@ -9,7 +10,7 @@ let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = 
 function subscribeToAppState(listener: () => void): () => void {
   appStateListeners.add(listener)
   if (!appStateSubscription) {
-    currentAppState = AppState.currentState
+    currentAppState = currentAppStateStatus()
     appStateSubscription = AppState.addEventListener('change', (nextState) => {
       currentAppState = nextState
       appStateListeners.forEach((notify) => notify())
@@ -100,7 +101,14 @@ export function useSharedNow(intervalMs = 30_000): number {
 
 const readNow = (now: number): number => now
 
-export function useSharedNowSnapshot<T>(intervalMs: number, select: (now: number) => T): T {
+// A disabled caller reads the clock's last time without keeping its timer running.
+const subscribeWhileDisabled = (): (() => void) => () => {}
+
+export function useSharedNowSnapshot<T>(
+  intervalMs: number,
+  select: (now: number) => T,
+  enabled = true
+): T {
   const clock = sharedClock(intervalMs)
   const subscribe = useCallback(
     (listener: () => void) => {
@@ -135,5 +143,5 @@ export function useSharedNowSnapshot<T>(intervalMs: number, select: (now: number
     [clock, intervalMs]
   )
   const read = useCallback(() => select(clock.now), [clock, select])
-  return useSyncExternalStore(subscribe, read, read)
+  return useSyncExternalStore(enabled ? subscribe : subscribeWhileDisabled, read, read)
 }

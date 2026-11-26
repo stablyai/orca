@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { PLUGIN_HOOK_NAMES } from '../contributions/plugin-hook-contribution'
 
 /** What `next(event)` returns: the handler returns it to let the chain go on. */
@@ -9,16 +10,20 @@ class PluginHookContinue {
 export type PluginHookNext = (event?: unknown) => PluginHookContinue
 export type PluginHookHandler = (event: unknown, next: PluginHookNext) => unknown
 
-export const pluginWorkerHookParamsSchema = z.object({
-  event: z.enum(PLUGIN_HOOK_NAMES),
-  payload: z.unknown()
-})
+export const pluginWorkerHookParamsSchema = lazyZodSchema(() =>
+  z.object({
+    event: z.enum(PLUGIN_HOOK_NAMES),
+    payload: z.unknown()
+  })
+)
 
 /** One worker's verdict: go on with (possibly changed) `payload`, or stop with `result`. */
-export const pluginWorkerHookDecisionSchema = z.discriminatedUnion('decision', [
-  z.object({ decision: z.literal('continue'), payload: z.unknown() }),
-  z.object({ decision: z.literal('result'), result: z.unknown() })
-])
+export const pluginWorkerHookDecisionSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('decision', [
+    z.object({ decision: z.literal('continue'), payload: z.unknown() }),
+    z.object({ decision: z.literal('result'), result: z.unknown() })
+  ])
+)
 
 export type PluginWorkerHookDecision = z.infer<typeof pluginWorkerHookDecisionSchema>
 

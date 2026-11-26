@@ -1,7 +1,7 @@
 import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
-} from '../../../../../shared/clipboard-text'
+} from '../../../../../shared/clipboard/clipboard-text'
 import { TEXT_CONTROL_PASTE_MAX_BYTES } from '../../text-input/paste/text-control-paste-model'
 import { pasteTextIntoTextControl } from '../../text-input/paste/text-control-paste'
 import { createTextControlRejectedResult } from '../../text-input/paste/text-control-paste-diagnostics'

@@ -7,7 +7,7 @@ import {
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME,
   orcadBunRuntimeFilename
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'

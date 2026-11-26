@@ -1,4 +1,8 @@
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { RemoteBrowserPageHandle } from '../../../store/slices/browser/browser-slice-contract'
 
@@ -6,7 +10,8 @@ export function buildBrowserSessionData(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
   activeBrowserTabIdByWorktree: Record<string, string | null>,
-  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
+  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>,
+  browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
 ): Pick<
   WorkspaceSessionState,
   'browserTabsByWorktree' | 'browserPagesByWorkspace' | 'activeBrowserTabIdByWorktree'
@@ -16,7 +21,8 @@ export function buildBrowserSessionData(
     browserTabsByWorktree: buildPersistedBrowserTabsByWorktree(browserTabsByWorktree),
     browserPagesByWorkspace: buildPersistedBrowserPagesByWorkspace(
       browserPagesByWorkspace,
-      remoteBrowserPageHandlesByPageId
+      remoteBrowserPageHandlesByPageId,
+      browserAnnotationsByPageId
     ),
     activeBrowserTabIdByWorktree
   }
@@ -35,16 +41,23 @@ export function buildPersistedBrowserTabsByWorktree(
 
 export function buildPersistedBrowserPagesByWorkspace(
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
-  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
+  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>,
+  browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
 ): WorkspaceSessionState['browserPagesByWorkspace'] {
   return Object.fromEntries(
     Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
       workspaceId,
-      pages.map((page) => ({
-        ...page,
-        loading: false,
-        ...persistedRemoteBrowserPageIdentity(remoteBrowserPageHandlesByPageId[page.id])
-      }))
+      pages.map(({ remoteBrowserPagePlacedHere: _stalePlacedHere, ...page }) => {
+        // Placed-here is recomputed from the live handle; a stale saved flag must not outlive it.
+        void _stalePlacedHere
+        const annotations = browserAnnotationsByPageId[page.id]
+        return {
+          ...page,
+          loading: false,
+          ...persistedRemoteBrowserPageIdentity(remoteBrowserPageHandlesByPageId[page.id]),
+          ...(annotations?.length ? { annotations } : {})
+        }
+      })
     ])
   )
 }
@@ -52,13 +65,18 @@ export function buildPersistedBrowserPagesByWorkspace(
 // Persist host page identity/client-hosted status before republished placement arrives; restored markers must survive a second quit too.
 function persistedRemoteBrowserPageIdentity(
   handle: RemoteBrowserPageHandle | undefined
-): Pick<BrowserPage, 'remoteBrowserPageId' | 'remoteBrowserPageClientHosted'> {
+): Pick<
+  BrowserPage,
+  'remoteBrowserPageId' | 'remoteBrowserPageClientHosted' | 'remoteBrowserPagePlacedHere'
+> {
   if (!handle) {
     return {}
   }
   const clientHosted = handle.placement?.kind === 'client' || handle.restoredClientHosted === true
+  const placedHere = handle.placedHere === true
   return {
     remoteBrowserPageId: handle.remotePageId,
-    ...(clientHosted ? { remoteBrowserPageClientHosted: true } : {})
+    ...(clientHosted ? { remoteBrowserPageClientHosted: true } : {}),
+    ...(clientHosted && placedHere ? { remoteBrowserPagePlacedHere: true } : {})
   }
 }

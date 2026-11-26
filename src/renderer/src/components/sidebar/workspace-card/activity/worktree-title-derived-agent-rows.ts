@@ -1,5 +1,5 @@
 import type { TitleDerivedAgentRowsInput } from './title-derived-agent-row-input'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import {
   isClaudeManagementTitle,
@@ -8,19 +8,20 @@ import {
 
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { jcodePaneTitleStatus } from '../../../../../../shared/agent-status/title/providers/jcode-terminal-title'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentStatusState,
   AgentType
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { FIRST_PANE_ID } from '../../../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../../../shared/workspace-layout/pane-key'
 import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
-} from '../../../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   isTerminalLeafId,
   makePaneKey
@@ -85,13 +86,14 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
         liveSlotIds.length === leafIds.length &&
         liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
       for (const [paneId, title] of paneTitleEntries) {
+        const slot = Number(paneId)
         const leafId = resolveLeafIdForTitleFallback({
           layout,
           leafIds,
           ptyIds: ptyIdsByTabId[tab.id] ?? [],
           liveSlotIds,
           liveSlotsAreDense,
-          paneId: Number(paneId),
+          paneId: slot,
           title
         })
         if (!leafId) {
@@ -101,6 +103,7 @@ export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): Da
           tab,
           leafId,
           title,
+          runtimePaneId: slot >= FIRST_PANE_ID ? slot : undefined,
           ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
           paneForegroundAgentByPaneKey,
           now: args.now,
@@ -143,6 +146,7 @@ function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
   title: string
+  runtimePaneId?: number
   ownerAgentType: AgentType | null
   paneForegroundAgentByPaneKey: Record<string, TitleDerivedPaneForeground>
   now: number
@@ -182,7 +186,8 @@ function buildTitleDerivedAgentRow(args: {
     return null
   }
   // Why: the title sets activity only; a plain title on a process-identified pane is idle.
-  const status = titleStatus ?? 'idle'
+  // Jcode's own tail outranks agent names its conversation title happens to mention.
+  const status = jcodePaneTitleStatus(title, agentType) ?? titleStatus ?? 'idle'
   const rowLabel =
     agentType === titleAgentType &&
     label &&
@@ -220,6 +225,7 @@ function buildTitleDerivedAgentRow(args: {
   }
   return {
     paneKey,
+    runtimePaneId: args.runtimePaneId,
     entry,
     tab: args.tab,
     agentType,

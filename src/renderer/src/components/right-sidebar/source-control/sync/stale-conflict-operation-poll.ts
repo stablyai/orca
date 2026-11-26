@@ -1,13 +1,13 @@
 import { useEffect, useMemo } from 'react'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { getRuntimeGitConflictOperation } from '@/runtime/source-control/git/runtime-git-status-client'
 import {
   createCoalescedPollRunner,
   type SlowTaskBackoffOptions
-} from '../../../../lib/repository-refresh/coalesced-poll-runner'
+} from '../../../../lib/source-control/refresh/coalesced-poll-runner'
 import {
   installWindowVisibilityInterval,
   isWindowVisible
@@ -85,12 +85,11 @@ export function useStaleConflictOperationPolling(args: {
           if (!isConnectionReady(connectionId) || !target) {
             continue
           }
-          const op = await getRuntimeGitConflictOperation({
-            target,
-            worktreeId: id,
-            worktreePath: path,
-            connectionId
-          })
+          // A 3 s poll: no use of an idle WSL host (#46567).
+          const op = await getRuntimeGitConflictOperation(
+            { target, worktreeId: id, worktreePath: path, connectionId },
+            { background: true }
+          )
           if (!active) {
             return
           }

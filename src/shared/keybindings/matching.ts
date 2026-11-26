@@ -77,6 +77,17 @@ export function keybindingRunsInTextField(
   )
 }
 
+export function keybindingRunsInChatPrompt(
+  actionId: KeybindingActionId,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  return (
+    DEFINITIONS_BY_ID.get(actionId)?.runsInChatPrompt === true ||
+    keybindingRunsInTextField(actionId, input, platform)
+  )
+}
+
 export function digitFromInput(input: KeybindingInput, platform: NodeJS.Platform): string | null {
   for (let value = 1; value <= 9; value++) {
     const digit = String(value)

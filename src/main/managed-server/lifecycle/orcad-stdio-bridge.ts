@@ -1,7 +1,7 @@
 import {
   OrcadHostUnsupportedError,
   OrcadStdioBridgeUnavailableError
-} from '../../orcad/orcad-host-unavailable'
+} from '../../orcad/diagnostics/orcad-host-unavailable'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import { orcadWindowsHomeOpCommand } from '../install/orcad-remote-windows-node'
 import {

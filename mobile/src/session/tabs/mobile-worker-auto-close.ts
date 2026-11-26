@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import * as z from 'zod'
 import { Timer } from 'lucide-react-native'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../../src/shared/orchestration/orchestration-runtime-capabilities'
 import {
   pollWorkerAutoClose,

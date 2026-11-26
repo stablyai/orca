@@ -17,6 +17,7 @@ import type {
 import type { LazyChunkRecoveryReloadOutcome } from '@/app-shell/startup/lazy-chunk-recovery-reload'
 import { useAppStore } from '@/store/index'
 import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
+import { wslMoveStartFieldsOf } from '../../../../shared/wsl-move/wsl-move-request'
 
 /** Projects listed with a checkbox; from main's whole-distro preview, or the catalog fallback. */
 export type WslMoveCandidates = { repoIds: string[]; folderWorkspaceIds: string[] }
@@ -56,8 +57,8 @@ export type WslMoveDialogState =
 
 export type WslMoveOpenRequest = {
   distro: string
-  /** Opened from one project: only it starts checked. Otherwise every project does. */
-  only?: WslMoveRowRef
+  /** Opened from some projects: only they start checked. Otherwise every project does. */
+  only?: WslMoveRowRef | readonly WslMoveRowRef[]
   /** Fallback list when main refuses the whole-distro preview. */
   catalogCandidates?: () => WslMoveCandidates
 }
@@ -174,9 +175,11 @@ export async function openWslMoveDialog(request: WslMoveOpenRequest): Promise<vo
     candidates = request.catalogCandidates()
   }
   const all = refsOf(candidates)
-  const only = request.only
-  // Opened from one project that cannot move: check nothing; "Not moving" says why.
-  const selected = only ? all.filter((ref) => ref.kind === only.kind && ref.id === only.id) : all
+  const only = request.only === undefined ? undefined : [request.only].flat()
+  // Opened from projects that cannot move: check nothing; "Not moving" says why.
+  const selected = only
+    ? all.filter((ref) => only.some((wanted) => ref.kind === wanted.kind && ref.id === wanted.id))
+    : all
   const wholeDistro = selected.length === all.length && distroPreview.outcome === 'ready'
   setDialog({
     stage: 'preview',
@@ -239,6 +242,8 @@ export async function startWslMove(): Promise<void> {
     return
   }
   const { distro, selected } = dialog
+  // Main moves only if the drives still map where this preview read them.
+  const fromPreview = wslMoveStartFieldsOf(dialog.preview)
   ++previewToken
   setDialog({ stage: 'running', distro, selected, progress: null, cancel: 'idle' })
   const unsubscribe = window.api.wslMove.onProgress((progress) => {
@@ -251,7 +256,8 @@ export async function startWslMove(): Promise<void> {
   try {
     result = await window.api.wslMove.start({
       ...requestOf(distro, selected),
-      sleptPanes: collectWslMoveSleptPaneBindings(useAppStore.getState())
+      sleptPanes: collectWslMoveSleptPaneBindings(useAppStore.getState()),
+      ...fromPreview
     })
   } catch (error) {
     // The IPC itself failed; main's own failures arrive as results.

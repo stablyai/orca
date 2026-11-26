@@ -1,5 +1,5 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -56,12 +56,18 @@ export function shouldShowSourceControlBranchContextRow(
 }
 
 // Toolbar chrome may show head identity without a compare base.
+// A paused rebase's strip shows even with no head identity or base to anchor it.
 export function shouldShowSourceControlBranchContextChrome(
   summary: GitBranchCompareSummary | null | undefined,
   compareBaseRef: string | null | undefined,
-  headDisplay: WorktreeGitIdentityDisplay | null | undefined
+  headDisplay: WorktreeGitIdentityDisplay | null | undefined,
+  rebasePaused = false
 ): boolean {
-  return shouldShowSourceControlBranchContextRow(summary, compareBaseRef) || headDisplay != null
+  return (
+    rebasePaused ||
+    shouldShowSourceControlBranchContextRow(summary, compareBaseRef) ||
+    headDisplay != null
+  )
 }
 
 // Show both directions against the named base so rebased branches also reveal commits behind it.

@@ -1,4 +1,4 @@
-import type { RuntimeTerminalListResult } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalListResult } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null

@@ -10,12 +10,17 @@ import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { remarkMarkdownDocLinks } from '../../markdown/documents/markdown-doc-links'
-import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../../../shared/github/github-callouts'
+import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../../../shared/github/markdown/github-callouts'
 import { remarkGitHubCallouts } from '@/lib/markdown/remark-github-callouts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
+import { MARKDOWN_CODE_LANGUAGES } from '@/lib/markdown/markdown-code-languages'
+
+// Authored ids are prefixed by the sanitizer; heading slugs are not.
+export const MARKDOWN_PREVIEW_HTML_ID_PREFIX = 'user-content-'
 
 const markdownPreviewSanitizeSchema = {
   ...defaultSchema,
+  clobberPrefix: MARKDOWN_PREVIEW_HTML_ID_PREFIX,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
   protocols: {
     ...defaultSchema.protocols,
@@ -72,7 +77,10 @@ export const MARKDOWN_REHYPE_NORMALIZATION_PLUGINS: MarkdownPluginList = [
   [rehypeSanitize, markdownPreviewSanitizeSchema],
   rehypeSlug
 ]
-export const MARKDOWN_REHYPE_EXPANSION_PLUGINS: MarkdownPluginList = [rehypeHighlight, rehypeKatex]
+export const MARKDOWN_REHYPE_EXPANSION_PLUGINS: MarkdownPluginList = [
+  [rehypeHighlight, { languages: MARKDOWN_CODE_LANGUAGES }],
+  rehypeKatex
+]
 
 // Sanitize raw HTML before math and syntax expansion.
 export const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginList = [

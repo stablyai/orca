@@ -1,6 +1,6 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
-import type { SkillPackageManifestV1 } from '../../../shared/skill-package-manifest'
+import type { SkillPackageManifestV1 } from '../../../shared/skills/packages/skill-package-manifest'
 import type { SkillInstallReceiptV1 } from '../transaction-state/skill-install-provenance'
 import {
   nativeSkillInstallFilesystem,

@@ -5,7 +5,7 @@ import { workspaceAttachmentProviderLabel } from '../metadata/worktree-attachmen
 import { MonitorUp } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { WorktreeCardRowActionsMenu } from '../surface/WorktreeCardRowActionsMenu'
-import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
+import { HostedReviewUnlinkMenuItem } from '@/components/source-control/HostedReviewUnlinkMenuItem'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function WorktreeCardReviewActions({

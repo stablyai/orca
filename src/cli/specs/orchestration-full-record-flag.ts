@@ -1,4 +1,4 @@
-import type { CommandSpec } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
 
 // Output is the concise agent view by default; --full prints the whole record Orca returned.
 export function withFullRecordFlag(spec: CommandSpec): CommandSpec {

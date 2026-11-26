@@ -1,17 +1,18 @@
-import type { OrchestrationDb } from '../../db/orchestration-db'
+import type Database from '../../../../sqlite/sync-database'
 
-const waiters = new WeakMap<OrchestrationDb, Set<() => void>>()
+const waiters = new WeakMap<Database.Database, Set<() => void>>()
 
-/** Wakes every pull waiting on this store; each re-reads its own conversations. */
-export function notifyPeerMailQueued(db: OrchestrationDb): void {
+/** Wakes every pull waiting on this database; each re-reads its own conversations. Called by every
+ *  write that can queue an item home: a reply, a message filed in a Run, a lifecycle change, a reset. */
+export function notifyPeerMailQueued(db: Database.Database): void {
   for (const wake of waiters.get(db) ?? []) {
     wake()
   }
 }
 
-/** Resolves when a reply is queued, the wait ends, or the caller goes away. */
+/** Resolves when an item may have been queued, the wait ends, or the caller goes away. */
 export function waitForPeerMail(
-  db: OrchestrationDb,
+  db: Database.Database,
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<void> {
@@ -29,4 +30,12 @@ export function waitForPeerMail(
     set.add(done)
     signal?.addEventListener('abort', done, { once: true })
   })
+}
+
+/** Runs `listener` on every queued change on this database until the returned stop is called. */
+export function onPeerMailQueued(db: Database.Database, listener: () => void): () => void {
+  const set = waiters.get(db) ?? new Set<() => void>()
+  waiters.set(db, set)
+  set.add(listener)
+  return () => set.delete(listener)
 }

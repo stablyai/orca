@@ -2,12 +2,8 @@ import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import type {
-  AgentSessionAttachResult,
-  AgentSessionMutationResult
-} from '../../../../../shared/agent-session/agent-session-wire'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isAgentSessionForkSourceAdmissionRefusal,
@@ -16,26 +12,24 @@ import {
 import { readAgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { useAppStore } from '@/store/index'
+import { isAgentCliUpdateAgent } from '../../../../../shared/agent-launch/installation/agent-cli-update'
 import {
   supportsStructuredAgentSessionCreateOptionsMode,
   structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
-import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { withFrameDrawnChatTabPlacement } from '../../frame-drawn-chat-tab-placement'
+import { withFrameDrawnChatTabPlacement } from '../../../store/workspace-layout/frames/frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
-import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   StructuredAgentSessionCreateError,
   StructuredAgentSessionCreateAbandonedError,
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
-
 import {
   requireHostForkSupport,
   inheritedForkCreateOptions,
@@ -45,7 +39,13 @@ import {
   RuntimeConnectionChangedBeforeSendError,
   RuntimeRpcCallError
 } from '@/runtime/rpc/calls/runtime-rpc-result'
-export { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from './structured-agent-session-launch-fork-support'
+import type {
+  AgentSessionAttachResult,
+  AgentSessionMutationResult
+} from '../../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
+import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
 const DEFINITIVE_CREATE_FAILURE_CODES = [
@@ -195,6 +195,13 @@ export async function launchStructuredAgentSession(
     )
   }
   delete intent.beforeCreate
+  if (isAgentCliUpdateAgent(params.agent)) {
+    // A chat start is when the host's own CLI matters; the check never holds up or fails the start.
+    const { target } = intent
+    void Promise.resolve()
+      .then(() => useAppStore.getState().checkAgentCliUpdates(target))
+      .catch(() => {})
+  }
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,

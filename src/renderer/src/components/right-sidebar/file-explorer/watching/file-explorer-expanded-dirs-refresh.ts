@@ -7,7 +7,7 @@ import {
   clearFailedOpenedDirectoryLink,
   type FileExplorerDirectoryListing
 } from '../tree/file-explorer-directory-listing'
-import { forEachWithConcurrency } from '../../../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../../../shared/concurrency/map-with-concurrency'
 import { describeFileExplorerReadError } from '../panel/file-explorer-read-error'
 import {
   clearFileExplorerDirsLoading,

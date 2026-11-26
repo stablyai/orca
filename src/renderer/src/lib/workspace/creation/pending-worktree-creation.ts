@@ -1,6 +1,6 @@
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type {
   WorkspaceLinkedItem as FolderWorkspaceLinkedTask,
@@ -9,14 +9,14 @@ import type {
   WorkspaceStatus
 } from '../../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace/creation/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
   CreateWorktreeArgs,
   SetupDecision,
   WorktreeCheckoutProgress
 } from '../../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../../shared/worktree/creation/launch-types'
 
 import type { AgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
@@ -27,7 +27,7 @@ import type {
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { EnvironmentDoctorCheck } from '../../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -176,6 +176,8 @@ export type PendingWorktreeCreation = {
   heldChatSkills?: readonly AgentJournalSkillRef[]
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
+  /** When the worktree was ready and the chat's agent began starting. */
+  chatHandedOffAt?: number
   request: WorktreeCreationRequest
 }
 

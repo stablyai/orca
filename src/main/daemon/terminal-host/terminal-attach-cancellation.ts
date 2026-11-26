@@ -1,5 +1,5 @@
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
-import { PromiseSettlementWaiters } from '../../../shared/promise-settlement-waiters'
+import { PromiseSettlementWaiters } from '../../../shared/concurrency/promise-settlement-waiters'
 
 export function waitForTerminalAttachOperation<T>(
   operation: Promise<T>,

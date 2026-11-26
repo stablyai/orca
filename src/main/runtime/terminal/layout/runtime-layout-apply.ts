@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type {
   CommandOf,
   LayoutApplyReply,
@@ -6,10 +9,10 @@ import type {
   RenameTabsCommand,
   UntitledTab
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-leaf-move'
+import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { renameTabCommandsOf } from '../../../../shared/workspace-layout/workspace-layout-commands'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
-import { isWslMoveWorkspaceSessionFrozen } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { isWslMoveWorkspaceSessionFrozen } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** Route tab commands to their holding partitions; group trees and browser records use the workspace partition. */
@@ -21,6 +24,7 @@ export type WindowLayoutCommand =
         | { type: 'setGroupRatios' }
         | { type: 'closeTabs'; tabIds: [string] }
         | { browserTabId: string }
+        | { type: 'replaceTabContent' }
         | { type: 'moveTabToWorkspace' }
         | { type: 'renameEditorFiles' }
         | { type: 'setDefaultTabsApplied' | 'applyDefaultTabs' }

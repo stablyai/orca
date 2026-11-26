@@ -1,45 +1,86 @@
-import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/structured-agent-session-live-read'
+import type { StructuredAgentSessionReplyTextInterest } from './structured-agent-session-read-owner-contract'
+import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-read'
 import {
   type AgentSessionTextAppendCapabilities,
   agentSessionTextAppendRequest
-} from '../../../../../../../shared/agent-session/agent-session-text-append'
+} from '../../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import {
+  AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
-} from '../../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+} from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { subscribeStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'
 import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { documentLiveTextViewer, documentViewerVisibility } from './document-viewer-visibility'
 
 type LiveReadArgs = Parameters<typeof startStructuredAgentSessionLiveRead>[0]
 
-// Read once per chat run, overlapping hydration; a host that later refuses the param drops appends.
-async function environmentTextAppends(
-  environmentId: string
-): Promise<AgentSessionTextAppendCapabilities | null> {
-  const [textAppend, toolOutputAppend] = await runtimeEnvironmentSupportsCapabilities(
+const LOCAL_TEXT_APPEND: AgentSessionTextAppendCapabilities = { textAppend: 1, toolOutputAppend: 1 }
+
+// Read once per chat run, overlapping hydration; a host that later refuses the param drops what
+// it asked for. Older hosts' params predate each key, and a failed check asks for none.
+function environmentSubscribeAsks(environmentId: string): {
+  textAppend: Promise<AgentSessionTextAppendCapabilities | null>
+  promptSuggestions: Promise<boolean>
+  liveTextViewer: Promise<boolean>
+} {
+  const supported = runtimeEnvironmentSupportsCapabilities(
     environmentId,
     [
       AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
-      AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
-    ]
-  ).catch(() => [false, false])
-  return agentSessionTextAppendRequest({ textAppend, toolOutputAppend })
+      AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
+      AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
+      AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY
+    ],
+    undefined,
+    // A host from before live text keeps its cached answer: reopening chats doesn't re-ask it.
+    [AGENT_SESSION_LIVE_TEXT_VIEWER_RUNTIME_CAPABILITY]
+  ).catch(() => [false, false, false, false])
+  return {
+    textAppend: supported.then(([textAppend, toolOutputAppend]) =>
+      agentSessionTextAppendRequest({ textAppend, toolOutputAppend })
+    ),
+    promptSuggestions: supported.then(([, , promptSuggestions]) => promptSuggestions === true),
+    liveTextViewer: supported.then(([, , , liveTextViewer]) => liveTextViewer === true)
+  }
 }
 
 export function startStructuredAgentSessionReadTransport(
-  args: Omit<LiveReadArgs, 'readCurrentRequests' | 'subscribe'> & {
+  args: Omit<LiveReadArgs, 'readCurrentRequests' | 'subscribe' | 'promptSuggestions'> & {
     target: RuntimeClientTarget
+    /** This reader shows prompt suggestions, so the host should generate them while it reads. */
+    showsPromptSuggestions?: boolean
+    /** Whether a reader draws reply text; only then does a shown window take live text. */
+    replyText?: StructuredAgentSessionReplyTextInterest
   }
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
-  const { target, ...read } = args
+  const { target, showsPromptSuggestions, replyText, ...read } = args
+  const asks = target.kind === 'environment' ? environmentSubscribeAsks(target.environmentId) : null
+  const viewer = asks?.liveTextViewer ?? true
+  let sendsShownTail = viewer === true
+  void Promise.resolve(viewer).then((supported) => (sendsShownTail = supported))
   return startStructuredAgentSessionLiveRead({
     ...read,
-    // Only a network hop pays for whole-reply restatements; local IPC keeps opening in the same turn.
-    ...(target.kind === 'environment'
-      ? { textAppend: environmentTextAppends(target.environmentId) }
-      : {}),
+    // A streaming reply goes out as its new text every window. The local host ships with this
+    // renderer, so it is asked without a check and the read still opens in the same turn.
+    textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
+    ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
+    coalesce: { visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail) },
+    // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.
+    liveTextViewer: documentLiveTextViewer(
+      viewer,
+      (viewerId, shown, seq) =>
+        callStructuredAgentSession(target, 'agentSession.liveTextShown', {
+          sessionId: read.sessionId,
+          viewerId,
+          shown,
+          seq
+        }),
+      replyText
+    ),
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),
     subscribe: (params, onEvent, onError, onClose) =>

@@ -1,33 +1,36 @@
 import { recordAgentStartTelemetry } from '../ipc/pty/pane/spawn-telemetry'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   StructuredChatStartTelemetryEvent,
   StructuredChatPromptTelemetryEvent,
   StructuredChatTelemetryEvent
-} from '../../shared/structured-chat-dispatch-telemetry'
-import { agentKindSchema } from '../../shared/telemetry-property-schemas'
+} from '../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
+import { agentKindSchema } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import { isTelemetryInitialized, track } from './client'
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 
 type TelemetryListener = (event: StructuredChatTelemetryEvent, callerKey: string) => void
 const remoteListeners = new Set<TelemetryListener>()
 const receivedEvents = new Set<string>()
-const telemetryEventSchema = z.discriminatedUnion('type', [
-  z.strictObject({
-    type: z.literal('structuredChatAgentStart'),
-    id: z.uuid(),
-    agent_kind: agentKindSchema,
-    launch_source: z.literal('unknown'),
-    request_kind: z.enum(['new', 'resume'])
-  }),
-  z.strictObject({
-    type: z.literal('structuredChatPromptAccepted'),
-    id: z.uuid(),
-    agent_kind: agentKindSchema,
-    client: z.enum(['desktop', 'mobile'])
-  })
-])
+const telemetryEventSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    z.strictObject({
+      type: z.literal('structuredChatAgentStart'),
+      id: z.uuid(),
+      agent_kind: agentKindSchema,
+      launch_source: z.literal('unknown'),
+      request_kind: z.enum(['new', 'resume'])
+    }),
+    z.strictObject({
+      type: z.literal('structuredChatPromptAccepted'),
+      id: z.uuid(),
+      agent_kind: agentKindSchema,
+      client: z.enum(['desktop', 'mobile'])
+    })
+  ])
+)
 
 /** Live, best-effort delivery; outcomes settled without the caller connected are not replayed. */
 export function subscribeStructuredChatTelemetry(listener: TelemetryListener): () => void {

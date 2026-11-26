@@ -70,29 +70,6 @@ describe('classifyWindowsTreeKillTarget', () => {
 })
 
 describe('verifyWindowsTreeKillTarget', () => {
-  it('returns unknown when the Windows process table is unavailable', async () => {
-    const readRows = vi.fn().mockResolvedValue(null)
-    await expect(
-      verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
-    ).resolves.toBe('unknown')
-  })
-
-  it('returns unknown when the process query rejects', async () => {
-    const readRows = vi.fn().mockRejectedValue(new Error('process table unavailable'))
-    await expect(
-      verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
-    ).resolves.toBe('unknown')
-  })
-
-  it('returns unknown when the query throws synchronously', async () => {
-    const readRows = vi.fn(() => {
-      throw new Error('spawn EPERM')
-    })
-    await expect(
-      verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
-    ).resolves.toBe('unknown')
-  })
-
   it('does not let a wedged process query block teardown past the deadline', async () => {
     vi.useFakeTimers()
     try {

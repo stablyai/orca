@@ -1,13 +1,13 @@
 import { shallow } from 'zustand/shallow'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
 import type {
   EphemeralVmHostLifecycle,
@@ -16,11 +16,15 @@ import type {
 } from '../../../../../../shared/execution-host/execution-host-health'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 
-import { getExecutionHostHealthLabel } from '@/lib/runtime-host-copy'
+import { getExecutionHostHealthLabel } from '@/runtime/hosts/display/runtime-host-copy'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
-import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
-import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import type { RuntimeCompatVerdict } from '../../../../../../shared/remote-runtime/protocol/protocol-compat'
+import type {
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
@@ -29,7 +33,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimeHostBlockedReason
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { WslHostStatus } from '../../../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
@@ -38,11 +42,12 @@ import {
   getWslHostRowHealth,
   getWslHostRowServerFilesMissingDetail,
   getWslHostRowTurnedOffDetail
-} from '../../wsl-host-row-status'
+} from '../../host-admission/wsl/wsl-host-row-status'
 
 export type SidebarHostOption = {
   id: ExecutionHostId
   label: string
+  isDefaultLocalLabel?: boolean
   detail: string
   kind: 'local' | 'ssh' | 'runtime'
   health: ExecutionHostHealth
@@ -128,7 +133,11 @@ export function buildSidebarHostOptions(
     ephemeralVmHosts: args.ephemeralVmHosts
   }).map((host) => {
     if (host.kind === 'local') {
-      return { ...host, presence: 'local' }
+      return {
+        ...host,
+        isDefaultLocalLabel: host.isDefaultLocalLabel,
+        presence: 'local'
+      }
     }
     if (host.kind === 'ssh') {
       const targetId = decodeURIComponent(host.id.slice('ssh:'.length))
@@ -176,6 +185,10 @@ export function buildSidebarHostOptions(
   })
 }
 
+export function sidebarHostDisplayLabel(host: SidebarHostOption, t: Translate = translate): string {
+  return translateHostDisplayLabel(host, t)
+}
+
 export function shouldShowHostScopeControls(hosts: readonly SidebarHostOption[]): boolean {
   return pickerExecutionHosts(hosts).some((host) => host.id !== LOCAL_EXECUTION_HOST_ID)
 }
@@ -189,12 +202,12 @@ export function buildSidebarHostScopeOptions(
     {
       id: ALL_EXECUTION_HOSTS_SCOPE,
       label: t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
-      detail: hosts.map((host) => host.label).join(', '),
+      detail: hosts.map((host) => translateHostDisplayLabel(host, t)).join(', '),
       health: 'mixed'
     },
     ...hosts.map((host) => ({
       id: host.id,
-      label: host.label,
+      label: translateHostDisplayLabel(host, t),
       detail: host.detail,
       health: host.health,
       ...(host.vmState ? { vmState: host.vmState } : {})
@@ -213,7 +226,7 @@ export function getSidebarHostVisibilityLabel(
     return t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
   }
   if (checkedRows.length === 1) {
-    return checkedRows[0].label
+    return translateHostDisplayLabel(checkedRows[0], t)
   }
   if (checkedRows.length === 0) {
     return t('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
@@ -252,7 +265,7 @@ export function sidebarHostSemantics(host: SidebarHostOption & ExecutionHostRegi
 export function createSidebarHostLabelsSelector() {
   let result = new Map<ExecutionHostId, string>()
   return (hosts: readonly SidebarHostOption[]): ReadonlyMap<ExecutionHostId, string> => {
-    const next = new Map(hosts.map((host) => [host.id, host.label]))
+    const next = new Map(hosts.map((host) => [host.id, translateHostDisplayLabel(host)]))
     if (!shallow(result, next)) {
       result = next
     }

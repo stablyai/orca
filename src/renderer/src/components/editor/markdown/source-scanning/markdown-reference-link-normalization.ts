@@ -2,7 +2,7 @@ import {
   createMarkdownFenceRangeCursor,
   createMarkdownFenceTracker,
   getMarkdownFenceRanges
-} from './markdown-fence-scanner'
+} from '../../../../../../shared/markdown/markdown-fence-scanner'
 
 type ReferenceLinkDefinition = {
   label: string
@@ -190,6 +190,10 @@ function replaceReferenceLinks(
   }
 
   return result
+}
+
+export function hasMarkdownReferenceDefinitionLines(content: string): boolean {
+  return splitReferenceDefinitions(content).definitions.size > 0
 }
 
 export function normalizeMarkdownReferenceLinks(content: string): string {

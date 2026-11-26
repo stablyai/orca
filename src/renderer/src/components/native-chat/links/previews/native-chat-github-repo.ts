@@ -1,30 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
-import { resolveRepoSlug } from '@/lib/repo-slug-index'
+import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 import {
   readRepoSlugCache,
   REPO_SLUG_FAILURE_TTL_MS,
   repoSlugCacheKey
-} from '@/lib/repo-slug-cache'
+} from '@/lib/workspace/catalog/repo-slug-cache'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../actions/native-chat-file-link-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
+import { githubPreviewRepoAuthorityKey } from './native-chat-github-route-repo'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
-  getRepoExecutionHostId,
-  isUnresolvedOwnerHostId
-} from '../../../../../../shared/execution-host'
+  isUnresolvedOwnerHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
   repoUpstreamIdentityKey
-} from '../../../../../../shared/github/repository-identity-key'
+} from '../../../../../../shared/github/repositories/repository-identity-key'
 import {
   githubReferenceRepo,
   type GitHubRepoReference
-} from '../../../../../../shared/github/github-reference-links'
+} from '../../../../../../shared/github/markdown/github-reference-links'
 
 export type NativeChatGitHubRepo = {
   repo: Repo
@@ -52,10 +55,13 @@ type NativeChatRepoState = Pick<
 
 function resolveNativeChatRepo(
   state: NativeChatRepoState,
-  worktreeId: string | undefined
+  worktreeId: string | undefined,
+  pinnedHostId: ExecutionHostId | undefined
 ): Repo | null {
   // The same owner the chat's file links route to; twins on other hosts must not answer for it.
-  const hostId = worktreeId ? getKnownExecutionHostIdForWorktree(state, worktreeId) : null
+  const hostId = worktreeId
+    ? (pinnedHostId ?? getKnownExecutionHostIdForWorktree(state, worktreeId))
+    : null
   if (!worktreeId || !hostId || isUnresolvedOwnerHostId(hostId)) {
     return null
   }
@@ -63,21 +69,31 @@ function resolveNativeChatRepo(
   if (!worktree) {
     return null
   }
+  const owner = resolveOwner(state, { workspaceId: worktreeId, hostId: pinnedHostId })
+  if (owner.kind !== 'resolved') {
+    return null
+  }
   const owners = state.repos.filter(
-    (candidate) => candidate.id === worktree.repoId && getRepoExecutionHostId(candidate) === hostId
+    (candidate) =>
+      candidate.id === worktree.repoId &&
+      githubPreviewRepoAuthorityKey(candidate) === authorityKey(owner.owner)
   )
   const found = owners.length === 1 ? owners[0] : null
   return found && (!found.kind || found.kind === 'git') ? found : null
 }
 
-export function createNativeChatRepoSelector(worktreeId: string | undefined) {
+/** `hostId` pins the workspace's host when the caller knows it, over the active selection's twin. */
+export function createNativeChatRepoSelector(
+  worktreeId: string | undefined,
+  hostId?: ExecutionHostId
+) {
   let inputs: unknown[] | null = null
   let repo: Repo | null = null
   // Retained chats all subscribe; unrelated store writes must not re-resolve the owner or scan repos.
   return (state: NativeChatRepoState): Repo | null => {
     if (!inputs || FILE_LINK_CONTEXT_INPUT_KEYS.some((key, i) => state[key] !== inputs?.[i])) {
       inputs = FILE_LINK_CONTEXT_INPUT_KEYS.map((key) => state[key])
-      repo = resolveNativeChatRepo(state, worktreeId)
+      repo = resolveNativeChatRepo(state, worktreeId, hostId)
     }
     return repo
   }
@@ -85,9 +101,13 @@ export function createNativeChatRepoSelector(worktreeId: string | undefined) {
 
 /** The git repo behind the chat's workspace, with its GitHub remotes once resolved. */
 export function useNativeChatGitHubRepo(
-  worktreeId: string | undefined
+  worktreeId: string | undefined,
+  hostId?: ExecutionHostId
 ): NativeChatGitHubRepo | null {
-  const selectRepo = useMemo(() => createNativeChatRepoSelector(worktreeId), [worktreeId])
+  const selectRepo = useMemo(
+    () => createNativeChatRepoSelector(worktreeId, hostId),
+    [worktreeId, hostId]
+  )
   const repo = useAppStore(selectRepo)
   const [resolved, setResolved] = useState(() => ({
     repo,

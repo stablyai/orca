@@ -2,16 +2,15 @@ import {
   isTerminalInputPaused,
   TerminalInputPausedError
 } from '../../../terminal/input/terminal-input-admission'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isUntypedTerminalInput } from '../../../../../shared/terminal/input/terminal-untyped-input'
-import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
-import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import { assertTerminalAgentSendable } from '../../terminal/terminal-agent-send-guard'
+import { TerminalSend } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   assertTerminalSendExactPtyBinding,
-  assertTerminalSendTextWithinLimit,
   commitMobileInputFloorClaim,
   getTerminalSendGuardRefusedReason,
   terminalInputSourceForClient,
@@ -20,6 +19,10 @@ import {
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
+import {
+  assertTerminalSendTextsWithinLimit,
+  isGuardedCombinedTerminalSend
+} from './terminal-send-pre-wake-refusal'
 import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
@@ -61,8 +64,7 @@ export const TERMINAL_SEND_METHODS = [
         assertSequenceBinding
       ) => {
         const inputSource = terminalInputSourceForClient(params.client, caller)
-        await assertTerminalSendTextWithinLimit(params.text)
-        await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
+        await assertTerminalSendTextsWithinLimit(params)
         if (params.text) {
           await assertLegacyAiVaultResumeCommandAllowed(params.text, () =>
             runtime.ensureStructuredAgentSessionHost()
@@ -97,6 +99,13 @@ export const TERMINAL_SEND_METHODS = [
         )
         if (replayObservation) {
           return replayObservation
+        }
+        if (isGuardedCombinedTerminalSend(params)) {
+          return refusedSend(params.terminal)
+        }
+        // A slept agent resumes in place first, so every check below reads its woken process.
+        if (params.inputKind !== 'query-reply' && (params.text || params.enter)) {
+          await runtime.wakeSleptAgentHandle(params.terminal, { signal })
         }
         // Reject stale handles before evaluating driver/lock state on the wrong PTY (#7718).
         const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
@@ -141,12 +150,6 @@ export const TERMINAL_SEND_METHODS = [
             return refusedSend(params.terminal)
           }
         }
-        const hasText = typeof params.text === 'string' && params.text.length > 0
-        const hasSuffix = params.enter === true || params.interrupt === true
-        if (params.requireAgentStatus === 'sendable' && hasText && hasSuffix) {
-          // Guarded sends are two-phase; combined payload/submit could partially deliver across a guard flip.
-          return refusedSend(params.terminal)
-        }
         // Recheck permission and agent presence immediately before PTY acceptance.
         const assertSendPreconditions =
           params.requireAgentStatus === 'sendable'
@@ -174,16 +177,28 @@ export const TERMINAL_SEND_METHODS = [
             return refusedSend(params.terminal, refusedReason)
           }
         }
+        const { requireStartupDialog } = params
+        // Checked right before the bytes go out: the card's keys are aimed from the screen it was read off.
+        const assertStartupDialogCurrent =
+          requireStartupDialog !== undefined
+            ? (ptyId?: string): void => {
+                if (!ptyId || !runtime.claimStartupDialogChoice(ptyId, requireStartupDialog)) {
+                  throw new Error('terminal_guard_not_writable')
+                }
+              }
+            : undefined
         const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
         const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
         const beforeWrite =
           assertSequenceBinding ||
           assertSendPreconditions ||
+          assertStartupDialogCurrent ||
           (orchestrationMutation && params.agentPrompt === true)
             ? async (ptyId?: string): Promise<void> => {
                 assertSequenceBinding?.(ptyId)
                 await assertSendPreconditions?.(ptyId)
                 assertSequenceBinding?.(ptyId)
+                assertStartupDialogCurrent?.(ptyId)
                 if (orchestrationMutation && params.agentPrompt === true) {
                   markMutationEffectPossible?.()
                 }
@@ -191,7 +206,8 @@ export const TERMINAL_SEND_METHODS = [
             : undefined
         const useSettledAgentPrompt =
           params.agentPrompt === true &&
-          hasText &&
+          typeof params.text === 'string' &&
+          params.text.length > 0 &&
           params.enter === true &&
           params.interrupt !== true &&
           params.client?.type === 'desktop' &&

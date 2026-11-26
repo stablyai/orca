@@ -1,5 +1,8 @@
 import { randomBytes } from 'node:crypto'
-import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
+import type {
+  DirectSshAuthority,
+  SshProviderEpoch
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import {
   advanceSshConnectionGeneration,
   isSshConnectionGenerationInCurrentSession,

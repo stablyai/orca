@@ -1,5 +1,5 @@
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import type { TopLevelView } from '../../../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { TopLevelView } from '../../../../shared/ui-chrome/ui-chrome-types'
 
 type ActiveViewUnloadState = {
   activeView: TopLevelView

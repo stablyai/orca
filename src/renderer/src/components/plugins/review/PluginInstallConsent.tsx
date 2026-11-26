@@ -1,8 +1,8 @@
 import { useId } from 'react'
 import { AlertTriangle, Check, Loader2, ShieldAlert } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
-import { getIntlLocale } from '@/i18n/i18n'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import { getIntlLocaleForCopy } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { Button } from '../../ui/button'
 import { SecuritySurface } from '../../ui/security-surface'
@@ -10,7 +10,7 @@ import {
   pluginCapabilityDescription,
   shownPluginCapabilities
 } from '../presentation/plugin-capability-presentation'
-import { formatKeybindingList } from '../../../../../shared/keybindings'
+import { formatKeybindingList } from '../../../../../shared/keybindings/formatting'
 import { useAppStore } from '@/store'
 import type { PluginTrust } from '../presentation/plugin-access-profile'
 import { pluginTrustLabel, pluginTrustWarnings } from '../presentation/plugin-consent-copy'
@@ -39,16 +39,18 @@ type PluginInstallConsentProps = {
   installed: PluginHostListEntry | null
   official: boolean
   publisher: string
+  managedByTeams?: string[] | undefined
   source?: PluginConsentSource
   /** The plugin changed since it was last approved, or since this page was opened. */
   changed: boolean
   error: string | null
 }
 
-function formatFileTypeList(
-  fileTypes: readonly string[],
-  intlLocale: string = getIntlLocale()
-): string {
+function formatFileTypeList(fileTypes: readonly string[]): string {
+  // Join in the sentence's own language: plugin packs cannot translate this protected copy.
+  const intlLocale = getIntlLocaleForCopy(
+    'auto.components.settings.PluginInstallConsent.editsFileTypes'
+  )
   try {
     return new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(fileTypes)
   } catch {
@@ -72,12 +74,12 @@ export function PluginInstallConsent({
   installed,
   official,
   publisher,
+  managedByTeams,
   source,
   changed,
   error
 }: PluginInstallConsentProps): React.JSX.Element {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const headingId = useId()
   const capabilities = requested ? shownPluginCapabilities(requested, trust) : null
   const ready = capabilities !== null
@@ -130,7 +132,7 @@ export function PluginInstallConsent({
                 {t(
                   'auto.components.settings.PluginInstallConsent.editsFileTypes',
                   'Opens and edits {{value0}} files in Orca. It can read the files it opens.',
-                  { value0: formatFileTypeList(editorFileTypes, intlLocale) }
+                  { value0: formatFileTypeList(editorFileTypes) }
                 )}
               </span>
             </p>
@@ -230,7 +232,12 @@ export function PluginInstallConsent({
             </span>
           )}
           <div className="ml-auto">
-            <PluginConsentProvenance official={official} publisher={publisher} source={source} />
+            <PluginConsentProvenance
+              official={official}
+              publisher={publisher}
+              managedByTeams={managedByTeams}
+              source={source}
+            />
           </div>
         </div>
       </section>

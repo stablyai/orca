@@ -12,7 +12,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   getRepoCommitMessageModelDiscoveryHostKey,
   LOCAL_COMMIT_MESSAGE_HOST_KEY
@@ -24,6 +24,7 @@ import {
 } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   getDiscoveredModels,
+  getTextGenerationModels,
   readSourceControlAiModelChoiceForHost,
   resolveThinkingLevel
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
@@ -35,7 +36,10 @@ import { registeredRepoTextModelHostKeys } from './source-control-text-action-mo
 
 import { useTextActionModelDiscovery } from './use-text-action-model-discovery'
 import { textActionPickerEntryView } from './source-control-text-action-picker-entries'
-import { AI_TEXT_ACTION_IDS } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import {
+  AI_TEXT_ACTION_IDS,
+  isGlobalAiTextAction
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   agentPickerDraft,
@@ -45,7 +49,6 @@ import {
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { getAgentCatalogForAction } from '../source-control-action-recipe-options'
-import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 
 export function SourceControlTextActionAgentPicker(props: TextActionPickerProps) {
   const current = useRef(props)
@@ -124,7 +127,7 @@ const TextActionPicker = memo(
       }
       const inheritedSource = { ...source, modelOverridesByOperation: inheritedChoices }
       const repoChoices = { ...repoAi?.modelOverridesByOperation }
-      if (operation !== 'conversationName') {
+      if (!isGlobalAiTextAction(operation)) {
         delete repoChoices[operation]
       }
       const inheritedRepo = { ...repoAi, modelOverridesByOperation: repoChoices }
@@ -165,18 +168,17 @@ const TextActionPicker = memo(
             [operation]: { ...source.actions?.[operation], agentId: agent.id }
           }
         }
-        const forcedRepo =
-          operation !== 'conversationName'
-            ? {
-                sourceControlAi: {
-                  ...(ownRepo ?? repoAi),
-                  actionOverrides: {
-                    ...repoAi?.actionOverrides,
-                    [operation]: { ...repoAi?.actionOverrides?.[operation], agentId: agent.id }
-                  }
+        const forcedRepo = !isGlobalAiTextAction(operation)
+          ? {
+              sourceControlAi: {
+                ...(ownRepo ?? repoAi),
+                actionOverrides: {
+                  ...repoAi?.actionOverrides,
+                  [operation]: { ...repoAi?.actionOverrides?.[operation], agentId: agent.id }
                 }
               }
-            : null
+            }
+          : null
         const inherited = resolveSourceControlAiActionModelDefault(
           {
             settings: {
@@ -192,7 +194,9 @@ const TextActionPicker = memo(
         )
         const params = inherited.ok ? inherited.value.params : undefined
         const models = new Map(
-          [...discovered, ...capability.models].map((model) => [model.id, model])
+          getTextGenerationModels(capability.models, source, legacy, hostKey, agent.id).map(
+            (model) => [model.id, model]
+          )
         )
         const effortByModel = Object.fromEntries(
           [...models.values()].map((model) => [
@@ -259,10 +263,8 @@ const TextActionPicker = memo(
     const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
       const saved = readSourceControlAiModelChoiceForHost(choice, hostKey, entry.agent)
       const models = entry.catalog.origin !== 'unknown' ? entry.catalog.models : []
-      const selectedModel =
-        saved && !models.some((model) => model.id === saved)
-          ? getCommitMessageAgentCapability(entry.agent)?.defaultModelId
-          : saved
+      // A pick this host can't run falls through to what generation runs instead.
+      const selectedModel = saved && models.some((model) => model.id === saved) ? saved : undefined
       const model = selectedModel ?? entry.terminal.model
       const effort = entry.textGeneration?.effortByModel[model ?? '']
       return {
@@ -359,20 +361,19 @@ const TextActionPicker = memo(
             })
             props.onChange?.(saved.choice, saved.agentArgs, saved.edits)
           },
-          children: (
-            <>
-              <DropdownMenuItem onSelect={() => props.onAgentChange('__default_agent__')}>
-                {props.defaultAgentLabel ??
-                  t(
-                    'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-                    'Use default agent'
-                  )}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => props.onAgentChange('custom')}>
-                {customLabel}
-              </DropdownMenuItem>
-            </>
-          )
+          choices: [
+            {
+              id: 'default',
+              label:
+                props.defaultAgentLabel ??
+                t(
+                  'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+                  'Use default agent'
+                ),
+              onSelect: () => props.onAgentChange('__default_agent__')
+            },
+            { id: 'custom', label: customLabel, onSelect: () => props.onAgentChange('custom') }
+          ]
         }}
       />
     )

@@ -1,9 +1,10 @@
 // Uninstall only: end each running WSL host's terminals and orcad, so its distro can stop.
 // No paired connection exists by then, so the server's own CLI inside the distro stands in for RPC.
 import { z } from 'zod'
-import { errorMessage } from '../../../shared/error-message'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import type { WslHostServerStop } from '../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { listRunningWslDistrosAsync } from '../discovery/distro-catalog'
 import { readWslHostRecordsQuietly } from './wsl-host-connection-record'
@@ -23,14 +24,18 @@ export const WSL_HOST_UNINSTALL_STOP_TIMEOUT_MS = 30_000
 /** orcad writes this launcher into its data root; older slots without a CLI have none. */
 const GUEST_CLI = '"$HOME/.orca/cli/bin/orca"'
 
-const TerminalListSchema = z.object({
-  result: z.object({
-    terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
+const TerminalListSchema = lazyZodSchema(() =>
+  z.object({
+    result: z.object({
+      terminals: z.array(z.object({ handle: z.string().min(1), worktreeId: z.string() }))
+    })
   })
-})
-const StatusSchema = z.object({
-  result: z.object({ runtime: z.object({ runtimeId: z.string().min(1).optional() }) })
-})
+)
+const StatusSchema = lazyZodSchema(() =>
+  z.object({
+    result: z.object({ runtime: z.object({ runtimeId: z.string().min(1).optional() }) })
+  })
+)
 
 /** The CLI's JSON envelope, past anything a login shell printed first. */
 function parseCliJson(stdout: string): unknown {
@@ -141,7 +146,7 @@ export async function stopWslHostServerFromGuest(
 }
 
 export type WslHostUninstallStopDependencies = {
-  distros: () => string[]
+  distros: () => string[] | Promise<string[]>
   /** Confirmed running list; null when it can't be read. Must never start a distro. */
   listRunning: () => Promise<string[] | null>
   stop: (distro: string, signal: AbortSignal) => Promise<WslHostServerStop>
@@ -152,7 +157,8 @@ export function wslHostUninstallStopDependencies(
   userDataPath: string
 ): WslHostUninstallStopDependencies {
   return {
-    distros: () => readWslHostRecordsQuietly(userDataPath).map((record) => record.distro),
+    distros: async () =>
+      (await readWslHostRecordsQuietly(userDataPath)).map((record) => record.distro),
     listRunning: () => listRunningWslDistrosAsync({ requireConfirmed: true }).catch(() => null),
     stop: stopWslHostServerFromGuest
   }
@@ -193,7 +199,7 @@ async function stopWithin(
 export async function stopWslHostServersForUninstall(
   deps: WslHostUninstallStopDependencies
 ): Promise<void> {
-  const distros = [...new Map(deps.distros().map((d) => [d.toLowerCase(), d])).values()]
+  const distros = [...new Map((await deps.distros()).map((d) => [d.toLowerCase(), d])).values()]
   if (distros.length === 0) {
     return
   }

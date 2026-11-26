@@ -3,7 +3,7 @@ import {
   resolveCapturedDigitChordsForLayout,
   type MacCapturedDigitChord,
   type MacCapturedDigitRowChord
-} from '../../../../../shared/macos-symbolic-hotkeys'
+} from '../../../../../shared/keybindings/macos-symbolic-hotkeys'
 import type { LayoutMapLike } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { normalizeLayoutBaseCharacter } from '@/lib/keyboard-layout/layout-base-character'
 

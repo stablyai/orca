@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeGitMutationInFlight } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 
 export function sourceControlRecoveryScopeKey(context: RuntimeGitContext): string {
   return JSON.stringify([

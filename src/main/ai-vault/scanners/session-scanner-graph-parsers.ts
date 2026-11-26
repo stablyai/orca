@@ -1,4 +1,4 @@
-import { waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import { waitForAiVaultScan } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
 export { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
 import { foldOmpTranscriptTitle, type OmpTranscriptTitle } from './omp/session-scanner-omp-title'
@@ -10,12 +10,12 @@ import {
 import {
   openTranscriptReadStream,
   wslGatedReadFile
-} from '../../native-chat/wsl-transcript-fs-access'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { rovoTranscriptPathForMetadata } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { withOmpSubagentTranscriptCount } from './omp/session-scanner-omp-subagent-transcripts'
 import type {
   FileWithMtime,
@@ -30,18 +30,17 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../session-scanner-accumulator'
-import { addSessionContent } from '../session-scanner-messages'
+} from '../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../parsing/session-scanner-messages'
+import { arrayValue, firstString, asRecord } from '../parsing/session-record-fields'
+import { extractString } from '../../../shared/text/trimmed-string'
+import { parseJsonObject } from '../parsing/session-json-object'
+import { readJsonObjectIfExists } from '../discovery/session-json-file'
 import {
-  arrayValue,
-  extractString,
-  firstString,
-  parseJsonObject,
-  readJsonObjectIfExists
-} from '../session-scanner-values'
-import { asRecord } from '../session-scanner-record-value'
-import { extractContentText, extractMessageText } from '../session-scanner-text-normalization'
-import { tokenTotal } from '../session-scanner-token-values'
+  extractContentText,
+  extractMessageText
+} from '../parsing/session-scanner-text-normalization'
+import { tokenTotal } from '../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -204,7 +203,7 @@ export async function parseMessageGraphSessionContent(
 
 type MessageGraphParseState = {
   accumulator: SessionAccumulator
-  ompTitle: OmpTranscriptTitle | null
+  persistedTitle: OmpTranscriptTitle | null
 }
 
 function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: string): void {
@@ -215,14 +214,16 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
   }
   if (accumulator.agent === 'pi' && isOmpWrittenRecord(record)) {
     accumulator.agent = 'omp'
-    accumulator.fallbackTitle = accumulator.title
-    accumulator.title = null
   }
   updateTimeline(accumulator, extractString(record.timestamp))
-  // Fold before the writer is known: an OMP title can precede the record that proves OMP wrote it.
-  state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
-  if (accumulator.agent === 'omp' && state.ompTitle) {
-    accumulator.title = state.ompTitle.title
+  // Pi and OMP persist names apart from the prompt, so the first prompt is only a fallback.
+  const persistsTitle = accumulator.agent === 'pi' || accumulator.agent === 'omp'
+  // Pi clears its name with an empty session_info, falling back to the first prompt.
+  const piNameCleared =
+    accumulator.agent === 'pi' && record.type === 'session_info' && !extractString(record.name)
+  state.persistedTitle = piNameCleared ? null : foldOmpTranscriptTitle(state.persistedTitle, record)
+  if (persistsTitle) {
+    accumulator.title = state.persistedTitle?.title ?? null
   }
   if (record.type === 'session') {
     const sessionId = extractString(record.id)
@@ -246,7 +247,7 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
   if (role === 'user' || role === 'assistant') {
     accumulator.messageCount++
     if (role === 'user') {
-      if (accumulator.agent === 'omp') {
+      if (persistsTitle) {
         accumulator.fallbackTitle ??= extractMessageText(message)
       } else {
         accumulator.title ??= extractMessageText(message)
@@ -271,7 +272,7 @@ export function createMessageGraphSessionResumeState(
       sessionId: sessionIdFromFileName(file.path),
       messages
     }),
-    ompTitle: null
+    persistedTitle: null
   })
   return withOmpSubagentTranscriptCount(state, file.path)
 }
@@ -283,7 +284,7 @@ function createMessageGraphResumeState(state: MessageGraphParseState): Resumable
     clone: () =>
       createMessageGraphResumeState({
         accumulator: cloneSessionAccumulator(state.accumulator),
-        ompTitle: state.ompTitle
+        persistedTitle: state.persistedTitle
       }),
     touchFile: (file) => {
       state.accumulator.modifiedAt = file.modifiedAt

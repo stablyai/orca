@@ -261,7 +261,8 @@ function prepareMacDevElectronApp() {
   const requiredResourcePaths = [
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
-    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint'),
+    path.join(appPath, 'Contents', 'MacOS', 'orca-socket-owner')
   ]
 
   function copiedAppIsUsable() {
@@ -531,7 +532,11 @@ function prepareDevWebClient() {
       '--logLevel',
       'warn'
     ],
-    { cwd: repoRoot, stdio: 'inherit', env: withRolldownThreadLimit(process.env) }
+    {
+      cwd: repoRoot,
+      stdio: 'inherit',
+      env: { ...withRolldownThreadLimit(process.env), VITE_CONFIG_NATIVE_IGNORE_WARNING: 'true' }
+    }
   )
   webClientBuild = build
   try {

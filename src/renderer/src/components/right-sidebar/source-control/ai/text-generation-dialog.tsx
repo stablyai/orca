@@ -1,4 +1,4 @@
-import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
+import { textGenerationErrorText } from '@/lib/text-generation/text-generation-error-copy'
 import React, { useMemo } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlTextActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { buildBranchNamePrompt } from '../../../../../../shared/source-control/ai/naming/branch-name-from-work'
 import { buildCommitMessagePrompt } from '../../../../../../shared/source-control/ai/generation/commit-message-generation'

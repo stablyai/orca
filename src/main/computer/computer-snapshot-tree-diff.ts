@@ -1,9 +1,9 @@
-import type { ComputerSnapshotResult } from '../../shared/runtime-types'
+import type { ComputerSnapshotResult } from '../../shared/computer/computer-use-runtime-types'
 import {
   joinComputerTreeText,
   parseComputerTreeText,
   type ComputerTreeElement
-} from '../../shared/computer-use-tree-text'
+} from '../../shared/computer/computer-use-tree-text'
 
 const MAX_BASELINES = 32
 // Matches the provider snapshot caches: older element indexes are refused by actions anyway.

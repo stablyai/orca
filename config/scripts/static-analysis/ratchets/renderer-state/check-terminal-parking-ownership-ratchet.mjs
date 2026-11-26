@@ -8,16 +8,25 @@ const RENDERER = 'src/renderer/src/'
 const WATCHERS = `${RENDERER}components/terminal-pane/parking/output-watchers/`
 const ROOTS = new Map([
   [
-    `${RENDERER}components/terminal/terminal-provider-snapshot-bound-pty-ids.ts`,
+    `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts`,
     ['createTerminalProviderSnapshotBoundPtyIdsSelector']
   ],
-  [`${RENDERER}components/use-terminal-watcher-effects.ts`, ['useTerminalWatcherEffects']],
-  [`${RENDERER}components/use-terminal-parking-pass.ts`, ['useTerminalParkingPass']],
   [
-    `${RENDERER}components/terminal-parking-pass-candidates.ts`,
+    `${RENDERER}components/terminal/workbench/use-terminal-watcher-effects.ts`,
+    ['useTerminalWatcherEffects']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/use-terminal-parking-pass.ts`,
+    ['useTerminalParkingPass']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/terminal-parking-pass-candidates.ts`,
     ['collectTerminalParkingPassCandidates']
   ],
-  [`${RENDERER}components/terminal/split-group-mount.ts`, ['anyMountedWorktreeHasLayout']],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/split-group-mount.ts`,
+    ['anyMountedWorktreeHasLayout']
+  ],
   [
     `${RENDERER}components/terminal-pane/parking/lifecycle/use-parked-terminal-watcher-synchronization.ts`,
     ['useParkedTerminalWatcherSynchronization']
@@ -41,28 +50,32 @@ const HOT_MAPS = new Set([
 ])
 const OWNER_ROOTS = [
   {
-    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    rel: 'store/terminals/parking/terminal-parking-input-owner.ts',
     name: 'acceptTerminalParkingInputs',
     inputs: []
   },
   {
-    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    rel: 'store/terminals/parking/terminal-parking-input-owner.ts',
     name: 'publishAcceptedTerminalParkingInputs',
     inputs: []
   },
   {
-    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    rel: 'store/terminals/parking/terminal-parking-input-owner.ts',
     name: 'invalidateTerminalParkingPtyInputs',
     inputs: []
   },
   {
-    rel: 'store/terminals/terminal-tab-owner-index.ts',
+    rel: 'store/terminals/ownership/terminal-tab-owner-index.ts',
     name: 'update',
     inputs: ['tabsByWorktree']
   },
-  { rel: 'store/terminals/sleeping-agent-record-index.ts', name: 'update', inputs: ['records'] },
   {
-    rel: 'store/terminals/sleeping-agent-record-index.ts',
+    rel: 'store/terminals/sleep/sleeping-agent-record-index.ts',
+    name: 'update',
+    inputs: ['records']
+  },
+  {
+    rel: 'store/terminals/sleep/sleeping-agent-record-index.ts',
     name: 'acceptTransition',
     inputs: ['previous', 'next']
   },
@@ -73,14 +86,14 @@ const OWNER_ROOTS = [
   }
 ]
 const KEY_DIFFS = new Set([
-  `${RENDERER}store/terminals/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
-  `${RENDERER}store/terminals/terminal-tab-owner-index.ts#diffUnknownTabOwnerKeys`,
-  `${RENDERER}store/terminals/sleeping-agent-record-index.ts#diffUnknownSleepingRecordKeys`,
+  `${RENDERER}store/terminals/parking/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
+  `${RENDERER}store/terminals/ownership/terminal-tab-owner-index.ts#diffUnknownTabOwnerKeys`,
+  `${RENDERER}store/terminals/sleep/sleeping-agent-record-index.ts#diffUnknownSleepingRecordKeys`,
   `${RENDERER}lib/workspace/tabs/worktree-tab-bucket-projection.ts#diffUnknownProjectionKeys`
 ])
 const COLD_RESYNCS = new Set([
-  `${RENDERER}store/terminals/terminal-parking-input-owner.ts#resyncTerminalParkingWorkspaceIds`,
-  `${RENDERER}store/terminals/sleeping-agent-record-index.ts#resyncSleepingAgentRecordKeys`
+  `${RENDERER}store/terminals/parking/terminal-parking-input-owner.ts#resyncTerminalParkingWorkspaceIds`,
+  `${RENDERER}store/terminals/sleep/sleeping-agent-record-index.ts#resyncSleepingAgentRecordKeys`
 ])
 
 function isColdResyncCall(node, source) {
@@ -120,12 +133,12 @@ function isColdResyncCall(node, source) {
 const STORE_BOUNDARIES = new Set([`${RENDERER}store/index.ts`, `${RENDERER}store.ts`])
 // Resource delivery and startup recovery are separate entry points, not parking input discovery.
 const EFFECT_BOUNDARIES = new Set([
-  `${RENDERER}components/terminal/terminal-provider-snapshot-bound-pty-ids.ts#resyncUnknownSnapshot`,
-  `${RENDERER}components/terminal/use-terminal-startup-activation.ts#useTerminalStartupActivation`,
+  `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts#resyncUnknownSnapshot`,
+  `${RENDERER}components/terminal/workspace-mounting/use-terminal-startup-activation.ts#useTerminalStartupActivation`,
   `${WATCHERS}terminal-parked-pty-watcher.ts#startParkedPtyWatcher`,
   `${RENDERER}components/terminal-pane/parking/capture/parked-terminal-buffer-capture.ts#captureParkedTerminalBuffers`,
   `${RENDERER}lib/agent-session/resume/sleeping-agent-session-launch.ts#launchSleepingAgentSession`,
-  `${RENDERER}lib/host-mirror-handle-gap-wait.ts#parkUntilHostMirrorHandleLands`,
+  `${RENDERER}lib/agent-session/resume/host-mirror-handle-gap-wait.ts#parkUntilHostMirrorHandleLands`,
   `${RENDERER}runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration.ts#parkUntilHostSessionMirrorHydrates`
 ])
 const ENUMERATORS = new Set(['entries', 'values', 'keys', 'assign'])
@@ -139,20 +152,20 @@ const ADDRESSED_FIELDS = new Set([
   'sleepingAgentSessionsByPaneKey'
 ])
 const ORDINARY_WRITERS = [
-  'store/terminals/terminal-layout-state.ts',
-  'store/terminals/terminal-pane-hibernation.ts',
-  'store/terminals/terminal-pty-bindings.ts',
-  'store/terminals/terminal-pty-release.ts',
-  'store/terminals/terminal-orphan-cleanup.ts',
-  'store/terminals/terminal-startup-queues.ts',
-  'store/terminals/terminal-tab-presentation.ts',
-  'store/terminals/terminal-shutdown-state.ts',
-  'store/terminals/window-tab-start-in-main.ts',
-  'store/slices/agent-status/agent-status-live-reducer.ts',
-  'store/slices/agent-status/agent-status-launch-actions.ts',
-  'store/slices/agent-status/agent-status-provider-session-actions.ts',
-  'store/slices/agent-status/agent-status-recovery-actions.ts',
-  'store/slices/agent-status/agent-status-authority-actions.ts'
+  'store/terminals/layout/terminal-layout-state.ts',
+  'store/terminals/sleep/terminal-pane-hibernation.ts',
+  'store/terminals/pty/terminal-pty-bindings.ts',
+  'store/terminals/pty/terminal-pty-release.ts',
+  'store/terminals/retirement/terminal-orphan-cleanup.ts',
+  'store/terminals/tabs/creation/terminal-startup-queues.ts',
+  'store/terminals/tabs/presentation/terminal-tab-presentation.ts',
+  'store/terminals/sleep/terminal-shutdown-state.ts',
+  'store/terminals/tabs/creation/window-tab-start-in-main.ts',
+  'store/slices/agent-status/live-status/agent-status-live-reducer.ts',
+  'store/slices/agent-status/launch-config/agent-status-launch-actions.ts',
+  'store/slices/agent-status/live-status/agent-status-provider-session-actions.ts',
+  'store/slices/agent-status/sleep-recovery/agent-status-recovery-actions.ts',
+  'store/slices/agent-status/pane-authority/agent-status-authority-actions.ts'
 ].map((rel) => RENDERER + rel)
 const RECORD_TRANSITIONS = new Set([
   'replaceRecordEntries',

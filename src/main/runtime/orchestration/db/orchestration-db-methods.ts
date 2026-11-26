@@ -3,6 +3,8 @@ import type { CoordinatorRunStoreMethods } from './coordinator-runs/coordinator-
 import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-store'
 import type { DispatchCompletionMethods } from './dispatch-context/dispatch-completion'
 import type { DispatchContextStoreMethods } from './dispatch-context/dispatch-context-store'
+import type { DispatchLinksByIdMethods } from './dispatch-context/dispatch-links-by-id'
+import type { SessionPartyRowsMethods } from './worker-terminal/session-party-rows'
 import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
 import type { DispatchDepthMethods } from './dispatch-depth'
 import type { WorkerReportSettlementMethods } from './dispatch-context/worker-report-settlement'
@@ -10,6 +12,7 @@ import type { FederationRelayAckMethods } from './federation/federation-relay-ac
 import type { LegacyRemoteDbMethods } from '../legacy-remote/legacy-remote-db-methods'
 import type { LegacyRemoteHomeDbMethods } from '../legacy-remote-home/legacy-remote-home-db-methods'
 import type { PeerMailStoreMethods } from './federation/peer-mail-store'
+import type { PeerRunStoreMethods } from './peer-runs/peer-run-store'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
 import type { LegacyCompatibilityCandidatesMethods } from './legacy/legacy-compatibility-candidates'
 import type { LegacyCompatibilityPrincipalsMethods } from './legacy/legacy-compatibility-principals'
@@ -24,6 +27,10 @@ import type { DirectMailboxRoutingMethods } from './messages/direct-mailbox-rout
 import type { ForeignDirectMailboxRoutingMethods } from './messages/foreign-direct-mailbox-routing'
 import type { MailboxPointerEnterStateMethods } from './messages/mailbox-pointer-enter-state'
 import type { MessageInboxMethods } from './messages/message-inbox'
+import type { BotRequestStoreMethods } from './bot-requests/bot-request-store'
+import type { BotConversationActsForMethods } from './bot-requests/bot-conversation-acts-for-store'
+import type { BotRunResendMethods } from './bot-requests/bot-run-resend-store'
+import type { BotRequestOutcomeMethods } from './bot-requests/bot-request-outcomes'
 import type { MessageInsertMethods } from './messages/message-insert'
 import type { RoleMailboxDeliveryMethods } from './messages/role-mailbox-delivery'
 import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-receipt-store'
@@ -56,10 +63,16 @@ import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
 import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
+import type { MailWakeAttemptStoreMethods } from './messages/mail-wake-attempt-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
 export type OrchestrationDbMethods = AttemptObservationStoreMethods &
+  BotRequestStoreMethods &
+  BotConversationActsForMethods &
+  BotRunResendMethods &
+  MailWakeAttemptStoreMethods &
+  BotRequestOutcomeMethods &
   CreateTablesMethods &
   SchemaMigrateMethods &
   SchemaColumnProbesMethods &
@@ -104,6 +117,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   LegacyRemoteDbMethods &
   FederationRelayAckMethods &
   PeerMailStoreMethods &
+  PeerRunStoreMethods &
   StructuredMailSendStoreMethods &
   WorkerTerminalResourceStoreMethods &
   WorkerTerminalTransferMethods &
@@ -112,6 +126,8 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   WorkerTerminalAutoReleaseMethods &
   WorkerTerminalListingMethods &
   DispatchContextStoreMethods &
+  DispatchLinksByIdMethods &
+  SessionPartyRowsMethods &
   DispatchLookupMethods &
   DispatchDepthMethods &
   DispatchCompletionMethods &

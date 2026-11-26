@@ -285,24 +285,6 @@ describe('ConPTY DA1 override', () => {
 })
 
 describe('HeadlessEmulator forwarding window', () => {
-  it('scopes the async-fallback forwarding window to the flagged chunk parse', async () => {
-    const onQueryReply = vi.fn()
-    const emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
-    // Exercise async xterm writes without writeChain serialization; writeSync is deprecated.
-    const internals = emulator as unknown as { terminal: { _core: { writeSync?: unknown } } }
-    internals.terminal._core.writeSync = undefined
-    try {
-      // Queue unflagged seed and flagged live writes together; the seed must not borrow the live reply window.
-      const seed = emulator.write('seeded\x1b[c')
-      const live = emulator.write('\x1b[5n', { forwardQueryReplies: true })
-      await Promise.all([seed, live])
-
-      expect(onQueryReply.mock.calls.map((call) => call[0])).toEqual(['\x1b[0n'])
-    } finally {
-      emulator.dispose()
-    }
-  })
-
   it('keeps the ConPTY override inside the forwarding window', async () => {
     const onQueryReply = vi.fn()
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })

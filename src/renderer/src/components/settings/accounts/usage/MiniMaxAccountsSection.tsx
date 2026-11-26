@@ -1,10 +1,10 @@
 import { ExternalLink, ShieldCheck } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { FeatureInteractionId } from '../../../../../../shared/feature-interaction-catalog'
-import type { ProviderRateLimits } from '../../../../../../shared/rate-limit-types'
+import type { FeatureInteractionId } from '../../../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import type { ProviderRateLimits } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { Label } from '../../../ui/label'
-import { MiniMaxIcon } from '../../../status-bar/icons'
+import { MiniMaxIcon } from '../../../status-bar/accounts/provider-icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { DebouncedSettingsTextInput } from '../../form-controls/DebouncedSettingsTextInput'
 import { MiniMaxCredentials, miniMaxStorageHelp } from './accounts-pane-minimax-credentials'
@@ -17,6 +17,7 @@ import {
 } from './usage-credential-host'
 import type { UsageHostSettingsModel } from './use-usage-host-settings'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 
 export function MiniMaxAccountsSection({
   host,
@@ -49,7 +50,7 @@ export function MiniMaxAccountsSection({
     void usageSettings.update({ minimaxEndpoint: value })
   }
   return (
-    <div id="accounts-minimax" className="scroll-mt-6">
+    <div id={ACCOUNTS_SECTION_IDS.minimax} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">

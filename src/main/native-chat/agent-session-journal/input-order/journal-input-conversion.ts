@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -5,7 +6,6 @@ import { initializeJournalInputOrder, journalInputOrder } from './journal-input-
 import type { JournalOutcomeFold } from '../outcomes/journal-outcome-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type Database from '../../../sqlite/sync-database'
-import { journalInputAcceptance } from './journal-input-provenance'
 import { restoredJournalPersonAcceptance } from '../replay/journal-historical-inputs'
 import type { JournalOutcomeSource } from '../outcomes/journal-outcome-format'
 
@@ -20,8 +20,8 @@ export type JournalNativePrefix = {
 export function detachJournalNativePrefix(state?: JournalReducerState): JournalNativePrefix {
   const prefix = {
     personAcceptedSequence: state ? journalInputOrder(state).latestPersonAcceptedSequence() : 0,
-    entries: new Map(state?.inputEntries),
-    cards: new Map(state?.inputCards),
+    entries: new Map(state ? memoryJournalMap(state.inputEntries) : undefined),
+    cards: new Map(state ? memoryJournalMap(state.inputCards) : undefined),
     base: state ? (journalInputOrder(state).legacy?.lineage.at(0) ?? 0) : 0
   }
   state?.inputEntries.clear()
@@ -53,7 +53,7 @@ export function restoreJournalNativeState(
         state.inputCards.set(id, card)
       }
     }
-    for (const [id, card] of state.queue.cards) {
+    for (const [id, card] of memoryJournalMap(state.queue.cards)) {
       const known = !fold.replaced('queue.cards', id) ? prefix.cards.get(id) : undefined
       const introducedAt = fold.introduction('queue.cards', id)
       if (known) {
@@ -65,7 +65,7 @@ export function restoreJournalNativeState(
         })
       }
     }
-    for (const [id, entry] of state.submissions) {
+    for (const [id, entry] of memoryJournalMap(state.submissions)) {
       const sequence = entry.acceptedSequence ?? entry.submittedSequence
       if (
         !state.inputEntries.has(id) &&
@@ -76,16 +76,22 @@ export function restoreJournalNativeState(
         state.inputEntries.set(id, {
           context: {
             source: { epoch: state.epoch, sequence },
-            basis: 'legacy',
+            basis: 'observed',
             cut: prefix.base + sequence
           }
         })
       }
     }
   }
-  const owner = initializeJournalInputOrder(state, (id) =>
-    journalInputAcceptance(db, state.sessionId, id)
-  )
+  for (const [id, entry] of memoryJournalMap(state.inputEntries)) {
+    if (entry.context.basis === 'legacy') {
+      state.inputEntries.set(id, {
+        ...entry,
+        context: { ...entry.context, basis: 'observed' }
+      })
+    }
+  }
+  const owner = initializeJournalInputOrder(state)
   if (format < 3) {
     owner.beginReconstruction()
   }

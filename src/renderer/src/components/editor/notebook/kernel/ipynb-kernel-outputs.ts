@@ -1,4 +1,4 @@
-import type { KernelOutputType } from '../../../../../../shared/notebook-kernel-types'
+import type { KernelOutputType } from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 import { isRecord } from '../document/ipynb-parse'
 import {
   appendDiagnostic,

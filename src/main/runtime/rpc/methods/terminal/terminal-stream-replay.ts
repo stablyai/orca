@@ -8,11 +8,11 @@ import {
   iterateTerminalOutputFrameChunks,
   type TerminalOutputFrameChunk,
   type TerminalOutputMeta
-} from '../../terminal-output-frame-chunks'
+} from '../../terminal/terminal-output-frame-chunks'
 import {
   measureTerminalStreamByteLength,
   terminalStreamByteLength
-} from '../../terminal-stream-byte-length'
+} from '../../terminal/terminal-stream-byte-length'
 import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
 

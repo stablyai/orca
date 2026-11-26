@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { ComputerAwakeMode } from '../../../../../../shared/computer-awake-mode'
+import type { ComputerAwakeMode } from '../../../../../../shared/app-lifecycle/computer-awake-mode'
 import { searchKeywords } from '../../search/settings-search-keywords'
 
 const AGENT_AWAKE_TITLE_KEY = 'auto.components.settings.agent-awake-copy.modeTitle'

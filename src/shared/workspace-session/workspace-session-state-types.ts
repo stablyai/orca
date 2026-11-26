@@ -1,15 +1,25 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
-import type { WorkspaceKey } from '../workspace-scope'
-import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
+import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode,
+  WorkspaceVisibleTabType
+} from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
-import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from '../browser-workspace-types'
+import type {
+  BrowserHistoryEntry,
+  BrowserPage,
+  BrowserWorkspace
+} from '../browser/workspaces/browser-workspace-types'
+import type { BrowserPageAnnotation } from '../browser/element-grab/browser-grab-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
-import type { PairedTerminalTabCloseIntent } from '../workspace-layout/paired-terminal-tab-close-intent'
+import type { PairedTerminalTabCloseIntent } from '../workspace-layout/terminal-surfaces/paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
-import type { ClosedTerminalTabTombstonesByTabId } from '../workspace-layout/closed-terminal-tab-tombstones'
-import type { ClosedTerminalPanesByPaneKey } from '../workspace-layout/closed-terminal-panes'
+import type { ClosedTerminalTabTombstonesByTabId } from '../workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
+import type { ClosedTerminalPanesByPaneKey } from '../workspace-layout/terminal-surfaces/closed-terminal-panes'
 
 /** Persist edit-mode files only; reconstruct transient diffs/conflicts from git state. */
 export type PersistedOpenFile = {
@@ -31,6 +41,9 @@ export type PersistedOpenFile = {
   /** Opt-in streaming append for a read-only local log tab. */
   liveTail?: boolean
 }
+
+/** A saved page carries its unsent notes; the store keeps them in browserAnnotationsByPageId. */
+export type PersistedBrowserPage = BrowserPage & { annotations?: BrowserPageAnnotation[] }
 
 export type WorkspaceSessionState = {
   activeRepoId: string | null
@@ -56,7 +69,7 @@ export type WorkspaceSessionState = {
   /** Persisted browser workspaces, keyed by worktree ID. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Persisted browser pages, keyed by workspace ID. */
-  browserPagesByWorkspace?: Record<string, BrowserPage[]>
+  browserPagesByWorkspace?: Record<string, PersistedBrowserPage[]>
   /** Per-worktree active browser workspace ID at shutdown. */
   activeBrowserTabIdByWorktree?: Record<string, string | null>
   /** Runtime-authoritative logical client-hosted pages; desktop browserPagesByWorkspace holds the client half. */
@@ -86,6 +99,11 @@ export type WorkspaceSessionState = {
   activeConnectionIdsAtShutdown?: string[]
   /** Relay PTY session IDs captured at shutdown for startup pty.attach. */
   remoteSessionIdsByTabId?: Record<string, string>
+  /** Main-owned, per tab: the relay id the desktop window last wrote. It owns the key while the stored
+   *  id matches, so its saves change only those keys. */
+  desktopRelayOwnerByTabId?: Record<string, string>
+  /** Main-owned: relay ids saved before ownership was recorded were sorted once, at this version. */
+  desktopRelayAdoptionVersion?: number
   /** Cmd+J focus recency, distinct from background activity and navigation history (docs/cmd-j-empty-query-ordering.md). Accept missing/partial legacy maps; seed the active workspace on restore. Keys may be <hostId>|<worktreeId> or legacy bare IDs. */
   lastVisitedAtByWorktreeId?: Record<string, number>
   /** Persist default-tab admission so reopening a workspace after closing all tabs does not recreate its template. */

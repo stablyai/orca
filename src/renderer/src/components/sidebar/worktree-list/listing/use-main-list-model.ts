@@ -1,14 +1,18 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
-import { useDesktopSidebarFeed } from '@/lib/desktop-sidebar-feed'
+import { useAppStore } from '@/store/index'
+import { useBotListedWorktreeIdentities } from '@/components/bots/use-bot-listed-worktree-identities'
+import { useDesktopSidebarFeed } from '@/components/sidebar/sidebar-feed/desktop-sidebar-feed'
 import {
   overlaySidebarPendingLayer,
   readSidebarPendingLayer,
   subscribeSidebarPendingLayer
-} from '@/lib/sidebar-pending-layer'
-import { useSidebarListSession } from '@/lib/sidebar-list-session'
-import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
+} from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
+import { useSidebarListSession } from '@/components/sidebar/sidebar-feed/sidebar-list-session'
+import {
+  readEndedCreations,
+  subscribeEndedCreations
+} from '@/components/sidebar/sidebar-feed/sidebar-ended-creations'
 import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
@@ -21,24 +25,24 @@ import {
   getLocalExecutionHostLabel,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import {
   planSidebarFeedRows,
   renderSidebarFeedRows,
   type SidebarFeedView
-} from '../../../../../../shared/sidebar-list/sidebar-feed-rows'
+} from '../../../../../../shared/sidebar-list/feed/sidebar-feed-rows'
 import {
   indexSidebarFeed,
   rankSidebarFeedWorktrees
-} from '../../../../../../shared/sidebar-list/sidebar-feed-index'
+} from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
 import {
   filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from '../../../../../../shared/sidebar-list/host-filtering'
-import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-list/host-section-order'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+} from '../../../../../../shared/sidebar-list/hosts/host-filtering'
+import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
@@ -168,12 +172,15 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     filterRepoIds: filterState.filterRepoIds
   })
   const { importedWorktreesByRepo, newExternalWorktreesInboxByRepo } = externalWorktreeCards
+  // The window-model list leaves these out too (compute-visible-worktrees.ts).
+  const botListedWorktreeIdentities = useBotListedWorktreeIdentities()
   const planned = useMemo(
     () =>
       planSidebarFeedRows(domains, index, catalog, view, rankedIds, {
         forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
           ? [args.agentSendTargetWorktreeId]
           : undefined,
+        botListedWorktreeIdentities,
         importedWorktreesByRepo,
         newExternalWorktreesInboxByRepo
       }),
@@ -184,6 +191,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       view,
       rankedIds,
       args.agentSendTargetWorktreeId,
+      botListedWorktreeIdentities,
       importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo
     ]

@@ -9,16 +9,3 @@ export function removeModelDownloadStaging(stagingDir: string, legacyArchivePath
     }
   }
 }
-
-export function removeModelDownloadFiles(
-  modelDir: string,
-  stagingDir: string,
-  legacyArchivePath: string
-): void {
-  removeModelDownloadStaging(stagingDir, legacyArchivePath)
-  try {
-    rmSync(modelDir, { recursive: true, force: true })
-  } catch {
-    // best-effort
-  }
-}

@@ -2,7 +2,7 @@ import {
   tokenizeCustomCommandTemplate,
   type CommandTokenSpan
 } from '../../source-control/ai/generation/commit-message-prompt'
-import { quotePowerShellLiteral } from '../../powershell-native-argument'
+import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 
 /** posix output must parse identically across Unix shells including fish; remote/WSL shell detection is not reliable enough to choose a separate dialect. */
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'

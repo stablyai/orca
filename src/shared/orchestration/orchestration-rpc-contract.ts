@@ -28,9 +28,12 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.dispatch',
   'orchestration.workerStart',
   'orchestration.workerStop',
+  'orchestration.workerDockStop',
+  'orchestration.workerDockAcknowledge',
   'orchestration.workerAbandon',
   'orchestration.workerRelease',
   'orchestration.workerRetain',
+  'orchestration.approvalAnswer',
   'orchestration.ask',
   'orchestration.gateCreate',
   'orchestration.gateResolve',
@@ -40,7 +43,8 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.federationImport',
   'orchestration.federationStop',
   'orchestration.federationRelease',
-  'orchestration.federationRetain'
+  'orchestration.federationRetain',
+  'orchestration.peerRunCancel'
 ])
 
 const RETIRED_ORCHESTRATION_METHODS = new Set(['orchestration.run', 'orchestration.runStop'])

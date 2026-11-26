@@ -4,7 +4,7 @@ import {
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT,
   publishShutdownCheckpointFailureReason
-} from '../../../../shared/renderer-shutdown-events'
+} from '../../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import { recordRendererCrashBreadcrumb } from '../../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 export type ShutdownCheckpointGuard = {

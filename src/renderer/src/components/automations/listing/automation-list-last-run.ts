@@ -1,9 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
-import type {
-  AutomationRun,
-  AutomationRunStatus
+import {
+  getAutomationRunListedAt,
+  type AutomationRun,
+  type AutomationRunStatus
 } from '../../../../../shared/automations/history/automation-run'
 import type { ExternalAutomationJob } from '../../../../../shared/automations/external/external-automation'
 import {
@@ -11,14 +12,10 @@ import {
   formatAutomationRelativeTime,
   getAutomationRunStatusLabel
 } from '../automation-page-parts'
-
-export type AutomationLastRunTone =
-  | 'failed'
-  | 'succeeded'
-  | 'running'
-  | 'skipped'
-  | 'never'
-  | 'unknown'
+import {
+  getToneForAutomationRunStatus,
+  type AutomationLastRunTone
+} from '../../../../../shared/automation-last-run'
 
 export type AutomationLastRunSnapshot = {
   at: number | null
@@ -36,51 +33,27 @@ const EXTERNAL_SUCCEEDED_STATUSES = new Set([
   'healthy'
 ])
 
-export function indexLatestAutomationRuns(
-  runs: readonly AutomationRun[]
-): ReadonlyMap<string, AutomationRun> {
-  const latest = new Map<string, AutomationRun>()
-  for (const run of runs) {
-    const existing = latest.get(run.automationId)
-    if (!existing || run.createdAt > existing.createdAt) {
-      latest.set(run.automationId, run)
-    }
-  }
-  return latest
-}
-
-export function getAutomationRunLastRunAt(run: AutomationRun): number {
-  return run.dispatchedAt ?? run.startedAt ?? run.createdAt
-}
-
-export function getToneForAutomationRunStatus(status: AutomationRunStatus): AutomationLastRunTone {
-  if (status === 'dispatch_failed') {
-    return 'failed'
-  }
-  if (status === 'completed') {
-    return 'succeeded'
-  }
-  if (status === 'pending' || status === 'dispatching' || status === 'dispatched') {
-    return 'running'
-  }
-  if (status.startsWith('skipped')) {
-    return 'skipped'
-  }
-  return 'unknown'
-}
-
 /** Use the authority-projected newest retained run without fetching history; legacy servers fall back to stored lastRunAt alone. */
 export function getAutomationRowLastRunSnapshot(
   row: {
     automation: Automation
-    usageSummary: { lastRunStatus?: AutomationRunStatus | null; lastRunAt?: number | null } | null
+    usageSummary: {
+      lastRunStatus?: AutomationRunStatus | null
+      lastRunAt?: number | null
+      lastRunListedAt?: number | null
+    } | null
   },
   t?: Translate
 ): AutomationLastRunSnapshot {
   const status = row.usageSummary?.lastRunStatus
   if (status) {
     return {
-      at: row.usageSummary?.lastRunAt ?? row.automation.lastRunAt ?? null,
+      // Why: rows, rail and run pages name a run by its slot; older hosts only send lastRunAt.
+      at:
+        row.usageSummary?.lastRunListedAt ??
+        row.usageSummary?.lastRunAt ??
+        row.automation.lastRunAt ??
+        null,
       tone: getToneForAutomationRunStatus(status),
       statusLabel: getAutomationRunStatusLabel(status, t)
     }
@@ -95,7 +68,7 @@ export function getLocalAutomationLastRunSnapshot(
 ): AutomationLastRunSnapshot {
   if (lastRun) {
     return {
-      at: getAutomationRunLastRunAt(lastRun),
+      at: getAutomationRunListedAt(lastRun),
       tone: getToneForAutomationRunStatus(lastRun.status),
       statusLabel: getAutomationRunStatusLabel(lastRun.status, t)
     }

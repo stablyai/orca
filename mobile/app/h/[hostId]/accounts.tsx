@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
-import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
-import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { shellScreenRoute } from '../../../src/mobile-web-shell/routing/shell-screen-route'
+import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 
 /** The shell route for the host's agent accounts, in `tasks.tsx`'s shape. */

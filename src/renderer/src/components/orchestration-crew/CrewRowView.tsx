@@ -2,15 +2,16 @@ import { memo } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
+import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
 import { CrewRowMenu } from './CrewRowMenu'
-import { CrewAgentIcons, type CrewRowLook } from './CrewAgentIcons'
+import { CrewAgentIcons } from './CrewAgentIcons'
+import type { CrewRowLook } from './CrewAgentIcons'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function IconButton({
   label,
@@ -99,11 +100,9 @@ export const CrewRowView = memo(function CrewRowView({
       </button>
       <div className="flex shrink-0 items-center">
         <IconButton
-          label={t(
-            'components.orchestrationCrew.showDetails',
-            "Show {{name}}'s task and latest message",
-            { name: row.label }
-          )}
+          label={t('components.orchestrationCrew.showDetails', "Show {{name}}'s task and reply", {
+            name: row.label
+          })}
           aria-expanded={expanded}
           onClick={toggle}
         >

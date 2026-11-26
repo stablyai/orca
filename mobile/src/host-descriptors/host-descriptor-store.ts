@@ -1,5 +1,8 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { sameHostMachine, type HostMachine } from '../../../src/shared/host-machine-line'
+import {
+  sameHostMachine,
+  type HostMachine
+} from '../../../src/shared/execution-host/host-machine-line'
 
 export type HostMachineDescriptor = {
   machineName: string | null
@@ -60,9 +63,4 @@ export function useHostDescriptor(hostId: string | undefined): HostMachineDescri
     [hostId]
   )
   return useSyncExternalStore(subscribeToHost, read, read)
-}
-
-export function resetHostDescriptorStoreForTests(): void {
-  descriptorByHostId.clear()
-  listenersByHostId.clear()
 }

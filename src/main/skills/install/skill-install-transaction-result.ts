@@ -1,5 +1,5 @@
-import type { SkillInstallResult } from '../../../shared/skill-install-contract'
-import type { SkillPackageManifestV1 } from '../../../shared/skill-package-manifest'
+import type { SkillInstallResult } from '../../../shared/skills/installation/skill-install-contract'
+import type { SkillPackageManifestV1 } from '../../../shared/skills/packages/skill-package-manifest'
 import { skillInstallFailureFromError } from './skill-install-operation-error'
 import type { SkillCanonicalState } from './skill-canonical-install-state'
 import type { SkillInstallReceiptV1 } from '../transaction-state/skill-install-provenance'

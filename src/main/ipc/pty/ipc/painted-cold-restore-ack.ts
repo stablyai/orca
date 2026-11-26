@@ -1,5 +1,8 @@
-import type { PaintedRestoreAck, PaintedRestorePane } from '../../../../shared/painted-restore-ack'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type {
+  PaintedRestoreAck,
+  PaintedRestorePane
+} from '../../../../shared/terminal/replay/painted-restore-ack'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { tryGetProviderForPty } from '../provider/registry'
 
 function isPane(value: unknown): value is PaintedRestorePane {

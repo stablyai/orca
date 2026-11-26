@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { Quote } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   DropdownMenu,
@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
-import { preventAgentSendTargetOutsideDismiss } from '@/components/browser-pane/annotate/prevent-agent-send-target-outside-dismiss'
+import { preventAgentSendTargetOutsideDismiss } from '@/components/browser-pane/annotate/delivery/prevent-agent-send-target-outside-dismiss'
 import {
   readPointMenu,
   setPointMenu,

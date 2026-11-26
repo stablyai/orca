@@ -3,8 +3,15 @@ import type {
   BundledSkillInstallResult,
   BundledSkillPlan,
   BundledSkillPlanEntry
-} from '../../../../../shared/bundled-skill-plan'
-import { isBundledSkillAutoUpdateOp } from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import {
+  holdsCurrentBundledSkillCopy,
+  isBundledSkillAutoUpdateOp
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import {
+  bundledSkillOpBackupPaths,
+  bundledSkillOpPublished
+} from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   bundledSkillTargetKey,
@@ -12,13 +19,20 @@ import {
 } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
-import { useAppStore } from '@/store/index'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { skillBackupDirectory } from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import { skillHostLabel } from './skill-backup-location'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
 // Why per skill and observed bytes: a failed or raced update re-plans identically and must fall back to the nudge, without blocking other skills.
 type AttemptState = 'running' | 'settled'
 // Keyed by target; each scan prunes what it no longer observes, so the map stays plan-sized.
 const attemptsByTarget = new Map<string, Map<string, AttemptState>>()
+// Current copies asked to record their marker this session; one per host pairing, skill and bytes.
+// Why never released on failure: a retry would re-run on every plan refresh while the host stays
+// busy or unreachable. A missing marker is best effort; the next session, a manual update, or any
+// later write of the skill records it.
+const markedCopies = new Set<string>()
 
 /** Drop settled attempts for states this scan no longer sees; running ones still own their skills. */
 function pruneAttempts(targetKey: string, liveKeys: ReadonlySet<string>): void {
@@ -47,11 +61,15 @@ function warnAboutEdits(title: string, description: string): void {
   toast.warning(title, { description, duration: Number.POSITIVE_INFINITY })
 }
 
-/** A write that raced the update is kept aside; never let that pass as a silent success. */
-function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
+/**
+ * A write that raced the update is kept aside; never let that pass as a silent success. A copy
+ * whose backup was refused (it is on another drive) stays where the result says, with the edits.
+ */
+export function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
   for (const skill of result?.skills ?? []) {
     for (const op of skill.ops) {
-      if (op.strandedPath) {
+      const keptPath = op.backupRefusal?.path ?? op.strandedPath
+      if (keptPath) {
         warnAboutEdits(
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.strandedTitle',
@@ -61,59 +79,52 @@ function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.strandedDescription',
             'Your edits are still in {{value0}}. Copy them somewhere safe before updating again.',
-            { value0: op.strandedPath }
+            { value0: keptPath }
           )
         )
-      } else if (op.backupPath) {
+      }
+      // Backups that finished still count beside a later refusal.
+      const published = bundledSkillOpPublished(op)
+      for (const backupPath of bundledSkillOpBackupPaths(op)) {
         warnAboutEdits(
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.preservedTitle',
             'Your edits to {{value0}} were saved separately',
             { value0: skill.name }
           ),
-          translate(
-            'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
-            'Orca updated the skill and saved your edits to {{value0}}.',
-            { value0: op.backupPath }
-          )
+          published
+            ? translate(
+                'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
+                'Orca updated the skill and saved your edits to {{value0}}.',
+                { value0: backupPath }
+              )
+            : translate(
+                'auto.components.skills.skillFreshnessAutoUpdate.preservedBackupOnly',
+                'Orca saved your edits to {{value0}}.',
+                { value0: backupPath }
+              )
         )
       }
     }
   }
 }
 
-function targetLabel(target: BundledSkillTarget): string {
-  if (target.kind === 'local') {
-    return translate('auto.components.skills.host.local', 'This machine')
-  }
-  const environment =
-    target.kind === 'environment'
-      ? useAppStore
-          .getState()
-          .runtimeEnvironments.find((candidate) => candidate.id === target.environmentId)
-      : undefined
-  return environment?.name ?? translate('auto.components.skills.host.remote', 'Connected runtime')
-}
-
-/** The host-side folder where the executor preserves edits that raced a swap. */
-function skillBackupDirectory(homeDirectory: string): string {
-  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
-  const home = homeDirectory.replace(/[\\/]+$/u, '')
-  return [home, '.agents', '.orca-skill-backups'].join(separator)
-}
-
 /** A lost or timed-out reply may follow a committed swap, so its backups must not go unmentioned. */
-function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPlan): void {
+export function reportUncertainOutcome(
+  target: BundledSkillTarget,
+  plan: Pick<BundledSkillPlan, 'homeDirectory'>
+): void {
   warnAboutEdits(
     translate(
       'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitle',
       "Orca couldn't confirm the skill update on {{value0}}",
-      { value0: targetLabel(target) }
+      { value0: skillHostLabel(target) }
     ),
+    // A backup refused across drives leaves the edited copy in the skills folder instead.
     translate(
-      'auto.components.skills.skillFreshnessAutoUpdate.uncertainDescription',
-      "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}.",
-      { value0: targetLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
+      'auto.components.skills.skillFreshnessAutoUpdate.uncertainDescriptionKept',
+      "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}} or still in the skills folder.",
+      { value0: skillHostLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
     )
   )
 }
@@ -154,15 +165,39 @@ export function autoUpdateUnmodifiedSkills(
       keys.push(key)
     }
   }
-  if (started.length > 0) {
+  // Why: a copy already at this build's digest plans keep-only, so no update ever runs to mark it.
+  // Asked when no update starts, as a record-only call that can never write a skill.
+  const recordOnly = started.length === 0
+  // Why the pairing revision: a re-pair may put a different machine behind the same server ID.
+  const host =
+    target.kind === 'environment' ? getRuntimeEnvironmentRevision(target.environmentId) : undefined
+  const marking =
+    canStart && recordOnly
+      ? entries.flatMap(({ entry, key }) => {
+          const mark = `${targetKey}#${host ?? ''}:${entry.name}@${entry.digest}`
+          return !key && !markedCopies.has(mark) && holdsCurrentBundledSkillCopy(entry)
+            ? [{ name: entry.name, mark }]
+            : []
+        })
+      : []
+  for (const { mark } of marking) {
+    markedCopies.add(mark)
+  }
+  const names = recordOnly ? marking.map(({ name }) => name) : started
+  if (names.length > 0) {
     // The host re-plans under its locks and re-checks each location right before writing.
-    void runAutomaticSkillUpdate(target, started, () =>
-      autoUpdateBundledSkillsOnTarget(target, started)
+    void runAutomaticSkillUpdate(target, names, () =>
+      autoUpdateBundledSkillsOnTarget(target, names, { recordOnly })
     )
       .then(
         (ran) => reportPreservedEdits(ran?.value ?? null),
         // Settling the keys below means the same state is never retried; the nudge takes over.
-        () => reportUncertainOutcome(target, plan)
+        // A record-only call writes no skill, so its failure has nothing to warn about.
+        () => {
+          if (!recordOnly) {
+            reportUncertainOutcome(target, plan)
+          }
+        }
       )
       .catch(() => undefined)
       .finally(() => {
@@ -171,7 +206,10 @@ export function autoUpdateUnmodifiedSkills(
         for (const key of keys) {
           settled.set(key, 'settled')
         }
-        notifyInstalledAgentSkillsChanged()
+        // Markers never change this build's own plan, so only an update needs a re-plan.
+        if (!recordOnly) {
+          notifyInstalledAgentSkillsChanged()
+        }
       })
   }
   return owned
@@ -180,6 +218,7 @@ export function autoUpdateUnmodifiedSkills(
 /** @internal - tests need a clean module between cases. */
 export function _resetSkillFreshnessAutoUpdate(): void {
   attemptsByTarget.clear()
+  markedCopies.clear()
 }
 
 /** @internal - lets tests prove the attempt map stays bounded. */

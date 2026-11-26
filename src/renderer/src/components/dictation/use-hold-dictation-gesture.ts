@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useEffectEvent, useRef } from 'react'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import {
-  keybindingMatchesAction,
-  normalizeTerminalShortcutPolicy,
-  type KeybindingOverrides
-} from '../../../../shared/keybindings'
-import { textInputOwnsComposition } from '../../../../shared/text-input-shortcut-policy'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { dictationShortcutMode } from '../../../../shared/dictation-shortcut-mode'
+import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
+import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
+import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
+import { textInputOwnsComposition } from '../../../../shared/keybindings/text-input-shortcut-policy'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { dictationShortcutMode } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { getKeybindingContext } from '../terminal-workspace-model'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
+import { getKeybindingContext } from '../terminal/workbench/terminal-workspace-model'
 
 type HoldDictationGestureOptions = {
   canStartDictation: () => boolean

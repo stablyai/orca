@@ -1,6 +1,6 @@
 // A client that lost a send's reply asks here instead of searching the history pages it loaded.
 
-import { SendRecordedParams } from '../../../../../../shared/rpc-contract/structured-agent-session-send-recorded-params'
+import { SendRecordedParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-send-recorded-params'
 import type { StructuredSendAnswer } from '../../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'

@@ -1,10 +1,13 @@
 import { translateMain } from '../../i18n/main-i18n'
-import { PET_BUNDLE_DEFAULT_LABEL, PetImportError } from '../../../shared/pet-import-failure-copy'
+import {
+  PET_BUNDLE_DEFAULT_LABEL,
+  PetImportError
+} from '../../../shared/pets/pet-import-failure-copy'
 import { BrowserWindow, dialog } from 'electron'
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
-import type { CustomPet } from '../../../shared/pet-types'
+import type { CustomPet } from '../../../shared/pets/pet-types'
 import { applyCodexPetDefaults, type ResolvedPetManifest } from './pet-bundle'
 import { PetManifestSchema, type PetManifest } from './pet-bundle-manifest-schema'
 import { buildBundleSprite } from './pet-bundle-sprite-metadata'

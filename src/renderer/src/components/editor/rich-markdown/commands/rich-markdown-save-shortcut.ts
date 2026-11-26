@@ -1,5 +1,5 @@
 import type { KeyHandlerContext } from './rich-markdown-key-handler-context'
-import { editorShortcutMatches } from '../../editor-shortcuts'
+import { editorShortcutMatches } from '../../commands/editor-shortcuts'
 import { commitRichMarkdownSerialization } from '../document/rich-markdown-serialization-commit'
 
 /** Flush debounced text and preserve untouched source style before saving. */

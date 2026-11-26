@@ -1,19 +1,19 @@
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   JIRA_IMAGE_MAX_BYTES,
   JIRA_IMAGE_MAX_REFERENCES,
   JIRA_IMAGE_MAX_PENDING_READS
 } from '../../../../shared/jira/jira-attachment-image'
-import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { readRuntimeJiraImage } from './runtime-jira-image-client'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
 } from '../rpc/environment-revisions/runtime-environment-revision'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 const MAX_CACHE_BYTES = 24 * 1024 * 1024

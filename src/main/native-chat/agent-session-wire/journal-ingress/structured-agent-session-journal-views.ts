@@ -1,42 +1,7 @@
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-
-export type StructuredAgentSessionLifecycleJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'visitItems'
->
-
-export type StructuredAgentSessionIdentityResolver = (
-  journal: StructuredAgentSessionLifecycleJournal
-) => AgentJournalItemIdentity | null
-
-export type StructuredAgentSessionRevisionJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'visitItems' | 'itemBody' | 'item'
->
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 
 /** Compare provider history against the existing chat at open. */
 export type StructuredAgentSessionHistoryJournal = Pick<
-  AgentSessionJournal,
-  | 'epoch'
-  | 'cursor'
-  | 'visitItems'
-  | 'visitItemsWithLinkage'
-  | 'item'
-  | 'receiptFor'
-  | 'submissions'
-  | 'currentRead'
-  | 'inputOrder'
-  | 'historyOrigin'
+  SqlAgentSessionJournal,
+  'cursor' | 'reads' | 'readInOrder'
 >
-
-export type StructuredAgentSessionLinkageJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'visitItemsWithLinkage' | 'threadGoal' | 'threadGoalSource'
->
-
-/** Resolve the revised row and full replacement body at execution time. */
-export type StructuredAgentSessionRevisionResolver = (
-  journal: StructuredAgentSessionRevisionJournal
-) => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null

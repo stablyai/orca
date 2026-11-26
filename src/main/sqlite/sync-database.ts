@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs'
+import { basename } from 'node:path'
 import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
 import { NodeSqliteStatement } from './node-sqlite-statement'
 import type { SqliteStatement } from './sqlite-statement'
+import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-calls'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
 
@@ -71,8 +73,11 @@ export function isSqliteAvailable(): boolean {
 class SyncDatabase {
   private readonly db: DatabaseSync
   private readonly statementCache = new Map<string, SqliteStatement>()
+  /** Names this database in main-thread stall reports. */
+  private readonly label: string
 
   constructor(path: SqlitePath, options: SyncDatabaseOptions = {}) {
+    this.label = basename(String(path))
     if (options.fileMustExist && path !== ':memory:' && !existsSync(path)) {
       throw new Error(`SQLite database does not exist: ${String(path)}`)
     }
@@ -88,7 +93,16 @@ class SyncDatabase {
     if (SCHEMA_CHANGING_SQL.test(sql)) {
       this.statementCache.clear()
     }
-    this.db.exec(sql)
+    const call = enterSyncCall()
+    try {
+      this.db.exec(sql)
+    } finally {
+      exitSyncCall(call, this.label, sql)
+    }
+  }
+
+  function(name: string, callback: Parameters<DatabaseSync['function']>[1]): void {
+    this.db.function(name, callback)
   }
 
   prepare(sql: string): SqliteStatement {
@@ -98,7 +112,7 @@ class SyncDatabase {
       this.statementCache.set(sql, cached)
       return cached
     }
-    const statement = new NodeSqliteStatement(this.db.prepare(sql))
+    const statement = new NodeSqliteStatement(() => this.db.prepare(sql), this.label, sql)
     if (isStatementCacheable(sql)) {
       if (this.statementCache.size >= STATEMENT_CACHE_LIMIT) {
         const oldest = this.statementCache.keys().next().value

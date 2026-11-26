@@ -1,5 +1,5 @@
 import type { ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 
 export type TerminalColorOverrides = {
   foreground?: string

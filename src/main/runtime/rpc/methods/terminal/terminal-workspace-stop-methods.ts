@@ -11,7 +11,7 @@ import {
   TerminalSleep,
   TerminalStop,
   TerminalStopExact
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 
 /** Stopping every terminal of a workspace; closing and sleeping them wait in its lifecycle queue. */
 export const TERMINAL_WORKSPACE_STOP_METHODS = [

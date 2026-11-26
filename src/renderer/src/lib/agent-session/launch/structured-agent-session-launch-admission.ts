@@ -1,7 +1,7 @@
 import { terminalLaunchOpened } from './new-tab/launch-agent-in-new-tab-host-agents'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import {
   adoptAgentSessionLaunchVerdict,
@@ -22,9 +22,9 @@ import type {
   StructuredAgentLaunchHooks,
   StructuredAgentLaunchSettlement
 } from './continuation/structured-agent-launch-settlement'
-import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { LaunchAgentInNewTabArgs } from './new-tab/launch-agent-in-new-tab-args'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
@@ -177,7 +177,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
     notify = plan.requestedSurface === 'chat'
   ): StructuredAgentLaunchSettlement => {
     if (notify && !admitted) {
-      notifyExplicitChatFailure(plan.agent, reason)
+      notifyExplicitChatFailure(plan.agent, reason, args.worktreeId)
       resolveDelivery(NOT_DELIVERED_NOTIFIED)
       return { kind: 'failed', error, notified: true }
     }

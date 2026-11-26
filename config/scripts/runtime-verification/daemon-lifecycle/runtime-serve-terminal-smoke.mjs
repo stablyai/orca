@@ -10,7 +10,7 @@ import process from 'node:process'
 import {
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
-} from '../../../../src/shared/orcad-artifacts.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { packagedNodeRuntimePath } from '../../orcad-distribution/prebuilds/build-orcad-node.mjs'
 import { currentTarget } from '../../orcad-distribution/prebuilds/server-build-target.mjs'
 

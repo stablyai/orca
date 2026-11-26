@@ -1,5 +1,6 @@
+import type { SleepingAgentLaunchConfig } from './resume/sleeping-agent-launch-config'
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
-import { readClaudePermissionMode } from './provider-session-live-settings'
+import { readClaudePermissionMode } from './resume/provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
 import type {
   AgentStatusCacheIdentity,
@@ -16,7 +17,6 @@ export const RESUMABLE_TUI_AGENTS = [
   'qoder',
   'qoder-cn',
   'qwen-code',
-  'gemini',
   'antigravity',
   'opencode',
   'opencode2',
@@ -55,12 +55,7 @@ export type AgentProviderSessionMetadata = {
   permissionMode?: string
 }
 
-export type SleepingAgentLaunchConfig = {
-  agentCommand?: string
-  agentArgs: string
-  agentEnv: Record<string, string>
-  ompResumeFilePath?: string
-}
+export type { SleepingAgentLaunchConfig } from './resume/sleeping-agent-launch-config'
 
 export type SleepingAgentSessionRecord = {
   paneKey: string
@@ -84,6 +79,8 @@ export type SleepingAgentSessionRecord = {
   origin?: 'worktree-sleep' | 'quit' | 'live'
   /** Explicit-sleep finished panes resume only when their own tab opens; mobile wake must not mount/respawn every slept tab (#11598). */
   restoreOnTabOpenOnly?: boolean
+  /** The handle main named this pane by when Agent Sleep stopped it; the pane answers to it again after a restart. */
+  terminalHandle?: string
 }
 
 /** A record of a slept pane (worktree sleep, or a legacy record); 'quit'/'live' resume a running agent. */
@@ -198,23 +195,6 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   }
 }
 
-/** Compare the provider-owned values that identify the CLI resume target.
- *  Pi-family transcript resumes use file identity; other agents use provider ids. */
-export function agentProviderSessionsEqual(
-  agent: string | undefined,
-  left: AgentProviderSessionMetadata | undefined,
-  right: AgentProviderSessionMetadata | undefined
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right
-  }
-  return (
-    left.key === right.key &&
-    left.id === right.id &&
-    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
-  )
-}
-
 export function extractAgentProviderSession(
   source: AgentHookSource,
   payload: Record<string, unknown>
@@ -230,7 +210,6 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }
-    case 'gemini':
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
     // falls through

@@ -1,4 +1,4 @@
-import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../shared/concurrency/event-loop-yield'
 
 /** Runs for at most `budgetMs`; true once its work is finished. */
 export type SyntaxHighlightJob = (budgetMs: number) => boolean

@@ -1,18 +1,18 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
+import type { RefObject } from 'react'
+import { useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
 import {
   buildFolderStatusMap,
   buildStatusMap
-} from '../../../../lib/source-control/paths/git-path-decoration'
+} from '../../../../../../shared/git/status/git-path-decoration'
 import { useFileDeletion } from '../mutations/useFileDeletion'
 import { useFileExplorerDragDrop } from '../mutations/useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from '../mutations/useFileExplorerHandlers'
@@ -42,9 +42,9 @@ type UseFileExplorerTreePaneStateParams = {
   expanded: Set<string>
   activeFileId: string | null
   openFiles: OpenFile[]
-  hasNameFilter: boolean
-  setNameFilterQuery: Dispatch<SetStateAction<string>>
-  handleToggleNameFilterDir: (worktreeId: string, dirPath: string) => void
+  /** Search results cover the tree. */
+  hasNameFilterQuery: boolean
+  clearNameFilter: () => void
   tree: ReturnType<typeof useFileExplorerTree>
   selection: ReturnType<typeof useFileExplorerSelection>
   selectedNode: TreeNode | null
@@ -57,7 +57,6 @@ type UseFileExplorerTreePaneStateParams = {
 type UseFileExplorerTreePaneStateResult = {
   scrollRef: RefObject<HTMLDivElement | null>
   runtimeDownloadContext: RuntimeFileOperationArgs | null
-  supportsFolderDownload: boolean
   canOpenWorkspaceFileBrowserForPath: ReturnType<typeof useWorkspaceFileBrowserActionPredicate>
   statusByRelativePath: ReturnType<typeof buildStatusMap>
   folderStatusByRelativePath: ReturnType<typeof buildFolderStatusMap>
@@ -82,9 +81,8 @@ export function useFileExplorerTreePaneState({
   expanded,
   activeFileId,
   openFiles,
-  hasNameFilter,
-  setNameFilterQuery,
-  handleToggleNameFilterDir,
+  hasNameFilterQuery,
+  clearNameFilter,
   tree,
   selection,
   selectedNode,
@@ -117,22 +115,9 @@ export function useFileExplorerTreePaneState({
     selectedPaths
   } = selection
 
-  const pendingReveal = useAppStore((s) => s.pendingExplorerReveal)
-  useEffect(() => {
-    if (pendingReveal?.worktreeId === activeWorktreeId && hasNameFilter) {
-      setNameFilterQuery('')
-    }
-  }, [pendingReveal, activeWorktreeId, hasNameFilter, setNameFilterQuery])
-
   const scrollRef = useRef<HTMLDivElement>(null)
   const canOpenWorkspaceFileBrowserForPath =
     useWorkspaceFileBrowserActionPredicate(activeWorktreeId)
-  const supportsFolderDownload = useAppStore((s) => {
-    const connectionId = activeRepo?.connectionId
-    return connectionId
-      ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
-      : false
-  })
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
@@ -197,7 +182,7 @@ export function useFileExplorerTreePaneState({
     refreshTree,
     resetAndLoad,
     resetSelection,
-    setNameFilterQuery
+    clearNameFilter
   })
 
   const inlineInputState = useFileExplorerInlineInput({
@@ -250,9 +235,11 @@ export function useFileExplorerTreePaneState({
     rootCache,
     loadDir,
     loadMoreDir,
+    selectedPath: selection.selectedPath,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
-    openFiles
+    openFiles,
+    hasNameFilterQuery
   })
 
   useFileExplorerLoadMore({
@@ -268,7 +255,7 @@ export function useFileExplorerTreePaneState({
     runtimeEnvironmentId: ownerRuntimeEnvironmentId,
     openFile,
     makePreviewFilePermanent,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+    toggleDir,
     loadDir,
     statPath,
     markPathAsDirectory,
@@ -293,7 +280,7 @@ export function useFileExplorerTreePaneState({
     requestDeleteAll: deletion.requestDeleteAll,
     refreshDir,
     handleClick: handlers.handleClick,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+    toggleDir,
     scrollToIndex: rowScrolling.scrollToIndex,
     pathOwner
   })
@@ -301,7 +288,6 @@ export function useFileExplorerTreePaneState({
   return {
     scrollRef,
     runtimeDownloadContext,
-    supportsFolderDownload,
     canOpenWorkspaceFileBrowserForPath,
     statusByRelativePath,
     folderStatusByRelativePath,

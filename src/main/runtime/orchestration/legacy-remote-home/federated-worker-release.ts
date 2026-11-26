@@ -2,47 +2,50 @@ import {
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
 } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { getOrchestrationPeerCapabilityCache } from '../federation/orchestration-peer-capability-cache'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederatedDispatchRow } from '../db/orchestration-records'
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
-import type { WorkerReleaseReceipt } from '../../rpc/methods/orchestration/worker/worker-release-completion'
-import { releaseUnknownRecovery } from '../../rpc/methods/orchestration/worker/worker-release-unknown-recovery'
-import type { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+import type { WorkerReleaseReceipt } from '../../rpc/methods/orchestration/worker/release/worker-release-completion'
+import { releaseUnknownRecovery } from '../../rpc/methods/orchestration/worker/release/worker-release-unknown-recovery'
+import type { resolvePinnedFederatedServer } from './pinned-federated-server'
 
 type RemoteReleaseReceipt = Omit<WorkerReleaseReceipt, 'archive'> & {
   archive?: WorkerReleaseReceipt['archive']
   output?: { source?: string }
 }
 
-const RemoteReleaseReceiptSchema = z
-  .object({
-    dispatchId: z.string().min(1),
-    state: z.enum([
-      'released',
-      'already_released',
-      'retained',
-      'release_pending',
-      'release_unknown'
-    ]),
-    reason: z.string().optional(),
-    processAction: z.enum(['closed_agent_terminal', 'closed_exited_terminal', 'none']),
-    archive: z
-      .object({ source: z.string().nullable(), status: z.string().nullable() })
-      .nullable()
-      .optional(),
-    recovery: z.string().optional(),
-    lastError: z.string().optional(),
-    output: z.unknown().optional()
-  })
-  .passthrough()
+const RemoteReleaseReceiptSchema = lazyZodSchema(() =>
+  z
+    .object({
+      dispatchId: z.string().min(1),
+      state: z.enum([
+        'released',
+        'already_released',
+        'retained',
+        'release_pending',
+        'release_unknown'
+      ]),
+      reason: z.string().optional(),
+      processAction: z.enum(['closed_agent_terminal', 'closed_exited_terminal', 'none']),
+      archive: z
+        .object({ source: z.string().nullable(), status: z.string().nullable() })
+        .nullable()
+        .optional(),
+      recovery: z.string().optional(),
+      lastError: z.string().optional(),
+      output: z.unknown().optional()
+    })
+    .passthrough()
+)
 
 type FederatedWorkerMutationArgs = {
   runtime: WorkerTerminalReleaseRuntime
-  server: ReturnType<typeof resolvePinnedFederatedServer>
+  server: Awaited<ReturnType<typeof resolvePinnedFederatedServer>>
   federated: FederatedDispatchRow
   dispatchId: string
   requestId: string

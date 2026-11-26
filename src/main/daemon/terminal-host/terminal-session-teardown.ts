@@ -2,6 +2,7 @@ import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descen
 import { excludeShellBackgroundJobs } from '../../pty/process-retirement/pty-shell-job-preservation'
 import { terminateShutdownDescendants } from '../sessions/terminal-descendant-shutdown'
 import type { Session } from '../sessions/session'
+import { getAliveTerminalHostSession } from './terminal-host-session-access'
 
 type TeardownOperation = {
   promise: Promise<void>
@@ -68,11 +69,30 @@ export class TerminalSessionTeardown {
     await Promise.all(this.requestImmediateAll())
   }
 
+  /** Join a teardown already under way (escalating it when immediate), else start one on the live session. */
+  kill(sessionId: string, immediate: boolean, onStarted: () => void): Promise<void> {
+    const pending = this.get(sessionId)
+    if (pending) {
+      return Promise.resolve(immediate ? this.requestImmediate(sessionId) : pending)
+    }
+    const killed = this.killSession(
+      sessionId,
+      getAliveTerminalHostSession(this.sessions, sessionId),
+      immediate
+    )
+    onStarted()
+    return Promise.resolve(killed)
+  }
+
   killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
     if (!session.launchAgent && !immediate && process.platform === 'win32') {
       // The PTY job would also end `start /b` and GUI children, which a graceful close leaves running.
       if (session.beginTermination()) {
-        session.signalTerminationRoot()
+        try {
+          session.signalTerminationRoot()
+        } catch (error) {
+          return Promise.reject(error)
+        }
         session.scheduleForceDisposeFallback()
       }
       return
@@ -123,7 +143,8 @@ export class TerminalSessionTeardown {
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) =>
+        terminateShutdownDescendants(snapshot, session.shellIsRootChild),
       awaitEscalation: true
     })
     await session.forceKillAndWaitForExit()
@@ -176,7 +197,8 @@ export class TerminalSessionTeardown {
               entry.descendantVerification = terminateShutdownDescendants(
                 session.launchAgent || entry.immediate
                   ? snapshot
-                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild)
+                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild),
+                session.shellIsRootChild
               )
               return entry.descendantVerification
             },

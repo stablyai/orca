@@ -1,13 +1,16 @@
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import {
   findLocalFolderWorkspaceRuntimeRepo,
   resolveQualifiedFolderWorkspaceResult
 } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type RuntimeWorkspaceState = Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo'> &

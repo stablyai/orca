@@ -1,26 +1,26 @@
 import { toast } from 'sonner'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentPromptOutcome } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
-import { buildAgentSessionForkPrompt } from '@/lib/agent-session/context/agent-session-fork-context'
+import { buildAgentSessionForkPrompt } from '../../../../../shared/agent-session/conversation-context/agent-session-fork-context'
+import { readTerminalContextText } from '@/lib/agent-session/context/terminal-context-text'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
-import {
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
-import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { slugifyForWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane
@@ -98,14 +98,14 @@ export function prepareAgentSessionForkFromPane({
 }: ForkAgentSessionFromPaneArgs): PreparedAgentSessionFork | null {
   const paneKey = makePaneKey(tabId, pane.leafId)
   const state = useAppStore.getState()
-  const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey[paneKey]?.agentType)
+  const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey.get(paneKey)?.agentType)
   const tabAgent = resolveTuiAgent(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent
   )
   const agent = sourceAgent ?? tabAgent
   // This forks context, not the process; xterm capture works for both local and SSH panes.
   const prompt = buildAgentSessionForkPrompt({
-    capturedText: pane.serializeAddon.serialize({ scrollback: 800 }),
+    capturedText: readTerminalContextText(pane.terminal),
     sourceLabel: paneKey,
     agentLabel: agent
   })
@@ -222,7 +222,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     return copyAgentSessionForkContext(fork)
   }
   const agentSessionLaunchPlan = planAgentSessionLaunch(useAppStore.getState(), {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     agent: fork.agent,
     workspace: { kind: 'git-worktree', worktreeId: forkWorktreeId },
     prompt: fork.prompt,
@@ -233,7 +233,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     worktreePath: created.worktree.path,
     projectRuntime: sourceProjectRuntime
   })
-  const result = launchAgentInNewTab({
+  const result = launchAgentInNewTabWithOutcome({
     agent: fork.agent,
     worktreeId: forkWorktreeId,
     prompt: fork.prompt,

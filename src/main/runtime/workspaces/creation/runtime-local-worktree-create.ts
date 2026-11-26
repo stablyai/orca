@@ -1,7 +1,7 @@
 import { worktreeCreateGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { shouldRunSetupForCreate } from '../../../workspace-hooks/effective-hook-config'
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
@@ -9,10 +9,16 @@ import {
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
 } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { resolveDefaultBaseRefWithLocalGit } from '../../../git/repo-default-base-ref'
-import type { LocalGitExecOptions } from '../../../git/repo-default-base-ref'
-import { resolveLocalGitUsername } from '../../../git/git-username'
-import { computeWorkspaceRoot, getWorktreePathSettings } from '../../../ipc/worktree-logic'
+import {
+  readDefaultBaseRefWithLocalGit,
+  type LocalGitExecOptions
+} from '../../../git/refs/resolution/repo-default-base-ref'
+
+import { resolveLocalGitUsername } from '../../../git/repositories/git-username'
+import {
+  computeWorkspaceRoot,
+  getWorktreePathSettings
+} from '../../../ipc/worktrees/paths/worktree-logic'
 import { resolveWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type {
@@ -118,7 +124,8 @@ async function performRuntimeLocalWorktreeCreate<T>(
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: request.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
-    resolveDefaultBaseRef: () => resolveDefaultBaseRefWithLocalGit(gitExecOptions),
+    resolveDefaultBaseRef: () => readDefaultBaseRefWithLocalGit(gitExecOptions),
+    explicitBaseHint: 'pass an explicit --base-branch',
     isBaseUsable: async (candidate) => {
       const remoteBase = await args.resolveRemoteTrackingBase(
         repo.path,
@@ -137,7 +144,7 @@ async function performRuntimeLocalWorktreeCreate<T>(
   const [username, baseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
   if (!baseBranch) {
     throw new Error(
-      'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
+      'Could not resolve a default base ref for this repo. Pass an explicit --base-branch and try again.'
     )
   }
   const base = await resolveRuntimeLocalWorktreeCreateBase({

@@ -1,21 +1,23 @@
 import { useRef, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, type HostInstance } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
+  Link,
   List,
   MoreHorizontal,
   PanelLeftClose,
+  Server,
   SquareTerminal,
   UserCircle
 } from 'lucide-react-native'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
 import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
-import { StatusDot } from '../components/StatusDot'
+import { StatusDot } from '../components/feedback/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useRefreshHint } from '../query/refresh-hint'
 import { colors, pressedStyle } from '../theme/mobile-theme'
@@ -28,6 +30,10 @@ import {
   type ConnectionVerdict
 } from '../transport/connection/connection-health'
 import type { HostScreenController } from './use-host-screen-controller'
+import { HostSharedLinksSheet } from './host-shared-links-sheet'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../src/shared/mcp-servers/mcp-servers'
+import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return isConnectionOutage(v) || v.kind === 'auth-failed'
@@ -95,10 +101,17 @@ export function HostScreenHeader({
     onHideSidebar,
     router
   } = controller
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [sharedLinksOpen, setSharedLinksOpen] = useState(false)
+  // The computer's own bot links, once it lists bots; a server's live under that server's account.
+  const listsBots = controller.bots.some(
+    (entry) => entry.kind === 'listed' && entry.hostId === LOCAL_EXECUTION_HOST_ID
+  )
   const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'
+  // Only while the host's MCP servers switch is on; a host that hasn't answered yet lists nothing.
+  const mcpServers = useRouteCapability(MCP_SERVERS_RUNTIME_CAPABILITY)
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 
   const navigationGroup: ActionSheetAction[] = [
@@ -126,6 +139,30 @@ export function HostScreenHeader({
       closeBeforePress: true,
       onPress: () => actions.navigateFromHostList(`${hostPath}/accounts`)
     },
+    ...(mcpServers
+      ? [
+          {
+            id: 'mcp-servers',
+            label: t('hostScreen.hostScreenHeader.mcpServers', 'MCP servers'),
+            icon: Server,
+            disabled: disconnected,
+            closeBeforePress: true,
+            onPress: () => actions.navigateFromHostList(`${hostPath}/mcp`)
+          }
+        ]
+      : []),
+    ...(listsBots
+      ? [
+          {
+            id: 'shared-links',
+            label: t('hostScreen.hostScreenHeader.sharedLinks', 'Shared links'),
+            icon: Link,
+            disabled: disconnected,
+            closeBeforePress: true,
+            onPress: () => setSharedLinksOpen(true)
+          }
+        ]
+      : []),
     ...(floatingWorkspaceEnabled
       ? [
           {
@@ -184,6 +221,13 @@ export function HostScreenHeader({
         groups={[navigationGroup, hostGroup]}
         onClose={() => setMenuOpen(false)}
       />
+      {listsBots ? (
+        <HostSharedLinksSheet
+          controller={controller}
+          visible={sharedLinksOpen}
+          onClose={() => setSharedLinksOpen(false)}
+        />
+      ) : null}
     </>
   )
 }

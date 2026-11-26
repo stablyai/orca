@@ -1,7 +1,7 @@
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
@@ -13,12 +13,15 @@ import {
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addSessionText } from '../../session-scanner-messages'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractMessageText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { tokenTotal } from '../../session-scanner-token-values'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
+import { asRecord } from '../../parsing/session-record-fields'
+import {
+  extractMessageText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -53,24 +56,13 @@ function consumeDroidRecordLine(accumulator: SessionAccumulator, line: string): 
     accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
     return
   }
-  if (record.type === 'system') {
-    accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
-    accumulator.model = extractString(record.model) ?? accumulator.model
-  }
   const streamSessionId = extractString(record.session_id) ?? extractString(record.sessionId)
   if (streamSessionId) {
     accumulator.sessionId = streamSessionId
   }
+  // Model and token usage come from the settings sidecar (session-scanner-droid-settings.ts).
   if (record.type === 'message') {
     consumeDroidMessage(accumulator, record)
-  } else if (record.type === 'completion') {
-    accumulator.messageCount++
-    accumulator.totalTokens += tokenTotal(record.usage)
-    addSessionText(accumulator, {
-      role: 'assistant',
-      text: extractString(record.finalText),
-      timestamp: record.timestamp
-    })
   }
 }
 

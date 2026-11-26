@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { normalizeRuntimePathForComparison as codexBinaryKey } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison as codexBinaryKey } from '../../../../shared/file-access/cross-platform-path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { isPlainObject } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'

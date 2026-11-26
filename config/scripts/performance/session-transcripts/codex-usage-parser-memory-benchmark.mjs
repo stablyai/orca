@@ -181,6 +181,24 @@ async function runComparison() {
           {
             name: 'record-parser-source-graph',
             setup(builder) {
+              builder.onResolve({ filter: /(?:^|[/\\])trimmed-string(?:\.[jt]s)?$/ }, (args) => {
+                if (arm !== 'baseline') {
+                  return undefined
+                }
+                const logicalPath = relative(root, resolve(args.resolveDir, args.path))
+                  .split(sep)
+                  .join('/')
+                if (
+                  ![
+                    'src/shared/trimmed-string',
+                    'src/shared/trimmed-string.ts',
+                    'src/shared/trimmed-string.js'
+                  ].includes(logicalPath)
+                ) {
+                  return undefined
+                }
+                return { path: join(root, 'src/shared/trimmed-string.ts') }
+              })
               builder.onLoad({ filter: /\.[cm]?[jt]sx?$/ }, ({ path }) => {
                 const sourcePath = relative(root, path).split(sep).join('/')
                 if (!sourcePath.startsWith('src/')) {

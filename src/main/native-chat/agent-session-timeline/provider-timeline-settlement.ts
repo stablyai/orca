@@ -1,5 +1,5 @@
 import { isHistoricalProviderTimelineItem } from './provider-timeline-history'
-// Resolve unsettled work from journal bodies, using the same terminal forms as dead-generation recovery.
+// The writer resolves unsettled work from its selected rows, using the same terminal forms as dead-generation recovery.
 // Preserve client answers and other writers’ settlements; repeated settlement writes nothing.
 
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -12,14 +12,14 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session/jou
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/writing/journal-lifecycle-mutation'
 import { lostLiveWorkJournalBody } from '../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
   runningCallEnd,
   terminalAgentJournalBody
 } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { JournalTimelineView } from '../agent-session-journal/writing/journal-timeline-view'
 import {
   agentJournalTurnRowReservedBytes,
   resolveAgentJournalTurnRowWrite
@@ -70,41 +70,37 @@ export type ProviderTimelineSettlementEnding = {
 }
 
 export function providerTimelineSettlement(
-  journal: StructuredAgentSessionTransitionJournal,
+  view: JournalTimelineView,
   scope: ProviderTimelineSettlementScope,
   ending?: ProviderTimelineSettlementEnding,
   keep?: ReadonlySet<string>
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []
-  journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
+  for (const item of view.unsettled(scope === 'session' ? null : scope.turnItemId)) {
+    const { itemId, body } = item
     if (keep?.has(itemId)) {
-      return
+      continue
     }
-    const turnScope = attribution.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
-    const historical = scope === 'session' && journal.item(itemId)
-    if (historical && isHistoricalProviderTimelineItem(historical, (key) => journal.item(key))) {
-      return
+    const turnScope = item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+    if (scope === 'session' && isHistoricalProviderTimelineItem(item, view.item)) {
+      continue
     }
-    const covered =
-      scope === 'session' ||
-      (turnScope.kind === 'turn' && turnScope.turnItemId === scope.turnItemId)
     const end =
-      covered && ending && body.kind === 'tool-call' && body.state === 'running'
-        ? runningCallEnd(turnScope, (turnItemId) => journal.itemBody(turnItemId), ending.end.state)
+      ending && body.kind === 'tool-call' && body.state === 'running'
+        ? runningCallEnd(turnScope, view.itemBody, ending.end.state)
         : null
     // Background tasks/subagents outlive turns; only session end proves contact loss.
-    const settled = !covered
-      ? null
-      : (terminalAgentJournalBody(body, end) ??
-        (scope === 'session' ? lostLiveWorkJournalBody(body, ending?.lostAt) : null))
+    const settled =
+      terminalAgentJournalBody(body, end) ??
+      (scope === 'session' ? lostLiveWorkJournalBody(body, ending?.lostAt) : null)
     const identity = settled ? parseAgentJournalItemKey(itemId) : null
     if (settled && identity) {
       // Omitted linkage preserves the original producer.
       mutations.push({ kind: 'item', identity, body: settled, turnScope })
     }
-  })
+  }
   for (const turn of ending?.turns ?? []) {
-    const ended = ending ? endedTurnRow(journal, turn, ending.end) : null
+    const ended = ending ? endedTurnRow(view, turn, ending.end) : null
     if (ended) {
       mutations.push({ kind: 'item', ...ended, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     }
@@ -113,26 +109,27 @@ export function providerTimelineSettlement(
 }
 
 export function runningProviderTimelineTurns(
-  journal: StructuredAgentSessionTransitionJournal
+  view: JournalTimelineView
 ): { identity: AgentJournalItemIdentity; itemId: string }[] {
   const running: { identity: AgentJournalItemIdentity; itemId: string }[] = []
-  journal.visitItems((itemId, _sequence, body) => {
+  for (const item of view.unsettled(null)) {
     const identity =
-      readAgentJournalTurn(body)?.state === 'running' ? parseAgentJournalItemKey(itemId) : null
-    const item = journal.item(itemId)
-    if (identity && item && !isHistoricalProviderTimelineItem(item, (key) => journal.item(key))) {
-      running.push({ identity, itemId })
+      readAgentJournalTurn(item.body)?.state === 'running'
+        ? parseAgentJournalItemKey(item.itemId)
+        : null
+    if (identity && !isHistoricalProviderTimelineItem(item, view.item)) {
+      running.push({ identity, itemId: item.itemId })
     }
-  })
+  }
   return running
 }
 
 function endedTurnRow(
-  journal: StructuredAgentSessionTransitionJournal,
+  view: JournalTimelineView,
   turn: { identity: AgentJournalItemIdentity; itemId: string },
   end: ProviderTimelineTurnEnd
 ): { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null {
-  const running = readAgentJournalTurn(journal.itemBody(turn.itemId) ?? undefined)
+  const running = readAgentJournalTurn(view.itemBody(turn.itemId) ?? undefined)
   if (running?.state !== 'running') {
     return null
   }
@@ -143,7 +140,7 @@ function endedTurnRow(
     onlyWhileRunning: true as const
   }
   return resolveAgentJournalTurnRowWrite(
-    journal,
+    view,
     target,
     write,
     agentJournalTurnRowReservedBytes(target, write)

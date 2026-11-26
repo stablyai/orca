@@ -1,4 +1,4 @@
-import { parseGitHubIssueOrPRLink, type RepoSlug } from '../../github/links'
+import { parseGitHubIssueOrPRLink, type RepoSlug } from '../../github/repositories/links'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../new-workspace/gitlab-links'
 import type { NativeChatMessage } from '../native-chat-types'
 import { nativeChatToolCallScript } from './native-chat-tool-call-script'
@@ -26,7 +26,7 @@ const CREATE_RUNS = CREATE_COMMANDS.map(({ provider, command }) => ({
   run: new RegExp(`${COMMAND_START}${command.source}(?=$|[\\s;&|)])`, 'gu')
 }))
 // Heredoc bodies, quoted strings, comments and escaped characters (`\;`) are text a command carries,
-// not commands it runs. Unlike the common pattern, escapes count too: `printf x \; gh pr create` runs
+// not commands it runs. Escapes count too: `printf x \; gh pr create` runs
 // only printf.
 const HEREDOC_BODY =
   /<<-?[ \t]*(['"]?)(\w+)\1[^\n]*\n(?:(?:[\s\S]*?\n)?[ \t]*\2[ \t]*(?=\n|$)|[\s\S]*$)/gu
@@ -351,6 +351,17 @@ function commandOutputText(output: string): string {
   } catch {
     return output
   }
+}
+
+/** Whether a row ran a host's create command, before its output (maybe clipped) says what opened. */
+export function nativeChatRowRunsPullRequestCreate(message: NativeChatMessage): boolean {
+  return message.blocks.some((block) => {
+    if (block.type !== 'tool-call' || block.state === 'running') {
+      return false
+    }
+    const script = nativeChatToolCallScript(block.name, block.input)
+    return !!script && isPullRequestCreateScript(script) && createCount(shellCode(script)) > 0
+  })
 }
 
 function isPullRequestCreateScript(script: string): boolean {

@@ -1,3 +1,4 @@
+import { readTestJournalItems, readTestJournalSnapshot } from '../journal-observation.test-support'
 import { createCodexHistoryCollector } from './journal-codex-history'
 import { readRecord } from '../../../codex/app-server/codex-item-field-readers'
 import { codexCommandPresentation } from '../../../codex/history/rollouts/codex-command-presentation'
@@ -84,6 +85,47 @@ it.each(['active', 'archive', 'compressed'] as const)(
   }
 )
 
+it('imports a compressed ancestor with a large Codex compaction record', async () => {
+  const parent = await writeCodexHistoryFixture(root, PARENT, ['before'])
+  // Codex writes this key order; the payload exceeds the 16 MiB record limit.
+  const compaction = `${JSON.stringify({
+    timestamp: '2026-10-27T00:00:00.000Z',
+    ordinal: parent.position.end_ordinal_exclusive,
+    type: 'compacted',
+    payload: {
+      message: 'summary',
+      replacement_history: [
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'a'.repeat(16 * 1024 * 1024) }]
+        }
+      ]
+    }
+  })}\n`
+  await appendFile(parent.filePath, compaction)
+  const archived = join(dirname(root), 'archived_sessions', `${basename(parent.filePath)}.zst`)
+  await writeFile(archived, zstdCompressSync(await readFile(parent.filePath)))
+  await rm(parent.filePath)
+
+  const child = await writeCodexHistoryFixture(root, CHILD, ['after'], {
+    ...parent.position,
+    end_ordinal_exclusive: parent.position.end_ordinal_exclusive + 1,
+    end_byte_offset: parent.position.end_byte_offset + Buffer.byteLength(compaction)
+  })
+
+  const result = await prepareLegacyTranscriptImport(request(child.filePath))
+  expect(result).toMatchObject({
+    ok: true,
+    items: [
+      { body: { blocks: [{ text: 'before' }] } },
+      { body: { blocks: [{ text: 'before answer' }] } },
+      { body: { blocks: [{ text: 'after' }] } },
+      { body: { blocks: [{ text: 'after answer' }] } }
+    ]
+  })
+})
+
 it('revises an inherited turn without inheriting segment proof (source-derived contract)', async () => {
   const source = await recordedCodexRollout('b')
   const parentId = '01a1b0e1-8937-7ba1-87e4-501016bc5f8b'
@@ -145,7 +187,7 @@ it('revises an inherited turn without inheriting segment proof (source-derived c
     fence: 1
   })
   expect(imported.ok).toBe(true)
-  const rows = c.journal.snapshot().items
+  const rows = await readTestJournalItems(c.journal)
   const opener = rows.find((row) => row.body.kind === 'message' && row.body.role === 'user')!
   expect(rows[0]?.body).toMatchObject({ kind: 'turn', userItemId: opener.itemId })
   const command = rows.find((row) => row.body.kind === 'tool-call')?.body
@@ -172,7 +214,7 @@ it.each(['a', 'b', 'r24'] as const)(
       options: { filePath }
     })
     expect(imported.ok).toBe(true)
-    const snapshot = c.journal.snapshot()
+    const snapshot = await readTestJournalSnapshot(c.journal)
     const calls = snapshot.items.filter((row) => row.body.kind === 'tool-call')
     expect(calls).toHaveLength(label === 'a' ? 4 : label === 'b' ? 3 : 1)
     const blocks = projectStructuredItemsToNativeChat(snapshot.items).flatMap(
@@ -269,7 +311,7 @@ it.each(['a', 'b', 'r24'] as const)(
       expect(calls[0]?.body).not.toHaveProperty('endedAs')
     }
     await c.reopen()
-    expect(c.journal.snapshot()).toEqual(snapshot)
+    expect(await readTestJournalSnapshot(c.journal)).toEqual(snapshot)
   }
 )
 

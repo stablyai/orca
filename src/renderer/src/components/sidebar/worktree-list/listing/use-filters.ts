@@ -1,37 +1,41 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import {
-  clearSidebarFilters,
   selectSidebarFilterState,
   sidebarHasActiveFilters,
   sidebarWorkspaceRowFilters
 } from '../controls/sidebar-filter-actions'
+import { clearSidebarFiltersKeepingActiveRow } from '../controls/sleeping-workspaces-visibility'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import {
+  readRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   activeWorkspaceRowFilterKeys,
   type WorkspaceRowFilters
 } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getWorktreeExecutionHostId,
   getSettingsFocusedExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace,
   isDefaultBranchWorkspace,
   isDetachedHeadWorkspace
-} from '../../../../../../shared/worktree/workspace-kinds'
-import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/host-filtering'
+} from '../../../../../../shared/worktree/visibility/workspace-kinds'
+import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../../../../shared/workspace-creator-visibility'
+} from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
@@ -39,6 +43,7 @@ export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters
 
 type RevealContext = {
   state: AppState
+  statuses: RuntimeStatuses
   worktree: Worktree
   repo: Repo | undefined
   targetHostId: ExecutionHostId
@@ -80,11 +85,8 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
       state.setHideDetachedHeadWorkspaces(false)
     }
   },
-  hideWorkspacesFromOtherDevices: ({ state, worktree }) => {
-    const pairedDeviceIds = getPairedDeviceIdsByEnvironment(
-      state.runtimeEnvironments,
-      state.runtimeStatusByEnvironmentId
-    )
+  hideWorkspacesFromOtherDevices: ({ state, statuses, worktree }) => {
+    const pairedDeviceIds = getPairedDeviceIdsByEnvironment(state.runtimeEnvironments, statuses)
     if (isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIds)) {
       state.setHideWorkspacesFromOtherDevices(false)
     }
@@ -126,6 +128,7 @@ export function useSidebarWorktreeFilters() {
     const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
     const context = {
       state,
+      statuses: readRuntimeStatuses(),
       worktree,
       repo,
       targetHostId: getRevealTargetHostId(state, worktree, repo)
@@ -135,15 +138,10 @@ export function useSidebarWorktreeFilters() {
     }
   }, [])
 
-  const clearFilters = useCallback(
-    () => clearSidebarFilters(filterState, useAppStore.getState()),
-    [filterState]
-  )
-
   return {
     filterState,
     hasFilters: sidebarHasActiveFilters(filterState),
-    clearFilters,
+    clearFilters: clearSidebarFiltersKeepingActiveRow,
     revealWorkspaceFilters
   }
 }

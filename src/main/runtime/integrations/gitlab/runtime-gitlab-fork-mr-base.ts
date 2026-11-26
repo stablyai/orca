@@ -1,11 +1,11 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   gitlabMergeRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
-} from '../../../../shared/review-head-tracking-ref'
-import { isTransientReviewHeadFetchError } from '../../../git/fetch-error-classification'
-import { fetchGitLabMergeRequestHeadRef } from '../../../gitlab/mr-head-tracking-ref'
-import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
+} from '../../../../shared/worktree/hosted-review/review-head-tracking-ref'
+import { isTransientReviewHeadFetchError } from '../../../git/remotes/fetch-error-classification'
+import { fetchGitLabMergeRequestHeadRef } from '../../../gitlab/merge-requests/mr-head-tracking-ref'
+import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 type GitExec = (args: string[]) => Promise<{ stdout: string }>
 
 export async function resolveRuntimeGitLabForkMrBase(args: {

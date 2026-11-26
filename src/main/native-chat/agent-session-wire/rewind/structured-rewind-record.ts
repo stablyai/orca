@@ -1,6 +1,9 @@
-import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
+import {
+  onJournalReceiptCommitted,
+  type JournalOperationReceipt
+} from '../../agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { RewindRecoveryDeps } from './structured-rewind-recovery'
 import { rewindRefusal } from './structured-rewind-refusal'
 
@@ -19,12 +22,7 @@ export function persistRewindRecord(
       current.providerFork = fork
     }
   }
-  return store.transitionHandoff(sessionId, (record) => {
-    if (record.lease.runtimeFence !== fence) {
-      throw new Error('agent_session_checkpoint_stale')
-    }
-    return { ...record, rewind: current }
-  })
+  return store.updateRecord(sessionId, { kind: 'rewind', fence, rewind: current })
 }
 
 /** Pre-fork Claude rewinds never ran; refuse them without blocking the already-attached chat. */
@@ -61,15 +59,10 @@ export function inheritForkName(
   sessionId: string,
   receipt: JournalOperationReceipt
 ): JournalOperationReceipt {
-  return {
-    fold: receipt.fold,
-    write: receipt.write,
-    committed: () => {
-      receipt.committed()
-      const record = deps.store.getRecord(sessionId)
-      if (record?.rewind?.providerFork?.materialized) {
-        deps.nameProviderConversation?.(record)
-      }
+  return onJournalReceiptCommitted(receipt, () => {
+    const record = deps.store.getRecord(sessionId)
+    if (record?.rewind?.providerFork?.materialized) {
+      deps.nameProviderConversation?.(record)
     }
-  }
+  })
 }

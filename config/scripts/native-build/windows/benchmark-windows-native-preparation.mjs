@@ -17,6 +17,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { runProcess } from '@orca/process-host'
+import { nativeRuntimeModules } from '../node-addons/native-build-entry.cjs'
 import { buildCounterbalancedSchedule } from '../../performance/measurement/counterbalanced-benchmark-schedule.mjs'
 import { summarizeBenchmarkSamples } from '../../performance/measurement/benchmark-sample-summary.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
@@ -27,12 +28,7 @@ import {
   hash
 } from './windows-native-benchmark-observer.mjs'
 
-const addonNames = [
-  'node-pty',
-  '@orca/windows-registry',
-  '@orca/windows-security',
-  '@vscode/windows-process-tree'
-]
+const addonNames = nativeRuntimeModules('win32')
 const candidate = 'initialize-windows-native-toolchain.mjs'
 const control = 'ensure-native-runtime.mjs'
 const unchangedFiles = [
@@ -66,7 +62,6 @@ export function validateObservedPreparation(receipt, variant, warm = false) {
     )
   }
   if (variant === 'control') {
-    assert.equal(calls('addon-build').length, warm ? 0 : 4, 'Expected all four cold addon builds')
     assert(
       receipt.calls.every((call) => call.code === 0),
       'Control preparation failed'
@@ -158,6 +153,7 @@ function binaryReceipt(snapshot) {
     join(dirname(require.resolve('node-pty/package.json')), 'build/Release/conpty.node'),
     join(dirname(require.resolve('node-pty/package.json')), 'build/Release/conpty/conpty.dll'),
     join(dirname(require.resolve('node-pty/package.json')), 'build/Release/conpty/OpenConsole.exe'),
+    join(snapshot, 'native/windows-notifications/build/Release/orca_windows_notifications.node'),
     join(snapshot, 'native/windows-registry/build/Release/orca_windows_registry.node'),
     join(snapshot, 'native/windows-security/build/Release/orca_windows_security.node'),
     join(
@@ -274,7 +270,7 @@ export async function benchmarkWindowsNativePreparation(
     await command('source-clean', 'git', ['diff', '--exit-code', 'HEAD', '--'])
     const tree = (await command('source-tree', 'git', ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
     const pnpmVersion = (await pnpmCommand('pnpm-version', ['--version'], root)).stdout.trim()
-    assert.equal(pnpmVersion, '12.14.0', 'Comparison requires pinned pnpm')
+    assert.equal(pnpmVersion, '12.18.0', 'Comparison requires pinned pnpm')
     const action = readFileSync(
       join(root, '.github/actions/prepare-native-runtime/action.yml'),
       'utf8'

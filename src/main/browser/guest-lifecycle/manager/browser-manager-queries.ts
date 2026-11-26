@@ -2,9 +2,9 @@ import { webContents } from 'electron'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from '../../certificate-trust/browser-certificate-challenge'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { safeOrigin } from '../browser-event-origin'
 import type { BrowserPopupPage } from '../popups/browser-popup-ownership'
 import { BrowserManagerRegistration } from './registration/browser-manager-registration'
@@ -13,8 +13,31 @@ import {
   listBrowserRouteGuestPopups
 } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
+import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
+  isGuestMemoryProtected(browserPageId: string): boolean {
+    const guestId = this.webContentsIdByTabId.get(browserPageId)
+    if (
+      guestId === undefined ||
+      this.hasActiveGrabOp(browserPageId) ||
+      this.isAgentUsingPage(browserPageId)
+    ) {
+      return true
+    }
+    for (const download of this.downloadsById.values()) {
+      if (download.browserTabId === browserPageId && !download.terminalEvent) {
+        return true
+      }
+    }
+    for (const holds of this.capturePaintHolds.values()) {
+      if (holds.has(browserPageId)) {
+        return true
+      }
+    }
+    return this.getPopupPages().some((popup) => popup.openerBrowserPageId === browserPageId)
+  }
+
   getGuestWebContentsId(browserTabId: string): number | null {
     return this.webContentsIdByTabId.get(browserTabId) ?? null
   }
@@ -25,6 +48,11 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
 
   getTabIdForWebContentsId(webContentsId: number): string | null {
     return this.tabIdByWebContentsId.get(webContentsId) ?? null
+  }
+
+  /** The browser workspace (outer tab) a registered page belongs to. */
+  getWorkspaceIdForPage(browserPageId: string): string | null {
+    return this.workspaceIdByPageId.get(browserPageId) ?? null
   }
 
   /** Includes popups owned by the page. */
@@ -53,8 +81,31 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
       : null
   }
 
+  /** A tab's guest, or a popup's window listed as a page beside it. */
+  private pageWebContentsId(browserPageId: string): number | undefined {
+    return (
+      this.webContentsIdByTabId.get(browserPageId) ??
+      this.resolvePopupPageWebContentsId(browserPageId) ??
+      undefined
+    )
+  }
+
   getWorktreeIdForTab(browserTabId: string): string | undefined {
     return this.worktreeIdByTabId.get(this.getOwningTabIdForPage(browserTabId))
+  }
+
+  /** The workspace of a page an agent is driving whose guest lives in `sess` (null when unknown). */
+  findAgentPageInSession(sess: Electron.Session): { worktreeId: string | null } | null {
+    for (const browserPageId of this.agentActivity.activePageIds()) {
+      const guestId =
+        this.resolvePopupPageWebContentsId(browserPageId) ??
+        this.webContentsIdByTabId.get(browserPageId)
+      const guest = guestId === undefined ? undefined : webContents.fromId(guestId)
+      if (guest && !guest.isDestroyed() && guest.session === sess) {
+        return { worktreeId: this.getWorktreeIdForTab(browserPageId) ?? null }
+      }
+    }
+    return null
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {
@@ -104,20 +155,42 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   }
 
   getBrowserPageLoadError(browserPageId: string): BrowserLoadError | null {
-    const webContentsId =
-      this.webContentsIdByTabId.get(browserPageId) ??
-      this.resolvePopupPageWebContentsId(browserPageId) ??
-      undefined
+    const webContentsId = this.pageWebContentsId(browserPageId)
     return webContentsId === undefined
       ? null
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)
   }
 
   getBrowserPageRemoteTabFaviconUrl(browserPageId: string): string | null {
-    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    const webContentsId = this.pageWebContentsId(browserPageId)
     return webContentsId === undefined
       ? null
       : (this.remoteTabFaviconUrlByGuestId.get(webContentsId) ?? null)
+  }
+
+  getBrowserPageNavigationState(
+    browserPageId: string
+  ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
+    const webContentsId = this.pageWebContentsId(browserPageId)
+    const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      return null
+    }
+    return { loading: guest.isLoadingMainFrame(), ...readGuestNavigationState(guest) }
+  }
+
+  /** Session rows carry sound flags only when set, so silent pages and older readers see none. */
+  getBrowserPageAudioRowFields(browserPageId: string): { audible?: true; audioMuted?: true } {
+    const webContentsId = this.pageWebContentsId(browserPageId)
+    const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      // A page freed for memory keeps its tab and the mute it wakes with.
+      return this.mutedOffscreenPageIds.has(browserPageId) ? { audioMuted: true } : {}
+    }
+    return {
+      ...(guest.isCurrentlyAudible() ? { audible: true as const } : {}),
+      ...(guest.isAudioMuted() ? { audioMuted: true as const } : {})
+    }
   }
 
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {
@@ -181,18 +254,14 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   }
 
   protected notifyBrowserGuestStateChanged(webContentsId: number): void {
-    if (!this.offscreenGuestIds.has(webContentsId)) {
+    this.offscreenGuestStateNotices.cancel(String(webContentsId))
+    if (!this.isListedAsServerPage(webContentsId)) {
       return
     }
-    const browserPageId = this.tabIdByWebContentsId.get(webContentsId)
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(webContentsId)
     const worktreeId = browserPageId ? this.worktreeIdByTabId.get(browserPageId) : null
     if (worktreeId) {
-      // Isolate listener exceptions from Electron event dispatch.
-      try {
-        this.browserGuestStateChangedListener?.(worktreeId)
-      } catch (error) {
-        console.error('[browser-manager] browserGuestStateChanged listener failed', error)
-      }
+      this.notifyWorktreeBrowserGuestStateChanged(worktreeId)
     }
   }
 

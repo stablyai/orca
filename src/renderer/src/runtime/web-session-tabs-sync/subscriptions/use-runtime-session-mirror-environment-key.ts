@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
-import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
-import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
+import { shallow } from 'zustand/shallow'
+import { getReachableRuntimeSessionMirrorTargets } from '@/runtime/web-session-tabs-sync/subscriptions/runtime-session-mirror-targets'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
 
 export type RuntimeSessionMirrorTargetInputs = Pick<
   AppState,
@@ -16,13 +17,14 @@ export type RuntimeSessionMirrorTargetInputs = Pick<
   | 'projectGroups'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'runtimeEnvironments'
-  | 'runtimeStatusByEnvironmentId'
 > & {
   activeRuntimeEnvironmentId: string | null
+  runtimeStatusByEnvironmentId: RuntimeStatuses
 }
 
 export function selectRuntimeSessionMirrorTargetInputs(
-  state: AppState
+  state: AppState,
+  statuses: RuntimeStatuses
 ): RuntimeSessionMirrorTargetInputs {
   return {
     activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId ?? null,
@@ -32,7 +34,7 @@ export function selectRuntimeSessionMirrorTargetInputs(
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments: state.runtimeEnvironments,
-    runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId
+    runtimeStatusByEnvironmentId: statuses
   }
 }
 
@@ -71,7 +73,7 @@ export function buildRuntimeSessionMirrorEnvironmentKeys(
 
 export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEnvironmentKeys {
   // Agent/tab writes are hot; rescan ownership only when its sources change.
-  const inputs = useAppStore(useShallow(selectRuntimeSessionMirrorTargetInputs))
+  const inputs = useAppStoreWithHostStatuses(selectRuntimeSessionMirrorTargetInputs, shallow)
   const {
     activeRuntimeEnvironmentId,
     repos,

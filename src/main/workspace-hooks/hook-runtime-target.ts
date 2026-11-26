@@ -1,5 +1,5 @@
 import { parseWslPath } from '../wsl/filesystem/unc-path-access'
-import { toLinuxPath } from '../../shared/wsl-paths'
+import { toLinuxPath } from '../../shared/file-access/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 
 export type HookRuntimeTarget = {

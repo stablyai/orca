@@ -1,4 +1,4 @@
-import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 
 const MAX_CONCURRENT_RECOVERY_RPCS = 4
 const MAX_WAITING_RECOVERY_RPCS = 64
@@ -24,9 +24,4 @@ export async function runInTerminalRecoveryRpcLane<T>(
   } finally {
     release()
   }
-}
-
-export function clearTerminalRecoveryRpcLaneForTests(): void {
-  recoveryRpcLane = new PrioritySemaphore(MAX_CONCURRENT_RECOVERY_RPCS)
-  waitingRecoveryRpcs = 0
 }

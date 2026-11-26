@@ -14,6 +14,7 @@ import { startFixChecksAgent } from '@/lib/source-control/checks/fix-checks-agen
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
@@ -24,7 +25,10 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -147,6 +151,7 @@ export function useCheckRunDetailsFixWithAI(args: {
     args.worktreeId && repo
       ? resolveRepoWorktreeLaunchPlatform(
           useAppStore.getState(),
+          readRuntimeStatuses(),
           repo,
           worktree ?? { id: args.worktreeId }
         )

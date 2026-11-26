@@ -5,15 +5,15 @@ import { requireManagedOrcadEnvironment } from './orcad-managed-runtime-context'
 
 export type LifecycleArgs = { selector: string; signal?: AbortSignal }
 
-export function withManagedOrcadLifecycle<T>(
+export async function withManagedOrcadLifecycle<T>(
   userDataPath: string,
   selector: string,
-  run: (managed: ReturnType<typeof requireManagedOrcadEnvironment>) => Promise<T>
+  run: (managed: Awaited<ReturnType<typeof requireManagedOrcadEnvironment>>) => Promise<T>
 ): Promise<T> {
-  const { environment, deployment } = requireManagedOrcadEnvironment(userDataPath, selector)
+  const { environment, deployment } = await requireManagedOrcadEnvironment(userDataPath, selector)
   return runTargetLifecycle(deployment.sshTargetId, async () => {
     // Re-read in the lifecycle queue because reconciliation/stop may have won first.
-    const current = requireManagedOrcadEnvironment(userDataPath, environment.id)
+    const current = await requireManagedOrcadEnvironment(userDataPath, environment.id)
     assertRuntimeEnvironmentNotReconciling(current.environment)
     return run(current)
   })

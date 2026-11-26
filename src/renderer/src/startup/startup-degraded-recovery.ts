@@ -10,11 +10,9 @@ import {
   announceWebPairingRefusedAtStartup,
   isWebPairingRefusedAtStartup
 } from './startup-web-pairing-refused'
-import {
-  collectTerminalProviderSnapshotPtyIds,
-  refreshTerminalProviderSnapshotCapabilities
-} from '../components/terminal/terminal-provider-snapshot-capability'
-import { probeTerminalProviderGoneSessions } from '../components/terminal/terminal-provider-gone-sessions'
+import { refreshTerminalProviderSnapshotCapabilities } from '../components/terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { collectTerminalProviderSnapshotPtyIds } from '../components/terminal/provider-snapshots/terminal-provider-snapshot-pty-inventory'
+import { probeTerminalProviderGoneSessions } from '../components/terminal/provider-snapshots/terminal-provider-gone-sessions'
 
 type DegradedStartupRecoveryArgs = {
   error: unknown
@@ -109,7 +107,7 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
     void probeTerminalProviderGoneSessions(restoredPtyIds)
     await refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
     await reconnectPersistedTerminals(abortSignal)
-    await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+    await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup({ afterReconnect: true })
     // Reconnect does not set the success chain’s final flag; release restoration readers on degraded boot too.
     if (!isCancelled()) {
       useAppStore.setState({ terminalStartupRestorationReady: true })

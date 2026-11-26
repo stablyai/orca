@@ -2,7 +2,7 @@
 import { stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
+import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {
@@ -24,7 +24,7 @@ const RECHECK_BATCH_ROWS = 1_000
 // Never stat WSL rows: stopped distros can boot or hang; expire unused rows after 180 days instead.
 const WSL_PATH_GLOB = '[\\/][\\/][wW][sS][lL][.$]*'
 const WSL_EXPIRE_AFTER_MS = 180 * 24 * 60 * 60_000
-const SQLITE_SESSION_AGENTS = ['opencode', 'opencode2', 'zcode'] as const
+const SQLITE_SESSION_AGENTS = ['opencode', 'opencode2', 'zcode', 'hermes'] as const
 
 export type SessionParseCachePersistenceOptions = {
   // The legacy JSON file; the database sits beside it.

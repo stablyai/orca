@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/native-chat-composer-autocomplete'
-import { preferredNativeChatPickerIndex } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import { preferredNativeChatPickerIndex } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 
 /** Highlight the best name match after every edit or caret move; arrow keys own it in between.
  * Returns the setter for user navigation, which pins the highlight until the next edit. */

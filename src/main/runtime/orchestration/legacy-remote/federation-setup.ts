@@ -3,7 +3,7 @@ import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   applyWaitForSetupOutcome,
   type WorkerSetupReceipt
-} from '../../rpc/methods/orchestration/worker/worker-topology'
+} from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
 import { isFederationResidualEffect, type FederationEffect } from './federation-effects'
 
 type FederationSetupStageArgs = {

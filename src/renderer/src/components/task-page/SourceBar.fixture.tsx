@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { getTaskSourceContextSummary } from '../task-source-context-summary'
+import { getTaskSourceContextSummary } from './source-selection/task-source-context-summary'
 import { getSourceOptions } from './task-page-localized-options'
 import { TaskPageSourceBar } from './SourceBar'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'

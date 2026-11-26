@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { createTerminalPanePasteExecution } from './terminal-pane-paste-execution'
 import { registerTerminalPanePasteListeners } from './terminal-pane-paste-listeners'
-import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../../mounting/use-terminal-pane-lifecycle-stage'
 
-export function useTerminalPanePasteListeners(controller: TerminalPaneCloseController): void {
+export function useTerminalPanePasteListeners(controller: TerminalPaneMountedController): void {
   const {
+    terminalManager,
     containerRef,
     forceBracketedMultilineTextPaste,
     isActive,
@@ -14,7 +15,7 @@ export function useTerminalPanePasteListeners(controller: TerminalPaneCloseContr
   } = controller
 
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive || !terminalManager) {
       return
     }
     const container = containerRef.current
@@ -36,5 +37,5 @@ export function useTerminalPanePasteListeners(controller: TerminalPaneCloseContr
       shortcutPlatform
     })
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
+  }, [terminalManager, isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
 }

@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Text, View } from 'react-native'
-import { OrcaLogo } from '../components/OrcaLogo'
+import { OrcaLogo } from '../components/icons/OrcaLogo'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 
 function sampleNotifications(t: Translate) {
   return [

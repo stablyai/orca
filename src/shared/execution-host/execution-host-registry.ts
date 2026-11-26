@@ -9,11 +9,11 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
-import type { SshConnectionState } from '../ssh-types'
+} from './execution-host'
+import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
 import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/runtime-environments'
-import type { GlobalSettings } from '../global-settings-types'
-import type { Repo } from '../repo-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
+import type { Repo } from '../repository/repo-types'
 import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
 import { getSshConnectionHealth, type EphemeralVmHostLifecycle } from './execution-host-health'
 import { applyEphemeralVmHostLifecycles } from './execution-host-vm-lifecycle'
@@ -114,6 +114,7 @@ export function buildExecutionHostRegistry(args: {
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
   /** Defaults to this process's platform, which only the host itself may use. */
   localHostLabel?: string
+  localHostLabelIsDefault?: boolean
   /** VM runtime records by the server they host; their lifecycle outranks transport health. */
   ephemeralVmHosts?: readonly EphemeralVmHostLifecycle[]
 }): ExecutionHostRegistryEntry[] {
@@ -122,6 +123,7 @@ export function buildExecutionHostRegistry(args: {
     id: LOCAL_EXECUTION_HOST_ID,
     kind: 'local',
     label: args.localHostLabel ?? getLocalExecutionHostLabel(),
+    isDefaultLocalLabel: args.localHostLabelIsDefault ?? args.localHostLabel == null,
     detail: 'This computer',
     health: 'local'
   })
@@ -224,6 +226,8 @@ export function buildExecutionHostRegistry(args: {
     const label =
       overrides.get(host.id) ??
       host.aliasHostIds?.map((aliasHostId) => overrides.get(aliasHostId)).find(Boolean)
-    return label ? { ...host, label } : host
+    return label
+      ? { ...host, label, ...(host.kind === 'local' ? { isDefaultLocalLabel: false } : {}) }
+      : host
   })
 }

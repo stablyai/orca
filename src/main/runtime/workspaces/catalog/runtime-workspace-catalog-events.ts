@@ -1,17 +1,20 @@
-import {
-  getRepoExecutionHostId,
-  getRepoRoutingConnectionId
-} from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { onMcpHostListSignInChanged } from '../../../mcp-servers/mcp-host-list-sign-in'
+import { noteMcpHostListChanged } from '../../../mcp-servers/mcp-host-list-changes'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { composeWorktreeId } from '../../../../shared/worktree/id'
-import type { PullRequestChange } from '../../../github/pull-request-changed-events'
+import type { PullRequestChange } from '../../../github/pull-requests/refresh/pull-request-changed-events'
 import { OrcaRuntimeWithGetStatus } from '../../hosts/runtime-status'
 
 export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetStatus {
   abstract invalidateResolvedWorktreeCache(): void
 
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
+
+  protected abstract peekRepoWorktreeListing(
+    repo: Repo
+  ): { worktrees: { path: string }[] } | undefined
 
   // Renderer meta writes skip its notifier after optimistic updates; remote clients still need invalidation.
   notifyWorktreesChangedForRemoteClients(repoId: string): void {
@@ -56,9 +59,8 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
 
   // Ids spelled as clients listed them; an unlisted path may be another spelling of any checkout, so name none.
   private listedWorktreeIds(repo: Repo, paths: readonly string[]): string[] | null {
-    const scan = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
     const listed = new Map(
-      (scan?.listing ?? scan?.result)?.worktrees.map((worktree) => [
+      this.peekRepoWorktreeListing(repo)?.worktrees.map((worktree) => [
         normalizeRuntimePathForComparison(worktree.path),
         worktree.path
       ])
@@ -82,5 +84,17 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
   // The PR coordinator is fed by desktop IPC, so its refreshes reach paired clients only through here.
   notifyPullRequestChangedForRemoteClients(change: PullRequestChange): void {
     this.emitClientEvent({ type: 'pullRequestChanged', ...change })
+  }
+
+  // A sign-in finishing, failing to start or getting lost changes a row outside mcpServers.* calls.
+  protected readonly stopMcpServerSignInWatch = onMcpHostListSignInChanged(() =>
+    this.notifyMcpServersChanged()
+  )
+
+  /** This host's MCP server list changed; its windows and every other client re-read it. */
+  notifyMcpServersChanged(): void {
+    noteMcpHostListChanged()
+    this.notifier?.mcpServersChanged?.()
+    this.emitClientEvent({ type: 'mcpServersChanged' })
   }
 }

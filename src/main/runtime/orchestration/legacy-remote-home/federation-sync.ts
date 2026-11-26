@@ -2,7 +2,7 @@ import { federationRelayPrefix } from '../federation/relay/federation-relay-pref
 import { federationRelayWireItem } from '../legacy-remote/federation-relay-wire'
 import type { FederationRuntime } from '../federation/federation-runtime'
 import type { FederatedLifecycleSettlement } from '../legacy-remote/federation-lifecycle-settlement'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrchestrationError } from '../orchestration-error'
 import {
@@ -25,11 +25,18 @@ import {
 const FEDERATION_PULL_PAGE_SIZE = 50
 const MAX_FEDERATION_PULL_PAGES_PER_SYNC = 6
 
+/** imported and sent count new relay items, so a sync that moved nothing reads as idle. */
+export type FederatedSyncResult = { imported: number; sent: number; acknowledgedThrough: number }
+
+export function federatedSyncMovedMail(result: FederatedSyncResult): boolean {
+  return result.imported > 0 || result.sent > 0
+}
+
 export async function syncFederatedDispatch(
   runtime: FederationRuntime,
   dispatchId: string,
   isCurrent: () => boolean = () => true
-): Promise<{ imported: number; acknowledgedThrough: number }> {
+): Promise<FederatedSyncResult> {
   return syncFederatedDispatchPages(
     runtime,
     dispatchId,
@@ -43,9 +50,9 @@ async function syncFederatedDispatchPages(
   dispatchId: string,
   remainingPages: number,
   isCurrent: () => boolean
-): Promise<{ imported: number; acknowledgedThrough: number }> {
+): Promise<FederatedSyncResult> {
   if (!isCurrent()) {
-    return { imported: 0, acknowledgedThrough: 0 }
+    return { imported: 0, sent: 0, acknowledgedThrough: 0 }
   }
   const db = runtime.getOrchestrationDb()
   const federated = db.getFederatedDispatch(dispatchId)
@@ -56,7 +63,7 @@ async function syncFederatedDispatchPages(
       `Federated Dispatch ${dispatchId} was not found.`
     )
   }
-  const currentServer = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
+  const currentServer = await runtime.resolveOrchestrationWorkerServer(federated.environment_id)
   if (currentServer.peerFingerprint !== federated.peer_fingerprint) {
     throw new OrchestrationError(
       'peer_changed',
@@ -70,7 +77,7 @@ async function syncFederatedDispatchPages(
     currentServer.pairingRevision
   )
   if (!isCurrent()) {
-    return { imported: 0, acknowledgedThrough: federated.to_home_imported_sequence }
+    return { imported: 0, sent: 0, acknowledgedThrough: federated.to_home_imported_sequence }
   }
   const supportsLifecycleSettlement =
     federated.protocol_version >= ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION &&
@@ -102,7 +109,7 @@ async function syncFederatedDispatchPages(
   }
   const pulled = parsedPull.data
   if (!isCurrent()) {
-    return { imported: 0, acknowledgedThrough: federated.to_home_imported_sequence }
+    return { imported: 0, sent: 0, acknowledgedThrough: federated.to_home_imported_sequence }
   }
   let cursor =
     shouldReplayUnacknowledged && pulled.items.length > 0
@@ -125,6 +132,7 @@ async function syncFederatedDispatchPages(
       message: {
         id: item.message_id,
         runId: dispatch.run_id,
+        // isFederatedRelaySender depends on this exact shape: this from and no sender pane key.
         from: `dispatch:${dispatchId}`,
         to: `run:${dispatch.run_id}`,
         subject: message.subject,
@@ -239,6 +247,7 @@ async function syncFederatedDispatchPages(
       ? db.listPendingFederationRelay(dispatchId, 'to_worker')
       : []
   let outgoing = toWorker.map(federationRelayWireItem)
+  let sent = 0
   while (outgoing.length > 0 && isCurrent()) {
     let sentThrough = outgoing.at(-1)!.sequence
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: federationImport returns this receipt; the acknowledgment is validated below.
@@ -272,7 +281,9 @@ async function syncFederatedDispatchPages(
       direction: 'to_worker',
       throughSequence: delivered.acknowledgedThrough
     })
-    outgoing = outgoing.filter((item) => item.sequence > delivered.acknowledgedThrough)
+    const remaining = outgoing.filter((item) => item.sequence > delivered.acknowledgedThrough)
+    sent += outgoing.length - remaining.length
+    outgoing = remaining
   }
   if (
     isCurrent() &&
@@ -288,8 +299,9 @@ async function syncFederatedDispatchPages(
     )
     return {
       imported: imported + next.imported,
+      sent: sent + next.sent,
       acknowledgedThrough: next.acknowledgedThrough
     }
   }
-  return { imported, acknowledgedThrough: cursor }
+  return { imported, sent, acknowledgedThrough: cursor }
 }

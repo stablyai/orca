@@ -5,13 +5,13 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
-import { isClaudeInjectedUserMessage } from '../../claude-internal-message-content'
+import { isClaudeInjectedUserMessage } from './claude-internal-message-content'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent,
   claudeToolResultText,
   claudeToolResultFailed
-} from '../../../../shared/claude-tool-content'
+} from '../../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
 export type ClaudeMessageEnvelope = {
   sessionId: string

@@ -240,13 +240,66 @@
   }
 }
 
-.rich-markdown-editor-shell.has-rich-markdown-review-notes .rich-markdown-editor {
-  padding-right: clamp(252px, 28%, 308px);
+/* Why: % in these unregistered properties resolves where each is used (scroller or shell), not here. */
+.rich-markdown-editor-shell {
+  --rich-md-measure: calc(
+    var(--markdown-reading-measure-em) * (14px + var(--editor-font-zoom-level, 0) * 1px)
+  );
+  --rich-md-card-width: clamp(220px, 24%, 250px);
+  /* Why: keep wide panes' 42px text-to-card gap on narrow ones too: 4px + the 24px add button + up to 14px of
+     editor scrollbar, because the button is placed from the shell's width and the card from the scroller's. */
+  --rich-md-rail-reserve: max(clamp(252px, 28%, 308px), var(--rich-md-card-width) + 58px);
+  --rich-md-pad-end: 32px;
+  /* Why: start padding always assumes the rail is reserved, so opening a draft or toggling notes never moves the column. */
+  --rich-md-pad-start: max(
+    32px,
+    min(
+      (100% - var(--rich-md-measure)) / 2,
+      100% - var(--rich-md-measure) - var(--rich-md-rail-reserve)
+    )
+  );
+  --rich-md-inset-end: max(
+    0px,
+    100% - var(--rich-md-measure) - var(--rich-md-pad-start) - var(--rich-md-rail-reserve)
+  );
+}
+
+.rich-markdown-editor-shell.has-rich-markdown-review-notes {
+  --rich-md-pad-end: var(--rich-md-rail-reserve);
+}
+
+/* Why: centre with the editor's own padding so clicks in the side margin still land in ProseMirror. */
+.rich-markdown-editor-shell .rich-markdown-editor {
+  padding-left: var(--rich-md-pad-start);
+  padding-right: max(
+    var(--rich-md-pad-end),
+    100% - var(--rich-md-measure) - var(--rich-md-pad-start)
+  );
+}
+
+/* Why: these are placed from the pane's right edge; shift them so they stay beside the centred column. */
+.rich-markdown-editor-shell .rich-markdown-review-note-layer {
+  right: calc(16px + var(--rich-md-inset-end));
+}
+
+/* Why: sit in the gap just right of the text, never inside the notes rail. */
+.rich-markdown-editor-shell > .rich-markdown-comment-add-btn {
+  left: calc(
+    min(100% - var(--rich-md-pad-end), var(--rich-md-measure) + var(--rich-md-pad-start)) + 4px
+  );
+}
+
+/* Why: a draft takes the saved card's slot in the rail (a draft always reserves it), so it never covers the text. */
+.rich-markdown-editor-shell > .orca-diff-comment-popover {
+  left: auto;
+  right: calc(16px + var(--rich-md-inset-end));
+  width: var(--rich-md-card-width);
 }
 
 .rich-markdown-review-rail-actions {
   position: absolute;
-  top: 12px;
+  /* Why: (40px toolbar row - 26px action buttons) / 2 keeps these centered with the formatting buttons. */
+  top: 7px;
   right: 14px;
   z-index: 45;
   display: inline-flex;
@@ -297,7 +350,7 @@
   top: 0;
   right: 16px;
   /* Why: the card action pill needs the same minimum rail width as preview mode. */
-  width: clamp(220px, 24%, 250px);
+  width: var(--rich-md-card-width);
   pointer-events: none;
   z-index: 30;
 }
@@ -1141,15 +1194,10 @@
 .rich-markdown-editor a,
 .rich-markdown-editor .ProseMirror a {
   color: var(--text-link, #0969da);
+  cursor: pointer;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 0.25em;
-}
-
-/* Plain clicks place the caret; RichMarkdownEditor exposes link pointers only while Cmd/Ctrl is held. */
-.rich-markdown-mod-held .rich-markdown-editor a,
-.rich-markdown-mod-held .rich-markdown-editor .ProseMirror a {
-  cursor: pointer;
 }
 
 .dark .rich-markdown-editor a {
@@ -1171,9 +1219,7 @@
   color: var(--text-link, #58a6ff);
 }
 
-.rich-markdown-mod-held
-  .rich-markdown-editor
-  .rich-markdown-html-superscript-link[data-actionable] {
+.rich-markdown-editor .rich-markdown-html-superscript-link[data-actionable] {
   cursor: pointer;
 }
 
@@ -1525,6 +1571,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono, monospace);
+  cursor: text;
+  user-select: text;
+  outline: none;
 }
 
 .rich-markdown-link-button {

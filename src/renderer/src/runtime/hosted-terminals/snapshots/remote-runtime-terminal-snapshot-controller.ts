@@ -21,6 +21,13 @@ import type {
   RemoteRuntimeSnapshotOutcome,
   RemoteRuntimeSnapshotRequestOptions
 } from './remote-terminal-snapshot-contracts'
+import { translate } from '@/i18n/i18n'
+
+const streamStoppedResponding = (): string =>
+  translate(
+    'auto.runtime.remoteTerminal.streamStopped',
+    'Remote terminal stream stopped responding.'
+  )
 
 export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRuntimeTerminalMultiplexerBase {
   // Compare known UTF-16 high-waters: startSeq beyond expectedSeq proves dropped output. First/unknown seq cannot prove a gap.
@@ -262,13 +269,13 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (this.streams.get(stream.streamId) !== stream) {
       return
     }
-    disposeRemoteTerminalStreamState(stream, 'Remote terminal stream stopped responding.')
+    disposeRemoteTerminalStreamState(stream, streamStoppedResponding())
     this.streams.delete(stream.streamId)
     this.sendFrame(stream.streamId, TerminalStreamOpcode.Unsubscribe)
     if (stream.callbacks.onTransportClose) {
       stream.callbacks.onTransportClose({ recoverable: true, stalled: true })
     } else {
-      stream.callbacks.onError?.('Remote terminal stream stopped responding.')
+      stream.callbacks.onError?.(streamStoppedResponding())
     }
     this.closeIfIdle()
   }

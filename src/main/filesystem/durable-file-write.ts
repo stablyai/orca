@@ -7,10 +7,17 @@ import { publishFileWithoutOverwrite } from './atomic-file-publication'
 import {
   renameFileWithWindowsRetry,
   renameFileWithWindowsRetryAsync
-} from '../../shared/windows-retry-file-operations'
+} from '../../shared/file-write/windows-retry-file-operations'
+import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-calls'
+
+export type DurableFilePayload =
+  | string
+  | Uint8Array
+  | Iterable<string | Uint8Array>
+  | AsyncIterable<string | Uint8Array>
 
 /** Persist directory changes where supported; Windows and some filesystems reject directory fsync. */
-async function syncDirectory(directory: string): Promise<void> {
+export async function syncDirectory(directory: string): Promise<void> {
   let handle: Awaited<ReturnType<typeof open>> | null = null
   try {
     handle = await open(directory, 'r')
@@ -25,12 +32,14 @@ async function syncDirectory(directory: string): Promise<void> {
 /** Best-effort directory fsync after synchronous publication. */
 export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
+  const call = enterSyncCall()
   try {
     fd = openSync(directory, 'r')
     fsyncSync(fd)
   } catch {
     // Directory fsync may be unsupported.
   } finally {
+    exitSyncCall(call, 'fsync', directory)
     if (fd !== null) {
       try {
         closeSync(fd)
@@ -64,7 +73,7 @@ export async function renameDurable(tmpPath: string, finalPath: string): Promise
 /** Make content durable without publishing, allowing backup rotation before replacement. */
 export async function writeTempFileDurable(
   tmpPath: string,
-  payload: string | Uint8Array,
+  payload: DurableFilePayload,
   mode?: number
 ): Promise<void> {
   const handle = await open(tmpPath, 'w', mode)
@@ -79,7 +88,7 @@ export async function writeTempFileDurable(
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array,
+  payload: DurableFilePayload,
   mode?: number
 ): Promise<void> {
   await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true, mode)
@@ -89,7 +98,7 @@ export async function writeFileDurable(
 export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array,
+  payload: DurableFilePayload,
   isCurrent: () => boolean,
   /** Creation mode for the new temp file, e.g. 0o600 for state other users must not read. */
   mode?: number
@@ -164,12 +173,17 @@ export function writeFileDurableSync(
 ): void {
   let renamed = false
   try {
-    writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
-    const fd = openSync(tmpPath, 'r+')
+    const call = enterSyncCall()
     try {
-      fsyncSync(fd)
+      writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
+      const fd = openSync(tmpPath, 'r+')
+      try {
+        fsyncSync(fd)
+      } finally {
+        closeSync(fd)
+      }
     } finally {
-      closeSync(fd)
+      exitSyncCall(call, 'fsync', finalPath)
     }
     renameDurableSync(tmpPath, finalPath)
     renamed = true

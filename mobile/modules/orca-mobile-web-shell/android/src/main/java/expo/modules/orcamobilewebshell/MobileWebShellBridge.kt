@@ -19,18 +19,8 @@ internal fun acceptsMobileWebShellBridgeFrame(
   hasCommittedDocument: Boolean
 ): Boolean = isMainFrame && isStringMessage && hasCommittedDocument
 
-/** Silently count refusals for tests without revealing the cap to the page. */
 internal class MobileWebShellBridgeGate {
-  var refusedCount = 0
-    private set
-
-  fun accepts(byteCount: Int): Boolean {
-    if (!acceptsMobileWebShellBridgeByteCount(byteCount)) {
-      refusedCount += 1
-      return false
-    }
-    return true
-  }
+  fun accepts(byteCount: Int): Boolean = acceptsMobileWebShellBridgeByteCount(byteCount)
 }
 
 /** What a prop update should do about the listener, decided before any WebView call. */
@@ -38,7 +28,7 @@ internal enum class MobileWebShellBridgeInstall {
   /** The prop is false, so nothing is registered and Phase B behaviour is byte-identical. */
   SKIP,
   INSTALL,
-  /** The WebView provider is older than `WEB_MESSAGE_LISTENER` (Chromium 88). Terminal. */
+  /** The WebView provider is older than `WEB_MESSAGE_LISTENER` (Chromium 83). Terminal. */
   UNAVAILABLE
 }
 

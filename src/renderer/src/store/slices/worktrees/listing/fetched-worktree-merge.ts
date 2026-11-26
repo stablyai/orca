@@ -1,5 +1,7 @@
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
+import { appliedWorktreeCatalogAuthorityPatch } from './worktree-catalog-absence'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -141,18 +143,23 @@ export function mergeFetchedWorktrees(
   get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
+  let retireNotices: ((after: AppState) => void) | undefined
   if (args.purgeRemovedWorktrees !== false) {
     // Why before the updater: delayed views must commit text the purge may offer back.
     const state = get()
+    const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
+      state,
+      args.repoId,
+      args.refresh.result,
+      args.hostId
+    )
     flushPurgedWorkspaceEdits(
       state,
-      getRemovedWorktreeIdsAfterAuthoritativeScan(
-        state,
-        args.repoId,
-        args.refresh.result,
-        args.hostId
-      ).map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
+      removedIds.map((id) => hostWorktreeTarget({ id, hostId: args.hostId }))
     )
+    if (removedIds.length > 0) {
+      retireNotices = captureWorkspaceTerminalNoticeRemoval(state, removedIds)
+    }
   }
   // Why a holder: the updater decides the outcome, and a narrowed `let` would hide that assignment.
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
@@ -210,20 +217,21 @@ export function mergeFetchedWorktrees(
       s.detectedWorktreesByRepo[args.repoId],
       refreshResult,
       args.hostId,
-      args.setup,
+      args,
       matchOptions
     )
+    const detectedChanged = !areDetectedWorktreeResultsEqual(
+      s.detectedWorktreesByRepo[args.repoId],
+      mergedDetected
+    )
+    const detectedPatch = detectedChanged
+      ? { detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [args.repoId]: mergedDetected } }
+      : null
+    const authorityPatch = appliedWorktreeCatalogAuthorityPatch(s, args.repoId, args.refresh)
     // Stored rows from a stopped WSL distro lack branch state the scanned rows already have.
     const keepCurrent = worktrees.length === 0 || !!args.refresh.result.wslDistroStopped
     if (!args.refresh.result.authoritative && keepCurrent && currentForHost.length > 0) {
-      return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
-        ? s
-        : {
-            detectedWorktreesByRepo: {
-              ...s.detectedWorktreesByRepo,
-              [args.repoId]: mergedDetected
-            }
-          }
+      return authorityPatch || detectedPatch ? { ...authorityPatch, ...detectedPatch } : s
     }
     const mergedWorktrees = mergeWorktreesForHost(
       s.worktreesByRepo[args.repoId],
@@ -245,10 +253,6 @@ export function mergeFetchedWorktrees(
       authoritativelySeenIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
     }
     const worktreesChanged = !catalogRowsEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
-    const detectedChanged = !areDetectedWorktreeResultsEqual(
-      s.detectedWorktreesByRepo[args.repoId],
-      mergedDetected
-    )
     const versionPatch = appliedWorktreeCatalogVersionPatch(
       s,
       args.repoId,
@@ -259,12 +263,14 @@ export function mergeFetchedWorktrees(
       !worktreesChanged &&
       !detectedChanged &&
       removedIds.length === 0 &&
-      Object.keys(versionPatch).length === 0
+      Object.keys(versionPatch).length === 0 &&
+      !authorityPatch
     ) {
       return s
     }
     return {
       ...versionPatch,
+      ...authorityPatch,
       ...(worktreesChanged
         ? {
             worktreesByRepo: {
@@ -277,14 +283,7 @@ export function mergeFetchedWorktrees(
               : { sortEpoch: s.sortEpoch + 1 })
           }
         : {}),
-      ...(detectedChanged
-        ? {
-            detectedWorktreesByRepo: {
-              ...s.detectedWorktreesByRepo,
-              [args.repoId]: mergedDetected
-            }
-          }
-        : {}),
+      ...detectedPatch,
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
             s,
@@ -295,6 +294,7 @@ export function mergeFetchedWorktrees(
     }
   })
   if (decision.outcome === 'applied') {
+    retireNotices?.(get())
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)

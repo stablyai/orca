@@ -1,33 +1,40 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
-} from '../../../shared/agent-session/agent-session-question-answer'
+} from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { AcpRpcError } from '../transport/acp-errors'
+import { acpFormElicitationPresentation } from '../requests/acp-form-elicitation'
+import { acpUrlElicitationPresentation } from '../requests/acp-url-elicitation'
 import {
   pendingAcpResolution,
   type AcpRequestPresentation,
   type AcpRequestSettlement
 } from './acp-dialect'
 
-const questionRequestSchema = z.object({
-  sessionId: z.string(),
-  toolCallId: z.string(),
-  questions: z
-    .array(
-      z.object({
-        question: z.string(),
-        multiSelect: z.boolean().nullish(),
-        options: z.array(z.object({ label: z.string(), description: z.string().optional() }))
-      })
-    )
-    .min(1)
-})
-const planRequestSchema = z.object({
-  sessionId: z.string(),
-  toolCallId: z.string(),
-  planContent: z.string().nullish()
-})
+const questionRequestSchema = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string(),
+    toolCallId: z.string(),
+    questions: z
+      .array(
+        z.object({
+          question: z.string(),
+          multiSelect: z.boolean().nullish(),
+          options: z.array(z.object({ label: z.string(), description: z.string().optional() }))
+        })
+      )
+      .min(1)
+  })
+)
+const planRequestSchema = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string(),
+    toolCallId: z.string(),
+    planContent: z.string().nullish()
+  })
+)
 
 function questionRequest(params: unknown): AcpRequestPresentation {
   const parsed = questionRequestSchema.safeParse(params)
@@ -43,7 +50,9 @@ function questionRequest(params: unknown): AcpRequestPresentation {
       label: option.label,
       ...(option.description === undefined ? {} : { description: option.description })
     })),
-    freeTextQuestionId: `q${index + 1}`
+    freeTextQuestionId: `q${index + 1}`,
+    // Grok takes answers that leave a question out, as its own question card sends.
+    skippable: true as const
   }))
   const body = {
     kind: 'question' as const,
@@ -68,12 +77,12 @@ function questionRequest(params: unknown): AcpRequestPresentation {
           : answer
       )
       if (!answers || !choices || !isValidAgentSessionQuestionAnswers(questions, choices)) {
-        throw new AcpRpcError(-32602, 'Question answer must answer every offered question')
+        throw new AcpRpcError(-32602, 'Question answer does not match the offered questions')
       }
       return {
         outcome: 'accepted',
         answers: Object.fromEntries(
-          questions.map((question) => {
+          questions.flatMap((question) => {
             const answer = answers.find((entry) => entry.questionId === question.id)!
             const values = answer.optionIds.map(
               (id) => question.options.find((option) => option.id === id)!.label
@@ -81,7 +90,10 @@ function questionRequest(params: unknown): AcpRequestPresentation {
             if (values.length === 0 && answer.other?.trim()) {
               values.push('Other')
             }
-            return [question.question, question.multiSelect ? values : values[0]]
+            // Grok's own question card leaves a skipped question out of `answers`.
+            return values.length === 0
+              ? []
+              : [[question.question, question.multiSelect ? values : values[0]]]
           })
         ),
         ...(answers.some((answer) => answer.other?.trim())
@@ -97,6 +109,36 @@ function questionRequest(params: unknown): AcpRequestPresentation {
             }
           : {})
       }
+    }
+  }
+}
+
+const mcpElicitSchema = lazyZodSchema(() =>
+  z.looseObject({ serverName: z.string(), message: z.string() })
+)
+const formReplySchema = lazyZodSchema(() =>
+  z.object({ action: z.string(), content: z.unknown().optional() })
+)
+
+/** An MCP server's `elicitation/create` that Grok forwards: a URL to open, or a form to fill. */
+function mcpElicitRequest(params: unknown): AcpRequestPresentation {
+  const parsed = mcpElicitSchema.safeParse(params)
+  if (!parsed.success) {
+    throw new AcpRpcError(-32602, 'Invalid MCP elicitation request')
+  }
+  const { serverName, message } = parsed.data
+  // Name the server, since the request is its, not Grok's.
+  const named = { ...parsed.data, message: serverName ? `${serverName}: ${message}` : message }
+  if (parsed.data.mode === 'url') {
+    return acpUrlElicitationPresentation(named, (action) => ({ outcome: action }))
+  }
+  const form = acpFormElicitationPresentation(named)
+  return {
+    ...form,
+    // Grok reads the same answer under `outcome` rather than ACP's `action`.
+    reply: (response) => {
+      const { action, content } = formReplySchema.parse(form.reply(response))
+      return { outcome: action, ...(content === undefined ? {} : { content }) }
     }
   }
 }
@@ -128,6 +170,9 @@ export function grokSettleRequest(
 export function grokRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
   if (['_x.ai/ask_user_question', 'x.ai/ask_user_question'].includes(method)) {
     return questionRequest(params)
+  }
+  if (['_x.ai/mcp/elicit', 'x.ai/mcp/elicit'].includes(method)) {
+    return mcpElicitRequest(params)
   }
   return undefined
 }

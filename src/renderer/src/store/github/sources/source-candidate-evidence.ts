@@ -1,5 +1,5 @@
 import type { WorkItemsCacheSources } from '../cache/cache-model'
-import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 
 type CandidateField = 'originCandidate' | 'upstreamCandidate'
 const CANDIDATE_FIELDS: readonly CandidateField[] = ['originCandidate', 'upstreamCandidate']

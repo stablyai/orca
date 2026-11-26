@@ -9,7 +9,7 @@ import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './pairing/network/network-expo
 import { createOwnerPairingOffer } from './pairing/pairing-offer-requests'
 import type { PairingOffersRpcContext } from '../core'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
   pairingUnavailable,
@@ -23,7 +23,15 @@ const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   protected override ownerPairingOffers(): PairingOffersRpcContext {
-    return { create: (params) => createOwnerPairingOffer(this, params) }
+    return {
+      create: async (params, createdByDeviceId, createdByClientInstanceId) => {
+        const offer = await createOwnerPairingOffer(this, params, undefined, createdByDeviceId)
+        if (offer.available && createdByClientInstanceId) {
+          this.deviceRegistry?.setOriginClientInstance(offer.deviceId, createdByClientInstanceId)
+        }
+        return offer
+      }
+    }
   }
 
   async createMobilePairingOffer(args: {
@@ -32,6 +40,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     name?: string
     rotate?: boolean
     offerTtlMs?: number
+    createdByDeviceId?: string
   }): Promise<MobilePairingOffer> {
     // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
     try {
@@ -53,6 +62,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     if (
       inFlight?.generation === this.mobilePairingOfferGeneration &&
       inFlight.address === address &&
+      inFlight.createdByDeviceId === args.createdByDeviceId &&
       (inFlight.rotate || !rotate)
     ) {
       return inFlight.request
@@ -68,7 +78,13 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       () => undefined,
       () => undefined
     )
-    this.mobileRelayPairingOfferInFlight = { generation, address, rotate, request }
+    this.mobileRelayPairingOfferInFlight = {
+      generation,
+      address,
+      rotate,
+      createdByDeviceId: args.createdByDeviceId,
+      request
+    }
     void request.then(
       () => {
         if (this.mobileRelayPairingOfferInFlight?.request === request) {
@@ -91,6 +107,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       name?: string
       rotate?: boolean
       offerTtlMs?: number
+      createdByDeviceId?: string
     },
     generation: number
   ): Promise<MobilePairingOffer> {
@@ -100,7 +117,12 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     for (const expired of this.deviceRegistry?.listExpiredPairingOffers('mobile') ?? []) {
       this.discardPendingMobilePairingDevice(expired.deviceId)
     }
-    const pending = this.deviceRegistry?.getPendingDevice('mobile', args.offerTtlMs)
+    const pending = this.deviceRegistry?.getPendingDevice(
+      'mobile',
+      args.offerTtlMs,
+      [],
+      args.createdByDeviceId
+    )
     // Rotate when connection policy changes so old QR credentials retain no new-policy authority.
     const switchingPendingMode =
       pending != null &&
@@ -172,7 +194,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       return refuseAutomaticWithoutRelay({
         code: 'relay_provider_unavailable',
         stage: 'provider_missing',
-        message: 'Orca Relay is not available on this desktop'
+        message: 'Orca Relay is not available on this host'
       })
     }
     const device = this.deviceRegistry?.getDevice(direct.deviceId)

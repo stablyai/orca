@@ -1,4 +1,4 @@
-import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../orca-cli-invocations'
+import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../cli/orca-cli-invocations'
 import type {
   AgentChildWorkKind,
   AgentChildWorkMembership,
@@ -27,7 +27,7 @@ export function isAgentChildWorkKind(kind: AgentChildWorkKind): boolean {
   return kind === 'agent'
 }
 
-function isAgentChildWork(child: AgentChildWorkLivenessCandidate): boolean {
+export function isAgentChildWork(child: AgentChildWorkLivenessCandidate): boolean {
   return (
     isAgentChildWorkKind(child.kind) || child.operation?.input === ORCA_ORCHESTRATION_WAIT_COMMAND
   )

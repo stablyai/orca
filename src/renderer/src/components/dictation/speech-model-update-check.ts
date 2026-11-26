@@ -1,6 +1,6 @@
-import { useAppStore } from '@/store'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech-types'
+import { useAppStore } from '@/store/index'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech/speech-types'
 import {
   findSpeechModelUpdateTarget,
   isSpeechModelReady,
@@ -78,11 +78,4 @@ async function runCheck(voice: CheckedVoice): Promise<SpeechModelUpdateTarget | 
     // A failed check never blocks dictation; the start path reports a model that can't load.
     return null
   }
-}
-
-export function resetSpeechModelUpdateCheckForTests(): void {
-  catalogRequest = null
-  readyModelIds.clear()
-  offeredTargets.clear()
-  inFlightChecks.clear()
 }

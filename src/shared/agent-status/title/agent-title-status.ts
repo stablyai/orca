@@ -1,5 +1,7 @@
 import { getDeepSeekBuildTitleStatus } from './providers/dsb-terminal-title'
 import { qoderTitleStatus } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
+import { cursorTitleStatus } from './providers/cursor-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
@@ -9,8 +11,6 @@ import {
 import {
   CLAUDE_IDLE,
   GEMINI_IDLE,
-  GEMINI_PERMISSION,
-  GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   QUARTER_CIRCLE_SPINNER_RE,
   containsAgentSpinnerGlyph,
@@ -25,8 +25,10 @@ import {
   isClaudeManagementTitle,
   isPiAgentTitle,
   isPiTerminalTitle,
-  isGeminiTerminalTitle,
-  isGrokRotatingWorkingTitle,
+  leadingGeminiGlyphStatus,
+  grokFrameTitleStatus,
+  GROK_PERMISSION_TITLE,
+  GROK_WORKING_TITLE,
   type AgentStatus
 } from './agent-title-core'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
@@ -57,6 +59,8 @@ export function createAgentStatusTracker(
   seedProgramActivity: (activity: AgentStatus | null) => void
   seedTitle: (title: string) => void
   restoreLastExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
+  /** The agent's end was proven elsewhere: no status stands, and no edge fires. */
+  forgetStatus: () => void
   reset: () => void
 } {
   // Restore a silent baseline so hidden agents can still emit their later idle transition.
@@ -120,6 +124,10 @@ export function createAgentStatusTracker(
       restorableExitStatus = null
       return restoredStatus
     },
+    forgetStatus(): void {
+      lastStatus = null
+      restorableExitStatus = null
+    },
     reset(): void {
       lastStatus = null
       restorableExitStatus = null
@@ -140,19 +148,15 @@ export function normalizeTerminalTitle(title: string): string {
     : title
 }
 
-const GEMINI_DISPLAY_LABEL = 'Gemini CLI'
 const QODER_DISPLAY_LABEL = 'Qoder CLI'
 const QODER_CN_DISPLAY_LABEL = 'Qoder CLI CN'
-const GROK_WORKING_TITLE = '\u280b Grok'
 const QODER_TITLE_GLYPHS = { working: GEMINI_WORKING, permission: '▲', idle: GEMINI_IDLE } as const
 const DESTRUCTIVE_TITLE_STAMPS: ReadonlySet<string> = new Set([
-  ...[GEMINI_WORKING, GEMINI_PERMISSION, GEMINI_IDLE].map(
-    (glyph) => `${glyph} ${GEMINI_DISPLAY_LABEL}`
-  ),
   ...Object.values(QODER_TITLE_GLYPHS).flatMap((glyph) =>
     [QODER_DISPLAY_LABEL, QODER_CN_DISPLAY_LABEL].map((label) => `${glyph} ${label}`)
   ),
-  GROK_WORKING_TITLE
+  GROK_WORKING_TITLE,
+  GROK_PERMISSION_TITLE
 ])
 
 export function isNormalizedAgentTitleStamp(title: string): boolean {
@@ -174,29 +178,15 @@ function proposeTerminalTitle(title: string): string {
     return title
   }
 
-  // Pi/OMP explicit markers outrank Gemini glyphs embedded in free-form session/cwd labels.
-  if (!getPiStateTitleStatus(title) && isGeminiTerminalTitle(title)) {
-    const status = detectAgentStatusFromTitle(title)
-    if (status === 'permission') {
-      return `${GEMINI_PERMISSION} ${GEMINI_DISPLAY_LABEL}`
-    }
-    if (status === 'working') {
-      return `${GEMINI_WORKING} ${GEMINI_DISPLAY_LABEL}`
-    }
-    // Require a glyph before stamping Gemini rest state; a bare shell auto-title is not readiness evidence.
-    if (status === 'idle' && title.includes(GEMINI_IDLE)) {
-      return `${GEMINI_IDLE} ${GEMINI_DISPLAY_LABEL}`
-    }
-  }
-
   // Canonicalize Pi/OMP braille frames in place, including medial frames and multiplexer segments, retaining session/cwd (#16093, #8032).
   if (getWrapperTitleSegments(title).some(isPiAgentTitle)) {
     return canonicalizeBrailleSpinnerFrame(title)
   }
 
-  // Collapse Grok spinner/status churn to one label; idle titles pass through so the final semantic title remains (#7863).
-  if (isGrokRotatingWorkingTitle(title)) {
-    return GROK_WORKING_TITLE
+  // Collapse Grok spinner/activity/blink churn to one label per state; idle titles pass through so the final semantic title remains (#7863).
+  const grokStatus = grokFrameTitleStatus(title)
+  if (grokStatus) {
+    return grokStatus === 'permission' ? GROK_PERMISSION_TITLE : GROK_WORKING_TITLE
   }
 
   return title
@@ -235,6 +225,14 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (qoderStatus) {
     return qoderStatus
   }
+  const cursorStatus = cursorTitleStatus(title)
+  if (cursorStatus) {
+    return cursorStatus
+  }
+  const grokStatus = grokFrameTitleStatus(title)
+  if (grokStatus) {
+    return grokStatus
+  }
   if (!title || isClaudeManagementTitle(title)) {
     return null
   }
@@ -254,14 +252,9 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
 
   // DSH uses Gemini's ✦ working glyph at rest; ignore it here. DSH braille covers active spinners and hooks remain authoritative.
   if (!isDshTerminalTitle(title)) {
-    if (title.includes(GEMINI_PERMISSION)) {
-      return 'permission'
-    }
-    if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
-      return 'working'
-    }
-    if (title.includes(GEMINI_IDLE)) {
-      return 'idle'
+    const geminiGlyphStatus = leadingGeminiGlyphStatus(title)
+    if (geminiGlyphStatus) {
+      return geminiGlyphStatus
     }
   }
 
@@ -272,6 +265,10 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   }
 
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
+    return 'idle'
+  }
+  // Activity comes from jcodePaneTitleStatus; the identity alone says Jcode is at rest.
+  if (isJcodeIdentityTerminalTitle(title)) {
     return 'idle'
   }
   // Read π ! as blocked before generic idle or OMP user waits disappear.

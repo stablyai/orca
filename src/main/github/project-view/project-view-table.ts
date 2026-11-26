@@ -1,9 +1,12 @@
-import type { GetProjectViewTableArgs } from '../../../shared/github/project-request-types'
-import type { GetProjectViewTableResult } from '../../../shared/github/project-result-types'
-import type { GitHubProjectTable } from '../../../shared/github/project-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
-import { isRenderableProjectViewLayout } from '../../../shared/github/project-types'
-import { assertPositiveInt, assertSlug } from './internals'
+import type { GetProjectViewTableArgs } from '../../../shared/github/projects/project-request-types'
+import type { GetProjectViewTableResult } from '../../../shared/github/projects/project-result-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
+import {
+  type GitHubProjectTable,
+  isRenderableProjectViewLayout
+} from '../../../shared/github/projects/project-types'
+
+import { assertPositiveInt, assertSlug } from './project-argument-validation'
 import {
   fetchProjectViewsPage,
   fetchViewFieldsContinuation,

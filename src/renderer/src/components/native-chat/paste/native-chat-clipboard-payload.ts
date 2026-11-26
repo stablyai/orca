@@ -2,7 +2,7 @@ import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
 import {
   clipboardEventPromptText,
   textOnlyLabelsCopiedFiles
-} from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
+} from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
 import { withPastedLinks } from './native-chat-pasted-links'
 
 /** Accept native pane clipboard events and React synthetic events. */
@@ -14,11 +14,15 @@ export type ClipboardEventLike = {
 
 /** Use drop-style resolution only when every copied file has a local path and text contains labels alone. */
 export function clipboardEventCopiedFilePaths(event: ClipboardEventLike): string[] {
-  const files = Array.from(event.clipboardData?.files ?? [])
   const fs = window.api?.fs
   // The web fallback proxy fabricates methods absent from the concrete namespace.
   const getPathForFile = fs && 'getPathForFile' in fs ? fs.getPathForFile : undefined
-  if (files.length === 0 || !getPathForFile) {
+  if (!getPathForFile) {
+    return []
+  }
+  // Read files only once a path can resolve; Chromium encodes clipboard bitmaps synchronously here.
+  const files = Array.from(event.clipboardData?.files ?? [])
+  if (files.length === 0) {
     return []
   }
   const paths: string[] = []

@@ -37,7 +37,8 @@ const before = await load(
   execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' }),
   'PluginCommandRegistry'
 )
-const after = await load(file, readFileSync(file, 'utf8'), 'PluginCommandRegistry')
+const currentFile = 'src/main/plugins/commands/plugin-command-registry.ts'
+const after = await load(currentFile, readFileSync(currentFile, 'utf8'), 'PluginCommandRegistry')
 const results = []
 for (const count of [1, 16, 64, 256]) {
   const plugins = [

@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
-import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
+import { getWorktreeIdsWithLiveAgent } from '@/lib/workspace/activity/worktree-activity-state'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 
@@ -25,8 +25,6 @@ const AGENT_PROCESS_NAMES = new Set([
   'codex',
   'crush',
   'droid',
-  'gemini',
-  'gemini-cli',
   'goose',
   'opencode'
 ])

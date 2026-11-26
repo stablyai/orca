@@ -11,7 +11,7 @@ export function resetMobileWebBundleAssetVerdictsForTests(): void {
   verdicts.clear()
 }
 
-/** Cache one asset hash verdict per build; store the pending promise before await so concurrent readers share the hash. */
+/** Cache one passing asset hash verdict per build; store the pending promise before await so concurrent readers share the hash. */
 export function verifyMobileWebBundleAsset(
   root: string,
   buildId: string,
@@ -22,11 +22,16 @@ export function verifyMobileWebBundleAsset(
   if (cached) {
     return cached
   }
-  const verdict = hashAsset(root, asset).then(undefined, (error: unknown) => {
-    // A read that failed is not evidence the bytes changed, so it is not remembered as a verdict.
-    verdicts.delete(key)
-    throw error
-  })
+  const verdict = hashAsset(root, asset)
+  // Keep only a match: a package install may still be writing this build's files, and a failed read proves nothing.
+  void verdict.then(
+    (matches) => {
+      if (!matches) {
+        verdicts.delete(key)
+      }
+    },
+    () => verdicts.delete(key)
+  )
   verdicts.set(key, verdict)
   return verdict
 }

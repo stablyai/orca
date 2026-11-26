@@ -1,5 +1,5 @@
-import { useAppStore } from '@/store'
-import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
+import { useAppStore } from '@/store/index'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
 import { createIpcPtyTransport } from '../../pty-transport/ipc/pty-transport'
 import { createRemoteRuntimePtyTransport } from '../../pty-transport/remote-runtime/remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'

@@ -7,7 +7,7 @@ import {
   OpenAiSpeechKeySet,
   SpeechModelAction,
   SpeechSetupRead
-} from '../../../../../shared/rpc-contract/speech-params'
+} from '../../../../../shared/rpc-contract/speech/speech-params'
 
 export const SPEECH_METHODS = [
   defineMethod({

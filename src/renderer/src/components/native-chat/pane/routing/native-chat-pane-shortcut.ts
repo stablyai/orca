@@ -8,7 +8,7 @@ import type {
 import type { NativeChatContextMenuActions } from '../actions/use-native-chat-context-menu'
 
 export type NativeChatSplitDirection = 'right' | 'down'
-type NativeChatPaneShortcut = NativeChatSplitDirection | 'equalize'
+export type NativeChatPaneShortcut = NativeChatSplitDirection | 'equalize'
 
 type NativeChatTerminalPaneShortcutActions = Pick<
   NativeChatContextMenuActions,

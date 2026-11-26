@@ -2,12 +2,11 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import {
   AI_TEXT_ACTION_IDS,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
-  type AiActionId
+  type AiActionId,
+  type AiTextActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
-  CUSTOM_AGENT_ID,
   type CustomAgentId,
-  getCommitMessageAgentCapability,
   isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -18,14 +17,23 @@ import type { Translate } from '@/i18n/use-translate'
 
 export const AI_TEXT_ACTION_ID_SET = new Set<string>(AI_TEXT_ACTION_IDS)
 export const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
-const TEXT_GENERATION_AGENT_ID_SET = new Set(
-  listCommitMessageAgentCapabilities().map((capability) => capability.id)
-)
+
+function isAiTextActionId(actionId: AiActionId): actionId is AiTextActionId {
+  return AI_TEXT_ACTION_ID_SET.has(actionId)
+}
+
+function textGenerationAgentIds(actionId: AiTextActionId): Set<string> {
+  return new Set(listCommitMessageAgentCapabilities(actionId).map((capability) => capability.id))
+}
 
 export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionId, string> => ({
   conversationName: translate(
     'settings.chat.names.recipeDescription',
     'Generate a short name from the first message in a new chat.'
+  ),
+  dictationCleanup: translate(
+    'settings.voice.cleanup.recipeDescription',
+    'Clean up dictated text before it lands.'
   ),
   commitMessage: translate(
     'auto.components.settings.source.control.action.recipe.options.commitMessage',
@@ -61,60 +69,24 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
   )
 }))
 
-const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
-
-const AGENT_ARGS_PLACEHOLDER_OVERRIDES: Partial<Record<TuiAgent, string>> = {
-  antigravity: '--effort low',
-  // Short, reviewable Source Control prompts default to the mini model.
-  codex: '--model gpt-5.4-mini',
-  copilot: '--model gpt-5.4-mini',
-  omp: '--model <provider/model>'
-}
-
-const MODEL_FLAG_BY_AGENT: Partial<Record<TuiAgent, string>> = {
-  amp: '--mode'
-}
-
-export function getSourceControlAgentArgsPlaceholder(
-  agentId: TuiAgent | CustomAgentId | null | undefined
-): string {
-  if (!agentId) {
-    return FALLBACK_AGENT_ARGS_PLACEHOLDER
-  }
-
-  if (agentId === CUSTOM_AGENT_ID) {
-    return '--flag value'
-  }
-
-  const override = AGENT_ARGS_PLACEHOLDER_OVERRIDES[agentId]
-  if (override) {
-    return override
-  }
-
-  const capability = getCommitMessageAgentCapability(agentId)
-  if (!capability) {
-    return '--model <model>'
-  }
-
-  return `${MODEL_FLAG_BY_AGENT[agentId] ?? '--model'} ${capability.defaultModelId}`
-}
+// The model picker owns the model, so the example names no model that could differ from what runs.
+export const SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER = '--flag value'
 
 // Only text generators can run these actions; retain unsupported saved selections for visibility.
 export function getAgentCatalogForAction(
   actionId: AiActionId,
   selectedAgent: TuiAgent | CustomAgentId | null | undefined
 ): AgentCatalogEntry[] {
-  if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
+  if (!isAiTextActionId(actionId)) {
     return getAgentCatalog()
   }
-  return getAgentCatalog().filter(
-    (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
-  )
+  const agentIds = textGenerationAgentIds(actionId)
+  return getAgentCatalog().filter((agent) => agentIds.has(agent.id) || agent.id === selectedAgent)
 }
 
-function formatSupportedAgentLabels(t: Translate = translate): string {
+function formatSupportedAgentLabels(actionId: AiTextActionId, t: Translate = translate): string {
   return [
-    ...listCommitMessageAgentCapabilities().map((capability) => capability.label),
+    ...listCommitMessageAgentCapabilities(actionId).map((capability) => capability.label),
     t(
       'auto.components.settings.source.control.action.recipe.options.customCommand',
       'Custom command'
@@ -126,13 +98,13 @@ export function getSourceControlActionAgentSupportText(
   actionId: AiActionId,
   t: Translate = translate
 ): string | null {
-  if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
+  if (!isAiTextActionId(actionId)) {
     return null
   }
   return t(
     'auto.components.settings.source.control.action.recipe.options.supportedAgents',
     'Supported agents for this recipe: {{value0}}.',
-    { value0: formatSupportedAgentLabels(t) }
+    { value0: formatSupportedAgentLabels(actionId, t) }
   )
 }
 
@@ -141,12 +113,12 @@ export function getSourceControlActionAgentWarningText(
   selectedAgent: TuiAgent | CustomAgentId | null | undefined,
   t: Translate = translate
 ): string | null {
-  if (!AI_TEXT_ACTION_ID_SET.has(actionId)) {
+  if (!isAiTextActionId(actionId)) {
     return null
   }
 
   if (selectedAgent && !isCustomAgentId(selectedAgent)) {
-    if (TEXT_GENERATION_AGENT_ID_SET.has(selectedAgent)) {
+    if (textGenerationAgentIds(actionId).has(selectedAgent)) {
       return null
     }
     const agentLabel = getAgentCatalog().find((agent) => agent.id === selectedAgent)?.label

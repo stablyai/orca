@@ -1,8 +1,12 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { StringDecoder } from 'node:string_decoder'
 import { FlexAssembler, arrayRule, objectRule } from 'stream-json/core/utils/flex-assembler.js'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { createJsonTokenReader } from '../../../shared/json-stream/json-token-reader'
+import { ownRetainedString } from '../../../shared/text/own-retained-string'
 
 /** Fold one root array while retaining only the root fields the agent parser uses. */
 export async function readStreamedSessionDocument<T>(args: {
@@ -114,7 +118,12 @@ export async function readStreamedSessionDocument<T>(args: {
       ) {
         record[token.value] = Object.create(null)
       }
-      assembler.consume(token)
+      // Cached metadata must not pin the decoded chunk that also held discarded messages.
+      assembler.consume(
+        token.name === 'stringValue' && !inFoldedArray
+          ? { ...token, value: ownRetainedString(token.value) }
+          : token
+      )
     },
     64 * 1024,
     () => {

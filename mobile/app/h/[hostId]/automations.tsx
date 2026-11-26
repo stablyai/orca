@@ -3,8 +3,8 @@ import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShe
 import {
   shellScreenRoute,
   shellScreenRouteKey
-} from '../../../src/mobile-web-shell/shell-screen-route'
-import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+} from '../../../src/mobile-web-shell/routing/shell-screen-route'
+import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 
 export default function MobileAutomationsRoute() {

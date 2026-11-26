@@ -6,7 +6,7 @@ import {
   type SetStateAction
 } from 'react'
 import type { MobileSessionTab } from './mobile-session-tabs'
-import type { Terminal } from '../../terminal/session/mobile-terminal-model'
+import type { TerminalRecord as Terminal } from '../../terminal/session/inventory/mobile-terminal-records'
 
 type MarkdownTab = Extract<MobileSessionTab, { type: 'markdown' }>
 type FileTab = Extract<MobileSessionTab, { type: 'file' }>

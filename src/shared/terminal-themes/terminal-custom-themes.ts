@@ -1,5 +1,5 @@
 import type { TerminalColorOverrides } from './terminal-color-overrides'
-import { HEX_COLOR_RE } from '../color-validation'
+import { HEX_COLOR_RE } from '../color/color-validation'
 
 export type TerminalCustomThemeSource = 'warp' | 'ghostty' | 'manual'
 export type TerminalCustomThemeMode = 'dark' | 'light' | 'unknown'

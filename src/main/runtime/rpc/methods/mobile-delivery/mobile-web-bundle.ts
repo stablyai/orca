@@ -50,8 +50,8 @@ function bundleError(code: MobileWebBundleErrorCode): InvalidArgumentError {
   return new InvalidArgumentError(code)
 }
 
-function requireBundle(): BundledMobileWebBundle {
-  const bundle = loadBundledMobileWebBundle()
+async function requireBundle(): Promise<BundledMobileWebBundle> {
+  const bundle = await loadBundledMobileWebBundle()
   if (!bundle) {
     throw bundleError('mobile_web_bundle_unavailable')
   }
@@ -69,7 +69,7 @@ async function readLocaleCatalog(
   params: MobileWebBundleLocaleCatalogParams,
   ctx: RpcContext
 ): Promise<MobileWebBundleLocaleCatalogResult> {
-  const bundle = requireBundle()
+  const bundle = await requireBundle()
   const entry = bundle.manifest.catalogs?.find((catalog) => catalog.locale === params.locale)
   if (!entry) {
     throw bundleError('mobile_web_bundle_asset_unknown')
@@ -157,7 +157,7 @@ async function readVerifiedWindow<T>(
   encode: (window: VerifiedWindow) => Promise<T>,
   sourceOf: (asset: MobileWebBundleAsset) => WindowSource = (asset) => asset
 ): Promise<T> {
-  const bundle = requireBundle()
+  const bundle = await requireBundle()
   // Check build before path: auto-update means restart from the manifest, not missing-asset.
   if (params.buildId !== bundle.manifest.buildId) {
     throw bundleError('mobile_web_bundle_build_changed')
@@ -212,7 +212,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (): Promise<MobileWebBundleManifestResult> => ({
-      manifest: requireBundle().manifest,
+      manifest: (await requireBundle()).manifest,
       chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
       // Complete replies must arrive within the phone's stall budget even on slow relays.
       rangeBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES

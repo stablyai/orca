@@ -1,14 +1,15 @@
 import { hostQualifiedRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
-import { RUNTIME_AUTOMATION_PATCH_KEYS } from './runtime-automation-patch-keys'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { AutomationService } from '../../../automations/service'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { AutomationService } from '../../../automations/automation-service'
 import type {
   Automation,
   AutomationUpdateInput
 } from '../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import type { AutomationRunEvent } from '../../../../shared/automation-event-triggers'
+import { AutomationWebhookSaves } from '../../../webhooks/automation-webhook-saves'
 import type {
   AutomationListParams,
   AutomationListResult
@@ -16,21 +17,56 @@ import type {
 import type {
   AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition,
-  AutomationDestination
+  AutomationDestination,
+  AutomationUpdatePreconditions
 } from '../../../../shared/automations/ownership/automation-owner-precondition'
-import { runAutomationNowFenced } from '../../../automations/refused-manual-run'
+import { runAutomationNowFenced } from '../../../automations/dispatch/refused-manual-run'
+import type { EventRunOptions } from '../../../automations/automation-trigger-runs'
 import { paginateAutomationRuns } from '../../../../shared/automations/history/automation-run-cursor'
-import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import {
+  copyRuntimeAutomationPatchValues,
+  hasRuntimeAutomationUpdateValue
+} from './runtime-automation-update-value'
+import {
+  updateRuntimeAutomations,
+  type RuntimeAutomationBatchUpdate
+} from './runtime-automation-batch-update'
 import {
   assertAutomationRunContextMatchesTarget,
-  type RuntimeAutomationTargetResolvers,
-  type RuntimeAutomationTargetInput,
   type RuntimeAutomationCreateInput,
   type RuntimeAutomationUpdateInput
 } from './runtime-automation-run-context'
+import type { ConnectorRefResolver } from '../../../connector-cloud/connector-ref-resolution'
+import { assertBotPlacesUnchanged } from '../../../automations/bot-automation-place-refs'
+import type { Bot } from '../../../../shared/bot-types'
+import type { TriggerPeopleSearch } from '../../../automations/bot-trigger-people'
+import { botAutomationCreateRules, patchBotAutomationUpdate } from './runtime-automation-bot-update'
+import {
+  assertAutomationBotAtWrite,
+  botAutomationAgent,
+  botAutomationTarget,
+  requireCreatableAutomationBot,
+  assertThreadReplies,
+  resolveRuntimeAutomationTarget,
+  type BotChatLookup,
+  type RuntimeAutomationTargetResolvers
+} from './runtime-automation-target'
 
 export class RuntimeAutomationController {
   private service: AutomationService | null = null
+  /** Set once this host can make webhooks. */
+  readonly webhooks = new AutomationWebhookSaves()
+
+  /** Whether this host's Orca Cloud binds an event run to its thread; set with the connector. */
+  takesThreadReplies: () => boolean = () => false
+  /** Looks places up as refs where this host's Orca Cloud takes them; set with the connector. */
+  placeRefs: () => ConnectorRefResolver | null = () => null
+  /** Who a rule's from= names, where this host's Orca Cloud takes it; set with the connector. */
+  triggerPeople: (bot: Bot) => TriggerPeopleSearch | null = () => null
+  /** Which rules this host's Orca Cloud takes (CloudTriggers); set with the connector. */
+  cloudTriggers = () => ({ own: false, github2: false, workflows: false, ciFinished: false })
+  /** A bot's chat a run may continue; set with the runtime, which reads its chats. */
+  botChat: BotChatLookup = async () => null
 
   constructor(
     private readonly store: RuntimeStore | null,
@@ -66,6 +102,13 @@ export class RuntimeAutomationController {
     return this.store.listAutomationRuns(automationId)
   }
 
+  listRunsByAutomation(automationIds: readonly string[]): Map<string, AutomationRun[]> {
+    if (!this.store?.listAutomationRunsByAutomation) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.listAutomationRunsByAutomation(automationIds)
+  }
+
   listRunsPage(automationId?: string, limit?: number, cursor?: string) {
     if (this.store?.listAutomationRunsPage) {
       return this.store.listAutomationRunsPage(automationId, limit, cursor)
@@ -94,65 +137,94 @@ export class RuntimeAutomationController {
 
   async create(
     input: RuntimeAutomationCreateInput,
-    destination?: AutomationDestination
+    destination?: AutomationDestination,
+    /** Runs after the target resolves, right before the write; a throw refuses it (a plugin
+     *  creator that lost its approval meanwhile). */
+    beforeWrite?: () => void
   ): Promise<Automation> {
-    if (!this.store?.createAutomation) {
+    const store = this.store
+    if (!store?.createAutomation) {
       throw new Error('runtime_unavailable')
     }
-    const target = await this.resolveTarget(input)
+    const createAutomation = store.createAutomation.bind(store)
+    const bot = requireCreatableAutomationBot(store, input, this.webhooks)
+    assertThreadReplies(this.takesThreadReplies, input.bot)
+    const target = bot
+      ? botAutomationTarget(bot)
+      : await resolveRuntimeAutomationTarget(this.resolvers, input)
+    beforeWrite?.()
     assertAutomationRunContextMatchesTarget(input.runContext, target.repo)
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    const automation = this.store.createAutomation(
-      {
-        creationKey: input.creationKey,
-        name: input.name,
-        prompt: input.prompt,
-        precheck: input.precheck,
-        agentId: input.agentId,
-        extraAgentArgs: input.extraAgentArgs,
-        launchSetupPatch: input.launchSetupPatch,
-        runContext: input.runContext,
-        sourceContext: input.sourceContext,
-        projectId: target.projectId,
-        workspaceMode: target.workspaceMode,
-        workspaceId: target.workspaceId,
-        baseBranch: input.baseBranch,
-        setupDecision: input.setupDecision,
-        setupTrustHash: input.setupTrustHash,
-        reuseSession: input.reuseSession,
-        timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-        rrule: input.rrule,
-        dtstart: input.dtstart,
-        enabled: input.enabled,
-        missedRunGraceMinutes: input.missedRunGraceMinutes
-      },
-      { destination: destination ?? input.destination, resolvedRepo: target.repo ?? undefined }
-    )
-    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
-    return automation
+    const { on: rules, bot: botTarget } = await botAutomationCreateRules(this, bot, input)
+    const chosen = destination ?? input.destination
+    return await this.webhooks.save(bot && { botId: bot.id }, rules, async (on, id) => {
+      assertAutomationBotAtWrite(store, botTarget)
+      const automation = createAutomation(
+        {
+          creationKey: input.creationKey,
+          name: input.name,
+          prompt: input.prompt,
+          precheck: input.precheck,
+          agentId: bot ? botAutomationAgent(botTarget, bot) : input.agentId,
+          extraAgentArgs: input.extraAgentArgs,
+          launchSetupPatch: input.launchSetupPatch,
+          runContext: input.runContext,
+          sourceContext: input.sourceContext,
+          ...(botTarget ? { bot: botTarget } : {}),
+          ...(on ? { on } : {}),
+          ...(input.once ? { once: input.once } : {}),
+          projectId: target.projectId,
+          workspaceMode: target.workspaceMode,
+          workspaceId: target.workspaceId,
+          baseBranch: input.baseBranch,
+          setupDecision: input.setupDecision,
+          setupTrustHash: input.setupTrustHash,
+          reuseSession: input.reuseSession,
+          timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezoneExplicit: input.timezoneExplicit,
+          rrule: input.rrule,
+          dtstart: input.dtstart,
+          enabled: input.enabled,
+          missedRunGraceMinutes: input.missedRunGraceMinutes,
+          createdBy: input.createdBy
+        },
+        { destination: chosen, id, resolvedRepo: target.repo ?? undefined }
+      )
+      await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+      return automation
+    })
   }
 
   async update(
     id: string,
     updates: RuntimeAutomationUpdateInput,
-    // Forwarded unchanged so the store checks every precondition against the record it writes.
-    options?: Parameters<NonNullable<RuntimeStore['updateAutomation']>>[2]
+    options?: AutomationUpdatePreconditions
   ): Promise<Automation> {
-    if (!this.store?.updateAutomation) {
+    const store = this.store
+    if (!store?.updateAutomation) {
       throw new Error('runtime_unavailable')
     }
+    const updateAutomation = store.updateAutomation.bind(store)
     const current = this.show(id)
     const patch: AutomationUpdateInput = {}
-    this.copyPatchValues(updates, patch)
+    copyRuntimeAutomationPatchValues(updates, patch)
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspaceMode')
+    const botChanged = hasRuntimeAutomationUpdateValue(updates, 'bot')
+    if (current.bot ? targetChanged : botChanged) {
+      throw new Error('An automation cannot move between a bot and a project.')
+    }
+    assertThreadReplies(this.takesThreadReplies, updates.bot, current)
+    if (current.bot) {
+      await patchBotAutomationUpdate(this, store, { ...current, bot: current.bot }, updates, patch)
+    }
     let resolvedRepo: Repo | undefined
     if (targetChanged) {
-      const target = await this.resolveTarget(updates, current)
+      const target = await resolveRuntimeAutomationTarget(this.resolvers, updates, current)
       resolvedRepo = target.repo ?? undefined
       assertAutomationRunContextMatchesTarget(updates.runContext, target.repo)
       if (patch.reuseSession === true && target.workspaceMode !== 'existing') {
@@ -182,9 +254,23 @@ export class RuntimeAutomationController {
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    const automation = this.store.updateAutomation(id, patch, { ...options, resolvedRepo })
-    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
-    return automation
+    const owner = current.bot ? { botId: current.bot.botId, current } : null
+    return await this.webhooks.save(owner, patch.on, async (on) => {
+      // Checked with the write, so a pass that read it earlier never overwrites a newer edit.
+      assertBotPlacesUnchanged(this.show(id), options?.unchangedSince)
+      assertAutomationBotAtWrite(store, updates.bot)
+      const automation = updateAutomation(id, on ? { ...patch, on } : patch, {
+        ...options,
+        resolvedRepo
+      })
+      await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+      return automation
+    })
+  }
+
+  /** `update` for many automations with one store write and one flush; moves need `update`. */
+  updateMany(entries: readonly RuntimeAutomationBatchUpdate[]) {
+    return updateRuntimeAutomations(this.store, entries)
   }
 
   async delete(
@@ -211,6 +297,13 @@ export class RuntimeAutomationController {
     })
   }
 
+  async runForEvent(id: string, event: AutomationRunEvent, gate?: EventRunOptions) {
+    if (!this.service) {
+      throw new Error('runtime_unavailable')
+    }
+    return await this.service.runForEvent(id, event, gate)
+  }
+
   assertOwner(
     id: string,
     expectedOwner: AutomationOwnerPrecondition | undefined,
@@ -223,81 +316,5 @@ export class RuntimeAutomationController {
       return
     }
     this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
-  }
-
-  private copyPatchValues(
-    updates: RuntimeAutomationUpdateInput,
-    patch: AutomationUpdateInput
-  ): void {
-    for (const key of RUNTIME_AUTOMATION_PATCH_KEYS) {
-      if (hasRuntimeAutomationUpdateValue(updates, key)) {
-        Object.assign(patch, { [key]: updates[key] })
-      }
-    }
-  }
-  private async resolveTarget(
-    input: RuntimeAutomationTargetInput,
-    current?: Automation
-  ): Promise<{
-    projectId: string
-    workspaceMode: Automation['workspaceMode']
-    workspaceId?: string | null
-    repo: Repo | null
-  }> {
-    const hasRepo = input.repo !== undefined
-    const hasWorkspace = input.workspace !== undefined
-    if (
-      current?.workspaceMode === 'existing' &&
-      hasRepo &&
-      !hasWorkspace &&
-      input.workspaceMode !== 'new_per_run'
-    ) {
-      throw new Error(
-        'Repo updates for existing-workspace automation require workspaceMode new_per_run.'
-      )
-    }
-    const contextHost = parseExecutionHostId(
-      input.runContext?.hostId ??
-        (!input.repo && !input.workspace ? current?.runContext?.hostId : undefined)
-    )
-    const hostId = contextHost?.kind === 'runtime' ? 'local' : contextHost?.id
-    const workspace = input.workspace
-      ? await this.resolvers.showManagedWorktree(input.workspace, hostId)
-      : null
-    const repoSelector =
-      input.repo ??
-      (workspace?.repoId
-        ? `id:${workspace.repoId}`
-        : current?.projectId
-          ? `id:${current.projectId}`
-          : null)
-    const repo = repoSelector
-      ? await this.resolvers.showRepo(
-          hostQualifiedRepoSelector(repoSelector, hostId ?? workspace?.hostId)
-        )
-      : null
-    const workspaceMode =
-      input.workspaceMode ??
-      (workspace
-        ? 'existing'
-        : input.repo && !current
-          ? 'new_per_run'
-          : (current?.workspaceMode ?? 'new_per_run'))
-    if (workspaceMode === 'existing') {
-      const workspaceId = workspace?.id ?? current?.workspaceId
-      const projectId = workspace?.repoId ?? current?.projectId
-      if (repo && repo.id !== projectId) {
-        throw new Error('Selected workspace belongs to a different repo.')
-      }
-      if (!workspaceId || !projectId) {
-        throw new Error('Existing-workspace automation requires --workspace.')
-      }
-      return { projectId, workspaceMode, workspaceId, repo }
-    }
-    const projectId = repo?.id ?? workspace?.repoId ?? current?.projectId
-    if (!projectId) {
-      throw new Error('Automation requires --repo or --workspace.')
-    }
-    return { projectId, workspaceMode: 'new_per_run', workspaceId: null, repo }
   }
 }

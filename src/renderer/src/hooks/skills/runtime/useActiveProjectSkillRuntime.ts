@@ -1,81 +1,28 @@
 import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { SkillDiscoveryTarget } from '../../../../../shared/skills'
 import { useActiveSkillDiscoveryRuntimeTarget } from '../discovery/use-active-skill-discovery-runtime-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import {
-  getGlobalWindowsExecutionRuntimeContext,
-  getLocalProjectExecutionRuntimeContext
-} from '@/lib/local-preflight-context'
-import {
-  getProjectAgentSkillRuntime,
-  getProjectAgentSkillTerminalShellOverride,
-  getProjectSkillDiscoveryTarget,
-  getProjectSkillInstallDisabledReason,
-  type ProjectAgentSkillRuntime
-} from '@/lib/skills/runtime/project-skill-runtime'
 import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { servingExecutionHostId } from '@/lib/skills/runtime/bundled-skill-target'
 import {
-  resolveBundledSkillTarget,
-  servingExecutionHostId,
-  type BundledSkillTarget
-} from '@/lib/skills/runtime/bundled-skill-target'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+  resolveProjectSkillRuntime,
+  type ProjectSkillRuntime
+} from '@/lib/skills/runtime/project-skill-runtime-resolution'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { useAppStore } from '@/store/index'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-
-type ActiveProjectSkillRuntime = {
-  projectRuntime?: ProjectExecutionRuntimeResolution
-  discoveryTarget?: SkillDiscoveryTarget
-  discoveryRuntimeTarget: RuntimeClientTarget | null
-  agentRuntime?: ProjectAgentSkillRuntime
-  // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
-  terminalShellOverride?: string
-  installDisabledReason: string | null
-  canUseSkillFreshness: boolean
-  /** Where Update skills plans Orca's skills; null while that host is unknown. */
-  bundledSkillTarget: BundledSkillTarget | null
-}
-
-const LOCAL_RUNTIME_TARGET = { kind: 'local' } as const
-
-/** Whether setup surfaces show the plan's pill: this machine or a paired host, not WSL yet. */
-export function shouldUseSkillFreshness(
-  runtimeTarget: RuntimeClientTarget | null,
-  agentRuntime?: ProjectAgentSkillRuntime
-): boolean {
-  return (
-    runtimeTarget?.kind === 'environment' ||
-    (runtimeTarget?.kind === 'local' && agentRuntime?.runtime !== 'wsl')
-  )
-}
-
-export function hasLocalSkillRuntimeAuthority(runtimeTarget: RuntimeClientTarget | null): boolean {
-  return runtimeTarget?.kind === 'local'
-}
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 // Compare the full serialized Windows resolution so equal store-driven reconstructions retain discovery identity, including future fields.
-function activeProjectSkillRuntimeIdentity(runtime: ActiveProjectSkillRuntime): string {
+function activeProjectSkillRuntimeIdentity(runtime: ProjectSkillRuntime): string {
   return JSON.stringify(runtime)
 }
 
-/** Keeps only a WSL-targeting resolution; a windows-host one is the same as having none here. */
-function wslOnly(
-  resolution: ProjectExecutionRuntimeResolution | undefined
-): ProjectExecutionRuntimeResolution | undefined {
-  if (!resolution) {
-    return undefined
-  }
-  const targetsWsl = resolution.status === 'repair-required' || resolution.runtime.kind === 'wsl'
-  return targetsWsl ? resolution : undefined
-}
-
-export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
+/** The active project's skill runtime; with hostId, that host's, using the active project only when it lives there. */
+export function useActiveProjectSkillRuntime(hostId?: ExecutionHostId): ProjectSkillRuntime {
   const runtimeState = useAppStore(
     useShallow((state) => ({
       activeRepoId: state.activeRepoId,
@@ -97,71 +44,31 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   const currentPlatform = getCurrentPlatform()
   const windowsCapabilities = useWindowsTerminalCapabilities(currentPlatform === 'win32')
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const webClientEnvironmentId = useAppStore(getPairedWebClientEnvironmentId)
 
   const resolved = useMemo(() => {
-    const wslContext = {
-      wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
-      availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
+    const input = {
+      state: runtimeState,
+      activeWorkspaceHostId,
+      runtimeTarget,
+      currentPlatform,
+      wslContext: {
+        wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
+        availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
+      },
+      hostId,
+      webClientEnvironmentId
     }
-    const ownerRuntimeTarget =
-      runtimeState.activeWorktreeId && activeWorkspaceHostId === LOCAL_EXECUTION_HOST_ID
-        ? LOCAL_RUNTIME_TARGET
-        : runtimeTarget
-    const localAuthority =
-      hasLocalSkillRuntimeAuthority(ownerRuntimeTarget) &&
-      (!runtimeState.activeWorktreeId || activeWorkspaceHostId === LOCAL_EXECUTION_HOST_ID)
-    const projectRuntime = localAuthority
-      ? (getLocalProjectExecutionRuntimeContext(
-          runtimeState,
-          undefined,
-          currentPlatform,
-          wslContext
-        ) ??
-        // Global WSL is the only no-project default that changes the install target (#12103).
-        wslOnly(
-          getGlobalWindowsExecutionRuntimeContext(
-            runtimeState,
-            undefined,
-            currentPlatform,
-            wslContext
-          )
-        ))
-      : undefined
-    const bundledSkillTarget = resolveBundledSkillTarget(
-      ownerRuntimeTarget,
-      projectRuntime,
-      runtimeState.activeWorktreeId ? activeWorkspaceHostId : undefined
-    )
-    const discoveryRuntimeTarget =
-      bundledSkillTarget?.kind === 'ssh'
-        ? null
-        : (bundledSkillTarget ?? (localAuthority && projectRuntime ? ownerRuntimeTarget : null))
-    if (!projectRuntime) {
-      return {
-        discoveryRuntimeTarget,
-        installDisabledReason: null,
-        canUseSkillFreshness: shouldUseSkillFreshness(discoveryRuntimeTarget),
-        bundledSkillTarget
-      }
-    }
-
-    const agentRuntime = getProjectAgentSkillRuntime(projectRuntime, currentPlatform)
-    return {
-      projectRuntime,
-      discoveryRuntimeTarget,
-      discoveryTarget: getProjectSkillDiscoveryTarget(projectRuntime),
-      agentRuntime,
-      // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
-      terminalShellOverride: getProjectAgentSkillTerminalShellOverride(
-        currentPlatform,
-        runtimeState.settings,
-        agentRuntime
-      ),
-      installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime),
-      canUseSkillFreshness: shouldUseSkillFreshness(discoveryRuntimeTarget, agentRuntime),
-      bundledSkillTarget
-    }
-  }, [activeWorkspaceHostId, currentPlatform, runtimeState, runtimeTarget, windowsCapabilities])
+    return resolveProjectSkillRuntime(input)
+  }, [
+    activeWorkspaceHostId,
+    currentPlatform,
+    hostId,
+    runtimeState,
+    runtimeTarget,
+    webClientEnvironmentId,
+    windowsCapabilities
+  ])
 
   // Keep content-equal runtime identity; update React state during render so discarded renders cannot leak ref writes.
   const [stable, setStable] = useState(resolved)

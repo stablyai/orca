@@ -1,3 +1,5 @@
+import { readProcessReportHeader } from '../orcad/native-runtime/native-host-abi'
+
 export type GlibcVersion = { major: number; minor: number }
 export type LinuxLibcFacts = { libc: 'glibc' | 'musl'; glibc: GlibcVersion | null }
 
@@ -67,4 +69,19 @@ export async function probeLinuxLibc(
     }
   }
   throw new UnidentifiedHostLibcError()
+}
+
+let muslHost: boolean | undefined
+
+// Building a process report is slow and synchronous, and the libc can't change while running.
+export function isMuslHost(): boolean {
+  if (process.platform !== 'linux') {
+    return false
+  }
+  if (muslHost === undefined) {
+    // glibc builds report their runtime glibc version; musl builds have none.
+    const header = readProcessReportHeader()
+    muslHost = !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
+  }
+  return muslHost
 }

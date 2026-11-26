@@ -1,14 +1,14 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import { getNativeChatCommandReply } from '../../../../../../../shared/native-chat/native-chat-agent-profiles'
+import { getNativeChatCommandReply } from '../../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { deriveNativeChatContextUsage } from '../../../../../../../shared/native-chat/native-chat-context-usage'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { ompModelSelector } from '../../../../../../../shared/omp-model-list-probe'
+import { ompModelSelector } from '../../../../../../../shared/agent-session/options/model-catalog/omp-model-list-probe'
 import {
   formatNativeChatContextUsageAnswer,
   formatNativeChatContextUsageUnreported
 } from '../../../usage/native-chat-context-usage-answer'
-import type { NativeChatPtySessionOptionsSurface } from '../../../../../../../shared/native-chat/input/native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 
 export type NativeChatModelContextWindow = (modelId: string) => number | null
 

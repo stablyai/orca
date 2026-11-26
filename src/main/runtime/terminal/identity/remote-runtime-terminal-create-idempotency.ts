@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 
 const DEFAULT_MAX_IN_FLIGHT_TERMINAL_CREATES = 4_096
 

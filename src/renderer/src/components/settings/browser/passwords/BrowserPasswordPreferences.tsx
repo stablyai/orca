@@ -1,6 +1,6 @@
 import { useTranslate } from '@/i18n/use-translate'
-import type { BrowserPasswordReauthMethod } from '../../../../../../shared/browser-passwords-types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { BrowserPasswordReauthMethod } from '../../../../../../shared/browser/passwords/browser-passwords-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 
 /** App-wide save and fill behaviour; the vault itself is per profile. */

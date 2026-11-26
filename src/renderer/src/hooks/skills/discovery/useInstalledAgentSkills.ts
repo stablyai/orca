@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { agentReadsSkill } from '@/lib/skills/agent-skill-coverage'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DiscoveredSkill,
@@ -8,9 +8,9 @@ import type {
   SkillDiscoverySource,
   SkillDiscoveryTarget,
   SkillSourceKind
-} from '../../../../../shared/skills'
+} from '../../../../../shared/skills/discovery/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
+import { markOrchestrationSetupComplete } from '@/components/orchestration/setup/orchestration-setup-state'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
@@ -18,6 +18,7 @@ import {
 } from './installed-agent-skill-discovery'
 import {
   getInstalledAgentSkillVerdict,
+  isClaudeDesktopSyncedSkill,
   type InstalledAgentSkillScan
 } from './installed-agent-skill-verdict'
 import {
@@ -92,7 +93,7 @@ export function hasInstalledAgentSkillNamed(
     if (options.agent && !agentReadsSkill(options.agent, skill, options.sources ?? [])) {
       return false
     }
-    if (!skill.installed) {
+    if (!skill.installed || isClaudeDesktopSyncedSkill(skill)) {
       return false
     }
     if (options.sourceKinds && !options.sourceKinds.includes(skill.sourceKind)) {

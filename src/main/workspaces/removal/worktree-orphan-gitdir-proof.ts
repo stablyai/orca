@@ -1,5 +1,5 @@
 import type { posix } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { resolveGitCommonDirectory } from '../../../shared/git/metadata/git-common-directory'
 import {
   areResolvedPathsEqual,

@@ -1,6 +1,6 @@
 import type { HostedReviewCreationEligibility } from '../hosted-review/hosted-review-contracts'
 import type { GitUpstreamStatus } from '../../git/status/git-status-types'
-import type { PRState } from '../../github/pull-request-types'
+import type { PRState } from '../../github/pull-requests/pull-request-types'
 
 export type SourceControlPrimaryActionKind =
   | 'commit'
@@ -46,6 +46,7 @@ export type SourceControlPrimaryActionTitleIntent =
   | 'push_count'
   | 'create_review'
   | 'nothing_to_commit_up_to_date'
+  | 'nothing_to_commit'
   | 'checking_review_creation'
 
 export type SourceControlPrimaryActionDecision = {
@@ -69,9 +70,10 @@ export type SourceControlCommitAreaPrimaryActionDecision = Omit<
     SourceControlPrimaryActionDecision['labelIntent'],
     'create_pr_intent' | 'create_pr'
   >
+  // nothing_to_commit needs suppressPullAfterRebase, which only the desktop panel sets.
   titleIntent: Exclude<
     SourceControlPrimaryActionTitleIntent,
-    'prepare_review' | 'create_review' | 'checking_review_creation'
+    'prepare_review' | 'create_review' | 'checking_review_creation' | 'nothing_to_commit'
   >
 }
 
@@ -94,4 +96,6 @@ export type SourceControlPrimaryActionDecisionInputs = {
   canPushLinkedReviewWithoutUpstream?: boolean
   isPrIntentInFlight?: boolean
   isHostedReviewCreationLoading?: boolean
+  // Orca rebased this branch: hide Pull/Sync faces; never promotes a force path.
+  suppressPullAfterRebase?: boolean
 }

@@ -4,6 +4,9 @@ import type {
   WorkspaceSpaceScanWorkerRequest,
   WorkspaceSpaceScanWorkerResponse
 } from './workspace-space-scan-worker-protocol'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-workspace-space-scan')
 
 if (!parentPort) {
   throw new Error('Workspace space scan worker requires a parent port.')

@@ -1,5 +1,6 @@
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
-import { isExpectedAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import { useAppStore } from '@/store/index'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
@@ -48,7 +49,7 @@ function titleSuggestsReady(tabId: string): boolean {
 /** Resolve readiness by idle title, matching process or non-shell child after grace. Timeout resolves ready:false; never rejects. */
 export async function waitForAgentReady(
   tabId: string,
-  expectedProcess: string,
+  agent: TuiAgent,
   opts?: { timeoutMs?: number }
 ): Promise<AgentReadyResult> {
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
@@ -73,7 +74,7 @@ export async function waitForAgentReady(
     try {
       const process = await inspectRuntimeTerminalProcess(ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
+      if (isAgentForegroundProcess(foreground, agent)) {
         return { ready: true, reason: 'foreground-match' }
       }
 

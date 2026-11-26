@@ -1,49 +1,35 @@
 /** Execute accepted Codex/Claude account restarts for unmounted local panes so input cannot stay blocked until reveal. */
-import {
-  isTerminalLeafId,
-  makePaneKey
-} from '../../../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { LocatedCodexPane } from './located-codex-pane'
-
-import type { AppState } from '@/store/types'
+import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
   buildCodexAccountRestartStartup,
   buildPaneAccountRestartStartup
 } from '@/lib/agent-session/accounts/agent-account-restart-startup'
-import { isClaudePaneMidTurn } from '@/lib/agent-session/accounts/claude/claude-session-account-move'
-import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { isForeignMachineCodexPtyId } from '@/lib/agent-session/accounts/codex-pane-selection-lane'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import '../../pty-transport/delivery/pty-dispatcher'
 import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
-import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
-import {
-  hasFreeDetachedRestartSlot,
-  holdDetachedRestartSlot,
-  resetDetachedRestartSlotsForTests
-} from './detached-pane-restart-slots'
+import { hasFreeDetachedRestartSlot, holdDetachedRestartSlot } from './detached-pane-restart-slots'
 import {
   killReplacedCodexPanePty,
   reapUnboundCodexPty,
   releaseReplacedCodexPanePty
 } from './detached-pane-restart-pty-release'
+import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import type { LocatedCodexPane } from './located-codex-pane'
+import type { AppState } from '@/store/types'
+import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
 const inFlightPtyIds = new Set<string>()
-
-export function resetDetachedCodexPaneRestartClaimsForTests(): void {
-  inFlightPtyIds.clear()
-  resetDetachedRestartSlotsForTests()
-}
 
 export async function sweepUnclaimedCodexPaneRestarts(onSettled?: () => void): Promise<void> {
   const restarts: Promise<void>[] = []
@@ -81,14 +67,6 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     }
     // Mounted tabs register before transport bind; taking over in that gap would kill the PTY being attached.
     if (hasRegisteredRuntimeTerminalTab(located.tab.id, located.worktreeId)) {
-      return
-    }
-    // Why: a Claude restart waits out the turn; the scheduler re-sweeps on status changes.
-    if (
-      state.pendingPaneAccountRestarts[ptyId] === 'claude' &&
-      located.leafId &&
-      isClaudePaneMidTurn(state, makePaneKey(located.tab.id, located.leafId))
-    ) {
       return
     }
     const agent = useAppStore.getState().consumePendingPaneAccountRestart(ptyId)

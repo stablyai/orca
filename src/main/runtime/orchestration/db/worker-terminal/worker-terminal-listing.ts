@@ -8,7 +8,7 @@ import {
 } from '../../terminal-authority/release/worker-terminal-ownership'
 
 import { OrchestrationError } from '../../orchestration-error'
-import type { OrchestrationDb } from '../orchestration-db'
+import type { OrchestrationDb, OrchestrationDbConnection } from '../orchestration-db'
 import {
   getWorkerAttentionFacts,
   getWorkerAttentionFactsForDispatches
@@ -16,13 +16,16 @@ import {
 import {
   countWorkerTerminalInventory,
   scanWorkerTerminalStates,
-  WORKER_TERMINAL_HANDED_ON_SQL
+  WORKER_TERMINAL_HANDED_ON_SQL,
+  WORKER_TERMINAL_HANDED_ON_TO_SQL
 } from './worker-terminal-inventory-counts'
+import { readFormerlyOwnedResources, readOwnedResources } from './worker-terminal-listing-resources'
 import {
   allowWorkerTerminalAutoClose,
   getWorkerAutoCloseState,
   keepWorkerTerminalOpen
 } from './worker-terminal-user-keep'
+import { listWorkerReportWaitCandidates } from './worker-report-wait-candidates'
 
 /** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
 export type WorkerTerminalOrderingKey = {
@@ -54,7 +57,7 @@ export const WORKER_LIST_CURSOR_EXPIRED_MESSAGE =
 /** The anchor must still belong to the filtered set. An anchor from another Run resolved to a
  *  rowid past this Run's rows, so the page read as a finished, empty inventory. */
 function resolveAnchorRowId(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   after: WorkerTerminalOrderingKey,
   runId: string | undefined
 ): number {
@@ -78,7 +81,7 @@ function resolveAnchorRowId(
 }
 
 export function listWorkerTerminalResources(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   params: {
     runId?: string
     limit?: number
@@ -103,6 +106,10 @@ export function listWorkerTerminalResources(
   pendingApproval: boolean
   terminationReason: TerminalExitCause['kind'] | null
   resource: WorkerTerminalResourceRow | null
+  /** The follow-up its terminal went to, and the shared row it last held (null when none names it). */
+  handedOn: { toDispatchId: string; resource: WorkerTerminalResourceRow | null } | null
+  /** The paired Orca's name when its Run here coordinates this worker. */
+  coordinatedFrom: string | null
   createdAt: string
   databaseId: number
 }[] {
@@ -167,9 +174,11 @@ export function listWorkerTerminalResources(
                 ELSE COALESCE(r.pane_key, d.assignee_pane_key) END AS pane_key,
               COALESCE(w.worktree_id, r.worktree_id) AS worktree_id,
               w.stage AS worker_stage,
+              ${WORKER_TERMINAL_HANDED_ON_TO_SQL} AS handed_on_to,
               t.parent_id AS parent_task_id,
               d.task_id, d.run_id, d.status AS dispatch_status,
               d.termination_reason,
+              (SELECT home_label FROM peer_runs WHERE run_id = d.run_id) AS coordinated_from,
               EXISTS (
                 SELECT 1 FROM question_threads q
                  WHERE q.dispatch_id = d.id AND q.status = 'pending'
@@ -192,6 +201,7 @@ export function listWorkerTerminalResources(
     pane_key: string | null
     worktree_id: string | null
     worker_stage: string | null
+    handed_on_to: string | null
     parent_task_id: string | null
     task_id: string
     run_id: string
@@ -199,20 +209,17 @@ export function listWorkerTerminalResources(
     termination_reason: TerminalExitCause['kind'] | null
     pending_input: number
     pending_approval: number
+    coordinated_from: string | null
     created_at: string
     database_id: number
   }[]
-  const resources =
-    rows.length === 0
-      ? []
-      : (this.db
-          .prepare(
-            `SELECT r.* FROM worker_terminal_resources r
-               WHERE r.owner_dispatch_id IN (${rows.map(() => '?').join(',')})`
-          )
-          .all(...rows.map((row) => row.dispatch_id)) as WorkerTerminalResourceRow[])
-  const resourceByOwner = new Map(
-    resources.map((resource) => [resource.owner_dispatch_id, resource])
+  const resourceByOwner = readOwnedResources.call(
+    this,
+    rows.map((row) => row.dispatch_id)
+  )
+  const resourceByFormerOwner = readFormerlyOwnedResources.call(
+    this,
+    rows.filter((row) => row.handed_on_to).map((row) => row.dispatch_id)
   )
   return rows.map((row) => {
     const resource = resourceByOwner.get(row.dispatch_id) ?? null
@@ -236,6 +243,13 @@ export function listWorkerTerminalResources(
       pendingApproval: row.pending_approval === 1,
       terminationReason: row.termination_reason,
       resource,
+      handedOn: row.handed_on_to
+        ? {
+            toDispatchId: row.handed_on_to,
+            resource: resourceByFormerOwner.get(row.dispatch_id) ?? null
+          }
+        : null,
+      coordinatedFrom: row.coordinated_from,
       createdAt: row.created_at,
       databaseId: row.database_id
     }
@@ -283,6 +297,7 @@ export type WorkerTerminalListingMethods = {
   countWorkerTerminalInventory: typeof countWorkerTerminalInventory
   getWorkerAttentionFacts: typeof getWorkerAttentionFacts
   getWorkerAttentionFactsForDispatches: typeof getWorkerAttentionFactsForDispatches
+  listWorkerReportWaitCandidates: typeof listWorkerReportWaitCandidates
 }
 
 export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
@@ -296,6 +311,7 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
     getWorkerTerminalOrderingKey,
     countWorkerTerminalInventory,
     getWorkerAttentionFacts,
-    getWorkerAttentionFactsForDispatches
+    getWorkerAttentionFactsForDispatches,
+    listWorkerReportWaitCandidates
   })
 }

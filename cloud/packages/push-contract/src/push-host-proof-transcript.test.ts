@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildPushHostChallengePlaintext,
-  buildPushHostProofMacInput,
   buildPushHostProofTranscript
 } from './push-host-proof-transcript.js'
 
@@ -48,30 +46,4 @@ describe('push host proof transcript', () => {
     expect(offset).toBe(transcript.byteLength)
   })
 
-  it('frames the challenge plaintext as domain, length, transcript, secret', () => {
-    const transcript = buildPushHostProofTranscript(transcriptInput)
-    const secret = new Uint8Array(32).fill(11)
-    const plaintext = buildPushHostChallengePlaintext(transcript, secret)
-    const length = Buffer.alloc(4)
-    length.writeUInt32BE(transcript.byteLength)
-    expect(Buffer.from(plaintext)).toEqual(
-      Buffer.concat([
-        Buffer.from('orca-push-host-challenge/v1\0'),
-        length,
-        Buffer.from(transcript),
-        Buffer.alloc(32, 11)
-      ])
-    )
-    expect(() => buildPushHostChallengePlaintext(transcript, new Uint8Array(16))).toThrow(
-      'challengeSecret must be 32 bytes'
-    )
-  })
-
-  it('separates the ack mac input from the challenge domain', () => {
-    const transcript = buildPushHostProofTranscript(transcriptInput)
-    const macInput = buildPushHostProofMacInput(transcript)
-    expect(Buffer.from(macInput)).toEqual(
-      Buffer.concat([Buffer.from('orca-push-host-proof/v1\0ack\0'), Buffer.from(transcript)])
-    )
-  })
 })

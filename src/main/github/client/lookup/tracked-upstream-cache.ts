@@ -1,8 +1,8 @@
 import type { GitReviewBranchSource } from '../../../../shared/git/remotes/git-review-branch-source'
 import { splitRemoteBranchName } from '../../../../shared/git/remotes/git-remote-branch-name'
-import type { OwnerRepo } from '../../gh-utils'
-import { readLocalGitConfigSignature } from '../../local-git-config-signature'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { readLocalGitConfigSignature } from '../../repositories/local-git-config-signature'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 export type TrackedUpstreamBranch = {
   remoteName: string
   branchName: string
@@ -63,24 +63,6 @@ export function pruneTrackedUpstreamSnapshotCache(now: number): void {
     }
     trackedUpstreamSnapshotCache.delete(oldestKey)
   }
-}
-
-export function _getTrackedUpstreamBranchCacheSizesForTests(): {
-  snapshots: number
-  inFlight: number
-  generations: number
-} {
-  return {
-    snapshots: trackedUpstreamSnapshotCache.size,
-    inFlight: trackedUpstreamSnapshotInFlight.size,
-    generations: trackedUpstreamSnapshotGenerations.size
-  }
-}
-
-export function __resetTrackedUpstreamBranchCacheForTests(): void {
-  trackedUpstreamSnapshotCache.clear()
-  trackedUpstreamSnapshotInFlight.clear()
-  trackedUpstreamSnapshotGenerations.clear()
 }
 
 export function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {

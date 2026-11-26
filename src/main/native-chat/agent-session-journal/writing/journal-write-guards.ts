@@ -37,7 +37,7 @@ export function assertJournalFence(fence: number, highestFence: number): void {
 
 /** Reusing a submission ID would reset settled state and deliver twice. */
 export function assertSubmissionIdUnused(
-  submissions: ReadonlyMap<string, unknown>,
+  submissions: Pick<ReadonlyMap<string, unknown>, 'has'>,
   clientMessageId: string
 ): void {
   if (submissions.has(clientMessageId)) {

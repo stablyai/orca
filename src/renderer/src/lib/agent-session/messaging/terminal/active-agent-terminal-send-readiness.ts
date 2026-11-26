@@ -1,9 +1,9 @@
-import type { RuntimeTerminalAgentStatus } from '../../../../../../shared/runtime-terminal-contracts'
-import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
+import type { RuntimeTerminalAgentStatus } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { ActiveAgentNotesSendFailureCode } from './active-agent-note-send-result'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   runtimeFailureCode,
   TERMINAL_RUNTIME_FAILURE_CODES

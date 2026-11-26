@@ -3,10 +3,12 @@ import {
   buildPosixClaudeBackgroundJobGuardLines
 } from '../../../agent-hooks/installation/scripts/claude-background-job-guard'
 import { buildPosixAgentHookPostCommand } from '../../../agent-hooks/installation/scripts/hook-post-command'
+import { buildHookTmuxPaneCapture } from '../../../agent-hooks/installation/scripts/hook-process-capture'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines
+  buildWindowsHookEnvironmentGuardLines,
+  POSIX_HOOK_STDIN_EXEC
 } from '../../../agent-hooks/installation/scripts/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../../../agent-hooks/installation/commands/windows-agent-hook-post-command'
 
@@ -27,7 +29,9 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
-    ...buildPosixHookPayloadCapture(),
+    // Same bytes as the default reader; the capture subshell execs cat instead of forking it.
+    ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_STDIN_EXEC),
+    ...buildHookTmuxPaneCapture(),
     ...buildPosixHookSpoolLines('codex'),
     ...buildPosixClaudeBackgroundJobGuardLines(),
     // Reload endpoint state so surviving PTYs keep reporting after restart.

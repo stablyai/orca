@@ -4,7 +4,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 import type { RemoveWorktreeOptions } from '@/store/slices/worktrees/teardown/worktree-removal-options'
 import type { RendererRemoveWorktreeResult } from '@/store/slices/worktrees/teardown/renderer-remove-worktree-result'
 import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'

@@ -8,7 +8,7 @@ import {
 import { PluginKillListStore } from './plugin-kill-list-store'
 import { fetchBoundedJson } from './plugin-bounded-json-fetch'
 
-export const PLUGIN_KILL_LIST_URL = 'https://onorca.dev/plugins/kill-list.json'
+export const PLUGIN_KILL_LIST_URL = 'https://orca.dev/plugins/kill-list.json'
 const PLUGIN_KILL_LIST_DOWNLOAD_LIMIT = 4 * 1024 * 1024
 // Why: revocations must reach sessions that stay open for days, not only fresh launches.
 export const PLUGIN_KILL_LIST_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000

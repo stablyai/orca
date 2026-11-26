@@ -1,7 +1,7 @@
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { prepareLegacyTranscriptImport } from '../../agent-session-journal/history-import/journal-legacy-import'
-import { resolveStructuredAgentSessionAdoptionForCreate } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
+import { resolveStructuredAgentSessionAdoptionForCreate } from '../../../runtime/agent-session/ownership/structured-agent-session-create-adoption'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
 /** An imported root has no hosted turn receipt; ask the same pinned native history importer. */

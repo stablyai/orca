@@ -250,6 +250,15 @@ export class RpcSessionLivenessWatchdog {
       this.startProbe(identity, decisiveTimeoutMs)
       return
     }
+    // Frames heard within the window prove the link alive; on a slow link the reply queues behind them (#42588).
+    if (decisiveTimeoutMs !== null && this.lastInboundAt > sentAt) {
+      const heardAt = this.lastInboundAt
+      this.timer = this.setTimer(
+        () => this.handleProbeTimeout(identity, heardAt, decisiveTimeoutMs),
+        Math.max(1, heardAt + decisiveTimeoutMs - this.now())
+      )
+      return
+    }
     if (
       decisiveTimeoutMs === null &&
       this.options.isLinkBusy?.(this.lastInboundAt > sentAt, this.now() - this.lastInboundAt)

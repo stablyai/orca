@@ -3,7 +3,7 @@ import { AlertTriangle, Plus } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { getRepositoryHookScriptTextareaRows } from '@/lib/script-textarea-rows'
+import { getRepositoryHookScriptTextareaRows } from '@/components/script-editor/rows/script-textarea-rows'
 import type {
   LocalCommandSourcePolicyNotice,
   LocalHookField
@@ -127,10 +127,7 @@ export function RepositoryHookScriptSetting({
 
   const showLocalEditor = showLocal || value.length > 0 || !hasShared
   return (
-    <div
-      className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm"
-      id={sectionId}
-    >
+    <div className="space-y-3" id={sectionId}>
       <div className="space-y-1">
         <h5 className="text-sm font-semibold">{field.label}</h5>
         <p className="text-xs text-muted-foreground">{field.description}</p>

@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { WorktreeHostContextBadge } from '../../workspace-card/host/WorktreeHostContextBadge'
 
 /** Names the machine of a parent candidate on another machine, as the sidebar badge does. */

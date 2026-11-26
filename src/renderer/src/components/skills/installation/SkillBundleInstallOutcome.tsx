@@ -1,5 +1,5 @@
 import { AlertTriangle, Check } from 'lucide-react'
-import type { SkillBundleInstallResult } from '../../../../../shared/skill-bundle-install-contract'
+import type { SkillBundleInstallResult } from '../../../../../shared/skills/installation/skill-bundle-install-contract'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { skillBundleSkillNeedsRetry } from './skill-bundle-retry-selection'

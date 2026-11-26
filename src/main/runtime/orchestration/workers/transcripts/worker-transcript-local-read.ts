@@ -5,8 +5,12 @@ import {
   readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
-import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-tail-boundary'
-import { transcriptFallbackId } from '../../../../native-chat/transcript-fallback-id'
+import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-watching/transcript-tail-boundary'
+import type {
+  nativeChatTurnEvidenceObserverForAgent,
+  NativeChatTurnEvidence
+} from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
+import { transcriptFallbackId } from '../../../../native-chat/transcript-streaming/transcript-fallback-id'
 import {
   localTranscriptOffsetStartsInsideRecord,
   readLocalTranscriptHandleBoundaryCheckpoint,
@@ -31,6 +35,8 @@ type LocalTranscriptReadSuccess = {
   limited: boolean
   clipping: string[]
   warnings: string[]
+  /** An initial page's newest turn marker, from the bytes it decoded. */
+  turn?: NativeChatTurnEvidence
 }
 
 type LocalTranscriptPage = Omit<LocalTranscriptReadSuccess, 'boundaryCheckpoint'>
@@ -42,13 +48,25 @@ type LocalTranscriptReadResult =
 export async function readInitialLocalWorkerTranscriptPage(
   filePath: string,
   limit: number,
-  decode: NativeChatLineDecoder
+  decode: NativeChatLineDecoder,
+  turnObserver: ReturnType<typeof nativeChatTurnEvidenceObserverForAgent>
 ): Promise<LocalTranscriptReadResult> {
   const before = await readLocalTranscriptSourceIdentity(filePath)
   if (!before) {
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
   }
-  const page = await readNativeChatTranscriptTailFile(filePath, limit, decode, false)
+  const page = await readNativeChatTranscriptTailFile(
+    filePath,
+    limit,
+    decode,
+    false,
+    undefined,
+    null,
+    undefined,
+    undefined,
+    false,
+    turnObserver?.observe
+  )
   const after = await readLocalTranscriptSourceIdentity(filePath)
   if (workerTranscriptSourceChanged(before, after, page.consumedTo)) {
     return sourceChanged()
@@ -61,6 +79,10 @@ export async function readInitialLocalWorkerTranscriptPage(
   if (!boundaryCheckpoint) {
     return sourceChanged()
   }
+  const turn =
+    page.malformedRecordCount || page.oversizedRecordCount
+      ? undefined
+      : turnObserver?.result(page.messageOffsets ?? [])
   return {
     ok: true,
     filePath,
@@ -70,7 +92,8 @@ export async function readInitialLocalWorkerTranscriptPage(
     nextOffset: page.consumedTo,
     limited: page.hasMore,
     clipping: [],
-    warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount)
+    warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount),
+    ...(turn ? { turn } : {})
   }
 }
 
@@ -79,7 +102,9 @@ export async function readForwardLocalWorkerTranscriptPage(
   startOffset: number,
   limit: number,
   decode: NativeChatLineDecoder,
-  expectedBoundaryCheckpoint?: string
+  expectedBoundaryCheckpoint: string | undefined,
+  /** How many of a page's leading messages fit its response; the cursor resumes after the last one. */
+  fits: (messages: readonly NativeChatMessage[]) => number
 ): Promise<LocalTranscriptReadResult> {
   const sourceIdentity = await readLocalTranscriptSourceIdentity(filePath)
   if (!sourceIdentity) {
@@ -115,7 +140,8 @@ export async function readForwardLocalWorkerTranscriptPage(
             scanEnd,
             fileSize,
             limit,
-            decode
+            decode,
+            fits
           })
     const afterCheckpoint = await readLocalTranscriptHandleBoundaryCheckpoint(handle, startOffset)
     const boundaryCheckpoint = await readLocalTranscriptHandleBoundaryCheckpoint(
@@ -147,8 +173,10 @@ async function scanForwardPage(args: {
   fileSize: number
   limit: number
   decode: NativeChatLineDecoder
+  fits: (messages: readonly NativeChatMessage[]) => number
 }): Promise<LocalTranscriptPage> {
   const messages: NativeChatMessage[] = []
+  const messageEnds: number[] = []
   let pendingChunks: Buffer[] = []
   let pendingBytes = 0
   let pendingStart = args.startOffset
@@ -174,7 +202,7 @@ async function scanForwardPage(args: {
       retainPart(chunk.subarray(segmentStart, newline))
       const lineEnd = absoluteOffset + newline + 1
       if (!droppingOversizedRecord) {
-        decodeLine()
+        decodeLine(lineEnd)
       }
       resetLine(lineEnd)
       nextOffset = lineEnd
@@ -215,7 +243,7 @@ async function scanForwardPage(args: {
     pendingStart = nextStart
   }
 
-  function decodeLine(): void {
+  function decodeLine(lineEnd: number): void {
     let line = Buffer.concat(pendingChunks).toString('utf8')
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)
@@ -232,17 +260,20 @@ async function scanForwardPage(args: {
     const message = args.decode(line, transcriptFallbackId(args.filePath, pendingStart))
     if (message) {
       messages.push(message)
+      messageEnds.push(lineEnd)
     }
   }
 
   function successfulPage(limited: boolean, scanLimited = false): LocalTranscriptPage {
+    // Messages past the response budget are left for the next page, not skipped by the cursor.
+    const kept = args.fits(messages)
     return {
       ok: true,
       filePath: args.filePath,
       sourceFingerprint: args.sourceIdentity.fingerprint,
-      messages,
-      nextOffset,
-      limited,
+      messages: messages.slice(0, kept),
+      nextOffset: kept < messages.length ? messageEnds[kept - 1]! : nextOffset,
+      limited: limited || kept < messages.length,
       clipping: [],
       warnings: recordWarnings(malformedRecordCount, oversizedRecordCount, scanLimited)
     }

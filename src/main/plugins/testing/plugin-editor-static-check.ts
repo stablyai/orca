@@ -5,9 +5,9 @@
  */
 import { realpathSync } from 'node:fs'
 import { posix } from 'node:path'
-import { resolvePluginModuleSpecifier } from '../panels/plugin-frame-module-resolution'
-import { parsePluginTranspileFailure } from '../panels/plugin-source-transpile-failure'
-import { transpilePluginSource } from '../panels/plugin-source-transpiler'
+import { resolvePluginModuleSpecifier } from '../panels/frame-serving/plugin-frame-module-resolution'
+import { parsePluginTranspileFailure } from '../panels/source-transpilation/plugin-source-transpile-failure'
+import { transpilePluginSource } from '../panels/source-transpilation/plugin-source-transpiler'
 import {
   PLUGIN_FRAME_ASSET_MAX_BYTES,
   PLUGIN_FRAME_CHECKED_MAX_BYTES,
@@ -17,11 +17,11 @@ import {
 import {
   isCheckedPluginFrameType,
   pluginFrameContentType
-} from '../panels/plugin-frame-content-types'
+} from '../panels/frame-serving/plugin-frame-content-types'
 import {
   readContainedPluginArtifactText,
   resolveContainedPluginArtifact
-} from '../plugin-contained-artifact'
+} from '../artifacts/plugin-contained-artifact'
 import {
   lineColumn,
   readHtmlScripts,

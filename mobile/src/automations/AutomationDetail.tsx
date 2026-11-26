@@ -1,7 +1,9 @@
 import { automationOrphanIssueText } from './automation-orphan-issue-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Text, View, type HostInstance } from 'react-native'
+import { Ellipsis, History, Pencil, Play, Trash2 } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   loadAutomationTargets,
@@ -9,29 +11,39 @@ import {
   workspaceMatchesSetup,
   type AutomationTargets
 } from './automation-target-inventory'
-import { Switch, Text, View } from 'react-native'
-import { formatAutomationSchedule } from './automation-schedule-label'
-import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
+import { MobileSwitch } from '../components/controls/MobileSwitch'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { ListRow } from '../components/list/ListGroup'
+import { useBackClaim } from '../navigation/use-back-claim'
+import type { AutomationHeaderBar } from './AutomationControls'
+import { automationNextRunShortLabel } from './automation-next-run-label'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
+import { useMobilePendingControl } from '../components/controls/use-mobile-pending-control'
+import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
+import { automationScheduleText } from './automation-schedule-label'
+import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
 import type { MobileAutomationRow } from './automation-reply-schema'
-import { AutomationButton, AutomationMetadata } from './AutomationControls'
-import { automationDate } from './automation-run-presentation'
 import { automationStyles as styles } from './automation-styles'
 
 export function AutomationDetail(props: {
   row: MobileAutomationRow
   client: RpcClient | null
   disabled: boolean
+  projectName: string | undefined
   onBack: () => void
   onToggle: (enabled: boolean) => void
-  onRun: () => void
-  onEdit: () => void
-  onDelete: () => void
-  onRuns: () => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const { automation, item } = props.row
-  const orphan = item.selector.kind === 'orphan'
+  // Back returns to the list, as the bar's back button does.
+  useBackClaim(() => {
+    props.onBack()
+    return true
+  })
   const client = props.client
   const [inventory, setInventory] = useState<{
     client: RpcClient
@@ -115,88 +127,161 @@ export function AutomationDetail(props: {
         )
       : []
   const workspace = workspaces.length === 1 ? workspaces[0] : undefined
+  const unavailable = t('automations.mobile.unavailable', 'Unavailable')
   return (
-    <View style={styles.stack}>
-      <AutomationButton
-        label={t('automations.mobile.allAutomations', 'All automations')}
-        onPress={props.onBack}
-      />
-      <View style={styles.row}>
-        <Text style={[styles.title, styles.grow]}>{automation.name}</Text>
-        <Switch
-          accessibilityLabel={t('automations.mobile.runOnSchedule', 'Run {{name}} on schedule', {
-            name: automation.name
-          })}
-          value={automation.enabled}
-          onValueChange={props.onToggle}
-          disabled={props.disabled}
-        />
-      </View>
+    <>
       {item.selector.kind === 'orphan' ? (
-        <Text style={styles.error}>{automationOrphanIssueText(item.selector.issue)}</Text>
+        <SettingsNote error>{automationOrphanIssueText(item.selector.issue)}</SettingsNote>
       ) : null}
-      <View style={styles.card}>
-        <AutomationMetadata
-          label={t('automations.mobile.schedule', 'Schedule')}
-          value={`${formatAutomationSchedule(automation.rrule)} · ${automation.timezone}`}
-        />
-        <AutomationMetadata
-          label={t('automations.mobile.nextRun', 'Next run')}
-          value={
-            automation.enabled
-              ? automationDate(automation.nextRunAt, automation.timezone)
-              : t('automations.mobile.noNextScheduledRun', 'No next scheduled run')
+      <SettingsSection first>
+        <ListRow
+          title={t('automations.mobile.on', 'On')}
+          accessory={
+            <MobileSwitch
+              accessibilityLabel={t(
+                'automations.mobile.runOnSchedule',
+                'Run {{name}} on schedule',
+                { name: automation.name }
+              )}
+              value={automation.enabled}
+              onValueChange={props.onToggle}
+              disabled={props.disabled}
+            />
           }
         />
-        <AutomationMetadata
-          label={t('automations.mobile.agent', 'Agent')}
+      </SettingsSection>
+      <SettingsSection title={t('automations.mobile.schedule', 'Schedule')}>
+        <ListRow
+          title={t('automations.mobile.repeats', 'Repeats')}
+          value={automationScheduleText(automation)}
+        />
+        <ListRow
+          title={t('automations.mobile.agent', 'Agent')}
           value={mobileTuiAgentLabel(automation.agentId)}
+          valueIcon={<MobileAgentIcon agentId={automation.agentId} size={13} />}
         />
-        <AutomationMetadata
-          label={t('automations.mobile.project', 'Project')}
-          value={
-            setup
-              ? `${setup.label} · ${setup.path}`
-              : t('automations.mobile.unavailable', 'Unavailable')
-          }
+        <ListRow
+          title={t('automations.mobile.project', 'Project')}
+          value={props.projectName ?? setup?.label ?? unavailable}
         />
-        <AutomationMetadata
-          label={t('automations.mobile.workspace', 'Workspace')}
+        <ListRow
+          title={t('automations.mobile.workspace', 'Workspace')}
           value={
             automation.workspaceMode === 'existing'
-              ? workspace?.displayName || t('automations.mobile.unavailable', 'Unavailable')
-              : t('automations.mobile.newWorkspacePerRun', 'New workspace per run')
+              ? workspace?.displayName || unavailable
+              : t('automations.mobile.newOnePerRun', 'New one per run')
           }
         />
-      </View>
-      <Text style={styles.heading}>{t('automations.mobile.instructions', 'Instructions')}</Text>
-      <Text selectable style={styles.text}>
-        {automation.prompt}
-      </Text>
-      <View style={styles.row}>
-        <View style={styles.grow}>
-          <AutomationButton
-            label={t('automations.mobile.runNow', 'Run now')}
-            onPress={props.onRun}
-            primary
-            disabled={props.disabled || orphan}
-          />
-        </View>
-        <AutomationButton
-          label={t('automations.mobile.edit', 'Edit')}
-          onPress={props.onEdit}
-          disabled={props.disabled}
-        />
-      </View>
-      <AutomationButton
-        label={t('automations.mobile.viewAllRuns', 'View all runs')}
-        onPress={props.onRuns}
-      />
-      <AutomationButton
-        label={t('automations.mobile.deleteAutomation', 'Delete automation')}
-        onPress={props.onDelete}
+      </SettingsSection>
+      <SettingsSection title={t('automations.mobile.instructions', 'Instructions')}>
+        <Text selectable style={styles.instructions}>
+          {automation.prompt}
+        </Text>
+      </SettingsSection>
+    </>
+  )
+}
+
+type DetailMenuActions = {
+  disabled: boolean
+  onEdit: () => void
+  onRuns: () => void
+  onDelete: () => void
+}
+
+/** The detail's bar: the automation's name over its next run, and ⋯. */
+export function automationDetailBar(
+  row: MobileAutomationRow,
+  onBack: () => void,
+  actions: DetailMenuActions
+): AutomationHeaderBar {
+  return {
+    page: {
+      title: row.automation.name,
+      subtitle: automationNextRunShortLabel(row.automation),
+      onBack
+    },
+    trailing: <AutomationDetailMenu {...actions} name={row.automation.name} />
+  }
+}
+
+/** The detail's ⋯ in the bar: Edit, All runs and Delete, which asks first. */
+function AutomationDetailMenu(props: DetailMenuActions & { name: string }) {
+  const t = useMobileTranslation()
+  const [open, setOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const anchor = useRef<HostInstance>(null)
+  return (
+    <>
+      <ConfirmModal
+        visible={confirming}
+        title={t('common.delete', 'Delete')}
+        message={t(
+          'automations.mobile.deleteRetained',
+          'Delete “{{name}}” and its retained runs?',
+          { name: props.name }
+        )}
+        confirmLabel={t('common.delete', 'Delete')}
         destructive
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false)
+          props.onDelete()
+        }}
+      />
+      <NavBarButton
+        ref={anchor}
+        icon={Ellipsis}
+        accessibilityLabel={t('automations.mobile.moreActions', 'More actions')}
+        onPress={() => setOpen(true)}
+      />
+      <PullDownMenu
+        visible={open}
+        anchorRef={anchor}
+        onClose={() => setOpen(false)}
+        groups={[
+          [
+            {
+              label: t('automations.mobile.edit', 'Edit'),
+              icon: Pencil,
+              disabled: props.disabled,
+              onPress: props.onEdit
+            },
+            {
+              label: t('automations.mobile.allRuns', 'All runs'),
+              icon: History,
+              onPress: props.onRuns
+            }
+          ],
+          [
+            {
+              label: t('common.delete', 'Delete'),
+              icon: Trash2,
+              destructive: true,
+              disabled: props.disabled,
+              closeBeforePress: true,
+              onPress: () => setConfirming(true)
+            }
+          ]
+        ]}
+      />
+    </>
+  )
+}
+
+/** Run now, the detail's one action, in the bar at the foot of the screen. */
+export function AutomationRunNowBar(props: { disabled: boolean; onRun: () => Promise<boolean> }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const control = useMobilePendingControl<'run'>()
+  return (
+    <View style={styles.bottomBar}>
+      <SheetPrimaryButton
+        label={t('automations.mobile.runNow', 'Run now')}
+        icon={Play}
+        busy={control.pending === 'run'}
         disabled={props.disabled}
+        onPress={() => void control.run('run', props.onRun)}
       />
     </View>
   )

@@ -2,7 +2,7 @@ import { useEffect, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import { useAppStore } from '@/store/index'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
-import { matchesPendingEditorFocusRequest } from '../../pending-editor-focus-request'
+import { matchesPendingEditorFocusRequest } from '../../commands/pending-editor-focus-request'
 
 type PendingFocusOptions = {
   editor: Editor | null

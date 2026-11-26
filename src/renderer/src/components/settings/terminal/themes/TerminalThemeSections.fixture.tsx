@@ -2,6 +2,7 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '../../../../store'
 import { TERMINAL_THEME_CATALOG } from '../../../../../../shared/terminal-themes/terminal-theme-catalog'
 import { Toaster } from '../../../ui/sonner'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { TerminalThemeCatalogSection } from './TerminalThemeSections'
 import { useWarpThemeImport } from './useWarpThemeImport'
 import { WarpThemeImportModal } from './WarpThemeImportModal'
@@ -15,16 +16,18 @@ function TerminalThemesFixture(): React.JSX.Element {
   }
   return (
     <>
-      <TerminalThemeCatalogSection
-        settings={settings}
-        systemPrefersDark={settings.theme !== 'light'}
-        updateSettings={updateSettings}
-        previewFontFamily={null}
-        importedHighlightSignal={warpThemes.importSignal}
-        warpThemes={warpThemes}
-        showThemeImport
-        preferredTarget="dark"
-      />
+      <SettingsGroup>
+        <TerminalThemeCatalogSection
+          settings={settings}
+          systemPrefersDark={settings.theme !== 'light'}
+          updateSettings={updateSettings}
+          previewFontFamily={null}
+          importedHighlightSignal={warpThemes.importSignal}
+          warpThemes={warpThemes}
+          showThemeImport
+          preferredTarget="dark"
+        />
+      </SettingsGroup>
       <WarpThemeImportModal {...warpThemes} />
       <Toaster />
     </>

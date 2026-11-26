@@ -1,11 +1,11 @@
 import type { Automation } from '../automation-definition'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { WorkspaceRunContext } from '../../work-items/task-source-context'
 import {
   getRepoExecutionHostId,
   isRepoSshOnlyHost,
   parseExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 
 /** A captured target names a row; a legacy bare id must resolve uniquely. */
 export function findAutomationRepo<

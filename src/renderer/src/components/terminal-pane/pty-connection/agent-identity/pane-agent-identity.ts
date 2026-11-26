@@ -1,17 +1,17 @@
+import { settlePaneShellForeground } from './pane-agent-shell-lifecycle'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '@/store/index'
-import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
-} from '@/lib/pane-manager/windows-pty-compatibility'
+} from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
 import { createTerminalCommandLifecycle } from '../../emulation/commands/terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from './foreground-process/pane-foreground-agent-tracker'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
+import { dispatchTerminalCommandFinishedEvent } from '@/lib/terminal/output/terminal-command-finished-event'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   isTuiAgent,
@@ -29,7 +29,7 @@ import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
   session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean => {
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
+    const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
   }
   // One launch ladder serves finish confirmation, visible sampling and OSC color-reply suppression.
@@ -69,7 +69,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.deferredConfirmedShellReconcile = null
   /** Confirmed shell return retires main’s latches using one acceptedStatusSeq anchor across the full ladder; deferred row removal is not newer evidence. A foreign delete/rebuild can reset the ordinal, but command-start already cancels normal relaunch races. */
   session.reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
-    const current = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const current = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
     if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
       return
     }
@@ -156,38 +156,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     onAgentProcessRead: (process) =>
       session.agentCompletionCoordinator?.observeForegroundAgentProcess(process),
     hasKnownAgentIdentity: session.paneHasKnownAgentIdentity,
-    onConfirmedShellForeground: (reason) => {
-      // Retire stale agent occupancy when a normal exit returns to the shell.
-      const state = useAppStore.getState()
-      const sleepingRecord = session.getSleepingRecordForPane(state)
-      const ptyId = session.transport.getPtyId()
-      const wake = session.hibernatedWakeTarget
-      // A delayed shell read can settle after exit consumes suppression; preserve only that PTY's exact wake record.
-      const isHibernationWakeRecord =
-        (ptyId && state.suppressedPtyExitIds[ptyId]) ||
-        (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
-      if (sleepingRecord && !isHibernationWakeRecord) {
-        session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
-      }
-      session.clearStaleAgentTabTitleOnConfirmedShell()
-      // Confirmed hard-kill exit must disarm leftover mouse/focus/Kitty modes; guard reset auto-replies from reaching the shell.
-      session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
-      // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
-      if (!isHibernationWakeRecord) {
-        session.deps.onAgentExitedRef.current(session.pane.leafId)
-      }
-      // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
-      if (reason === 'process-exit') {
-        // Why: reopen the one-shot visible sample so the next agent typed here is identified.
-        session.visibleForegroundSamplePending = false
-        session.visibleForegroundSampleSettled = false
-      }
-      if (reason === 'visible-pty' || reason === 'process-exit') {
-        state.clearAgentLaunchConfig(session.cacheKey)
-        return
-      }
-      session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
-    },
+    onConfirmedShellForeground: (reason) => settlePaneShellForeground(session, reason),
     // Wrap callbacks so caller arguments cannot become options that reconcile an unproven exit.
     onCommandFinishedUnavailable: () => session.settleDeferredCommandFinishedStatusDrop(),
     onVisibleForegroundSettled: (outcome) => {
@@ -216,7 +185,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     // Commands can change HEAD/index; nudge git UI immediately instead of waiting for polling.
     dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
     const state = useAppStore.getState()
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
+    const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     const inferenceResult = session.flushPendingInterruptInference()
     const dropStatus = (): void => {
       if (inferenceResult === true) {

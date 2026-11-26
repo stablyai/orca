@@ -1,5 +1,5 @@
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { handBackStructuredAgentSessionMessage } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
 import {
   dropStructuredAgentSessionSends,
@@ -9,10 +9,10 @@ import {
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionSendInput } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-slot'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
-export type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
+
 type LaunchMessage = Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
 
 export type StagedDelivery = Omit<
@@ -66,6 +66,7 @@ export function stageStructuredLaunchPrompt(
     attachments?: LaunchMessage['attachments']
     skills?: LaunchMessage['skills']
     prepare?: StructuredLaunchPromptOptions['preparePrompt']
+    delivery?: StructuredAgentSessionSendInput['delivery']
   } = {}
 ): StagedStructuredLaunchPrompt {
   let discard = (): void => {}
@@ -76,11 +77,13 @@ export function stageStructuredLaunchPrompt(
   const whenCreateSettled = new Promise<StagedDelivery>((resolve) => {
     settleCreate = resolve
   })
+  // The send's host delivery mode, not the prompt's own `delivery` promise.
+  const { delivery: _sendDelivery, ...promptOptions } = options
   const prompt: StagedStructuredLaunchPrompt = {
     sessionId,
     text,
     slot: reserveStructuredAgentSessionSend({ sessionId, text, ...options }),
-    ...options,
+    ...promptOptions,
     whenDiscarded,
     discard,
     whenCreateSettled,

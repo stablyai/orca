@@ -4,10 +4,10 @@ import {
   getProject as getLinearProject,
   listProjectsByExactName as listLinearProjectsByExactName,
   listProjects as listLinearProjects
-} from '../../../linear/linear-project-queries'
-import { listProjectTeams as listLinearProjectTeams } from '../../../linear/linear-project-team-queries'
-import { getViewerForWorkspaceOrThrow as getLinearViewerForWorkspaceOrThrow } from '../../../linear/teams'
-import { linearError } from '../../../linear/issue-context/errors'
+} from '../../../linear/projects/linear-project-queries'
+import { listProjectTeams as listLinearProjectTeams } from '../../../linear/projects/linear-project-team-queries'
+import { getViewerForWorkspaceOrThrow as getLinearViewerForWorkspaceOrThrow } from '../../../linear/teams/linear-team-queries'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
 import type { LinearProjectSummary } from '../../../../shared/linear/project-types'
 import { RuntimeLinearTeamWriteCommands } from './runtime-linear-team-write-commands'
 
@@ -126,8 +126,9 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
   ): Promise<LinearProjectSummary[]> {
     signal?.throwIfAborted()
     try {
-      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true, signal))
-        .items
+      return (
+        await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true, { signal })
+      ).items
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }

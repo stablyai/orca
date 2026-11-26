@@ -1,5 +1,5 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   PtyListedSession,
   PtySessionListScope

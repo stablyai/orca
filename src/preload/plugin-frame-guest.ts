@@ -4,12 +4,12 @@ import {
   PRELOAD_PLUGIN_FRAME_IPC_CHANNEL,
   PRELOAD_PLUGIN_FRAME_KEY_CHANNEL,
   PRELOAD_PLUGIN_FRAME_TRANSPORT_GLOBAL
-} from './plugin-frame-guest-transport'
+} from './plugins/frames/plugin-frame-guest-transport'
 import {
   createPluginFrameGestureTracker,
   createPluginFrameSendBudget,
   type PluginFrameSendRefusal
-} from './plugin-frame-guest-send-budget'
+} from './plugins/frames/plugin-frame-guest-send-budget'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {

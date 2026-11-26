@@ -8,6 +8,7 @@ import {
   encodeWindowsPowerShellHookCommand,
   WINDOWS_POWERSHELL_HOOK_SWITCHES
 } from './windows-powershell-hook-launcher'
+import { POSIX_ORCA_PANE_GUARD } from './posix-hook-command'
 
 const MANAGED_SCRIPT_BASE_NAME = /^[A-Za-z0-9_-]+$/
 const WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE = '*\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*'
@@ -21,17 +22,19 @@ function assertManagedScriptBaseName(scriptBaseName: string): void {
 function buildPosixBranch(
   scriptBaseName: string,
   missingScriptFallback: string,
-  options: { requireHome?: boolean } = {}
+  options: { requireHome?: boolean; requirePane?: boolean } = {}
 ): string {
   const posixScript = `"\${HOME-}/.orca/agent-hooks/${scriptBaseName}.sh"`
   const homeGuard = options.requireHome ? '[ -n "${HOME-}" ] && ' : ''
+  const paneGuard = options.requirePane ? `${POSIX_ORCA_PANE_GUARD} && ` : ''
   const parentCapture =
     scriptBaseName === 'claude-hook' || scriptBaseName === 'openclaude-hook'
       ? HOOK_PARENT_CAPTURE
       : ''
-  return `if ${homeGuard}[ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${parentCapture}/bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
+  return `if ${paneGuard}${homeGuard}[ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${parentCapture}/bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
 }
 
+// Claude echoes this command after /compact and the event is rare, so it stays short and unguarded.
 export function wrapRuntimeHomePosixHookCommand(scriptBaseName: string): string {
   assertManagedScriptBaseName(scriptBaseName)
   return buildPosixBranch(scriptBaseName, POSIX_HOOK_STDIN_DRAIN_COMMAND, { requireHome: true })
@@ -63,7 +66,9 @@ export function wrapRuntimeHomeHookCommand(
   const powershellInvocation = `${powershell} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodedCommand}`
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${windowsMissingScriptFallback}; fi`
   const windowsBranch = `if [ -f ${windowsScript} ]; then case "\${HOME-}" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${windowsMissingScriptFallback}; fi`
-  const posixBranch = buildPosixBranch(scriptBaseName, posixMissingScriptFallback)
+  const posixBranch = buildPosixBranch(scriptBaseName, posixMissingScriptFallback, {
+    requirePane: true
+  })
   // Shell-owned OSTYPE avoids spawning a process for each platform check.
   return `if [ -z "\${HOME-}" ]; then ${missingScriptFallback}; else case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
 }

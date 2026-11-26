@@ -1,4 +1,4 @@
-import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
+import { createUsageWorktreeResolver } from '../usage/worktree-attribution/usage-worktree-resolver'
 import {
   getLegacySourceSkipBytesByPath,
   listCodexSessionFiles,
@@ -15,6 +15,12 @@ import type {
   CodexUsageSession
 } from './types'
 
+import {
+  createUsageScanCheckpointClock,
+  UsageScanReadBudget,
+  type UsageScanCheckpoint
+} from '../usage/source-input/usage-scan-pacing'
+
 const YIELD_EVERY_FILES = 10
 
 const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregates } =
@@ -28,7 +34,8 @@ type CodexRolloutResumePlan = {
 export async function scanCodexUsageFiles(
   worktrees: CodexUsageWorktreeRef[],
   previousProcessedFiles: CodexUsagePersistedFile[],
-  onFilesScanned?: (count: number) => void
+  onFilesScanned?: (count: number) => void,
+  onCheckpoint?: UsageScanCheckpoint<CodexUsagePersistedFile>
 ): Promise<{
   processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
@@ -49,6 +56,7 @@ export async function scanCodexUsageFiles(
       file.ownedEventKeys.length > 0
   )
 
+  const readBytesByPath = new Map<string, number>()
   const reusedByPath = new Map<string, CodexUsagePersistedFile>()
   const resumeByPath = new Map<string, CodexRolloutResumePlan>()
   const pathsToParse: string[] = []
@@ -57,15 +65,18 @@ export async function scanCodexUsageFiles(
     const fileInfo = await getProcessedFileInfo(filePath)
     const previous = previousByPath.get(filePath)
     const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
-    const hasGenerationMetadata =
+    // Reuse and resume both build on the cached projections, so a record missing them is reparsed.
+    const hasReusableRecord =
       previous &&
       typeof previous.ctimeMs === 'number' &&
-      (typeof previous.physicalFileId === 'string' || previous.physicalFileId === null)
+      (typeof previous.physicalFileId === 'string' || previous.physicalFileId === null) &&
+      Array.isArray(previous.sessions) &&
+      Array.isArray(previous.dailyAggregates)
     const canReuse =
       !mustReclaimDeferred &&
       legacySourceSkipBytes === 0 &&
       previous &&
-      hasGenerationMetadata &&
+      hasReusableRecord &&
       previous.mtimeMs === fileInfo.mtimeMs &&
       previous.size === fileInfo.size &&
       previous.ctimeMs === fileInfo.ctimeMs &&
@@ -80,7 +91,7 @@ export async function scanCodexUsageFiles(
         !mustReclaimDeferred &&
         legacySourceSkipBytes === 0 &&
         previous &&
-        hasGenerationMetadata &&
+        hasReusableRecord &&
         fileInfo.size > previous.size
       ) {
         const state = await resolveCodexRolloutResume(filePath, previous)
@@ -89,6 +100,11 @@ export async function scanCodexUsageFiles(
         }
       }
       pathsToParse.push(filePath)
+      readBytesByPath.set(
+        filePath,
+        fileInfo.size -
+          Math.max(resumeByPath.get(filePath)?.state.parsedBytes ?? 0, legacySourceSkipBytes)
+      )
     }
     onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
@@ -109,6 +125,8 @@ export async function scanCodexUsageFiles(
   }
 
   const parsedByPath = new Map<string, CodexUsagePersistedFile>()
+  const readBudget = new UsageScanReadBudget()
+  const checkpointDue = createUsageScanCheckpointClock()
   let lostOwnerKeys = lostOwnerPath
   const parseAndPublish = async (
     filePath: string,
@@ -140,6 +158,17 @@ export async function scanCodexUsageFiles(
 
   for (const [index, filePath] of pathsToParse.entries()) {
     await parseAndPublish(filePath, resumeByPath.get(filePath))
+    await readBudget.consume(readBytesByPath.get(filePath) ?? 0)
+    // A pending reclaim must finish first: a checkpoint would erase the lost owner that triggers it.
+    if (onCheckpoint && !lostOwnerKeys && checkpointDue()) {
+      // Unparsed files keep their previous record, so ownership matches a scan that stopped here.
+      await onCheckpoint(
+        files.flatMap(
+          (path) =>
+            parsedByPath.get(path) ?? reusedByPath.get(path) ?? previousByPath.get(path) ?? []
+        )
+      )
+    }
 
     // Yield so large histories do not monopolize the scan worker.
     onFilesScanned?.(1)
@@ -156,6 +185,7 @@ export async function scanCodexUsageFiles(
       if (current?.hasDeferredClaims) {
         await parseAndPublish(filePath)
         onFilesScanned?.(1)
+        await readBudget.consume(current.size)
       }
       if ((index + 1) % YIELD_EVERY_FILES === 0) {
         await yieldToEventLoop()

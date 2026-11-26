@@ -19,7 +19,7 @@ import {
   trackSshConnect,
   useSshConnectInFlight
 } from '@/ssh/ssh-connect-in-flight'
-import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
 type WorktreeCardSshHostControlProps = {
   targetId: string

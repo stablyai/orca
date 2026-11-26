@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import type { PRCheckJob } from '../../../../../../shared/github/check-types'
+import type { PRCheckJob } from '../../../../../../shared/github/checks/check-types'
 import { scrollTopCache } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import {
   checkLogDigest,

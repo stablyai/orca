@@ -1,19 +1,19 @@
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../../store/index'
-import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
+import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
-} from '../../activity/activity-terminal-portal'
+} from '../../activity/terminal-portal/activity-terminal-portal'
 import type { HiddenTerminalPrewarm } from '../controller/terminal-pane-types'
-import { shouldMountBackgroundWorktreeTab } from '../../terminal/background-terminal-worktree-mount'
+import { shouldMountBackgroundWorktreeTab } from '../../terminal/workspace-mounting/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../../native-chat/pane/routing/use-native-chat-toggle-shortcut'
-import { RetainedPaneHost } from '../../tab-group/RetainedPaneHost'
+import { RetainedPaneHost } from '../../tab-group/retained-pane/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
-import { captureWorkspaceEmptiedReaction } from '../../tab-group/workspace-emptied-reaction'
+import { captureWorkspaceEmptiedReaction } from '../../../lib/workspace/tabs/close/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
 import { useTerminalTabColdParking } from '../parking/lifecycle/use-terminal-tab-cold-parking'
 
@@ -76,7 +76,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     [worktreeId]
   )
 
-  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
+  const backdropActive = useWindowBackdropActive()
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
     [focusGroup, worktreeId]
@@ -173,8 +173,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isVisible={isVisible}
             isActive={isActive}
             hiddenPrewarm={assignment?.isActiveInGroup === true ? hiddenTerminalPrewarm : null}
-            // Why not over a theme image: a chat there is translucent, so a dim would bleed the image in.
-            dimmed={groups.length > 1 && isVisible && !isActive && !themeBackgroundActive}
+            // Why not over a backdrop: group dimming also fades terminal and chat text.
+            dimmed={groups.length > 1 && isVisible && !isActive && !backdropActive}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}

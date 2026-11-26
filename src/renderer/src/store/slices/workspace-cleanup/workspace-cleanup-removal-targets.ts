@@ -1,9 +1,9 @@
 /** Carry confirmed (worktreeId, executionHostId) through cleanup; IDs repeat across hosts. Refuse ambiguous/hostless/missing refreshed owners rather than risk deleting another host’s uncommitted work (STA-4343). */
 import type { AppState } from '../../types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   canQueueWorkspaceCleanupCandidate,
-  shouldForceWorkspaceCleanupRemoval,
+  needsWorkspaceCleanupRemovalApproval,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupScanError,
@@ -24,7 +24,8 @@ import {
   hasValidWorkspaceCleanupUnverifiedConsent,
   hasWorkspaceCleanupRiskEscalated
 } from './workspace-cleanup-preflight-failures'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import { scanWorkspaceCleanupHosts } from './workspace-cleanup-host-scan'
 
 /** Distinct from every ExecutionHostId, so a hostless row cannot alias one. */
 const UNQUALIFIED_HOST_BUCKET = Symbol('unqualified-cleanup-host')
@@ -167,11 +168,10 @@ export async function preflightWorkspaceCleanupCandidates(
   const worktreeIds = targets.map((target) => target.worktreeId)
   for (let start = 0; start < worktreeIds.length; start += WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT) {
     const chunk = worktreeIds.slice(start, start + WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
-    const scan = await window.api.workspaceCleanup.scan({
-      worktreeIds: [...chunk],
-      scanId: createBrowserUuid(),
-      refreshActivity: true
-    })
+    const scan = await scanWorkspaceCleanupHosts(
+      { worktreeIds: [...chunk], scanId: createBrowserUuid(), refreshActivity: true },
+      getState()
+    )
     const enriched = await enrich(scan.candidates, getState())
     scanErrors.push(...scan.errors)
     for (const candidate of enriched) {
@@ -282,7 +282,7 @@ export function evaluateWorkspaceCleanupPreflight(
       failure: getWorkspaceCleanupGitUnavailableFailure(target, candidate)
     }
   }
-  if (!target.approvedCandidate && shouldForceWorkspaceCleanupRemoval(candidate)) {
+  if (!target.approvedCandidate && needsWorkspaceCleanupRemovalApproval(candidate)) {
     return failure(
       translate(
         'auto.store.slices.workspace.cleanup.forceNeedsApproval',

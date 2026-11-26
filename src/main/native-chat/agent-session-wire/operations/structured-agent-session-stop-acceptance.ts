@@ -16,7 +16,7 @@ import {
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
 } from '../../agent-session-journal/replay/journal-open-failure'
-import type { JournalStopAcceptanceInput } from '../../agent-session-journal/context-epochs/journal-stop-acceptance'
+import type { JournalStopAcceptanceInput } from '../../agent-session-journal/journal-store-contracts'
 import type { ChatStopTarget } from './structured-agent-session-chat-stop-target'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { MutationCommandReceipt } from './structured-agent-session-mutation-plans'
@@ -28,6 +28,12 @@ import type {
 
 /** Preserve the first committed result, including no-op; later failures answer from that receipt. */
 export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResult> = {
+  binding: {
+    at: 'last',
+    kinds: ['tombstone', 'item'],
+    answer: 'journal-row',
+    absent: { kind: 'stop' }
+  },
   result: (row) => (row ? journalRowReceiptResult(row, 'tombstone', 'item') : { kind: 'stop' }),
   unwritten: (value) => ({
     kind: 'no-op',
@@ -79,8 +85,11 @@ export async function acceptChatStop(
   const receipt = stopReceipt(ctx)
   const committedBefore = receipt.isCommitted()
   try {
-    const accepted = await ctx.journal.stops.accept(
-      { ...input, liveTurnId: () => contextStructuredAgentSessionCurrentWork(ctx).activeTurnId() },
+    const accepted = await ctx.journal.acceptStop(
+      {
+        ...input,
+        liveTurnId: (await contextStructuredAgentSessionCurrentWork(ctx)).activeTurnId()
+      },
       committedBefore ? undefined : receipt
     )
     return { ok: true, value: { turnId: accepted.turnId, withdrawn: accepted.withdrawn } }
@@ -102,17 +111,17 @@ export async function acceptCapturedChatStop(
     const accepted = await acceptStopTarget(ctx)
     return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
   }
-  const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
-  const handed = ctx.journal.inputOrder
-    .recoverableSubmissions()
-    .some(
-      (entry) =>
-        entry.fence === ctx.fence &&
-        (entry.handoverRecorded !== true || entry.handedOverAt !== undefined) &&
-        (entry.dispatchState === 'pending' ||
-          (entry.dispatchState === 'unknown' && !entry.recovered)) &&
-        (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
-    )
+  const sinceStop = (await ctx.journal.queuedMessages.userStopInForce())?.sequence
+  const handed = (
+    await ctx.journal.reads.input({ kind: 'recoverable-submissions' })
+  ).submissions.some(
+    (entry) =>
+      entry.fence === ctx.fence &&
+      (entry.handoverRecorded !== true || entry.handedOverAt !== undefined) &&
+      (entry.dispatchState === 'pending' ||
+        (entry.dispatchState === 'unknown' && !entry.recovered)) &&
+      (sinceStop === undefined || (entry.submittedSequence ?? -1) > sinceStop)
+  )
   const accepted = await acceptChatStop(ctx, {
     event: {
       reason: 'user-stop',

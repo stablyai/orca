@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'
 

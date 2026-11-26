@@ -1,8 +1,11 @@
 import { resolveBrowserLinkSession } from '../navigation/browser-link-session'
 import { activateAndRevealWorkspace } from '../../workspace/activation/worktree-activation'
 import type { AppState } from '@/store/types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
-import '../../../../../shared/constants'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import type { WorkspaceFilePreviewPlan } from './file-preview'
 import type {
@@ -10,7 +13,7 @@ import type {
   BrowserOpenOutcome
 } from '../navigation/browser-link-destination'
 import { openLocalBrowserLink } from '../navigation/browser-link-open'
-import { getResolvedExecutionHostIdForWorktree } from '../../resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '../../workspace/ownership/resolved-worktree-execution-host'
 import { createBrowserLinkHostMatcher } from '../navigation/browser-link-owner'
 import { resolveWorktreeOperationRoute } from '../../workspace/ownership/worktree-operation-route'
 import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

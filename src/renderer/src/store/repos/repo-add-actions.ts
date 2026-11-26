@@ -1,9 +1,9 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { defaultCreationHost } from '@/runtime/hosts/selection/default-creation-host'
@@ -13,7 +13,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { fetchRuntimeAddProjectPathStatus, getRuntimeEnvironmentDisplayName } from './owner-routing'
@@ -27,7 +27,7 @@ import {
   runExclusiveForRuntimeEnvironment
 } from './pending-runtime-repo-removals'
 import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
-import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
+import { readWslHostWindowsDriveRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { showWslHostWindowsDriveRefusal } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(
@@ -64,7 +64,8 @@ export function createRepoAddActions(
                   target,
                   'repo.add',
                   { path, kind, ...(displayName ? { displayName } : {}) },
-                  { timeoutMs: 15_000 }
+                  // Adding a repo is the user's act: it may wake an idle-stopped WSL host (#46567).
+                  { timeoutMs: 15_000, wake: true }
                 )
               ).repo
               clearPendingRuntimeRepoRemoval(environmentId, added.id)

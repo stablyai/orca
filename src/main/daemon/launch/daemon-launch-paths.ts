@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { connect } from 'node:net'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { ensurePrivateDir } from '../endpoint/publication/daemon-private-file-modes'
 import { scheduleTerminalHistoryPermissionRepair } from '../history/storage/terminal-history-permission-repair'
 import { getDaemonLogFilePath } from '../../observability/logs-directory'

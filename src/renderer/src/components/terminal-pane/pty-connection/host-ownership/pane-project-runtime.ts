@@ -1,4 +1,4 @@
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities

@@ -1,6 +1,6 @@
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
-import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import {
   resolveCanonicalDocPreviewPath,
   resolveDocPreviewAuthorityPaths,
@@ -10,6 +10,8 @@ import {
 } from './doc-preview-grant-registry'
 import type { RuntimeDocPreviewReadParams } from './doc-preview-runtime-read-contract'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { remoteFileRequest } from '../../../shared/file-access/remote-file-locator'
+import type { GrantedRemoteFilePreviewAddress } from '../../media/remote-file-preview-reader'
 
 const TIMEOUT_MS = 15_000
 const UPDATE_REQUIRED_MESSAGE =
@@ -28,8 +30,33 @@ function isFilePreview(value: unknown): value is RuntimeFilePreviewResult {
 }
 
 export type DocPreviewTerminalRead =
-  | { preview: RuntimeFilePreviewResult }
+  | { grantedFile: GrantedRemoteFilePreviewAddress }
   | { workspaceParams: RuntimeDocPreviewReadParams }
+
+/** The whole file under the host's grant that `readDocPreviewTerminalFile` resolved. */
+export async function readDocPreviewGrantedFile(
+  address: GrantedRemoteFilePreviewAddress
+): Promise<RuntimeFilePreviewResult> {
+  const { method, params } = remoteFileRequest(address.worktree, address, 'preview')
+  const response = await callRuntimeEnvironment(
+    getRuntimeEnvironmentRegistryRoot(),
+    address.environmentId,
+    method,
+    params,
+    TIMEOUT_MS,
+    address.expectedEnvironmentPairingRevision,
+    undefined,
+    // Opening a preview is the user's own act: it may wake an idle-stopped WSL host (#46567).
+    { wake: true }
+  )
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  if (!isFilePreview(response.result)) {
+    throw new Error('The paired machine returned an unreadable file preview.')
+  }
+  return response.result
+}
 
 /** Called only after the page grant has authorized this path. The host still checks its file grant. */
 export async function readDocPreviewTerminalFile(
@@ -37,11 +64,8 @@ export async function readDocPreviewTerminalFile(
   absolutePath: string
 ): Promise<DocPreviewTerminalRead> {
   const owner = grant.owner
-  if (owner.kind !== 'runtime') {
-    throw new Error('Not found')
-  }
   const root = getRuntimeEnvironmentRegistryRoot()
-  const environment = resolveEnvironment(root, owner.environmentId)
+  const environment = await resolveEnvironment(root, owner.environmentId)
   const revision = environment.pairingRevision ?? environment.createdAt
   const call = async (method: string, params: unknown): Promise<unknown> => {
     const response = await callRuntimeEnvironment(
@@ -50,7 +74,9 @@ export async function readDocPreviewTerminalFile(
       method,
       params,
       TIMEOUT_MS,
-      revision
+      revision,
+      undefined,
+      { wake: true }
     )
     if (!response.ok) {
       throw new Error(response.error.message)
@@ -99,15 +125,15 @@ export async function readDocPreviewTerminalFile(
     'grantId' in target &&
     typeof target.grantId === 'string'
   ) {
-    const preview = await call('files.readTerminalArtifactPreview', {
-      worktree: owner.worktreeSelector,
-      grantId: target.grantId,
-      absolutePath: targetPath
-    })
-    if (!isFilePreview(preview)) {
-      throw new Error('The paired machine returned an unreadable file preview.')
+    return {
+      grantedFile: {
+        environmentId: owner.environmentId,
+        worktree: owner.worktreeSelector,
+        grantId: target.grantId,
+        absolutePath: targetPath,
+        expectedEnvironmentPairingRevision: revision
+      }
     }
-    return { preview }
   }
   if (
     target.kind === 'worktree-file' &&

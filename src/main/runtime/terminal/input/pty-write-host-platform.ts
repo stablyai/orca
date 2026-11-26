@@ -1,6 +1,6 @@
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 /** Use the PTY transport host: WSL ingests through Windows ConPTY, while SSH uses remote node-pty. */

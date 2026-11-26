@@ -1,6 +1,6 @@
-import { useMemo, type CSSProperties, type JSX, type ReactNode } from 'react'
+import { useMemo } from 'react'
+import type { CSSProperties, JSX, ReactNode } from 'react'
 import { ArrowUp, ChevronDown, Eye, Hand, Plus, X } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { FlowDiagram } from '@/components/feature-tips/ChatUiHereFeatureTipVisual'
 import {
   CHAT_DEMO_FILE,
@@ -12,14 +12,15 @@ import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/nati
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getTabRootStateClasses
-} from '@/components/tab-bar/drop-indicator'
+} from '@/components/tab-bar/strip/drop-indicator'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { buildFontFamily } from '../../../../../shared/monospace-font-family'
-import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
+import { resolveEffectiveTerminalAppearance } from '@/lib/terminal/appearance/terminal-theme'
 import { cn } from '@/lib/class-names'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 // The tip's chat miniature, finished and denser so it fits a tile; nothing here animates.
 const CHAT_SCALE: CSSProperties & { '--chat-font-size': string } = { '--chat-font-size': '10px' }

@@ -151,7 +151,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/orca-node-runtime
-          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -162,6 +162,11 @@ jobs:
           key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-builder-mac-
+
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
 
       # Install both x64/arm64 optional natives for both macOS packages.
       - name: Install dependencies
@@ -224,7 +229,7 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           # Unset dev identity so official-only stable/rc telemetry stays silent.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template

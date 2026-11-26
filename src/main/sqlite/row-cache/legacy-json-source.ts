@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 
 /** A JSON file an older build may have written, before its rows moved into SQLite. */
 export type LegacyJsonSource =

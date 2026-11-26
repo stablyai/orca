@@ -1,7 +1,7 @@
-import { powerMonitor } from 'electron'
 import { recoverOrcadManagedTunnelsAfterHostResume } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
+import { sshDesktopHost } from '../../ssh/application/ssh-desktop-host'
 
 let powerMonitorUnsubscribe: (() => void) | null = null
 let registeredGetUserDataPath: (() => string) | undefined
@@ -34,14 +34,9 @@ export function retrySshConnectionsAfterNetworkReturn(): void {
 export function registerPowerMonitorReconnect(getUserDataPath?: () => string): void {
   powerMonitorUnsubscribe?.()
   registeredGetUserDataPath = getUserDataPath
-  const onResume = (): void => retrySshConnectionsAfterNetworkReturn()
-  powerMonitor.on('resume', onResume)
-  // macOS/Windows lock without sleep can still drop VPN routes.
-  powerMonitor.on('unlock-screen', onResume)
-  powerMonitorUnsubscribe = () => {
-    powerMonitor.off('resume', onResume)
-    powerMonitor.off('unlock-screen', onResume)
-  }
+  powerMonitorUnsubscribe = sshDesktopHost().onHostResume(() =>
+    retrySshConnectionsAfterNetworkReturn()
+  )
 }
 
 export function unregisterPowerMonitorReconnect(): void {

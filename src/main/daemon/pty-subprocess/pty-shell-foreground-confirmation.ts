@@ -1,7 +1,7 @@
 import type * as pty from 'node-pty'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
-import { confirmShellForegroundProcess } from '../../providers/agent-foreground-process'
-import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
+import { confirmShellForegroundProcess } from '../../providers/foreground/agent-process'
+import { readWindowsPtyJobProcessIds } from '../../providers/foreground/windows/pty-job-membership'
 
 /** Require fresh execution-host inspection; cached foreground state is insufficient. */
 export async function confirmPtyShellForeground(args: {

@@ -1,13 +1,20 @@
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { providerSpawnAbsent } from '../../../provider-process/provider-executable-missing'
+import { providerOutcomeLost } from '../../../provider-process/provider-process-exit-status'
+import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
 } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { isCodexAppServerHandshakeExitUnprovenError } from '../../app-server/codex-app-server-handshake-exit-proof'
-import {
-  cancelCodexAcquisitionAttempt,
-  type CodexAcquisitionAttempt,
-  type CodexAcquisitionRegistry
+import type {
+  CodexAcquisitionAttempt,
+  CodexAcquisitionRegistry
 } from '../session-lifecycle/codex-structured-session-state'
 
 export async function stopSupersededCodexAcquisition(input: {
@@ -60,4 +67,38 @@ export async function closeFailedCodexAcquisition(input: {
     throw new AgentSessionAcquisitionRootExitObservedError(input.cause, 'kill-delivered')
   }
   throw input.cause
+}
+
+export async function cancelCodexAcquisitionAttempt(
+  attempt: CodexAcquisitionAttempt | undefined,
+  requestedClose = true
+): Promise<boolean> {
+  if (!attempt) {
+    return true
+  }
+  const closed = await cancelProcessAcquisition({
+    cancel: () => {
+      attempt.historyCatchUp?.abort()
+      attempt.cancelled = true
+      attempt.requestedClose = requestedClose
+    },
+    connection: () => attempt.window.connection,
+    exitProven: () => attempt.exitProven,
+    finished: attempt.finished
+  })
+  if (closed) {
+    attempt.exitProven = true
+    attempt.dispose?.()
+  }
+  return closed
+}
+
+/** Lost transport outcomes cannot be attributed to the agent. */
+export function codexAcquisitionExitFailure(error: Error, cancelled: boolean) {
+  if (cancelled || providerOutcomeLost(error)) {
+    return agentSessionFailureFact('hostFault')
+  }
+  return providerSpawnAbsent(error)
+    ? providerStartupFailureFact(error)
+    : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(error) })
 }

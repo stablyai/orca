@@ -1,7 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { lstat, readdir, realpath } from 'node:fs/promises'
 import path from 'node:path'
-import { waitForPromiseWithSignal } from '../../abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 import {
   isMissingGitAdminEntry,
   readGitAdminFile,
@@ -9,8 +9,8 @@ import {
   type GitAdminReadOptions
 } from '../metadata/git-common-directory'
 import { resolveGitMetadataPath, resolveWorktreeHostPath } from '../metadata/git-metadata-path'
-import { mapWithConcurrency } from '../../map-with-concurrency'
-import { foldWslUncPathCaseInsensitiveParts } from '../../wsl-paths'
+import { mapWithConcurrency } from '../../concurrency/map-with-concurrency'
+import { foldWslUncPathCaseInsensitiveParts } from '../../file-access/wsl-paths'
 import type { GitWorktreeInfo } from '../../worktree/types'
 
 const ADMIN_READ_CONCURRENCY = 8

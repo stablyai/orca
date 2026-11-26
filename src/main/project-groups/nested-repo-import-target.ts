@@ -1,5 +1,5 @@
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import { listWorktreeGraph } from '../git/worktrees/catalog/worktree-scan-cache'
 
 export type NestedRepoImportTargetResolver = {

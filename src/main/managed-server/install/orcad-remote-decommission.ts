@@ -18,8 +18,8 @@ import {
 import { readRemoteOrcadManagedStopTarget } from '../lifecycle/orcad-managed-remote-stop'
 import { settleOrcadDecommissionStop } from '../lifecycle/orcad-decommission-stop'
 import type { OrcadSlotOptions } from '../activation/orcad-recovery-slot'
-import type { OrcadDecommissionResult } from '../../../shared/orcad-decommission'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadDecommissionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-decommission'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 type OrcadDecommissionOptions = OrcadSlotOptions & {
   /** Refuse if the host record changed since caller review. */

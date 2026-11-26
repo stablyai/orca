@@ -6,3 +6,13 @@ export type RouteHandoff = ReturnType<typeof useRouter>
 export function useRouteHandoff(): RouteHandoff {
   return useRouter()
 }
+
+// Null without a shell. `returns` says whether the shell goes back to a session's existing entry instead of pushing a second one.
+export type ShellSessionHandoff = Readonly<{
+  returns: () => boolean
+  open: (href: string) => void
+}> | null
+
+export function useShellSessionHandoff(): ShellSessionHandoff {
+  return null
+}

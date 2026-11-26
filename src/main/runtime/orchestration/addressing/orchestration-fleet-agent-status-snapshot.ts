@@ -1,3 +1,5 @@
+import { orchestrationProjectionFacts } from '../crew/orchestration-projection-facts'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { conversationRecordReader } from './session-lineage/structured-session-lineage'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -13,7 +15,7 @@ import {
   mintAgentStatusFleetEvidence,
   type AgentStatusRuntimeEnrichment,
   type ObservedAgentStatusPaneIdentity
-} from '../../../ipc/agent-status-ipc-boundary'
+} from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 
 /** Hook rows plus registry identity lookups and the identity observed when each row arrived. */
 export type FleetAgentStatusSnapshotSource = AgentStatusRuntimeEnrichment & {
@@ -39,7 +41,20 @@ export function readCapturedOrchestrationFleetAgentStatusSnapshot(
   dependencies: RuntimeAgentOrchestrationDependencies
 ): readonly FleetAgentStatusEvidence[] {
   const projection = new RuntimeAgentOrchestrationProjection(dependencies)
-  let scope: ReturnType<typeof createOrchestrationProjectionScope> | undefined
+  // Captured on the first bound pane so reads with no bound panes stay off the DB.
+  let captured:
+    | { db: OrchestrationDb | null; scope: ReturnType<typeof createOrchestrationProjectionScope> }
+    | null
+    | undefined
+  const capture = () => {
+    const raw = dependencies.getDb()
+    const sourceFacts = raw?.db ? orchestrationProjectionFacts(raw) : undefined
+    if (raw?.db && !sourceFacts) {
+      return null
+    }
+    const db = sourceFacts?.view ?? raw
+    return { db, scope: createOrchestrationProjectionScope(db, dependencies) }
+  }
   return readOrchestrationFleetAgentStatusSnapshot({
     ...source,
     getAgentStatusOrchestrationContextForPaneKey: (paneKey) => {
@@ -47,9 +62,17 @@ export function readCapturedOrchestrationFleetAgentStatusSnapshot(
       if (!handle) {
         return undefined
       }
-      const db = dependencies.getDb()
-      scope ??= createOrchestrationProjectionScope(db, dependencies)
-      return projection.getForHandle(handle, db, { paneKey }, scope)
+      if (captured === undefined) {
+        captured = capture()
+      }
+      return captured
+        ? projection.getForHandle(
+            handle,
+            captured.db,
+            { paneKey, deferAttention: true },
+            captured.scope
+          )
+        : undefined
     }
   })
 }

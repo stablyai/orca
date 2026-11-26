@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { markQoderWorkspaceTrusted } from '../../qoder/workspace-trust'
+import { markQwenWorkspaceTrusted } from '../../qwen-code/workspace-trust'
 import {
   type AgentTrustPreset,
   markAntigravityWorkspaceTrusted,
@@ -11,10 +12,12 @@ import {
   markKimiWorkspaceTrusted
 } from './agent-trust-presets'
 import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline'
+import { getAntigravityTrustLedgerPath } from './antigravity-workspace-trust-ownership'
+import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
 import {
   type ClaudeTrustConfigTarget,
   grantClaudeWorkspaceTrust
-} from '../../claude/claude-folder-trust-file'
+} from '../../claude/configuration/claude-folder-trust-file'
 import { isTooBroadToPreTrust } from '../../../shared/agent-launch/permissions/workspace-pretrust-scope'
 
 /** Resolve trust on the agent’s execution host, including WSL guests and SSH relays. */
@@ -31,6 +34,8 @@ export type WorkspaceTrustHost = {
   guestWorkspacePath?: string
   /** KIMI_CODE_HOME for the launched Kimi; unset means `<agentHome>/.kimi-code`. */
   kimiHome?: string
+  /** The launched agent's env, for agents whose config root an env var moves (Qwen). */
+  agentEnv?: Record<string, string | undefined>
   deadlineMs: number
 }
 
@@ -49,6 +54,7 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   copilot: true,
   qoder: true,
   'qoder-cn': true,
+  'qwen-code': true,
   antigravity: false,
   kimi: false
 }
@@ -64,6 +70,7 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   copilot: false,
   qoder: false,
   'qoder-cn': false,
+  'qwen-code': false,
   antigravity: false,
   kimi: true
 }
@@ -106,6 +113,8 @@ async function writePreset(
       return markQoderWorkspaceTrusted(storedPath, host.agentHome, '.qoder-cn')
     case 'qoder':
       return markQoderWorkspaceTrusted(storedPath, host.agentHome)
+    case 'qwen-code':
+      return markQwenWorkspaceTrusted(storedPath, host.agentEnv ?? {}, host.agentHome)
     case 'antigravity':
       return markAntigravityWorkspaceTrusted(storedPath, host.agentHome, host.guestWorkspacePath)
     case 'kimi':
@@ -130,11 +139,15 @@ export async function applyWorkspaceTrustOnThisHost(
         return
       }
     }
-    await awaitAgentTrustWriteWithinDeadline(writePreset(preset, workspacePath, host), {
-      preset,
-      workspacePath,
-      deadlineMs: host.deadlineMs
-    })
+    // Why: removals edit the same Antigravity files on the worker; the deadline bounds the wait
+    // behind them, and a late grant still runs in queue order.
+    const write = (): Promise<void> => writePreset(preset, workspacePath, host)
+    await awaitAgentTrustWriteWithinDeadline(
+      preset === 'antigravity'
+        ? runExclusivelyForCodexTrustConfig(getAntigravityTrustLedgerPath(), write)
+        : write(),
+      { preset, workspacePath, deadlineMs: host.deadlineMs }
+    )
   } catch (error) {
     console.warn(
       `[agent-trust] ${preset} trust for ${workspacePath} failed; the agent will ask`,

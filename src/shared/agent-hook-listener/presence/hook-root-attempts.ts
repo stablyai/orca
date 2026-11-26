@@ -1,6 +1,10 @@
 import type { HookListenerState } from '../listener-state'
 import type { AgentProcessIdentity } from '../../agent-status/process/agent-process-presence'
-import { beforeDeadline, DEADLINE_PASSED, monotonicNow } from '../../deadline-settle-notifier'
+import {
+  beforeDeadline,
+  DEADLINE_PASSED,
+  monotonicNow
+} from '../../concurrency/deadline-settle-notifier'
 import {
   hookProcessKey,
   type HookRootAttempt,

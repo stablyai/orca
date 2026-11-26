@@ -15,7 +15,7 @@ export function retireLiveAgentRowOnConfirmedProcessExit(
   if (session.deferredCommandFinishedStatusDrop || !ptyId || isRemoteExecutionHostPtyId(ptyId)) {
     return
   }
-  const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+  const entry = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
   if (
     !entry ||
     resolveCompatibleAgentTypeForOwner(entry.agentType, exited.agent) !== exited.agent

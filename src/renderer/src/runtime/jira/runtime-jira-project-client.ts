@@ -3,7 +3,7 @@ import type {
   JiraProject,
   JiraSiteSelection
 } from '../../../../shared/jira/jira-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { parseJiraConnectionStatus } from './runtime-jira-connection-status'
 

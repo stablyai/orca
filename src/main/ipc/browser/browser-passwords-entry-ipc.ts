@@ -3,7 +3,7 @@ import type {
   BrowserPasswordCopyResult,
   BrowserPasswordEntryDetailsResult,
   BrowserPasswordEntryEditResult
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { toBrowserPasswordOrigin } from '../../browser-passwords/browser-password-origin'
 import { confirmBrowserPasswordOwner } from '../../browser-passwords/browser-password-reauth'
 import type { BrowserPasswordStoreResult } from '../../browser-passwords/browser-password-vault-file'
@@ -76,12 +76,14 @@ export function registerBrowserPasswordsEntryHandlers(): void {
         return { ok: false, reason: password.reason === 'not-found' ? 'not-found' : 'unavailable' }
       }
       const copied = password.value
-      clipboard.writeText(copied)
+      await clipboard.writeText(copied)
       setTimeout(() => {
         // Why compare first: never wipe something the user copied afterwards.
-        if (clipboard.readText() === copied) {
-          clipboard.clear()
-        }
+        void clipboard.readText().then((current) => {
+          if (current === copied) {
+            clipboard.clear()
+          }
+        })
       }, CLIPBOARD_CLEAR_MS).unref?.()
       return { ok: true }
     }

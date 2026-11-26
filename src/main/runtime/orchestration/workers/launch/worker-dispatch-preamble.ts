@@ -1,19 +1,23 @@
 import type { OrchestrationCliCommand } from './orchestration-cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../../../terminal/input/agent-prompt-write-options'
-import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orca-dispatch-status-prompt'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orchestration/workers/orca-dispatch-status-prompt'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
 export type PreambleParams = {
   taskId: string
   // Dispatch ids fence completion authority across retries of one Task.
   dispatchId: string
   taskSpec: string
-  /** A terminal handle, or a session's `orca_session_id:<id>`; each is labelled by its kind. */
+  /** A terminal handle, or a session's `orca_session_id:<id>`; a terminal handle is not printed. */
   coordinatorHandle: string
+  /** The paired Orca's name when it coordinates this worker's Run from another computer. */
+  coordinatedFrom?: string
   workerHandle: string
   devMode?: boolean
   // Packaged WSL uses orca-ide; other hosts retain their existing launcher.
   cliCommand?: OrchestrationCliCommand
+  // Codex's Windows sandbox account cannot read Orca's install there (#49301).
+  runsOnNativeWindows?: boolean
   // Supply actual preflight drift only; spurious warnings train workers to ignore stale-base evidence.
   baseDrift?: {
     base: string
@@ -35,17 +39,57 @@ function isSessionHandle(handle: string): boolean {
   return handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
 }
 
-/** Terminal agents keep their handle's wording; only a session is named by its Orca session ID. */
+/** A terminal coordinator's handle is not printed: workers splice a second term_ UUID into their own --from (#14570). */
 function dispatchIdentityLines(params: PreambleParams): string {
   return [
-    isSessionHandle(params.coordinatorHandle)
-      ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
-      : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
+    params.coordinatedFrom
+      ? `You are coordinated from ${params.coordinatedFrom}. Your coordinator's address here is: ${params.coordinatorHandle}`
+      : isSessionHandle(params.coordinatorHandle)
+        ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
+        : 'Your coordinator receives mail you send with no recipient.',
     `Your task ID is: ${params.taskId}`,
     ...(isSessionHandle(params.workerHandle)
       ? [`Your Orca session ID is: ${params.workerHandle}`]
       : [])
   ].join('\n')
+}
+
+function windowsSandboxLine(cli: string, runsOnNativeWindows: boolean | undefined): string {
+  if (!runsOnNativeWindows) {
+    return ''
+  }
+  return `On Windows, if a sandboxed shell reports \`${cli}\` as not recognized or access denied before
+Orca itself runs, the sandbox cannot read Orca's install: re-run that command, and later
+\`${cli}\` commands including worker_done, with escalated permissions.
+`
+}
+
+// Chat mail arrives directly; terminal workers need the check syntax so they never guess `check --from`.
+function checkLines({
+  chat,
+  unreadMail,
+  cli,
+  workerHandle
+}: {
+  chat: boolean
+  unreadMail?: boolean
+  cli: string
+  workerHandle: string
+}): string {
+  if (chat) {
+    return unreadMail
+      ? `  # Messages for this task arrive next, one at a time.
+
+`
+      : ''
+  }
+  const comment = unreadMail
+    ? 'Messages for this task are waiting; read them'
+    : 'When Orca says you have messages, read them'
+  return `  # ${comment}:
+  ${cli} orchestration check --terminal ${workerHandle}
+
+`
 }
 
 // Place behavior rules beside CLI examples, where agent readers use them.
@@ -67,23 +111,13 @@ ${dispatchIdentityLines(params)}
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
 unless the task asks.
-Do only this task, yourself: no subagents or helper workers unless the task asks.
+${windowsSandboxLine(cli, params.runsOnNativeWindows)}Do only this task, yourself: no subagents or helper workers unless the task asks.
+Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 
 === CLI COMMANDS ===
 
 \`\`\`sh
-${
-  params.unreadMail
-    ? chat
-      ? `  # Messages for this task arrive next, one at a time.
-
-`
-      : `  # Messages for this task are waiting; read them:
-  ${cli} orchestration check --terminal ${params.workerHandle}
-
-`
-    : ''
-}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.workerHandle })}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
   ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"
@@ -92,10 +126,11 @@ ${
   ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
   # Finish: send exactly once. --body is three sentences: what you did, what
-  # you found, what is left. Use --outcome failed if the work is not done;
-  # never hide failure in prose. Add --files-modified or --report-path only
-  # with real values. You are done when it confirms; if it fails, follow the
-  # recovery it prints.
+  # you found, what is left. --outcome failed means only that you could not
+  # finish (e.g. no access to the repo). Finished work is succeeded even when
+  # results are bad (e.g. tests found bugs); list the problems in --body.
+  # Add --files-modified or --report-path only with real values. You are
+  # done when it confirms; if it fails, follow the recovery it prints.
   ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 \`\`\`
 
@@ -134,10 +169,10 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
 }
 
 export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. More supervised work arrives here as a fresh preamble
-and TASK block; follow it under its new Dispatch.`
+and TASK block; follow it under its new Dispatch, using that preamble's --task-id and --dispatch-id.`
 
 export const CHAT_REDISPATCH_PARAGRAPH = `More supervised work arrives in this chat as a fresh preamble and TASK
-block; follow it under its new Dispatch.`
+block; follow it under its new Dispatch, using that preamble's --task-id and --dispatch-id.`
 
 function buildPostWorkerDoneInstructions({
   cli,

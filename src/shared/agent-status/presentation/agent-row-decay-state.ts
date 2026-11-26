@@ -1,4 +1,8 @@
-import { agentStatusEvidenceObservedAt } from '../contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusEvidenceObservedAt,
+  isAgentStatusFresh
+} from '../contracts/agent-status-freshness'
 import type { AgentStatusEntry, AgentStatusState } from '../contracts/agent-status-types'
 
 /** Row states: the hook-reported statuses plus the two Orca derives when an entry goes stale. */
@@ -14,6 +18,31 @@ export function resolveDecayedAgentRowState(
   return hasLivePty && entry.state !== 'done' && entry.restoredUnconfirmed !== true
     ? 'unverifiable'
     : 'idle'
+}
+
+/** The row state the workspace card and Activity both show: stale working/blocked/waiting decays by PTY evidence. */
+export function resolveAgentRowState(
+  entry: DecayInput & Parameters<typeof isAgentStatusFresh>[0],
+  now: number,
+  hasLivePty: boolean
+): AgentRowState {
+  const canDecay =
+    entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting'
+  return canDecay && !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    ? resolveDecayedAgentRowState(entry, hasLivePty)
+    : entry.state
+}
+
+/** The instant after which resolveAgentRowState(entry, now, ·) decays, or undefined when it never changes with time. */
+export function agentRowStateDecaysAfter(
+  entry: DecayInput & Parameters<typeof isAgentStatusFresh>[0]
+): number | undefined {
+  const canDecay =
+    entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting'
+  // Unconfirmed restores are never fresh and host-owned rows are always fresh.
+  return canDecay && entry.restoredUnconfirmed !== true && entry.structuredHostOwned !== true
+    ? agentStatusEvidenceObservedAt(entry) + AGENT_STATUS_STALE_AFTER_MS
+    : undefined
 }
 
 /** Coarse `34m` / `2h` / `3d` duration, floored so it never overstates the gap. */

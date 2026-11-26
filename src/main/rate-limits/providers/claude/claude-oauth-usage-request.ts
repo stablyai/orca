@@ -1,4 +1,7 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { ensureElectronProxyFromEnvironment } from '../../../network/proxy-settings'
 import { getMainHttpClient } from '../../../network/http-client'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'

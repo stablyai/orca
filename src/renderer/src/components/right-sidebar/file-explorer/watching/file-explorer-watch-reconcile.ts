@@ -4,7 +4,7 @@ import type { DirCache, TreeNode } from '../tree/file-explorer-types'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import {
   purgeDirCacheSubtrees,
   purgeExpandedDirsSubtrees,

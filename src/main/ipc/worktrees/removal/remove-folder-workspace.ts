@@ -1,10 +1,13 @@
-import type { Repo } from '../../../../shared/repo-types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
-import { notifyWorktreesChanged } from '../../worktree-remote'
+import { notifyWorktreesChanged } from '../worktree-remote'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'

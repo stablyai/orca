@@ -1,3 +1,4 @@
+import type { EditorDiscardGeneration } from '../../save/flush/editor-discard-epoch'
 import {
   useCallback,
   useEffect,
@@ -10,7 +11,7 @@ import { registerPendingEditorFlush } from '../../save/flush/editor-pending-flus
 import {
   focusLeftView,
   notifyStaleViewEditRejected,
-  staleViewEditEpoch
+  captureViewEditGeneration
 } from '../../save/flush/editor-stale-view-edit'
 import {
   deleteIpynbCell,
@@ -84,7 +85,7 @@ export function useIpynbDocumentEditing({
   const sourceCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Why: each drafted cell's source when typing began; a draft onto a cell changed elsewhere is refused.
   const draftBasesRef = useRef<Record<string, IpynbSourceDraftBase>>({})
-  const draftEpochRef = useRef(0)
+  const draftGenerationRef = useRef<EditorDiscardGeneration | null>(null)
   const parsedContentRef = useRef(content)
   const structuralFrameIdsRef = useRef<number[]>([])
   useLayoutEffect(() => {
@@ -118,7 +119,7 @@ export function useIpynbDocumentEditing({
       return contentRef.current
     }
     const cells = latestCells() ?? []
-    const discarded = staleViewEditEpoch(fileId) !== draftEpochRef.current
+    const discarded = draftGenerationRef.current?.discarded === true
     const rebase = discarded
       ? { updates: [], dropped: Object.keys(drafts), lostTyping: false }
       : rebaseIpynbSourceDrafts(cells, drafts, draftBasesRef.current)
@@ -135,7 +136,7 @@ export function useIpynbDocumentEditing({
       sourceDraftsRef.current = nextDrafts
       setSourceDrafts(nextDrafts)
       if (rebase.lostTyping) {
-        notifyStaleViewEditRejected(fileId, draftEpochRef.current)
+        notifyStaleViewEditRejected(draftGenerationRef.current)
       }
     }
     draftBasesRef.current = nextBases
@@ -228,7 +229,7 @@ export function useIpynbDocumentEditing({
       }
       const key = getIpynbCellKey(cell, index)
       if (sourceCommitTimerRef.current === null) {
-        draftEpochRef.current = staleViewEditEpoch(fileId)
+        draftGenerationRef.current = captureViewEditGeneration(fileId)
       }
       if (!Object.hasOwn(draftBasesRef.current, key)) {
         draftBasesRef.current = {

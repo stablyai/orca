@@ -1,4 +1,4 @@
-import { resolveProcessCwd } from '../../providers/process-cwd'
+import { resolveProcessCwd } from '../../providers/working-directory/process-cwd'
 import type { Session } from '../sessions/session'
 
 export async function resolveTerminalHostSessionCwd(session: Session): Promise<string | null> {

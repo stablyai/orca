@@ -1,10 +1,11 @@
 import type { PluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { Store } from '../../persistence/loading-store/store'
-import { isBundledPluginKey } from '../plugin-bundled-bootstrap'
-import { getPluginsDataDir, getUserPluginsDir } from '../plugin-discovery'
-import { clearRemovedPluginSettings } from '../plugin-removal-settings'
+import { isBundledPluginKey } from '../bootstrap/plugin-bundled-bootstrap'
+import { getPluginsDataDir, getUserPluginsDir } from '../discovery/plugin-discovery'
+import { clearRemovedPluginSettings } from './plugin-removal-settings'
 import type { PluginService } from '../plugin-service'
 import { readPluginLockfile, removeInstalledPlugin } from './plugin-install'
+import { assertPluginIsNotRequired } from './plugin-team-install-policy'
 
 type UninstallingPluginService = Pick<
   PluginService,
@@ -38,6 +39,7 @@ export async function uninstallInstalledPlugin(input: {
   const { pluginService, pluginKey, store } = input
   const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
   const lock = await readPluginLockfile(pluginsDir)
+  assertPluginIsNotRequired(lock.plugins[pluginKey])
   if (!canRemoveInstalledPlugin(pluginService, pluginKey, lock)) {
     return false
   }

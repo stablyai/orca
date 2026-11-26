@@ -3,10 +3,10 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
+import { compareWorktreeDisplayName } from '../../../../../../shared/worktree/display-name-order'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 function sortBoardWorktrees(a: Worktree, b: Worktree): number {

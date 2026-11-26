@@ -1,8 +1,10 @@
+import { isGlobalAiTextAction } from '../recipes/source-control-ai-actions'
 import type {
   CommitMessageAiSettings,
   CommitMessageAiModelCapability
 } from '../generation/commit-message-ai-types'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../generation/commit-message-host-key'
+import { getCommitMessageAgentSpec } from '../generation/commit-message-agent-spec'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type {
   RepoSourceControlAiOverrides,
@@ -122,10 +124,18 @@ export function withDiscoveredModels(
   config: SourceControlAiSettings,
   agentId: TuiAgent,
   discovered: CommitMessageAiModelCapability[],
-  hostKey: string
-): Pick<SourceControlAiSettings, 'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost'> {
+  hostKey: string,
+  listedAt = Date.now()
+): Pick<
+  SourceControlAiSettings,
+  'discoveredModelsByAgent' | 'discoveredModelsByAgentByHost' | 'discoveredAtByAgentByHost'
+> {
   const models = savedDiscoveredModels(discovered)
   return {
+    discoveredAtByAgentByHost: {
+      ...config.discoveredAtByAgentByHost,
+      [hostKey]: { ...config.discoveredAtByAgentByHost?.[hostKey], [agentId]: listedAt }
+    },
     discoveredModelsByAgent:
       hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
         ? { ...config.discoveredModelsByAgent, [agentId]: models }
@@ -137,6 +147,27 @@ export function withDiscoveredModels(
   }
 }
 
+/** A recent account listing for the host, or null when none bounds what runs. */
+export function getFreshAccountModelListing(
+  source: SourceControlAiSettings,
+  legacy: CommitMessageAiSettings | null | undefined,
+  hostKey: string,
+  agentId: TuiAgent
+): CommitMessageAiModelCapability[] | null {
+  // Codex's model/list is the signed-in account's own list, so a fresh one bounds what runs; an older
+  // one may be another login's or predate a new model, and Codex's refusal retry covers that case.
+  const listedAt = source.discoveredAtByAgentByHost?.[hostKey]?.[agentId]
+  if (
+    !listsAccountModels(agentId) ||
+    listedAt === undefined ||
+    Date.now() - listedAt >= ACCOUNT_LISTING_FRESH_MS
+  ) {
+    return null
+  }
+  const discovered = getDiscoveredModels(source, legacy, hostKey, agentId)
+  return discovered.length > 0 ? discovered : null
+}
+
 /** The models generation can run for an agent on a host, in its lookup order: spec, then saved discovery. */
 export function getTextGenerationModels<T extends CommitMessageAiModelCapability>(
   specModels: readonly T[],
@@ -145,15 +176,31 @@ export function getTextGenerationModels<T extends CommitMessageAiModelCapability
   hostKey: string,
   agentId: TuiAgent
 ): (T | CommitMessageAiModelCapability)[] {
+  const listing = getFreshAccountModelListing(source, legacy, hostKey, agentId)
+  if (listing) {
+    return listing
+  }
+  const discovered = getDiscoveredModels(source, legacy, hostKey, agentId)
   const specIds = new Set(specModels.map((model) => model.id))
-  return [
-    ...specModels,
-    ...getDiscoveredModels(source, legacy, hostKey, agentId).filter(
-      (model) => !specIds.has(model.id)
-    )
-  ]
+  return [...specModels, ...discovered.filter((model) => !specIds.has(model.id))]
 }
 
+// The settings picker re-lists on open, so a day bounds how long a login switch can hide a model.
+const ACCOUNT_LISTING_FRESH_MS = 24 * 60 * 60 * 1000
+
+/** Whether the agent lists the signed-in account's models (Codex's app-server `model/list`). */
+export function listsAccountModels(agentId: TuiAgent): boolean {
+  const discovery = getCommitMessageAgentSpec(agentId)?.modelDiscovery
+  return discovery !== undefined && 'listing' in discovery
+}
+
+// Dictated text waits on cleanup before it lands, so cleanup starts on each agent's quickest model.
+const DICTATION_CLEANUP_MODEL_BY_AGENT: Partial<Record<TuiAgent, string>> = {
+  claude: 'haiku',
+  codex: 'gpt-5.4-mini'
+}
+
+/** The nearest saved pick the host can run; a pick it can't run falls through to the next level. */
 export function selectPersistedModelId(args: {
   source: SourceControlAiSettings
   legacy: CommitMessageAiSettings | null | undefined
@@ -161,22 +208,23 @@ export function selectPersistedModelId(args: {
   operation: AiTextOperation
   hostKey: string
   agentId: TuiAgent
-  defaultModelId: string
-}): string {
-  const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
-  return (
-    (operation === 'conversationName'
+  isAvailable: (modelId: string) => boolean
+}): string | undefined {
+  const { source, legacy, repoOverrides, operation, hostKey, agentId } = args
+  const picks = [
+    isGlobalAiTextAction(operation)
       ? undefined
       : readSourceControlAiModelChoiceForHost(
           repoOverrides?.modelOverridesByOperation?.[operation],
           hostKey,
           agentId
-        )) ??
+        ),
     readSourceControlAiModelChoiceForHost(
       source.modelOverridesByOperation?.[operation],
       hostKey,
       agentId
-    ) ??
+    ),
+    operation === 'dictationCleanup' ? DICTATION_CLEANUP_MODEL_BY_AGENT[agentId] : undefined,
     readSourceControlAiModelChoiceForHost(
       {
         selectedModelByAgent: source.selectedModelByAgent,
@@ -184,13 +232,11 @@ export function selectPersistedModelId(args: {
       },
       hostKey,
       agentId
-    ) ??
-    legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
-    (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-      ? legacy?.selectedModelByAgent?.[agentId]
-      : undefined) ??
-    defaultModelId
-  )
+    ),
+    legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId],
+    hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY ? legacy?.selectedModelByAgent?.[agentId] : undefined
+  ]
+  return picks.find((pick) => pick !== undefined && args.isAvailable(pick))
 }
 
 export function resolveThinkingLevel(args: {
@@ -204,7 +250,7 @@ export function resolveThinkingLevel(args: {
     return undefined
   }
   const persisted =
-    (args.operation === 'conversationName'
+    (isGlobalAiTextAction(args.operation)
       ? undefined
       : args.repoOverrides?.modelOverridesByOperation?.[args.operation]?.selectedThinkingByModel?.[
           args.model.id

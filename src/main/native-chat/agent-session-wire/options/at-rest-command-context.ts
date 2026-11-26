@@ -17,9 +17,12 @@ const launchSettings = new Set([
   'agentPermissionDefault',
   'agentPermissionOverrides',
   'nativeChatInheritShellEnvironment',
+  'nativeChatInlineVisuals',
   'nativeChatShellEnvironmentVariables',
   'terminalWindowsShell',
-  'terminalWindowsPowerShellImplementation'
+  'terminalWindowsPowerShellImplementation',
+  'httpProxyUrl',
+  'httpProxyBypassRules'
 ])
 
 export function retireAtRestCommandSettings(keys: Iterable<string>): void {

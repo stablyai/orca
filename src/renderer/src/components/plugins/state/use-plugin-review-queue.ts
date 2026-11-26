@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { pluginNeedsReview } from '../presentation/plugin-status-presentation'
 
 /**

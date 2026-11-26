@@ -3,8 +3,8 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getWorktreeOperationOwnerHostIds,
   resolveWorktreeOperationRoute,
@@ -27,7 +27,7 @@ import {
   dropConfirmedHostRow,
   resolveSameIdSurvivingHostId
 } from './host-qualified-worktree-row-removal'
-import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined
 type RemoveWorktreeSliceResult = Awaited<ReturnType<WorktreeSlice['removeWorktree']>>

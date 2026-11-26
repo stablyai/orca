@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { RotateCcw } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
@@ -21,7 +21,7 @@ import {
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   normalizeTerminalTuiMouseWheelMultiplier
-} from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
+} from '@/lib/pane-manager/terminal-input/pane-terminal-tui-wheel-reports'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalInteractionSectionProps = {

@@ -4,7 +4,7 @@ import type {
   UsageLocationModelBreakdown,
   UsageModelBreakdown,
   UsageSession
-} from '../usage/usage-rollup-records'
+} from '../usage/rollups/usage-rollup-records'
 
 // Muse supplies no prices for rollups.
 export type MuseUsageMetric = Record<never, never>

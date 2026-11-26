@@ -2,8 +2,9 @@ import type {
   NativeChatBlock,
   NativeChatMessage
 } from '../../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
-import { nativeChatBlocksInOwnWords } from '../../../../../../shared/native-chat/native-chat-stopped-before-start'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { nativeChatBlocksInOwnWords } from '../../../../../../shared/native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
 import type { Translate } from '../../../../i18n/use-translate'
 
@@ -12,7 +13,10 @@ export function nativeChatMessageRowBlocks(
   message: NativeChatMessage,
   t?: Translate
 ): NativeChatBlock[] {
-  return nativeChatBlocksInOwnWords(message.blocks, nativeChatStoppedBeforeStartLabel(t))
+  return nativeChatBlocksInOwnWords(
+    withoutSentImagePromptMarkers(message),
+    nativeChatStoppedBeforeStartLabel(t)
+  )
 }
 
 /** The words an agent row draws and copies; Copy exists only where these do. */

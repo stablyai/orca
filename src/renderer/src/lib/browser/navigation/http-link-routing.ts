@@ -1,34 +1,36 @@
 import {
+  isRemoteLoopbackHttpLink,
+  openOwnedSystemHttpLink,
   localhostLabelRouteForHttpLink,
-  openLabeledLocalhostLink,
-  type LocalhostLinkRepo,
-  type LocalhostLinkProject,
-  type LocalhostLinkWorktree
+  openLabeledLocalhostLink
 } from './http-link-localhost-route'
-import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
-
-import type { LinkOpenIntent, LinkSourceState } from '../../link-open-intent'
-import { captureLinkOpenIntent, canOpenLinkInSourceGroup } from '../../link-open-intent'
-import type { AppState } from '@/store/types'
-import { translate } from '@/i18n/i18n'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { toast } from 'sonner'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
+import type {
+  LocalhostLinkRepo,
+  LocalhostLinkProject,
+  LocalhostLinkWorktree
+} from './http-link-localhost-route'
 import {
-  captureBrowserLinkReveal,
-  type BrowserLinkSelectionSubscriber
-} from './browser-link-reveal'
+  captureLinkOpenIntent,
+  canOpenLinkInSourceGroup
+} from '../../links/placement/link-open-intent'
+import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link-open-intent'
+import { showBrowserOpenFailure } from '../workspace/workspace-browser-open-failure-toast'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
+import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
+import { captureBrowserLinkReveal } from './browser-link-reveal'
+import type { BrowserLinkSelectionSubscriber } from './browser-link-reveal'
 import {
   isHttpLinkBackgroundOpen,
   openLocalHttpLinkTab,
-  prepareRemoteHttpLinkTab,
-  type HttpLinkBrowserTabState
+  prepareRemoteHttpLinkTab
 } from './http-link-browser-placement'
-
-import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
+import type { HttpLinkBrowserTabState } from './http-link-browser-placement'
 import { resolveModifierRouting } from './http-link-modifier-routing'
+import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
+import type { AppState } from '@/store/types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 
 function settleHttpLinkBrowserOpen(
   opening: Promise<string | null | void>,
@@ -39,11 +41,11 @@ function settleHttpLinkBrowserOpen(
   if (onComplete) {
     void opening
       .then((pageId) => onComplete({ pageId: pageId ?? null, background }))
-      .catch(reportHttpLinkBrowserOpenFailure)
+      .catch(showBrowserOpenFailure)
       .finally(reveal.dispose)
     return
   }
-  void opening.catch(reportHttpLinkBrowserOpenFailure).finally(reveal.dispose)
+  void opening.catch(showBrowserOpenFailure).finally(reveal.dispose)
 }
 
 export type HttpLinkSourceOwner =
@@ -136,19 +138,20 @@ export function canHttpLinkOpenInSourceGroup(
   return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
 }
 
-function reportHttpLinkBrowserOpenFailure(error: unknown): void {
-  toast.error(
-    error instanceof Error
-      ? error.message
-      : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
-  )
+/** The one renderer route to the system browser for an address already resolved for it. */
+export async function openSystemHttpLink(url: string): Promise<void> {
+  await openSystemHttpLinkReportingOutcome(url)
 }
 
-async function openSystemHttpLink(url: string): Promise<void> {
+/** openSystemHttpLink for a caller that reports success: false when the launch failed, which it
+ *  has already reported. */
+export async function openSystemHttpLinkReportingOutcome(url: string): Promise<boolean> {
   try {
     await window.api.shell.openUrl(url)
+    return true
   } catch {
-    reportHttpLinkBrowserOpenFailure(null)
+    showBrowserOpenFailure(null)
+    return false
   }
 }
 
@@ -187,16 +190,21 @@ function executeHttpLink(
     ? effectiveSourceOwner.kind === 'local'
     : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
+  // A client fallback tab browses from this desktop, so it cannot reach the owner's loopback either.
+  const prefersOrca =
+    openLinksInApp ||
+    (!opts.allowClientBrowserFallback &&
+      isRemoteLoopbackHttpLink(url, effectiveSourceOwner, worktreeId))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),
-    openLinksInApp,
+    prefersOrca,
     state?.settings?.openLinksInAppModifierInverts === true
   )
   const wantsOrca =
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
-    (forceInApp || openLinksInApp || modifier.wantsOrca)
+    (forceInApp || prefersOrca || modifier.wantsOrca)
 
   if (
     wantsOrca &&
@@ -220,6 +228,8 @@ function executeHttpLink(
         ...fields,
         linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
         ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
+        // Why: only links that already open in Orca may use a "This device" SSH host's desktop tab.
+        ...(openLinksInApp ? { allowSshDeviceBrowser: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
@@ -281,7 +291,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void openSystemHttpLink(url)
+    openOwnedSystemHttpLink(url, effectiveSourceOwner, worktreeId, openSystemHttpLink)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {

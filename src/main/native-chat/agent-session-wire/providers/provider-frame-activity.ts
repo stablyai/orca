@@ -1,5 +1,5 @@
 import { normalizeOptionalField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
-import { formatNativeChatDuration } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
+import { formatNativeChatDuration } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
 export const MAX_PROVIDER_ACTIVITY_LENGTH = 160
 export const PROVIDER_COMPACTING_ACTIVITY = 'Compacting the conversation'

@@ -2,8 +2,15 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export const PRIVACY_SETTING_ANCHORS = {
+  overview: 'privacy-overview',
+  usageData: 'privacy-usage-data',
+  diagnostics: 'privacy-diagnostics'
+} as const
+
 export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: PRIVACY_SETTING_ANCHORS.overview,
     title: translate('auto.components.settings.privacy.search.a966af0840', 'Privacy & telemetry'),
     description: translate(
       'auto.components.settings.privacy.search.aa3b794c17',
@@ -40,6 +47,7 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: PRIVACY_SETTING_ANCHORS.diagnostics,
     title: translate('auto.components.settings.privacy.search.6d258d2ed6', 'Diagnostics'),
     description: translate(
       'auto.components.settings.privacy.search.8b08f32366',
@@ -54,6 +62,8 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    // The variables disable the usage-data switch; their notice renders under it only while one is set.
+    targetSectionId: PRIVACY_SETTING_ANCHORS.usageData,
     title: translate(
       'auto.components.settings.privacy.search.e058a3c98d',
       'Telemetry environment variables'

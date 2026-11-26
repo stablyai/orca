@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { TERMINAL_COLOR_OVERRIDES_SETTING } from '../../../shared/terminal-themes/terminal-color-overrides'
 import { isQualifiedPluginKey } from '../../../shared/plugins/manifest/plugin-manifest'
 import {
@@ -10,7 +10,7 @@ import {
   parsePluginTerminalThemeArtifact,
   type PluginTerminalThemeRegistration
 } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import { PluginHostCallError } from '../workers/plugin-host-call-scope'
+import { PluginHostCallError } from '../workers/host-api/plugin-host-call-scope'
 
 export type PluginAppearanceColors = { app: string; terminal: string }
 export type PreparedPluginAppearance = {

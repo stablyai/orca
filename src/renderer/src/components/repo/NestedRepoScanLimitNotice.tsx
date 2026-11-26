@@ -1,6 +1,6 @@
 import { CircleHelp } from 'lucide-react'
 import { useState } from 'react'
-import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../../shared/project/groups/project-group-types'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

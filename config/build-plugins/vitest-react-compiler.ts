@@ -4,9 +4,10 @@ import {
   REACT_COMPILER_OPTIONS,
   isReactCompilerEnabled,
   reactCompilerExcludePattern
-} from './react-compiler'
+} from './react-compiler.ts'
 
-const rendererSource = /\/src\/renderer\/src\/.*\.tsx?$/
+// Captures the path below the renderer root: a checkout directory named like fix-test-run must not read as a test marker.
+const rendererSource = /\/src\/renderer\/src(\/.*\.tsx?)$/
 // Only shipped code is compiled; tests, fixtures, mocks and harnesses run as written.
 const testSupport =
   /\/__(?:mocks|fixtures|tests)__\/|\.(?:test|spec|bench)\.tsx?$|[.-]test-|[.-]fixtures?\.tsx?$/
@@ -33,9 +34,10 @@ export function vitestReactCompiler(): Plugin[] {
       },
       async transform(source, id) {
         const filename = normalizePath(id.split('?')[0])
+        const rendererPath = rendererSource.exec(filename)?.[1]
         if (
-          !rendererSource.test(filename) ||
-          testSupport.test(filename) ||
+          !rendererPath ||
+          testSupport.test(rendererPath) ||
           excluded.test(filename) ||
           importsVitest.test(source)
         ) {

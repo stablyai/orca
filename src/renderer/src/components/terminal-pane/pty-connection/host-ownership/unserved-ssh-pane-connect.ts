@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
-import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
-import { isSshUserDisconnectedMessage } from '../../../../../../shared/ssh-user-disconnect-message'
+import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host/execution-host'
+import { isSshUserDisconnectedMessage } from '../../../../../../shared/remote-runtime/ssh/ssh-user-disconnect-message'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'

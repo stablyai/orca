@@ -1,9 +1,16 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { createHash } from 'node:crypto'
-import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
+import { readTranscriptSlice } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { parseAgentSessionFile } from '../session-scanner-agent-parser'
-import { consumeCompleteJsonlLines } from '../session-scanner-jsonl-reader'
+import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
+import {
+  consumeCompleteJsonlLines,
+  noteTranscriptSourceFailure
+} from '../parsing/session-scanner-jsonl-reader'
+import { isZstdTranscriptPath } from '../../native-chat/transcript-streaming/transcript-zstd-decompression'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import {
   invalidateSessionParseCacheEntry,
@@ -55,7 +62,10 @@ export async function readResumableTranscript(
 ): Promise<ResumableTranscriptRead> {
   const { file } = args.candidate
   const resume = args.resume
+  // Codex .jsonl.zst archives never grow; decoded offsets cannot address their compressed bytes.
+  const archived = isZstdTranscriptPath(file.path)
   const canResume =
+    !archived &&
     resume !== null &&
     typeof file.sizeBytes === 'number' &&
     file.sizeBytes >= resume.byteOffset &&
@@ -83,7 +93,7 @@ export async function readResumableTranscript(
   // Hash only for consumers: they compare prefixes after a restart drops this resume point.
   const prefixHash = canResume
     ? (resume.prefixHash?.copy() ?? null)
-    : hasTranscriptConsumers()
+    : !archived && hasTranscriptConsumers()
       ? createHash('sha256')
       : null
   const prefixOffsets =
@@ -98,6 +108,8 @@ export async function readResumableTranscript(
     prefixOffsets
   })
   try {
+    // Archives are covered through their compressed size, which search cursors compare to stat size.
+    const coveredThrough = archived ? (file.sizeBytes ?? 0) : null
     const readResult = await consumeCompleteJsonlLines({
       path: file.path,
       start: startOffset,
@@ -135,7 +147,7 @@ export async function readResumableTranscript(
     throwIfAiVaultScanCancelled(args.signal)
     channel.finishRead({
       session: consumerSession,
-      byteOffset: readResult.consumedThrough,
+      byteOffset: coveredThrough ?? readResult.consumedThrough,
       incomplete: false,
       prefixHash: readResult.prefixHash?.copy().digest('hex')
     })
@@ -143,7 +155,7 @@ export async function readResumableTranscript(
       session,
       resume: {
         state,
-        byteOffset: readResult.consumedThrough,
+        byteOffset: coveredThrough ?? readResult.consumedThrough,
         mtimeMs: file.mtimeMs,
         sizeBytes: file.sizeBytes,
         channel,
@@ -232,9 +244,14 @@ async function endsWithNewlineAt(
   offset: number,
   signal?: AbortSignal
 ): Promise<boolean> {
-  const slice = await waitForAiVaultScan(
-    readTranscriptSlice(path, offset - 1, 1, 'scan', signal),
-    signal
-  )
-  return slice.length === 1 && slice[0] === NEWLINE_BYTE
+  try {
+    const slice = await waitForAiVaultScan(
+      readTranscriptSlice(path, offset - 1, 1, 'scan', signal),
+      signal
+    )
+    return slice.length === 1 && slice[0] === NEWLINE_BYTE
+  } catch (error) {
+    noteTranscriptSourceFailure(error)
+    throw error
+  }
 }

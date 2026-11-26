@@ -1,7 +1,7 @@
 /** Loopback is optional: any uncertainty retains the direct proxy route. */
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { parseSshGOutput } from '../../config/ssh-g-config-resolution'
 import { requiresSystemSshForSecurityKey } from '../ssh-transport-selection'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from '../system-ssh-args'

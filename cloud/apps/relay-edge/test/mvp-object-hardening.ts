@@ -128,6 +128,32 @@ export async function keepaliveProbeCheck(key: KeyLike): Promise<void> {
   }
 }
 
+// K4: a keepalive host gone silent when its authorization expires closes as a dropped host (4408),
+// not 4401, so edge drop counts stay comparable with the cells (their pings would have closed it).
+export async function keepaliveExpiredSilentCheck(key: KeyLike): Promise<void> {
+  const host = newHost()
+  await assign(host.relayHostId, 'edge', EPOCH, [])
+  const started = Date.now()
+  // Alive for 50 s, then silent: the silence probe (sent ~9 s later) is still pending when the
+  // 3 s token passes its 60 s grace at ~63 s, so the expiry check is what closes it.
+  const c = control(host, await mint(key, host.relayHostId, undefined, '3s'), EPOCH, {
+    caps: `${SHIPPED_CAPS},client-keepalive-v1`,
+    drop: () => Date.now() - started > 50_000
+  })
+  await c.client.connect()
+  try {
+    const closed = await waitFor(() => c.events.closes.length > 0, 3_000 + 60_000 + 15_000)
+    const after = Date.now() - started
+    record(
+      'K4 silent keepalive host at token expiry: closed 4408 (not 4401)',
+      closed && c.events.closes.includes(4408) && !c.events.closes.includes(4401) && after >= 59_000,
+      `closedAfter=${after}ms pings=${c.events.pings} closes=${c.events.closes}`
+    )
+  } finally {
+    c.client.closeNow()
+  }
+}
+
 // F5: POST /__admin/drain sends the host's controls back to the director (drain frame, 4503).
 export async function drainCheck(key: KeyLike): Promise<void> {
   const host = newHost()

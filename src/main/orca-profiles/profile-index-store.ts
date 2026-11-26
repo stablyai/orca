@@ -1,13 +1,7 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
+import { writeRollingFileBackup } from '../filesystem/rolling-file-backup'
 import {
   bestEffortFsyncDirectorySync,
   fsyncFileSync
@@ -22,7 +16,7 @@ import {
   type OrcaProfileIndex,
   type OrcaProfileListState,
   type OrcaProfileSummary
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileDirectory,
@@ -31,21 +25,12 @@ import {
   hasOrcaProfileStateDatabase,
   getProfileUserDataPath
 } from './profile-storage-paths'
-import { copyLegacyStateToProfile } from './profile-legacy-state-import'
+import { copyLegacyStateToProfile } from './storage/profile-legacy-state-import'
+import { supersedeCloudConnectAttempts } from './cloud-auth/profile-cloud-connect-attempts'
+import { observeActiveTeamProfile } from './cloud-auth/active-team-capabilities'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
-import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
-import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
-
-export {
-  getOrcaProfileBrowserSessionMetaFile,
-  getOrcaProfileDataFile,
-  getOrcaProfileDirectory,
-  getOrcaProfileIndexPath,
-  getOrcaProfileStateDatabaseFile,
-  hasOrcaProfileStateDatabase,
-  getOrcaProfilesDirectory,
-  initOrcaProfilePaths
-} from './profile-storage-paths'
+import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
+import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
 
 export type ActiveOrcaProfileState = {
   index: OrcaProfileIndex
@@ -134,7 +119,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   // Never replace the recovery backup with a corrupt primary index.
   if (existsSync(indexPath) && readProfileIndexFile(indexPath)) {
     try {
-      copyFileSync(indexPath, `${indexPath}.bak`)
+      writeRollingFileBackup(indexPath, `${indexPath}.bak`)
     } catch {
       // Backup failure must not block the primary write.
     }
@@ -143,6 +128,10 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   fsyncFileSync(tmpPath)
   renameSync(tmpPath, indexPath)
+  const active = index.profiles.find((profile) => profile.id === index.activeProfileId)
+  if (active) {
+    observeActiveTeamProfile(dirname(indexPath), active)
+  }
   bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 
@@ -303,6 +292,8 @@ export function setActiveOrcaProfile(
     profiles
   }
   mkdirSync(getOrcaProfileDirectory(profileId, userDataPath), { recursive: true })
+  // A sign-in still in flight belongs to the profile being left.
+  supersedeCloudConnectAttempts()
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
   return {
     activeProfileId: nextIndex.activeProfileId,

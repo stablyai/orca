@@ -2,7 +2,7 @@ import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { ORCAD_MACHINE_HOMES_DIRNAME } from '../host-state/orcad-machine-home'

@@ -37,17 +37,20 @@ export function setSidebarPointerDragDocumentStyles(enabled: boolean): void {
   document.documentElement.toggleAttribute(POINTER_DRAGGING_ATTR, enabled)
 }
 
-function stripDuplicatePreviewAttributes(preview: HTMLElement): void {
-  preview.removeAttribute('id')
-  preview.removeAttribute('aria-describedby')
-  preview.removeAttribute('data-worktree-drag-id')
-  preview.querySelectorAll<HTMLElement>('[id],[aria-describedby]').forEach((element) => {
-    element.removeAttribute('id')
-    element.removeAttribute('aria-describedby')
-  })
-  preview.querySelectorAll<HTMLElement>('[data-worktree-drag-id]').forEach((element) => {
-    element.removeAttribute('data-worktree-drag-id')
-  })
+export function cloneSidebarDragSource(
+  source: HTMLElement,
+  additionalAttributes: readonly string[] = []
+): HTMLElement {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cloneNode preserves the source HTMLElement's type.
+  const clone = source.cloneNode(true) as HTMLElement
+  const attributes = ['id', 'aria-describedby', 'data-worktree-drag-id', ...additionalAttributes]
+  const selector = attributes.map((attribute) => `[${attribute}]`).join(',')
+  for (const element of [clone, ...clone.querySelectorAll(selector)]) {
+    for (const attribute of attributes) {
+      element.removeAttribute(attribute)
+    }
+  }
+  return clone
 }
 
 export function updateSidebarDragPreviewPosition(args: {
@@ -72,11 +75,10 @@ export function createSidebarDragPreview(args: {
 }): { preview: HTMLElement; offsetX: number; offsetY: number; height: number } {
   const rect = args.sourceRow.getBoundingClientRect()
   const preview = document.createElement('div')
-  const clone = args.sourceRow.cloneNode(true) as HTMLElement
+  const clone = cloneSidebarDragSource(args.sourceRow)
   const offsetX = Math.min(Math.max(args.pointerX - rect.left, 0), rect.width)
   const offsetY = Math.min(Math.max(args.pointerY - rect.top, 0), rect.height)
 
-  stripDuplicatePreviewAttributes(clone)
   preview.setAttribute(POINTER_DRAG_PREVIEW_ATTR, 'true')
   preview.setAttribute('aria-hidden', 'true')
   preview.appendChild(clone)

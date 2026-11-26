@@ -91,9 +91,31 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
       let generation,
       let url = urlSchemeTask.request.url,
       let parts = MobileWebShellRequestParts(request: urlSchemeTask.request),
-      let path = MobileWebShellOrigin.resolveRequestPath(parts, sessionId: sessionId),
-      let asset = generation.entries[path]
+      let path = MobileWebShellOrigin.resolveRequestPath(parts, sessionId: sessionId)
     else {
+      fail(urlSchemeTask, key)
+      return
+    }
+    if path == MobileWebShellChatVisualFrame.path {
+      let data = MobileWebShellChatVisualFrame.document
+      guard
+        let response = Self.makeResponse(
+          url: url,
+          contentType: "text/html; charset=utf-8",
+          byteCount: data.count,
+          path: path
+        )
+      else {
+        fail(urlSchemeTask, key)
+        return
+      }
+      liveTasks.remove(key)
+      urlSchemeTask.didReceive(response)
+      urlSchemeTask.didReceive(data)
+      urlSchemeTask.didFinish()
+      return
+    }
+    guard let asset = generation.entries[path] else {
       fail(urlSchemeTask, key)
       return
     }
@@ -105,7 +127,7 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
           let data,
           let response = Self.makeResponse(
             url: url,
-            asset: asset,
+            contentType: asset.contentType,
             byteCount: data.count,
             path: path
           )
@@ -132,7 +154,7 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
 
   private static func makeResponse(
     url: URL,
-    asset: MobileWebShellAsset,
+    contentType: String,
     byteCount: Int,
     path: String
   ) -> HTTPURLResponse? {
@@ -142,7 +164,7 @@ private final class MobileWebShellSchemeHandler: NSObject, WKURLSchemeHandler {
       httpVersion: "HTTP/1.1",
       headerFields: MobileWebShellResponseHeaders.forPath(
         path,
-        contentType: asset.contentType,
+        contentType: contentType,
         byteCount: byteCount
       )
     )
@@ -498,8 +520,16 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
   }
 
   private func isDocumentUrl(_ url: URL?) -> Bool {
-    guard let url, let parts = MobileWebShellRequestParts(url: url) else { return false }
-    return MobileWebShellOrigin.resolveRequestPath(parts, sessionId: appliedSessionId ?? "") == "/"
+    requestPath(url) == "/"
+  }
+
+  private func isChatVisualFrameUrl(_ url: URL?) -> Bool {
+    requestPath(url) == MobileWebShellChatVisualFrame.path
+  }
+
+  private func requestPath(_ url: URL?) -> String? {
+    guard let url, let parts = MobileWebShellRequestParts(url: url) else { return nil }
+    return MobileWebShellOrigin.resolveRequestPath(parts, sessionId: appliedSessionId ?? "")
   }
 
   func webView(
@@ -517,6 +547,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
       url: navigationAction.request.url?.absoluteString,
       isMainFrame: isMainFrame,
       isDocumentUrl: isDocumentUrl(navigationAction.request.url),
+      isChatVisualFrameUrl: isChatVisualFrameUrl(navigationAction.request.url),
       isShellLoad: loadState.isShellLoad,
       hasGesture: navigationAction.navigationType == .linkActivated,
       isDownload: isDownload
@@ -536,10 +567,12 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
     decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
-    // Only srcdoc subframes pass the action policy; refusing one must not fail the shell document.
+    // Only srcdoc and chat visual subframes pass the action policy; refusing one must not fail the shell document.
     guard navigationResponse.isForMainFrame else {
-      let url = navigationResponse.response.url?.absoluteString
-      decisionHandler(url == MobileWebShellNavigationPolicy.inlineDocumentUrl ? .allow : .cancel)
+      let url = navigationResponse.response.url
+      let allowed = url?.absoluteString == MobileWebShellNavigationPolicy.inlineDocumentUrl ||
+        isChatVisualFrameUrl(url)
+      decisionHandler(allowed ? .allow : .cancel)
       return
     }
     let allowed = navigationResponse.canShowMIMEType &&

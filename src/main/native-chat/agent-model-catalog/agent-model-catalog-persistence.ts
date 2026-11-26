@@ -5,17 +5,16 @@ import {
   type KeyedJsonRow
 } from '../../sqlite/row-cache/keyed-json-row-cache'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
-import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import {
   agentModelCatalogEntry,
   serializedAgentModelCatalogListing,
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
-import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { AgentModelCatalogInternPool } from './agent-model-catalog-intern'
+import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.
@@ -81,6 +80,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsFastMode === 'boolean'
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
+    ...(typeof row.defaultFastMode === 'boolean' ? { defaultFastMode: row.defaultFastMode } : {}),
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),
@@ -95,7 +95,10 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
   }
 }
 
-function parseListing(value: unknown): AgentModelCatalogListing | null {
+function parseListing(
+  value: unknown,
+  pool: AgentModelCatalogInternPool
+): AgentModelCatalogListing | null {
   const row = asRecord(value)
   if (
     !row ||
@@ -114,7 +117,9 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
   const supported = support?.supported
   const supportReason = text(support?.reason)
   return {
-    models: models.filter((model): model is AgentSessionModelOption => model !== null),
+    models: pool.internModelList(
+      models.filter((model): model is AgentSessionModelOption => model !== null)
+    ),
     ...(typeof supported === 'boolean'
       ? {
           fastModeSupport: {
@@ -130,35 +135,46 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
 }
 
 /** Reject incompatible rows rather than trusting persisted schema shapes. */
-function parseEntry(value: unknown): AgentModelCatalogEntry | null {
+function parseEntry(
+  value: unknown,
+  pool: AgentModelCatalogInternPool
+): AgentModelCatalogEntry | null {
   const row = asRecord(value)
   if (!row || !isStructuredAgentId(row.agent) || typeof row.fingerprint !== 'string') {
     return null
   }
-  if (row.agent === 'claude' || row.agent === 'codex') {
-    const display = parseListing(row.discovered) ?? parseListing(row.live)
-    return agentModelCatalogEntry(row.agent, row.fingerprint, display, null, null)
-  }
-  const configured = asRecord(row.configured)
-  const configuredModelId = text(configured?.modelId)
-  const configuredEffort = text(configured?.effort)
-  const sameModelIds = Array.isArray(configured?.sameModelIds)
-    ? configured.sameModelIds.filter((id): id is string => typeof id === 'string')
-    : []
-  return agentModelCatalogEntry(
-    row.agent,
-    row.fingerprint,
-    parseListing(row.discovered),
-    parseListing(row.live),
-    configuredModelId && typeof configured?.at === 'number'
-      ? {
-          modelId: configuredModelId,
-          ...(sameModelIds.length > 0 ? { sameModelIds } : {}),
-          ...(configuredEffort ? { effort: configuredEffort } : {}),
-          at: configured.at
-        }
-      : null
-  )
+  const entry =
+    row.agent === 'claude' || row.agent === 'codex'
+      ? agentModelCatalogEntry(
+          row.agent,
+          row.fingerprint,
+          parseListing(row.discovered, pool) ?? parseListing(row.live, pool),
+          null,
+          null
+        )
+      : (() => {
+          const configured = asRecord(row.configured)
+          const configuredModelId = text(configured?.modelId)
+          const configuredEffort = text(configured?.effort)
+          const sameModelIds = Array.isArray(configured?.sameModelIds)
+            ? configured.sameModelIds.filter((id): id is string => typeof id === 'string')
+            : []
+          return agentModelCatalogEntry(
+            row.agent,
+            row.fingerprint,
+            parseListing(row.discovered, pool),
+            parseListing(row.live, pool),
+            configuredModelId && typeof configured?.at === 'number'
+              ? {
+                  modelId: configuredModelId,
+                  ...(sameModelIds.length > 0 ? { sameModelIds } : {}),
+                  ...(configuredEffort ? { effort: configuredEffort } : {}),
+                  at: configured.at
+                }
+              : null
+          )
+        })()
+  return entry ? { ...entry, models: pool.internModelList(entry.models) } : null
 }
 
 // Persist source listings/default facts; derive the merged view on load.
@@ -173,7 +189,10 @@ function persistedEntry(entry: AgentModelCatalogEntry): unknown {
 }
 
 function parseEntries(values: readonly unknown[]): AgentModelCatalogEntry[] {
-  return values.map(parseEntry).filter((entry): entry is AgentModelCatalogEntry => entry !== null)
+  const pool = new AgentModelCatalogInternPool()
+  return values
+    .map((value) => parseEntry(value, pool))
+    .filter((entry): entry is AgentModelCatalogEntry => entry !== null)
 }
 
 function catalogRow(entry: AgentModelCatalogEntry): KeyedJsonRow {

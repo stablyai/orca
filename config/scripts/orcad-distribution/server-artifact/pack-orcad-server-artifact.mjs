@@ -22,17 +22,18 @@ import {
   ORCAD_TEMPLATE_TARGETS_DIR,
   ORCAD_VERSION_FILENAME,
   ORCAD_CLI_ENTRY_FILENAME,
+  isOrcadExecutableArtifact,
   orcadNodeRuntimeExecutable,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
-} from '../../../../src/shared/orcad-artifacts.ts'
-import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../../../src/shared/orcad-local-serve-selection.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
+import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../../../src/shared/remote-runtime/serve-supervisor/orcad-local-serve-selection.ts'
 import {
   NODE_RUNTIME_PIN,
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl,
   pinnedNodeRuntimeAsset
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import {
   ensurePinnedNodeExecutable,
   fetchPinnedFile,
@@ -60,10 +61,6 @@ export function orcaServerArtifactName(target) {
 
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
-}
-
-function isExecutable(filename) {
-  return /(?:^|\/)(?:rg|spawn-helper)$/.test(filename)
 }
 
 function copyVerified(source, destination, expectedSha256, executable) {
@@ -101,7 +98,7 @@ function stageSlot(templateDir, target, slotDir) {
       join(templateDir, ...filename.split('/')),
       join(slotDir, ...filename.split('/')),
       expected,
-      isExecutable(filename)
+      isOrcadExecutableArtifact(filename)
     )
   }
   for (const filename of orcadTemplateTargetFilenames(target)) {
@@ -113,7 +110,7 @@ function stageSlot(templateDir, target, slotDir) {
       join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target, ...filename.split('/')),
       join(slotDir, ...filename.split('/')),
       expected,
-      isExecutable(filename)
+      isOrcadExecutableArtifact(filename)
     )
   }
   // Hashed like a desktop slot without the optional browser, which this tarball omits.

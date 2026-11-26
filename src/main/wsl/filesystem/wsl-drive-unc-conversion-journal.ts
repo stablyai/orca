@@ -8,7 +8,7 @@
  * - `profile-rewritten`: the profile names the drive paths; the other stores only go forward.
  */
 import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
-import { createMigrationJournalDirectory } from '../../persistence/migrating-orcad-catalog/migration-journal-directory'
+import { createMigrationJournalDirectory } from '../../persistence/migrating-orcad-catalog/cutover-journals/migration-journal-directory'
 
 export const WSL_DRIVE_UNC_CONVERSION_PHASES = ['prepared', 'profile-rewritten'] as const
 export type WslDriveUncConversionPhase = (typeof WSL_DRIVE_UNC_CONVERSION_PHASES)[number]

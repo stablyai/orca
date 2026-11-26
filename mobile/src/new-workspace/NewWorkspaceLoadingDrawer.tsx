@@ -18,8 +18,8 @@ import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import {
   DownloadProgressBar,
   downloadedMegabytesCaption
-} from '../mobile-web-shell/DownloadProgressBar'
-import type { ShellOverlayDownload } from '../mobile-web-shell/shell-overlay-load'
+} from '../mobile-web-shell/presentation/DownloadProgressBar'
+import type { ShellOverlayDownload } from '../mobile-web-shell/presentation/shell-overlay-load'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -143,7 +143,7 @@ function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
       />
       <Text style={styles.caption}>
         {t('newWorkspace.loadingDrawer.downloadProgress', 'Downloading… {{progress}}', {
-          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)
+          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes, t)
         })}
       </Text>
     </>

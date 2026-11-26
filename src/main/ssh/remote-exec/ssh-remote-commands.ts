@@ -2,7 +2,7 @@ import type { RemoteHostPlatform } from '../remote-host/ssh-remote-platform'
 import { isWindowsRemoteHost, remoteDirname } from '../remote-host/ssh-remote-platform'
 
 import { powerShellCommand } from './ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 export function readRemoteHomeCommand(host: RemoteHostPlatform): string {

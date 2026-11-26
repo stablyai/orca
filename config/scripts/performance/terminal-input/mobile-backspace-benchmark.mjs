@@ -6,8 +6,8 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 import { summarizeBenchmarkSamples } from '../measurement/benchmark-sample-summary.mjs'
 
-// git show <baseline-ref>:mobile/src/terminal/terminal-live-text-commit.ts | node config/scripts/mobile-backspace-benchmark.mjs
-const target = resolve('mobile/src/terminal/terminal-live-text-commit.ts')
+// git show <baseline-ref>:mobile/src/terminal/live-input/terminal-live-text-commit.ts | node config/scripts/mobile-backspace-benchmark.mjs
+const target = resolve('mobile/src/terminal/live-input/terminal-live-text-commit.ts')
 async function load(source) {
   const result = await build({
     stdin: { contents: source, loader: 'ts', resolveDir: dirname(target) },

@@ -1,5 +1,5 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from '../../../../../../shared/project-group-order-capability'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from '../../../../../../shared/project/groups/project-group-order-capability'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import '@/store/project-groups/project-group-owner-routing'

@@ -93,6 +93,10 @@ function pickSeededDomains(domains) {
       picked[domain] = domains[domain]
     }
   }
+  if (picked.settings) {
+    picked.settings = { ...picked.settings }
+    delete picked.settings.aiVaultSearch
+  }
   return picked
 }
 

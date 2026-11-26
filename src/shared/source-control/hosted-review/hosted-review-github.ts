@@ -1,6 +1,6 @@
-import { projectPRCheckOwner } from '../../github/complete-pr-check-owner'
+import { projectPRCheckOwner } from '../../github/checks/complete-pr-check-owner'
 import type { HostedReviewInfo } from './hosted-review-contracts'
-import type { PRInfo } from '../../github/pull-request-types'
+import type { PRInfo } from '../../github/pull-requests/pull-request-types'
 
 export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
   const review: HostedReviewInfo = {

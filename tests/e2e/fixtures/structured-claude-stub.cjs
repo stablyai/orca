@@ -1,4 +1,5 @@
 // Model stream-json initialize and short prompt turns without a real Claude CLI; generated wrappers pass the launch log first.
+const { execFileSync } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
 const fs = require('node:fs')
 
@@ -35,9 +36,42 @@ const TURN_MS = 500
 const SLOW_TURN_MS = 60_000
 let turnTimer = null
 
+function promptText(message) {
+  const content = message?.content
+  if (typeof content === 'string') {
+    return content
+  }
+  return Array.isArray(content) ? content.map((part) => part?.text ?? '').join('\n') : ''
+}
+
+// Each prompt line `run: <command>` runs in sh, the way an agent's Bash tool would; its output is logged.
+function runPromptCommands(text) {
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('run: ')) {
+      continue
+    }
+    let output
+    try {
+      output = execFileSync('/bin/sh', ['-c', line.slice(5)], {
+        encoding: 'utf8',
+        env: process.env
+      })
+    } catch (error) {
+      output = `failed: ${String(error.stderr || error.stdout || error.message)}`
+    }
+    fs.appendFileSync(launchLog, `${JSON.stringify({ ran: line.slice(5), output })}\n`)
+  }
+}
+
 function startTurn(frame) {
+  // What the agent was sent, beside the launch log, so a spec can read its exact input.
+  fs.appendFileSync(
+    launchLog.replace(/\.jsonl$/, '-inputs.jsonl'),
+    `${JSON.stringify(frame.message)}\n`
+  )
   // The CLI's --replay-user-messages echo, which opens the turn.
   write({ ...frame, isReplay: true })
+  runPromptCommands(promptText(frame.message))
   const prompt = JSON.stringify(frame.message ?? '')
   const slow = prompt.includes('slow')
   const pluginUi = prompt.includes('plugin-ui')

@@ -12,7 +12,7 @@ import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db/contract-cons
 import '../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../orchestration/db/dispatch-row-writer'
 import '../../../orchestration/db/attempt-outcome-projection'
-import { isDispatchMutationMessageType } from '../../../../../shared/rpc-contract/orchestration-params'
+import { isDispatchMutationMessageType } from '../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { parseMessageTaskId } from './messaging/message-payload'
 import { federatedMessageNamesOnlyHome } from '../../../orchestration/workers/reports/dispatch-report-mailbox'
 
