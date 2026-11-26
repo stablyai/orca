@@ -94,7 +94,6 @@ export function useNativeChatOlderHistory({
     const nextLimit = nextNativeChatLimit(limitRef.current)
     const requestEpoch = transcriptEpochRef.current
     const lifecycleRevision = transcriptLifecycleControl.revision()
-    const loadedCount = read.messages.length
     const isCurrent = (): boolean =>
       latestEnabled.current &&
       latestSessionId.current === sessionId &&
@@ -113,16 +112,20 @@ export function useNativeChatOlderHistory({
             return 'failed'
           }
           limitRef.current = nextLimit
+          // Measured against the base this read replaces, so a response applied twice (a retained
+          // callback, a repeated read) grows it, and counts, once.
+          const held = heldRef.current
+          const grew = result.messages.length > (held.phase === 'ready' ? held.messages.length : 0)
           // Replace the ordered base tail to prepend history; preserve separate live appends.
           heldRef.current = { phase: 'ready', messages: result.messages }
           setRead(heldRef.current)
-          if (result.messages.length > loadedCount) {
+          if (grew) {
             setOlderPages((count) => count + 1)
           }
           transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
           const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
           setHasMore(more)
-          return result.messages.length > loadedCount ? 'applied' : more ? 'unchanged' : 'exhausted'
+          return grew ? 'applied' : more ? 'unchanged' : 'exhausted'
         })
 
     // Reads one page strictly before the oldest held row, so cost stays flat with depth.

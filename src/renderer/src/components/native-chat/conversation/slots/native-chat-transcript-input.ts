@@ -1,4 +1,5 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import type { NativeChatRunOwnerships } from './native-chat-run-ownership'
 import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
@@ -27,8 +28,8 @@ export type NativeChatTranscriptSlotsInput = {
   openedPullRequests?: ReadonlyMap<string, readonly NativeChatOpenedPullRequest[]>
   /** Turns the reader opened. Everything else with a duration stays folded. */
   expandedTurnKeys: ReadonlySet<string>
-  /** Rows whose run an older page grew at its start, each with the id its disclosures keep. */
-  carriedDisclosureIds?: ReadonlyMap<string, string>
+  /** Disclosure ids kept for runs an older page grew at their start (see native-chat-run-ownership). */
+  ownedRuns?: NativeChatRunOwnerships
   isWorking: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
   lifecycleWorking: boolean

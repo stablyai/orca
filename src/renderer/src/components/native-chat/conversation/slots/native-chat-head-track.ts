@@ -5,11 +5,12 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { openNativeChatExpandedKeys } from '../../messages/disclosure/native-chat-expanded-keys'
 import {
-  NO_CARRIED_RUN_DISCLOSURES,
-  nativeChatCarryAcrossPage,
-  nativeChatLoadedCarries,
-  nativeChatOwnedCarries
-} from './native-chat-carried-run-disclosures'
+  NO_RUN_OWNERSHIPS,
+  nativeChatNamedCallIds,
+  nativeChatRecordRunOwnership,
+  nativeChatSettleRunOwnerships,
+  type NativeChatRunOwnerships
+} from './native-chat-run-ownership'
 import { NO_TURNS, nativeChatTurnsHeldOpen, withTurns } from './native-chat-held-open-turns'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 import { nativeChatRowSuccessors } from './native-chat-row-successors'
@@ -36,8 +37,8 @@ export type NativeChatHeadTrack = {
   held: ReadonlySet<string>
   /** The reader's expanded turns when `held` was handed to them; any later set has them. */
   heldSince: ReadonlySet<string> | null
-  /** Rows whose run a page grew at its start, with the disclosure id each keeps. */
-  carried: ReadonlyMap<string, string>
+  /** Disclosure ids kept for runs a page grew at their start (see native-chat-run-ownership). */
+  owned: NativeChatRunOwnerships
 }
 
 export const NO_HEAD_TRACK: NativeChatHeadTrack = {
@@ -47,7 +48,7 @@ export const NO_HEAD_TRACK: NativeChatHeadTrack = {
   window: null,
   held: NO_TURNS,
   heldSince: null,
-  carried: NO_CARRIED_RUN_DISCLOSURES
+  owned: NO_RUN_OWNERSHIPS
 }
 
 /** One commit, as the slots hook sees it. */
@@ -60,10 +61,9 @@ export type NativeChatHeadStep = {
   input: NativeChatTranscriptSlotsInput
   /** `input.messages` as of their last structural change, row for row. */
   structure: readonly NativeChatMessage[]
-  /** Every loaded row's id (held while a reply streams). */
-  loaded: ReadonlySet<string>
-  /** What this commit draws. */
+  /** What this commit draws, and where its build found each kept id's owner. */
   slots: readonly NativeChatTranscriptSlot[]
+  owners: ReadonlyMap<string, string> | undefined
 }
 
 /** How an applied page continues the window it landed on: the row now holding the window's first
@@ -95,18 +95,42 @@ export function nativeChatPageContinuation(
   return { first: first.id, successor: successor.id }
 }
 
+function rowsOf(slot: NativeChatTranscriptSlot): readonly string[] {
+  if (slot.kind !== 'message') {
+    return []
+  }
+  return slot.workRun ? slot.workRun.map((member) => member.id) : [slot.message.id]
+}
+
+/** The run at the page's seam, grown at its start: keep the id it was drawn under. */
+function recordAtSeam(
+  window: HeadWindow,
+  before: readonly NativeChatTranscriptSlot[],
+  after: readonly NativeChatTranscriptSlot[],
+  continued: { first: string; successor: string },
+  owned: NativeChatRunOwnerships
+): NativeChatRunOwnerships {
+  const seam = before.find((slot) => rowsOf(slot).includes(continued.first))
+  const grown = after.find((slot) => rowsOf(slot).includes(continued.successor))
+  if (seam?.kind !== 'message' || grown?.kind !== 'message') {
+    return owned
+  }
+  const id = seam.disclosureId ?? seam.message.id
+  if ((grown.disclosureId ?? grown.message.id) === id) {
+    return owned
+  }
+  const row = window.messages.find((message) => message.id === id)
+  return nativeChatRecordRunOwnership(owned, id, row ? nativeChatNamedCallIds(row) : [])
+}
+
 function acceptedPage(
   head: NativeChatHeadTrack,
   step: NativeChatHeadStep,
-  window: HeadWindow
+  window: HeadWindow,
+  owned: NativeChatRunOwnerships
 ): NativeChatHeadTrack {
   const { input, slots } = step
-  const next = {
-    ...head,
-    pages: step.pages,
-    window,
-    carried: nativeChatLoadedCarries(head.carried, step.loaded)
-  }
+  const next = { ...head, pages: step.pages, window, owned }
   const continued = head.window && nativeChatPageContinuation(head.window.messages, input.messages)
   if (!head.window || !continued) {
     return next
@@ -114,14 +138,14 @@ function acceptedPage(
   // Capped as the drawn union is, so these builds draw what the reader will see.
   const expanded = openNativeChatExpandedKeys(input.expandedTurnKeys, head.held)
   // The window the page landed on, drawn as it would be now: with the reader's folds, the turns
-  // already held and the carries in use, so what it drew is what the reader has.
+  // already held and the ids kept, so what it drew is what the reader has.
   const before = {
     ...head.window,
     slots: buildNativeChatTranscript({
       ...input,
       ...head.window,
       expandedTurnKeys: expanded,
-      carriedDisclosureIds: head.carried
+      ownedRuns: owned
     }).slots
   }
   const follow = (id: string): string => (id === continued.first ? continued.successor : id)
@@ -131,28 +155,28 @@ function acceptedPage(
     expanded,
     follow
   )
-  // A held turn draws its runs again; carry among them as they will be drawn.
+  // A held turn draws its runs again; find the seam's run as it will be drawn.
   const drawn =
     held.size === 0
       ? slots
       : buildNativeChatTranscript({
           ...input,
           expandedTurnKeys: openNativeChatExpandedKeys(expanded, held),
-          carriedDisclosureIds: head.carried
+          ownedRuns: owned
         }).slots
-  const carried = nativeChatCarryAcrossPage(before.slots, drawn, continued, head.carried)
   return {
     ...next,
     held: withTurns(head.held, held),
     heldSince: held.size === 0 ? head.heldSince : input.expandedTurnKeys,
-    carried: nativeChatLoadedCarries(carried, step.loaded)
+    owned: recordAtSeam(head.window, before.slots, drawn, continued, owned)
   }
 }
 
 /**
  * The head track after a commit; `head` itself when nothing changed, so the hook can store it
- * during render. Only an applied page (its count moved) can hold a turn or carry a run; any other
- * structural change only keeps the window current.
+ * during render. Only an applied page (its count moved) can hold a turn or keep a run's id; any
+ * other structural change only keeps the window current. Every commit settles the kept ids with
+ * what its build resolved.
  */
 export function nativeChatHeadTrackStep(
   head: NativeChatHeadTrack,
@@ -168,8 +192,9 @@ export function nativeChatHeadTrackStep(
       window
     }
   }
+  const owned = nativeChatSettleRunOwnerships(head.owned, step.input.ownedRuns, step.owners)
   if (head.generation !== step.generation) {
-    // A trim or reset: the window starts over, but rows still loaded keep their carried ids.
+    // A trim or reset: the window starts over; kept ids stay while their owners are loaded.
     return {
       ...head,
       generation: step.generation,
@@ -177,24 +202,19 @@ export function nativeChatHeadTrackStep(
       window,
       held: NO_TURNS,
       heldSince: null,
-      carried: nativeChatLoadedCarries(head.carried, step.loaded)
+      owned
     }
   }
   if (head.pages !== step.pages) {
-    return acceptedPage(head, step, window)
+    return acceptedPage(head, step, window, owned)
   }
   if (head.held.size > 0 && step.input.expandedTurnKeys !== head.heldSince) {
     // The reader's expanded turns took the held ones over; their status row folds them as usual.
-    return { ...head, held: NO_TURNS, heldSince: null }
+    return { ...head, held: NO_TURNS, heldSince: null, owned }
   }
-  // A structural change (rows, or only which turn a row is in) keeps the window current; a split
-  // that draws a carried id's original row on its own again hands the id back to it.
+  // A structural change (rows, or only which turn a row is in) keeps the window current.
   if (head.window?.messages !== step.structure || head.window.turnKeys !== step.input.turnKeys) {
-    const carried = nativeChatOwnedCarries(
-      nativeChatLoadedCarries(head.carried, step.loaded),
-      step.slots
-    )
-    return { ...head, window, carried }
+    return { ...head, window, owned }
   }
-  return head
+  return owned === head.owned ? head : { ...head, owned }
 }

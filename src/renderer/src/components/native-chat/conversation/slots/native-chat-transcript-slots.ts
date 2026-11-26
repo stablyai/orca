@@ -37,7 +37,7 @@ import {
 } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
-import { nativeChatMarkCarriedDisclosures } from './native-chat-carried-run-disclosures'
+import { nativeChatDrawRunOwnership } from './native-chat-run-ownership'
 import {
   nativeChatSideChatForkPoint,
   nativeChatSlotOffersFork,
@@ -130,6 +130,8 @@ export function buildNativeChatTranscript(
   forkPoint: NativeChatSideChatForkPoint | null
   /** Settled quiet turns, drawn or still fading out. */
   quietTurnKeys: ReadonlySet<string>
+  /** Where each kept run id is owned, when any are kept (`ownedRuns`). */
+  runOwners?: ReadonlyMap<string, string>
 } {
   const {
     imageSources = nativeChatMarkdownImageSources,
@@ -262,7 +264,7 @@ export function buildNativeChatTranscript(
     typography
   )
   // Set here, in the structural build, so streamed frames patch these slots like any other.
-  nativeChatMarkCarriedDisclosures(drawn, input.carriedDisclosureIds)
+  const runOwners = nativeChatDrawRunOwnership(drawn, input.messages, input.ownedRuns)
   // One action holder per turn: its last drawn response with words, else (when folding hid them)
   // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()
@@ -331,6 +333,7 @@ export function buildNativeChatTranscript(
   markNativeChatActivityJoins(drawn, typography)
   return {
     slots: drawn,
+    runOwners,
     quietTurnKeys: leaving.turns.size ? new Set([...quiet.turns, ...leaving.turns]) : quiet.turns,
     forkPoint: forkOffer
       ? nativeChatSideChatForkPoint(newestOffered, isWorking || lifecycleWorking)

@@ -5,6 +5,7 @@ import type {
 } from '../../../../../../shared/native-chat/native-chat-types'
 import { pairNativeChatToolResults } from '../../../../../../shared/native-chat/tools/native-chat-tool-pairing'
 import { nativeChatToolLineIdentity } from '../../../../../../shared/native-chat/tools/native-chat-tool-line-identity'
+import { summarizeToolInput } from '../../../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { buildEditCards } from '../../../../../../shared/native-chat/tools/native-chat-edit-cards'
 import type { NativeChatEditFile } from '../../../../../../shared/native-chat/tools/native-chat-edit-model'
 import {
@@ -44,30 +45,27 @@ export type NativeChatToolRunRow =
       disclosureKey: string
     }
 
-/** Disclosure keys for the run's named calls that an older page can't move: a provider id seen
- *  more than once is numbered from its newest call, so a page bringing an earlier duplicate leaves
- *  the calls already drawn under the keys they had. Calls with no usable id are absent. */
+/** Disclosure keys for the run's named calls that neither an older page nor a live append can
+ *  move: each is its provider id with its bounded input summary, so a duplicate id with other
+ *  input is a different key. Only an exact repeat (same id, same input) is numbered, oldest first.
+ *  Calls with no usable id are absent. */
 function seamStableCallKeys(
   blocks: readonly NativeChatBlock[]
 ): ReadonlyMap<NativeChatBlock, string> {
-  const named = blocks.flatMap((block) =>
-    block.type === 'tool-call' && block.callId !== undefined && block.callId.trim() !== ''
-      ? [{ block, callId: block.callId }]
-      : []
-  )
-  const remaining = new Map<string, number>()
-  for (const { callId } of named) {
-    remaining.set(callId, (remaining.get(callId) ?? 0) + 1)
-  }
+  const seen = new Map<string, number>()
   const keys = new Map<NativeChatBlock, string>()
-  for (const { block, callId } of named) {
-    const fromNewest = (remaining.get(callId) ?? 1) - 1
-    remaining.set(callId, fromNewest)
+  for (const block of blocks) {
+    if (block.type !== 'tool-call' || block.callId === undefined || block.callId.trim() === '') {
+      continue
+    }
+    const source = JSON.stringify([block.callId, summarizeToolInput(block.input)])
+    const repeat = seen.get(source) ?? 0
+    seen.set(source, repeat + 1)
     keys.set(
       block,
-      fromNewest === 0
-        ? `call:${callId}`
-        : `call-occurrence:${JSON.stringify([callId, fromNewest])}`
+      repeat === 0
+        ? `call:${source}`
+        : `call:${JSON.stringify([block.callId, summarizeToolInput(block.input), repeat])}`
     )
   }
   return keys

@@ -223,7 +223,7 @@ export function NativeChatMessageList({
     openedPullRequests: openedPullRequests.byTurn,
     expandedTurnKeys: expandedTurnIds,
     setExpandedTurnKeys: setExpandedTurnIds,
-    history: { session, loaded: loadedMessageIds },
+    history: session,
     isWorking: working,
     lifecycleWorking,
     subagentHeads: scope.heads,

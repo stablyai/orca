@@ -30,7 +30,6 @@ import {
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 
 const NO_ROWS: readonly NativeChatMessage[] = []
-const NO_LOADED_ROWS: ReadonlySet<string> = new Set()
 export function useNativeChatTranscriptSlots({
   line,
   structureMessages,
@@ -40,16 +39,12 @@ export function useNativeChatTranscriptSlots({
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'workers'> & {
   /** Receives turns kept open because an older page would fold work the reader was looking at. */
   setExpandedTurnKeys: (update: (current: ReadonlySet<string>) => ReadonlySet<string>) => void
-  /** Whose older history this is (another session or generation starts over), how many
-   *  older-history pages (including the mount prefetch) added rows, and every loaded row's id.
-   *  Read only here, for this rule. */
-  history?: {
-    session: Pick<
-      NativeChatLiveSession,
-      'agent' | 'sessionId' | 'olderHistoryGeneration' | 'olderPages'
-    >
-    loaded: ReadonlySet<string>
-  }
+  /** Whose older history this is (another session or generation starts over), and how many
+   *  older-history pages (including the mount prefetch) added rows. Read only here, for this rule. */
+  history?: Pick<
+    NativeChatLiveSession,
+    'agent' | 'sessionId' | 'olderHistoryGeneration' | 'olderPages'
+  >
   /** `messages` as of their last change other than a streaming reply's text, row for row. */
   structureMessages?: readonly NativeChatMessage[]
   line: {
@@ -153,7 +148,7 @@ export function useNativeChatTranscriptSlots({
       turnDiffs,
       openedPullRequests,
       expandedTurnKeys: drawnExpandedTurnKeys,
-      carriedDisclosureIds: head.carried,
+      ownedRuns: head.owned,
       isWorking,
       lifecycleWorking,
       subagentHeads,
@@ -166,7 +161,7 @@ export function useNativeChatTranscriptSlots({
       leavingTurnKeys,
       workers,
       drawnExpandedTurnKeys,
-      head.carried,
+      head.owned,
       imageSources,
       forkOffer,
       isWorking,
@@ -184,20 +179,20 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const [streamedTranscript] = useState(createNativeChatStreamedTranscript)
-  const { slots, forkPoint, quietTurnKeys } = useMemo(
+  const { slots, forkPoint, quietTurnKeys, runOwners } = useMemo(
     () => streamedTranscript(buildInput, saved, messages),
     [streamedTranscript, buildInput, saved, messages]
   )
   // Only an applied older page can hold a turn or carry a run; anything else keeps the window
   // the next page lands on current.
   const nextHead = nativeChatHeadTrackStep(head, {
-    session: history ? `${history.session.agent}:${history.session.sessionId}` : undefined,
-    generation: history?.session.olderHistoryGeneration,
-    pages: history?.session.olderPages ?? 0,
-    loaded: history?.loaded ?? NO_LOADED_ROWS,
+    session: history ? `${history.agent}:${history.sessionId}` : undefined,
+    generation: history?.olderHistoryGeneration,
+    pages: history?.olderPages ?? 0,
     input: { ...buildInput, messages, expandedTurnKeys },
     structure: saved,
-    slots
+    slots,
+    owners: runOwners
   })
   if (nextHead !== head) {
     setHead(nextHead)
