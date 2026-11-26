@@ -2184,6 +2184,19 @@
         "reconnection-failed": "Falha na reconexão",
         "deploying-relay": "Implantando relay…",
         "reconnecting": "Reconectando…"
+      },
+      "errors": {
+        "authMethodsFailed": "Todos os métodos de autenticação configurados falharam",
+        "badPassphrase": "Não foi possível analisar a chave privada: a verificação de integridade da chave OpenSSH falhou. A frase secreta está incorreta?",
+        "connectionRefused": "Conexão recusada",
+        "connectionTimedOut": "A conexão expirou",
+        "handshakeLost": "Conexão perdida antes do handshake",
+        "handshakeTimeout": "Tempo esgotado aguardando o handshake",
+        "hostKeyVerificationFailed": "Falha na verificação da chave do host",
+        "hostNotFound": "Host não encontrado",
+        "passphraseRequired": "Não foi possível analisar a chave privada: a chave OpenSSH está criptografada e a frase secreta não foi informada.",
+        "permissionDenied": "Permissão negada",
+        "permissionDeniedPublickey": "Permissão negada (publickey)"
       }
     },
     "mcp": {
@@ -2968,6 +2981,10 @@
         "streamClosed": "O fluxo do terminal remoto foi fechado.",
         "streamEnded": "O fluxo do terminal remoto terminou.",
         "streamStopped": "O fluxo do terminal remoto parou de responder."
+      },
+      "jira": {
+        "currentSprintNeedsUpdate": "Atualize o servidor remoto do Orca para filtrar as issues predefinidas pela sprint atual.",
+        "transitionFieldsNeedsUpdate": "Atualize o servidor remoto do Orca para enviar os campos de transição obrigatórios ou conclua a transição no Jira."
       }
     },
     "ssh": {
@@ -3909,7 +3926,9 @@
         "settingUpWorkspace": "Configurando seu espaço de trabalho…",
         "preparingWorkspace": "Preparando espaço de trabalho…",
         "creatingWorktree": "Criando worktree…",
-        "fetchingBaseBranch": "Buscando branch base…"
+        "fetchingBaseBranch": "Buscando branch base…",
+        "checkingVmEnvironment": "Verificando o ambiente da VM…",
+        "vmChecksFailed": "As verificações de ambiente falharam"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} e {{value1}} são o mesmo servidor pareado duas vezes. Remova um em Configurações > Servidores Orca remotos."
@@ -3989,6 +4008,9 @@
           "wslRegistrationUnavailable": "O registro da CLI do WSL não está disponível.",
           "wslWindowsOnly": "O registro da CLI do WSL está disponível apenas no Windows."
         }
+      },
+      "ephemeralVm": {
+        "provisionedRootNeedsUpdate": "O servidor do Orca nesta VM não consegue adotar uma raiz provisionada. Atualize o Orca na VM."
       },
       "projectHostSetupOptions": {
         "locationNotSet": "Local do projeto não definido",
@@ -7698,6 +7720,10 @@
           "stopCleanup": "Parar limpeza",
           "cleanupStopped": "Limpeza interrompida",
           "stopCleanupFailed": "Não foi possível parar a limpeza da VM na Nuvem.",
+          "provisioning": "Provisionando",
+          "untrackedRuntimeHint": "O Orca nunca recebeu os detalhes desta VM. A limpeza executa destroy apenas com o ID da instância {{instanceId}}; se falhar, exclua a VM no seu provedor e depois remova-a desta lista.",
+          "removeFromList": "Remover da lista",
+          "removeFromListFailed": "Não foi possível remover o runtime de VM na Nuvem da lista.",
           "cca21fb369": "Atualizar VMs na nuvem"
         },
         "commit": {
@@ -8761,7 +8787,10 @@
           "checking": "Verificando receitas...",
           "none": "Nenhuma receita encontrada ainda.",
           "cloudVmSkillTitle": "Skill de configuração de VM na Nuvem",
-          "cloudVmRefresh": "Atualizar receitas de VM na Nuvem"
+          "cloudVmRefresh": "Atualizar receitas de VM na Nuvem",
+          "setUpWithAgent": "Configurar com agente",
+          "setUpWithAgentHint": "Inicia seu agente padrão em {{repo}}. Ele edita o orca.yaml, executa os doctors até passarem e abre um PR.",
+          "setUpWithAgentNoRepo": "Adicione um projeto primeiro."
         },
         "automations": {
           "showButtonDescription": "Mostra o atalho de Automações na barra lateral.",
@@ -9790,6 +9819,8 @@
           "bulkProgress": "Removendo {{done}} de {{count}}…",
           "bulkConnectedSingular": "{{count}} host está conectado. Os terminais remotos dele serão fechados.",
           "bulkConnectedPlural": "{{count}} hosts estão conectados. Os terminais remotos deles serão fechados.",
+          "remove": "Remover",
+          "removing": "Removendo",
           "916f480036": "Remover Destino SSH"
         },
         "WorkspaceDirectorySetting": {
@@ -10074,7 +10105,11 @@
           "advanced": "Avançado"
         },
         "EphemeralVmRecipeRow": {
-          "useInWorkspace": "Usar no espaço de trabalho"
+          "useInWorkspace": "Usar no espaço de trabalho",
+          "envLimited": "Os scripts recebem apenas as variáveis listadas em passEnv, além de PATH, HOME e outras básicas semelhantes.",
+          "envNamesMore": "{{names}} +{{count}} mais",
+          "envExposedAllowlist": "Os scripts são executados neste computador e recebem estas credenciais de passEnv: {{names}}.",
+          "envExposedAll": "Os scripts são executados neste computador com todo o seu ambiente, incluindo {{names}}. Defina passEnv na receita para passar apenas o necessário."
         },
         "MobileRelayBetaNotice": {
           "notice": "O Orca Relay está em beta."
@@ -10166,7 +10201,8 @@
             "updateOrcaOnHost": "Atualizar Orca neste host",
             "updateAnyway": "Atualizar mesmo assim",
             "notNow": "Agora não",
-            "forceUpdate": "Há terminais em execução neste host. Eles continuam em execução durante a atualização, e seus painéis se reconectam quando o servidor do Orca reiniciar."
+            "forceUpdate": "Há terminais em execução neste host. Eles continuam em execução durante a atualização, e seus painéis se reconectam quando o servidor do Orca reiniciar.",
+            "forceUpdateUncounted": "O Orca não conseguiu contar os terminais neste host. A atualização só prossegue se nenhum daemon de terminal estiver em execução lá, e todos os terminais que o próprio servidor do Orca executa serão encerrados."
           },
           "description": "O Orca se instala em um host SSH vazio e se mantém atualizado.",
           "deploy": {
@@ -10301,6 +10337,8 @@
           "automationsLeftDisabled_many": "O servidor do Orca deste host assumiu {{count}} automações, mas não conseguiu reativá-las. Ative-as em Automações.",
           "windowsBuildUnsupported": "Este host executa uma versão do Windows anterior ao Windows 10 e ao Windows Server 2016, então não consegue executar o servidor do Orca. Use um host com uma versão mais recente do Windows, ou um host Linux ou macOS.",
           "windowsNoExtractor": "Este host Windows não tem tar.exe nem o Expand-Archive do PowerShell, então o Orca não consegue descompactar o servidor nele. Instale o Windows PowerShell 5.1 no host e conecte novamente.",
+          "linkedProjects": "O servidor Orca deste host já tinha {{paths}}, então este computador agora usa a cópia do servidor. As abas e {{count}} automações deste computador nesse host não foram movidas, e os worktrees que ele criou lá aparecem como worktrees externos.",
+          "olderTerminals": "{{count}} terminais iniciados por uma versão anterior do Orca ainda estão em execução neste host e não param sozinhos. Feche-os naquela versão do Orca ou encerre-os no host e conecte novamente.",
           "setupFreeHostSpace": "Este host não tem espaço livre em disco suficiente para que o Orca mantenha um backup dos dados do servidor ao iniciá-lo. Libere espaço no host e conecte-se novamente.",
           "setupStopUnmanagedRuntime": "Um servidor Orca que não foi iniciado por este aplicativo ainda parece estar usando os dados do Orca neste host. Pare-o no host e conecte-se novamente. A seção Detalhes deste host, em Configurações > Hosts SSH, mostra o nome do processo.",
           "setupSeeDetails": "O Orca não conseguiu iniciar seu servidor neste host. A causa está nos detalhes deste host, em Configurações > Hosts SSH."
@@ -10401,6 +10439,7 @@
         "SettingsHostScopePicker": {
           "label": "Host",
           "unavailable": "{{value0}} (indisponível)",
+          "loading": "Carregando hosts…",
           "unavailableNotice": "Este servidor não está mais salvo, então não há informações a exibir. Escolha outro host no topo das Configurações."
         },
         "wslHostsExperimental": {
@@ -10419,7 +10458,15 @@
           "connect": "Conectar",
           "forceUpdate": "Forçar atualização",
           "turnOn": "Abrir Experimental",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "Um host SSH iniciou este servidor, então os projetos não podem ser movidos para cá. Reinicie-o como host WSL para corrigir isso.",
+          "restartAsWslHost": {
+            "button": "Reiniciar como host WSL",
+            "title": "Reiniciar como host WSL?",
+            "description": "Encerra todos os terminais e agentes em {{host}}, incluindo os abertos por um host SSH, e depois reinicia o servidor do Orca como host WSL.",
+            "cancel": "Cancelar",
+            "action": "Encerrar terminais e reiniciar"
+          }
         },
         "restartServer": {
           "action": "Reiniciar servidor Orca…",
@@ -10584,6 +10631,7 @@
           "setUpOnSshHost": "Configurar Orca em um host SSH",
           "setUp": "Configurar",
           "overYourSsh": "Pela sua conexão SSH",
+          "newerThanApp": "Mais recente que este app (v{{version}})",
           "installViaSsh": "Instalar via SSH"
         },
         "sshBulkRemove": {
@@ -12993,6 +13041,11 @@
           "groupProjectsRemained_other": "Projetos do grupo restantes após excluí-lo: {{remaining}} de {{count}}.",
           "groupProjectsRemained_many": "Projetos do grupo restantes após excluí-lo: {{remaining}} de {{count}}.",
           "hostServerReplaced": "Servidor diferente: esqueça-o e conecte novamente",
+          "hostVmResumeFailed": "Falha ao retomar",
+          "hostVmSetupFailed": "Falha na configuração",
+          "hostVmSuspended": "Suspenso",
+          "hostVmWaking": "Despertando…",
+          "hostVmProvisioning": "Provisionando…",
           "projectGroupRefreshScanFailed": "Não foi possível verificar este grupo de projetos",
           "projectGroupRefreshNoProjects": "Nenhum novo projeto encontrado",
           "projectGroupRefreshPartial": "Alguns novos projetos não puderam ser adicionados ao grupo",
@@ -14221,6 +14274,8 @@
           "stopped": "Parada",
           "unverifiable": "Desconhecido",
           "title": "Adicionar distribuição WSL",
+          "descriptionMoveFromSidebar": "Git, arquivos e terminais são executados nativamente no Linux. Os projetos WSL existentes permanecem no Windows até você escolher Mover para o host … no menu do projeto.",
+          "descriptionAutoMove": "Git, arquivos e terminais são executados nativamente no Linux. Seus projetos WSL são movidos para cá quando os terminais deles ficam ociosos.",
           "distro": "Distribuição",
           "loading": "Procurando distribuições WSL…",
           "placeholder": "Escolha uma distribuição",
@@ -17484,7 +17539,13 @@
         },
         "usageFormatters": {
           "notScannedYet": "Ainda não escaneado",
-          "updatedAt": "Atualizado em {{time}}"
+          "updatedAt": "Atualizado em {{time}}",
+          "unknownLocation": "Local desconhecido"
+        },
+        "StatsHostScope": {
+          "remoteCaption": "Estatísticas e uso registrados em {{value0}}. Ativar e Atualizar agem em {{value0}}.",
+          "tooOldTitle": "{{value0}} ainda não consegue informar o uso",
+          "tooOldBody": "Ele executa uma versão mais antiga do Orca. Atualize o Orca em {{value0}} para ver o uso de tokens dele aqui."
         }
       },
       "github": {
@@ -21178,6 +21239,18 @@
             "create": "Criar worktree",
             "setup": "Configurar espaço de trabalho",
             "startAgent": "Iniciar {{agent}}"
+          },
+          "VmBuildSheet": {
+            "checks": "Verificar ambiente",
+            "checksFailed": "A VM está ativa, mas as verificações de ambiente falharam",
+            "create": "Criar espaço de trabalho",
+            "editRecipe": "Editar receita",
+            "fixWithAgent": "Corrigir com agente",
+            "openAnyway": "Abrir mesmo assim",
+            "openAnywayHint": "Abrir mesmo assim mantém esta VM e cria o espaço de trabalho nela como está. Descartar destrói a VM.",
+            "provision": "Provisionar VM",
+            "retryChecks": "Tentar verificações novamente",
+            "title": "Criando sua VM"
           }
         }
       },
@@ -21398,6 +21471,9 @@
         "statusProviderUnsupported": "provedor não compatível com este host",
         "statusServerUpdateNeeded": "requer atualização do servidor",
         "unavailableCount_one": "{{count}} indisponível",
+        "statusProvisioning": "provisionando",
+        "statusSuspended": "suspenso",
+        "statusWaking": "despertando",
         "unavailableCount_other": "{{count}} indisponíveis",
         "unavailableCount_many": "{{count}} indisponíveis",
         "statusConnected": "conectado",
@@ -21764,6 +21840,11 @@
         "stateNeedsYou": "Precisa de você",
         "stateResuming": "Retomando",
         "stateStopped": "Parado"
+      },
+      "RunTargetCombobox": {
+        "noWslDistros": "Nenhuma distribuição WSL encontrada",
+        "wslDistro": "Distribuição WSL",
+        "wslDistroHint": "Uma distribuição Linux neste PC"
       },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "Não foi possível retomar.",
@@ -26020,6 +26101,30 @@
       "draft": "{{review}}: Rascunho",
       "merged": "{{review}}: Mergeado",
       "open": "{{review}}: Aberto"
+    },
+    "vm": {
+      "menu": {
+        "waking": "Despertando a VM…",
+        "retryResume": "Tentar Retomar a VM Novamente",
+        "resume": "Retomar VM",
+        "suspend": "Suspender VM",
+        "suspendDescription": "Fecha os painéis deste espaço de trabalho e suspende a VM dele. Abrir o espaço de trabalho a desperta."
+      },
+      "state": {
+        "provisioning": "VM sendo provisionada",
+        "suspended": "VM suspensa",
+        "waking": "VM despertando",
+        "resumeFailed": "Falha ao retomar a VM",
+        "provisionFailed": "Falha na configuração da VM"
+      },
+      "hint": {
+        "provisioning": "A VM está sendo criada.",
+        "suspended": "Em repouso para economizar custos. Abrir o espaço de trabalho a desperta.",
+        "waking": "Retomando a VM e reconectando.",
+        "resumeFailed": "Não foi possível retomar a VM. Clique com o botão direito e escolha “Tentar Retomar a VM Novamente”.",
+        "provisionFailed": "A VM não foi criada ou a criação foi interrompida. Abra as Configurações para destruí-la ou removê-la."
+      },
+      "suspendFailed": "Falha ao suspender o espaço de trabalho da VM"
     }
   },
   "tabHoverCard": {
@@ -26140,7 +26245,8 @@
       "manual": "A instalação automática falhou. Instale esta atualização manualmente.",
       "deadline": "Reinicie até {{deadline}}. O Orca salva suas sessões antes de reiniciar.",
       "download": "Abrir downloads"
-    }
+    },
+    "remoteUpdateBusy": "Este servidor já está sendo atualizado. Verifique novamente quando terminar."
   },
   "jira": {
     "connect": {
@@ -26714,7 +26820,12 @@
       "local": "Local",
       "repair": "Precisa parear novamente",
       "update": "Precisa de atualização",
-      "serverReplaced": "Servidor diferente"
+      "serverReplaced": "Servidor diferente",
+      "resumeFailed": "Falha ao retomar",
+      "setupFailed": "Falha na configuração",
+      "provisioning": "Provisionando",
+      "suspended": "Suspenso",
+      "waking": "Despertando"
     },
     "compat": {
       "compatible": "O cliente e o servidor do ambiente de execução são compatíveis.",
@@ -27017,7 +27128,8 @@
       "review": "Voltar aos projetos",
       "browserLoginsHostUnknown": "Os logins do navegador não foram copiados, porque o Orca não conseguiu identificar o perfil do navegador do host. Entre novamente nas abas do navegador do host.",
       "browserLoginsConflict": "Os logins do navegador não foram copiados, porque o perfil do navegador do host já está em uso. Entre novamente nas abas do navegador do host.",
-      "browserLoginsNotCopied": "Os logins do navegador não foram copiados para o host. Entre novamente nas abas do navegador do host."
+      "browserLoginsNotCopied": "Os logins do navegador não foram copiados para o host. Entre novamente nas abas do navegador do host.",
+      "droppedForMappedDrives": "Não movidos, porque a letra de unidade deles não aponta mais para {{distro}}: {{names}}. Verifique a unidade e mova-os novamente."
     },
     "runtime": {
       "label": "Ambiente de execução do projeto",
@@ -27040,6 +27152,8 @@
       "destinationChanged": "Projetos anteriores de {{distro}} foram movidos para outro host WSL. Conecte esse host para mover mais.",
       "hostUnavailable": "O host {{distro}} não está conectado. Conecte-o em Configurações e tente novamente.",
       "hostUpdateRequired": "O host {{distro}} usa uma versão anterior do Orca. Atualize-o em Configurações e tente novamente.",
+      "hostLaunchUnproven": "O servidor do Orca em {{distro}} executa esta versão do Orca, mas não pode receber estes projetos, então atualizar não vai ajudar. Ele pode ter sido iniciado fora dos hosts WSL, por exemplo por um host SSH. Remova o host {{distro}} nas Configurações e adicione-o novamente.",
+      "hostNotWslLaunched": "O servidor do Orca em {{distro}} não foi iniciado como host WSL (geralmente foi um host SSH desta distro que o iniciou), então ele não pode receber estes projetos. Atualizar não vai ajudar. Escolha Reiniciar como host WSL no host {{distro}} nas Configurações e tente novamente.",
       "terminalsBlocked": "Alguns terminais, agentes ou automações nestes projetos estão ocupados. Nada foi movido.",
       "exportIncomplete": "Parte do estado salvo destes projetos ainda não pode ser movida, então nada foi movido:",
       "exportIncompletePreview": "Parte do estado salvo destes projetos ainda não pode ser movida:",
@@ -27047,7 +27161,9 @@
       "pauseFailed": "O Orca não conseguiu pausar os terminais destes projetos, então nada foi movido. Os terminais pausados reiniciam quando você os abre. Tente novamente.",
       "scopeChanged": "Um projeto mudou enquanto a movimentação era preparada, então nada foi movido. Confira os projetos e tente novamente.",
       "cancelled": "Movimentação cancelada. Nada foi movido.",
-      "finishedEarlierMove": "O Orca concluiu primeiro uma movimentação anterior para {{distro}}. Recarregue a janela e inicie esta movimentação novamente."
+      "finishedEarlierMove": "O Orca concluiu primeiro uma movimentação anterior para {{distro}}. Recarregue a janela e inicie esta movimentação novamente.",
+      "mappedDriveUnverifiable": "O Orca não conseguiu verificar a letra de unidade em que alguns projetos estão salvos. Confirme que a unidade está conectada e tente novamente.",
+      "nothingMovable": "Nenhum destes projetos pode ser movido para o host {{distro}} ainda. Cada um informa o motivo."
     },
     "step": {
       "preparing": "Preparando",
@@ -27085,7 +27201,11 @@
       "windowsDrive": "A pasta dele está em uma unidade do Windows, então ele fica neste computador.",
       "mixedLocations": "Algumas das pastas dele estão fora desta distro, então ele fica neste computador.",
       "notLocal": "Ele já é executado em outro host.",
-      "other": "Ele não pode ser movido."
+      "other": "Ele não pode ser movido.",
+      "windowsGitWorktrees": "O Git para Windows registrou algumas das worktrees dele, incluindo as que já foram excluídas, e o Git no host WSL não consegue usar esses registros. Remova essas worktrees ou execute git worktree repair no WSL e depois mova-o.",
+      "windowsGitDir": "A pasta Git dele está vinculada por um caminho do Windows (uma worktree ou uma pasta Git separada que o Git para Windows configurou), que o Git no host WSL não consegue seguir.",
+      "gitUnreadable": "O Orca não conseguiu ler os detalhes do Git dele a tempo de verificá-los, então ele permanece neste computador. Verifique novamente em instantes.",
+      "mappedDriveUnverifiable": "O Orca não conseguiu verificar para onde a letra de unidade dele aponta agora. Confirme que a unidade está conectada e verifique novamente."
     },
     "reloadToast": {
       "title": "Recarregue para concluir a movimentação"
@@ -27466,7 +27586,13 @@
       "cleanupInterrupted": "A limpeza foi interrompida. Tente a limpeza novamente para continuar.",
       "sshTargetRemoveFailed": "Não foi possível remover o destino SSH oculto.",
       "recipeExitedWithoutCode": "A receita terminou com um código desconhecido.",
-      "destroyExitedWithoutCode": "A destruição terminou com um código desconhecido."
+      "destroyExitedWithoutCode": "A destruição terminou com um código desconhecido.",
+      "suspendExited": "A suspensão terminou com o código {{exitCode}}.",
+      "suspendExitedWithoutCode": "A suspensão terminou com um código desconhecido.",
+      "resumeExited": "A retomada terminou com o código {{exitCode}}.",
+      "resumeExitedWithoutCode": "A retomada terminou com um código desconhecido.",
+      "recipeTimedOut": "A etapa {{mode}} da receita não terminou em {{timeout}}, então o Orca a interrompeu. Verifique a saída da receita ou aumente timeoutSeconds no orca.yaml se ela precisar de mais tempo.",
+      "provisionInterrupted": "O Orca parou enquanto esta VM estava sendo criada. Destrua-a para liberar os recursos do provedor."
     }
   },
   "installDirAcl": {
