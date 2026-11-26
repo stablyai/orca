@@ -23882,10 +23882,6 @@
         "pageChanged": "가져오는 동안 이 페이지가 닫혔거나 프로필이 변경되었습니다. 다시 시도하세요."
       },
       "notice": {
-        "importedMore_one": "{{domains}} 외 {{more}}개 도메인의 쿠키 {{count}}개를 가져왔습니다. 적용하려면 페이지를 새로 고치세요.",
-        "importedMore_other": "{{domains}} 외 {{more}}개 도메인의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
-        "imported_one": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 적용하려면 페이지를 새로 고치세요.",
-        "imported_other": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
       },
       "routedPage": {

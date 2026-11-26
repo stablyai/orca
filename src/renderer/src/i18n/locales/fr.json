@@ -277,12 +277,6 @@
         "pageChanged": "Cette page a été fermée ou a changé de profil pendant l’importation. Réessayez."
       },
       "notice": {
-        "importedMore_one": "{{count}} cookie importé pour les domaines {{domains}} (+{{more}}). Rechargez la page pour l'utiliser.",
-        "importedMore_other": "{{count}} cookies importés pour les domaines {{domains}} (+{{more}}). Rechargez la page pour les utiliser.",
-        "importedMore_many": "{{count}} cookies importés pour les domaines {{domains}} (+{{more}}). Rechargez la page pour les utiliser.",
-        "imported_one": "{{count}} cookie importé pour {{domains}}. Rechargez la page pour l'utiliser.",
-        "imported_other": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
-        "imported_many": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "failed": "Impossible d'importer les cookies : {{reason}}"
       },
       "routedPage": {

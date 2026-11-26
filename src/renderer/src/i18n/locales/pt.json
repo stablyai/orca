@@ -1497,12 +1497,6 @@
         "pageChanged": "Esta página foi fechada ou mudou de perfil durante a importação. Tente novamente."
       },
       "notice": {
-        "importedMore_one": "{{count}} cookie importado para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-lo.",
-        "importedMore_other": "{{count}} cookies importados para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-los.",
-        "importedMore_many": "{{count}} cookies importados para os domínios {{domains}} (+{{more}}). Recarregue a página para usá-los.",
-        "imported_one": "{{count}} cookie importado para {{domains}}. Recarregue a página para usá-lo.",
-        "imported_other": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
-        "imported_many": "{{count}} cookies importados para {{domains}}. Recarregue a página para usá-los.",
         "failed": "Não foi possível importar cookies: {{reason}}"
       },
       "routedPage": {

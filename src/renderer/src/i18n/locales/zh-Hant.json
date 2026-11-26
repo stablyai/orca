@@ -553,8 +553,6 @@
         "pageChanged": "匯入期間此頁面已關閉或變更了設定檔。請再試一次。"
       },
       "notice": {
-        "importedMore_other": "已為 {{domains}} 及其他 {{more}} 個網域匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
-        "imported_other": "已為 {{domains}} 匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "failed": "Cookie 匯入失敗：{{reason}}"
       },
       "routedPage": {
