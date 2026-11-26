@@ -1,8 +1,5 @@
-import {
-  BotChatSearch,
-  BotChatsOwn,
-  BotChatTreeRead
-} from '../../../../shared/rpc-contract/bots-params'
+import { BotChatSearch, BotChatTreeRead } from '../../../../shared/rpc-contract/bots-params'
+import { BotChatsOwn } from '../../../../shared/rpc-contract/bot-chats-params'
 import { readSharedBotChatTree, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { readBotOwnChatPanes } from '../../../bots/bot-own-chat-panes'
 import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat-search-host'

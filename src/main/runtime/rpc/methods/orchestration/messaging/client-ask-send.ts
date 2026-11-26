@@ -11,6 +11,7 @@ import {
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import {
   forgetPeerQuestionOut,
+  recordPeerHandoffOut,
   recordPeerQuestionOut
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 import { clientEnvironmentId } from '../../../../orchestration/federation/client-asks/client-ask-environment'
@@ -118,6 +119,15 @@ export function sendClientAsk(args: {
     // Kept until its answer or notice comes back, so an ended pairing can tell the asker none will;
     // recorded first, as `send --on` does, and forgotten if the queue refuses it.
     recordPeerQuestionOut(db, {
+      messageId: id,
+      conversationId: conversation.conversation_id,
+      environmentId,
+      peerFingerprint: client.fingerprint,
+      asker: caller.address,
+      threadId: params.threadId
+    })
+  } else if (type.data === 'handoff') {
+    recordPeerHandoffOut(db, {
       messageId: id,
       conversationId: conversation.conversation_id,
       environmentId,

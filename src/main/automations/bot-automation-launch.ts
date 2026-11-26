@@ -10,6 +10,7 @@ import type { LinkableChat } from '../external-conversations/external-conversati
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
 import type { Bot } from '../../shared/bot-types'
 import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
+import { runChatClosesWhenFinished } from '../../shared/automation-bot-target'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import type { AutomationBotLauncher } from './launch/automation-launch'
 import type { BotRunCompletion, BotRunResult } from '../bots/bot-run-results'
@@ -56,6 +57,8 @@ export type BotAutomationSessions = {
   /** Stops the agent of a finished run's own conversation now, unless someone watches it or it owes
    *  work; replying later resumes it. Never rejects. */
   release(sessionId: string): Promise<void>
+  /** Closes a finished run's own conversation once it has sat idle for the bot's Close after. */
+  closeWhenIdle(bot: Bot, sessionId: string): void
   /** The bot's Chat, created on first use. */
   sendToChat(bot: Bot, text: string, run?: BotRunFields): Promise<BotRunSend>
 }
@@ -286,6 +289,10 @@ export function createBotAutomationDispatcher(
           // Only a conversation the run started is its own to release.
           if (route.kind === 'take' && runsIn === 'new') {
             void sessions.release(send.sessionId)
+            // A chat that answers a thread or issue hears from it again, so it stays open.
+            if (runChatClosesWhenFinished(resultsTo)) {
+              sessions.closeWhenIdle(target.bot, send.sessionId)
+            }
           }
         })
     }

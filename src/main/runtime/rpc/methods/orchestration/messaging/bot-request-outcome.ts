@@ -2,6 +2,7 @@
  * a post where the asker asked is noted so the answer is never passed on twice, and a request that
  * ends with no answer, or is dropped unread, wakes the sender to tell the asker. */
 
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -129,6 +130,11 @@ export async function noteBotRequestPost(
     // A message ref in the thread starts with the thread's ref.
     if (answerRef && ref && `${ref}:`.startsWith(`${answerRef}:`)) {
       db.recordBotRequestOutcome(requestId, 'posted')
+      // The asker gets no mail for a post, so its finished run chat stops waiting on it here.
+      const asker = parseOrcaSessionAddress(db.getMessageById(requestId)?.from_handle)
+      if (asker) {
+        runtime.botRunChatCloser?.wake([asker])
+      }
     }
   }
 }

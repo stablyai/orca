@@ -1,6 +1,7 @@
 // The questions this Orca's agents asked agents on paired computers, kept until an answer or notice
 // for each comes back, so an unpair or re-pair tells the askers still waiting that none will come.
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
@@ -35,14 +36,38 @@ export function recordPeerQuestionOut(
     )
 }
 
+/** A handoff to a paired computer, kept only until its answer or notice comes back, so a finished
+ *  run chat that sent it stays open for the result; an ended pairing drops it without a notice. */
+export function recordPeerHandoffOut(
+  db: OrchestrationDb,
+  handoff: Parameters<typeof recordPeerQuestionOut>[1]
+): void {
+  db.db
+    .prepare(
+      `INSERT OR IGNORE INTO peer_handoffs_out (
+         message_id, conversation_id, environment_id, peer_fingerprint, asker, thread_id
+       ) VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      handoff.messageId,
+      handoff.conversationId,
+      handoff.environmentId,
+      handoff.peerFingerprint,
+      handoff.asker,
+      handoff.threadId ?? null
+    )
+}
+
 /** Its delivery failed: nothing there will answer it, and the sender saw the failure. */
 export function forgetPeerQuestionOut(db: OrchestrationDb, messageId: string): void {
   db.db.prepare('DELETE FROM peer_questions_out WHERE message_id = ?').run(messageId)
+  db.db.prepare('DELETE FROM peer_handoffs_out WHERE message_id = ?').run(messageId)
 }
 
-/** A reply came back on this conversation: the question it names, by its answer, notice or reply,
- *  is settled, and no other. An older paired Orca names none, so its reply settles the oldest
- *  question still open in its thread. Call it once per stored reply, so a replay settles nothing. */
+/** A reply came back on this conversation: the question or handoff it names, by its answer, notice
+ *  or reply, is settled, and no other. An older paired Orca names none, so its reply settles one ask
+ *  of its thread: the oldest open question, else the oldest handoff. Call it once per stored reply,
+ *  so a replay settles nothing. */
 export function settlePeerQuestionsOut(
   db: OrchestrationDb,
   conversationId: string,
@@ -56,8 +81,14 @@ export function settlePeerQuestionsOut(
          WHERE conversation_id = ? AND message_id = ? AND awaiting = 1`
       )
       .run(conversationId, named)
-  } else if (reply.threadId) {
-    db.db.prepare(SETTLE_OLDEST_IN_THREAD_SQL).run(conversationId, reply.threadId)
+    db.db
+      .prepare('DELETE FROM peer_handoffs_out WHERE conversation_id = ? AND message_id = ?')
+      .run(conversationId, named)
+  } else if (
+    reply.threadId &&
+    db.db.prepare(SETTLE_OLDEST_IN_THREAD_SQL).run(conversationId, reply.threadId).changes === 0
+  ) {
+    db.db.prepare(SETTLE_OLDEST_HANDOFF_IN_THREAD_SQL).run(conversationId, reply.threadId)
   }
 }
 
@@ -67,6 +98,12 @@ const SETTLE_OLDEST_IN_THREAD_SQL = `UPDATE peer_questions_out SET awaiting = 0
   WHERE rowid = (
     SELECT rowid FROM peer_questions_out
     WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2 AND awaiting = 1
+    ORDER BY rowid LIMIT 1
+  )`
+const SETTLE_OLDEST_HANDOFF_IN_THREAD_SQL = `DELETE FROM peer_handoffs_out
+  WHERE rowid = (
+    SELECT rowid FROM peer_handoffs_out
+    WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2
     ORDER BY rowid LIMIT 1
   )`
 const THREAD_SETTLED_UNNAMED_SQL = `SELECT 1 FROM peer_questions_out
@@ -92,6 +129,17 @@ export function tellUnpairedPeerQuestions(
           pairing: peerMailPairing(params.server)
         }
       : { ...params, pairing: params.currentPairing ?? null }
+  // No answer will come for these either; the chats that sent them may close again.
+  const handedOff = db.db
+    .prepare(
+      `DELETE FROM peer_handoffs_out
+       WHERE environment_id = ?1 AND (?2 IS NULL OR peer_fingerprint <> ?2) RETURNING asker`
+    )
+    .all(params.environmentId, pairing)
+    .flatMap(({ asker }) => parseOrcaSessionAddress(String(asker)) ?? [])
+  if (handedOff.length > 0) {
+    runtime.botRunChatCloser?.wake(handedOff)
+  }
   const waiting = db.db
     .prepare(
       `SELECT message_id, conversation_id, asker, thread_id FROM peer_questions_out

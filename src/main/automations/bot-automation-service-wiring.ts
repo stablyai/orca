@@ -7,6 +7,7 @@ import { bindLookAroundToAutomations } from '../bots/bot-look-around-runtime'
 import { bindGoogleTriggersToAutomations } from '../google/google-trigger-runtime'
 import { runtimeBotRunRefusals, runtimeBotRunResults } from '../bots/bot-run-results'
 import { runtimeBotWaits } from '../bots/bot-waits'
+import { startBotRunChatCloser } from '../bots/bot-run-chat-close-runtime'
 import { runtimeChatHost } from '../external-conversations/external-conversation-chat'
 
 /** The scheduler's bot side: runs that open in a bot's chat, and the alert when one cannot. */
@@ -50,5 +51,6 @@ export function bindBotAutomations(
   runtime.inAutomationLane = (automationId, operation) =>
     service.runInAutomationLane(automationId, operation)
   bindLookAroundToAutomations(service, runtime)
+  runtime.botRunChatCloser ??= startBotRunChatCloser(runtime, store)
   bindGoogleTriggersToAutomations(service, store, runtime)
 }

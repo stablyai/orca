@@ -20,8 +20,10 @@ import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { uploadPeerMailFiles } from './peer-mail-files'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import { callOutcomeUnknown } from '../../../../orchestration/federation/remote-owned/remote-owned-answers'
 import {
   forgetPeerQuestionOut,
+  recordPeerHandoffOut,
   recordPeerQuestionOut
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 
@@ -97,6 +99,15 @@ export async function sendPeerMail(args: {
       asker: caller.address,
       threadId: params.threadId
     })
+  } else if (type === 'handoff') {
+    recordPeerHandoffOut(db, {
+      messageId: id,
+      conversationId: conversation.conversation_id,
+      environmentId: server.environmentId,
+      peerFingerprint: conversation.peer_fingerprint,
+      asker: caller.address,
+      threadId: params.threadId
+    })
   }
   try {
     const held = await deliverPeerMail(runtime, server, conversation, {
@@ -115,7 +126,9 @@ export async function sendPeerMail(args: {
     })
     warnings.push(...held)
   } catch (error) {
-    if (type === 'question') {
+    // A refusal there, or a send that never left, is forgotten; one the server may have taken, its
+    // answer lost on the way back, still waits for that answer.
+    if ((type === 'question' || type === 'handoff') && !callOutcomeUnknown(error)) {
       forgetPeerQuestionOut(db, id)
     }
     throw error

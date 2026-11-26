@@ -106,6 +106,15 @@ export class BotItemsHost {
     return this.stores.get(botItemsStoreFile(getProfileUserDataPath())) ?? null
   }
 
+  /** Whether a chat owns an open item; a profile with no items file owns none. */
+  async chatHasOpenItems(botId: string, chatId: string): Promise<boolean> {
+    const store = await this.existingStore()
+    if (!store) {
+      return false
+    }
+    return store.chatOwnsOpenItem(botId, this.deps.chatRoot(chatId))
+  }
+
   async owedCommentAttachmentUploads(
     stateDirectory: string,
     root: string
@@ -121,18 +130,22 @@ export class BotItemsHost {
   }
 
   private async recover(): Promise<void> {
-    const path = botItemsStoreFile(getProfileUserDataPath())
-    if (!this.stores.has(path)) {
-      const exists = await access(path).then(
-        () => true,
-        () => false
-      )
-      if (!exists) {
-        return
-      }
-      this.store()
+    if (await this.existingStore()) {
+      await this.sendOwedMail()
     }
-    await this.sendOwedMail()
+  }
+
+  /** This profile's store when it has an items file, opened on first use; null when it has none. */
+  private async existingStore(): Promise<BotItemsRemote | null> {
+    const path = botItemsStoreFile(getProfileUserDataPath())
+    if (this.stores.has(path)) {
+      return this.store()
+    }
+    const exists = await access(path).then(
+      () => true,
+      () => false
+    )
+    return exists ? this.store() : null
   }
 
   /** Leaves the bots DB worker client alone: the runtime owns it, shared with the work record. */

@@ -35,6 +35,7 @@ import type { StructuredAgentSessionStatusSubscriber as StatusSubscriber } from 
 import type { CapturedChildWorkStops } from '../../observations/structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from '../../observations/structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from '../../observations/structured-agent-session-subagent-rows'
+import { noteAgentSessionViewerLeft } from './agent-session-viewer-left'
 import {
   StructuredAgentSessionTurnCompletionFeed,
   type StructuredAgentSessionTurnCompletionSubscriber as TurnCompletionSubscriber
@@ -127,7 +128,8 @@ export class StructuredAgentSessionClientDelivery {
       readWorkFrame: (sessionId, journal, rows) =>
         this.statusFeed.journalProjection.workFrame(sessionId, journal, rows),
       onPromptSuggestionInterest: (sessionId, wanted) =>
-        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
+        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted),
+      onLastViewerLeft: noteAgentSessionViewerLeft
     })
   }
 

@@ -204,7 +204,7 @@ function refuseUnreachableSessionRecipient(
       message:
         reached.reason === 'worker-identity-lost'
           ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. ${noEffect}`
-          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}`,
+          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect} To mail it again, reopen it first: \`orca bot reopen --chat ${sessionId}\` for a bot's chat, or Resume in Session History.`,
       unreachable: reached.reason === 'worker-identity-lost' ? 'unverifiable' : 'ended'
     }
   }

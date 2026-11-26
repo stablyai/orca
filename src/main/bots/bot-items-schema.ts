@@ -129,6 +129,12 @@ export const BOT_ITEMS_MIGRATIONS: readonly string[] = [
   `
 ]
 
+/** Lets a chat's open items be found without reading all of its bot's; made on every open, outside
+ *  the numbered steps, so an older Orca still writes the file. */
+export function ensureBotItemsChatIndex(db: SyncDatabase): void {
+  db.exec('CREATE INDEX IF NOT EXISTS idx_items_chat ON items(chat_id)')
+}
+
 /** Runs the steps a file lacks; false when a newer Orca wrote it, so it must stay read-only. */
 export function migrateBotItems(db: SyncDatabase): boolean {
   const version = Number(db.pragma('user_version', { simple: true }) ?? 0)

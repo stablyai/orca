@@ -91,5 +91,6 @@ export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
   readWorkFrame?: StructuredAgentSessionWorkFrameReader
   /** The session gained its first, or lost its last, subscriber that shows prompt suggestions. */
   onPromptSuggestionInterest?: (sessionId: string, wanted: boolean) => void
+  onLastViewerLeft?: (sessionId: string) => void
   now?: () => number
 }

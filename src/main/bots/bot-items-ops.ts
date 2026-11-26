@@ -13,6 +13,7 @@ export const BOT_ITEMS_OPS = [
   'reportFact',
   'linkedDispatchRefs',
   'list',
+  'chatOwnsOpenItem',
   'needsYou',
   'viewRows',
   'closes',

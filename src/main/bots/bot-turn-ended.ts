@@ -28,6 +28,7 @@ import {
   createBotUnansweredQuestionNote
 } from './bot-unanswered-question-note'
 import { requireStructuredHost } from './bot-chat-session'
+import { wakeRunChat } from './bot-run-chat-close-runtime'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 
@@ -39,6 +40,7 @@ export function botTurnEnded(
   ended?: TurnEndedVerdict
 ): void {
   markBotGroupRoomUnread(runtime, sessionId)
+  wakeRunChat(runtime, sessionId)
   void noteBotGroupMemberReply(runtime, sessionId, turnId).catch((error: unknown) =>
     console.warn('[bot-groups] could not note a reply for the sidebar', error)
   )

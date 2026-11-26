@@ -42,6 +42,13 @@ export function isRemoteDispatchTerminal(
     : SETTLED_WORKER_STATES.includes(record.worker_state)
 }
 
+const sqlList = (values: readonly string[]): string => values.map((v) => `'${v}'`).join(', ')
+/** `isRemoteDispatchTerminal`'s opposite in SQL, over `alias`, from the same two lists. */
+export function remoteDispatchOpenSql(alias: string): string {
+  return `(${alias}.worker_state IS NULL AND ${alias}.status IN (${sqlList(ACTIVE_DISPATCH_STATUSES)}))
+    OR (${alias}.worker_state IS NOT NULL AND ${alias}.worker_state NOT IN (${sqlList(SETTLED_WORKER_STATES)}))`
+}
+
 /** Counted as a local Dispatch would be: active while its Dispatch is pending or dispatched there. */
 /** A prior a retry may follow, by the local rule: its worker settled there, or it was abandoned here. */
 export function isRemoteAttemptSettledForRetry(

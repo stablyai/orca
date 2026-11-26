@@ -81,7 +81,7 @@ describe('the creator of a worker a paired server runs', () => {
 
   let imported = 0
   /** Imports everything the server queued home since the last import, as the relay does. */
-  function importQueue(): void {
+  function importQueue(): ReturnType<typeof importRemoteOwnedItem>[] {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT names exactly these columns.
     const items = server.db
       .prepare(
@@ -94,13 +94,13 @@ describe('the creator of a worker a paired server runs', () => {
       kind: string
       payload: string
     }[]
-    for (const item of items) {
+    return items.map((item) => {
       imported = item.sequence
-      importRemoteOwnedItem(home, remoteServerPin(SERVER), {
+      return importRemoteOwnedItem(home, remoteServerPin(SERVER), {
         ...item,
         conversationId: link.conversation_id
       })
-    }
+    })
   }
 
   const stamp = (dispatchId: string) => {
@@ -138,6 +138,21 @@ describe('the creator of a worker a paired server runs', () => {
       lastFailure: 'server_unlinked',
       completedAtKnown: true
     })
+  })
+
+  it('a worker whose state changes there, even lost with no mail, names the chat to tell', () => {
+    const first = startOnServer(TASK, 'repo::/first')
+    expect(importQueue()).toContainEqual({ workerChat: CHAT })
+    // The server's restart lost the worker and readied its Task; no report comes home.
+    server.db
+      .prepare("UPDATE worker_dispatches SET state = 'failed' WHERE dispatch_id = ?")
+      .run(first)
+    server.db.prepare("UPDATE dispatch_contexts SET status = 'failed' WHERE id = ?").run(first)
+    server.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(TASK)
+    const lost = importQueue()
+    expect(lost.length).toBeGreaterThan(0)
+    expect(lost).toContainEqual({ workerChat: CHAT })
+    expect(lost.some((result) => result !== undefined && 'to' in result)).toBe(false)
   })
 
   it("never takes another link's Dispatch as the earlier one, though its id matches", () => {

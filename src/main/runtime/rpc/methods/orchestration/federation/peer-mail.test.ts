@@ -139,7 +139,7 @@ describe('agent mail between paired Orca servers', () => {
         }
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
-      return (await b.dispatcher.dispatch(
+      const answer = (await b.dispatcher.dispatch(
         {
           id: `from_a_${method}`,
           authToken: 'a-device-token',
@@ -153,13 +153,19 @@ describe('agent mail between paired Orca servers', () => {
           clientKind: bClientKind
         }
       )) as RuntimeRpcResponse<unknown>
+      if (loseDeliverAnswer && method === 'orchestration.peerMailDeliver') {
+        throw new Error('The connection closed before the server answered.')
+      }
+      return answer
     }
   }
+  let loseDeliverAnswer = false
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'orca-peer-mail-'))
     bCapabilities = (capabilities) => capabilities
     bClientKind = 'runtime'
+    loseDeliverAnswer = false
     aCredential = 'fingerprint_a'
     hasEnvironment = () => true
     b = openSide('b', 'Build Box')
@@ -633,6 +639,42 @@ describe('agent mail between paired Orca servers', () => {
     expect(first).toMatchObject({ ok: true })
     expect(retried).toMatchObject({ ok: true, result: { message: { id: 'msg_aaaaaaaaaaaa' } } })
     expect(b.db.getInbox(10).filter((message) => message.subject === 'Once')).toHaveLength(1)
+  })
+
+  it('keeps a question or handoff the server took though its answer was lost, not one it refused', async () => {
+    const out = () => [
+      ...a.db.db.prepare('SELECT message_id FROM peer_questions_out WHERE awaiting = 1').all(),
+      ...a.db.db.prepare('SELECT message_id FROM peer_handoffs_out').all()
+    ]
+    loseDeliverAnswer = true
+    for (const type of ['question', 'handoff']) {
+      const sent = await mutation(a, 'orchestration.send', {
+        from: 'term_a',
+        on: 'devB',
+        to: 'term_b',
+        subject: `Lost answer ${type}`,
+        type
+      })
+      expect(sent).toMatchObject({ ok: false })
+    }
+    expect(b.db.getInbox(10)).toHaveLength(2)
+    expect(out()).toHaveLength(2)
+
+    // A refusal there is an answer: nothing was taken, so nothing is waited on.
+    loseDeliverAnswer = false
+    vi.spyOn(b.db, 'findActiveRemoteAttachmentForPane').mockImplementation((paneKey) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
+      paneKey === B_PANE ? ({ dispatch_id: 'ctx_remote' } as never) : undefined
+    )
+    const refused = await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Refused question',
+      type: 'question'
+    })
+    expect(refused).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(out()).toHaveLength(2)
   })
 
   it('refuses mail to a worker another Orca coordinates', async () => {

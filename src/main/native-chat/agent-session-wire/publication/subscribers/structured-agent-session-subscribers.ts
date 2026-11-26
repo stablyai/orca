@@ -337,6 +337,7 @@ export class AgentSessionSubscribers {
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
+      this.hooks.onLastViewerLeft?.(subscriber.sessionId)
     }
     this.promptSuggestions.reconcile(subscriber.sessionId)
   }

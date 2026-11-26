@@ -32,7 +32,7 @@ type ReadContext = {
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(id: string, task: () => Promise<T>) => Promise<T>
   seal: (id: string) => void
-  readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
+  client: Pick<StructuredAgentSessionClientDelivery, 'readCommandsSettled' | 'subscribers'>
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
   publishStatus: (id: string) => void
   runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
@@ -185,7 +185,9 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         messageId
       ),
     readCommands: (id: string, commandsOnRequest = false) =>
-      context().readCommands(id, commandsOnRequest),
+      context().client.readCommandsSettled(id, commandsOnRequest),
+    /** Open on some client's screen now. */
+    viewed: (id: string) => context().client.subscribers.subscriberCount(id) > 0,
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>
       providerSupport.adapterSupportsCreate(context().deps.adapter, location, agent),
     knownAgentIds: () => providerSupport.knownAgentIds(context().deps),

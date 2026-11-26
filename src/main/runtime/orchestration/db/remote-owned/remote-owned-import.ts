@@ -44,6 +44,8 @@ export type PulledRemoteOwnedItem = {
 
 /** Mail to wake its mailbox for once the import commits. */
 export type ImportedRemoteOwnedMail = { to: string; type: MessageType }
+/** A worker's state changed: the chat that started it, to tell once the import commits. */
+export type ImportedRemoteOwnedWorker = { workerChat: string }
 
 /**
  * Imports one item of a link's queue, with everything it implies, in one transaction that also
@@ -61,7 +63,7 @@ export function importRemoteOwnedItem(
     /** The Run's coordinating chat when it was deleted, so a new question there is told at once. */
     deletedChat?: (run: RunRow) => string | undefined
   } = { name: server.environment_id }
-): ImportedRemoteOwnedMail | undefined {
+): ImportedRemoteOwnedMail | ImportedRemoteOwnedWorker | undefined {
   const parsed = parseRemoteOwnedItem(item)
   return runLifecycleWriteTransaction(db.db, 'import_remote_owned_item', () => {
     const link = getRemoteRunLink(db, item.conversationId)
@@ -224,7 +226,7 @@ function importWorkerState(
   db: OrchestrationDb,
   link: RemoteRunLinkRow,
   state: RemoteOwnedWorkerState
-): undefined {
+): ImportedRemoteOwnedWorker | undefined {
   const { dispatch, task } = state
   adoptRemoteAttempt(db, link, {
     taskId: dispatch.taskId,
@@ -251,6 +253,10 @@ function importWorkerState(
           agent: dispatch.agent
         }
   )
+  // The chat that started it hears of its change once the import commits, even with no mail.
+  const changed = record.creator_orca_session_id
+    ? { workerChat: record.creator_orca_session_id }
+    : undefined
   if (state.removed) {
     // No stop there can prove anything about a Dispatch its reset deleted, so nothing is owed for it.
     abandonRemoteDispatchStop(db, dispatch.id)
@@ -266,10 +272,10 @@ function importWorkerState(
     currentRemoteAttempt(db, dispatch.taskId)?.dispatch_id === dispatch.id
   ) {
     settleTaskAfterLostWorker(db, dispatch.taskId, 'ready')
-    return undefined
+    return changed
   }
   if (record.task_settled_here) {
-    return undefined
+    return changed
   }
   if (state.removed || task.status === 'failed') {
     db.settleRemoteAttemptResult({
@@ -293,5 +299,5 @@ function importWorkerState(
   ) {
     reconcileTaskAfterDispatchInterruption(db, dispatch.taskId, dispatch.id)
   }
-  return undefined
+  return changed
 }

@@ -229,6 +229,7 @@ export type RuntimeStore = {
     nativeChatCiResultLines?: GlobalSettings['nativeChatCiResultLines']
     nativeChatAutoContinueAfterUsageLimit?: GlobalSettings['nativeChatAutoContinueAfterUsageLimit']
     nativeChatIdleStopMinutes?: GlobalSettings['nativeChatIdleStopMinutes']
+    botRunChatsCloseAfter?: GlobalSettings['botRunChatsCloseAfter']
     nativeChatInlineVisuals?: GlobalSettings['nativeChatInlineVisuals']
     nativeChatPromptSuggestions?: GlobalSettings['nativeChatPromptSuggestions']
     experimentalSharedCodexServers?: GlobalSettings['experimentalSharedCodexServers']

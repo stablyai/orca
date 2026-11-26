@@ -79,7 +79,7 @@ function withoutConversation(run: BotRunFields | undefined): BotRunFields | unde
 
 export function botAutomationSessions(
   deps: BotAutomationSessionDependencies
-): Omit<BotAutomationSessions, 'release'> {
+): Omit<BotAutomationSessions, 'release' | 'closeWhenIdle'> {
   return {
     startConversation: async (
       bot,
@@ -150,7 +150,13 @@ export function runtimeBotAutomationSessions(runtime: OrcaRuntimeService): BotAu
       await getStructuredAgentSessionHost()
         ?.releaseIdleSession(sessionId)
         .catch((error: unknown) => console.warn('[bots] could not release a finished run', error))
-    }
+    },
+    // Its Close after now, not as the run started.
+    closeWhenIdle: (bot, sessionId) =>
+      runtime.botRunChatCloser?.arm(
+        runtime.bots.list().find((entry) => entry.id === bot.id) ?? bot,
+        sessionId
+      )
   }
 }
 

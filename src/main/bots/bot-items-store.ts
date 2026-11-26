@@ -5,7 +5,7 @@ import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../shared/agent-session/a
 import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import { BotItemError } from './bot-item-error'
 import { ensureKeptWaitingAsks } from './bot-item-waiting-ask-keep'
-import { migrateBotItems } from './bot-items-schema'
+import { ensureBotItemsChatIndex, migrateBotItems } from './bot-items-schema'
 import { BotItemsOwner } from './bot-items-owner'
 import { ownerCommentAttachmentBody } from './bot-item-comment-attachment-body'
 import { agentSessionAttachmentReferences } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
@@ -27,6 +27,7 @@ export class BotItemsStore extends BotItemsOwner {
     const writable = migrateBotItems(db)
     if (writable) {
       ensureKeptWaitingAsks(db)
+      ensureBotItemsChatIndex(db)
       db.exec(`CREATE INDEX IF NOT EXISTS idx_item_events_comment_request
         ON item_events(item_uid, json_extract(data, '$.requestId'))
         WHERE kind = 'commented' AND json_extract(data, '$.requestId') IS NOT NULL;

@@ -49,6 +49,9 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
     } finally {
       if (!keepRunning) {
         await host.close(params.sessionId, 'user-close')
+      } else {
+        // A finished run chat its tab held open counts down again.
+        ctx.runtime.botRunChatCloser?.wake([params.sessionId])
       }
     }
     return { ok: true as const }

@@ -12,6 +12,7 @@ import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { formatBotChats, type BotChatsResult } from './bot-chats-format'
+import { BOT_CHAT_ID_PREFIX } from '../../shared/bots/bot-chat-row'
 import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
 
 export function formatBot(bot: Bot): string {
@@ -119,6 +120,24 @@ export const BOT_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('all') ? { all: true } : {})
     })
     printResult(result, json, (value) => formatBotChats(value))
+  },
+  'bot reopen': async ({ flags, client, json }) => {
+    const chatId = getOptionalStringFlag(flags, 'chat')
+    if (!chatId) {
+      throw new RuntimeClientError('invalid_argument', 'Missing --chat <id>')
+    }
+    const selector = getOptionalStringFlag(flags, 'bot')
+    const botId = selector ? (await findBot(client, selector)).id : undefined
+    const result = await callBots<{ reopened: boolean; chatId: string }>(
+      client,
+      'bots.chats.reopen',
+      { ...callerChat(), ...(botId ? { botId } : {}), chatId }
+    )
+    printResult(result, json, (value) =>
+      value.reopened
+        ? `Reopened ${BOT_CHAT_ID_PREFIX}${value.chatId}. It takes mail again: send it --chat ${value.chatId}.`
+        : `${BOT_CHAT_ID_PREFIX}${value.chatId} is already open.`
+    )
   },
   'bot list': async ({ client, json }) => {
     const result = await client.call<{ bots: BotRosterEntry[]; unreachable?: { name: string }[] }>(

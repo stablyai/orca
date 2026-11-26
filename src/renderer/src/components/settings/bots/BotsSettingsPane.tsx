@@ -5,6 +5,7 @@ import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { useBotSettingsAccounts, useBotSettingsComputers } from './bot-settings-computers'
 import { BotAccountGroup, BotComputerGroup } from './BotSettingsGroups'
+import { BotRunChatCloseDefaultSetting } from './BotRunChatCloseDefaultSetting'
 
 /** The bots switch and this computer's bot settings, then each Orca account and each computer with bots. */
 export function BotsSettingsPane({
@@ -53,6 +54,7 @@ export function BotsSettingsPane({
             updateSettings({ skipNewHomeChatConfirm: !settings.skipNewHomeChatConfirm })
           }
         />
+        <BotRunChatCloseDefaultSetting settings={settings} updateSettings={updateSettings} />
       </div>
       <div className="space-y-6">
         {accounts.map((account) => (

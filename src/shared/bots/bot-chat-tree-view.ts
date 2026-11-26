@@ -181,13 +181,15 @@ export function botChatListView(
   }
 ): BotChatListView {
   const searching = query.trim() !== ''
+  // A closed chat leaves the list; its history is in Session History.
+  const open = chats.filter((chat) => !chat.closed)
   const found = searching
-    ? (search?.hits ?? [])
-    : chats.slice(0, first + CHAT_TREE_CAPS.step * steps).map((chat) => ({ chat, matches: null }))
+    ? (search?.hits ?? []).filter((hit) => !hit.chat.closed)
+    : open.slice(0, first + CHAT_TREE_CAPS.step * steps).map((chat) => ({ chat, matches: null }))
   return {
     found,
-    older: searching ? 0 : chats.length - found.length,
-    onlyHome: chats.length === 1 && chats[0].origin === 'home' && chats[0].finishedTotal === 0,
+    older: searching ? 0 : open.length - found.length,
+    onlyHome: open.length === 1 && open[0].origin === 'home' && open[0].finishedTotal === 0,
     noMatch:
       searching && search !== null && !search.pending && !search.failed && found.length === 0,
     searchFailed: searching && search?.failed === true,

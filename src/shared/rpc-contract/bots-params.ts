@@ -1,3 +1,5 @@
+import { BotRunChatCloseAfterSchema } from '../bots/bot-run-chat-close'
+import { BotItemsStaleSchema } from '../bots/bot-items-stale'
 import { botTidyUp, patchTidyUp, TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { BOT_IMPORT_REPLY_MAX, BotImportFromSchema } from '../bots/bot-import'
@@ -8,7 +10,6 @@ import {
   BOT_MAX_SKILL_PROJECTS,
   BOT_MAX_MEMBERS,
   BotMemberSchema,
-  BotItemsStaleSchema,
   BotNameSchema,
   NewBotNameSchema,
   BotNotificationsSchema,
@@ -170,6 +171,8 @@ export const BotUpdate = z.object({
        *  Applied inside the host's update queue, so a claim is a compare-and-set. */
       offerAnswer: BotOfferAnswerUpdateSchema.optional(),
       itemsStale: BotItemsStaleSchema.optional(),
+      /** null follows the host's default again. */
+      runChatsCloseAfter: BotRunChatCloseAfterSchema.nullable().optional(),
       slackMirror: z.boolean().optional()
     })
     // Strict so a phone's unknown key fails the phone gate instead of being dropped.
@@ -223,15 +226,6 @@ export const BotChatSearch = z.object({
 })
 export type BotChatSearchParams = z.infer<typeof BotChatSearch>
 
-/** Each bot's own side chats; `botIds` answers only those (a notice named them), absent every bot. */
-export const BOT_CHATS_OWN_MAX_IDS = 500
-export const BotChatsOwn = z.object({
-  botIds: z.array(z.string().min(1)).max(BOT_CHATS_OWN_MAX_IDS).optional()
-})
-
-/** Chats the owner opened on a client without a reveal (their tab already open); their bot threads stop being new. */
-export const BotChatsSeen = z.object({ sessionIds: z.array(z.string().min(1)).max(100) })
-
 /** The bot's Chat: open it (created on first use), or reset it to a new conversation. */
 export const BotChat = z.object({ botId: requiredString('Missing bot id') })
 
@@ -255,14 +249,6 @@ export const BotMemoryEdit = BotChat.extend({
 
 /** One row of a bot's memory history to undo. */
 export const BotMemoryUndo = BotChat.extend({ id: requiredString('Missing change id') })
-
-/** A bot's chats; from a bot's own chat with no botId, that bot's, with the calling chat marked. */
-export const BotChats = z.object({
-  botId: OptionalString,
-  callerSessionId: OptionalString,
-  /** Closed chats (earlier Home Chats) too. */
-  all: OptionalBoolean
-})
 
 /** Every bot with what it is for; run from a bot's chat, that bot is marked as itself. */
 /** `allComputers`: the paired servers' bots too, after this host's own; `withoutChats`: no Chats
@@ -335,6 +321,7 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     tidyUp,
     offerAnswer,
     cancelledWait,
+    runChatsCloseAfter,
     lookAtRevision,
     lookAtEpoch,
     ...rest
@@ -390,6 +377,9 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     next.linear = rest.linearWorkspaces[0] ?? null
   } else if (rest.linear !== undefined) {
     next.linearWorkspaces = rest.linear ? [rest.linear] : []
+  }
+  if (runChatsCloseAfter !== undefined) {
+    next.runChatsCloseAfter = runChatsCloseAfter ?? undefined
   }
   if (permissionMode === null) {
     delete next.permissionMode

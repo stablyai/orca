@@ -147,6 +147,7 @@ import {
   BotSlackIconUpload,
   BotSlackIconWanted
 } from './bot-avatar-params'
+import { BotChatReopen, BotChats, BotChatsOwn, BotChatsSeen } from './bot-chats-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -218,9 +219,6 @@ import {
   BotChatReset,
   BotChatSearch,
   BotChatTreeRead,
-  BotChats,
-  BotChatsOwn,
-  BotChatsSeen,
   BotCreate,
   BotCreateOfferRequest,
   BotDelete,
@@ -1288,6 +1286,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.chatTree': BotChatTreeRead,
   'bots.chats': BotChats,
   'bots.chats.own': BotChatsOwn,
+  'bots.chats.reopen': BotChatReopen,
   'bots.chats.search': BotChatSearch,
   'bots.chats.seen': BotChatsSeen,
   'bots.chats.unseen': null,
