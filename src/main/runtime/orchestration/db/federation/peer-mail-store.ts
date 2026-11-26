@@ -4,6 +4,10 @@ import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { NOT_CLIENT_ENVIRONMENT_SQL } from '../../federation/client-asks/client-ask-environment'
+import {
+  GROUP_POST_RELAY_KIND,
+  GROUP_REPLY_RELAY_KIND
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type PeerMailConversationRow = {
   conversation_id: string
@@ -20,6 +24,7 @@ export type PeerMailMessageRow = {
   conversation_id: string
   sender_label: string
   remote_party: string | null
+  group_question: string | null
 }
 
 /** The conversation this Orca opened for one local agent with one paired server's current pairing; reused for every send. */
@@ -81,18 +86,22 @@ export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
 export function listPeerConversationIdsWithPendingReplies(
   this: OrchestrationDb,
   peerFingerprint: string,
-  clientEnvironmentId: string | null = null
+  clientEnvironmentId: string | null = null,
+  includeGroupPosts = true
 ): string[] {
   const statement = this.db.prepare(
     `SELECT DISTINCT c.conversation_id FROM federation_relay_items i
      JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
      WHERE i.acked_at IS NULL AND c.peer_fingerprint = ?1
+       AND (?3 OR i.kind NOT IN ('${GROUP_POST_RELAY_KIND}', '${GROUP_REPLY_RELAY_KIND}'))
        AND ((i.direction = 'to_home' AND c.role = 'peer' AND c.environment_id IS NULL)
          OR (?2 IS NOT NULL AND i.direction = 'to_worker' AND c.role = 'home' AND c.environment_id = ?2))
      ORDER BY c.conversation_id`
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
-  const rows = statement.all(peerFingerprint, clientEnvironmentId) as { conversation_id: string }[]
+  const rows = statement.all(peerFingerprint, clientEnvironmentId, Number(includeGroupPosts)) as {
+    conversation_id: string
+  }[]
   return rows.map((row) => row.conversation_id)
 }
 
@@ -178,15 +187,16 @@ export function linkPeerMailMessage(
     messageId: string
     senderLabel: string
     environmentId?: string
+    groupQuestion?: string
   }
 ): void {
   openPeerConversation(this, params.conversationId, params.peerFingerprint, params.environmentId)
   this.db
     .prepare(
-      `INSERT OR IGNORE INTO peer_mail_messages (message_id, conversation_id, sender_label, remote_party)
-       VALUES (?, ?, ?, NULL)`
+      `INSERT OR IGNORE INTO peer_mail_messages (message_id, conversation_id, sender_label, remote_party, group_question)
+       VALUES (?, ?, ?, NULL, ?)`
     )
-    .run(params.messageId, params.conversationId, params.senderLabel)
+    .run(params.messageId, params.conversationId, params.senderLabel, params.groupQuestion ?? null)
 }
 
 /** Stores mail that crossed from a paired Orca once; a replayed id is a duplicate, even after a reset removed its row. */

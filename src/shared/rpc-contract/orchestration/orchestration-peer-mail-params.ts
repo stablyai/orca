@@ -21,6 +21,24 @@ export const PeerMailSender = z.object({
 })
 export type PeerMailSender = z.infer<typeof PeerMailSender>
 
+export const PeerGroupQuestion = z.object({
+  kind: z.literal('question'),
+  botId: LINE,
+  roomId: LINE,
+  rootRequestId: LINE,
+  requiresGroupReply: z.literal(true).optional(),
+  threadId: LINE.optional()
+})
+
+export const PeerGroupMail = z.discriminatedUnion('kind', [
+  PeerGroupQuestion,
+  z.object({ kind: z.literal('answer'), requestId: LINE })
+])
+
+export const GROUP_POST_RELAY_KIND = 'group_post'
+export const GROUP_REPLY_RELAY_KIND = 'group_reply'
+export const GROUP_ANSWER_CONTEXT_PAYLOAD = '{"groupContinuation":true}'
+
 /** Agent mail one Orca carries to an agent on a paired Orca, inside a conversation the sender's Orca opened. */
 export const PeerMailDeliverParams = z.object({
   conversationId: requiredString('Missing conversation ID'),
@@ -38,6 +56,7 @@ export const PeerMailDeliverParams = z.object({
   item: OptionalString,
   /** With `item`: files the sender uploaded to this Orca's attachment store for the item's chat. */
   attachments: z.array(z.string().min(1).max(4096)).max(30).optional(),
+  group: PeerGroupMail.optional(),
   sender: PeerMailSender.optional()
 })
 
@@ -59,7 +78,9 @@ export const PeerMailPullParams = z.object({
   waitMs: OptionalFiniteNumber,
   /** Conversations it could not read and is waiting to retry: their items neither return nor end the wait. */
   holdBack: z.array(z.string()).max(50).optional(),
-  clientAsks: PeerMailClientAsksPull.optional()
+  clientAsks: PeerMailClientAsksPull.optional(),
+  /** This caller can import follow-up posts and route bot-to-bot answers. */
+  groupPosts: z.literal(true).optional()
 })
 
 /** One queued item on the wire, pulled from or returned to a paired Orca. */
@@ -77,6 +98,7 @@ export const PeerMailReturnParams = z.object({
 })
 
 export const PeerMailAckParams = z.object({
+  groupPosts: z.literal(true).optional(),
   acknowledgments: z
     .array(
       z.object({
@@ -98,6 +120,7 @@ export const PeerMailRelayPayload = z.object({
   sender: PeerMailSender.optional(),
   /** A bot's answer to a request the opening Orca sent, and what the asker does with it. */
   botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional(),
+  groupPost: z.literal(true).optional(),
   /** A notice that a request the opening Orca sent went unanswered; an older Orca ignores it. */
   notice: z.object({ requestId: LINE }).optional()
 })
@@ -107,7 +130,8 @@ export const PeerMailRelayPayload = z.object({
 export const ClientAskPayload = PeerMailDeliverParams.omit({
   conversationId: true,
   messageId: true,
-  attachments: true
+  attachments: true,
+  group: true
 }).extend({
   rootSession: z.string().min(1).max(500)
 })

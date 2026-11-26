@@ -133,6 +133,64 @@ describe('a rollback to a build that predates these fields', () => {
     groups.store.put({ ...group, remoteMembers: undefined })
     expect(groups.store.get(group.id).remoteMembers).toBeUndefined()
   })
+
+  it('advances an existing cutoff through a later legacy write after upgrading old triggers', () => {
+    const { db, groups, group, ask, posted } = room()
+    const previousCutoff = groups.store.message(posted.id)!.sequence
+    groups.store.put({ ...group, legacyRemoteCutoff: previousCutoff })
+    const updated = ask('later', 'q-2')
+    db.exec(`DROP TRIGGER IF EXISTS bot_groups_preserve_remote_cutoff;
+      DROP TRIGGER IF EXISTS bot_groups_keep_legacyRemoteCutoff;
+      DROP TRIGGER IF EXISTS bot_groups_fence_legacy_room_write;
+      CREATE TRIGGER bot_groups_keep_legacyRemoteCutoff AFTER UPDATE OF record ON bot_groups
+        WHEN json_type(NEW.record, '$.legacyRemoteCutoff') IS NULL
+          AND json_type(OLD.record, '$.legacyRemoteCutoff') IS NOT NULL
+        BEGIN
+          UPDATE bot_groups SET record = json_set(record, '$.legacyRemoteCutoff',
+            OLD.record -> '$.legacyRemoteCutoff') WHERE id = NEW.id;
+        END;
+      CREATE TRIGGER bot_groups_fence_legacy_room_write AFTER UPDATE OF record ON bot_groups
+        WHEN json_type(NEW.record, '$.remoteStopWriter') IS NULL
+          AND NEW.record ->> '$.revision' > OLD.record ->> '$.revision'
+        BEGIN
+          UPDATE bot_groups SET record = json_set(record, '$.legacyRemoteCutoff',
+            (SELECT max(sequence) FROM bot_group_messages WHERE group_id = NEW.id))
+            WHERE id = NEW.id;
+        END;`)
+    const readGroup = new BotGroupStore(db)
+    db.prepare(
+      `UPDATE bot_groups SET record = json_remove(json_set(record, '$.revision', 2),
+        '$.remoteStopWriter', '$.legacyRemoteCutoff') WHERE id = ?`
+    ).run(group.id)
+    expect(readGroup.get(group.id).legacyRemoteCutoff).toBe(readGroup.message(updated.id)!.sequence)
+  })
+
+  it('keeps nested route pins when an old writer still knows the roster and question arrays', () => {
+    const { db, groups, group, posted } = room()
+    const [ask] = posted.remoteAsks!
+    const pinned = { ...ATLAS, pairing: 'fp-s' }
+    const pinnedAsk = {
+      ...ask,
+      pairing: 'fp-s',
+      conversationId: 'peerconv_kept',
+      interactive: true as const
+    }
+    groups.store.put({ ...group, remoteMembers: [pinned] })
+    groups.store.update({ ...groups.store.message(posted.id)!, remoteAsks: [pinnedAsk] })
+    db.prepare(
+      `UPDATE bot_groups SET record = json_remove(record, '$.remoteMembers[0].pairing') WHERE id = ?`
+    ).run(group.id)
+    db.prepare(
+      `UPDATE bot_group_messages SET record = json_remove(record,
+        '$.remoteAsks[0].pairing', '$.remoteAsks[0].conversationId', '$.remoteAsks[0].interactive')
+       WHERE id = ?`
+    ).run(posted.id)
+    expect(groups.store.get(group.id).remoteMembers).toEqual([pinned])
+    expect(groups.store.message(posted.id)?.remoteAsks).toEqual([pinnedAsk])
+    const replacement = { ...ATLAS, chatSessionId: '77777777-7777-4777-8777-777777777777' }
+    groups.store.put({ ...group, remoteMembers: [replacement] })
+    expect(groups.store.get(group.id).remoteMembers).toEqual([replacement])
+  })
 })
 
 describe('a remote answer arriving', () => {

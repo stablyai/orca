@@ -45,6 +45,12 @@ export function MobileBotGroupPost({
             ...(message.automationRun ? { automationRun: message.automationRun } : {})
           }}
         />
+      ) : message.remoteAuthor ? (
+        <MobileBotGroupRemoteAsk
+          postId={message.id}
+          author={message.remoteAuthor}
+          text={message.text}
+        />
       ) : (
         <MobileBotGroupPeerRequestLine message={message} />
       )}

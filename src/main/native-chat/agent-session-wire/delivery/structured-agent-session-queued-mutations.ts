@@ -30,7 +30,10 @@ import {
   structuredQueueHold
 } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { admitQueuedMessage } from './structured-agent-session-queued-mail'
+import {
+  admitQueuedMessage,
+  QueuedMessageAdmissionDeferred
+} from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
@@ -178,6 +181,9 @@ export function sendQueuedStructuredAgentMessage(
           ctx.operationReceipt
         )
       } catch (error) {
+        if (error instanceof QueuedMessageAdmissionDeferred) {
+          return invalid(error.message)
+        }
         if (error instanceof QueuedMessageNotConsumableError) {
           return invalid('The queued message changed underneath this Send; try again.')
         }

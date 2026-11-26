@@ -15,7 +15,10 @@ import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sq
 import { AgentSessionJournalError } from '../../agent-session-journal/writing/journal-write-guards'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { admitQueuedMessage } from './structured-agent-session-queued-mail'
+import {
+  admitQueuedMessage,
+  QueuedMessageAdmissionDeferred
+} from './structured-agent-session-queued-mail'
 export { maybeQueueStructuredAgentSessionSend } from './structured-agent-session-send-admission'
 
 export type QueuedMessageDrainDeps = {
@@ -105,6 +108,9 @@ export class StructuredAgentSessionQueuedMessageDrain {
       admit
     )
     if (result.kind === 'needs-admission') {
+      if (refused?.error instanceof QueuedMessageAdmissionDeferred) {
+        return
+      }
       // A card the guard refuses is held as a failed send.
       await journal.queuedMessages.hold({
         messageIds: [result.messageId],

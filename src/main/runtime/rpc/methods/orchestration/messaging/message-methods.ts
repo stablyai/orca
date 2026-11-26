@@ -1,4 +1,5 @@
 import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
+import { ORCHESTRATION_GROUP_POST_METHOD } from './group-post-method'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { inspectedRunAccess, taskCreateAccess, taskUpdateAccess } from '../access/run-access-rules'
 import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
@@ -15,6 +16,7 @@ import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,
+  ORCHESTRATION_GROUP_POST_METHOD,
   defineOrchestrationMethod({
     name: 'orchestration.inbox',
     permission: 'workspace',

@@ -304,6 +304,12 @@ describe('agent mail between paired Orca servers', () => {
     expect(header).toBe('──── From: Ranger on Review Laptop (question) ────')
     expect(notes).toEqual([])
     await chatReply(b, CHAT_ON_B, { id: message.id, body: 'Looks good.' })
+    await expect(chatReply(b, CHAT_ON_B, { id: message.id, body: 'Again.' })).rejects.toMatchObject(
+      {
+        code: 'already_answered',
+        message: "You already answered that request, so send new mail if there's more to say."
+      }
+    )
     a.runtime.ensureOrchestrationFederationRelay()
     await vi.waitFor(() =>
       expect(mailFor(a, CHAT_ON_A)).toMatchObject([{ body: 'Looks good.', to_handle: CHAT_ON_A }])

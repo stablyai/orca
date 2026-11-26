@@ -3,6 +3,7 @@ import type { OrchestrationEntryCaller } from '../../../../orchestration/address
 import type { PeerMailMessageRow } from '../../../../orchestration/db/federation/peer-mail-store'
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { peerGroupQuestionRecipient } from '../../../../orchestration/federation/peer-mail/peer-group-question'
 import {
   deliverPeerMail,
   peerMailMessageId,
@@ -22,7 +23,10 @@ import {
 } from '../../../../orchestration/federation/client-asks/client-ask-environment'
 import { listenerForClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
-import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  GROUP_ANSWER_CONTEXT_PAYLOAD,
+  type ClientReplyPayload
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { z } from 'zod'
 
 const NOTHING_SENT = { effectsApplied: false } as const
@@ -62,21 +66,56 @@ export async function replyOverPeerMail(args: {
   }
 
   if (conversation.role === 'peer') {
+    if (original.payload === GROUP_ANSWER_CONTEXT_PAYLOAD) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        'This group answer is for context, not a new question.',
+        NOTHING_SENT
+      )
+    }
+    const group = route.group_question ? peerGroupQuestionRecipient(runtime, original, route) : null
+    if (group && args.orchestrationCaller?.address !== group.to) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        'Only the group question’s receiving Home Chat can answer it.',
+        NOTHING_SENT
+      )
+    }
     const sender = peerMailSender(runtime, replier)
     // The answer's record and its queued reply commit together.
-    runLifecycleWriteTransaction(db.db, 'peer_reply_with_answer', () => {
-      queuePeerMailReply(db, conversation.conversation_id, id, {
-        senderLabel,
-        fromAddress: replier,
-        subject,
-        body: params.body,
-        threadId,
-        sender,
-        // Refuses a second answer to a bot request, before the original is marked read.
-        ...botAnswerOf(db, original)
+    try {
+      runLifecycleWriteTransaction(db.db, 'peer_reply_with_answer', () => {
+        queuePeerMailReply(
+          db,
+          conversation.conversation_id,
+          id,
+          {
+            senderLabel,
+            fromAddress: replier,
+            subject,
+            body: params.body,
+            threadId,
+            sender,
+            ...botAnswerOf(db, original)
+          },
+          group?.requiresGroupReply
+        )
+        db.markAsRead([original.id], { kind: 'reply' })
       })
-      db.markAsRead([original.id], { kind: 'reply' })
-    })
+    } catch (error) {
+      if (
+        !route.group_question ||
+        !(error instanceof OrchestrationError) ||
+        error.code !== 'already_answered'
+      ) {
+        throw error
+      }
+      throw new OrchestrationError(
+        'already_answered',
+        `You already answered that request. Post a separate follow-up with \`orca orchestration group-post --id ${original.id} --body <text>\`.`,
+        NOTHING_SENT
+      )
+    }
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
       { message: { id, subject }, to: original.from_handle },

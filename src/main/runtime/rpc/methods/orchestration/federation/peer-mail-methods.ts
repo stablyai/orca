@@ -6,6 +6,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { FederationRelayItemRow } from '../../../../orchestration/db/orchestration-records'
 import { withDeliveryHoldWarning } from '../messaging/send-delivery-hold'
 import { deliverPeerMailToBot } from './peer-mail-bot-delivery'
+import { peerGroupQuestionRecipient } from '../../../../orchestration/federation/peer-mail/peer-group-question'
 import { storePeerMailForAgent } from './peer-mail-agent-store'
 import { peerMailSenderSnapshot } from '../../../../orchestration/federation/peer-mail/peer-mail-sender-snapshot'
 import { waitForPeerMail } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
@@ -55,10 +56,15 @@ function pendingReplies(
   db: OrchestrationDb,
   peerFingerprint: string,
   holdBack: ReadonlySet<string>,
-  clientEnvironment: string | null
+  clientEnvironment: string | null,
+  includeGroupPosts: boolean
 ): FederationRelayItemRow[] {
   const pending = db
-    .listPeerConversationIdsWithPendingReplies(peerFingerprint, clientEnvironment)
+    .listPeerConversationIdsWithPendingReplies(
+      peerFingerprint,
+      clientEnvironment,
+      includeGroupPosts
+    )
     .filter((id) => !holdBack.has(id))
   const share = Math.max(1, Math.floor(PULL_PAGE_SIZE / pending.length))
   const pullRotation = pullRotations.get(db.db) ?? new Map<string, number>()
@@ -67,7 +73,9 @@ function pendingReplies(
   pullRotation.set(peerFingerprint, (start + PULL_PAGE_SIZE) % Math.max(1, pending.length))
   return [...pending.slice(start), ...pending.slice(0, start)]
     .slice(0, PULL_PAGE_SIZE)
-    .flatMap((id) => db.listPendingFederationRelay(id, relayDirectionOf(db, id), share))
+    .flatMap((id) =>
+      db.listPendingFederationRelay(id, relayDirectionOf(db, id), share, includeGroupPosts)
+    )
     .slice(0, PULL_PAGE_SIZE)
 }
 
@@ -141,15 +149,49 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       if (replayed) {
         return replayed
       }
+      const groupAnswer = params.group?.kind === 'answer' ? params.group : undefined
+      const answerRecipient = () => {
+        const original = groupAnswer && db.getMessageById(groupAnswer.requestId)
+        const route = groupAnswer && db.getPeerMailMessage(groupAnswer.requestId)
+        const conversation = route && db.getPeerMailConversation(route.conversation_id)
+        if (
+          !original ||
+          !route ||
+          conversation?.role !== 'peer' ||
+          conversation.conversation_id !== params.conversationId ||
+          conversation.peer_fingerprint !== peerFingerprint ||
+          params.type !== undefined ||
+          params.chat !== undefined ||
+          params.item !== undefined ||
+          params.threadId !== original.id ||
+          params.to !== peerGroupQuestionRecipient(runtime, original, route).to
+        ) {
+          throw new OrchestrationError(
+            'request_mismatch',
+            'This answer cannot be joined to a group question for that Home Chat.',
+            NOTHING_DELIVERED
+          )
+        }
+        return params.to
+      }
       const senderSnapshot = peerMailSenderSnapshot(params.senderLabel, params.sender)
-      const routed = await deliverPeerMailToBot(runtime, params, peerFingerprint, senderSnapshot)
+      const routed = groupAnswer
+        ? { to: answerRecipient(), body: params.body }
+        : await deliverPeerMailToBot(runtime, params, peerFingerprint, senderSnapshot)
       if (routed === 'delivered') {
         return { message: { id: params.messageId, to: params.to } }
       }
       const { to, body = params.body } = routed
       const landed = await storePeerMailForAgent(
         runtime,
-        { ...params, to, body, peerFingerprint, senderSnapshot },
+        {
+          ...params,
+          to,
+          body,
+          peerFingerprint,
+          senderSnapshot,
+          ...(groupAnswer ? { groupContinuation: answerRecipient } : {})
+        },
         delivered,
         // An older sending Orca ignores the warnings; the sender learns the mail waits unread.
         (stored, takenByWaiter) =>
@@ -161,10 +203,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
             takenByWaiter
           )
       )
-      if (landed) {
-        return landed
-      }
-      return { message: { id: params.messageId, to: params.to } }
+      return landed ?? { message: { id: params.messageId, to: params.to } }
     }
   }),
   defineOrchestrationMethod({
@@ -203,17 +242,24 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       try {
         const db = ctx.runtime.getOrchestrationDb()
         const holdBack = new Set(params.holdBack)
-        let items = pendingReplies(db, peerFingerprint, holdBack, clientEnvironment)
+        const includeGroupPosts = params.groupPosts === true
+        let items = pendingReplies(
+          db,
+          peerFingerprint,
+          holdBack,
+          clientEnvironment,
+          includeGroupPosts
+        )
         const waitMs = Math.min(Math.max(params.waitMs ?? 0, 0), MAX_PULL_WAIT_MS)
         const deadline = Date.now() + waitMs
-        // A wake is any queued change on this Orca, so one that queued nothing for this peer waits on.
         while (items.length === 0 && Date.now() < deadline && !ctx.signal?.aborted) {
           await waitForPeerMail(db.db, deadline - Date.now(), ctx.signal)
           items = pendingReplies(
             ctx.runtime.getOrchestrationDb(),
             peerFingerprint,
             holdBack,
-            clientEnvironment
+            clientEnvironment,
+            includeGroupPosts
           )
         }
         return {
@@ -250,17 +296,19 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         if (!conversation || conversation.peer_fingerprint !== peerFingerprint) {
           continue
         }
-        // Asks it took from this Orca's conversation with it, or replies it took home.
         const asks =
           conversation.role === 'home' && isClientEnvironment(conversation.environment_id)
         if (conversation.role !== 'peer' && !asks) {
           continue
         }
-        db.acknowledgeFederationRelay({
-          dispatchId: ack.conversationId,
-          direction: asks ? 'to_worker' : 'to_home',
-          throughSequence: ack.throughSequence
-        })
+        db.acknowledgeFederationRelay(
+          {
+            dispatchId: ack.conversationId,
+            direction: asks ? 'to_worker' : 'to_home',
+            throughSequence: ack.throughSequence
+          },
+          params.groupPosts === true
+        )
       }
       return { acknowledged: params.acknowledgments.length }
     }

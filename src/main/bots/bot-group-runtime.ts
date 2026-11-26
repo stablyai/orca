@@ -24,11 +24,11 @@ import {
 } from './bot-group-membership'
 import {
   assertGroupQueuedMessageAllowed,
-  readBotGroup,
   resumePendingGroupDeliveries,
   sendBotGroupMessage,
   type SendBotGroupMessageOptions
 } from './bot-group-delivery'
+import { readBotGroup } from './bot-group-reader'
 import { stopBotGroup } from './bot-group-stop'
 import { pausedBotChatHoldsMail } from './bot-paused-mail'
 import {
@@ -46,14 +46,33 @@ import { noteGroupTurnMailed } from './bot-group-mention-handoffs'
 import { botGroupRoomChat } from './bot-group-automation-run'
 import { nameBotGroupMemberChats } from './bot-group-member-chat-names'
 import type { BotChatLookup } from '../runtime/integrations/automations/runtime-automation-target'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
-/** `homeChat`, also finding the group rooms a bot is a member of, where its automations may run. */
-export function withGroupRoomChats(
+export function configureBotGroupChats(
   runtime: OrcaRuntimeService,
-  homeChat: BotChatLookup
-): BotChatLookup {
-  return async (bot, id) =>
+  automation: { botChat: BotChatLookup },
+  store: Pick<RuntimeStore, 'onSettingsChanged'> | null
+): void {
+  store?.onSettingsChanged?.((updates) => {
+    const groups = runtimes.get(runtime)
+    if (updates.botsEnabled === true && groups?.store.db.isOpen) {
+      try {
+        const host = getStructuredAgentSessionHost()
+        for (const sessionId of groups.deferredContinuationSessions) {
+          host?.wakeQueuedMessages(sessionId)
+        }
+        groups.deferredContinuationSessions.clear()
+        settleStoredRoomMail(groups)
+        groups.resumePending()
+      } catch (error) {
+        console.warn('[bot-groups] could not resume pending deliveries', error)
+      }
+    }
+  })
+  const homeChat = automation.botChat
+  automation.botChat = async (bot, id) =>
     botGroupRoomChat(runtimeBotGroups(runtime), bot, id) ?? homeChat(bot, id)
 }
 
@@ -145,6 +164,8 @@ export class BotGroupRuntime {
   readonly queues = new Map<string, Promise<void>>()
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
+  /** Native cards remain waiting in their own journal; enable only wakes these sessions. */
+  readonly deferredContinuationSessions = new Set<string>()
   /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
   readonly mailTurnChecks = new Map<
     string,

@@ -107,6 +107,44 @@ When you stopped following this work, and anything that could have changed since
 Write it to a new file outside the repository and send the whole file back with --body-file (as your reply, or your worker_done if you were started as a worker). Don't open PRs, push, or change code for this.
 ```
 
+## Shared groups with bots on paired computers
+
+Answer a group question once from the Home Chat that received it:
+`ORCA orchestration reply --id <question_msg_id> --body-file <file>`.
+To post again in the same group and thread, use
+`ORCA orchestration group-post --id <question_msg_id> --body-file <file>`.
+Use the original incoming question ID, not the reply ID or the room's display name.
+The receipt says **queued** until the host places the post; check the group for publication.
+After an uncertain CLI result, retry with the command's `--retry-request` value, not a new invocation.
+The post, including its metadata and escaped body, must fit in 64 KiB of serialized UTF-8.
+The room page marks shortened long posts with `…`; shortening the preview doesn't change the post
+or which mentions it routes.
+
+A bot's reply or new post can ask a current member by writing `@Name` outside quoted text and code.
+No mention means the new post is for reference only. An answer to a bot's request appears in the
+group and goes back to the requesting chat as context, not as another question to reply to.
+Stop blocks further routing under that request; it doesn't cancel an already-running remote Home
+turn, and its first answer may still appear in the room.
+Turning bots off on the group host pauses pending group routing and delivery until bots are turned
+back on. Answers can still appear in the room while their delivery to the requester is paused.
+An answer already queued in the requesting chat stays queued, unless Stop or another room change
+invalidates it.
+
+Update the group host and each participating remote bot's computer. Older peers can still answer
+the owner's first question. After updating, start with a new group question so the host can pin
+the conversation to the receiving Home Chat.
+
+### Before downgrading the room host
+
+Live rollback of an active group is not supported. Stop creating new requests and follow-up
+posts while all computers are updated. Wait for every in-flight question, queued post and
+answer to settle. Match each post to the room and each bot-to-bot answer to both the room and
+the requesting Home's inbox. A `queued` receipt, a timeout, or a room answer alone is not proof.
+If any receipt or queue is unaccounted for, or a peer is offline and you can't verify it, don't
+downgrade. After draining, Stop every affected room and thread, and keep them inactive on
+the older host: no new group requests or follow-ups. Roll forward before using those groups
+again, and start with a new owner question, never a pre-rollback question ID.
+
 ## Places
 
 A person names a place the way they see it: `#deploys`, `ENG`, `ENG-42`, `acme/api#17`, or a link. Pass it as given. When Orca says a Slack name matches more than one place, or you can't tell which one is meant, `slack find` prints each match as a ref and a label, best first; pass the ref to the next command. A bot can be in more than one Slack or Linear workspace, so one name can match a place in each. When it does, ask the owner which one and never pick one yourself. An automation saved with a name keeps the place the name matched when it was saved.

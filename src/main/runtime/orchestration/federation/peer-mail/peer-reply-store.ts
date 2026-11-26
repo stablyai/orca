@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
+import { botGroupOfRoomMailAddress } from '../../../../../shared/bots/bot-group-room-mail'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
 import type { MessageRow } from '../../db/orchestration-records'
@@ -19,10 +20,15 @@ export function storePeerReply(
   payload: z.infer<typeof PeerMailRelayPayload>
 ): MessageRow | undefined {
   const handle = peerMailLocalRecipient(runtime, conversation)
+  if (payload.groupPost && !botGroupOfRoomMailAddress(handle)) {
+    return undefined
+  }
   // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
   const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
   const { from, body, ...carried } = presentImportedPeerItem({ kind: 'peer_mail', ...payload })
-  settlePeerQuestionsOut(db, conversation.conversation_id, payload)
+  if (!payload.groupPost) {
+    settlePeerQuestionsOut(db, conversation.conversation_id, payload)
+  }
   const stored = db.insertPeerMailMessage({
     conversationId: conversation.conversation_id,
     remoteParty: payload.fromAddress,
@@ -34,7 +40,8 @@ export function storePeerReply(
       body,
       threadId: payload.threadId ?? undefined,
       runId: recipient.ok ? recipient.runId : undefined,
-      ...carried
+      ...carried,
+      ...(payload.groupPost ? { payload: JSON.stringify({ groupPost: true }) } : {})
     }
   })
   return stored.duplicate ? undefined : stored.message

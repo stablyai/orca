@@ -11,8 +11,12 @@ import type { BotGroup } from '../../shared/bots/bot-group'
  */
 const KEPT_FIELDS = [
   ['bot_groups', 'remoteMembers'],
+  ['bot_groups', 'remoteStops'],
   ['bot_group_messages', 'images'],
-  ['bot_group_messages', 'remoteAsks']
+  ['bot_group_messages', 'remoteAsks'],
+  ['bot_group_messages', 'remoteAuthor'],
+  ['bot_group_messages', 'groupRequest'],
+  ['bot_group_messages', 'continuation']
 ] as const
 
 function keepFieldTrigger(table: string, field: string): string {
@@ -21,6 +25,41 @@ function keepFieldTrigger(table: string, field: string): string {
     WHEN json_type(NEW.record, ${path}) IS NULL AND json_type(OLD.record, ${path}) IS NOT NULL
     BEGIN
       UPDATE ${table} SET record = json_set(record, ${path}, OLD.record -> ${path}) WHERE rowid = NEW.rowid;
+    END;`
+}
+
+/** A rolled-back writer still knows the arrays, but strips the route fields on each entry. */
+function keepRouteFields(
+  table: string,
+  array: string,
+  identity: readonly string[],
+  fields: readonly string[]
+): string {
+  const path = `'$.${array}'`
+  const sameEntry = identity
+    .map((key) => `saved.value ->> '$.${key}' = incoming.value ->> '$.${key}'`)
+    .join(' AND ')
+  const dropped = fields
+    .map(
+      (key) => `(saved.value -> '$.${key}' IS NOT NULL AND incoming.value -> '$.${key}' IS NULL)`
+    )
+    .join(' OR ')
+  const pinned = fields.reduce(
+    (value, key) =>
+      `CASE WHEN incoming.value -> '$.${key}' IS NULL AND saved.value -> '$.${key}' IS NOT NULL
+        THEN json_set(${value}, '$.${key}', saved.value -> '$.${key}') ELSE ${value} END`,
+    'incoming.value'
+  )
+  const entries = `json_each(NEW.record, ${path}) incoming
+    LEFT JOIN json_each(OLD.record, ${path}) saved ON ${sameEntry}`
+  return `CREATE TRIGGER IF NOT EXISTS ${table}_keep_${array}_route AFTER UPDATE OF record ON ${table}
+    WHEN EXISTS (SELECT 1 FROM ${entries} WHERE ${dropped})
+    BEGIN
+      UPDATE ${table} SET record = json_set(record, ${path}, json((
+        SELECT json_group_array(json(value)) FROM (
+          SELECT ${pinned} AS value FROM ${entries} ORDER BY incoming.key
+        )
+      ))) WHERE rowid = NEW.rowid;
     END;`
 }
 
@@ -79,7 +118,9 @@ function indexRemoteAsks(db: Database): boolean {
 
 /** Whether older posts' questions are all indexed. */
 export function createBotGroupTables(db: Database): boolean {
-  db.exec(`CREATE TABLE IF NOT EXISTS bot_groups (id TEXT PRIMARY KEY, record TEXT NOT NULL);
+  try {
+    db.exec(`SAVEPOINT bot_group_schema;
+    CREATE TABLE IF NOT EXISTS bot_groups (id TEXT PRIMARY KEY, record TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS bot_group_messages (
       sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
       group_id TEXT NOT NULL, record TEXT NOT NULL);
@@ -95,9 +136,44 @@ export function createBotGroupTables(db: Database): boolean {
     -- The post each remote question went with, so its answer's mail finds it without reading rooms.
     CREATE TABLE IF NOT EXISTS bot_group_remote_asks (request_id TEXT PRIMARY KEY, message_id TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS bot_group_remote_asks_message ON bot_group_remote_asks(message_id);
-    CREATE TABLE IF NOT EXISTS bot_group_remote_asks_scanned (id INTEGER PRIMARY KEY CHECK (id = 1), sequence INTEGER NOT NULL);`)
-  for (const [table, field] of KEPT_FIELDS) {
-    db.exec(keepFieldTrigger(table, field))
+    CREATE TABLE IF NOT EXISTS bot_group_remote_asks_scanned (id INTEGER PRIMARY KEY CHECK (id = 1), sequence INTEGER NOT NULL);
+    ${keepRouteFields(
+      'bot_groups',
+      'remoteMembers',
+      ['environmentId', 'botId', 'chatSessionId', 'joinedAfter'],
+      ['pairing']
+    )}
+    ${keepRouteFields(
+      'bot_group_messages',
+      'remoteAsks',
+      ['requestId'],
+      ['pairing', 'conversationId', 'interactive']
+    )}
+    ${KEPT_FIELDS.map(([table, field]) => keepFieldTrigger(table, field)).join('\n')}
+    -- One trigger owns the cutoff regardless of the order SQLite runs triggers in.
+    DROP TRIGGER IF EXISTS bot_groups_keep_legacyRemoteCutoff;
+      DROP TRIGGER IF EXISTS bot_groups_fence_legacy_room_write;
+      CREATE TRIGGER IF NOT EXISTS bot_groups_preserve_remote_cutoff AFTER UPDATE OF record ON bot_groups
+        WHEN (json_type(NEW.record, '$.legacyRemoteCutoff') IS NULL
+              AND json_type(OLD.record, '$.legacyRemoteCutoff') IS NOT NULL)
+          OR (json_type(NEW.record, '$.remoteStopWriter') IS NULL
+              AND NEW.record ->> '$.revision' > OLD.record ->> '$.revision')
+        BEGIN
+          UPDATE bot_groups SET record = json_set(record, '$.legacyRemoteCutoff', max(
+            coalesce(record ->> '$.legacyRemoteCutoff', 0),
+            coalesce(OLD.record ->> '$.legacyRemoteCutoff', 0),
+            CASE WHEN json_type(NEW.record, '$.remoteStopWriter') IS NULL
+              AND NEW.record ->> '$.revision' > OLD.record ->> '$.revision'
+              THEN coalesce((SELECT max(sequence) FROM bot_group_messages WHERE group_id = NEW.id), 0)
+              ELSE 0 END
+          )) WHERE id = NEW.id;
+        END;
+      RELEASE bot_group_schema;`)
+  } catch (error) {
+    if (db.isTransaction) {
+      db.exec('ROLLBACK TO bot_group_schema; RELEASE bot_group_schema;')
+    }
+    throw error
   }
   return indexRemoteAsks(db)
 }

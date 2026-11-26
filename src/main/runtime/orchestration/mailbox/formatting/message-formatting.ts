@@ -17,6 +17,7 @@ import {
   formatBotItemReportHint,
   type BotItemReportFact
 } from '../../../../../shared/bots/bot-item-report-hint'
+import { GROUP_ANSWER_CONTEXT_PAYLOAD } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 // The fields of this host's own bot-request record that name a paired sender, in every shape it
 // has saved them.
@@ -166,14 +167,20 @@ export function formatMessageBannerWithContent(
     return [start, start + value.length]
   }
   const subject = appendField(msg.subject, 'Subject: ')
-  if (authority !== 'current') {
+  const contextOnly =
+    msg.payload === GROUP_ANSWER_CONTEXT_PAYLOAD &&
+    options.peerMail?.getPeerMailMessage(msg.id)?.sender_label === msg.from_handle
+  if (authority === 'legacy_read_only' || (authority !== 'current' && !contextOnly)) {
     appendLegacyGuidance(lines, authority, options.supportedActionHints ?? [])
   }
 
   const body = msg.body ? appendField(msg.body) : undefined
-  const payload = msg.payload ? appendField(msg.payload, '[Payload: ', ']') : undefined
+  const payload =
+    msg.payload && !contextOnly ? appendField(msg.payload, '[Payload: ', ']') : undefined
 
-  if (authority === 'current' && options.followUp) {
+  if (contextOnly) {
+    lines.push('[Group answer for context only; no reply is expected.]')
+  } else if (authority === 'current' && options.followUp) {
     lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)
   } else if (authority === 'current') {
     const explicitFrom =
@@ -184,7 +191,7 @@ export function formatMessageBannerWithContent(
       `[Reply: ${options.cliCommand ?? 'orca'} orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`
     )
   }
-  if (authority === 'current' && options.reportItem) {
+  if (authority === 'current' && !contextOnly && options.reportItem) {
     lines.push(`[${formatBotItemReportHint(options.reportItem, options.cliCommand ?? 'orca')}]`)
   }
   lines.push(SEPARATOR)
