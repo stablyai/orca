@@ -29,6 +29,7 @@ import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-mode
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import { AgentLaunchPickerDropdown } from './AgentLaunchPickerDropdown'
+import { AgentLaunchPickerTriggerLabel } from './AgentLaunchPickerTriggerLabel'
 import { AgentLaunchDefaultsFields } from './AgentLaunchDefaultsFields'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
@@ -69,6 +70,7 @@ export const AgentLaunchPicker = memo(
     entries: suppliedEntries,
     triggerLabel,
     triggerDetail,
+    triggerIcon,
     defaultModelLabel,
     inline,
     draftScope,
@@ -98,6 +100,9 @@ export const AgentLaunchPicker = memo(
     triggerLabel?: string
     /** Muted after triggerLabel, as the launch summary follows an agent's name. */
     triggerDetail?: string
+    /** In place of the agent's icon, with triggerLabel, for a choice that names no agent: the
+     *  label reads muted, as a placeholder. */
+    triggerIcon?: ReactNode
     /** Model already resolved by the owning settings page, for the trigger summary only. */
     defaultModelLabel?: string
     inline?: boolean
@@ -115,7 +120,8 @@ export const AgentLaunchPicker = memo(
     emptyLabel?: string
     /** True when this launch is the terminal, so the closed field says "(CLI)". */
     cli?: boolean
-    /** Non-agent choices, shown as full-width rows under the agents and listed by search. */
+    /** Non-agent choices, shown as full-width rows under the agents (`leading`: over them) and
+     *  listed by search. */
     choices?: readonly AgentPickerChoice[]
     onSelectBlankTerminal?: () => void
     onTriggerEnter?: () => void
@@ -314,15 +320,12 @@ export const AgentLaunchPicker = memo(
                 }
               }}
             >
-              {agent ? <AgentVariantIcon agent={agent} size={14} /> : null}
-              <span className="min-w-0 flex-1 truncate text-left">
-                {triggerLabel ?? agentLabel}
-                {triggerLabel && triggerDetail ? (
-                  <span className="text-muted-foreground"> · {triggerDetail}</span>
-                ) : !triggerLabel && agent && summary ? (
-                  <span className="text-muted-foreground"> · {summary}</span>
-                ) : null}
-              </span>
+              <AgentLaunchPickerTriggerLabel
+                icon={triggerIcon ?? (agent ? <AgentVariantIcon agent={agent} size={14} /> : null)}
+                label={triggerLabel ?? agentLabel}
+                detail={triggerLabel ? triggerDetail : agent ? summary : undefined}
+                muted={Boolean(triggerIcon)}
+              />
               <ChevronDown
                 className={inline ? 'size-3 opacity-60' : 'size-3.5 text-muted-foreground'}
               />

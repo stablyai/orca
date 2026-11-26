@@ -27898,6 +27898,7 @@
       "computerHint": "bot 运行的位置",
       "computerAccountHint": "bot 运行的位置，以 {{account}} 身份登录 Orca",
       "useChatDefaults": "使用聊天默认设置",
+      "chatDefault": "聊天默认",
       "usingChatDefault": "正在使用你的聊天默认设置。后台运行使用你的“智能体”设置",
       "agent": "智能体",
       "folder": "文件夹：{{path}}",
@@ -27979,8 +27980,7 @@
       },
       "hostSleeping": "休眠中 · 使用时唤醒",
       "wslWaking": "正在唤醒 {{distro}}…",
-      "hostWaking": "正在唤醒…",
-      "useChatDefaultsHint": "把智能体的模型、选项和权限恢复为你的聊天默认设置"
+      "hostWaking": "正在唤醒…"
     },
     "googleSetup": {
       "otherAccount": "切换账号",
