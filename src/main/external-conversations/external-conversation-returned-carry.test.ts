@@ -647,7 +647,29 @@ it('leaves a returned request retryable if its images would exceed the Pi turn b
   const bytes = 3 * 1024 * 1024
   const path = stagedImage('earlier.png', bytes)
   const next = { path: stagedImage('current.png', 1024 * 1024), fileId: 'FNEXT', bytes: 1024 ** 2 }
-  failedStart('failed', asked('failed', 'Two earlier images', THREAD, [path, path]), 'notSignedIn')
+  const prompt = connectorAskerPrompt(
+    'slack',
+    {
+      userId: 'U1',
+      role: 'owner',
+      place: { kind: 'public_channel', id: 'C1' },
+      text: '@bot',
+      context: [],
+      earlierOwn: {
+        messages: [
+          {
+            at: NOW,
+            text: 'Two screenshots',
+            messageRef: 'slack:T1:C1:1.2:1.2',
+            files: ['FONE', 'FTWO'].map((id) => ({ id, name: 'earlier.png', type: 'image/png' }))
+          }
+        ]
+      }
+    },
+    undefined,
+    { attached: new Map([['FONE', 1], ['FTWO', 2]]) }
+  )
+  failedStart('failed', asked('failed', prompt, THREAD, [path, path]), 'notSignedIn')
   const queue = readJournalDomainReturnedCards(db, target, NOW + 3)
   const inspect = () => connectorImageInspection(undefined, new AbortController().signal)
   const pi = { ...THREAD, agent: 'pi' as const }
@@ -658,11 +680,32 @@ it('leaves a returned request retryable if its images would exceed the Pi turn b
   expect(alone.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
 })
 
+it('carries a returned Pi request with a larger direct image when the follow-up is text', async () => {
+  const image = stagedImage('large.png', 5 * 1024 * 1024)
+  failedStart('failed', asked('failed', 'Attached directly', THREAD, [image]), 'notSignedIn')
+  const queue = readJournalDomainReturnedCards(db, target, NOW + 3)
+  const carried = await carriedMessages(
+    { ...THREAD, agent: 'pi' },
+    queue,
+    ACCOUNT,
+    NOW + 3,
+    [],
+    connectorImageInspection(undefined, new AbortController().signal)
+  )
+  expect(carried.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
+  expect(carried.blocks).toContainEqual({ type: 'image-ref', path: image })
+})
+
 it('rechecks a previously missing image when carry progress clears during inspection', async () => {
   const missing = join(dir, 'restored.png')
   const healthy = stagedImage('healthy.png')
   failedStart('missing', asked('missing', 'Earlier request', THREAD, [missing]), 'notSignedIn', NOW)
-  failedStart('healthy', asked('healthy', 'Next request', THREAD, [healthy]), 'notSignedIn', NOW + 1)
+  failedStart(
+    'healthy',
+    asked('healthy', 'Next request', THREAD, [healthy]),
+    'notSignedIn',
+    NOW + 1
+  )
   const progress = new ReturnedImageProgress()
   const probes = new ConnectorImageProbes()
   const carry = () =>

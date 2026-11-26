@@ -114,9 +114,12 @@ export async function carriedMessages(
     AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
     direct.reduce((total, image) => total + image.bytes, 0)
   let fileIds = new Set(direct.map((image) => image.fileId))
-  const imageBudget = budgetForEarlierImages(link.agent, { count, bytes, fileIds }, direct)
-  const reservedBytes = bytes - imageBudget.bytes
+  const piBudget =
+    link.agent === 'pi' ? budgetForEarlierImages('pi', { count, bytes, fileIds }, direct) : null
+  const reservedBytes = piBudget ? bytes - piBudget.bytes : 0
   let imageCount = 0
+  let carriesPositionedImages = false
+  let largestImage = direct.reduce((largest, image) => Math.max(largest, image.bytes), 0)
   const imagePositions = new Map<string, number>()
   const start = progress?.owner.read(progress.key, eligible, now) ?? 0
   let missingPrefix = start
@@ -132,6 +135,7 @@ export async function carriedMessages(
     const ownBlocks: NativeChatBlock[] = []
     let cardBytes = 0
     let cardImages = 0
+    let largestCardImage = 0
     const positioned =
       inspection &&
       each.card.body.blocks.some(
@@ -166,14 +170,13 @@ export async function carriedMessages(
       if (fileId && cardFileIds.has(fileId)) {
         continue
       }
-      if (
-        ++cardImages > count ||
-        (imageBudget.maxImageBytes !== undefined && (stored?.bytes ?? 0) > imageBudget.maxImageBytes)
-      ) {
+      if (++cardImages > count) {
         break cards
       }
-      cardBytes += stored?.bytes ?? 0
-      if (cardBytes + reservedBytes > bytes) {
+      const imageBytes = stored?.bytes ?? 0
+      cardBytes += imageBytes
+      largestCardImage = Math.max(largestCardImage, imageBytes)
+      if (cardBytes > bytes) {
         break cards
       }
       if (fileId) {
@@ -182,6 +185,20 @@ export async function carriedMessages(
       }
       ownBlocks.push(block)
     }
+    // Older Pi must be able to take a new combination with automatic pictures. A returned
+    // request on its own keeps the attachments it originally had, including larger modern images.
+    if (
+      piBudget?.maxImageBytes !== undefined &&
+      (positioned || carriesPositionedImages) &&
+      direct.length + imageCount > 0 &&
+      cardImages > 0 &&
+      (cardBytes + reservedBytes > bytes ||
+        Math.max(largestImage, largestCardImage) > piBudget.maxImageBytes)
+    ) {
+      continue
+    }
+    carriesPositionedImages ||= Boolean(positioned && cardImages > 0)
+    largestImage = Math.max(largestImage, largestCardImage)
     imageCount += cardImages
     for (const [fileId, position] of cardPositions) {
       imagePositions.set(fileId, position)

@@ -15,7 +15,7 @@ function closeFence(
   from: number,
   length: number
 ): { close: number; next: number } | null {
-  const closer = '\n' + '>'.repeat(length)
+  const closer = `\n${'>'.repeat(length)}`
   let close = text.indexOf(closer, from - 1)
   while (close !== -1) {
     const end = close + closer.length

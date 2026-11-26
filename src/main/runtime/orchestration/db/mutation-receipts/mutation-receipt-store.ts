@@ -251,7 +251,7 @@ export function pendingConversationReceiptAttempts(
     .prepare(`SELECT DISTINCT receipt FROM mutation_receipts
       WHERE caller_fingerprint=? AND request_id>=? AND request_id<?
         AND state='pending' AND instr(receipt,?)=1`)
-    .all(callerFingerprint, requestPrefix + ',', requestPrefix + '-', receiptPrefix)
+    .all(callerFingerprint, `${requestPrefix},`, `${requestPrefix}-`, receiptPrefix)
     .map((row) => String(row.receipt))
 }
 

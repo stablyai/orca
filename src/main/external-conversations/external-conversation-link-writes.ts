@@ -1,5 +1,6 @@
 import { externalConversationTitle } from '../../shared/external-conversation-title'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
+import type { ConnectorAsker } from '../../shared/connectors/connector-cloud-contract'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
 import { chatLink, type LinkableChat } from './external-conversation-chat-delivery'
@@ -14,6 +15,19 @@ import {
   type LinkedConversation
 } from './external-conversation-links'
 import type { ConversationKey } from './external-conversation-types'
+import type { ExternalConversationSeamDeps } from './external-conversation-host'
+
+export function openChatLink(
+  { store, slackMirror }: Pick<ExternalConversationSeamDeps, 'store' | 'slackMirror'>,
+  key: ConversationKey,
+  chat: LinkableChat,
+  opening?: string | { title: string },
+  asker?: Pick<ConnectorAsker, 'app' | 'name' | 'place' | 'role'>
+): LinkedConversation | null {
+  const fresh = findLink(store, key) === null
+  const written = writeChatLink(store, key, chat, opening)
+  return (asker && slackMirror?.()?.opened(written, asker, fresh)) || written
+}
 
 /** Keeps a fact on the conversation's link; false when it is gone or already says so. A known
  *  workspace is read alone, never the whole inventory. */

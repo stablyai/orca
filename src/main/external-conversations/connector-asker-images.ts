@@ -114,7 +114,7 @@ export function askerImageIds(text: string): string[] {
     }
     end = start
   }
-  return [...new Set(ids.reverse())].slice(0, MAX_ASKER_IMAGES)
+  return [...new Set(ids.toReversed())].slice(0, MAX_ASKER_IMAGES)
 }
 
 type ImageTarget = { ref: string; fileId: string }

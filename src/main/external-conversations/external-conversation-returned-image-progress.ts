@@ -33,7 +33,11 @@ export class ReturnedImageProgress {
     if (!Number.isFinite(expiresAt)) {
       return
     }
-    if (previous?.count === count && previous.resume === resume && previous.expiresAt === expiresAt) {
+    if (
+      previous?.count === count &&
+      previous.resume === resume &&
+      previous.expiresAt === expiresAt
+    ) {
       return
     }
     this.prefixes.delete(key)

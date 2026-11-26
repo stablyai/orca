@@ -44,7 +44,7 @@ import {
   findConversationChat,
   type LinkedConversation
 } from './external-conversation-links'
-import { writeChatLink } from './external-conversation-link-writes'
+import { openChatLink } from './external-conversation-link-writes'
 import {
   conversationId,
   type ConnectorMessage,
@@ -305,17 +305,13 @@ export class ExternalConversationSeam {
     opening?: string | { title: string },
     asker?: Pick<ConnectorAsker, 'app' | 'name' | 'place' | 'role'>
   ): void {
-    const fresh = findLink(this.deps.store, key) === null
-    const written = writeChatLink(this.deps.store, key, chat, opening)
-    const linked = (asker && this.deps.slackMirror?.()?.opened(written, asker, fresh)) || written
+    const linked = openChatLink(this.deps, key, chat, opening, asker)
+    const kept = linked ?? findLink(this.deps.store, key)
     if (linked) {
       this.events?.linked(linked, this.deps.actsForOf?.(chat.sessionId))
       this.deps.onLinked?.()
-    } else {
-      const kept = findLink(this.deps.store, key)
-      if (kept) {
-        this.events?.delivered(kept.link)
-      }
+    } else if (kept) {
+      this.events?.delivered(kept.link)
     }
     if (asker && chat.bot) {
       void nameLinkedPlace(this.deps, key, chat.bot.botId, asker.place, this.abort.signal)
