@@ -19,7 +19,7 @@ import { useBotItemWalk } from './use-bot-item-walk'
 import type { BotItemsClosedPage } from './use-bot-items-shown-list'
 
 // A live walk: the real list, grouping and walk hook over seeded items, the pane on top when one is open.
-// Needs you 3, In progress 4, Waiting 1, Snoozed 2, Stale 2, Closed 5 loaded of 40 (6 in the Design chat).
+// Needs you 3, In progress 4, Planned 1, Waiting 1, Snoozed 2, Stale 2, Closed 5 loaded of 40 (6 in the Design chat).
 const WALK_NOW = Date.now()
 const WALK_MIN = 60_000
 const WALK_DAY = 24 * 60 * WALK_MIN
@@ -59,6 +59,11 @@ walkSeed.push(
     status: 'waiting',
     lastActivityAt: WALK_NOW - 10 * WALK_DAY,
     chat: designChat
+  }),
+  makeTestBotItem(56, {
+    title: 'Plan the next release train',
+    status: 'planned',
+    lastActivityAt: WALK_NOW - 12 * WALK_MIN
   })
 )
 const walkClosed = Array.from({ length: 40 }, (_, index) =>
