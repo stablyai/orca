@@ -97,6 +97,8 @@ export function getSidebarFolderOccurrences(
     rows: folderRows,
     pairByIdentity,
     isFolder,
+    /** The row's project is hidden, so it shows only in a folder's lane. */
+    isHiddenRow: hiddenProjects.isRowHidden,
     /** The rows the plan places, then every folder row. */
     withPlacedRows: (
       worktrees: readonly Worktree[],

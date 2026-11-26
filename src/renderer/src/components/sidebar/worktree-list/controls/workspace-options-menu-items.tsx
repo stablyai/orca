@@ -38,7 +38,12 @@ import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterRow'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
-import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
+import {
+  applyCardStyleChoice,
+  isCardStyleChoice,
+  readCardStyleChoice,
+  type CardStyleChoice
+} from './card-style-choice'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
@@ -68,16 +73,15 @@ type OptionItemProps = {
 
 function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
   const t = useTranslate()
-  const experimental = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const classicLabel = t(
-    'auto.components.settings.ExperimentalPane.worktreeCardStyle.classic',
-    'Classic'
-  )
-  const experimentalLabel = t(
-    'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental',
-    'Experimental'
-  )
+  const choice = useAppStore((s) => readCardStyleChoice(s.settings))
+  const labels: Record<CardStyleChoice, string> = {
+    classic: t('auto.components.settings.ExperimentalPane.worktreeCardStyle.classic', 'Classic'),
+    experimental: t(
+      'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental',
+      'Experimental'
+    ),
+    tree: t('auto.components.settings.ExperimentalPane.worktreeCardStyle.tree', 'Tree')
+  }
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -85,9 +89,7 @@ function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.E
           <span>
             {t('auto.components.settings.ExperimentalPane.worktreeCardStyle.title', 'Card style')}
           </span>
-          <span className="text-2xs font-medium text-muted-foreground">
-            {experimental ? experimentalLabel : classicLabel}
-          </span>
+          <span className="text-2xs font-medium text-muted-foreground">{labels[choice]}</span>
         </span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent
@@ -95,23 +97,16 @@ function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.E
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
         <DropdownMenuRadioGroup
-          value={experimental ? 'experimental' : 'classic'}
+          value={choice}
           onValueChange={(value) => {
-            const next = value === 'experimental'
-            void updateSettings({ experimentalNewWorktreeCardStyle: next }).then(() => {
-              const state = useAppStore.getState()
-              if ((state.settings?.experimentalNewWorktreeCardStyle === true) !== next) {
-                return
-              }
-              state.setWorktreeCardsIntroChoice(null)
-              if (next !== experimental) {
-                trackWorktreeCardStyleChanged(next, 'options_menu')
-              }
-            })
+            if (isCardStyleChoice(value)) {
+              applyCardStyleChoice(value, 'options_menu')
+            }
           }}
         >
-          <DropdownMenuRadioItem value="classic">{classicLabel}</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="experimental">{experimentalLabel}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="classic">{labels.classic}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="experimental">{labels.experimental}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="tree">{labels.tree}</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
       </DropdownMenuSubContent>
     </DropdownMenuSub>

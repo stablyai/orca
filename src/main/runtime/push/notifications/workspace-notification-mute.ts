@@ -13,13 +13,22 @@ import {
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../shared/workspace-view/workspace-creator-visibility'
 import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
+import {
+  showsProjectChats,
+  type ProjectTreeSettings
+} from '../../../../shared/sidebar-list/project-tree-settings'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type WorkspaceNotificationMuteDeps = {
   store: Pick<
     RuntimeStore,
     'getUI' | 'getRepo' | 'getWorktreeMeta' | 'getAllWorktreeLineage' | 'getFolderWorkspaces'
-  > & { getSettings: () => { notifications?: NotificationSettings } }
+  > & {
+    getSettings: () => {
+      notifications?: NotificationSettings
+      experimentalNewWorktreeCardStyle?: boolean
+    } & ProjectTreeSettings
+  }
   /** Last resolved Git listing, possibly stale; branch and HEAD come only from here. */
   resolvedWorktrees: readonly Worktree[] | null
 }
@@ -49,7 +58,10 @@ export function isWorkspaceHiddenBySidebarFilters(
   }
   const hideOtherClients = ui.hideWorkspacesFromOtherDevices === true
   const switches: WorkspaceKindSwitches = {
-    hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace === true,
+    // The project tree shows a hidden main checkout's agents as the project's Chats, so they stay audible.
+    hideDefaultBranchWorkspace:
+      ui.hideDefaultBranchWorkspace === true &&
+      !showsProjectChats(deps.store.getSettings(), ui.groupBy),
     hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
     hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
     hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true

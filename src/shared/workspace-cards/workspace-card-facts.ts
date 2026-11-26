@@ -94,6 +94,8 @@ export type WorkspaceCardFacts = {
     deleteQuickAction: boolean
     /** A one-line row under a bot, which names its project at the row's end. */
     compactLine: boolean
+    /** A one-line row that ends with its status pills and last-activity time, as the new card's title does. */
+    lineTime: boolean
     /** A line on another paired server than its bot's: that server's name, in place of the host mark. */
     lineHostLabel: string | null
   }

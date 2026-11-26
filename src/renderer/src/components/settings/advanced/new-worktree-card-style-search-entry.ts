@@ -38,6 +38,14 @@ export function getNewWorktreeCardStyleSearchEntry(): SettingsSearchEntry {
         'metadata'
       ),
       ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.newWorktreeCardStyle.tree',
+        'tree'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.newWorktreeCardStyle.chats',
+        'chats'
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.status',
         'status'
       ),

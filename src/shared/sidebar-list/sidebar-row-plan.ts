@@ -77,6 +77,9 @@ export type SidebarRowPlanInputs = {
   lineageParentIdentities?: SidebarLineageParentIdentities
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
+  /** False keeps a child in its own project rather than under a parent from another (Tree style).
+   * A hidden project's row still nests: it shows only in a folder's lane, through its parent (#43083). */
+  nestAcrossProjects?: boolean
   projectGroups: readonly ProjectGroup[]
   placeholderRepoIds: ReadonlySet<string>
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
@@ -104,8 +107,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     repoOrder,
     workspaceStatuses,
     projectOrderBy,
-    lineageById,
-    lineageParentIdentities,
     worktreeMap,
     nestLineage,
     projectGroups,
@@ -137,11 +138,12 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const lineageChildren = nestLineage
     ? getSidebarLineageChildren(
         worktrees,
-        lineageById,
+        inputs.lineageById,
         worktreeMap,
         filterRepoIds,
-        lineageParentIdentities,
-        folders.rows
+        inputs.lineageParentIdentities,
+        folders.rows,
+        inputs.nestAcrossProjects === false ? folders.isHiddenRow : undefined
       )
     : new Map<string, Worktree[]>()
   const occurrencePlan = buildWorktreeOccurrencePlan({

@@ -8,7 +8,7 @@
     "folder": "ws.kind == 'folder'",
     "pinnedRepo": "place.inPinnedSection && repo != null && !place.showProjectName",
     "inlineRepo": "repo != null && !place.hideRepoBadge && (!vars.folder || vars.classic) && !vars.pinnedRepo && !place.compactLine",
-    "lineRepo": "place.compactLine && repo != null && !vars.folder",
+    "lineRepo": "place.compactLine && repo != null && !vars.folder && !place.hideRepoBadge",
     "hostLabel": "options.show.host ? host.contextLabel : null",
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
     "detailsRow": "!vars.newStyle || options.detailsRow",
@@ -96,7 +96,7 @@
                 },
                 {
                   "el": "Row",
-                  "when": "vars.titleIndicators || vars.lineRepo || vars.newStyle",
+                  "when": "vars.titleIndicators || vars.lineRepo || vars.newStyle || place.lineTime",
                   "props": { "push": true, "keep": true, "align": "center", "gap": "sm" },
                   "children": [
                     {
@@ -123,8 +123,13 @@
                     },
                     {
                       "el": "Row",
-                      "when": "vars.newStyle",
-                      "props": { "keep": true, "align": "center", "gap": "sm", "inset": "end" },
+                      "when": "vars.newStyle || place.lineTime",
+                      "props": {
+                        "keep": true,
+                        "align": "center",
+                        "gap": "sm",
+                        "inset": "=vars.newStyle ? 'end' : 'none'"
+                      },
                       "children": [{ "el": "TitleStatus" }]
                     }
                   ]

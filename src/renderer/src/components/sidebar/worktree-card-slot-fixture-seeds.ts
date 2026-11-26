@@ -34,6 +34,8 @@ export type WorkspaceSeed = {
   lastActivityMinutesAgo?: number
   /** The workspace's PR, seeded into the hosted-review cache. */
   pr?: { number: number; state: HostedReviewState }
+  /** Prefix for its tab ids, when `id` has a `:` (a real `repo::path` id): pane keys split on it. */
+  tabPrefix?: string
 }
 
 export const FIXTURE_REPO: Repo = {
@@ -76,12 +78,13 @@ export function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): vo
   const ptyIdsByTabId: Record<string, string[]> = {}
   for (const seed of seeds) {
     // Each agent gets a tab, plus a plain shell focused earlier, so the leading icon has layers.
-    const shellTabId = `${seed.id}-shell`
+    const tabBase = seed.tabPrefix ?? seed.id
+    const shellTabId = `${tabBase}-shell`
     unifiedTabsByWorktree[seed.id] = [
       ...seed.agents.map((agent, index): Tab => ({
-        id: `${seed.id}-tab-${index}`,
-        entityId: `${seed.id}-tab-${index}`,
-        groupId: `${seed.id}-group`,
+        id: `${tabBase}-tab-${index}`,
+        entityId: `${tabBase}-tab-${index}`,
+        groupId: `${tabBase}-group`,
         worktreeId: seed.id,
         contentType: 'terminal',
         label: agent.agentType,
@@ -94,7 +97,7 @@ export function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): vo
       {
         id: shellTabId,
         entityId: shellTabId,
-        groupId: `${seed.id}-group`,
+        groupId: `${tabBase}-group`,
         worktreeId: seed.id,
         contentType: 'terminal',
         label: 'zsh',
@@ -106,7 +109,7 @@ export function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): vo
       }
     ]
     tabsByWorktree[seed.id] = seed.agents.map((agent, index) => {
-      const tabId = `${seed.id}-tab-${index}`
+      const tabId = `${tabBase}-tab-${index}`
       const paneKey = `${tabId}:00000000-0000-4000-8000-00000000000${index}`
       agentStatusByPaneKey[paneKey] = {
         state: agent.state,

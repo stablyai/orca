@@ -21,5 +21,8 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'folder-workspace') {
     return row.key
   }
+  if (row.type === 'project-chats') {
+    return `chats:${row.key}`
+  }
   return `wt:${row.rowKey}`
 }

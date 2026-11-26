@@ -26,7 +26,8 @@ import type { LineageToggleHandler } from '../../workspace-card/identity/worktre
 import {
   renderImportedWorktreesVirtualRow,
   renderNewExternalWorktreesInboxVirtualRow,
-  renderPendingCreationVirtualRow
+  renderPendingCreationVirtualRow,
+  renderProjectChatsVirtualRow
 } from './notice-rows'
 import { renderWorktreeItemRow, type WorktreeItemRowContext } from './item-row'
 import { LineageGuides } from './lineage-guides'
@@ -34,6 +35,11 @@ import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
+import { getTreeRowLane, ProjectFrameEdge, type ProjectFramePiece } from './project-frame'
+import { WORKTREE_CARD_SURFACE_MARGIN } from './indentation'
+
+// Root rows arrive with their glyph 14px into the surface; the tree lane puts it 10px in.
+const TREE_CONTENT_PULLBACK = 4
 
 export type WorktreeVirtualRowContext = {
   dragUnitsByRow: ReadonlyMap<number, { identity: string }>
@@ -41,6 +47,8 @@ export type WorktreeVirtualRowContext = {
   projection: LineageRowProjection
   activeFamilyRoots: ReadonlySet<number>
   renderRows: RenderRow[]
+  /** Project tree only: each row's piece of its open project's frame. */
+  projectFrames?: ReadonlyMap<number, ProjectFramePiece>
   firstHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
   activeStickyHostIndexRef: React.MutableRefObject<number | null>
@@ -128,6 +136,7 @@ export function renderWorktreeVirtualRow(
   if (row.type === 'host-header') {
     return renderHostHeaderVirtualRow(ctx, row, vItem)
   }
+  const projectFrame = ctx.projectFrames?.get(vItem.index)
 
   if (row.type === 'header') {
     return renderWorktreeSectionHeaderRow(
@@ -142,7 +151,8 @@ export function renderWorktreeVirtualRow(
           index: vItem.index,
           firstHeaderIndex: ctx.firstHeaderIndex
         }),
-        measureVirtualRowElement: ctx.measureVirtualRowElement
+        measureVirtualRowElement: ctx.measureVirtualRowElement,
+        projectFrame
       },
       t
     )
@@ -155,7 +165,8 @@ export function renderWorktreeVirtualRow(
       measureVirtualRowElement: ctx.measureVirtualRowElement,
       actionStateByProjectId: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
-      onKeepHidden: ctx.onKeepImportedWorktreesHidden
+      onKeepHidden: ctx.onKeepImportedWorktreesHidden,
+      projectFrame
     })
   }
 
@@ -166,7 +177,8 @@ export function renderWorktreeVirtualRow(
       measureVirtualRowElement: ctx.measureVirtualRowElement,
       actionState: ctx.newExternalWorktreeInboxActionState.get(row.repo.id),
       onReview: ctx.onOpenWorktreeVisibility,
-      onSuppress: ctx.onOpenSuppressExternalWorktreeInbox
+      onSuppress: ctx.onOpenSuppressExternalWorktreeInbox,
+      projectFrame
     })
   }
 
@@ -174,11 +186,24 @@ export function renderWorktreeVirtualRow(
     return renderPendingCreationVirtualRow({
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      projectFrame
+    })
+  }
+
+  if (row.type === 'project-chats') {
+    return renderProjectChatsVirtualRow({
+      row,
+      vItem,
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      onCreateForRepo: ctx.header.projectActions.onCreateForRepo,
+      onCreateFolderWorkspace: ctx.header.onCreateFolderWorkspace,
+      projectFrame
     })
   }
 
   const frame = ctx.projection.frames[vItem.index]
+  const lane = getTreeRowLane(projectFrame)
   const folder = row.type === 'folder-workspace'
   const itemWorkspaceStatus =
     !folder && ctx.groupBy === 'workspace-status'
@@ -198,10 +223,28 @@ export function renderWorktreeVirtualRow(
       : 0) ?? 0
   const activeFamily = ctx.activeFamilyRoots.has(frame.root)
   const rootFrame = ctx.projection.frames[frame.root]
+  // Tree: a lineage family moves as one, so highlights stay inside the card (or beside the
+  // group's line), the root's glyph lands on the lane and children keep their indent.
+  const shift = lane ? lane.surface - WORKTREE_CARD_SURFACE_MARGIN - rootFrame.left : 0
+  const rowFrame = lane
+    ? {
+        ...frame,
+        left: frame.left + shift,
+        right: lane.right,
+        contentIndent: Math.max(0, frame.contentIndent - TREE_CONTENT_PULLBACK)
+      }
+    : frame
   const rootRow = ctx.renderRows[frame.root]
   const familyHidden = ctx.hiddenDragRanges.some(
     ({ start, end }) => frame.root >= start && frame.root <= end
   )
+  const lineageGuides = frame.guides ? (
+    <LineageGuides
+      guides={frame.guides}
+      before={frame.before}
+      hidden={guidesInDraggedRange || familyHidden}
+    />
+  ) : null
   const familyVariant =
     rootRow.type === 'item' &&
     isActiveSidebarWorkspace(rootRow.worktree, {
@@ -243,6 +286,7 @@ export function renderWorktreeVirtualRow(
           : undefined
       }
     >
+      <ProjectFrameEdge piece={projectFrame} gapInside />
       <div
         className="relative"
         data-worktree-lineage-row={frame.guides ? '' : undefined}
@@ -259,32 +303,32 @@ export function renderWorktreeVirtualRow(
               frame.end === vItem.index && vItem.index === rootFrame.end && 'rounded-b-lg border-b'
             )}
             style={{
-              left: rootFrame.left + 4,
-              right: rootFrame.right,
+              left: rootFrame.left + 4 + shift,
+              right: lane?.right ?? rootFrame.right,
               top: 0,
               bottom: frame.after
             }}
           />
         )}
-        {frame.guides && (
-          <LineageGuides
-            guides={frame.guides}
-            before={frame.before}
-            hidden={guidesInDraggedRange || familyHidden}
-          />
+        {lineageGuides && lane ? (
+          <div className="absolute inset-y-0 right-0" style={{ left: shift }}>
+            {lineageGuides}
+          </div>
+        ) : (
+          lineageGuides
         )}
         <div className={cn('relative', sourceHidden && 'pointer-events-none opacity-0')}>
           {folder
             ? renderFolderWorkspaceOption({
                 ctx: ctx.folderWorkspace,
                 row,
-                frame,
+                frame: rowFrame,
                 lineage: { onToggle: folderLineageToggle(ctx, row), childIsActive: activeFamily }
               })
             : renderWorktreeItemRow(
                 ctx.item,
                 row,
-                frame,
+                rowFrame,
                 activeFamily && frame.root === vItem.index
               )}
         </div>

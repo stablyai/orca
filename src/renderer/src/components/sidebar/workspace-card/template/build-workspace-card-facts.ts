@@ -118,6 +118,7 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       affiliateList: card.affiliateListMode,
       deleteQuickAction: card.showDeleteQuickAction,
       compactLine: card.compactLine,
+      lineTime: card.compactLine && card.lineTime === true,
       lineHostLabel:
         card.compactLine &&
         runtimeHost &&

@@ -18,6 +18,7 @@ type ReviewDetails = ReturnType<typeof useWorktreeCardReviewDetails>
 
 export function useWorktreeCardLinkedDetails({
   worktree,
+  titleOverride,
   newCardStyle,
   deleteState,
   branch,
@@ -25,7 +26,7 @@ export function useWorktreeCardLinkedDetails({
   linearIssueEntry,
   linearIssueFallbackEntry,
   prDisplay
-}: Pick<WorktreeCardProps, 'worktree'> &
+}: Pick<WorktreeCardProps, 'worktree' | 'titleOverride'> &
   Pick<Foundation, 'newCardStyle' | 'deleteState'> &
   Pick<
     ReviewDetails,
@@ -103,7 +104,8 @@ export function useWorktreeCardLinkedDetails({
     reviewTitle: prDisplay?.title
   })
   const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)
-  const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
+  const visibleCardTitle =
+    titleOverride ?? (newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay)
   const isDeleting = deleteState?.isDeleting ?? false
   const isQueuedForDeletion = deleteState?.phase === 'queued'
   const deleteLabel = isQueuedForDeletion

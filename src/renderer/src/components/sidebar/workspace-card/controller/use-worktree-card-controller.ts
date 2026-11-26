@@ -26,6 +26,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   })
   const linked = useWorktreeCardLinkedDetails({
     worktree,
+    titleOverride: props.titleOverride,
     newCardStyle: foundation.newCardStyle,
     deleteState: foundation.deleteState,
     branch: review.branch,

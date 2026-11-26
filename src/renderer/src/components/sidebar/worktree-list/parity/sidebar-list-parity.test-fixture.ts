@@ -312,6 +312,7 @@ export function projectParityRows(
       // Desktop-only cards: the feed never carries detected worktrees (see exclusions).
       case 'imported-worktrees-card':
       case 'new-external-worktrees-inbox':
+      case 'project-chats':
         return []
     }
   })

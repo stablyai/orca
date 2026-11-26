@@ -1,7 +1,4 @@
-import {
-  getRootProjectHeaderKey,
-  getRootProjectHeaderOccurrenceKey
-} from '../drag/root-project-header-drop'
+import { getRootProjectHeaderOccurrenceKey } from '../drag/root-project-header-drop'
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
@@ -12,12 +9,11 @@ import { RepoMark } from '@/components/repo/RepoMark'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
 import '@/store/project-groups/project-group-owner-routing'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
-  getHeaderDragRepo,
   isSingleHostProjectHeader,
   type GroupHeaderRow
 } from '../../../../../../shared/sidebar-list/row-types'
+import { getSectionHeaderDragState } from './section-header-drag-state'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace/status/workspace-statuses'
@@ -43,6 +39,8 @@ import {
   RepoHeaderCreateWorkspaceButton,
   RepoHeaderProjectActionsMenu
 } from './repo-header-project-actions'
+import { HeaderChevron, ProjectChatHeaderButton, ProjectSummary } from './project-header-parts'
+import { getTreeCardInset, ProjectFrameEdge, type ProjectFramePiece } from './project-frame'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
   shouldIgnoreRepoHeaderToggle,
@@ -61,6 +59,7 @@ export function renderWorktreeSectionHeaderRow(
     hasStickyHost: boolean
     hasHeaderTopSpacing: boolean
     measureVirtualRowElement: (element: HTMLDivElement | null) => void
+    projectFrame?: ProjectFramePiece
   },
   t?: Translate
 ): React.JSX.Element {
@@ -68,68 +67,22 @@ export function renderWorktreeSectionHeaderRow(
   const { headerDrag } = ctx
   const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
-  const usesRootProjectDrag = Boolean(
-    headerDrag.rootProjectHeaderKeys && (row.projectGroupDepth ?? 0) === 0
-  )
-  const headerRepo = isRepoHeader
-    ? usesRootProjectDrag
-      ? (row.anchorRepo ?? row.repo)
-      : getHeaderDragRepo(row)
-    : undefined
-  const projectIdForHeader = headerRepo?.id
-  const projectGroupIdForHeader =
-    isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
-      ? row.projectGroup.id
-      : undefined
-  const projectGroupDragIdForHeader =
-    row.repeated && !usesRootProjectDrag ? undefined : projectGroupIdForHeader
-  // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
-  const projectGroupHostIdForHeader =
-    row.projectGroup && 'createdFrom' in row.projectGroup
-      ? getRepoExecutionHostId(row.projectGroup)
-      : undefined
-  const repoHeaderIndex = headerRepo && headerDrag.repoHeaderIndexByRepoId.get(headerRepo.id)
-  const repoHeaderBucketKey = headerRepo && headerDrag.repoHeaderBucketByRepoId.get(headerRepo.id)
-  const projectGroupHeaderIndex =
-    projectGroupDragIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderIndexByGroupId.get(projectGroupDragIdForHeader)
-      : undefined
-  const projectGroupHeaderBucketKey =
-    projectGroupDragIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
-      : undefined
-  const rootProjectHeaderKey = usesRootProjectDrag ? getRootProjectHeaderKey(row) : undefined
-  const rootProjectHeaderCount = rootProjectHeaderKey
-    ? (headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
-        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey, row.hostId)
-      ) ??
-      headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
-        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey)
-      ))
-    : undefined
-  const isDraggableRepoHeader = Boolean(
-    headerDrag.canReorderRepoHeaders &&
-    projectIdForHeader &&
-    repoHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
-  )
-  const isDraggableProjectGroupHeader = Boolean(
-    headerDrag.canReorderProjectGroupHeaders &&
-    projectGroupDragIdForHeader &&
-    projectGroupHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-          0) > 1)
-  )
-  const isDraggingThis =
-    headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
-  const isDraggingThisProjectGroup =
-    headerDrag.canReorderProjectGroupHeaders &&
-    headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
+  const {
+    headerRepo,
+    projectIdForHeader,
+    projectGroupIdForHeader,
+    projectGroupDragIdForHeader,
+    projectGroupHostIdForHeader,
+    repoHeaderIndex,
+    repoHeaderBucketKey,
+    projectGroupHeaderIndex,
+    projectGroupHeaderBucketKey,
+    rootProjectHeaderKey,
+    isDraggableRepoHeader,
+    isDraggableProjectGroupHeader,
+    isDraggingThis,
+    isDraggingThisProjectGroup
+  } = getSectionHeaderDragState(ctx, row, isRepoHeader, isProjectGroupHeader)
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
@@ -169,6 +122,16 @@ export function renderWorktreeSectionHeaderRow(
   const showHeaderCollapseAffordance =
     row.count > 0 &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+  // Experimental project tree: a leading chevron, groups as section labels, a collapsed project's summary.
+  const projectTree = ctx.projectTree === true && (isRepoHeader || isProjectGroupHeader)
+  const treeGroup = projectTree && !row.repo
+  const headerPaddingLeft =
+    isRepoHeader || isProjectGroupHeader
+      ? getProjectGroupHeaderPaddingLeft(row.projectGroupDepth ?? 0)
+      : WORKTREE_SECTION_HEADER_PADDING_LEFT
+  // Tree: a project header keeps to its card, so hover, reveal and drag highlights match the card.
+  const cardInset = projectTree && row.repo ? getTreeCardInset(row.projectGroupDepth ?? 0) : null
+  const separated = args.projectFrame?.separated === true && !isActiveStickyHeader
   return (
     <div
       key={vItem.key}
@@ -183,7 +146,7 @@ export function renderWorktreeSectionHeaderRow(
       className={cn(
         'left-0 right-0',
         // Why: drop the inter-group spacer once the header pins so it sits flush at top (see getActiveStickyHeaderIndexForScroll).
-        args.hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
+        separated ? 'pt-3' : args.hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
         isActiveStickyHeader
           ? cn(
               'sticky z-20 bg-worktree-sidebar',
@@ -194,6 +157,7 @@ export function renderWorktreeSectionHeaderRow(
       )}
       style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
     >
+      <ProjectFrameEdge piece={args.projectFrame && { ...args.projectFrame, separated }} />
       <ProjectHeaderHostTooltip label={label} context={hostContext}>
         <div
           id={getWorktreeOptionId(row.key)}
@@ -245,15 +209,19 @@ export function renderWorktreeSectionHeaderRow(
             isPinnedHeader &&
               ctx.pinDragOver &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
-            row.repo && 'overflow-hidden'
+            row.repo && 'overflow-hidden',
+            cardInset && 'rounded-lg'
           )}
-          style={{
-            // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
-            paddingLeft:
-              isRepoHeader || isProjectGroupHeader
-                ? getProjectGroupHeaderPaddingLeft(row.projectGroupDepth ?? 0)
-                : WORKTREE_SECTION_HEADER_PADDING_LEFT
-          }}
+          style={
+            cardInset
+              ? {
+                  marginInlineStart: cardInset.left,
+                  width: `calc(100% - ${cardInset.left + cardInset.right}px)`,
+                  paddingLeft: headerPaddingLeft - cardInset.left
+                }
+              : // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
+                { paddingLeft: headerPaddingLeft }
+          }
           onDragOver={
             isPinnedHeader
               ? ctx.onWorkspacePinDragOver
@@ -310,10 +278,12 @@ export function renderWorktreeSectionHeaderRow(
                 'cursor-grab active:cursor-grabbing'
             )}
           >
+            {projectTree ? <HeaderChevron collapsed={isHeaderCollapsed} /> : null}
             <div
               className={cn(
                 'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
+                repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone,
+                treeGroup && 'hidden'
               )}
             >
               {row.repo && repoHeaderColor ? (
@@ -332,7 +302,15 @@ export function renderWorktreeSectionHeaderRow(
 
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1.5">
-                <div className="min-w-0 truncate text-[13px] font-semibold leading-4">{label}</div>
+                <div
+                  className={cn(
+                    'min-w-0 truncate text-[13px] font-semibold leading-4',
+                    treeGroup &&
+                      'text-[11px] font-bold tracking-wider text-muted-foreground uppercase'
+                  )}
+                >
+                  {label}
+                </div>
                 {hostContext ? <ProjectHeaderHostLabel context={hostContext} /> : null}
                 <RepoForkIndicator upstream={row.repo?.upstream} />
                 <FolderPathStatusIndicator status={projectGroupPathStatus} />
@@ -341,8 +319,16 @@ export function renderWorktreeSectionHeaderRow(
             </div>
           </div>
 
+          {projectTree && isHeaderCollapsed ? (
+            row.repo ? (
+              <ProjectSummary repo={row.repo} hostId={row.hostId} />
+            ) : (
+              <span className="ml-auto pl-2 text-[11px] text-muted-foreground">{row.count}</span>
+            )
+          ) : null}
+
           <ProjectHeaderActions>
-            {showHeaderCollapseAffordance ? (
+            {showHeaderCollapseAffordance && !projectTree ? (
               <div
                 className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
                 data-repo-header-collapse-affordance=""
@@ -391,7 +377,9 @@ export function renderWorktreeSectionHeaderRow(
                 actions={ctx.projectActions}
               />
             ) : null}
-
+            {projectTree && row.repo ? (
+              <ProjectChatHeaderButton repo={row.repo} label={label} hostId={row.hostId} />
+            ) : null}
             {row.repo && ctx.groupBy === 'repo' ? (
               <RepoHeaderCreateWorkspaceButton
                 key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}

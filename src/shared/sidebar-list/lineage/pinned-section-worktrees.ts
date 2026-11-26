@@ -1,6 +1,7 @@
 import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
+import { projectGroupIdFromRepoId } from '../../folder-workspaces/folder-workspace-worktree'
 import { getLineagePlacementRows } from './worktree-occurrence-plan'
 import {
   getSidebarLineageParentsByIdentity,
@@ -28,7 +29,9 @@ export function getSidebarLineageChildren(
   worktreeMap: ReadonlyMap<string, Worktree>,
   filterRepoIds: readonly string[] = [],
   lineageParentIdentities?: SidebarLineageParentIdentities,
-  folderRows: readonly Worktree[] = []
+  folderRows: readonly Worktree[] = [],
+  /** Tree style: which children may still nest under another project's row; omitted, all may. */
+  nestsAcrossProjects?: (child: Worktree) => boolean
 ): Map<string, Worktree[]> {
   const rowsByIdentity = getSidebarLineageRowsByIdentity(
     worktrees,
@@ -47,6 +50,11 @@ export function getSidebarLineageChildren(
     const parent = parentByIdentity.get(childIdentity)
     if (
       !parent ||
+      // A group's folder workspace spans its projects, so it still nests any of theirs.
+      (nestsAcrossProjects &&
+        !nestsAcrossProjects(child) &&
+        parent.repoId !== child.repoId &&
+        !projectGroupIdFromRepoId(parent.repoId)) ||
       (allowedRepoIds &&
         (!allowedRepoIds.has(child.repoId) ||
           (!allowedRepoIds.has(parent.repoId) &&

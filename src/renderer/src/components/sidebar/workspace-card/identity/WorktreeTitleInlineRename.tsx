@@ -43,6 +43,8 @@ type WorktreeTitleInlineRenameProps = {
   wrapTitle?: boolean
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
+  /** The saved name editing starts from and compares against, when the title shows something else. */
+  renameFrom?: string
   // Parents request editing once and clear the trigger through onBeginEditingConsumed.
   beginEditing?: boolean
   onBeginEditingConsumed?: () => void
@@ -61,10 +63,12 @@ export function WorktreeTitleInlineRename({
   wrapTitle = false,
   onEditingChange,
   onRename,
+  renameFrom,
   beginEditing = false,
   onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
   const t = useTranslate()
+  const renameStart = renameFrom ?? displayName
   const editingRef = useRef(false)
   const savingRef = useRef(false)
   const mountedRef = useRef(true)
@@ -73,7 +77,7 @@ export function WorktreeTitleInlineRename({
   const removeTitleResizeListenerRef = useRef<(() => void) | null>(null)
   const inputElementRef = useRef<HTMLInputElement | null>(null)
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(displayName)
+  const [value, setValue] = useState(renameStart)
   const [saving, setSaving] = useState(false)
   const [titleTruncated, setTitleTruncated] = useState(false)
   const emojiInput = useWorkspaceEmojiShortcodeInput({
@@ -148,9 +152,9 @@ export function WorktreeTitleInlineRename({
   )
 
   const openRenameEditor = useCallback(() => {
-    setValue(displayName)
+    setValue(renameStart)
     setEditingMode(true)
-  }, [displayName, setEditingMode])
+  }, [renameStart, setEditingMode])
 
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
     inputElementRef.current = input
@@ -191,16 +195,16 @@ export function WorktreeTitleInlineRename({
 
   const cancelRename = useCallback(() => {
     emojiInput.close()
-    setValue(displayName)
+    setValue(renameStart)
     setEditingMode(false)
-  }, [displayName, emojiInput, setEditingMode])
+  }, [renameStart, emojiInput, setEditingMode])
 
   const commitRename = useCallback(async () => {
     if (savingRef.current) {
       return
     }
 
-    const commit = getWorktreeTitleRenameCommit(displayName, value)
+    const commit = getWorktreeTitleRenameCommit(renameStart, value)
     if (commit.kind === 'cancel') {
       cancelRename()
       return
@@ -229,7 +233,7 @@ export function WorktreeTitleInlineRename({
         setSaving(false)
       }
     }
-  }, [cancelRename, displayName, onRename, setEditingMode, value])
+  }, [cancelRename, renameStart, onRename, setEditingMode, value])
   useBlurSaveOnUnmount(() => editing && editingRef.current, commitRename)
 
   const handleKeyDown = useCallback(
