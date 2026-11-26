@@ -33,13 +33,13 @@ const KEPT_LISTING_OPEN_WAIT_MS = 1_500
 /**
  * Whether the last run's agent may still run under the terminal host, so its open settles nothing.
  * Only proof ends it: a complete listing without it, or its owner process gone (unless its ended
- * agent still opens, to replay what it left). A late listing is
- * unknown, so the chat opens as kept and reconciles once the listing answers.
+ * agent still opens, to replay what it left). A late listing is unknown, so the chat opens as kept
+ * and reconciles once the listing answers, even with no owner.
  */
 export async function structuredAgentSessionKeptAtOpen(
   record: Pick<
     AgentSessionConversationView,
-    'sessionId' | 'provider' | 'location' | 'ownerObservation'
+    'sessionId' | 'provider' | 'location' | 'ownerObservation' | 'neverStarted'
   >,
   waitMs = KEPT_LISTING_OPEN_WAIT_MS
 ): Promise<boolean> {
@@ -53,11 +53,15 @@ export async function structuredAgentSessionKeptAtOpen(
   if (keptRunningProviderRelayPid(sessionId) !== null) {
     return true
   }
-  // An agent that ends while Orca is closed may leave output and its turn's end to replay; only
-  // the listing proves that one gone.
-  const ownerGone =
-    !providerRelayProviderOpensEnded(provider) && owner && (await ownerProvenGone(owner))
-  if (listed || !owner || ownerGone) {
+  if (listed) {
+    return false
+  }
+  // An ended agent that still opens leaves output to replay, and an owner released without proof
+  // (launch recovery) leaves only the listing to prove it gone.
+  const gone = owner
+    ? !providerRelayProviderOpensEnded(provider) && (await ownerProvenGone(owner))
+    : record.neverStarted || record.ownerObservation.deathEvidence !== null
+  if (gone) {
     return false
   }
   noteProviderRelayKeptUnverified(sessionId)
