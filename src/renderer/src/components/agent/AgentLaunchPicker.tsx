@@ -21,7 +21,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { rowLabel } from './launch-menu/agent-menu-row-presentation'
@@ -49,14 +48,6 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
-/** A model's name as the agent's catalog lists it, else its id. */
-export function launchModelLabel(agent: string, model: string | undefined): string | undefined {
-  return (
-    getAgentSessionOptionLaunchCatalog(agent)?.models.find((entry) => entry.id === model)?.label ??
-    model
-  )
-}
-
 const AGENT_LAUNCH_PICKER_SIDE_OFFSET = 4
 const AGENT_LAUNCH_PICKER_COLLISION_PADDING = 8
 const PLACEMENT_GAP = AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING
@@ -82,6 +73,7 @@ export const AgentLaunchPicker = memo(
     disabled,
     setupDisabled,
     selectAgentOnTab,
+    closeOnAgentChange,
     portalContainer,
     emptyLabel,
     cli,
@@ -117,6 +109,7 @@ export const AgentLaunchPicker = memo(
     setupDisabled?: boolean
     /** Apply agent tabs directly and omit the launch surface footer. */
     selectAgentOnTab?: boolean
+    closeOnAgentChange?: boolean
     portalContainer?: HTMLElement | null
     emptyLabel?: string
     /** True when this launch is the terminal, so the closed field says "(CLI)". */
@@ -217,9 +210,12 @@ export const AgentLaunchPicker = memo(
         if (next && from) {
           rememberPickedAgentModel(from, next)
         }
+        if (closeOnAgentChange && picked !== agent) {
+          setOpen(false)
+        }
         onPick(picked, next, from, surface, permissionPicked)
       },
-      [onPick]
+      [agent, closeOnAgentChange, onPick, setOpen]
     )
     const entry = entries.find((entry) => entry.agent === agent)
     const draft = entry

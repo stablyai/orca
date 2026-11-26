@@ -10,6 +10,8 @@ import { terminalOwnerRefusalMessage } from '../../../../shared/agent-session/li
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
+import { isCurrentProviderSwitch } from '../delivery/structured-agent-session-provider-selection'
+import { submissionForActiveAgent } from '../options/structured-agent-session-execution-options'
 import {
   structuredAgentSessionResumeOperationId,
   structuredAgentSessionResumeParams
@@ -43,7 +45,10 @@ export async function structuredAgentSessionStartParams(
       'No structured session exists by that id.'
     )
   }
-  if (!hostCanStartRecord(context.deps, record)) {
+  if (
+    !hostCanStartRecord(context.deps, record) ||
+    (record.providerSwitch && !isCurrentProviderSwitch(context.deps, record, startedFor))
+  ) {
     return refusedStructuredAgentSessionStart(
       'structured_agent_session_unsupported',
       { reason: 'hostUnsupported' },
@@ -74,8 +79,11 @@ export async function structuredAgentSessionStartParams(
             'The session lease is not one this host may resume.'
           )
   }
-  const startupOptions = startedFor
-    ? (await context.sessions.get(sessionId)?.journal.reads.submission(startedFor))?.options
+  const submission = startedFor
+    ? await context.sessions.get(sessionId)?.journal.reads.submission(startedFor)
+    : undefined
+  const startupOptions = submission
+    ? submissionForActiveAgent(record, submission).options
     : undefined
   return { ok: true, params, ...(startupOptions ? { startupOptions } : {}) }
 }

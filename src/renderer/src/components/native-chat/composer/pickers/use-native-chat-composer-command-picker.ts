@@ -36,6 +36,7 @@ export function useNativeChatComposerCommandPicker(
       /** An edit saves into a queued message; a launch prompt has no session to resume and
        *  lists its workspace's skills. */
       mode?: 'edit' | 'launch'
+      nextAgent?: string
       room: NativeChatComposerRoom | undefined
     }
 ): {
@@ -44,9 +45,14 @@ export function useNativeChatComposerCommandPicker(
   /** Send opens a `/btw` or `/side` draft as a side chat, so the editor shows it as one. */
   sideChat: boolean
 } {
-  const { structuredTransport, editor, setNotice, mode, room, ...pickerArgs } = args
+  const { structuredTransport, editor, setNotice, mode, room, nextAgent, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
-  const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
+  const composerNextAgent = mode === 'edit' ? undefined : nextAgent
+  const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(
+    agent,
+    structuredTransport,
+    composerNextAgent
+  )
   const reported = structuredTransport?.sessionCommands
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
@@ -69,6 +75,7 @@ export function useNativeChatComposerCommandPicker(
   )
   const listed = useNativeChatPickerState({
     ...pickerArgs,
+    agent: composerNextAgent ?? agent,
     ...(mode === 'launch' ? { launchWorktreeId: structuredTransport?.worktreeId } : {}),
     ...editor,
     agentCommands,

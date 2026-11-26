@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  appendAgentSessionProviderHandleLink,
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandle,
@@ -130,7 +131,85 @@ describe('a record row older builds wrote', () => {
   })
 })
 
+it('keeps both native handles across a switch and puts the current chain where older builds read it', () => {
+  const claude: AgentSessionProviderHandleLink = {
+    linkId: 'claude-1',
+    handle: claudeProviderHandle('original', 'leaf'),
+    origin: 'created',
+    mintedAtFence: 6,
+    observedAt: 1_000,
+    seenThrough: { epoch: 'journal-1', sequence: 21 },
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/user/.claude' }
+  }
+  const codex: AgentSessionProviderHandleLink = {
+    linkId: 'codex-1',
+    handle: codexProviderHandle('new-thread'),
+    origin: 'created',
+    mintedAtFence: 7,
+    observedAt: 2_000,
+    switchedFrom: 'claude-1'
+  }
+  const resumed: AgentSessionProviderHandleLink = {
+    linkId: 'claude-2',
+    handle: claude.handle,
+    origin: 'resumed',
+    mintedAtFence: 8,
+    observedAt: 3_000,
+    switchedFrom: 'codex-1'
+  }
+  const providerHandleChain = appendAgentSessionProviderHandleLink(
+    appendAgentSessionProviderHandleLink([claude], codex),
+    resumed
+  )
+  const record = {
+    ...agentSessionRecordFixture(
+      agentSessionLeaseFixture({ runtimeFence: 8, provenHandleLinkId: 'claude-2' })
+    ),
+    providerHandleChain
+  }
+  const stored = encodeAgentSessionRecord(record)
+  expect(stored.providerHandleChain.map(({ linkId }) => linkId)).toEqual(['claude-1', 'claude-2'])
+  expect(stored.inactiveProviderHandleLinks?.map(({ linkId }) => linkId)).toEqual(['codex-1'])
+  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+  expect(decodePersistedAgentSessionRecord(stored).record.providerHandleChain).toEqual([
+    claude,
+    codex,
+    resumed
+  ])
+  expect(() =>
+    appendAgentSessionProviderHandleLink([claude], { ...codex, switchedFrom: 'other-claude' })
+  ).toThrow('agent_session_provider_handle_provider_mismatch')
+})
+
 describe('what this build writes', () => {
+  it('keeps an uncommitted provider handoff read-only on older hosts', () => {
+    const source = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        claimStatus: 'released',
+        ownerProcess: null,
+        provenHandleLinkId: null,
+        minimumNextFence: 10
+      })
+    )
+    const record: AgentSessionRecord = {
+      ...source,
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/test/codex' },
+      providerSwitch: {
+        clientMessageId: 'message-1',
+        hostRunId: 'host-1',
+        from: { provider: source.provider, accountHome: source.accountHome },
+        through: { epoch: 'journal-1', sequence: 20 }
+      }
+    }
+    const stored = encodeAgentSessionRecord(record)
+    expect(stored.lease.minimumNextFence).toBeNull()
+    expect(stored.providerSwitchFenceFloor).toBe(10)
+    expect(isPersistedAgentSessionRecord(stored)).toBe(true)
+    expect(isPersistedAgentSessionRecord({ ...stored, providerSwitch: undefined })).toBe(false)
+    expect(decodePersistedAgentSessionRecord(stored).record).toEqual(record)
+  })
+
   it('keeps the persisted key and root strings older builds derived', () => {
     // Fork seeds, superseded creations and resume offers store these; a new spelling strands them.
     const claude = claudeProviderHandle('sess-1', 'leaf-1')

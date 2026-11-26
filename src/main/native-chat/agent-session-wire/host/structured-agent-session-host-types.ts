@@ -251,6 +251,13 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
+  resolveProviderSwitchAccount?: (
+    record: AgentSessionRecord,
+    agent: string,
+    permission: AgentChatPermissionChoice
+  ) => Promise<AgentSessionAccountHome>
+  canSwitchProvider?: (sessionId: string, agent: string) => boolean
+  botHomeDefault?: (botId: string, sessionId: string) => string | undefined
   /** The MCP servers a chat's agent launched with from Orca (a bot's own, the host list's), against
    *  what its next launch would get; a chat that got none never refreshes for tools. */
   launchTools?: {
@@ -303,6 +310,8 @@ export type StructuredAgentSessionConversationNaming = {
 }
 
 export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
+  contextHandoff?: string
+  settleProviderSwitch?: (outcome: 'delivered' | 'failed') => Promise<void> | undefined
   admitFreshInput?: StructuredAgentSessionAdmitHostInput
   continueInput?: StructuredAgentSessionContinueInput
   acquireAborts?: Pick<StructuredAgentSessionAcquireAborts, 'begin'>

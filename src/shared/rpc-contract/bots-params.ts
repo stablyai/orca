@@ -1,3 +1,4 @@
+import { BotAgentSwitchConsent } from './bot-agent-switch-params'
 import { botTidyUp, patchTidyUp, TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { BOT_IMPORT_REPLY_MAX, BotImportFromSchema } from '../bots/bot-import'
@@ -17,15 +18,14 @@ import {
   BotSlackAppSchema,
   botMemberSource,
   botSlackApps,
-  withoutBotMember,
   withSlackMembersTagged,
-  type Bot,
-  type BotMember
+  type Bot
 } from '../bot-types'
 import { SettableBotAvatar } from './bot-avatar-params'
 import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from '../bots/bot-avatar-outfit'
-import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
+import { applyBotMemberUpdates } from '../bots/bot-member-updates'
+export { applyBotMemberUpdates } from '../bots/bot-member-updates'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
 import { BotTakeOverSchema } from '../bots/bot-take-over'
@@ -130,6 +130,7 @@ export const BotUpdate = z.object({
     .object({
       name: BotNameSchema.optional(),
       agent: z.enum(BOT_AGENTS).optional(),
+      agentSwitchConsent: BotAgentSwitchConsent.optional(),
       avatar: SettableBotAvatar.optional(),
       /** The mascot revision visible when its color or outfit was picked. */
       lookAtEpoch: z.uuid().optional(),
@@ -305,27 +306,10 @@ export const BotRunSendAgainParams = BotChat.extend({
 export type BotTakeOverParams = z.infer<typeof BotTakeOverParams>
 export type BotChatResetParams = z.infer<typeof BotChatReset>
 
-/** Who can ask after the people an update takes off and adds, applied to the list the host has now.
- *  Throws botMembersFullError, saving nothing, when an add would pass a limit. */
-export function applyBotMemberUpdates(
-  members: readonly BotMember[],
-  updates: Pick<BotUpdateParams['updates'], 'removeMember' | 'removeMembers' | 'addMembers'>
-): BotMember[] {
-  const { removeMember, removeMembers = [], addMembers = [] } = updates
-  let next = [...members]
-  for (const key of [...(removeMember ? [removeMember] : []), ...removeMembers]) {
-    next = withoutBotMember(next, key)
-  }
-  const plan = planBotMemberAdds(next, addMembers)
-  if (!plan.ok) {
-    throw botMembersFullError(plan.full)
-  }
-  return plan.members
-}
-
 /** A null permission mode clears the override, so the bot's chats follow the native chat default. */
 export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   const {
+    agentSwitchConsent: _agentSwitchConsent,
     permissionMode,
     launch,
     removeMember,

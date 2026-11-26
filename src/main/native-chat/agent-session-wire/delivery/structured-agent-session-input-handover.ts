@@ -25,6 +25,7 @@ import {
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { previousExitUnverifiableRefusal } from '../termination/structured-agent-session-child-close'
+import { structuredChatSwitchInput } from './structured-agent-session-provider-handover'
 
 type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
@@ -68,6 +69,7 @@ export async function beginStructuredAgentSessionInputHandover(
     return null
   }
   const failureTextContext = await deps.failureTextContext(sessionId)
+  const { submission, ...switchInput } = await structuredChatSwitchInput(deps, session, next)
   return beginSubmissionHandover(
     {
       sessionId,
@@ -78,6 +80,7 @@ export async function beginStructuredAgentSessionInputHandover(
       failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),
       turnContext: deps.turnContext,
+      ...switchInput,
 
       admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
         let admission: StructuredAgentSessionInputAdmission | undefined
@@ -296,7 +299,7 @@ export async function beginStructuredAgentSessionInputHandover(
         return recorder
       }
     },
-    next,
+    submission,
     // Re-read right before the provider call, which runs outside the serialize.
     isCurrent,
     isBound

@@ -11,7 +11,11 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatReasoningBody } from '../message-content/MobileNativeChatReasoningRow'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
-import type { MobileNativeChatLiveLine as LiveLine } from '../turn-state/use-mobile-native-chat-turn-disclosure'
+import type {
+  MobileNativeChatLiveLine as LiveLine,
+  useMobileNativeChatTurnDisclosure
+} from '../turn-state/use-mobile-native-chat-turn-disclosure'
+import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 
 // Keep the clock in the turn bar; the live line may disclose reasoning whose standalone row is hidden.
 export function MobileNativeChatLiveLine({
@@ -105,3 +109,23 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.lg
   }
 }))
+
+export function mobileNativeChatLiveStatus(
+  awaitingInput: boolean,
+  {
+    liveLine,
+    onToggleReasoning
+  }: Pick<ReturnType<typeof useMobileNativeChatTurnDisclosure>, 'liveLine' | 'onToggleReasoning'>,
+  fontScale: number
+) {
+  if (awaitingInput) {
+    return <MobileNativeChatAwaitingInputRow subject={null} pending fontScale={fontScale} />
+  }
+  return liveLine ? (
+    <MobileNativeChatLiveLine
+      line={liveLine}
+      onToggleReasoning={onToggleReasoning}
+      fontScale={fontScale}
+    />
+  ) : null
+}

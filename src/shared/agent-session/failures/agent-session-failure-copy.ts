@@ -1,3 +1,4 @@
+import { PROVIDER_SWITCH_FAILURE_COPY } from './agent-session-provider-switch-failure-copy'
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
@@ -191,6 +192,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   answerUnconfirmed: 'Your answer was recorded but the agent did not confirm it.',
   hostFault: "Orca ran into a problem, so this didn't go through.",
   hostFaultTryAgain: "Orca ran into a problem, so this didn't go through. Try again.",
+  ...PROVIDER_SWITCH_FAILURE_COPY,
   hostStopped: '{{agent}} never finished starting, so Orca stopped it.',
   providerRateLimited: '{{agent}} is rate-limited and retrying.',
   providerRetrying: '{{agent}} hit a temporary problem and is retrying.',

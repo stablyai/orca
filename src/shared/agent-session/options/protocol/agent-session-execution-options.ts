@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 /** Freeze choices on acceptance; permission stays a launch setting. Strip unknown keys from free-form send/saved options. */
 export const AgentSessionExecutionOptionsSchema = z.object({
+  capturedAgent: z.string().min(1).max(64).optional(),
   model: z.string().min(1).max(256).optional(),
   effort: z.string().min(1).max(64).optional(),
   personality: z.string().min(1).max(64).optional(),
@@ -24,12 +25,14 @@ export function readAgentSessionExecutionOptions(
 export function agentSessionExecutionOptionsRecord(
   options: AgentSessionExecutionOptions
 ): Record<string, string> {
+  const { capturedAgent: _capturedAgent, ...choices } = options
   return Object.fromEntries(
-    Object.entries(options).filter((entry): entry is [string, string] => entry[1] !== undefined)
+    Object.entries(choices).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
 }
 
 /** Exact picker domain; personality remains host-captured. */
 export const AgentSessionSelectionSchema = AgentSessionExecutionOptionsSchema.omit({
-  personality: true
+  personality: true,
+  capturedAgent: true
 }).strict()

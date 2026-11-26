@@ -2,11 +2,11 @@ import { readPiSessionHeader, samePiDirectory } from './pi-session-header'
 export { readPiSessionHeader, samePiDirectory } from './pi-session-header'
 import { isAbsolute } from 'node:path'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import {
-  agentSessionProviderHandleChainHead,
-  type AgentSessionProviderHandleChain,
-  type AgentSessionProviderHandleLink
+import type {
+  AgentSessionProviderHandleChain,
+  AgentSessionProviderHandleLink
 } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -159,7 +159,7 @@ export function piRpcLaunchPart(
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
       resolveWorkingDirectory: () => cwd
     })
-    const previous = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    const { head: previous, handleChain } = activeProviderContext(record)
     let sessionFile: string | undefined
     let forkFile: string | undefined
     let replacement: PiRpcResolvedLaunch['replacement']
@@ -236,9 +236,7 @@ export function piRpcLaunchPart(
         prefixArgs,
         fullAccess: deps.resolveFullAccess?.() ?? true,
         previous,
-        ...(sessionFile || forkFile
-          ? { lineage: piConversationFiles(record.providerHandleChain) }
-          : {}),
+        ...(sessionFile || forkFile ? { lineage: piConversationFiles(handleChain) } : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {}),

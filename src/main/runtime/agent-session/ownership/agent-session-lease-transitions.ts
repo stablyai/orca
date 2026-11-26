@@ -20,6 +20,7 @@ import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { providerSwitchHandleLink } from './agent-session-provider-handle-transition'
 
 export type AgentSessionReservation = {
   spawnToken: string
@@ -149,7 +150,10 @@ export function proveAgentSessionOwner(args: {
     throw new Error('agent_session_provider_handle_stale_fence')
   }
   const providerHandleChain = link
-    ? appendAgentSessionProviderHandleLink(record.providerHandleChain, link)
+    ? appendAgentSessionProviderHandleLink(
+        record.providerHandleChain,
+        providerSwitchHandleLink(record, link)
+      )
     : record.providerHandleChain
   const head = providerHandleChain.at(-1)
   if (link && !head) {

@@ -19,7 +19,8 @@ export type NativeChatComposerCatalog = {
 /** Structured chats use host and session-loaded commands/skills plus Orca /resume, /btw and /mcp; PTY chats retain curated catalogs. */
 export function useNativeChatComposerCatalog(
   agent: AgentType,
-  structuredTransport?: NativeChatStructuredComposerTransport
+  structuredTransport?: NativeChatStructuredComposerTransport,
+  nextAgent?: AgentType
 ): NativeChatComposerCatalog {
   const structured = Boolean(structuredTransport)
   const reported = structuredTransport?.sessionCommands
@@ -33,6 +34,9 @@ export function useNativeChatComposerCatalog(
   const sideChat = structuredTransport?.sideChat !== undefined
   const sideChatNotReady = structuredTransport?.sideChat?.notReadyReason ?? null
   const agentCommands = useMemo(() => {
+    if (nextAgent && nextAgent !== agent) {
+      return getVerifiedNativeChatCommands(nextAgent)
+    }
     if (!structured) {
       return getVerifiedNativeChatCommands(agent)
     }
@@ -52,6 +56,7 @@ export function useNativeChatComposerCatalog(
   }, [
     accountUsage,
     agent,
+    nextAgent,
     fork,
     sideChat,
     sideChatNotReady,
@@ -62,6 +67,13 @@ export function useNativeChatComposerCatalog(
     interactionModeSupported,
     mcpPanel
   ])
-  const sessionSkills = useMemo(() => nativeChatSessionSkills(agent, reported), [agent, reported])
+  const sessionSkills = useMemo(
+    () =>
+      nativeChatSessionSkills(
+        nextAgent ?? agent,
+        nextAgent && nextAgent !== agent ? undefined : reported
+      ),
+    [agent, nextAgent, reported]
+  )
   return { agentCommands, sessionSkills }
 }

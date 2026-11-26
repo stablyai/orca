@@ -72,6 +72,32 @@ export function useStructuredAgentSessionOptionStamp(
   )
 }
 
+export function useStructuredAgentSessionSelectedProvider(
+  sessionId: string,
+  target: RuntimeClientTarget
+): AgentSessionStatusSummary['selectedProvider'] {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  const key = useSyncExternalStore(
+    subscribe,
+    () => JSON.stringify(feed.getSnapshot().get(sessionId)?.selectedProvider ?? null),
+    () => 'null'
+  )
+  return useMemo(() => JSON.parse(key) ?? undefined, [key])
+}
+
+export function useStructuredAgentSessionActiveProvider(
+  sessionId: string,
+  target: RuntimeClientTarget,
+  initial: string
+): string {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.agent ?? initial,
+    () => initial
+  )
+}
+
 /** Subscribe only to startup phase changes, avoiding unrelated status renders. */
 export function useStructuredAgentSessionHostExecutionPhase(
   sessionId: string,

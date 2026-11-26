@@ -12,11 +12,13 @@ const AGENT_GRID_COLUMNS = 3
 export function MobileAgentTileGrid({
   options,
   showCliOnly,
+  selected,
   onPick
 }: {
   options: readonly MobileNewTabAgentOption[]
   /** Notes tiles whose agent the host can only start as a CLI. */
   showCliOnly: boolean
+  selected?: string
   onPick: (option: MobileNewTabAgentOption) => void
 }) {
   useMobileColorScheme()
@@ -41,7 +43,8 @@ export function MobileAgentTileGrid({
               onPress={() => onPick(option)}
               accessibilityRole="button"
               accessibilityLabel={option.label}
-              style={styles.tile}
+              accessibilityState={selected ? { selected: selected === option.agent } : undefined}
+              style={[styles.tile, selected === option.agent && styles.selected]}
             >
               {({ pressed }) => (
                 <>
@@ -92,6 +95,7 @@ const styles = themedStyleSheet(() => ({
     left: 0,
     backgroundColor: colors.translucentFill
   },
+  selected: { borderWidth: 1, borderColor: colors.textSecondary },
   tileLabel: { fontSize: 13.5, fontWeight: '600', color: colors.textPrimary, maxWidth: '100%' },
   // Sits in the tile's gap, so a noted tile keeps the others' height.
   tileNote: { fontSize: 11, color: colors.textMuted, marginTop: -spacing.xs, maxWidth: '100%' },

@@ -133,7 +133,7 @@ export function canPaneOfferResumeInNewChat(
   return resolvePaneResumeInNewChatOffer(state, statuses, pane) !== null
 }
 
-/** A native chat tab's session and the provider recorded when it was created. */
+/** A native chat tab's session and its active provider. */
 export type NativeChatTabSession = {
   sessionId: string
   agent: AgentType | undefined

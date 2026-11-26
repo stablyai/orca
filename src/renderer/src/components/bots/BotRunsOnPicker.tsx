@@ -13,8 +13,7 @@ import { HostRowIcon } from '@/components/host-picker/host-row-icon'
 import { type BotAgent, botFolderName, newBotName } from '../../../../shared/bot-types'
 import { useHostBots } from '@/lib/bot-catalog'
 import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
-import { launchModelLabel } from '../agent/AgentLaunchPicker'
-import { usePickedAgentModel } from '../agent/agent-launch-setup-state'
+import { launchModelLabel, usePickedAgentModel } from '../agent/agent-launch-setup-state'
 import { COMBOBOX_FIELD_SHELL } from '../new-workspace/type-ahead/type-ahead-combobox-styles'
 import {
   BotAgentLaunchPicker,

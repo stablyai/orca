@@ -4,12 +4,19 @@ import {
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
 } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
+import { AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import { ensureBotHomeChat } from './host-bots-read'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { botAvatarUpload, botDelete, botUpdate } from './bot-sheet-operations'
+import {
+  botAvatarUpload,
+  botDelete,
+  botUpdate,
+  previewBotAgentSwitch
+} from './bot-sheet-operations'
 import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
 import { phoneAccessHost } from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
@@ -30,7 +37,6 @@ import { MobileBotIdentityPage } from './MobileBotIdentityPage'
 import { MobileBotAgentPage } from './MobileBotAgentPage'
 import { MobileBotComputerPage } from './MobileBotComputerPage'
 import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
-import { ensureBotHomeChat } from './host-bots-read'
 import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
 import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
 import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
@@ -70,6 +76,7 @@ export function MobileBotSettingsTab(props: {
   const status = props.client ? readConnectionStatusProbe(props.client) : undefined
   const takesColor = useRouteCapability(BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const takesOutfit = useRouteCapability(BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+  const inPlaceSwitch = useRouteCapability(AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY)
   const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
   const [saving, setSaving] = useState(false)
   const locked = saving || !props.online
@@ -263,12 +270,34 @@ export function MobileBotSettingsTab(props: {
         banner={offlineBanner}
         onBack={backToSettings}
         onLaunch={(launch) => void save({ launch })}
-        onSwitch={async (agent) => {
-          // The Home Chat starts fresh now, not on its next message, as the desktop's switch does.
-          if ((await save({ agent, launch: null })) && props.client) {
-            await ensureBotHomeChat(props.client, bot.id).then(
-              (refusal) => refusal && props.showToast(refusal, 3000)
+        inPlaceSwitch={inPlaceSwitch}
+        previewSwitch={async (agent) => {
+          if (!inPlaceSwitch) {
+            return { consent: null }
+          }
+          if (!props.client) {
+            return null
+          }
+          try {
+            return previewBotAgentSwitch.interpret(
+              await previewBotAgentSwitch.request(props.client, { botId: bot.id, agent })
             )
+          } catch (error) {
+            props.showToast(errorMessage(error), 3000)
+            return null
+          }
+        }}
+        onSwitch={async (agent, consent) => {
+          const saved = await save({
+            agent,
+            launch: null,
+            ...(consent ? { agentSwitchConsent: consent } : {})
+          })
+          if (saved && props.client && !inPlaceSwitch) {
+            const refusal = await ensureBotHomeChat(props.client, bot.id)
+            if (refusal) {
+              props.showToast(refusal, 3000)
+            }
           }
         }}
       />

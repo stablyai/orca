@@ -1,3 +1,5 @@
+import { botSwitchPermissionCopy } from '../../../../shared/agent-session/options/permissions/provider-switch-permission-copy'
+import type { BotAgentSwitchPreviewResult } from '../../../../shared/rpc-contract/bot-agent-switch-params'
 import { useCallback } from 'react'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { persistConfirmationSkipPreference } from '@/components/dismiss/confirmation/confirmation-skip-preference'
@@ -42,26 +44,60 @@ export function useConfirmNewHomeChat(): (bot: Pick<Bot, 'name'>) => Promise<boo
   )
 }
 
-/** Another agent can't carry the conversation, so a switch starts the Home Chat fresh. */
 export function useConfirmBotAgentSwitch(): (
   bot: Pick<Bot, 'name' | 'agent'>,
-  next: BotAgent
+  next: BotAgent,
+  consent?: BotAgentSwitchPreviewResult['consent'],
+  inPlace?: boolean
 ) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    (bot, next) => {
+    (bot, next, consent, inPlace = true) => {
       const agent = botAgentLabel(next)
       return confirm({
         title: translate('bots.agentSwitch.title', 'Switch {{name}} to {{agent}}?', {
           name: bot.name,
           agent
         }),
-        description: translate(
-          'bots.agentSwitch.description',
-          "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
-          { name: bot.name, agent }
-        ),
-        details: (
+        description: inPlace
+          ? translate(
+              'bots.agentSwitch.continueDescription',
+              'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
+              { agent }
+            )
+          : translate(
+              'bots.agentSwitch.description',
+              "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
+              { name: bot.name, agent }
+            ),
+        details: inPlace ? (
+          <ul className="list-disc space-y-1 pl-5 text-sm">
+            <li>
+              {translate(
+                'bots.agentSwitch.homeContinues',
+                'Home Chat continues on {{agent}} with its recent history',
+                { agent }
+              )}
+            </li>
+            <li>
+              {translate(
+                'bots.agentSwitch.newChats',
+                'New Slack threads, automation runs and chats you open later start on {{agent}}',
+                { agent }
+              )}
+            </li>
+            <li>
+              {translate(
+                'bots.agentSwitch.threads',
+                "Slack threads with an existing Orca chat keep that chat's agent"
+              )}
+            </li>
+            <li>
+              {translate('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors')}
+            </li>
+            {consent ? <li>{botSwitchPermissionCopy(consent, translate).join(' ')}</li> : null}
+          </ul>
+        ) : (
           <ul className="list-disc space-y-1 pl-5 text-sm">
             <li>
               {translate('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors')}
@@ -75,8 +111,9 @@ export function useConfirmBotAgentSwitch(): (
             </li>
           </ul>
         ),
-        confirmLabel: translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent }),
-        // A tab in the bot's agent picker switches agents with the picker still open.
+        confirmLabel: consent
+          ? translate('bots.agentSwitch.allowAction', 'Allow access and switch')
+          : translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent }),
         aboveMenus: true
       })
     },

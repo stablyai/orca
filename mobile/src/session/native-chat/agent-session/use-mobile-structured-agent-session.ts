@@ -54,7 +54,7 @@ export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
 ): StructuredMobileSession {
   const {
-    agent,
+    agent: tabAgent,
     client,
     hostId,
     pairedHostClient: paired,
@@ -62,15 +62,15 @@ export function useMobileStructuredAgentSession(
     sessionId,
     sourceIdentity = '',
     enabled,
-    onActionResolved,
     onSendError,
     hostSupport,
     onCommandsChanged
   } = args
+  const agent = args.activeProvider ?? tabAgent
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
-  const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, agent, sessionId)
+  const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, tabAgent, sessionId)
   const commandPendingRef = useRef(false)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } =
@@ -107,7 +107,6 @@ export function useMobileStructuredAgentSession(
   })
   const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
-  const { status, epoch } = state
   const linked = useMemo(
     () => mobileStructuredLinkedPrompts(state, args.itemLink, sessionId),
     [state, args.itemLink, sessionId]
@@ -229,7 +228,7 @@ export function useMobileStructuredAgentSession(
     journalItems: state.items,
     transcriptShown: messages.length > 0,
     // A saved or reloading copy is not this chat's current queue yet.
-    queueCurrent: status !== 'loading' && savedAt === null,
+    queueCurrent: state.status !== 'loading' && savedAt === null,
     queuedMessages,
     queuePause,
     submissions: state.submissions,
@@ -240,8 +239,7 @@ export function useMobileStructuredAgentSession(
     editCapable: hostSupport ? hostSupport.queuedMessageEdit === true : null,
     chatActive: enabled,
     enabled: enabled && connected,
-    mutate,
-    ...(onActionResolved ? { onActionResolved } : {})
+    mutate
   })
   // Stop preserves host-held cards under queue pause; only a later user action resumes them.
   const requestCancel = useMobileStructuredRequestCancel({
@@ -258,17 +256,18 @@ export function useMobileStructuredAgentSession(
     journal: { items: state.items, submissions: state.submissions },
     contextUsage: useMobileStructuredContextUsage(state.items, contextUsageSupport, state.epoch),
     visualSource: useMobileNativeChatVisualSource(client, sessionId),
-    ...useMobileStructuredAsyncQuestions(args, epoch),
+    ...useMobileStructuredAsyncQuestions(args, state.epoch),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
     session: {
       itemNavigation: savedAt === null ? linked.navigation : null,
       messages,
-      status,
+      status: state.status,
       // A stored copy can't answer "is this ask still open?" until a live frame confirms it.
-      transcriptLoading: status === 'loading' || savedAt !== null,
+      transcriptLoading: state.status === 'loading' || savedAt !== null,
       error: state.error,
-      readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
+      readFailedFinally:
+        state.status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
       clearing,
       hasMore: state.hasOlder && olderPages !== 'unavailable' && !clearing,
       loadingEarlier: olderPages === 'loading',

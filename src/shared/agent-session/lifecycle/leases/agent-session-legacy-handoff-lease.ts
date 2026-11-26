@@ -17,9 +17,13 @@ export type PersistedAgentSessionRuntimeKind =
 export type PersistedAgentSessionHandoffStage = AgentSessionHandoffStage | LegacyHandoffStage
 
 /** A lease as it may appear on disk. */
-export type PersistedAgentSessionLease = Omit<AgentSessionLease, 'runtimeKind' | 'handoffStage'> & {
+export type PersistedAgentSessionLease = Omit<
+  AgentSessionLease,
+  'runtimeKind' | 'handoffStage' | 'minimumNextFence'
+> & {
   runtimeKind: PersistedAgentSessionRuntimeKind
   handoffStage: PersistedAgentSessionHandoffStage | null
+  minimumNextFence?: number | null
 }
 
 /** A record as a row stores it. Decode through `decodePersistedAgentSessionRecord`. */
@@ -31,6 +35,9 @@ export type PersistedAgentSessionRecord = Omit<
   sleptAt?: unknown
   lastTurn?: unknown
   providerHandleChain: PersistedAgentSessionProviderHandleLink[]
+  /** Other agents' links. Older readers can still open the current provider's conversation. */
+  inactiveProviderHandleLinks?: PersistedAgentSessionProviderHandleLink[]
+  providerSwitchFenceFloor?: number
 }
 
 /** Checked stored facts before the independent next-grant floor has been validated. */

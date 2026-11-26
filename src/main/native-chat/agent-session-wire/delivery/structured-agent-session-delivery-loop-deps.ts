@@ -43,6 +43,23 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   ) => Promise<void>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
+  reconcileProviderSwitch?: (
+    session: StructuredAgentSessionHostSession,
+    clientMessageId: string | undefined
+  ) => Promise<'settled' | 'park' | 'current'>
+  prepareProviderSwitch?: (
+    session: StructuredAgentSessionHostSession,
+    submission: AgentJournalSubmission
+  ) => Promise<'none' | 'blocked' | 'changed' | 'rejected'>
+  settleProviderSwitch?: (
+    session: StructuredAgentSessionHostSession,
+    clientMessageId: string,
+    outcome: 'delivered' | 'failed'
+  ) => Promise<void>
+  providerSwitchPrompt?: (
+    session: StructuredAgentSessionHostSession,
+    clientMessageId: string
+  ) => Promise<string | null>
   retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
   /** Orca changed this chat's tools since its child launched and it owes no work (see
    *  `launchToolsRefreshDue`): the input needs a child that has them. */

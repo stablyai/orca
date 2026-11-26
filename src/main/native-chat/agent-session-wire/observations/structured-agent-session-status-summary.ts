@@ -80,6 +80,7 @@ export function structuredAgentSessionStatusSummary({
     ...(usageLimitContinue ? { usageLimitContinue } : {}),
     workspaceId: session.params.location.workspaceId,
     agent: session.params.provider,
+    ...structuredSummaryProviderSelection(record),
     ...(session.child || starting
       ? {
           hostExecutionOwned: true as const,
@@ -119,6 +120,13 @@ export function structuredAgentSessionStatusSummary({
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: lastActivityAt || now()
   }
+}
+
+export function structuredSummaryProviderSelection(
+  record: Pick<AgentSessionConversationView, 'selectedProvider'> | null
+): Pick<AgentSessionStatusSummary, 'selectedProvider'> {
+  const selected = record?.selectedProvider
+  return selected ? { selectedProvider: { agent: selected.agent, options: selected.options } } : {}
 }
 
 /** Marks chats whose pinned account runs a host program, which need no managed install. */
@@ -190,11 +198,13 @@ export function renamedStructuredStatusSummary(
     conversationNameSource: _source,
     forkedFrom: _forkedFrom,
     sleptAt: _sleptAt,
+    selectedProvider: _selectedProvider,
     ...rest
   } = previous
   const summary = {
     ...rest,
     ...structuredSummaryConversationNaming(record, deps.namingFailure?.(sessionId)),
+    ...structuredSummaryProviderSelection(record),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {})
   }
   return structuredStatusSummariesEqual(previous, summary) ? null : summary

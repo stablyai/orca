@@ -1718,7 +1718,8 @@
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
-        "permissionFullAccessDescription": "Never asks before edits or commands"
+        "permissionFullAccessDescription": "Never asks before edits or commands",
+        "permissionAgentSettings": "{{agent}} settings"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -3005,6 +3006,10 @@
       "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
       "hostFault": "Orca ran into a problem, so this didn't go through.",
       "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
+      "providerSwitchConsentRequired": "Choose the agent again and confirm its permissions before resending.",
+      "providerSwitchPlanMode": "Exit plan mode before switching agents, then resend your message.",
+      "providerSwitchUnavailable": "Check that the agent is available and signed in on this chat’s host, then choose it again.",
+      "providerSwitchQueuedPermission": "This message was queued before permissions changed. Choose an agent that supports its earlier permissions, or send the text as a new message.",
       "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
       "providerRateLimited": "{{agent}} is rate-limited and retrying.",
       "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
@@ -4312,6 +4317,22 @@
       "always": "Always allow {{server}}",
       "deny": "Deny",
       "thisServer": "this server"
+    },
+    "providerSwitch": {
+      "changed": "Chat permissions changed. Pick the agent again to continue.",
+      "failed": "Couldn’t select this agent.",
+      "closestPermissionTitle": "Use the closest permission on {{agent}}?",
+      "allow": "Allow and switch",
+      "moreModels": "More models ({{count}})",
+      "agent": "Agent",
+      "currentPermissions": "Current agent permissions",
+      "nextMessage": "Message {{agent}}…",
+      "pending": "Context handoff pending · {{from}} → {{to}}",
+      "closestPermission": "Closest available on {{agent}}: {{mode}}.",
+      "auggieAccess": "Auggie uses its own tool permissions. Orca can’t require it to ask before running tools.",
+      "toolsRunUnprompted": "{{agent}}’s usual tools can run without asking for Orca approval.",
+      "currentPermission": "Current permission: {{mode}}.",
+      "existingTurnPermissions": "The current reply and messages already queued keep their permissions."
     }
   },
   "sourceControl": {
@@ -7029,8 +7050,16 @@
       "description": "{{name}}’s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
       "kept": "Kept: soul, memory, automations, connectors",
       "notKept": "Not kept: the current conversation",
-      "threads": "Slack threads already running stay on {{agent}} until they finish",
-      "action": "Switch to {{agent}}"
+      "action": "Switch to {{agent}}",
+      "continueDescription": "Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.",
+      "homeContinues": "Home Chat continues on {{agent}} with its recent history",
+      "newChats": "New Slack threads, automation runs and chats you open later start on {{agent}}",
+      "existingSlackChats": "Slack threads with an existing Orca chat keep that chat’s agent",
+      "allowAction": "Allow access and switch",
+      "installRequired": "Install this agent on the bot’s computer first.",
+      "currentHomePermission": "Home Chat currently uses {{mode}}.",
+      "currentDefaultPermission": "New chats currently use {{mode}}.",
+      "threads": "Slack threads already running stay on {{agent}} until they finish"
     },
     "tools": {
       "add": "Add a tool",

@@ -41,9 +41,10 @@ type HostChoices = {
 async function readHostChoices(
   client: RpcClient,
   agent: string,
-  folderWorkspaceId: string
+  worktreeId: string,
+  signal: AbortSignal
 ): Promise<HostChoices> {
-  const worktree = `id:${folderWorkspaceKey(folderWorkspaceId)}`
+  const worktree = `id:${worktreeId}`
   const read = (waitForListing: boolean) =>
     callAgentSession<AgentSessionModelCatalogResult>(
       client,
@@ -61,7 +62,11 @@ async function readHostChoices(
   ])
   // A listing still running answers when it lands, as the desktop's picker waits for it.
   let catalog = first
-  for (let wait = 0; catalog.listingInProgress && wait < CATALOG_WAITS; wait += 1) {
+  for (
+    let wait = 0;
+    !signal.aborted && catalog.listingInProgress && wait < CATALOG_WAITS;
+    wait += 1
+  ) {
     catalog = await read(true)
   }
   return { catalog, seed: parseStructuredLaunchSeedOptions(support?.seedOptions) }
@@ -73,24 +78,48 @@ export function useBotModelChoices(
   online: boolean,
   bot: { agent: string; folderWorkspaceId: string; launch?: BotLaunch }
 ): BotModelChoices | null {
-  const { agent, folderWorkspaceId } = bot
-  const [answer, setAnswer] = useState<{ key: string; host: HostChoices | null } | null>(null)
-  const key = `${agent}\n${folderWorkspaceId}`
+  return useMobileChatModelChoices(
+    client,
+    online,
+    bot.agent,
+    folderWorkspaceKey(bot.folderWorkspaceId),
+    bot.launch
+  )
+}
+
+export function useMobileChatModelChoices(
+  client: RpcClient | null,
+  online: boolean,
+  agent: string | undefined,
+  worktreeId: string,
+  launch?: BotLaunch
+): BotModelChoices | null {
+  const [answer, setAnswer] = useState<{
+    client: RpcClient
+    key: string
+    host: HostChoices | null
+  } | null>(null)
+  const key = `${agent}\n${worktreeId}`
   useEffect(() => {
-    if (!client || !online) {
+    if (!client || !online || !agent) {
       return
     }
-    let live = true
-    void readHostChoices(client, agent, folderWorkspaceId).then(
-      (host) => live && setAnswer({ key, host }),
+    const controller = new AbortController()
+    void readHostChoices(client, agent, worktreeId, controller.signal).then(
+      (host) => !controller.signal.aborted && setAnswer({ client, key, host }),
       () =>
-        live && setAnswer((held) => (held?.key === key && held.host ? held : { key, host: null }))
+        !controller.signal.aborted &&
+        setAnswer((held) =>
+          held?.client === client && held.key === key && held.host
+            ? held
+            : { client, key, host: null }
+        )
     )
     return () => {
-      live = false
+      controller.abort()
     }
-  }, [client, online, agent, folderWorkspaceId, key])
-  const host = answer?.key === key ? answer.host : null
+  }, [client, online, agent, worktreeId, key])
+  const host = answer?.client === client && answer.key === key ? answer.host : null
   if (!host || !isTuiAgent(agent)) {
     return null
   }
@@ -103,17 +132,16 @@ export function useBotModelChoices(
   }
   // The bot's own picks over the chat defaults, as a new chat of the bot seeds them.
   const listed = agentPickerModels(entry, 'chat')
-  const modelId =
-    bot.launch?.model ?? host.seed?.model ?? listed.find((model) => model.isDefault)?.id
+  const modelId = launch?.model ?? host.seed?.model ?? listed.find((model) => model.isDefault)?.id
   const models = listed.filter((model) => !model.hidden || model.id === modelId)
   const model = modelId ? listedModelDescribing(models, undefined, modelId) : undefined
   const option = agentPickerEntryOptions(entry, modelId, 'chat').find(
     (candidate): candidate is EffortOption =>
       candidate.id === 'effort' && candidate.kind.type === 'select'
   )
-  const effort = bot.launch?.model
-    ? bot.launch.options?.effort
-    : (bot.launch?.options?.effort ?? host.seed?.effort)
+  const effort = launch?.model
+    ? launch.options?.effort
+    : (launch?.options?.effort ?? host.seed?.effort)
   return {
     models,
     modelId,

@@ -250,6 +250,12 @@ const FAILURE_SENTENCES = {
   answerUnconfirmed: (_context, _fact, _surface, say) => say('answerUnconfirmed'),
   hostFault: ({ agentName, retryControl }, _fact, _surface, say) =>
     (agentName ? `${agentName}: ` : '') + say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),
+  providerSwitchConsentRequired: (_context, _fact, _surface, say) =>
+    say('providerSwitchConsentRequired'),
+  providerSwitchPlanMode: (_context, _fact, _surface, say) => say('providerSwitchPlanMode'),
+  providerSwitchUnavailable: (_context, _fact, _surface, say) => say('providerSwitchUnavailable'),
+  providerSwitchQueuedPermission: (_context, _fact, _surface, say) =>
+    say('providerSwitchQueuedPermission'),
   hostStopped: (context, _fact, _surface, say) => say('hostStopped', agent(say, context)),
   // A provider that says how its retry is going, for a person, is quoted: that is the progress.
   providerRetrying: (context, { retry, detail }, _surface, say) =>

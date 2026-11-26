@@ -8,6 +8,8 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { unpickedFastModeIsOff } from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
 
 /** Capture send-specific choices or saved defaults once under the acceptance lane. */
@@ -33,8 +35,8 @@ export function captureStructuredExecutionOptions(
   ) {
     candidate.fastMode = 'false'
   }
-  const options = readAgentSessionExecutionOptions(candidate)
-  if (!options) {
+  const parsed = readAgentSessionExecutionOptions(candidate)
+  if (!parsed) {
     return {
       refusal: refuse(
         'agent_session_operation_invalid',
@@ -43,6 +45,7 @@ export function captureStructuredExecutionOptions(
       )
     }
   }
+  const { capturedAgent: _capturedAgent, ...options } = parsed
   const refusal = structuredAgentSessionOptionOverridesRefusal(
     ctx.agents,
     ctx.agent,
@@ -50,7 +53,27 @@ export function captureStructuredExecutionOptions(
       Object.entries(options).filter(([key]) => !(ctx.agent === 'codex' && key === 'fastMode'))
     )
   )
-  return refusal ? { refusal } : { options }
+  return refusal ? { refusal } : { options: { ...options, capturedAgent: ctx.agent } }
+}
+
+/** A later handoff may dispatch a waiting message on a different agent than captured its settings. */
+export function submissionForActiveAgent(
+  record: AgentSessionRecord | null,
+  submission: AgentJournalSubmission
+): AgentJournalSubmission {
+  const captured = submission.options?.capturedAgent
+  const stale =
+    record &&
+    (record.providerSwitch?.clientMessageId === submission.clientMessageId ||
+      (captured
+        ? captured !== record.provider
+        : submission.options && record.providerHandleChain.some(({ switchedBy }) => switchedBy)))
+  if (!stale && !captured) {
+    return submission
+  }
+  const { capturedAgent: _capturedAgent, ...options } =
+    (stale ? readAgentSessionExecutionOptions(record.options ?? {}) : submission.options) ?? {}
+  return { ...submission, options }
 }
 
 /** The model and effort the chat was created with, which its opening message runs on as a send's

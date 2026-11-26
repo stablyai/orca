@@ -1,3 +1,5 @@
+import type { BotControllerDependencies } from './bot-controller'
+import { botHomeFolder, writeBotHome } from './bot-home'
 import type { Bot } from '../../shared/bot-types'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
@@ -46,4 +48,20 @@ export function requireStoredBot(store: BotStore, botId: string): Bot {
     throw new Error('bot_not_found')
   }
   return bot
+}
+
+export async function saveBotUpdate(
+  store: BotStore,
+  { filesystem, botsRoot }: Pick<BotControllerDependencies, 'filesystem' | 'botsRoot'>,
+  previous: Bot,
+  next: Bot,
+  writeHome: boolean
+): Promise<void> {
+  if (writeHome) {
+    await writeBotHome(filesystem, botHomeFolder(next, botsRoot()), next)
+  }
+  if (next.name !== previous.name) {
+    store.updateFolderWorkspace(previous.folderWorkspaceId, { name: next.name })
+  }
+  store.saveBot(next)
 }

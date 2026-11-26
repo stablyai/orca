@@ -32,9 +32,14 @@ export function useMobileNativeChatSkills(args: {
   client: RpcClient | null
   worktreeId: string
   agent: string | null
+  nextAgent?: string
   supported: boolean
-}): { nativeChatSkills: NativeChatSkillDiscoverySnapshot; loadNativeChatSkills: () => void } {
-  const { hostId, client, worktreeId, agent, supported } = args
+}): {
+  nativeChatSkills: NativeChatSkillDiscoverySnapshot
+  queuedChatSkills: NativeChatSkillDiscoverySnapshot
+  loadNativeChatSkills: () => void
+} {
+  const { hostId, client, worktreeId, agent, nextAgent, supported } = args
   const exec = useWorkspaceExecutionHost() ?? 'local'
   const queryClient = useQueryClient()
   // The scan runs once a menu asks for it; a scan this document already holds shows at once.
@@ -71,18 +76,25 @@ export function useMobileNativeChatSkills(args: {
   }, [client, queryClient, scanKey, supported])
 
   const { data, isError } = scan
-  const nativeChatSkills = useMemo<NativeChatSkillDiscoverySnapshot>(() => {
-    if (!agent || !supported) {
-      return NO_SKILLS
+  const skills = useMemo(() => {
+    const discover = (provider: string | null): NativeChatSkillDiscoverySnapshot => {
+      if (!provider || !supported) {
+        return NO_SKILLS
+      }
+      if (!data) {
+        return { status: !demanded ? 'idle' : isError ? 'error' : 'loading', skills: [] }
+      }
+      return {
+        status: 'ready',
+        skills: data.skills.filter((skill) => isNativeChatSkillForAgent(provider, skill, data))
+      }
     }
-    if (!data) {
-      return { status: !demanded ? 'idle' : isError ? 'error' : 'loading', skills: [] }
-    }
+    const queuedChatSkills = discover(agent)
     return {
-      status: 'ready',
-      skills: data.skills.filter((skill) => isNativeChatSkillForAgent(agent, skill, data))
+      nativeChatSkills: nextAgent && nextAgent !== agent ? discover(nextAgent) : queuedChatSkills,
+      queuedChatSkills
     }
-  }, [agent, data, demanded, isError, supported])
+  }, [agent, data, demanded, isError, nextAgent, supported])
 
-  return { nativeChatSkills, loadNativeChatSkills }
+  return { ...skills, loadNativeChatSkills }
 }

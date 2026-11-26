@@ -33,6 +33,7 @@ export function continuationContextReader(
     sessionId: string
     workspaceId: string
     expectedCursor: AgentJournalCursor
+    inPlace?: { after?: AgentJournalCursor }
   }): Promise<AgentSessionContinuationContext> => {
     const sourceConversation = () => {
       const record = deps.store.getConversation(input.sessionId)
@@ -45,7 +46,7 @@ export function continuationContextReader(
       return { status: 'superseded' }
     }
     const session = await conversation(input.sessionId)
-    const context = await session.journal.reads.continuationContext()
+    const context = await session.journal.reads.continuationContext(input.inPlace?.after)
     const record = sourceConversation()
     if (
       !record ||
@@ -60,12 +61,19 @@ export function continuationContextReader(
     context.continued.forEach((part, index) => {
       items[part.index] = markers.mark(items[part.index], index)
     })
-    const messages = projectStructuredAgentSessionMessages(
-      items,
+    const projected = projectStructuredAgentSessionMessages(
+      input.inPlace
+        ? items.filter(
+            ({ body }) => body.kind !== 'status' || body.presentation !== 'context-handoff'
+          )
+        : items,
       [],
       context.submissions,
       projectSavedChatContextItems
     )
+    const messages = input.inPlace
+      ? projected.filter((message) => !message.queued && !message.unsent && !message.deliveryState)
+      : projected
     const continued = context.continued.length > 0
     const capturedText = buildAgentSessionHandoffContext(
       continued ? markers.excerpts(messages) : messages

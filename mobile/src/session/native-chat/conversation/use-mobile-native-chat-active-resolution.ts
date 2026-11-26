@@ -1,3 +1,8 @@
+import {
+  useMobileChatProviderPicker,
+  type MobileChatProviderPickerScope
+} from '../input/session-options/use-mobile-chat-provider-picker'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
@@ -7,6 +12,8 @@ import {
 } from '../../use-mobile-session-view-mode'
 
 export function useMobileNativeChatActiveResolution(args: {
+  client?: RpcClient | null
+  agentSessionHostSupport?: { selectProvider?: boolean } | null
   hostId: string
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
@@ -26,6 +33,7 @@ export function useMobileNativeChatActiveResolution(args: {
   activeChatAgentRef: MutableRefObject<string | null>
   activeChatSessionId: string | null
   activeChatStructured: boolean
+  providerPicker: MobileChatProviderPickerScope | null
   activeChatResolution: ReturnType<typeof resolveMobileNativeChat>
   nativeChatStatus: MobileNativeChatTab['agentStatus'] | null
   sourceIdentity: string
@@ -65,6 +73,14 @@ export function useMobileNativeChatActiveResolution(args: {
   const activeChatSessionId = activeChatResolution?.sessionId ?? null
   const activeChatStructured =
     activeChatResolution != null && activeSessionTab?.type === 'agent-session'
+  const providerPicker = useMobileChatProviderPicker(
+    args.client ?? null,
+    activeChatStructured && args.agentSessionHostSupport?.selectProvider
+      ? activeChatSessionId
+      : null,
+    worktreeId,
+    hostId
+  )
   const activeTabStatus = activeSessionTab?.agentStatus
   const nativeChatStatus = activeChatResolution && !activeChatStructured ? activeTabStatus : null
   const routeKey = `${hostId}\0${worktreeId}\0${activeSessionTabId ?? ''}`
@@ -83,6 +99,7 @@ export function useMobileNativeChatActiveResolution(args: {
     activeChatSessionId,
     activeChatStructured,
     activeChatResolution,
+    providerPicker,
     nativeChatStatus,
     sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId]),
     streamIdentity

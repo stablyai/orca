@@ -24,6 +24,8 @@ import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-st
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { useAppStore } from '../../../store/index'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { useAgentStatusSelector } from '@/runtime/agent-status/use-agent-status'
 import { useBotForWorkspace } from '../../bots/bot-workspace'
 import {
   isBotHomeTab,
@@ -90,6 +92,12 @@ function TabBarItemRow({
   )
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
+  )
+  const chatAgent = useAgentStatusSelector(
+    item.type === 'agent-session'
+      ? structuredAgentSessionPaneKey(item.data.id, item.data.entityId)
+      : null,
+    (entry) => entry?.agentType
   )
   const bot = useBotForWorkspace(
     worktreeId,
@@ -171,7 +179,10 @@ function TabBarItemRow({
     )
   }
   if (item.type === 'agent-session') {
-    const nativeChat = { sessionId: item.data.entityId, agent: item.data.agentSessionAgent }
+    const nativeChat = {
+      sessionId: item.data.entityId,
+      agent: chatAgent ?? item.data.agentSessionAgent
+    }
     const chatTab = item.data
     const forkSourceId = chatNaming.forkSourceId
     const fork = forkSourceId
@@ -203,7 +214,6 @@ function TabBarItemRow({
           customTitle: item.data.customLabel,
           color: item.data.color
         }}
-        // Why: a chat records its provider, so its title or turn state must never re-identify it.
         agent={agentTypeToIconAgent(nativeChat.agent)}
         isExpanded={false}
         onActivate={actions.activateAgentSession}

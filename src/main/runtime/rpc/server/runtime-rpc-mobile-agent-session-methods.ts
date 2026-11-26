@@ -22,6 +22,7 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.respondToApproval',
   'agentSession.respondToQuestion',
   'agentSession.setOption',
+  'agentSession.selectProvider',
   'agentSession.handoffStatus',
   'agentSession.options',
   'agentSession.modelCatalog',

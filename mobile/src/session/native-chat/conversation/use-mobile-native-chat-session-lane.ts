@@ -22,6 +22,7 @@ export function useMobileNativeChatSessionLane({
   composerScopeKey,
   structured,
   resolution,
+  activeProvider,
   sourceIdentity,
   hostSupport,
   appendComposerTextRef,
@@ -39,6 +40,7 @@ export function useMobileNativeChatSessionLane({
   composerScopeKey?: string | null
   structured: boolean
   resolution: MobileNativeChatResolution | null
+  activeProvider?: string
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
   hostSupport: StructuredAgentSessionHostSupport | null
   // Defer Edit through the composer ref because drafts mount after this lane.
@@ -94,6 +96,7 @@ export function useMobileNativeChatSessionLane({
     // reacquire the provider without clearing the cached transcript.
     connected: connState === 'connected',
     agent: structured ? agent : null,
+    activeProvider,
     sessionCommands: sessionCommands.commands,
     onCommandsChanged: sessionCommands.invalidate,
     onSendError,

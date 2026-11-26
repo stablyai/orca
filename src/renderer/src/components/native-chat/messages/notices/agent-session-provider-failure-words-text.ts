@@ -6,6 +6,26 @@ import {
 } from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const PROVIDER_FAILURE_PIECES = {
+  providerSwitchConsentRequired: () =>
+    translate(
+      'components.native-chat.failureWords.providerSwitchConsentRequired',
+      COPY.providerSwitchConsentRequired
+    ),
+  providerSwitchPlanMode: () =>
+    translate(
+      'components.native-chat.failureWords.providerSwitchPlanMode',
+      COPY.providerSwitchPlanMode
+    ),
+  providerSwitchUnavailable: () =>
+    translate(
+      'components.native-chat.failureWords.providerSwitchUnavailable',
+      COPY.providerSwitchUnavailable
+    ),
+  providerSwitchQueuedPermission: () =>
+    translate(
+      'components.native-chat.failureWords.providerSwitchQueuedPermission',
+      COPY.providerSwitchQueuedPermission
+    ),
   selectedModel: (values) =>
     translate('components.native-chat.failureWords.selectedModel', COPY.selectedModel, values),
   providerUnavailable: (values) =>

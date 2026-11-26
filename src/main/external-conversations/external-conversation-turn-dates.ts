@@ -47,13 +47,14 @@ export class TurnDates {
 
   /** The open turn's row shows this date too, its start re-dated, only while the host still runs the
    *  turn `opener` opened. */
-  showed(paneKey: string, at: number, opener: string | null): void {
+  showed(paneKey: string, at: number, opener: string | null): boolean {
     const known = this.openers.get(paneKey)
     if (!opener || known === '' || (known !== undefined && known !== opener)) {
-      return
+      return false
     }
     this.openers.set(paneKey, opener)
     this.add(paneKey, at)
+    return known === undefined
   }
 
   /** A turn taken over mid-run (a watch's snapshot, an adopted prompt) shows this date. */

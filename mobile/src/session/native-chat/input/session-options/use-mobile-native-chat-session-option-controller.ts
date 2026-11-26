@@ -15,6 +15,7 @@ import type {
 import { mobileNativeChatScopeKey } from '../../conversation/mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import type { MobileChatProviderPickerScope } from './use-mobile-chat-provider-picker'
 import {
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
@@ -29,6 +30,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   activeChatStructured: boolean
   activeSessionTabId: string | null
   agent: string | null
+  providerPicker: MobileChatProviderPickerScope | null
   dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
   hostId: string
   isTabChatView: (tabId: string) => boolean
@@ -61,6 +63,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     hostId,
     isTabChatView,
     isWorking,
+    providerPicker,
     reportedStatus,
     structured,
     toggleTabChatView,
@@ -148,12 +151,12 @@ export function useMobileNativeChatSessionOptionController(args: {
     () =>
       activeChatStructured
         ? structuredController
-          ? { controller: structuredController, isWorking }
+          ? { controller: structuredController, isWorking, providerPicker, activeAgent: agent }
           : null
         : sessionOptions.snapshot.length > 0
           ? { controller: sessionOptions, isWorking }
           : null,
-    [activeChatStructured, isWorking, sessionOptions, structuredController]
+    [activeChatStructured, agent, isWorking, providerPicker, sessionOptions, structuredController]
   )
 
   return { nativeChatSessionOptions, recordCommand: sessionOptions.recordCommand }

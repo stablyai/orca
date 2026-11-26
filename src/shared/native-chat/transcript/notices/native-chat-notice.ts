@@ -28,6 +28,7 @@ export type NativeChatNoticeTone = 'warning' | 'error' | 'notice'
 export type NativeChatNoticeLook =
   /** A rule across the chat with its label. */
   | { kind: 'divider'; label: 'compaction' | 'contextCleared' }
+  | { kind: 'context-handoff'; failed: boolean }
   /** The rule after a fork's inherited history, naming the chat it came from. */
   | {
       kind: 'forked-from'
@@ -80,6 +81,9 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   }
   if (presentation === 'context-cleared') {
     return { kind: 'divider', label: 'contextCleared' }
+  }
+  if (presentation === 'context-handoff') {
+    return { kind: 'context-handoff', failed: block.tone === 'error' }
   }
   if (presentation === AGENT_SESSION_FORKED_FROM_PRESENTATION && block.forkedFrom) {
     return {

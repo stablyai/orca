@@ -28,6 +28,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/records/agent-session-launch-args'
 import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { retainedProviderHandles } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-retained-handles'
 import type {
   StructuredAgentId,
   AgentSessionProviderHandleLink
@@ -234,15 +235,14 @@ export function assertAdoptedConversationUnowned(
     if (record.sessionId === request.sessionId) {
       continue
     }
-    // Only the conversation a chat continues now: an earlier link no longer holds anything.
-    const head = record.providerHandleChain.at(-1)
-    const holdsSameConversation =
-      !!head &&
-      (agentSessionProviderHandleRoot(head.handle) === root ||
+    const holdsSameConversation = retainedProviderHandles(record).some(
+      ({ handle }) =>
+        agentSessionProviderHandleRoot(handle) === root ||
         // One id from two chat agents that open the same conversations (`opencode`, `opencode2`).
-        (head.handle.transport === adopted.handle.transport &&
-          head.handle.nativeId === adopted.handle.nativeId &&
-          chatAgentsShareConversations(head.handle.agent, adopted.handle.agent)))
+        (handle.transport === adopted.handle.transport &&
+          handle.nativeId === adopted.handle.nativeId &&
+          chatAgentsShareConversations(handle.agent, adopted.handle.agent))
+    )
     if (holdsSameConversation) {
       throw agentSessionRefusalError('agent_session_conflict', {
         reason: 'conversationHeldElsewhere',

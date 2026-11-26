@@ -21,7 +21,7 @@ import {
   type AgentChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isBotAgent, type BotAgent } from '../../../../shared/bot-types'
-import { keptSetupCatalog } from '../../../../shared/agent-launch/picker/agent-launch-kept-setup-catalog'
+import { chatAgentPickerEntry } from '@/components/agent/chat-agent-picker-entry'
 import { botLaunchFromChoices, type BotLaunch } from '../../../../shared/bots/bot-launch'
 import type { BotPermissionIntent } from './use-bot-agent-setup'
 
@@ -104,21 +104,16 @@ function useBotAgentPickerEntries(
       if (previous && previous.signature === signature) {
         return previous.entry
       }
-      const projected: AgentPickerEntry = {
-        ...entry,
-        catalog: keptSetupCatalog(entry.agent, entry.catalog),
-        surfaces: ['chat'],
-        defaultSurface: 'chat',
-        // A bot's chats take no terminal Arguments, so none may set or hide a choice here.
-        arguments: '',
-        keptSetup: withPermission
+      const projected = chatAgentPickerEntry(
+        entry,
+        withPermission
           ? {
               permissions: agentChatPermissionModes(entry.agent)?.modes ?? [],
               // As the bot's Settings names it.
               inheritLabel: t('settings.bots.permissionSameAsChats', 'Same as chats')
             }
           : {}
-      }
+      )
       const projection: Projection = {
         signature,
         entry: projected,
@@ -161,6 +156,7 @@ export function BotAgentLaunchPicker({
   worktreeId,
   defaultModelHint,
   withPermission = true,
+  closeOnAgentChange,
   showChatDefaultHint = true,
   chatDefault,
   disabled,
@@ -178,6 +174,7 @@ export function BotAgentLaunchPicker({
   defaultModelHint?: { model?: { id: string; label: string }; observeModel: (id: string) => void }
   /** False where the bot's permission has its own control beside the picker. */
   withPermission?: boolean
+  closeOnAgentChange?: boolean
   showChatDefaultHint?: boolean
   /** Offered first in the menu, in place of the Use chat defaults link. */
   chatDefault?: BotAgentChatDefault
@@ -282,6 +279,7 @@ export function BotAgentLaunchPicker({
         draftForEntry={draftForEntry}
         disabled={disabled}
         selectAgentOnTab
+        closeOnAgentChange={closeOnAgentChange}
         onOpenChange={setMenuOpen}
         onCatalogOpen={setCatalogAgent}
         onPick={onPick}

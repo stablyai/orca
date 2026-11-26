@@ -119,6 +119,7 @@ export type MobileNativeChatController = {
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   nativeChatSkills: NativeChatSkillDiscoverySnapshot
+  queuedChatSkills: NativeChatSkillDiscoverySnapshot
   loadNativeChatSkills: () => void
   /** A grouped structured answer names the prompt it was rendered for. */
   handleNativeChatQuestionAnswer?: (

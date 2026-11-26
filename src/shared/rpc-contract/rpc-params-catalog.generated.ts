@@ -140,6 +140,7 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import { BotAgentSwitchPreview } from './bot-agent-switch-params'
 import {
   BotAvatarRead,
   BotAvatarUpload,
@@ -968,6 +969,7 @@ import {
   RestartResumeParams,
   RevealParams,
   RewindParams,
+  SelectProviderParams,
   SendParams,
   SetOptionParams,
   SleepWorkspaceParams,
@@ -1230,6 +1232,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.restartResume': RestartResumeParams,
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
+  'agentSession.selectProvider': SelectProviderParams,
   'agentSession.send': SendParams,
   'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
@@ -1278,6 +1281,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.access.redeem': BotAccessRedeem,
   'bots.activity': BotActivityRead,
   'bots.agentChoices': null,
+  'bots.agentSwitchPreview': BotAgentSwitchPreview,
   'bots.avatar.read': BotAvatarRead,
   'bots.avatar.slackIcon.upload': BotSlackIconUpload,
   'bots.avatar.slackIcon.wanted': BotSlackIconWanted,

@@ -14,11 +14,19 @@ const botAgentChoicesRead = bindDeferredRpcOperation(
     read: rpcResultVariant(
       'bot-agent-choices',
       z
-        .looseObject({ agents: z.array(z.string()), defaultAgent: z.unknown().optional() })
-        .transform(({ agents, defaultAgent }) => {
+        .looseObject({
+          agents: z.array(z.string()),
+          defaultAgent: z.unknown().optional(),
+          setupRequired: z.array(z.string()).optional()
+        })
+        .transform(({ agents, defaultAgent, setupRequired }) => {
           // A newer host's agent this build can't name or draw is left out.
           const known = BOT_AGENTS.filter((agent) => agents.includes(agent))
-          return { agents: known, defaultAgent: known.find((agent) => agent === defaultAgent) }
+          return {
+            agents: known,
+            defaultAgent: known.find((agent) => agent === defaultAgent),
+            setupRequired: setupRequired && known.filter((agent) => setupRequired.includes(agent))
+          }
         })
     )
   })
@@ -28,6 +36,7 @@ export type NewBotAgentChoices = {
   agents: BotAgent[]
   /** The agent the host's own New bot picks first; absent from an older host. */
   defaultAgent?: BotAgent
+  setupRequired?: BotAgent[]
 }
 
 /** The agents the host's own New bot offers there. A host that can't say (an older build, a failed

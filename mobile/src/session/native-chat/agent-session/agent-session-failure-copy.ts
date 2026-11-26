@@ -131,6 +131,26 @@ const COPY: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyVa
       "Orca ran into a problem, so this didn't go through. Try again.",
       values
     ),
+  providerSwitchConsentRequired: () =>
+    translate(
+      'session.failure.providerSwitchConsentRequired',
+      AGENT_SESSION_FAILURE_COPY.providerSwitchConsentRequired
+    ),
+  providerSwitchPlanMode: () =>
+    translate(
+      'session.failure.providerSwitchPlanMode',
+      AGENT_SESSION_FAILURE_COPY.providerSwitchPlanMode
+    ),
+  providerSwitchUnavailable: () =>
+    translate(
+      'session.failure.providerSwitchUnavailable',
+      AGENT_SESSION_FAILURE_COPY.providerSwitchUnavailable
+    ),
+  providerSwitchQueuedPermission: () =>
+    translate(
+      'session.failure.providerSwitchQueuedPermission',
+      AGENT_SESSION_FAILURE_COPY.providerSwitchQueuedPermission
+    ),
   hostStopped: (values) =>
     translate(
       'session.failure.hostStopped',

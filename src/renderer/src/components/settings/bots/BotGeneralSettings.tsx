@@ -1,3 +1,4 @@
+import type { BotAgentSwitchPreviewResult } from '../../../../../shared/rpc-contract/bot-agent-switch-params'
 // A bot's general settings, one subpage each: its agent and model, and its permissions.
 import { Check } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,7 +16,10 @@ import {
   SettingsInsetRow
 } from '@/components/bots/settings-view/BotSettingsRows'
 import { useTranslate } from '@/i18n/use-translate'
+import { botTarget, callBotRpc } from '@/lib/bot-hosts'
 import { openBotChat } from '@/lib/bot-catalog'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   AGENT_CHAT_PERMISSION_MODES,
   type AgentChatPermissionMode
@@ -39,6 +43,11 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
   const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
   const defaultModelHint = useBotSettingsModel(bot, worktreeId)
   const confirmAgentSwitch = useConfirmBotAgentSwitch()
+  const inPlace =
+    useStructuredAgentSessionHostCapabilityState(
+      botTarget(bot),
+      AGENT_SESSION_SELECT_PROVIDER_RUNTIME_CAPABILITY
+    ) !== 'unsupported'
   // The permission has its own subpage; the picker sets the agent and what it runs on.
   const setAgentSetup = async ({ agent, launch }: BotAgentSetup): Promise<void> => {
     if (agent === bot.agent) {
@@ -47,14 +56,31 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
       }
       return
     }
-    if (
-      !(await confirmAgentSwitch(bot, agent)) ||
-      !(await update({ agent, launch: launch ?? null }))
-    ) {
-      return
+    try {
+      if (!inPlace) {
+        if (
+          (await confirmAgentSwitch(bot, agent, null, false)) &&
+          (await update({ agent, launch: launch ?? null }))
+        ) {
+          await openBotChat(bot)
+        }
+        return
+      }
+      const { consent } = await callBotRpc<BotAgentSwitchPreviewResult>(
+        bot,
+        'bots.agentSwitchPreview',
+        { botId: bot.id, agent }
+      )
+      if (await confirmAgentSwitch(bot, agent, consent)) {
+        await update({
+          agent,
+          launch: launch ?? null,
+          ...(consent ? { agentSwitchConsent: consent } : {})
+        })
+      }
+    } catch (error) {
+      toast.error(botErrorMessage(error))
     }
-    // The Home Chat starts fresh now, not on its next message, so its tab already runs the new agent.
-    await openBotChat(bot).catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   return (
     <SettingsInsetGroup>
@@ -75,6 +101,7 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
           worktreeId={worktreeId}
           defaultModelHint={defaultModelHint}
           withPermission={false}
+          closeOnAgentChange
           onChange={(setup) => void setAgentSetup(setup)}
         />
       </div>

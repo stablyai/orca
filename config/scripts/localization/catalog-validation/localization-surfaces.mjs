@@ -2,6 +2,14 @@ import path from 'node:path'
 
 // Copy both surfaces render; each resolves it in its own catalog through an injected translator.
 const USAGE_STATUS_COPY_ROOT = path.join('src', 'shared', 'agent-usage', 'status-copy')
+const PROVIDER_SWITCH_PERMISSION_COPY = path.join(
+  'src',
+  'shared',
+  'agent-session',
+  'options',
+  'permissions',
+  'provider-switch-permission-copy.ts'
+)
 
 // Desktop and mobile ship separate catalogs under one contract: same call shape, key rules and gates.
 export const LOCALIZATION_SURFACES = {
@@ -36,7 +44,8 @@ export const LOCALIZATION_SURFACES = {
         'accounts',
         'agent-session-usage-account-label.ts'
       ),
-      USAGE_STATUS_COPY_ROOT
+      USAGE_STATUS_COPY_ROOT,
+      PROVIDER_SWITCH_PERMISSION_COPY
     ],
     runtimeRequiredPath: path.join('src', 'renderer', 'src', 'i18n', 'en-runtime-required.json'),
     // Desktop runtimes load built-in catalogs as-is; plural forms CLDR adds beyond `_other` are committed.
@@ -79,7 +88,8 @@ export const LOCALIZATION_SURFACES = {
         'accounts',
         'agent-session-usage-account-label.ts'
       ),
-      USAGE_STATUS_COPY_ROOT
+      USAGE_STATUS_COPY_ROOT,
+      PROVIDER_SWITCH_PERMISSION_COPY
     ],
     runtimeRequiredPath: path.join('mobile', 'src', 'i18n', 'en-runtime-required.json'),
     syncCatalogCommand: 'pnpm run sync:mobile-localization',

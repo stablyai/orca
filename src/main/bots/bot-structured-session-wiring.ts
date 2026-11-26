@@ -84,6 +84,7 @@ export function botStructuredSessionWiring(deps: {
     | 'readOnlySession'
     | 'quietTurnEnd'
     | 'isBotHome'
+    | 'botHomeDefault'
   >
 > {
   const lookup = createBotLookupIndex(() => deps.store().getBots?.() ?? [])
@@ -264,6 +265,10 @@ export function botStructuredSessionWiring(deps: {
           : null,
     quietTurnEnd: (sessionId, outcome, usageLimited) =>
       deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
-    isBotHome: (workspaceId) => lookup.byHome(workspaceId) !== null
+    isBotHome: (workspaceId) => lookup.byHome(workspaceId) !== null,
+    botHomeDefault: (botId, sessionId) => {
+      const bot = botById(botId)
+      return bot?.chatSessionId === sessionId ? bot.agent : undefined
+    }
   }
 }

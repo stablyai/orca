@@ -207,7 +207,7 @@ function MobileNativeChatOverlayContent({
       interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
         (entry) => entry.id === 'interactionMode'
       ),
-      skillDiscovery: controller.nativeChatSkills,
+      skillDiscovery: controller.queuedChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
       ...mentionFiles,
       onError: (message: string) => controller.reportQueuedEditError?.(message),
@@ -223,7 +223,7 @@ function MobileNativeChatOverlayContent({
       agent,
       structuredComposer,
       controller.nativeChatSessionOptions,
-      controller.nativeChatSkills,
+      controller.queuedChatSkills,
       controller.loadNativeChatSkills,
       mentionFiles,
       controller.reportQueuedEditError,

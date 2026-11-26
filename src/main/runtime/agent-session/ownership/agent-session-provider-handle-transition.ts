@@ -34,7 +34,7 @@ export function recordAgentSessionProviderHandle(args: {
   }
   const providerHandleChain = appendAgentSessionProviderHandleLink(
     record.providerHandleChain,
-    args.link
+    providerSwitchHandleLink(record, args.link)
   )
   const head = providerHandleChain.at(-1)
   if (!head) {
@@ -49,6 +49,23 @@ export function recordAgentSessionProviderHandle(args: {
       lastRenewedAt: args.now
     },
     updatedAt: args.now
+  }
+}
+
+export function providerSwitchHandleLink(
+  record: AgentSessionRecord,
+  link: AgentSessionProviderHandleLink
+): AgentSessionProviderHandleLink {
+  const previous = record.providerHandleChain.at(-1)
+  if (!record.providerSwitch) {
+    return link
+  }
+  return {
+    ...link,
+    switchedBy: record.providerSwitch.clientMessageId,
+    ...(previous && previous.handle.agent !== link.handle.agent
+      ? { switchedFrom: previous.linkId }
+      : {})
   }
 }
 

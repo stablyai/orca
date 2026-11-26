@@ -27,6 +27,7 @@ import {
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
 import { packageBuildPlugin } from './one-package-build-plugin.mjs'
+import { packedEnglishFallbackPlugin } from './packed-english-fallback-plugin.mjs'
 import { PAGE_GLOBALS_BANNER, bannerOnlyWhereScriptsRunFirst } from './page-globals-banner.mjs'
 import {
   ROUTE_ENTRY_NAMESPACE,
@@ -321,6 +322,7 @@ export function mobileWebAppBuildOptions(
       lucideBarrelPlugin,
       reactNativeSvgWebPlugin,
       hairlineDevicePixelPlugin,
+      packedEnglishFallbackPlugin,
       packageBuildPlugin
     ],
     resolveExtensions: [

@@ -108,6 +108,8 @@ export type MobileStructuredAgentSessionArgs = {
   /** Capability facts from the shared runtime status probe; null follows the legacy wire. */
   hostSupport: StructuredAgentSessionHostSupport | null
   agent: string | null
+  /** Live provider from the host, separate from the original tab's transcript identity. */
+  activeProvider?: string
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
   onCommandsChanged?: () => void
   sessionCommands?: readonly AgentSessionSlashCommand[]

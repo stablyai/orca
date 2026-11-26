@@ -270,14 +270,12 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  private mutations = mutationWiring.structuredAgentSessionMutationDelegates(
-    () => this.mutationContext(),
-    () => this.attachContext()
-  )
+  private mutations = mutationWiring.sessionMutations(this.mutationContext, this.attachContext)
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
   approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
   setOption = this.mutations.setOption
+  selectProvider = this.mutations.selectProvider
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 

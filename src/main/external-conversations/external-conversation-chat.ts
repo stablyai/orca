@@ -22,6 +22,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   getStructuredAgentSessionHost,
   onStructuredAgentSessionHostChanged
@@ -42,7 +43,21 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'publishedWork'
     | 'conversation'
   > & {
-    deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
+    deps: {
+      store: {
+        getConversation(
+          sessionId: string
+        ):
+          | (Pick<AgentSessionConversationView, 'currentFence'> &
+              Partial<
+                Pick<
+                  AgentSessionConversationView,
+                  'providerSwitch' | 'provider' | 'providerHandleChain'
+                >
+              >)
+          | null
+      }
+    }
   }
 
 /** The native-chat host is installed lazily and can be replaced, so readers follow it. */

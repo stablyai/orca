@@ -108,9 +108,11 @@ export function createQueuedRigProvider(
         link: {
           linkId: `link-${fence}`,
           handle:
-            identity.agent === 'claude'
-              ? claudeProviderHandle(thread, null)
-              : codexProviderHandle(thread),
+            identity.agent === 'pi'
+              ? { transport: 'jsonl-rpc', agent: 'pi', nativeId: thread }
+              : identity.agent === 'claude'
+                ? claudeProviderHandle(thread, null)
+                : codexProviderHandle(thread),
           origin: resumes ? ('resumed' as const) : ('created' as const),
           mintedAtFence: fence,
           observedAt: NOW

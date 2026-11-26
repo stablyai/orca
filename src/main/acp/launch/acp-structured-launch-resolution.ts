@@ -21,7 +21,7 @@ import {
 
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { activeProviderContext } from '../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -274,7 +274,7 @@ export function acpStructuredLaunchPart(
       ...botServers,
       ...ownServers.filter((own) => !botServers.some((bot) => bot.name === own.name))
     ]
-    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    const { head, handleChain } = activeProviderContext(record)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
     const model = spec.launchesWithModel && !head ? record.options?.model : undefined
@@ -318,7 +318,7 @@ export function acpStructuredLaunchPart(
                   identity.sessionId,
                   head.handle.nativeId
                 )),
-              lossKeys: record.providerHandleChain.flatMap((link) =>
+              lossKeys: handleChain.flatMap((link) =>
                 link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
               )
             }

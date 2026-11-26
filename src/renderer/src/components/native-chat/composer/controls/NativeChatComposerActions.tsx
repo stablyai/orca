@@ -20,6 +20,8 @@ import {
 import { NativeChatSessionOptionPickers } from '../../session/options/controls/NativeChatSessionOptionPickers'
 import { NativeChatComposerPermissionPicker } from '../../session/options/controls/NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
+import { NativeChatProviderPicker } from './NativeChatProviderPicker'
+import { NativeChatProviderPickerContext } from './native-chat-provider-picker-context'
 import { NativeChatComposerPrimaryButton } from './NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from './NativeChatAttachButton'
 import { NativeChatDictationButton } from './NativeChatDictationButton'
@@ -103,6 +105,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   const t = useTranslate()
   useUiLanguageRevision()
   const roomReplies = useContext(NativeChatRoomContext)?.replies
+  const providerPicker = useContext(NativeChatProviderPickerContext)
   const mode = useNativeChatPlanMode({
     surface: sessionOptionsSurface,
     snapshot: sessionOptionsSnapshot,
@@ -242,15 +245,23 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   const right: NativeChatComposerControl[] = [
     {
       id: 'model',
-      content: (
-        <NativeChatSessionOptionPickers
-          surface={sessionOptionsSurface}
-          snapshot={sessionOptionsSnapshot}
-          isWorking={isWorking}
-          pickerRequest={sessionOptionsPickerRequest}
-          focusComposer={focusComposer}
-        />
-      )
+      content:
+        providerPicker && agent && !editSession && !sessionOptionsPickerRequest ? (
+          <NativeChatProviderPicker
+            scope={providerPicker}
+            active={agent}
+            surface={sessionOptionsSurface}
+            snapshot={sessionOptionsSnapshot}
+          />
+        ) : (
+          <NativeChatSessionOptionPickers
+            surface={sessionOptionsSurface}
+            snapshot={sessionOptionsSnapshot}
+            isWorking={isWorking}
+            pickerRequest={sessionOptionsPickerRequest}
+            focusComposer={focusComposer}
+          />
+        )
     },
     ...(contextUsage
       ? [

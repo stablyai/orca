@@ -1,3 +1,5 @@
+import type { AgentSessionSelectProviderParams } from '../../../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
+import { selectStructuredChatProvider } from '../delivery/structured-agent-session-provider-selection'
 import {
   cancelStructuredAgentSessionTurn,
   respondToStructuredAgentSessionPrompt,
@@ -52,6 +54,10 @@ export function createStructuredAgentSessionHostMutationContext(
     deps: input.deps,
     sessions: input.sessions,
     publish: (sessionId, journal) => input.clientDelivery.subscribers.publish(sessionId, journal),
+    afterProviderSelection: (sessionId, journal) => {
+      input.clientDelivery.publishStatusAndSettlement(sessionId)
+      input.conversationDelivery.afterCommit(sessionId, journal)
+    },
     publishConversationName: (sessionId) => {
       const record = input.deps.store.getRecord(sessionId)
       if (input.deps.conversationNaming && record) {
@@ -95,11 +101,48 @@ export function createStructuredAgentSessionHostMutationContext(
 }
 
 /** Resolve context per call so moved maps/fences cannot become stale closures. */
-export function structuredAgentSessionMutationDelegates(
+export function sessionMutations(
   context: () => StructuredAgentSessionMutationContext,
   attachContext: () => StructuredAgentSessionAttachContext
 ) {
   return {
+    selectProvider: async (
+      params: AgentSessionSelectProviderParams,
+      botDefault?: { botId: string; save: () => Promise<void> }
+    ) => {
+      const mutations = context()
+      await mutations.conversation(params.sessionId)
+      return mutations.serialize(params.sessionId, async () => {
+        const session = mutations.sessions.get(params.sessionId)
+        if (!session) {
+          throw new Error('agent_session_provider_switch_unavailable')
+        }
+        const previous = mutations.deps.store.getRecord(params.sessionId)?.selectedProvider
+        const result = await selectStructuredChatProvider(
+          {
+            deps: mutations.deps,
+            now: mutations.now
+          },
+          session,
+          params,
+          botDefault?.botId
+        )
+        if (result.status === 'selected') {
+          try {
+            await botDefault?.save()
+          } catch (error) {
+            await mutations.deps.store.updateRecord(params.sessionId, {
+              kind: 'select-provider',
+              selection: previous ?? null,
+              now: mutations.now()
+            })
+            throw error
+          }
+          mutations.afterProviderSelection?.(params.sessionId, session.journal)
+        }
+        return result
+      })
+    },
     cancel: (
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof cancelStructuredAgentSessionTurn>[2]

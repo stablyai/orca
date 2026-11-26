@@ -72,7 +72,8 @@ export function toConnectorEvent(
         conversation,
         paneKey,
         at: event.at,
-        ...(event.deliveryId ? { deliveryId: event.deliveryId } : {})
+        ...(event.deliveryId ? { deliveryId: event.deliveryId } : {}),
+        ...(slack && event.switchedAgent ? { switchedAgent: event.switchedAgent } : {})
       }
     case 'turn-ended':
       // Without its start the cloud cannot place the turn; the next snapshot marks it unverifiable.

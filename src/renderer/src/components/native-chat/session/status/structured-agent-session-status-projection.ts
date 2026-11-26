@@ -88,7 +88,7 @@ function projectFailedStart(
     // Keep failure dating across restart, replacing even newer pane rows without refreshing its age.
     timing: { updatedAt: failedAt, allowOlderTimestamp: true, stateStartedAt: failedAt },
     routing: { tabId: tab.id, worktreeId: tab.worktreeId },
-    metadata: { terminalResumeEligible: false }
+    metadata: { structuredSessionStatus: true }
   })
 }
 
@@ -156,7 +156,7 @@ export function projectStatus(
     // Derived from `mainAgent`, so the equality below needs no second check of it.
     interrupted: mainAgentTurnInterrupted(mainAgent),
     prompt: summary.latestPrompt,
-    agentType: tab.agentSessionAgent,
+    agentType: summary.agent,
     // Project host journal model, live tool and settled reply fields as hook rows do.
     ...(summary.model ? { model: summary.model } : {}),
     ...(summary.toolName ? { toolName: summary.toolName } : {}),
@@ -188,11 +188,7 @@ export function projectStatus(
     current.worktreeId === tab.worktreeId &&
     current.terminalResumeEligible === false &&
     current.structuredHostOwned === summary.hostExecutionOwned &&
-    agentProviderSessionsEqual(
-      tab.agentSessionAgent,
-      current.providerSession,
-      summary.providerSession
-    )
+    agentProviderSessionsEqual(summary.agent, current.providerSession, summary.providerSession)
   ) {
     return
   }
@@ -214,7 +210,7 @@ export function projectStatus(
     routing: { tabId: tab.id, worktreeId: tab.worktreeId },
     metadata: {
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
-      terminalResumeEligible: false,
+      structuredSessionStatus: true,
       ...(summary.hostExecutionOwned ? { structuredHostOwned: true as const } : {})
     }
   })

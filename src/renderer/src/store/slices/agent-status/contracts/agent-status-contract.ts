@@ -96,7 +96,8 @@ export type AgentStatusMetadata = {
   /** Null is a host statement that no Orca launch runs; absent says nothing. */
   launchConfig?: SleepingAgentLaunchConfig | null
   launchToken?: string
-  terminalResumeEligible?: false
+  /** Status projected from the structured session feed rather than a terminal hook. */
+  structuredSessionStatus?: true
   executionHost?: 'shared'
   paneOwner?: { agent: AgentType; session: string }
 }

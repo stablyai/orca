@@ -61,6 +61,7 @@ export function ConfirmContent({
       <View style={styles.buttons}>
         {cancelLabel === null ? null : (
           <Pressable
+            accessibilityRole="button"
             style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
             onPress={() => {
               onCancelPress?.()
@@ -71,6 +72,7 @@ export function ConfirmContent({
           </Pressable>
         )}
         <Pressable
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.button,
             destructive ? styles.destructiveButton : styles.confirmButton,

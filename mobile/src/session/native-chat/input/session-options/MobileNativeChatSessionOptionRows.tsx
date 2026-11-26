@@ -1,3 +1,7 @@
+import {
+  mobileDeferredPermissionSummary,
+  mobileSessionOptionSummaryValue
+} from './mobile-native-chat-session-option-labels'
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ShieldAlert, type LucideIcon } from 'lucide-react-native'
@@ -6,8 +10,14 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup'
 import {
+  LIST_ROW_PADDING,
+  ListGroup,
+  ListRow,
+  SectionHeader
+} from '../../../../components/list/ListGroup'
+import {
+  isReadOnlySessionOptionValue,
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
   type SessionOptionValue
@@ -36,6 +46,7 @@ export function ModelPill({
   warning,
   icon: Icon,
   leading,
+  leadingContent,
   accessibleName,
   disabled,
   onPress
@@ -46,6 +57,7 @@ export function ModelPill({
   icon?: LucideIcon
   /** Shown before the label, unlike `icon`, which replaces it. */
   leading?: LucideIcon
+  leadingContent?: ReactNode
   accessibleName: string
   disabled: boolean
   onPress: () => void
@@ -63,6 +75,7 @@ export function ModelPill({
       disabled={disabled}
       hitSlop={6}
     >
+      {leadingContent}
       {PillIcon ? (
         <PillIcon
           size={15}
@@ -306,3 +319,67 @@ const styles = themedStyleSheet(() => ({
     maxWidth: 180
   }
 }))
+
+export function SessionOptionSummaryRows({
+  descriptors,
+  permission,
+  permissionColor,
+  locked,
+  onNavigate,
+  onSetOption
+}: {
+  descriptors: readonly SessionOptionDescriptor[]
+  permission: SessionOptionDescriptor | undefined
+  permissionColor: string | undefined
+  locked: (descriptor: SessionOptionDescriptor) => boolean
+  onNavigate: (page: string) => void
+  onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
+}): React.JSX.Element | null {
+  const t = useMobileTranslation()
+  if (descriptors.length === 0) {
+    return null
+  }
+  return (
+    <>
+      <SectionHeader title={t('chat.sessionOptionPickers.optionsSection', 'Options')} />
+      <ListGroup>
+        {descriptors.flatMap((descriptor) => {
+          const isPermission = descriptor === permission
+          const deferred = isPermission ? mobileDeferredPermissionSummary(descriptor) : null
+          const disabled = locked(descriptor) || !descriptor.settable
+          if (showsSessionOptionAsSwitch(descriptor)) {
+            return descriptorRowElements(
+              {
+                descriptor,
+                disabled,
+                onSetOption: (value) => onSetOption(descriptor, value),
+                onInvokeAction: () => onNavigate(descriptor.id)
+              },
+              t
+            )
+          }
+          return [
+            <SessionOptionSummaryRow
+              key={descriptor.id}
+              label={
+                isPermission
+                  ? t('chat.sessionOptionPickers.permissions', 'Permissions')
+                  : nativeChatSessionOptionLabel(descriptor, say)
+              }
+              value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
+              subtitle={deferred?.timing}
+              accessibleValue={deferred?.full}
+              valueColor={isPermission ? permissionColor : undefined}
+              disabled={disabled}
+              onPress={
+                isReadOnlySessionOptionValue(descriptor)
+                  ? undefined
+                  : () => onNavigate(descriptor.id)
+              }
+            />
+          ]
+        })}
+      </ListGroup>
+    </>
+  )
+}

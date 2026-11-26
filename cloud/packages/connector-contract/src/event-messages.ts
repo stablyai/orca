@@ -163,6 +163,8 @@ export type ConnectorActivityEvent = z.infer<typeof ConnectorActivityEventSchema
 
 // Identities: linked by pane, prompt by pane + promptId, a turn by pane + its turn-started `at` (turnId).
 // actsFor: whom the linked chat acts for, once recorded; an older machine leaves it out.
+const SwitchedAgentSchema = z.string().trim().min(1).max(64).regex(/^[^\r\n]+$/).optional().catch(undefined)
+
 export const ConnectorEventSchema = z.discriminatedUnion('kind', [
   z.object({
     ...PaneEvent,
@@ -193,7 +195,9 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     kind: z.literal('turn-started'),
     at: EpochMsSchema,
     // The delivery the turn answers, when exactly one started it; an older machine leaves it out.
-    deliveryId: OpaqueIdSchema.optional()
+    deliveryId: OpaqueIdSchema.optional(),
+    // Present only on the first turn after this chat changes agents.
+    switchedAgent: SwitchedAgentSchema
   }),
   z.object({
     ...PaneEvent,
@@ -243,6 +247,7 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
           ...PaneEvent,
           agent: z.string().min(1),
           working: z.boolean(),
+          switchedAgent: SwitchedAgentSchema,
           prompt: ConnectorPendingPromptSchema.nullable(),
           // The pane's latest turn (its turn-started `at`), working or not; a turn end older than it
           // changes nothing.

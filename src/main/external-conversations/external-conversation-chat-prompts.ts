@@ -10,6 +10,8 @@ import {
   type ConnectorAnswer
 } from '../../shared/connectors/connector-cloud-contract'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { agentSessionPromptQuestions } from '../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { refusalOf } from './external-conversation-chain'
 import {
@@ -213,6 +215,21 @@ export function chatPromptFacts(chats: ConversationChatHost | undefined) {
     turnStartedAt: (sessionId: string) => {
       const item = currentChat(chats)?.publishedWork(sessionId)?.activeTurn?.item
       return item ? (readAgentJournalTurn(item.body)?.startedAt ?? item.observedAt) : null
+    },
+    switchedAgentForTurn: (sessionId: string) => {
+      const chat = currentChat(chats)
+      const record = chat?.deps.store.getConversation(sessionId)
+      const switchedBy =
+        record?.providerSwitch?.clientMessageId ?? record?.providerHandleChain?.at(-1)?.switchedBy
+      const work = chat?.publishedWork(sessionId)
+      const activeTurn = work?.activeTurn?.item.body
+      const opener =
+        (activeTurn ? readAgentJournalTurn(activeTurn)?.userItemId : undefined) ??
+        work?.activeTurnOpener?.itemId
+      if (!record?.provider || !switchedBy || opener !== agentJournalSubmissionKey(switchedBy)) {
+        return undefined
+      }
+      return tuiAgentDisplayName(record.provider) ?? record.provider
     },
     turnPlan: async (sessionId: string) => {
       const reads = await currentChat(chats)?.journalReads(sessionId)

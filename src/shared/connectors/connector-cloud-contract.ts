@@ -342,7 +342,7 @@ export type ConnectorEvent =
       answeredWith?: string
     })
   // deliveryId: the delivery the turn answers; an older cloud ignores it.
-  | (PaneEvent & { kind: 'turn-started'; at: number; deliveryId?: string })
+  | (PaneEvent & { kind: 'turn-started'; at: number; deliveryId?: string; switchedAgent?: string })
   | (PaneEvent & {
       kind: 'turn-ended'
       turnId: number
@@ -388,6 +388,7 @@ export type ConnectorEvent =
       conversations: (PaneEvent & {
         agent: string
         working: boolean
+        switchedAgent?: string
         prompt: ConnectorPrompt | null
         // The pane's latest turn; a turn end older than it changes nothing.
         turnId?: number

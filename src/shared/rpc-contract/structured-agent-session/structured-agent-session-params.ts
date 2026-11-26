@@ -186,6 +186,19 @@ export const SetOptionParams = z.strictObject({
   value: z.string().max(MAX_OPTION_LABEL)
 })
 
+export const SelectProviderParams = z.strictObject({
+  sessionId: SessionId,
+  agent: Identifier('Invalid agent'),
+  options: AgentSessionSelectionSchema.omit({ interactionMode: true }).optional(),
+  consent: z
+    .strictObject({
+      from: Identifier('Invalid source agent'),
+      fromPermission: z.enum(['ask', 'accept-edits', 'auto', 'full-access', 'own']),
+      permission: z.literal('full-access')
+    })
+    .optional()
+})
+
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({
   botLinkTarget: BotLinkOpenTargetSchema.optional(),

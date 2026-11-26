@@ -1,5 +1,6 @@
 // The desktop bot panels' English wording, for the phone's bot header and sheet.
 import { isHostNotConnectedError } from '../query/host-query-errors'
+import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import { formatAutomationSchedule } from '../../../src/shared/automations/scheduling/automation-schedules'
@@ -16,7 +17,9 @@ import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
 
 export function botAgentLabel(agent: AgentType): string {
-  return agent === 'claude' ? 'Claude Code' : formatAgentTypeLabel(agent)
+  return agent === 'claude'
+    ? 'Claude Code'
+    : (tuiAgentDisplayName(agent) ?? formatAgentTypeLabel(agent))
 }
 
 // The desktop's event words; an event a newer host sends falls back to its service's line.

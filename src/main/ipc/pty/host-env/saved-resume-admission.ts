@@ -11,18 +11,11 @@ import type {
   RefusedPaneResume
 } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import {
-  agentSessionLeasePossiblyWriting,
-  listStructuredProviderSessionOwnership
-} from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 // oxfmt-ignore
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import {
-  keysMayMatch,
-  terminalConversationKey
-} from '../../../native-chat/conversation-adoption/structured-conversation-key'
+import { judgeResumes } from './saved-resume-ownership'
 
 export type ResumeSpawnArgs = {
   connectionId?: string | null
@@ -114,49 +107,6 @@ export async function admitColdRestoreReattach(
   ]
   const [first] = resumes
   return first ? judgeResumes(runtime, [first]) : null
-}
-
-async function judgeResumes(
-  runtime: AdmissionRuntime,
-  resumes: readonly [RefusedPaneResume, ...RefusedPaneResume[]]
-): Promise<ResumeSpawnAdmission> {
-  const keysOf = ({ agent, providerSession }: RefusedPaneResume) =>
-    [providerSession.id, providerSession.transcriptPath].flatMap((id) =>
-      id?.trim() ? [terminalConversationKey(agent, id)] : []
-    )
-  const admitted = (): ResumeSpawnAdmission => ({
-    verdict: 'admitted',
-    refused: resumes[0]
-  })
-  let store: AgentSessionRecordStore
-  try {
-    store = await runtime.openAgentSessionRecordStore()
-  } catch (error) {
-    console.warn(
-      "[pty] native chat records unreadable; cannot tell whether a resume is a chat's",
-      error
-    )
-    return { verdict: 'unverifiable', refused: resumes[0] }
-  }
-  const heads = listStructuredProviderSessionOwnership(store.listConversations()).filter(
-    (holding) => holding.role === 'head'
-  )
-  const tabs = store.getVisibleSessionTabIndex()
-  for (const refused of resumes) {
-    const holders = heads.filter((holding) =>
-      keysOf(refused).some((key) => keysMayMatch(holding.key, key))
-    )
-    if (holders.some((holding) => agentSessionLeasePossiblyWriting(holding.ownerObservation))) {
-      return { verdict: 'chat-writing', refused }
-    }
-    if (holders.length > 0 && (!tabs || !tabs.present)) {
-      return { verdict: 'unverifiable', refused }
-    }
-    if (tabs && holders.some((holding) => tabs.sessionIds.includes(holding.sessionId))) {
-      return { verdict: 'chat-home', refused }
-    }
-  }
-  return admitted()
 }
 
 /** A refused resume becomes the pane's plain shell: nothing of the agent launch is left to run,

@@ -2,6 +2,7 @@ import { useNativeChatComposerEditSession } from '../queue/editing/use-native-ch
 import { useNativeChatComposerNotice } from './controls/use-native-chat-composer-notice'
 import { useNativeChatMobileHoldNotice } from '../host-access/use-native-chat-mobile-hold-notice'
 import { forwardRef, useCallback, useState, useRef } from 'react'
+import { useNativeChatNextAgent } from './controls/native-chat-provider-picker-context'
 import { useNativeChatComposerInterrupt } from './submit/use-native-chat-composer-interrupt'
 import { useNativeChatContextUsageSummary } from '../usage/use-native-chat-context-usage-summary'
 import { useNativeChatDraft } from '../drafts/use-native-chat-draft'
@@ -71,6 +72,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     },
     ref
   ): React.JSX.Element {
+    const { nextAgent, nextAgentPlaceholder } = useNativeChatNextAgent()
     // Own drafts and attachments by pane/conversation so reconnect PTY replacement and UI mode changes cannot discard unsent input.
     const imeEnterGesture = useImeEnterGestureOwnership()
     const draftState = useNativeChatDraft(draftScopeKey, imeEnterGesture.isComposing)
@@ -114,6 +116,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const { picker, orcaCommands, sideChat } = useNativeChatComposerCommandPicker({
       mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
       agent,
+      nextAgent,
       terminalTabId,
       draftScopeKey: paneKey,
       draft,
@@ -373,7 +376,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
             disabled={disabled}
             hasPty={hasPty}
             canSend={canSend}
-            placeholderHint={unavailableHint}
+            placeholderHint={unavailableHint ?? nextAgentPlaceholder}
             idleHint={afterStop ? undefined : mentions.hint}
             autocomplete={autocomplete}
             mentionFiles={mentions.listed}

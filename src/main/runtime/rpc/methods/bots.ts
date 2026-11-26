@@ -18,6 +18,7 @@ import {
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
 import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
+import { BOT_AGENT_SWITCH_PREVIEW_METHOD, updateBotWithAgentSwitch } from './bots-agent-switch'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
@@ -52,7 +53,7 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (members !== undefined || added !== undefined || permissionMode !== undefined) {
     ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
   }
-  const bot = await context.runtime.bots.update(params.botId, params.updates)
+  const bot = await updateBotWithAgentSwitch(params, context)
   if (params.updates.skillProjects !== undefined) {
     // Replies after the links and caches change, so a `/` menu opened next lists them.
     await relinkBotSkills(bot, context.runtime.listRepos())
@@ -181,6 +182,7 @@ export const BOT_METHODS = [
   ...BOT_CHATS_METHODS,
   ...BOT_CHAT_TREE_METHODS,
   ...BOT_MEMORY_METHODS,
+  BOT_AGENT_SWITCH_PREVIEW_METHOD,
   defineMethod({
     name: 'bots.update',
     permission: 'workspace',

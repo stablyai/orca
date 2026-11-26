@@ -34,8 +34,7 @@ import { useNativeChatTextSettings } from './preferences/native-chat-text-settin
 import { useMobileNativeChatTailFollow } from './transcript/viewport/use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './transcript/turn-state/use-mobile-native-chat-turn-disclosure'
 import { mobileNativeChatComposerPlaceholder } from './composer/field/use-mobile-native-chat-input-lease'
-import { MobileNativeChatLiveLine } from './transcript/messages/MobileNativeChatLiveLine'
-import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNativeChatAwaitingInputRow'
+import { mobileNativeChatLiveStatus } from './transcript/messages/MobileNativeChatLiveLine'
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
@@ -58,6 +57,10 @@ import { MobileNativeChatLowerRegion } from './lower-region/MobileNativeChatLowe
 import { MobileNativeChatQueueAbovePromptContext } from './lower-region/mobile-native-chat-lower-region-context'
 import { MobileNativeChatPromptStrip } from './input/prompts/MobileNativeChatPromptStrip'
 import { MobileNativeChatOfflineQueue } from './input/queued-messages/MobileNativeChatOfflineQueue'
+import {
+  MobileNativeChatDivider,
+  useMobileChatProviderCopy
+} from './transcript/MobileNativeChatDivider'
 import { useMobileNativeChatOfflineQueue } from './composer/delivery/use-mobile-native-chat-offline-sends'
 
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
@@ -150,6 +153,10 @@ export function MobileNativeChatView({
   keyboardInset = 0
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const agentSwitchCopy = useMobileChatProviderCopy(
+    agent,
+    sessionOptions?.providerPicker?.selection?.agent
+  )
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -267,17 +274,7 @@ export function MobileNativeChatView({
     actionablePromptIds
   })
 
-  const liveStatus =
-    awaitingInput === 'unshown' ? (
-      <MobileNativeChatAwaitingInputRow subject={null} pending fontScale={fontScale} />
-    ) : turns.liveLine ? (
-      <MobileNativeChatLiveLine
-        line={turns.liveLine}
-        onToggleReasoning={turns.onToggleReasoning}
-        fontScale={fontScale}
-      />
-    ) : null
-
+  const liveStatus = mobileNativeChatLiveStatus(awaitingInput === 'unshown', turns, fontScale)
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
   // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}:${font}:${lineSpacing}`
@@ -351,7 +348,7 @@ export function MobileNativeChatView({
           {...{ dictationMode, onMicPressIn, onMicPressOut }}
           {...offlineQueue.composerLock}
           sendDisabled={expandedPromptOwnsSend}
-          placeholder={composerPlaceholder}
+          placeholder={composerPlaceholder ?? agentSwitchCopy.placeholder}
           {...{ filePaths, onNeedFiles, fileReference, skillDiscovery, onNeedSkills }}
           stop={canStop ? { onStop, held: turnIndicator?.stopRequestInFlight === true } : null}
         />
@@ -414,6 +411,9 @@ export function MobileNativeChatView({
           </GestureHandlerRootView>
         )}
         <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
+          {agentSwitchCopy.pending ? (
+            <MobileNativeChatDivider handoff label={agentSwitchCopy.pending} />
+          ) : null}
           {lowerContent}
         </MobileNativeChatLowerRegion>
       </MobileNativeChatComposerMenuHost>

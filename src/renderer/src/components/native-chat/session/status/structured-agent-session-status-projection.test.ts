@@ -88,6 +88,21 @@ it('still removes the row when the host knows no session and publishes a failed 
   expect(failed).toMatchObject({ state: 'done', mainAgent: { outcome: 'failure' } })
 })
 
+it('keeps one status row and moves it to the active provider on a direct turn transition', () => {
+  const working = summary({ status: 'working', model: 'opus' })
+  project(working)
+  expect(
+    project({ ...working, selectedProvider: { agent: 'codex', options: {} } }).get(paneKey)
+  ).toMatchObject({ agentType: 'claude', model: 'opus' })
+  const next = summary({ agent: 'codex', status: 'working', updatedAt: openedAt + 1 })
+  expect(project(next).get(paneKey)).toMatchObject({ agentType: 'codex', model: undefined })
+  expect(project({ ...next, model: 'gpt-6.2-sol' }).get(paneKey)).toMatchObject({
+    agentType: 'codex',
+    model: 'gpt-6.2-sol'
+  })
+  expect(sidebarRows()).toEqual([paneKey])
+})
+
 it('keeps the opened time when the host republishes a chat that has no request yet', () => {
   project(summary())
   const republished = project(summary({ model: 'opus', updatedAt: openedAt + 60_000 })).get(paneKey)

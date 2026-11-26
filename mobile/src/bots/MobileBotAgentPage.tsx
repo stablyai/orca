@@ -1,6 +1,5 @@
-// Agent and model: the agents this bot's computer can run; switching asks first, as the desktop does,
-// because the Home Chat starts over on the new agent.
 import { useState, type ReactNode } from 'react'
+import { botSwitchPermissionCopy } from '../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
 import { RotateCcw } from 'lucide-react-native'
 import { isBotAgent, type BotAgent } from '../../../src/shared/bot-types'
 import {
@@ -26,24 +25,30 @@ import type { SheetBot } from './bot-sheet-operations'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import { useNewBotAgentChoices } from './MobileNewBotPickers'
 import { useBotModelChoices } from './use-bot-model-choices'
+import type { BotAgentSwitchPreviewResult } from '../../../src/shared/rpc-contract/bot-agent-switch-params'
 
 export function MobileBotAgentPage(props: {
   bot: SheetBot
   client: RpcClient | null
   disabled: boolean
   online: boolean
+  inPlaceSwitch?: boolean
   banner: ReactNode
   onBack: { label: string; onPress: () => void }
   /** Saves the new agent; its old launch belongs to the old agent, so it goes too. */
-  onSwitch: (agent: BotAgent) => Promise<void>
+  onSwitch: (agent: BotAgent, consent: BotAgentSwitchPreviewResult['consent']) => Promise<void>
+  previewSwitch: (agent: BotAgent) => Promise<BotAgentSwitchPreviewResult | null>
   /** Saves its model and options; null goes back to the chat defaults. */
   onLaunch: (launch: BotLaunch | null) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { bot } = props
-  const choices = useNewBotAgentChoices(props.client)?.agents ?? null
-  const [switching, setSwitching] = useState<BotAgent | null>(null)
+  const inventory = useNewBotAgentChoices(props.client)
+  const choices = inventory?.agents
+  const [switching, setSwitching] = useState<
+    (BotAgentSwitchPreviewResult & { agent: BotAgent }) | null
+  >(null)
   const [picking, setPicking] = useState<'model' | 'effort' | null>(null)
   const modelChoices = useBotModelChoices(props.client, props.online, bot)
   useBackClaim(
@@ -108,7 +113,7 @@ export function MobileBotAgentPage(props: {
     )
   }
   if (switching) {
-    const agent = botAgentLabel(switching)
+    const agent = botAgentLabel(switching.agent)
     return (
       <ConfirmContent
         title={t('bots.agentSwitch.title', 'Switch {{name}} to {{agent}}?', {
@@ -116,23 +121,55 @@ export function MobileBotAgentPage(props: {
           agent
         })}
         message={[
-          t(
-            'bots.agentSwitch.description',
-            '{{name}}’s Home Chat starts fresh on {{agent}}. The current conversation stays in history.',
-            { name: bot.name, agent }
-          ),
+          props.inPlaceSwitch
+            ? t(
+                'bots.agentSwitch.continueDescription',
+                'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
+                { agent }
+              )
+            : t(
+                'bots.agentSwitch.description',
+                '{{name}}’s Home Chat starts fresh on {{agent}}. The current conversation stays in history.',
+                { name: bot.name, agent }
+              ),
           '',
           t('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors'),
-          t('bots.agentSwitch.notKept', 'Not kept: the current conversation'),
+          ...(props.inPlaceSwitch
+            ? [
+                t(
+                  'bots.agentSwitch.homeContinues',
+                  'Home Chat continues on {{agent}} with its recent history',
+                  { agent }
+                )
+              ]
+            : [t('bots.agentSwitch.notKept', 'Not kept: the current conversation')]),
           t(
-            'bots.agentSwitch.threads',
-            'Slack threads already running stay on {{agent}} until they finish',
-            { agent: botAgentLabel(bot.agent) }
-          )
+            'bots.agentSwitch.newChats',
+            'New Slack threads, automation runs and chats you open later start on {{agent}}',
+            { agent }
+          ),
+          props.inPlaceSwitch
+            ? t(
+                'bots.agentSwitch.existingSlackChats',
+                'Slack threads with an existing Orca chat keep that chat’s agent'
+              )
+            : t(
+                'bots.agentSwitch.threads',
+                'Slack threads already running stay on {{agent}} until they finish',
+                { agent: botAgentLabel(bot.agent) }
+              ),
+          ...(switching.consent ? ['', ...botSwitchPermissionCopy(switching.consent, t)] : [])
         ].join('\n')}
-        confirmLabel={t('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })}
+        confirmLabel={
+          switching.consent
+            ? t('bots.agentSwitch.allowAction', 'Allow access and switch')
+            : t('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })
+        }
         onCancel={() => setSwitching(null)}
-        onConfirm={() => void props.onSwitch(switching)}
+        onConfirm={() => {
+          setSwitching(null)
+          void props.onSwitch(switching.agent, switching.consent)
+        }}
       />
     )
   }
@@ -150,20 +187,36 @@ export function MobileBotAgentPage(props: {
       />
       {props.banner}
       <SettingsSection title={t('bots.settings.agent', 'Agent')} first radioGroup>
-        {agents.map((agent) => (
-          <CheckRow
-            key={agent}
-            label={botAgentLabel(agent)}
-            radio
-            checked={agent === bot.agent}
-            disabled={props.disabled}
-            onPress={() => {
-              if (agent !== bot.agent) {
-                setSwitching(agent)
+        {agents.map((agent) => {
+          const setupRequired = inventory?.setupRequired?.includes(agent) === true
+          return (
+            <CheckRow
+              key={agent}
+              label={botAgentLabel(agent)}
+              detail={
+                setupRequired
+                  ? t(
+                      'bots.agentSwitch.installRequired',
+                      'Install this agent on the bot’s computer first.'
+                    )
+                  : undefined
               }
-            }}
-          />
-        ))}
+              radio
+              checked={agent === bot.agent}
+              disabled={props.disabled || setupRequired}
+              keepsDisabledSubtitleReadable={setupRequired}
+              onPress={() => {
+                if (agent !== bot.agent) {
+                  void props.previewSwitch(agent).then((preview) => {
+                    if (preview) {
+                      setSwitching({ agent, ...preview })
+                    }
+                  })
+                }
+              }}
+            />
+          )
+        })}
       </SettingsSection>
       {modelChoices && modelChoices.models.length > 0 ? (
         <SettingsSection

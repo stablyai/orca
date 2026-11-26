@@ -1,3 +1,4 @@
+import { NativeChatSetupFailureRow } from './NativeChatSetupFailureRow'
 import { NativeChatGoalCheckNotice } from './NativeChatGoalCheckNotice'
 import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
 import { nativeChatBotCard } from '../../native-chat-bot-cards'
@@ -40,11 +41,7 @@ import { NativeChatDividerRow } from '../../NativeChatDividerRow'
 import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import * as Details from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
-import {
-  isNativeChatFailureRowResolved,
-  isNativeChatSetupFailureKind,
-  useNativeChatHostSetupView
-} from '../../host-access/native-chat-host-setup'
+import { isNativeChatSetupFailureKind } from '../../host-access/native-chat-host-setup'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -124,12 +121,23 @@ export function NativeChatNoticeRow({
   if (look.kind === 'forked-from') {
     return <NativeChatForkedFromRow look={look} />
   }
-  if (look.kind === 'divider') {
+  if (look.kind === 'divider' || look.kind === 'context-handoff') {
     const label =
-      look.label === 'contextCleared'
-        ? t('components.native-chat.notices.contextCleared', NATIVE_CHAT_NOTICE_COPY.contextCleared)
-        : t('components.native-chat.notices.compaction', NATIVE_CHAT_NOTICE_COPY.compaction)
-    return <NativeChatDividerRow label={label} />
+      look.kind === 'context-handoff'
+        ? block.text
+        : look.label === 'contextCleared'
+          ? t(
+              'components.native-chat.notices.contextCleared',
+              NATIVE_CHAT_NOTICE_COPY.contextCleared
+            )
+          : t('components.native-chat.notices.compaction', NATIVE_CHAT_NOTICE_COPY.compaction)
+    return (
+      <NativeChatDividerRow
+        label={label}
+        handoff={look.kind === 'context-handoff'}
+        tone={look.kind === 'context-handoff' && look.failed ? 'error' : undefined}
+      />
+    )
   }
   if (look.kind === 'command-output') {
     // Why: command output is laid out in columns; proportional type breaks its grid.
@@ -403,15 +411,4 @@ export function NativeChatNoticeRow({
   ) : (
     row(false)
   )
-}
-
-/** A setup failure a later successful turn resolved reads as history: muted, with no action. */
-function NativeChatSetupFailureRow({
-  rowId,
-  row
-}: {
-  rowId: string | undefined
-  row: (resolved: boolean) => React.JSX.Element
-}): React.JSX.Element {
-  return row(isNativeChatFailureRowResolved(useNativeChatHostSetupView(), rowId))
 }

@@ -17,6 +17,11 @@ export function structuredStatusSummariesEqual(
     a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
     a.usageLimitContinue?.continueAt === b.usageLimitContinue?.continueAt &&
     a.agent === b.agent &&
+    a.selectedProvider?.agent === b.selectedProvider?.agent &&
+    a.selectedProvider?.options?.model === b.selectedProvider?.options?.model &&
+    a.selectedProvider?.options?.effort === b.selectedProvider?.options?.effort &&
+    a.selectedProvider?.options?.fastMode === b.selectedProvider?.options?.fastMode &&
+    a.selectedProvider?.options?.serviceTier === b.selectedProvider?.options?.serviceTier &&
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
     a.hostExecutionPhase === b.hostExecutionPhase &&

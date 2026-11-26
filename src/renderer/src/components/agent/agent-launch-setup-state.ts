@@ -30,6 +30,13 @@ import {
   agentLaunchSetupOptionRows
 } from './agent-launch-setup-option-rows'
 
+export function launchModelLabel(agent: string, model: string | undefined): string | undefined {
+  return (
+    getAgentSessionOptionLaunchCatalog(agent)?.models.find((entry) => entry.id === model)?.label ??
+    model
+  )
+}
+
 /** What the setup pane shows for one agent's draft: its models, current model and option rows. */
 export function agentLaunchSetupState(
   entry: AgentPickerEntry,

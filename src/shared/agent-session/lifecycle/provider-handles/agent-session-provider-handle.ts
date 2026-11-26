@@ -2,6 +2,15 @@
 
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import {
+  isAgentChatPermissionMode,
+  type AgentChatPermissionMode
+} from '../../../agent-launch/permissions/agent-chat-permission-mode'
+import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
+import {
+  isAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from '../accounts/agent-session-account-home'
+import {
   agentSessionProviderHandleReplacementsEqual,
   isAgentSessionProviderHandleReplacement,
   type AgentSessionProviderHandleReplacement
@@ -9,12 +18,9 @@ import {
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
-  decodePersistedAgentSessionProviderHandle,
-  encodePersistedAgentSessionProviderHandle,
   isAgentSessionProviderHandle,
   isAgentSessionProviderHandleInNamespace,
-  isAgentSessionProviderHandleKeyFor,
-  type PersistedAgentSessionProviderHandle
+  isAgentSessionProviderHandleKeyFor
 } from './agent-session-provider-handle-encoding'
 
 /** Built-ins are only the fallback list; hosts advertise registered-agents and publish additional agents/capabilities through agentSession.agents. */
@@ -60,6 +66,13 @@ export type AgentSessionProviderHandleLink = {
   /** Runtime fence in force when this link was minted; never decreases along the chain. */
   mintedAtFence: number
   observedAt: number
+  /** The previous provider's last link when this native handle took over the Orca chat. */
+  switchedFrom?: string
+  switchedBy?: string
+  /** Journal position at the end of this handle's last active period. */
+  seenThrough?: AgentJournalCursor
+  accountHome?: AgentSessionAccountHome
+  permissionMode?: AgentChatPermissionMode
   /** Key of the link a fork was seeded from. Only set when `origin` is `forked`. */
   forkedFromKey?: string
   /** Key of the unsaved creation this creation replaced. Only set when `origin` is `created`. */
@@ -124,6 +137,19 @@ export function isAgentSessionProviderHandleLink(
     Number.isSafeInteger(link.mintedAtFence) &&
     (link.mintedAtFence as number) >= 0 &&
     Number.isSafeInteger(link.observedAt) &&
+    (link.switchedFrom === undefined ||
+      (typeof link.switchedFrom === 'string' && LINK_ID_PATTERN.test(link.switchedFrom))) &&
+    (link.switchedBy === undefined ||
+      (typeof link.switchedBy === 'string' &&
+        link.switchedBy.length > 0 &&
+        link.switchedBy.length <= 512)) &&
+    (link.seenThrough === undefined ||
+      (link.seenThrough !== null &&
+        typeof link.seenThrough.epoch === 'string' &&
+        Number.isSafeInteger(link.seenThrough.sequence) &&
+        link.seenThrough.sequence >= 0)) &&
+    (link.accountHome === undefined || isAgentSessionAccountHome(link.accountHome)) &&
+    (link.permissionMode === undefined || isAgentChatPermissionMode(link.permissionMode)) &&
     (link.origin === 'forked'
       ? isAgentSessionProviderHandleKeyFor(handle, link.forkedFromKey)
       : link.forkedFromKey === undefined) &&
@@ -180,16 +206,36 @@ function appendLink(
   const head = agentSessionProviderHandleChainHead(chain)
   if (!head) {
     // A replacement names the conversation before it, so it can never open a chain.
-    if ((link.origin !== 'created' && link.origin !== 'adopted') || link.replaces !== undefined) {
+    if (
+      (link.origin !== 'created' && link.origin !== 'adopted') ||
+      link.replaces !== undefined ||
+      link.switchedFrom !== undefined
+    ) {
       throw new Error('agent_session_provider_handle_invalid')
     }
     return [link]
   }
-  if (!isAgentSessionProviderHandleInNamespace(link.handle, head.handle)) {
-    throw new Error('agent_session_provider_handle_provider_mismatch')
-  }
   if (link.mintedAtFence < head.mintedAtFence) {
     throw new Error('agent_session_provider_handle_stale_fence')
+  }
+  if (!isAgentSessionProviderHandleInNamespace(link.handle, head.handle)) {
+    if (
+      link.switchedFrom !== head.linkId ||
+      link.handle.agent === head.handle.agent ||
+      link.mintedAtFence === head.mintedAtFence
+    ) {
+      throw new Error('agent_session_provider_handle_provider_mismatch')
+    }
+    const previous = chain.filter(({ handle }) =>
+      isAgentSessionProviderHandleInNamespace(link.handle, handle)
+    )
+    const { switchedFrom: _source, ...localLink } = link
+    // Validate a return against that provider's own history.
+    appendLink(previous, localLink, supersededHead)
+    return appendNewLink(chain, link)
+  }
+  if (link.switchedFrom !== undefined) {
+    throw new Error('agent_session_provider_handle_invalid')
   }
   const sameRoot =
     agentSessionProviderHandleRoot(link.handle) === agentSessionProviderHandleRoot(head.handle)
@@ -264,45 +310,17 @@ function supersedeUnsavedCreation(
   ) {
     throw new Error('agent_session_provider_handle_invalid')
   }
-  const next = head.replaces ? { ...link, replaces: head.replaces } : link
+  const next = {
+    ...link,
+    ...(head.replaces ? { replaces: head.replaces } : {}),
+    ...(head.switchedFrom ? { switchedFrom: head.switchedFrom } : {})
+  }
   // Why: in place, so a chat reopened unused across many restarts never grows toward the cap.
   return earlier.length === 0 ? [next] : appendLink(earlier, next, true)
 }
 
-/** A link as a record row stores it: only the handle has a stored form of its own. */
-export type PersistedAgentSessionProviderHandleLink = Omit<
-  AgentSessionProviderHandleLink,
-  'handle'
-> & {
-  handle: PersistedAgentSessionProviderHandle
-}
-
-export function encodePersistedAgentSessionProviderHandleChain(
-  chain: AgentSessionProviderHandleChain
-): PersistedAgentSessionProviderHandleLink[] {
-  return chain.map((link) => ({
-    ...link,
-    handle: encodePersistedAgentSessionProviderHandle(link.handle)
-  }))
-}
-
-/** The in-memory chain a stored one names, or null when any link or the chain itself is invalid. */
-export function decodePersistedAgentSessionProviderHandleChain(
-  value: unknown
-): AgentSessionProviderHandleLink[] | null {
-  if (!Array.isArray(value) || value.length > MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
-    return null
-  }
-  const decoded: unknown[] = []
-  for (const link of value) {
-    const handle =
-      typeof link === 'object' && link !== null && 'handle' in link
-        ? decodePersistedAgentSessionProviderHandle(link.handle)
-        : null
-    if (!handle) {
-      return null
-    }
-    decoded.push({ ...link, handle })
-  }
-  return isAgentSessionProviderHandleChain(decoded) ? decoded : null
-}
+export {
+  decodePersistedAgentSessionProviderHandleChain,
+  encodePersistedAgentSessionProviderHandleChain,
+  type PersistedAgentSessionProviderHandleLink
+} from './agent-session-provider-handle-stored-form'
