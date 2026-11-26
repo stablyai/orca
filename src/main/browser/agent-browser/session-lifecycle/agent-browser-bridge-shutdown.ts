@@ -29,6 +29,9 @@ export abstract class AgentBrowserBridgeShutdown extends AgentBrowserBridgeLifec
       (sessionName) => this.destroySession(sessionName, options)
     )
     this.pendingInterceptRestore.clear()
+    await Promise.allSettled(
+      [...this.directCdpProxies.keys()].map((pageId) => this.stopDirectCdpProxy(pageId))
+    )
   }
 }
 

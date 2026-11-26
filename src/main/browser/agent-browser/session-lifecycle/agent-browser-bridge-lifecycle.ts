@@ -7,7 +7,12 @@ import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-cleanup-option
 import { waitForAgentBrowserSessionExit } from './agent-browser-session-reset'
 import { runOutsideRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
+type DirectCdpProxy = { proxy: CdpWsProxy; webContentsId: number; endpoint: string }
+
 export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawProcess {
+  // Separate from the helper's proxy: each proxy serves one client and a new one evicts the old.
+  protected readonly directCdpProxies = new Map<string, DirectCdpProxy>()
+
   async onTabClosed(webContentsId: number): Promise<void> {
     const browserPageId = this.resolveTabIdSafe(webContentsId)
     const owningWorktreeId = browserPageId
@@ -31,6 +36,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     // Routes outlive a freed guest but not a closed page.
     this.retargetRouting(browserPageId, null)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    await this.stopDirectCdpProxy(browserPageId)
     await this.destroySession(sessionName)
     this.pendingInterceptRestore.delete(sessionName)
   }
@@ -58,6 +64,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     if (session && session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
+    await this.stopDirectCdpProxy(browserPageId)
     await this.destroySession(sessionName)
     this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
@@ -92,6 +99,41 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         closeSession()
       }
     })
+  }
+
+  /** A loopback CDP endpoint for a caller's own agent-browser; callers serialize it in the page queue. */
+  protected async startDirectCdpProxy(
+    browserPageId: string,
+    webContentsId: number
+  ): Promise<string> {
+    const existing = this.directCdpProxies.get(browserPageId)
+    if (existing?.webContentsId === webContentsId) {
+      return existing.endpoint
+    }
+    await this.stopDirectCdpProxy(browserPageId)
+    const wc = this.getWebContents(webContentsId)
+    if (!wc) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${browserPageId} is no longer available`
+      )
+    }
+    // No agent cursor: it only draws during Orca's own commands. Focus guarding still applies.
+    const proxy = new CdpWsProxy(
+      wc,
+      () => this.browserManager.holdPaintForCapture(webContentsId),
+      () => this.browserManager.guardUserFocusForAgentInput(webContentsId)
+    )
+    // The socket outlives this request, so it must not inherit a revocable remote scope.
+    const endpoint = await runOutsideRemoteCliBrowserScope(() => proxy.start())
+    this.directCdpProxies.set(browserPageId, { proxy, webContentsId, endpoint })
+    return endpoint
+  }
+
+  protected async stopDirectCdpProxy(browserPageId: string): Promise<void> {
+    const direct = this.directCdpProxies.get(browserPageId)
+    this.directCdpProxies.delete(browserPageId)
+    await direct?.proxy.stop()
   }
 
   protected async ensureSession(

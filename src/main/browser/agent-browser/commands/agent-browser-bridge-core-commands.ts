@@ -23,6 +23,7 @@ import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arg
 import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
 import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
 import { claimBrowserPageFirstLoad } from '../../guest-lifecycle/browser-page-memory'
+import { captureRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(
@@ -50,6 +51,26 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         passkeyRequest: getBrowserPasskeyRequest(wc.id)
       }
     })
+  }
+
+  /** Hands a local caller the tab's raw CDP endpoint, which skips Orca's per-action guards. */
+  async directCdpEndpoint(
+    worktreeId?: string,
+    browserPageId?: string
+  ): Promise<{ browserPageId: string; cdpEndpoint: string }> {
+    // A loopback endpoint on this desktop is useless to, and must never reach, an SSH host.
+    if (captureRemoteCliBrowserScope().bridged) {
+      throw new BrowserError('invalid_argument', 'orca tab cdp is available only on this desktop')
+    }
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => ({
+        browserPageId: target.browserPageId,
+        cdpEndpoint: await this.startDirectCdpProxy(target.browserPageId, target.webContentsId)
+      }),
+      { ensureSession: false }
+    )
   }
 
   async click(

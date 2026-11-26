@@ -103,6 +103,16 @@ export function orcadClientPageCommand(
         : closeBrowserPageWithoutEngine(host, params, browserUnavailableError)
     }
   }
+  if (name === 'browserTabCdp') {
+    // A server's engine or a desktop-drawn page has no endpoint on the caller's loopback.
+    return () =>
+      Promise.reject(
+        new BrowserError(
+          'invalid_argument',
+          'orca tab cdp is available only on the Orca desktop app'
+        )
+      )
+  }
   if (name === 'browserTabAnnotations') {
     return async (...args: Parameters<RuntimeBrowserCommands['browserTabAnnotations']>) => {
       const { page, worktree } = args[0] ?? {}

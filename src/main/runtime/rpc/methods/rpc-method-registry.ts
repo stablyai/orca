@@ -16,6 +16,7 @@ import { REFERENCE_METHODS } from './reference/reference'
 import { TERMINAL_METHODS } from './terminal/terminal'
 import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
 import { BROWSER_CORE_METHODS } from './browser/browser-core'
+import { BROWSER_TAB_CDP_METHODS } from './browser/browser-tab-cdp-rpc-method'
 import { BROWSER_IDENTITY_METHODS } from './browser/browser-identity-rpc'
 import { BROWSER_EXTRA_METHODS } from './browser/browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser/browser-screencast'
@@ -202,6 +203,7 @@ const SERVICE_RPC_METHODS = [
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
   ...BROWSER_CORE_METHODS,
+  ...BROWSER_TAB_CDP_METHODS,
   ...BROWSER_IDENTITY_METHODS,
   ...BROWSER_SCREENCAST_METHODS,
   ...BROWSER_GRAB_METHODS,

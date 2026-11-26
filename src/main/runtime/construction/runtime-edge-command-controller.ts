@@ -58,6 +58,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserTabList',
   'browserProceedCertificate',
   'browserTabShow',
+  'browserTabCdp',
   'browserTabCurrent',
   'browserTabAnnotations',
   'browserTabSwitch',
