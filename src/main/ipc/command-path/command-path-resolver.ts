@@ -16,6 +16,8 @@ export type ResolveCommandOptions = {
   /** Stop after this many matches; defaults to the complete list. */
   maxResults?: number
   signal?: AbortSignal
+  /** Override the file probe while preserving candidate order and cancellation. */
+  probeCandidate?: (candidate: string) => Promise<boolean>
 }
 
 // Windows environment keys are case-insensitive even though this Record is not.
@@ -216,7 +218,7 @@ async function findLocalCommandPaths(
       }
       seen.add(candidateKey)
       throwIfSignalAborted(options.signal)
-      if (await isExecutableFile(candidate, isWin)) {
+      if (await (options.probeCandidate?.(candidate) ?? isExecutableFile(candidate, isWin))) {
         found.push(candidate)
         if (stopAtFirst || found.length >= (options.maxResults ?? Infinity)) {
           return found

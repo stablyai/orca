@@ -17,7 +17,9 @@ import {
 } from '../../../../preflight/agent-command-detection'
 import { invalidateWslGuestEnvironment } from '../../../../wsl/execution/wsl-guest-environment'
 import {
+  detectAgentInventoryOnHost,
   detectProjectLaunchContext,
+  HOST_DEFAULT_AGENT_DETECTION,
   refreshAgentsOnHost
 } from '../../../../preflight/workspace-agent-detection'
 import { resolveClaudeTeamsInvocation } from '../../../terminal/launch/claude-teams-invocation'
@@ -54,6 +56,9 @@ vi.mock('node:os', async (original) => ({
 }))
 vi.mock('../../../../ipc/preflight/preflight-local-env', () => ({
   buildLocalPreflightEnv: () => ({ PATH: fixture.path, PATHEXT: '.EXE;.CMD' })
+}))
+vi.mock('../../../../ipc/command-path/agent-detection-shell-path', () => ({
+  hydrateShellPathForAgentDetection: async () => {}
 }))
 vi.mock('../../../../../shared/shell/command-resolution/fnm-default-alias-dirs', () => ({
   getFnmDefaultAliasDirectories: () => []
@@ -186,9 +191,7 @@ it('keeps a cold scan alive through launch timeouts and publishes the result for
     expect(await fresh).toEqual({ command: undefined, launchConfig: generated, blocked: 'unknown' })
     const retry = launch()
     gate.resolve()
-    expect(await inventory).toMatchObject({
-      message: 'Agent inventory is still running. Try again.'
-    })
+    expect(await inventory).toMatchObject({ agents: [], incomplete: true })
     expect((await retry).command).toBe(`${quoted(user)} --verbose`)
     expect((await launch()).command).toBe(`${quoted(user)} --verbose`)
     expect(fixture.enumerate).toHaveBeenCalledTimes(1)
@@ -381,14 +384,15 @@ it('publishes a completed scan and resolves its early waiter while a successor r
   }
 })
 
-it('returns an incomplete empty inventory on a cold deadline and publishes the scan for later reads', async () => {
+it('lets the picker reuse a completed inventory after its cold deadline', async () => {
   await executable('path', claudeName)
   const entered = Promise.withResolvers<void>()
   const held = Promise.withResolvers<void>()
   fixture.onScan = entered.resolve
   fixture.installs = held.promise
   vi.useFakeTimers()
-  const detect = detectInstalledAgentInventory().catch((error: unknown) => error)
+  const detectForPicker = () => detectAgentInventoryOnHost(HOST_DEFAULT_AGENT_DETECTION)
+  const detect = detectForPicker().catch((error: unknown) => error)
   try {
     await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
@@ -398,10 +402,12 @@ it('returns an incomplete empty inventory on a cold deadline and publishes the s
     held.resolve()
     await completion
   }
-  await expect(
-    detectInstalledAgentInventory(undefined, { onlyTuiAgent: 'claude' })
-  ).resolves.toMatchObject({ agents: ['claude'] })
+  const retry = await detectForPicker()
+  expect(retry.agents).toEqual(['claude'])
+  expect(retry.incomplete).toBeUndefined()
   expect(fixture.enumerate).toHaveBeenCalledTimes(1)
+  await detectForPicker()
+  expect(fixture.enumerate).toHaveBeenCalledTimes(2)
 })
 
 it('returns the published agents as incomplete when a detect wait expires', async () => {

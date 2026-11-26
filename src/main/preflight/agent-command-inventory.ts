@@ -51,11 +51,17 @@ type PendingInventory = {
   active: InventoryScan
   queued?: InventoryScan
 }
+type InventoryPublication = {
+  inventory: CommandInventory
+  generation: number | undefined
+  sequence: number
+}
 type InventorySlot = {
   distro?: string
   localEnv?: () => NodeJS.ProcessEnv | undefined
   pending?: PendingInventory
-  published?: { inventory: CommandInventory; generation: number | undefined }
+  published?: InventoryPublication
+  detectDeadlineSequence?: number
   retry?: { after: number; generation: number | undefined }
 }
 const scanPriority: Record<InventoryMode, number> = {
@@ -118,6 +124,10 @@ function inventoryGeneration(slot: InventorySlot): number | undefined {
   return slot.distro ? getWslGuestEnvironmentGeneration(slot.distro) : undefined
 }
 
+export function currentInventoryPublication(slot: InventorySlot): InventoryPublication | undefined {
+  return slot.published?.generation === inventoryGeneration(slot) ? slot.published : undefined
+}
+
 async function scanInventory(
   slot: InventorySlot,
   scan: InventoryScan
@@ -165,7 +175,11 @@ function publishInventory(
         probed: new Set([...result.probed, ...[...previous.probed].filter(notScanned)])
       }
     : result
-  slot.published = { inventory, generation: scan.generation }
+  slot.published = {
+    inventory,
+    generation: scan.generation,
+    sequence: (slot.published?.sequence ?? 0) + 1
+  }
 }
 
 function createScan(

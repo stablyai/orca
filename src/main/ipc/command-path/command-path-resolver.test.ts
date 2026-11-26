@@ -88,7 +88,10 @@ describe('win32 PATH lookup', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('shares a stalled cmd folder stat across expired callers and drops the lookup on settle', async () => {
+  it('lets a live cmd retry continue after a shared stat misses', async () => {
+    const exe = path.join(quotedBin, 'retry-tool.EXE')
+    const cmd = path.join(quotedBin, 'retry-tool.CMD')
+    await writeFile(cmd, '@echo off\r\n')
     const held = Promise.withResolvers<Awaited<ReturnType<typeof stat>>>()
     const statFile = vi.mocked(stat)
     statFile.mockClear()
@@ -96,18 +99,18 @@ describe('win32 PATH lookup', () => {
     const firstCaller = new AbortController()
     const retryCaller = new AbortController()
     const lookup = (signal: AbortSignal) =>
-      resolveCmdLaunchFolderProgram('tool', quotedBin, '.EXE;.cmd', signal)
+      resolveCmdLaunchFolderProgram('retry-tool', quotedBin, '.EXE;.CMD', signal)
     const first = lookup(firstCaller.signal).catch((error: unknown) => error)
     try {
       firstCaller.abort()
       expect(await first).toMatchObject({ name: 'AbortError' })
-      const retry = lookup(retryCaller.signal).catch((error: unknown) => error)
+      const retry = lookup(retryCaller.signal)
+      expect(statFile.mock.calls).toEqual([[exe]])
       held.reject(new Error('Missing executable'))
-      expect(await retry).toMatchObject({ name: 'AbortError' })
-      expect(statFile.mock.calls).toEqual([[path.join(quotedBin, 'tool.EXE')]])
-      await expect(lookup(new AbortController().signal)).resolves.toBe(
-        path.join(quotedBin, 'tool.cmd')
-      )
+      await expect(retry).resolves.toBe(cmd)
+      expect(statFile.mock.calls).toEqual([[exe], [cmd]])
+      await expect(lookup(new AbortController().signal)).resolves.toBe(cmd)
+      expect(statFile.mock.calls).toEqual([[exe], [cmd], [exe], [cmd]])
     } finally {
       held.reject(new Error('Missing executable'))
       statFile.mockReset()

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { BotToolProblem } from '../../../src/shared/bot-tools'
 import {
   getRepoExecutionHostId,
@@ -62,16 +63,29 @@ const discoveredQuery = defineHostQuery({
   signal: { events: ['mcpServersChanged'] }
 })
 
-// Installs rarely change; the new-tab picker reads them as rarely.
-const agentsQuery = defineHostQuery({
+const agentsQuery = defineHostQuery<
+  typeof NO_HOST_LIST_INPUT,
+  { agents: TuiAgent[]; incomplete?: boolean }
+>({
   family: 'mcpServers.agents',
-  fetch: async (client) => {
-    const detected = new Set(
-      preflightDetectAgentsRead.interpret(await preflightDetectAgentsRead.request(client)).agents
+  fetch: async (client, _target, _input, previous) => {
+    const { agents, incomplete } = preflightDetectAgentsRead.interpret(
+      await preflightDetectAgentsRead.request(client, { withManagedAgentCommands: true })
     )
-    return MOBILE_AGENT_CATALOG.filter((agent) => detected.has(agent.id)).map((agent) => agent.id)
+    const detected = new Set(agents)
+    if (incomplete) {
+      for (const agent of previous?.agents ?? []) {
+        detected.add(agent)
+      }
+    }
+    return {
+      agents: MOBILE_AGENT_CATALOG.filter((agent) => detected.has(agent.id)).map(
+        (agent) => agent.id
+      ),
+      incomplete
+    }
   },
-  staleTime: 10 * 60_000,
+  staleTime: ({ state: { data } }) => (data?.incomplete ? 0 : 10 * 60_000),
   gcTime: 30 * 60_000
 })
 
@@ -177,7 +191,7 @@ export function useMcpServersData(hostId: string, client: RpcClient | null, enab
     listError: list.error,
     loading: list.isPending,
     discovered: discovered.data ?? null,
-    agents: agents.data ?? null,
+    agents: agents.data?.agents ?? null,
     agentsFailed: agents.isError,
     workspaces,
     problems,

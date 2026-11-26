@@ -1,52 +1,38 @@
 import { win32 } from 'node:path'
 import {
-  abortSignalReason,
-  throwIfSignalAborted
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
 } from '../../../shared/concurrency/abort-signal-reason'
-import { PromiseSettlementWaiters } from '../../../shared/concurrency/promise-settlement-waiters'
+import { isExecutableFile } from './command-path-directory'
 import { resolveCommandOnLocalPath } from './command-path-resolver'
 
-const cmdFolderLookups = new Map<
-  string,
-  { controller: AbortController; waiters: PromiseSettlementWaiters<string | null> }
->()
+const cmdFolderStats = new Map<string, Promise<boolean>>()
 
-export function resolveCmdLaunchFolderProgram(
+export async function resolveCmdLaunchFolderProgram(
   program: string,
   cwd: string,
   pathExt: string | undefined,
   signal: AbortSignal
 ): Promise<string | null> {
   throwIfSignalAborted(signal)
-  const key = JSON.stringify([win32.resolve(cwd).toLowerCase(), program.toLowerCase(), pathExt])
-  let pending = cmdFolderLookups.get(key)
-  if (!pending) {
-    const controller = new AbortController()
-    const waiters = new PromiseSettlementWaiters(
-      resolveCommandOnLocalPath(program, {
-        platform: 'win32',
-        cwd,
-        env: { PATH: '', PATHEXT: pathExt },
-        signal: controller.signal
-      }),
-      () => {
-        if (cmdFolderLookups.get(key)?.waiters === waiters) {
-          cmdFolderLookups.delete(key)
-        }
-      }
-    )
-    pending = { controller, waiters }
-    cmdFolderLookups.set(key, pending)
-  }
-  const { controller, waiters } = pending
-  return waiters.wait({
+  const result = await resolveCommandOnLocalPath(program, {
+    platform: 'win32',
+    cwd,
+    env: { PATH: '', PATHEXT: pathExt },
     signal,
-    createAbortError: () => abortSignalReason(signal),
-    onAbandon: () => {
-      if (waiters.waiterCount === 0) {
-        // The outstanding stat is uncancellable; retain its key until it settles.
-        controller.abort()
+    probeCandidate: (candidate) => {
+      const key = win32.resolve(candidate).toLowerCase()
+      let pending = cmdFolderStats.get(key)
+      if (!pending) {
+        // The stat is uncancellable. A later caller can join until it settles.
+        pending = isExecutableFile(candidate, true).finally(() => {
+          cmdFolderStats.delete(key)
+        })
+        cmdFolderStats.set(key, pending)
       }
+      return waitForPromiseWithSignal(pending, signal)
     }
   })
+  throwIfSignalAborted(signal)
+  return result
 }

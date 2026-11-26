@@ -113,8 +113,10 @@ async function checkAgents(
   worktreePath: string,
   deps: EnvironmentDoctorDeps
 ): Promise<EnvironmentDoctorCheck[]> {
-  const agents = await deps.detectAgents().catch((): string[] => [])
-  if (agents.length === 0) {
+  const { agents, incomplete } = await deps
+    .detectAgents()
+    .catch(() => ({ agents: [], incomplete: false }))
+  if (agents.length === 0 && !incomplete) {
     return [
       check('agents', 'agent.cli', 'warn', 'No coding-agent CLI was found on PATH.', {
         remediation: 'Install the agent you run here (for example claude or codex).'
@@ -149,6 +151,9 @@ async function checkAgents(
   if (others.length > 0) {
     const names = others.map((agent) => tuiAgentDisplayName(agent) ?? agent)
     checks.push(check('agents', 'agent.cli', 'pass', `Also installed: ${names.join(', ')}.`))
+  }
+  if (incomplete) {
+    checks.push(check('agents', 'agent.inventory', 'warn', 'Still checking for coding-agent CLIs.'))
   }
   return checks
 }

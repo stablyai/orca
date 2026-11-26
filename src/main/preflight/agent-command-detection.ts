@@ -13,7 +13,12 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
-import { localInventory, readInventory, wslInventory } from './agent-command-inventory'
+import {
+  currentInventoryPublication,
+  localInventory,
+  readInventory,
+  wslInventory
+} from './agent-command-inventory'
 
 const INVENTORY_WAIT_MS = 10_000
 class AgentInventoryDeadlineError extends Error {
@@ -134,6 +139,7 @@ export async function detectAgentCommandInventoryOnHost(
     try {
       slot = wslTarget ? await wslInventory(wslTarget, waitSignal) : getLocalInventory()
       const before = slot?.published
+      const deadlineSequence = slot?.detectDeadlineSequence
       throwIfSignalAborted(waitSignal)
       if (options.prepare) {
         await options.prepare(waitSignal)
@@ -142,24 +148,36 @@ export async function detectAgentCommandInventoryOnHost(
       if (!slot) {
         return { slot, inventory: null }
       }
-      const latest = slot.published
-      if (
+      const latest = currentInventoryPublication(slot)
+      const inventory =
         !options.refresh &&
         latest &&
-        latest !== before &&
+        (latest !== before ||
+          (deadlineSequence !== undefined && latest.sequence > deadlineSequence)) &&
         !latest.inventory.incomplete &&
         commands.every((command) => latest.inventory.probed.has(command))
+          ? latest.inventory
+          : await waitForPromiseWithSignal(
+              readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, targeted),
+              waitSignal
+            )
+      if (
+        !targeted &&
+        !options.refresh &&
+        deadlineSequence !== undefined &&
+        slot.detectDeadlineSequence === deadlineSequence &&
+        inventory &&
+        !inventory.incomplete
       ) {
-        return { slot, inventory: latest.inventory }
+        delete slot.detectDeadlineSequence
       }
-      const inventory = await waitForPromiseWithSignal(
-        readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, targeted),
-        waitSignal
-      )
       return { slot, inventory }
     } catch (error) {
       const latest = slot?.published?.inventory
       if (error instanceof AgentInventoryDeadlineError && isAbortSignalReason(waitSignal, error)) {
+        if (slot && !targeted) {
+          slot.detectDeadlineSequence = slot.published?.sequence ?? 0
+        }
         return {
           slot,
           inventory: {

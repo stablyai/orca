@@ -10,6 +10,7 @@ import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platfo
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { isIncompleteAgentInventory } from '@/store/slices/agent-inventory/managed-agent-launch-commands'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   agentSessionInstallCommand,
   agentSessionSignInEnv
@@ -257,6 +258,7 @@ function useNativeChatInstall(
           inventory.state === 'successful' ||
           (inventory.state === 'pending' &&
             isIncompleteAgentInventory(inventory.ids) &&
+            isTuiAgent(agent) &&
             inventory.ids?.includes(agent))
         ) {
           setOpened(false)

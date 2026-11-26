@@ -29,7 +29,7 @@ export type EnvironmentDoctorDeps = {
     options: EnvironmentDoctorRunOptions
   ) => Promise<EnvironmentDoctorCommandResult>
   findCommands: (commands: readonly string[]) => Promise<Set<string>>
-  detectAgents: () => Promise<string[]>
+  detectAgents: () => Promise<{ agents: string[]; incomplete?: boolean }>
   readFile: (path: string) => Promise<string | null>
   exists: (path: string) => Promise<boolean>
   isDirectory: (path: string) => Promise<boolean>
