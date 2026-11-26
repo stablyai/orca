@@ -111,7 +111,7 @@ export type StructuredAgentSessionAttachment = {
 
 export class SkillRefLimitError extends Error {}
 
-/** Text then images, retaining only picked skills still mentioned by $name. */
+/** Text then images, retaining only picked skills still mentioned by their token. */
 export function structuredAgentSessionSendBody(
   text: string,
   attachments: readonly StructuredAgentSessionAttachment[],
@@ -135,7 +135,7 @@ export function structuredAgentSessionSendBody(
 export function pickedSkillsInText(
   text: string,
   skills: readonly AgentJournalSkillRef[],
-  sigils: readonly ('$' | '/')[] = ['$']
+  sigils: readonly ('$' | '/')[] = ['$', '/']
 ): AgentJournalSkillRef[] {
   const seen = new Set<string>()
   return skills.filter((skill) => {
@@ -153,7 +153,8 @@ function textNamesSkill(text: string, name: string, sigil: '$' | '/'): boolean {
     // Match Codex mention boundaries: $review, ends at review.
     if (
       (sigil !== '/' || at === 0 || /\s/u.test(text.charAt(at - 1))) &&
-      !/[\w:-]/u.test(text.charAt(at + token.length))
+      // A following slash makes it a path, not the picked token.
+      !/[\w:/-]/u.test(text.charAt(at + token.length))
     ) {
       return true
     }
