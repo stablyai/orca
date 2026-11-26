@@ -5,5 +5,9 @@ export function detectMobileFileLanguage(filePath: string, preferredLanguage?: s
   if (normalizedPreferred && normalizedPreferred !== 'plaintext') {
     return normalizedPreferred
   }
+  const path = filePath.toLowerCase()
+  if (path.endsWith('.bsl') || path.endsWith('.os')) {
+    return '1c'
+  }
   return detectLanguage(filePath)
 }

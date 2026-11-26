@@ -1,4 +1,5 @@
 import { common, createLowlight } from 'lowlight'
+import oneC from 'highlight.js/lib/languages/1c'
 import { detectMobileFileLanguage } from './mobile-file-language'
 
 export type MobileSyntaxTokenKind =
@@ -33,6 +34,8 @@ type LowlightNode = {
 }
 
 const lowlight = createLowlight(common)
+lowlight.register('1c', oneC)
+
 const MAX_FILE_HIGHLIGHT_CHARS = 48_000
 const MAX_FILE_HIGHLIGHT_SEGMENTS = 3_000
 const MAX_DIFF_HIGHLIGHT_CHARS = 24_000
@@ -55,6 +58,9 @@ const LANGUAGE_ALIASES = new Map([
   ['cuda-cpp', 'cpp'],
   ['glimmer-js', 'javascript'],
   ['glimmer-ts', 'typescript'],
+  ['bsl', '1c'],
+  ['onescript', '1c'],
+  ['os', '1c'],
   // lowlight has no dotenv grammar; ini covers KEY=value and # comments.
   ['dotenv', 'ini'],
   // HCL assignments, strings and comments use the bundled ini grammar on mobile.

@@ -3,6 +3,7 @@ import * as React from 'react'
 import * as ReactJsxRuntime from 'react/jsx-runtime'
 import { sha256 } from '@noble/hashes/sha256'
 import * as ReactQuery from '@tanstack/react-query'
+import oneC from 'highlight.js/lib/languages/1c'
 import * as i18next from 'i18next'
 import * as lowlight from 'lowlight'
 import * as zod from 'zod'
@@ -41,6 +42,7 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
     ['zod', zod],
     // Use real highlighting so preview tokens come from product behavior.
     ['lowlight', lowlight],
+    ['highlight.js/lib/languages/1c', { __esModule: true, default: oneC }],
     // Real catalogs and plural rules; recordings run in English, the device language below.
     ['i18next', i18next],
     [
