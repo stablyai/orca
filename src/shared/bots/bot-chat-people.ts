@@ -144,14 +144,15 @@ export function botPickedOther<E extends { pick: BotChatPersonPick }>(
 }
 
 /** Whose an item is, as an Everyone row names it before its age: anyone's but the viewer's own (null).
- *  `viewer`: a teammate's copy's `shareViewer`; absent, the owner looks. */
+ *  `viewer`: a teammate's copy's `shareViewer`, whose owner's name the owner's rows show (else
+ *  `ownerFallback`); absent, the owner looks. */
 export function botItemPersonMark(
   item: Pick<BotItem, 'people'>,
   viewer: Bot['shareViewer'],
-  ownerLabel: string
+  ownerFallback: string
 ): string | null {
   if (!item.people) {
-    return viewer ? ownerLabel : null
+    return viewer ? (viewer.ownerName ?? ownerFallback) : null
   }
   const others = viewer
     ? item.people.filter((person) => person.accountId !== viewer.accountId)

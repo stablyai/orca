@@ -159,7 +159,8 @@ export function useBotChatItems(
   const chats = useStableBotItemChats(chatIds)
   type Scoped = { chats: readonly string[] | null; whose: BotItemsWhose; value: BotItemsRead }
   const [read, setRead] = useState<Scoped | null>(null)
-  const [failed, setFailed] = useState(false)
+  // Keyed by scope, like `landed`: a failure is the scope's that failed, never the next pick's.
+  const [failedKey, setFailedKey] = useState<string | null>(null)
   const [landedKey, setLandedKey] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const moreRef = useRef<() => Promise<BotItemsRead | null>>(async () => null)
@@ -210,7 +211,7 @@ export function useBotChatItems(
             land(value)
             setLandedKey(key)
             missed = false
-            setFailed(false)
+            setFailedKey((failed) => (failed === key ? null : failed))
           }
         })
         .catch((error: unknown) => {
@@ -220,12 +221,12 @@ export function useBotChatItems(
             if (live) {
               land(error.landed)
               missed = false
-              setFailed(false)
+              setFailedKey((failed) => (failed === key ? null : failed))
             }
           } else if (ask.whole || ask.parts.length > 0) {
             missed = true
             if (live) {
-              setFailed(true)
+              setFailedKey(key)
             }
           }
         })
@@ -261,7 +262,7 @@ export function useBotChatItems(
   const readMore = useCallback(() => moreRef.current(), [])
   return {
     read: read && read.chats === chats && read.whose === whose ? read.value : null,
-    failed,
+    failed: failedKey === scopedReadKey({ hostId, id }, chats, whose),
     landed: landedKey === scopedReadKey({ hostId, id }, chats, whose),
     retry,
     readMore

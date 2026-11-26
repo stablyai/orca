@@ -150,8 +150,9 @@ describe('whom an Items empty list and row names, as each viewer sees it', () =>
     const shared = { people: [alice, bo] }
     expect(botItemPersonMark(ownersItem, undefined, 'Owner')).toBeNull()
     expect(botItemPersonMark(alicesItem, undefined, 'Owner')).toBe('Alice Park')
-    expect(botItemPersonMark(ownersItem, VIEWER, 'Jinwoo')).toBe('Jinwoo')
-    expect(botItemPersonMark(alicesItem, VIEWER, 'Jinwoo')).toBeNull()
-    expect(botItemPersonMark(shared, VIEWER, 'Jinwoo')).toBe('Bo Chen')
+    expect(botItemPersonMark(ownersItem, VIEWER, 'Owner')).toBe('Jinwoo')
+    expect(botItemPersonMark(ownersItem, { ...VIEWER, ownerName: null }, 'Owner')).toBe('Owner')
+    expect(botItemPersonMark(alicesItem, VIEWER, 'Owner')).toBeNull()
+    expect(botItemPersonMark(shared, VIEWER, 'Owner')).toBe('Bo Chen')
   })
 })

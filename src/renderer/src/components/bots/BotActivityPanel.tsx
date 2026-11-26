@@ -180,13 +180,13 @@ function BotActivityTab({
   const shownRead = botItemsShownReadState(shown, items)
   const seenAtOpen = useBotItemsSeenAtOpen(bot, shown.read, shownRead.landed)
   const list = useBotItemsShownGroups(bot, shown, filter, clock, seenAtOpen ?? '')
-  const ownerLabel = t('bots.items.filter.owner', 'Owner')
+  const ownerFallback = t('bots.items.filter.owner', 'Owner')
   const personMark = useMemo(
     () =>
       entries && pick.kind === 'everyone'
-        ? (item: BotItem) => botItemPersonMark(item, bot.shareViewer, ownerLabel)
+        ? (item: BotItem) => botItemPersonMark(item, bot.shareViewer, ownerFallback)
         : null,
-    [entries, pick.kind, bot.shareViewer, ownerLabel]
+    [entries, pick.kind, bot.shareViewer, ownerFallback]
   )
   const walk = useBotItemWalk(list, botRefKey(bot))
   const openItem = (uid: string): void => {
