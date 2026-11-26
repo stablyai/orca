@@ -7,6 +7,7 @@ import {
   type CopyValues,
   type CountedCopy
 } from '../../../i18n/counted-copy-english'
+import { formatCurrencyAmount } from '../../../agent-usage/display/currency-format'
 
 export const NATIVE_CHAT_SUBAGENT_GROUP_COPY = {
   stateCompleted: 'completed',
@@ -48,6 +49,13 @@ export function formatSubagentTokens(tokens: number): string {
   const scaled = tokens < 1_000_000 ? tokens / 1_000 : tokens / 1_000_000
   const suffix = tokens < 1_000_000 ? 'k' : 'M'
   return `${scaled.toFixed(1).replace(/\.0$/, '')}${suffix}`
+}
+
+/** Spend in US dollars; a fraction of a cent reads as under one, not as nothing. */
+export function formatSubagentCost(cost: number): string {
+  return cost > 0 && cost < 0.01
+    ? `<${formatCurrencyAmount(0.01, 'USD')}`
+    : formatCurrencyAmount(cost, 'USD')
 }
 
 /** Single-child verdicts omit count; multi-child verdicts include it, except completed means the whole group finished. */

@@ -23,6 +23,7 @@ import {
   hasOnlyKeys,
   isBoundedString,
   isChildWorkText,
+  isChildWorkCost,
   isChildWorkTokenCount,
   isRecord,
   isTimestamp
@@ -164,6 +165,7 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
         'model',
         'effort',
         'totalTokens',
+        'cost',
         'providerTiming',
         'parentChildWorkId',
         'residency',
@@ -186,7 +188,8 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
     !isTimestamp(value.observedAt) ||
     value.firstObservedAt > value.observedAt ||
     typeof value.stoppable !== 'boolean' ||
-    (value.totalTokens !== undefined && !isChildWorkTokenCount(value.totalTokens))
+    (value.totalTokens !== undefined && !isChildWorkTokenCount(value.totalTokens)) ||
+    (value.cost !== undefined && !isChildWorkCost(value.cost))
   ) {
     return null
   }
@@ -272,6 +275,7 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
     ...(labels.model ? { model: labels.model } : {}),
     ...(labels.effort ? { effort: labels.effort } : {}),
     ...(typeof value.totalTokens === 'number' ? { totalTokens: value.totalTokens } : {}),
+    ...(typeof value.cost === 'number' ? { cost: value.cost } : {}),
     ...(timing ? { providerTiming: timing } : {}),
     ...activity,
     firstObservedAt: value.firstObservedAt,

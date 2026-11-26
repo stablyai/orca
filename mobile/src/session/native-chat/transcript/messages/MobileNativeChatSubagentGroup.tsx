@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Text, View } from 'react-native'
 import { Bot } from 'lucide-react-native'
 import {
+  formatSubagentCost,
   formatSubagentTokens,
   nativeChatSubagentGroupHeader
 } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
@@ -27,7 +28,7 @@ import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatEventName, MobileNativeChatEventRow } from './MobileNativeChatEventRow'
 import { scaledType } from './mobile-native-chat-message-styles'
 
-/** What it is doing or said, then its role, where it runs and its tokens; null when it has none. */
+/** What it is doing or said, then its role, where it runs, its tokens and cost; null when it has none. */
 function subagentDetails(agent: NativeChatSubagentEntry): { text: string; facts: string } | null {
   const working = normalizeSubagentState(agent.state) === 'working'
   const text =
@@ -37,7 +38,8 @@ function subagentDetails(agent: NativeChatSubagentEntry): { text: string; facts:
     subagentEntryRunsOn(agent, sayOption),
     typeof agent.tokens === 'number'
       ? say('tokens', { value0: formatSubagentTokens(agent.tokens) })
-      : null
+      : null,
+    typeof agent.cost === 'number' ? formatSubagentCost(agent.cost) : null
   ]
     .filter(Boolean)
     .join(' · ')

@@ -6,6 +6,7 @@ export const SubagentEntry = z.object({
   label: z.string(),
   state: z.string().min(1),
   tokens: z.number().optional(),
+  cost: z.number().optional(),
   startedAt: z.number().optional(),
   settledAt: z.number().optional(),
   agentType: z.string().optional(),

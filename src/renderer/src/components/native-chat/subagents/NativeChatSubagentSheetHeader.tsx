@@ -10,7 +10,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatSubagentTokens } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
+import {
+  formatSubagentCost,
+  formatSubagentTokens
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import { subagentRoleLabel } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
 import type { NativeChatSubagentEntry } from '../../../../../shared/native-chat/native-chat-types'
@@ -170,6 +173,14 @@ export function NativeChatSubagentSheetHeader({
                 className="@max-[24rem]/subagent-sheet:hidden"
               >
                 {` · ${say('tokens', { value0: formatSubagentTokens(entry.tokens) })}`}
+              </span>
+            ) : null}
+            {typeof entry?.cost === 'number' ? (
+              <span
+                aria-hidden={counting || undefined}
+                className="@max-[24rem]/subagent-sheet:hidden"
+              >
+                {` · ${formatSubagentCost(entry.cost)}`}
               </span>
             ) : null}
           </div>

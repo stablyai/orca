@@ -105,6 +105,7 @@ function liveFields(
     ...(child.model !== undefined ? { model: child.model } : {}),
     ...(child.effort !== undefined ? { effort: child.effort } : {}),
     ...(child.totalTokens !== undefined ? { totalTokens: child.totalTokens } : {}),
+    ...(child.cost !== undefined ? { cost: child.cost } : {}),
     ...(owner !== undefined ? { parentChildWorkId: owner } : {}),
     residency: child.residency,
     ...(operation ? { operation } : {}),
@@ -192,6 +193,7 @@ export function settleAgentChildWork(
   reported: {
     lastMessage?: string
     totalTokens?: number
+    cost?: number
     basis?: AgentChildWorkOutcomeBasis
   } = {}
 ): void {
@@ -209,6 +211,7 @@ export function settleAgentChildWork(
     outcome,
     ...(reported.basis !== undefined ? { outcomeBasis: reported.basis } : {}),
     ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {}),
+    ...(reported.cost !== undefined ? { cost: reported.cost } : {}),
     ...(reported.lastMessage !== undefined ? { lastMessage: reported.lastMessage } : {}),
     observedAt: Math.max(observedAt, existing.observedAt),
     stoppable: false,

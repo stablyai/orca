@@ -50,6 +50,11 @@ export function isChildWorkTokenCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
+/** A spend in US dollars. */
+export function isChildWorkCost(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
 /** An id: nonempty, trimmed, no control characters, within `maxLength`. */
 export function isBoundedString(
   value: unknown,

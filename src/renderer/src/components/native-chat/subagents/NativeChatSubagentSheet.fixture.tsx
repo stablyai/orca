@@ -31,6 +31,7 @@ function agents(state: State): NativeChatSubagentEntry[] {
       label: 'Map streamed remote page RPC',
       state,
       tokens: 191_300,
+      cost: 1.24,
       startedAt: T0,
       agentType: 'Explore',
       ...settled,

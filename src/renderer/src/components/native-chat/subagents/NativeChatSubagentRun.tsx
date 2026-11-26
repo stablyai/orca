@@ -2,6 +2,7 @@ import { Bot } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/lib/window-activity/use-now'
 import {
+  formatSubagentCost,
   formatSubagentTokens,
   nativeChatSubagentGroupHeader
 } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
@@ -41,7 +42,7 @@ export function SubagentElapsed({
   return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
 }
 
-/** What it is doing, or once settled its result, then its role, where it runs and its tokens; null when it has none. */
+/** What it is doing, or once settled its result, then its role, where it runs, its tokens and cost; null when it has none. */
 function subagentDetails(
   agent: NativeChatSubagentEntry
 ): { text: string; result: string; facts: string } | null {
@@ -53,7 +54,8 @@ function subagentDetails(
     subagentEntryRunsOn(agent, sayOption),
     typeof agent.tokens === 'number'
       ? say('tokens', { value0: formatSubagentTokens(agent.tokens) })
-      : null
+      : null,
+    typeof agent.cost === 'number' ? formatSubagentCost(agent.cost) : null
   ]
     .filter(Boolean)
     .join(' · ')

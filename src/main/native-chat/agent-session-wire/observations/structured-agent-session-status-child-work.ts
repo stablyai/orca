@@ -25,7 +25,7 @@ export function structuredStatusChildWork(
   if (running.length === 0) {
     return {}
   }
-  const children = running.map(({ totalTokens: _totalTokens, ...view }) => view)
+  const children = running.map(({ totalTokens: _totalTokens, cost: _cost, ...view }) => view)
   // Old clients treat failed blocked tasks as live, so legacy lists must contain running records only.
   const { tasks } = structuredChildWorkLegacyTasks(children, provider)
   return { children, ...(tasks ? { backgroundTasks: tasks } : {}) }
