@@ -156,11 +156,17 @@ export function MobileMcpServerPage(props: {
               <ListRow
                 key={agent}
                 title={name}
-                subtitle={problem?.detail}
-                subtitleIcon={
-                  problem?.kind === 'blocked' ? <McpStatusDot tone="amber" /> : undefined
+                subtitle={
+                  problem?.kind === 'blocked' && agent === 'claude'
+                    ? t('mcpServers.agentBlocked', 'Blocked by your organization’s Claude settings')
+                    : problem?.detail
                 }
-                // The host's short line; two at most, as the org-policy one takes.
+                subtitleIcon={
+                  problem && problem.kind !== 'terminal-off' ? (
+                    <McpStatusDot tone="amber" />
+                  ) : undefined
+                }
+                // Two lines at most, as the org-policy one takes.
                 subtitleLines={2}
                 leading={<MobileAgentIcon agentId={agent} size={18} />}
                 accessory={

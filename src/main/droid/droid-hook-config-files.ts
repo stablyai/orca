@@ -32,7 +32,13 @@ export const DROID_EVENTS = [
 export type DroidHookEvents = Record<string, unknown>
 
 /** Orca rewrites only plain-JSON files, so a JSONC or unreadable file is never clobbered. */
-export type DroidHooksFile = { path: string; events: DroidHookEvents; editable: boolean }
+export type DroidHooksFile = {
+  path: string
+  events: DroidHookEvents
+  editable: boolean
+  /** Exact raw bytes this snapshot was parsed from, or null when absent/unreadable. */
+  raw: string | null
+}
 
 /**
  * Strips Orca's entries from every event, then adds them back when a command is given. Null means
@@ -96,14 +102,15 @@ export function hasManagedDroidHooks(events: unknown, scriptFileName: string): b
 function parseDroidHooksFile(path: string, raw: string | null): DroidHooksFile {
   const json = raw === null ? null : parseHooksJsonText(raw)
   if (json) {
-    return { path, events: json, editable: true }
+    return { path, events: json, editable: true, raw }
   }
   const errors: ParseError[] = []
   const parsed: unknown = raw === null ? undefined : parseJsonc(raw.replace(/^\uFEFF/, ''), errors)
   return {
     path,
     events: errors.length === 0 && isPlainObject(parsed) ? parsed : {},
-    editable: false
+    editable: false,
+    raw
   }
 }
 
@@ -122,7 +129,7 @@ export function readDroidHooksFile(factoryDir: string): DroidHooksFile {
   const legacyPath = join(factoryDir, 'hooks', 'hooks.json')
   const legacy = readHooksJsonWithRaw(legacyPath)
   return isAbsent(legacy)
-    ? { path, events: {}, editable: true }
+    ? { path, events: {}, editable: true, raw: null }
     : parseDroidHooksFile(legacyPath, legacy.raw)
 }
 
@@ -149,7 +156,8 @@ export async function readDroidHooksFileRemote(
     (await readRemoteHooksFile(sftp, `${factoryDir}/hooks/hooks.json`)) ?? {
       path,
       events: {},
-      editable: true
+      editable: true,
+      raw: null
     }
   )
 }

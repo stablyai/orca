@@ -8,6 +8,7 @@ import path from 'node:path'
 import { prepareKimiTextTaskPolicy } from './source-control-kimi-policy'
 import { parse as parseJson, type ParseError } from 'jsonc-parser'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import {
   compactRecipeOptions,
@@ -28,8 +29,8 @@ import type {
   TextGenerationOperation
 } from '../source-control-text-generation-types'
 
-const object = z.record(z.string(), z.unknown())
-const strings = z.array(z.string())
+const object = lazyZodSchema(() => z.record(z.string(), z.unknown()))
+const strings = lazyZodSchema(() => z.array(z.string()))
 const settingsOptions = [
   '--settings',
   '--model',

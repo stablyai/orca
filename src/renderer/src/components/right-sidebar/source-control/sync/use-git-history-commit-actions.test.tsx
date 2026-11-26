@@ -93,17 +93,20 @@ let latest: ReturnType<typeof useGitHistoryCommitActions> | null = null
 
 function Probe({
   worktreeId,
-  isSurfaceOpen
+  isSurfaceOpen,
+  placementWorkspaceId
 }: {
   worktreeId: string
   isSurfaceOpen?: () => boolean
+  placementWorkspaceId?: string
 }): null {
   latest = useGitHistoryCommitActions({
     activeWorktreeId: worktreeId,
     worktreePath: `/${worktreeId}`,
     activeRepoTarget: { kind: 'local' },
     resolveSplitTargetGroupId: () => undefined,
-    isSurfaceOpen
+    isSurfaceOpen,
+    placementWorkspaceId
   })
   return null
 }
@@ -429,6 +432,21 @@ describe('useGitHistoryCommitActions context fencing', () => {
     await expect(latest!.loadCommitFiles(COMMIT)).resolves.toEqual([
       { path: 'from-b.ts', status: 'modified' }
     ])
+  })
+
+  it('opens a folder-placed Graph tab’s diffs in the folder workspace', async () => {
+    mocks.getRuntimeGitCommitCompare.mockResolvedValue(compare('changed.ts'))
+    render(<Probe worktreeId="A" placementWorkspaceId="folder:F" />)
+    await latest!.openHistoryCommitDiff(COMMIT)
+    latest!.openCommitFile(COMMIT, { path: 'changed.ts', status: 'modified' })
+
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[0]).toBe('A')
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[6]).toMatchObject({
+      placementWorkspaceId: 'folder:F'
+    })
+    expect(mocks.openCommitDiff.mock.lastCall?.[5]).toMatchObject({
+      placementWorkspaceId: 'folder:F'
+    })
   })
 
   it('drops an Open diff whose load finishes after a worktree switch', async () => {
