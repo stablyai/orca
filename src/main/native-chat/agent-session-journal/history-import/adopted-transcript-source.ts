@@ -132,7 +132,10 @@ export function adoptedTranscriptSourceObserver(input: {
       sessionId = extractString(summary?.id) ?? sessionIdFromFileName(dirname(input.filePath))
       cwd = extractString(summary?.cwd)
     }
-    if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== sessionId) {
+    if (
+      (input.agent === 'pi' || input.agent === 'droid') &&
+      sessionIdFromFileName(input.filePath) !== sessionId
+    ) {
       throw new Error('The saved conversation header does not match its file identity.')
     }
     // Moved or copied chats keep their old cwd; Claude and Grok resume from the cwd's bucket regardless.
@@ -152,7 +155,10 @@ export function adoptedTranscriptSourceObserver(input: {
       sawCodexMetadata = true
       const payload = asRecord(record.payload)
       sessionId = extractString(payload?.id) ?? sessionId
-    } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
+    } else if (
+      ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') ||
+      (input.agent === 'droid' && record.type === 'session_start')
+    ) {
       sessionId = extractString(record.id)
       cwd = extractString(record.cwd)
     }
@@ -223,6 +229,10 @@ const ADOPTED_FOLDER_HEAD_BYTES = 16 * 1024 * 1024
 const ADOPTED_SUMMARY_BYTES = 1024 * 1024
 
 function folderCheckedTranscriptAgent(agent: AgentType) {
+  // Droid loads a session only in the folder it was saved in.
+  if (agent === 'droid') {
+    return agent
+  }
   const transcriptAgent = agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(agent)
   return transcriptAgent === 'codex' ? null : transcriptAgent
 }

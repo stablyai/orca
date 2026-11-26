@@ -30,6 +30,8 @@ export function aiVaultSessionResumeInChatWorkspaceMatters(
 ): boolean {
   return (
     agent === 'claude' ||
+    // Droid loads a session only in the folder it was saved in.
+    agent === 'droid' ||
     agent === 'grok' ||
     // Hermes moves a session into whatever folder loads it.
     agent === 'hermes' ||
