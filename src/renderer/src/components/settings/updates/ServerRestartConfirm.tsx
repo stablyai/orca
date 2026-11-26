@@ -127,14 +127,19 @@ export function ServerRestartConfirm({
         }}
       >
         <div className="flex items-center gap-1 p-1.5 @min-[27rem]/server-confirm:gap-2 @min-[27rem]/server-confirm:ps-3">
-          <p className="min-w-0 flex-1 truncate text-sm">
-            <span className={live ? 'hidden @min-[27rem]/server-confirm:inline' : undefined}>
+          <p className="flex min-w-0 flex-1 items-baseline gap-1 text-sm">
+            <span
+              className={
+                live
+                  ? 'hidden min-w-0 truncate @min-[27rem]/server-confirm:inline'
+                  : 'min-w-0 truncate'
+              }
+            >
               {question}
             </span>
             {live ? (
-              <span id={warningId}>
+              <span id={warningId} className="shrink-0 whitespace-nowrap">
                 <span className="hidden @min-[27rem]/server-confirm:inline">
-                  {' '}
                   {t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}
                 </span>
                 <span className="text-xs @min-[27rem]/server-confirm:hidden">
