@@ -52,6 +52,8 @@ export type BridgeClientShellSession = {
   onTerminalKeyRailUpdate: (listener: (keys: BridgeTerminalKeyRail) => void) => () => void
   onColorSchemeUpdate: (listener: (scheme: BridgeColorScheme) => void) => () => void
   onUiLocaleUpdate: (listener: (locale: BridgeUiLocale | null) => void) => () => void
+  /** Fires when an `init` moved whether the page owns the host area, including a replacement's. */
+  onHostAreaUpdate: (listener: (ownsHostArea: boolean) => void) => () => void
   /** Drops the session and every listener waiting on one, which `close` is the only caller of. */
   close: () => void
 }
@@ -69,6 +71,7 @@ export type BridgeShellSessionListeners = Pick<
   | 'onPageGeometryUpdate'
   | 'onFoldDivisionUpdate'
   | 'onTerminalKeyRailUpdate'
+  | 'onHostAreaUpdate'
 >
 
 /** Picked rather than spread: the session's `accept` and `close` are the client's alone. */
@@ -85,7 +88,8 @@ export function shellSessionListeners(
     onUiLocaleUpdate: session.onUiLocaleUpdate,
     onPageGeometryUpdate: session.onPageGeometryUpdate,
     onFoldDivisionUpdate: session.onFoldDivisionUpdate,
-    onTerminalKeyRailUpdate: session.onTerminalKeyRailUpdate
+    onTerminalKeyRailUpdate: session.onTerminalKeyRailUpdate,
+    onHostAreaUpdate: session.onHostAreaUpdate
   }
 }
 
@@ -104,6 +108,7 @@ export function createBridgeClientShellSession(args: {
   const railListeners = new Set<(keys: BridgeTerminalKeyRail) => void>()
   const schemeListeners = new Set<(scheme: BridgeColorScheme) => void>()
   const uiLocaleListeners = new Set<(locale: BridgeUiLocale | null) => void>()
+  const hostAreaListeners = new Set<(ownsHostArea: boolean) => void>()
 
   return {
     current: () => session,
@@ -153,6 +158,9 @@ export function createBridgeClientShellSession(args: {
       const movedScheme = held !== null && held.colorScheme !== colorScheme
       const uiLocale = message.uiLocale ?? null
       const movedUiLocale = held !== null && held.uiLocale !== uiLocale
+      // A fold can hand the page the host area mid-session; readers render before this init lands.
+      const ownsHostArea = message.ownsHostArea === true
+      const movedHostArea = held !== null && held.ownsHostArea !== ownsHostArea
       session =
         update === null
           ? {
@@ -174,6 +182,7 @@ export function createBridgeClientShellSession(args: {
               terminalKeyRail,
               colorScheme,
               uiLocale,
+              ownsHostArea,
               hostStatus: message.hostStatus ?? null
             }
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
@@ -223,6 +232,11 @@ export function createBridgeClientShellSession(args: {
       if (movedUiLocale) {
         for (const listener of uiLocaleListeners) {
           listener(uiLocale)
+        }
+      }
+      if (movedHostArea) {
+        for (const listener of hostAreaListeners) {
+          listener(ownsHostArea)
         }
       }
       // Only a route that moved is an update. The shell answers every `ready` with the route it
@@ -299,6 +313,12 @@ export function createBridgeClientShellSession(args: {
       uiLocaleListeners.add(listener)
       return () => {
         uiLocaleListeners.delete(listener)
+      }
+    },
+    onHostAreaUpdate: (listener) => {
+      hostAreaListeners.add(listener)
+      return () => {
+        hostAreaListeners.delete(listener)
       }
     },
     close: () => {
