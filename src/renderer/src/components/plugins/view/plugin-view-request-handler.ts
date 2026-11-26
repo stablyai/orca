@@ -22,6 +22,7 @@ import {
 } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import {
+  measurePluginPanelContentHeight,
   measurePluginPanelGuest,
   measurePluginPanelSurface,
   nextPaintedFrames,
@@ -153,6 +154,8 @@ async function capturePanel(
   }
   const dark = document.documentElement.classList.contains('dark')
   const guestRect = status.value?.ui === 'html' ? measurePluginPanelGuest(tabKey) : null
+  const contentHeight =
+    status.value?.ui === 'html' ? undefined : measurePluginPanelContentHeight(tabKey)
   return {
     requestId,
     ok: true,
@@ -161,6 +164,7 @@ async function capturePanel(
       ui: status.value?.ui ?? 'components',
       guestUrl: status.value?.guestUrl ?? null,
       ...(guestRect ? { guestRect } : {}),
+      ...(contentHeight === undefined ? {} : { contentHeight }),
       issue: status.value?.issue ?? null,
       colorScheme: dark ? 'dark' : 'light',
       themeApplied: wantDark !== null && dark === wantDark,

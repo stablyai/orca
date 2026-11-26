@@ -1,4 +1,5 @@
 import type { PluginHostStatus } from '../../../shared/plugins/plugin-list-entry'
+import { pluginShotClippedNote } from '../view/plugin-shot-clipped'
 import { formatPluginPanelCheck } from '../authoring/plugin-panel-check'
 import type { PluginDevWatchCheckResult } from './plugin-dev-watch-check'
 import { formatPluginEditorCheck } from '../authoring/plugin-editor-check'
@@ -124,9 +125,11 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
         ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`),
         ...event.editors.flatMap(formatPluginEditorCheck).map((line) => `  ${line}`)
       ].join('\n')
-    case 'shot':
+    case 'shot': {
+      const clippedNote = pluginShotClippedNote(event)
       return [
         `shot ${event.path} (${event.width}x${event.height})${event.settled ? '' : ', not finished drawing'}`,
+        ...(clippedNote ? [`  note: ${clippedNote}`] : []),
         ...(event.pendingRequests
           ? [
               `  note: ${event.pendingRequests} host call(s) were still unanswered; the panel may show its loading state`
@@ -134,6 +137,7 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
           : []),
         ...event.errors.map((error) => `  error: ${error}`)
       ].join('\n')
+    }
     case 'shot_skipped':
       return `shot skipped: ${event.reason}, so ${event.panelId} is not on screen; open it again to resume`
     case 'warning':

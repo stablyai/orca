@@ -8,6 +8,9 @@ export type PluginDevWatchShot = {
   path: string
   width: number
   height: number
+  /** The panel's content height and whether the PNG drops part of it; absent when unmeasured. */
+  contentHeight?: number
+  clipped?: boolean
   /** False when the panel had not finished drawing by the host's timeout. */
   settled: boolean
   errors: string[]

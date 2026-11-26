@@ -60,6 +60,11 @@ export function pluginPanelCaptureRect(
   return { x, y, width: Math.round(rect.width * zoom), height: Math.round(rect.height * zoom) }
 }
 
+/** A CSS-pixel height in window points, like the capture rect's. */
+export function pluginPanelContentHeight(height: number, zoomFactor: number): number {
+  return pluginPanelCaptureRect({ x: 0, y: 0, width: 0, height }, zoomFactor).height
+}
+
 type CaptureRect = { x: number; y: number; width: number; height: number }
 
 /** Creates an image from raw pixels; `nativeImage.createFromBitmap` in the app. */

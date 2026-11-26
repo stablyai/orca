@@ -103,6 +103,8 @@ export type PluginViewDrawnPanel = {
   settled: boolean
   /** Host calls (`plugin.request` included) still unanswered when it was measured. */
   pendingRequests?: number
+  /** Components panel: the full height its content needs (CSS pixels from `rect`'s top); absent when unmeasured. */
+  contentHeight?: number
   /** One result per requested act. */
   actions?: PluginShotActResult[]
   /** An editor capture: the frame asked for its document (`orca.document.get` or `onDidChange`). */
