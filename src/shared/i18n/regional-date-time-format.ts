@@ -1,3 +1,4 @@
+import { normalizeUiLocaleTag } from './ui-locale'
 // Dates and times read in the UI language but follow the OS region and 12/24-hour clock,
 // which the OS keeps separate from the language (English UI, Dutch region, 24-hour clock).
 
@@ -8,18 +9,22 @@ export type OsDateTimeRegion = {
   hourCycle: 'h12' | 'h23' | null
 }
 
-const REGION = /^(?:[A-Za-z]{2}|\d{3})$/
+/** An ISO 3166 region or UN M.49 area subtag. */
+export const REGION_SUBTAG = /^(?:[A-Za-z]{2}|\d{3})$/
 const SCRIPT = /^[A-Za-z]{4}$/
 const NO_OS_REGION: OsDateTimeRegion = { region: null, hourCycle: null }
 
 let osDateTimeRegion = NO_OS_REGION
+let regionKey = 'null|null'
 let formatsBuilt = false
 
 export function setOsDateTimeRegion(value: OsDateTimeRegion | null): void {
-  const region = value?.region && REGION.test(value.region) ? value.region.toUpperCase() : null
+  const region =
+    value?.region && REGION_SUBTAG.test(value.region) ? value.region.toUpperCase() : null
   const hourCycle =
     value?.hourCycle === 'h12' || value?.hourCycle === 'h23' ? value.hourCycle : null
   osDateTimeRegion = { region, hourCycle }
+  regionKey = `${region}|${hourCycle}`
 }
 
 export function currentOsDateTimeRegion(): OsDateTimeRegion {
@@ -33,7 +38,7 @@ export function regionalFormatsBuilt(): boolean {
 
 /** Changes exactly when regional formats can change. */
 export function osDateTimeRegionKey(): string {
-  return `${osDateTimeRegion.region}|${osDateTimeRegion.hourCycle}`
+  return regionKey
 }
 
 /** Region of an OS locale: `en-US@rg=nlzzzz` (macOS region override) → NL, `de_DE.UTF-8` → DE. */
@@ -41,14 +46,16 @@ export function osLocaleRegion(tag: string | null | undefined): string | null {
   if (!tag) {
     return null
   }
-  const [base = '', modifiers = ''] = tag.trim().split('@')
-  const override = /(?:^|;)rg=([a-z]{2})z{4}(?:;|$)/i.exec(modifiers)?.[1]
+  const override = /@(?:.*;)?rg=([a-z]{2})z{4}(?:;|$)/i.exec(tag)?.[1]
   if (override) {
     return override.toUpperCase()
   }
-  const [, ...subtags] = (base.split('.')[0] ?? '').split(/[-_]/)
-  const region = subtags.find((subtag, index) => index < 2 && REGION.test(subtag))
-  return region ? region.toUpperCase() : null
+  const normalized = normalizeUiLocaleTag(tag)
+  try {
+    return normalized ? (new Intl.Locale(normalized).region ?? null) : null
+  } catch {
+    return null
+  }
 }
 
 /** Windows short-time pattern (`HH:mm`, `h:mm tt`) → its hour cycle; `H` is the 24-hour field. */
@@ -67,8 +74,8 @@ function maximizedScript(tag: string): string | undefined {
 
 /** The UI locale with the OS region: `en` + NL → `en-NL`; keeps the UI's script (`zh` + TW →
  *  `zh-Hans-TW`), variants and extensions (`en-u-ca-buddhist` + US → `en-US-u-ca-buddhist`). */
-export function withOsRegion(uiLocale: string, region: string | null): string {
-  if (!region || !REGION.test(region)) {
+function withOsRegion(uiLocale: string, region: string | null): string {
+  if (!region) {
     return uiLocale
   }
   const subtags = uiLocale.split('-')
@@ -76,14 +83,14 @@ export function withOsRegion(uiLocale: string, region: string | null): string {
   const extensions = singleton === -1 ? [] : subtags.slice(singleton)
   const [language = '', ...rest] = singleton === -1 ? subtags : subtags.slice(0, singleton)
   let script = rest[0] && SCRIPT.test(rest[0]) ? rest.shift() : undefined
-  if (rest[0] && REGION.test(rest[0])) {
+  if (rest[0] && REGION_SUBTAG.test(rest[0])) {
     rest.shift()
   }
   if (!script) {
     const uiScript = maximizedScript(uiLocale)
     script = uiScript !== maximizedScript(`${language}-${region}`) ? uiScript : undefined
   }
-  return [language, script, region.toUpperCase(), ...rest, ...extensions].filter(Boolean).join('-')
+  return [language, script, region, ...rest, ...extensions].filter(Boolean).join('-')
 }
 
 let runtimeLocale: string | undefined
@@ -93,28 +100,19 @@ function resolveLocale(locale: string | undefined): string {
   return locale ?? (runtimeLocale ??= new Intl.DateTimeFormat().resolvedOptions().locale)
 }
 
-let regionClock: { region: string; hourCycle: OsDateTimeRegion['hourCycle'] } | undefined
-
 // The region's own clock, from its main language: ICU has no data for many pairs (en-BR, en-RU)
 // and would fall back to the UI language's clock without a word.
-function regionHourCycle(region: string | null): OsDateTimeRegion['hourCycle'] {
-  if (!region || typeof Intl.Locale !== 'function') {
+function regionHourCycle(region: string): OsDateTimeRegion['hourCycle'] {
+  try {
+    const { language } = new Intl.Locale(`und-${region}`).maximize()
+    const cycle = new Intl.DateTimeFormat(`${language}-${region}`, {
+      hour: 'numeric'
+    }).resolvedOptions().hourCycle
+    return cycle === 'h11' || cycle === 'h12' ? 'h12' : cycle ? 'h23' : null
+  } catch {
+    // Hermes has no Intl.Locale; the phone always sends its clock.
     return null
   }
-  if (regionClock?.region !== region) {
-    let hourCycle: OsDateTimeRegion['hourCycle'] = null
-    try {
-      const { language } = new Intl.Locale(`und-${region}`).maximize()
-      const cycle = new Intl.DateTimeFormat(`${language}-${region}`, {
-        hour: 'numeric'
-      }).resolvedOptions().hourCycle
-      hourCycle = cycle === 'h11' || cycle === 'h12' ? 'h12' : cycle ? 'h23' : null
-    } catch {
-      hourCycle = null
-    }
-    regionClock = { region, hourCycle }
-  }
-  return regionClock.hourCycle
 }
 
 /** The calls Orca makes on a date format; out-of-range dates read "Invalid Date" as
@@ -145,18 +143,20 @@ function forgiving(formatter: Intl.DateTimeFormat): RegionalDateTimeFormat {
 }
 
 // ICU dropped the region when it has no data for this language there (en-BR resolves to en).
-function regionDropped(tag: string, region: string | null): boolean {
+function regionDropped(tag: string, region: string): boolean {
   try {
-    return (
-      region !== null &&
-      !new Intl.DateTimeFormat(tag).resolvedOptions().locale.split('-').includes(region)
-    )
+    return !new Intl.DateTimeFormat(tag).resolvedOptions().locale.split('-').includes(region)
   } catch {
     return false
   }
 }
 
-type LocalePlan = { tag: string; hourCycle: OsDateTimeRegion['hourCycle'] }
+type LocalePlan = {
+  tag: string
+  hourCycle: OsDateTimeRegion['hourCycle']
+  /** The OS named a region or clock, so the plan departs from the UI language's defaults. */
+  fromOs: boolean
+}
 // One plan per language and OS region, so a new formatter costs only its own construction.
 const MAX_PLANS = 8
 const plans = new Map<string, LocalePlan>()
@@ -170,7 +170,8 @@ function localePlan(uiLocale: string): LocalePlan {
     // A pair ICU knows keeps its own clock (fr-CA is 24-hour though Canada's main language is not).
     plan = {
       tag,
-      hourCycle: forced ?? (regionDropped(tag, region) ? regionHourCycle(region) : null)
+      hourCycle: forced ?? (region && regionDropped(tag, region) ? regionHourCycle(region) : null),
+      fromOs: region !== null || forced !== null
     }
     if (plans.size >= MAX_PLANS) {
       plans.delete(plans.keys().next().value as string)
@@ -184,17 +185,15 @@ function buildDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   uiLocale: string
 ): Intl.DateTimeFormat {
-  const { region, hourCycle: forced } = osDateTimeRegion
   try {
-    const { tag, hourCycle } = localePlan(uiLocale)
+    const { tag, hourCycle, fromOs } = localePlan(uiLocale)
     const regional =
       hourCycle && options.hour12 === undefined && options.hourCycle === undefined
         ? { ...options, hourCycle }
         : options
     const formatter = new Intl.DateTimeFormat(tag, regional)
     // A 24-hour hour alone reads as a bare number ("20"), so it gets its minutes ("20:00").
-    const bareHour =
-      (region || forced) && options.hour !== undefined && options.minute === undefined
+    const bareHour = fromOs && options.hour !== undefined && options.minute === undefined
     return bareHour && /^h2[34]$/.test(formatter.resolvedOptions().hourCycle ?? '')
       ? new Intl.DateTimeFormat(tag, { ...regional, minute: '2-digit' })
       : formatter

@@ -35,9 +35,15 @@ function cachedFormatter<T>(
 /** Dates and times in the UI language with the OS region and clock; pass module-constant options. */
 export function uiDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
-  intlLocale: string = getIntlLocale()
+  intlLocale?: string
 ): RegionalDateTimeFormat {
-  return regionalDateTimeFormat(options, supportedIntlLocale(intlLocale, Intl.DateTimeFormat))
+  // getIntlLocale() already checks support; only a caller's own tag needs it.
+  return regionalDateTimeFormat(
+    options,
+    intlLocale === undefined
+      ? getIntlLocale()
+      : supportedIntlLocale(intlLocale, Intl.DateTimeFormat)
+  )
 }
 
 export function uiNumberFormat(

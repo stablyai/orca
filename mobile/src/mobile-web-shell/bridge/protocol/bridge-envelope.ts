@@ -3,6 +3,7 @@ import { BRIDGE_APP_INACTIVE_FRAME } from '../page-lifecycle/bridge-app-inactive
 import { BRIDGE_APP_RESUMED_FRAME } from '../page-lifecycle/bridge-app-resumed'
 import { salvagedOptional } from '../../../../../src/shared/validation/zod-salvage'
 import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/i18n/ui-locale'
+import { REGION_SUBTAG } from '../../../../../src/shared/i18n/regional-date-time-format'
 import { NODE_PLATFORM_NAMES } from '../../../transport/connection/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../../transport/rpc/rpc-envelope-fields'
 import { isRpcResponse } from '../../../transport/rpc/rpc-response-shape'
@@ -88,10 +89,7 @@ export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
 
 // The phone's Region setting and 12/24-hour clock, which page dates follow instead of the language's.
 export const BridgeDateTimeRegionSchema = z.object({
-  region: z
-    .string()
-    .regex(/^(?:[A-Za-z]{2}|\d{3})$/)
-    .nullable(),
+  region: z.string().regex(REGION_SUBTAG).nullable(),
   hourCycle: z.enum(['h12', 'h23']).nullable()
 })
 
