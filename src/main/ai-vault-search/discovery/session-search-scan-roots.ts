@@ -41,7 +41,35 @@ export async function discoverSessionSearchCandidates(
     issues
   })
   const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
-  return { candidates, discoveries, issues }
+  return { candidates: groupAntigravitySiblings(candidates), discoveries, issues }
+}
+
+/** Only the two named files under the same conversation logs directory share an identity. */
+function groupAntigravitySiblings(candidates: SessionFileChoice[]): SessionFileChoice[] {
+  const byPath = new Map(
+    candidates.filter((file) => file.agent === 'antigravity').map((file) => [file.file.path, file])
+  )
+  const paired = new Set<string>()
+  const result: SessionFileChoice[] = []
+  for (const candidate of candidates) {
+    const path = candidate.file.path
+    if (paired.has(path) && candidate.agent === 'antigravity') {
+      continue
+    }
+    if (candidate.agent === 'antigravity') {
+      const dir = path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
+      const full = byPath.get(`${dir}transcript_full.jsonl`)
+      const compact = byPath.get(`${dir}transcript.jsonl`)
+      if (full && compact && (candidate === full || candidate === compact)) {
+        result.push({ ...full, alternatives: [full, compact] })
+        paired.add(full.file.path)
+        paired.add(compact.file.path)
+        continue
+      }
+    }
+    result.push(candidate)
+  }
+  return result
 }
 
 /** Accept either path separator and require a segment boundary to exclude sibling prefixes. */
