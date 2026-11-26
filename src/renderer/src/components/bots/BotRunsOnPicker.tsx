@@ -66,6 +66,19 @@ function BotFolderPreview({ name, host }: { name: string; host: BotCreateHostCho
   )
 }
 
+/** Whether New bot's Agent field shows a placeholder (no agents, or a WSL distro being set up or
+ *  waking) instead of the picker, so nothing offers to change a setup the owner cannot see. */
+export function useBotAgentFieldPlaceholder(
+  { host, wslSetup }: BotCreateHostChoice,
+  model: NewTabAgentMenuModel,
+  choices: readonly BotAgent[]
+): boolean {
+  const wslDistro = useWslHostDistro(host.hostId)
+  const noAgents = model.state === 'settled' && choices.length === 0
+  const hostWaking = Boolean(host.sleeping || host.waking)
+  return wslSetup.state.phase !== 'idle' || noAgents || (hostWaking && Boolean(wslDistro))
+}
+
 export function BotRunsOnPicker({
   hostChoice,
   setup,
@@ -76,7 +89,8 @@ export function BotRunsOnPicker({
   onAddHost,
   name,
   showSubmitFeedback = false,
-  variant = 'row'
+  variant = 'row',
+  agentFieldRef
 }: {
   /** The computer it runs on (`useBotCreateHost`). */
   hostChoice: BotCreateHostChoice
@@ -93,8 +107,11 @@ export function BotRunsOnPicker({
   /** The bot's name, for its folder. */
   name?: string
   showSubmitFeedback?: boolean
-  /** `row` is a boxed summary that opens to the fields; `fields` shows Computer and Agent side by side. */
+  /** `row` is a boxed summary that opens to the fields; `fields` shows Computer and Agent side by side,
+   *  and leaves Use chat defaults to the dialog's footer. */
   variant?: 'row' | 'fields'
+  /** The Agent field, for focus to land on (`fields` only). */
+  agentFieldRef?: React.Ref<HTMLDivElement>
 }): React.JSX.Element {
   const t = useTranslate()
   const computerErrorId = useId()
@@ -122,6 +139,7 @@ export function BotRunsOnPicker({
   const setupState = wslSetup.state
   const settingUp = setupState.phase !== 'idle'
   const wslDistro = useWslHostDistro(host.hostId)
+  const placeholder = useBotAgentFieldPlaceholder(hostChoice, model, choices)
   const addedHostReady =
     setupState.phase === 'finding-agents' &&
     host.environmentId === setupState.environmentId &&
@@ -206,6 +224,7 @@ export function BotRunsOnPicker({
       <div className="min-w-0 space-y-1">
         <Label variant={labelVariant}>{agentLabel}</Label>
         <div
+          ref={fields ? agentFieldRef : undefined}
           role={fields ? 'group' : undefined}
           tabIndex={fields ? -1 : undefined}
           aria-label={fields ? agentLabel : undefined}
@@ -217,7 +236,7 @@ export function BotRunsOnPicker({
               : undefined
           }
         >
-          {fields && (settingUp || noAgents || (hostWaking && wslDistro)) ? (
+          {fields && placeholder ? (
             <div
               className={cn(
                 COMBOBOX_FIELD_SHELL,
@@ -251,6 +270,7 @@ export function BotRunsOnPicker({
               onChange={onSetupChange}
               keptPermission={keptPermission}
               showChatDefaultHint={!fields}
+              showReset={!fields}
             />
           )}
         </div>

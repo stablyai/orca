@@ -9476,6 +9476,8 @@
             "unverifiable": "Não concluído: o Orca não conseguiu confirmar o que está em execução neste servidor. Tente novamente quando o host estiver acessível.",
             "migration": "Não concluído: há uma movimentação para este servidor pendente. Retome-a primeiro.",
             "deferred": "Ainda não concluído: o servidor não está pronto para isso. Tente novamente mais tarde.",
+            "stopIncomplete": "Não concluído: o Orca não conseguiu confirmar que o servidor atual foi encerrado, então não iniciou a atualização. Verifique o orcad.log na pasta de instalação do servidor, em ~/.orca-remote no host, antes de tentar novamente.",
+            "rollbackStopIncomplete": "Não concluído: o Orca não conseguiu confirmar que o servidor atual foi encerrado, então não fez a reversão. Verifique o orcad.log na pasta de instalação do servidor, em ~/.orca-remote no host, antes de tentar novamente.",
             "failed": "O Orca não conseguiu concluir esta ação no servidor. Tente novamente.",
             "defaultServer": "Não concluído: este servidor é o host padrão para novos projetos. Escolha outro em Novos projetos são abertos em antes de pará-lo.",
             "wslMoveRunning": "Não concluído: um projeto está sendo movido para este servidor. O Orca o atualiza quando a movimentação terminar."

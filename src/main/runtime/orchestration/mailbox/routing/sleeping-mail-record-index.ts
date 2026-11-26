@@ -120,6 +120,12 @@ export class SleepingMailRecordIndex {
     }
   }
 
+  /** Whether the pane's leaf still finds it; another record sharing the leaf can take or drop the entry. */
+  private leafIndexedTo(pane: string): boolean {
+    const leafId = parsePaneKey(pane)?.leafId
+    return !leafId || this.panesByLeaf.get(leafId) === pane
+  }
+
   private indexLeaf(pane: string, present: boolean): void {
     const leafId = parsePaneKey(pane)?.leafId
     if (!leafId) {
@@ -198,6 +204,16 @@ export class SleepingMailRecordIndex {
       const pane = record.paneKey
       const before = previous.get(pane)
       next.set(pane, record)
+      // A write elsewhere in the map keeps this record object, and its indexes still name it.
+      if (
+        before === record &&
+        this.records.get(pane) === record &&
+        this.hostByPane.get(pane) === host &&
+        (!record.terminalHandle || this.panesByHandle.get(record.terminalHandle) === pane) &&
+        this.leafIndexedTo(pane)
+      ) {
+        continue
+      }
       if (before && before.worktreeId !== record.worktreeId) {
         this.indexWorktree(before.worktreeId, pane, false)
       }

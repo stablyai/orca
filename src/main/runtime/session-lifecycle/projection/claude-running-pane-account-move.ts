@@ -14,7 +14,7 @@ import {
   type ClaudePaneFolder
 } from '../../../../shared/agent-accounts/claude/claude-pane-account-folder'
 import { getPinnedClaudeAccountIdForPty } from '../../../claude-accounts/claude-pinned-pty-registry'
-import { readClaudeForeground } from './claude-pane-foreground-read'
+import { readAgentPaneForeground } from './agent-pane-foreground-read'
 import { answeredClaudeMove, claudeHostAccountSwitch } from './claude-host-account-switch'
 import type {
   ClaudeAccountSelectionChange,
@@ -141,7 +141,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
       if (heldPtyIds.has(pane.pty.ptyId) || folder?.kind === 'own-folder' || !mayBeOnOutgoing) {
         continue
       }
-      const running = await readClaudeForeground(this.ptyController, pane.pty.ptyId)
+      const running = await readAgentPaneForeground(this.ptyController, pane.pty.ptyId, 'claude')
       if (running === false) {
         continue
       }
@@ -216,9 +216,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     if (pty.connectionId !== null || isRemoteRuntimePtyId(pty.ptyId) || pty.isWsl || !recorded) {
       return null
     }
-    const row = this.getAgentStatusRowsForPane(recorded).find(
-      (candidate) => candidate.agentType === 'claude'
-    )
+    const row = this.getAgentStatusRowsForPane(recorded).find((r) => r.agentType === 'claude')
     if (row?.structuredHost) {
       return null
     }
@@ -287,7 +285,9 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     ) {
       return false
     }
-    return justRestarted || (await readClaudeForeground(this.ptyController, ptyId)) === true
+    return (
+      justRestarted || (await readAgentPaneForeground(this.ptyController, ptyId, 'claude')) === true
+    )
   }
 
   /** A switch landing during the restart leaves unknown which account its spawn read: restart again

@@ -17,7 +17,8 @@ const authStoppedTurns = new WeakMap<ClaudeSession, string>()
 /** Claude's blind retry loop on a credential its refresh couldn't fix (see claudeAuthRetryStatus) never clears. */
 function stopClaudeAuthRetries(
   session: ClaudeSession,
-  logger: ClaudeEventDelivery['deps']['logger']
+  sessionId: string,
+  { logger, onDispatchSettledLate }: ClaudeEventDelivery['deps']
 ): void {
   const turnId = session.translator?.currentTurnId
   // A command turn (e.g. compaction) reads its failure from Claude's own notice, so it keeps it.
@@ -32,7 +33,8 @@ function stopClaudeAuthRetries(
   void cancelClaudeTurn(
     session,
     CLAUDE_STOP_GRACE_MS,
-    () => session.translator?.currentTurnId === turnId
+    () => session.translator?.currentTurnId === turnId,
+    (settlement) => onDispatchSettledLate?.({ sessionId, ...settlement })
   ).catch((error: unknown) =>
     logger?.warn('interrupting a Claude credential retry failed', {
       scope: 'claude-auth-retry-interrupt',
@@ -46,7 +48,7 @@ type ClaudeEventDelivery = {
   event: ClaudeStructuredSessionEvent
   deps: Pick<
     ClaudeStructuredSessionAdapterDeps,
-    'onEvent' | 'onUserRenamed' | 'requestTimeoutMs' | 'logger'
+    'onEvent' | 'onUserRenamed' | 'requestTimeoutMs' | 'logger' | 'onDispatchSettledLate'
   >
   publishChildWork: (
     sessionId: string,
@@ -81,7 +83,7 @@ export function emitClaudeStructuredSessionEvent({
   }
   session?.translator?.handle(event)
   if (session && event.type === 'message' && claudeAuthRetryStatus(event.message) !== null) {
-    stopClaudeAuthRetries(session, deps.logger)
+    stopClaudeAuthRetries(session, event.sessionId, deps)
   }
   if (event.type !== 'retiring') {
     deps.onEvent?.(event)

@@ -4063,11 +4063,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "Host wird geprüft",
       "connectToDownload": "Mit diesem Host verbinden, um die neueste App-Version herunterzuladen",
       "documentLoadFailed": "Die heruntergeladene App konnte nicht geöffnet werden.",
       "downloadFailed": "Die neueste App-Version konnte von diesem Host nicht heruntergeladen werden.",
+      "downloadProgressFromHost": "von {{host}} · {{progress}}",
+      "downloadingLatestApp": "Neueste App wird heruntergeladen",
       "hostProfileUnreadable": "Die Daten dieses Hosts konnten auf dem Gerät nicht gelesen werden. Erneut versuchen.",
       "isolationUnavailable": "Die WebView dieses Geräts ist zu alt, um den Arbeitsbereich sicher zu öffnen.",
       "openingWorkspace": "Arbeitsbereich wird geöffnet",
