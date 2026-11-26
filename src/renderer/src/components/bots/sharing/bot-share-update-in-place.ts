@@ -10,7 +10,8 @@ export type BotShareInPlaceUpdate =
   | { kind: 'updated'; link: BotShareLink }
   | { kind: 'upToDate' }
   | { kind: 'secret' }
-  | { kind: 'failed'; error: string; moved: boolean }
+  /** `stale`: the link moved or was stopped elsewhere, so it must be read again. */
+  | { kind: 'failed'; error: string; stale: boolean }
 
 export async function updateBotShareInPlace(
   bot: BotRef,
@@ -20,7 +21,7 @@ export async function updateBotShareInPlace(
     prepareBotShare(bot, {}, { last: true, skillsSession: createNonSecureContextUuid() })
   )
   if (!prepared.ok) {
-    return { kind: 'failed', error: prepared.error, moved: false }
+    return { kind: 'failed', error: prepared.error, stale: false }
   }
   const { candidate, last } = prepared.value
   if (candidate.flags.some((flag) => flag.kind === 'secret')) {
@@ -45,7 +46,8 @@ export async function updateBotShareInPlace(
     return {
       kind: 'failed',
       error: published.error,
-      moved: published.code === BOT_SHARE_ERRORS.moved
+      stale:
+        published.code === BOT_SHARE_ERRORS.moved || published.code === BOT_SHARE_ERRORS.stopped
     }
   }
   const { share, version } = published.value

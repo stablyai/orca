@@ -86,6 +86,7 @@ export function BotSettingsSubpage({
         <BotSkillsSection bot={bot} onChange={(skillProjects) => void update({ skillProjects })} />
       )
     case 'sharing':
-      return <BotSharingPage bot={bot} />
+      // Keyed, so an update or picks in flight for one agent never land on the next.
+      return <BotSharingPage key={bot.id} bot={bot} />
   }
 }

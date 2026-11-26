@@ -25,8 +25,9 @@ vi.mock('@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog', () => ({
 vi.mock('../bot-connector-entries', () => ({ useBotConnectorEntries: () => [] }))
 vi.mock('../use-bot-host-label', () => ({ useBotHostLabel: () => null }))
 vi.mock('../orca-cloud-signed-out', () => ({ useOrcaCloudSignedOut: () => false }))
+const linkRead = vi.hoisted(() => ({ current: { kind: 'read', link: null } as { kind: string } }))
 vi.mock('../sharing/use-bot-share-link', () => ({
-  useBotShareLink: () => ({ read: { kind: 'read', link: null }, reread: () => {} })
+  useBotShareLink: () => ({ read: linkRead.current, reread: () => {}, otherLinks: false })
 }))
 vi.mock('../sharing/BotShareFlow', () => ({ BotSharePreview: () => null }))
 
@@ -67,6 +68,7 @@ function Providers({ children }: { children: React.ReactNode }): React.JSX.Eleme
 }
 
 afterEach(() => {
+  linkRead.current = { kind: 'read', link: null }
   cleanup()
   removeBotTeamShare.mockClear()
 })
@@ -101,5 +103,12 @@ describe('Settings › Sharing and the Share dialog', () => {
   it('names a copied agent by where it was copied from', () => {
     render(<BotSharedFromLine bot={bot} />)
     expect(screen.getByText('Copied from Dara')).toBeTruthy()
+  })
+
+  it('offers Create copy link when signed out, never a spinner', () => {
+    linkRead.current = { kind: 'signIn' }
+    render(<BotSharingPage bot={bot} />, { wrapper: Providers })
+    expect(screen.getByText('Create copy link')).toBeTruthy()
+    expect(screen.queryByText('Loading shared links…')).toBeNull()
   })
 })

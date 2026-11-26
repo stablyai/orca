@@ -97,7 +97,7 @@ export function BotSharingPage({ bot }: { bot: Bot }): React.JSX.Element {
         return
       case 'failed':
         toast.error(result.error)
-        if (result.moved) {
+        if (result.stale) {
           linkState.reread()
         }
     }
@@ -212,7 +212,7 @@ function BotShareLinkView({
   if (read.kind === 'offline') {
     return <BotShareOfflineRow title={title} error={read.error} onRetry={reread} />
   }
-  if (read.kind !== 'read') {
+  if (read.kind === 'loading') {
     return (
       <SettingsInsetGroup title={title}>
         <SettingsInsetRow
@@ -223,7 +223,8 @@ function BotShareLinkView({
       </SettingsInsetGroup>
     )
   }
-  const link = read.link
+  // Signed out reads as no link: Create copy link opens the copy dialog, which asks to sign in.
+  const link = read.kind === 'read' ? read.link : null
   if (!link) {
     return (
       <SettingsInsetGroup title={title}>

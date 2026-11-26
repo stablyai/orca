@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BotShareCandidateSummary } from '../../../../../shared/bots/bot-package'
+import { BOT_SHARE_ERRORS } from '../../../../../shared/bots/bot-share-errors'
 import type * as BotShareRpc from './bot-share-rpc'
 import { updateBotShareInPlace } from './bot-share-update-in-place'
 import type { BotShareLink } from './use-bot-share-link'
@@ -76,5 +77,14 @@ describe('Update link in place', () => {
     })
     expect(await updateBotShareInPlace(bot, LINK)).toEqual({ kind: 'upToDate' })
     expect(updateBotShare).not.toHaveBeenCalled()
+  })
+
+  it('asks for a fresh read when the link was stopped elsewhere', async () => {
+    prepareBotShare.mockResolvedValue({
+      candidate: candidate('digest-v2'),
+      last: { selection: {}, setupNote: 'Connect Slack' }
+    })
+    updateBotShare.mockRejectedValue(new Error(BOT_SHARE_ERRORS.stopped))
+    expect(await updateBotShareInPlace(bot, LINK)).toMatchObject({ kind: 'failed', stale: true })
   })
 })
