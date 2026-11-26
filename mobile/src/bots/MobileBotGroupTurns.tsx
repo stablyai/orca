@@ -1,6 +1,6 @@
 import type { BotGroupTurnDetailCursor } from '../../../src/shared/bots/bot-group-read-schema'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { memo, useCallback, useEffect, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { folderWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
 import { useMobileNativeChatVisualRenderer } from '../session/native-chat/visual/MobileNativeChatVisual'
@@ -38,13 +38,14 @@ import {
 import { createStructuredQuestionProjection } from '../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
-import { useBotGroupTurnDetails } from '../../../src/shared/bots/use-bot-group-turn-details'
+import { createBotGroupTurnDetailsHook } from '../../../src/shared/bots/use-bot-group-turn-details'
 import { groupTurnRows } from './bot-group-operations'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
 }
 const noItems: never[] = []
+const useBotGroupTurnDetails = createBotGroupTurnDetailsHook({ useEffect, useRef, useState })
 const transcript = createStructuredQuestionProjection(projectStructuredAgentStartItem)
 
 export const MobileBotGroupReader = memo(function Reader({

@@ -2,7 +2,7 @@ import type { BotGroupTurnDetailCursor } from '../../../../shared/bots/bot-group
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createNativeChatMessageListProjection } from '../native-chat/conversation/projection/native-chat-message-list-projection'
 import { Reply, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -41,10 +41,11 @@ import { type BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-gr
 import { botCodedText } from '../../../../shared/bots/bot-failure-copy'
 import { callBotRpc } from '@/lib/bot-hosts'
 import {
-  useBotGroupTurnDetails,
+  createBotGroupTurnDetailsHook,
   type BotGroupTurnDetailPage
 } from '../../../../shared/bots/use-bot-group-turn-details'
 const noItems: never[] = []
+const useBotGroupTurnDetails = createBotGroupTurnDetailsHook({ useEffect, useRef, useState })
 export const BotGroupTurn = memo(function BotGroupTurn({
   hostId,
   groupId,
