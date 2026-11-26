@@ -13,7 +13,7 @@ import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { HomeRelayedServers } from './home-relayed-servers'
 
 // Same pace as the workspace list's poll; a busy agent's notices can arrive many times a second.
-const HOME_RELAYED_REFRESH_FLOOR_MS = 3000
+export const HOME_RELAYED_REFRESH_FLOOR_MS = 3000
 
 // Home's own snapshots, so its single-server reads never prune the workspace list's.
 const homeServerRowSnapshots = {
