@@ -13,6 +13,7 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import { MobileSessionSidebar } from './tabs/MobileSessionSidebar'
 import { MobileSessionSidebarStage } from './tabs/MobileSessionSidebarStage'
 import { useMobileSessionSidebar } from './tabs/use-mobile-session-sidebar'
+import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
 import { useMobileSessionTabSummaryChannel } from './tabs/use-mobile-session-tab-summaries'
 import { useSessionRouteRequest } from './use-session-route-request'
 
@@ -101,7 +102,9 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
           <BotItemOpenContext.Provider value={openItem}>
             <BotChatOpenContext.Provider value={openChat}>
               <BotPanelOpenContext.Provider value={panelOpener}>
-                <MobileSessionContentRow controller={controller} />
+                <SidebarPageDragContext.Provider value={sidebar.pageDrag}>
+                  <MobileSessionContentRow controller={controller} />
+                </SidebarPageDragContext.Provider>
               </BotPanelOpenContext.Provider>
             </BotChatOpenContext.Provider>
           </BotItemOpenContext.Provider>

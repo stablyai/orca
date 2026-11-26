@@ -1,6 +1,9 @@
+import { useContext } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
+import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
+import { useSidebarContentSwipe } from './tabs/use-sidebar-content-swipe'
 import { dismissMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -30,9 +33,15 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     handleSessionContentRowLayout
   } = controller
   const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
+  // A chat and a note are this page's own content, so a leftward swipe across them opens the tabs
+  // sidebar. A terminal is its own document and a browser tab's page takes its own swipes.
+  const swipeOpensSidebar = useSidebarContentSwipe(
+    useContext(SidebarPageDragContext),
+    controller.showNativeChat || controller.activeMarkdownTab != null
+  )
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
-      <View style={styles.sessionContentMain}>
+      <View ref={swipeOpensSidebar} style={styles.sessionContentMain}>
         {createWarning ? (
           <View style={styles.createWarningBanner}>
             <AlertTriangle size={16} color={colors.statusAmber} strokeWidth={2.2} />
