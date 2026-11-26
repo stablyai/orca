@@ -95,7 +95,7 @@ function readCreditBalance(payload: unknown): number | null {
   return parts.reduce<number>((sum, part) => sum + (part ?? 0), 0)
 }
 
-/** Plan label: `data.plan?.name`, `data.planName`, `data.metadata.plan`, then the subscription status. */
+/** Plan label: `data.plan?.name`, `data.planName`, then `data.metadata.plan`. */
 function readPlanType(payload: unknown): string | null {
   const data = unwrap(payload)
   if (!isRecord(data)) {
@@ -111,7 +111,6 @@ function readPlanType(payload: unknown): string | null {
   if (isRecord(data.metadata)) {
     candidates.push(data.metadata.plan)
   }
-  candidates.push(data.status)
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim() !== '') {
       return candidate.trim()

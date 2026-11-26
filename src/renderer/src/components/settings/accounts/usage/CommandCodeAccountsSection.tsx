@@ -12,7 +12,6 @@ import {
   callCommandCodeCredentials,
   UsageCredentialsHostOutdatedError
 } from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
-import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -37,7 +36,7 @@ export type OwnerUsageSnapshot = {
 } | null
 
 /** Local scope shows this computer's poll; a remote host shows the reading streamed from that host. */
-export function selectCommandCodeUsage(
+function selectCommandCodeUsage(
   host: UsageCredentialHost,
   storeUsage: ProviderRateLimits | null,
   ownerUsage: OwnerUsageSnapshot
@@ -52,10 +51,7 @@ export function selectCommandCodeUsage(
 }
 
 /** Remote hosts read and save the key on their own runtime; this device cannot see it. */
-export function useCommandCodeCredentials(
-  updatedAt: number | undefined,
-  owner: RuntimeClientTarget
-) {
+function useCommandCodeCredentials(updatedAt: number | undefined, owner: RuntimeClientTarget) {
   const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<CredentialStatus>(null)
@@ -150,25 +146,7 @@ function formatCredits(balance: number, locale: string): string {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(balance)
 }
 
-export function isClearTimeoutError(error: unknown): boolean {
-  if (
-    hasRuntimeRpcErrorCode(error, 'runtime_timeout') ||
-    hasRuntimeRpcErrorCode(error, 'timeout')
-  ) {
-    return true
-  }
-  if (error instanceof Error) {
-    if (/timeout/i.test(error.name)) {
-      return true
-    }
-    if (/timed out/i.test(error.message)) {
-      return true
-    }
-  }
-  return false
-}
-
-export function mutationFailureCopy(
+function mutationFailureCopy(
   clear: boolean,
   t: Translate,
   error?: unknown
@@ -340,9 +318,7 @@ export function CommandCodeAccountsSection({
   )
 }
 
-export const isTimeoutError = isClearTimeoutError
-export const isClearTimeout = isClearTimeoutError
-
+// AccountsPane is at its line cap, so it renders this section through a keyed factory.
 export function renderCommandCodeAccountsSection(
   ownerKey: string,
   host: UsageCredentialHost,

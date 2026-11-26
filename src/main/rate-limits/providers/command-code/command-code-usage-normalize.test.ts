@@ -91,7 +91,7 @@ describe('normalizeCommandCodeUsage', () => {
     expect(result.weekly).toMatchObject({ usedPercent: 30, resetsAt: null })
   })
 
-  it('reads the plan name from data.plan.name, falling back to status', () => {
+  it('reads the plan name from data.plan.name or data.planName, never from the status', () => {
     const byPlanName = normalizeCommandCodeUsage({
       credits: creditsShape(),
       subscriptions: { success: true, data: { status: 'active', plan: { name: 'Pro' } } },
@@ -106,12 +106,12 @@ describe('normalizeCommandCodeUsage', () => {
     })
     expect(byPlanNameField.planType).toBe('Plus')
 
-    const byStatus = normalizeCommandCodeUsage({
+    const statusOnly = normalizeCommandCodeUsage({
       credits: creditsShape(),
       subscriptions: { success: true, data: { status: 'active' } },
       now: NOW
     })
-    expect(byStatus.planType).toBe('active')
+    expect(statusOnly.planType).toBeNull()
   })
 
   it('unrecognized shapes produce nulls, never a guessed meter', () => {

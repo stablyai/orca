@@ -112,13 +112,14 @@ export async function fetchCommandCodeRateLimits(input: {
       'missing-credentials'
     )
   }
+  // A 403 only wins when neither route yields usable data.
   const entitlement = [credits, subscriptions].some(
     (read) => read.kind === 'failed' && read.failureKind === 'no-subscription'
   )
-  if (entitlement) {
-    return failed('This Command Code plan does not include API usage access', 'no-subscription')
-  }
   if (credits.kind === 'failed' && subscriptions.kind === 'failed') {
+    if (entitlement) {
+      return failed('This Command Code plan does not include API usage access', 'no-subscription')
+    }
     return failed('Command Code usage request failed', credits.failureKind)
   }
   const normalized = normalizeCommandCodeUsage({
@@ -127,6 +128,9 @@ export async function fetchCommandCodeRateLimits(input: {
     now: Date.now()
   })
   if (!normalized.session && !normalized.weekly && !normalized.extraUsage) {
+    if (entitlement) {
+      return failed('This Command Code plan does not include API usage access', 'no-subscription')
+    }
     // A failed credits read with a successful subscriptions read is a request failure, not an
     // unrecognized payload: surface the credits failure (e.g. rate-limited) instead of 'parse'.
     if (credits.kind === 'failed' && subscriptions.kind === 'ok') {

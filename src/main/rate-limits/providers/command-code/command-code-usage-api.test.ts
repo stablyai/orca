@@ -60,7 +60,34 @@ describe('fetchCommandCodeRateLimits', () => {
     expect(result.session?.usedPercent).toBe((1.25 / 14) * 100)
     expect(result.weekly?.usedPercent).toBe((33.75 / 35) * 100)
     expect(result.extraUsage).toMatchObject({ balance: 17 })
-    expect(result.planType).toBe('active')
+    expect(result.planType ?? null).toBeNull()
+  })
+
+  it('keeps usable credits data when only the subscriptions route returns 403', async () => {
+    routeBy((url) =>
+      url.endsWith(COMMAND_CODE_CREDITS_PATH)
+        ? new Response(
+            JSON.stringify({
+              credits: { monthlyCredits: 3, purchasedCredits: 0, freeCredits: 0 },
+              windowLimits: { fiveHour: { used: 1, cap: 10, resetAt: FIXED_RESET_MS } }
+            }),
+            { status: 200 }
+          )
+        : new Response('{}', { status: 403 })
+    )
+    const result = await fetchCommandCodeRateLimits({ apiKey: KEY })
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(10)
+  })
+
+  it('reports missing API access when a 403 leaves no usable data', async () => {
+    routeBy((url) =>
+      url.endsWith(COMMAND_CODE_CREDITS_PATH)
+        ? new Response('{}', { status: 403 })
+        : new Response('{}', { status: 200 })
+    )
+    const result = await fetchCommandCodeRateLimits({ apiKey: KEY })
+    expect(result.usageMetadata?.failureKind).toBe('no-subscription')
   })
 
   it('reports a rejected key when the subscriptions route returns 401, even if credits is 404', async () => {
