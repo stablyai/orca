@@ -259,19 +259,15 @@ export class RelayReconnectController {
       ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
       : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
-    if (error instanceof MobileE2EEAuthenticationError) {
-      // E2EE rejection can be transient during credential commit; gate slow reprobes instead of waiting forever for a nudge.
+    if (error instanceof MobileE2EEAuthenticationError || (pendingOnly && !credentialRejected)) {
+      // E2EE rejection can be transient during credential commit, and an unconfirmed pending install may not
+      // exist; gate slow reprobes (and one retry per network change or resume) instead of fast retries.
       this.holdGate(scheduleRetry, 'external-signal')
       return
     }
     if (credentialRejected) {
       // Never retry rejected credentials fast; each slow attempt re-reads durable state.
       this.holdGate(scheduleRetry, 'fresh-credential')
-      return
-    }
-    if (pendingOnly) {
-      // A speculative credential gets slow reprobes, plus one fast retry per network change or resume.
-      this.holdGate(scheduleRetry, 'external-signal')
       return
     }
     if (hostOffline) {

@@ -30,9 +30,7 @@ export async function selectDialableRelayCredentials(args: {
   }
   const disk = await args.readBundle().catch(() => null)
   if (disk) {
-    const diskCredentials = args.controller.eligibleCredentials(
-      ...relayDialCandidates(disk, args.controller)
-    )
+    const diskCredentials = args.controller.eligibleCredentials(...relayDialCandidates(disk))
     if (diskCredentials.length > 0) {
       args.controller.acceptFreshCredential(disk.current.version)
       args.onAdoptedFresherBundle()
