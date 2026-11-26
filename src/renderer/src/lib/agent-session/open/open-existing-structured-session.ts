@@ -27,6 +27,7 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { sharedBotHostFor } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -252,10 +253,9 @@ export async function revealStructuredSession(target: {
       callRuntimeRpc<AgentSessionRevealReply>(
         host,
         'agentSession.reveal',
-        { sessionId: target.sessionId },
-        {
-          timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
-        }
+        // A shared agent's host moves only the asking window, never its owner's.
+        { sessionId: target.sessionId, ...(sharedBotHostFor(host) && { navigation: 'caller' }) },
+        { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
       )
     )
   } catch (error) {

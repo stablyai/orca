@@ -17,7 +17,7 @@ export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
   const botId = bot?.id ?? null
   const hostId = bot?.hostId ?? null
   const agent = bot?.agent ?? null
-  // Its tabs live here: this computer's agent, or one shared with this account.
+  // This computer's agent; another host's Home tab arrives from that host.
   const local = bot !== null && bot.hostId === LOCAL_EXECUTION_HOST_ID
   const sessionId = local ? (bot?.chatSessionId ?? null) : null
   const ready = useAppStore((state) => !local || state.workspaceSessionReady)

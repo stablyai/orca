@@ -103,10 +103,17 @@ export class SharedBotHosts {
     return (this.loaded ??= this.store.load())
   }
 
-  start(): void {
+  /** Follows the cloud's list once `before` (work on the kept shares) settles, unless stopped by then. */
+  start(before: Promise<unknown> = Promise.resolve()): void {
     this.stopped = false
-    this.pace.start()
-    void this.refresh()
+    void before
+      .catch(() => {})
+      .then(() => {
+        if (!this.stopped) {
+          this.pace.start()
+          void this.refresh()
+        }
+      })
   }
 
   /** Nothing reads or applies the cloud's list after this, a read already out included: quitting

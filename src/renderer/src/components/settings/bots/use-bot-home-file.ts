@@ -51,8 +51,7 @@ export function useStableBotHome(home: BotHome | null): BotHome | null {
 /** The bot's home as its catalog lists it; null while its folder workspace isn't loaded. */
 export function useBotHome(bot: Pick<Bot, 'hostId' | 'folderWorkspaceId'> | null): BotHome | null {
   const folderPath = useAppStore((state) =>
-    // A home kept on this computer for another account's agent holds none of that agent's files.
-    bot && bot.hostId === bot.hostId
+    bot
       ? (selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, bot.hostId)?.folderPath ?? null)
       : null
   )

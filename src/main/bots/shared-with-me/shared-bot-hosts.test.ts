@@ -556,6 +556,31 @@ describe('the homes an older build kept for shared agents', () => {
     })
     expect(store.get('share-1')?.homeWorkspaceId).toBe('old-home')
   })
+
+  it('never writes back a share that ended or changed while its old home was deleted', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-race-'))
+    dirs.push(dir)
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    store.put(entry({ homeWorkspaceId: 'home-1' }))
+    store.put(entry({ shareId: 'share-2', environmentId: 'env-2', homeWorkspaceId: 'home-2' }))
+    await removeOldSharedBotHomes({
+      userDataPath: dir,
+      store,
+      folderWorkspaceIds: () => ['home-1', 'home-2'],
+      // The cloud's list lands meanwhile: share-1 ended, share-2's name changed.
+      deleteFolderWorkspace: async (id) => {
+        if (id === 'home-1') {
+          store.remove(new Set(['share-1']))
+        } else {
+          store.put({ ...store.get('share-2')!, botName: 'Renamed' })
+        }
+      }
+    })
+    expect(store.get('share-1')).toBeUndefined()
+    expect(store.get('share-2')).toMatchObject({ botName: 'Renamed' })
+    expect(store.get('share-2')?.homeWorkspaceId).toBeUndefined()
+  })
 })
 
 const StartedChat = z.object({ sessionId: z.string() })

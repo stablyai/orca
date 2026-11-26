@@ -111,6 +111,18 @@ export function getRuntimeEnvironmentRevision(environmentId: string): number | u
   )
 }
 
+/** A host's revision as its catalog row gives it, or a shared agent's host's (which has no row). */
+export function listedRuntimeEnvironmentRevision(
+  environment: { createdAt: number; pairingRevision?: number } | undefined,
+  environmentId: string
+): number | undefined {
+  return environment
+    ? (environment.pairingRevision ?? environment.createdAt)
+    : sharedBotHostFor({ kind: 'environment', environmentId })
+      ? SHARED_BOT_HOST_REVISION
+      : undefined
+}
+
 /** Identity survives equal-revision publications, but never removal or a pairing transition. */
 export function getRuntimeEnvironmentRegistration(
   environmentId: string

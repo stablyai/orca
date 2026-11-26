@@ -3,7 +3,10 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import { isRemovedRuntimeHostId } from './removed-runtime-host-rows'
 import { getEnvironmentSshStateGeneration } from '../slices/ssh/runtime-environment-ssh'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
-import { readSharedBotHosts } from '../../runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import {
+  readSharedBotHosts,
+  sharedBotHostsAnswered
+} from '../../runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { HostIdentityFence } from '../../runtime/rpc/environment-revisions/host-identity-fence'
 import {
   captureHostIdentityFence,
@@ -100,11 +103,15 @@ export async function loadRuntimeHostCatalogs(
   /** Called only when the environment list itself answered, so absence from it is authoritative. */
   onListed?: (environmentIds: readonly string[]) => void
 ): Promise<void> {
-  const listed = await listRuntimeEnvironmentsForAllHostLoad()
+  // A shared agent's host lists its agent's home and groups here; its repos stay out of Projects.
+  // Its shares are awaited, so a load at startup does not read the hosts as gone.
+  const [listed] = await Promise.all([
+    listRuntimeEnvironmentsForAllHostLoad(),
+    kind === 'repos' ? null : sharedBotHostsAnswered()
+  ])
   if (!isCurrentLoad()) {
     return
   }
-  // A shared agent's host lists its agent's home and groups here; its repos stay out of Projects.
   const shared = kind === 'repos' ? [] : sharedBotHostEnvironmentIds()
   const environmentIds = [
     ...new Set([...(listed ?? []).map((environment) => environment.id), ...shared])

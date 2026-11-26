@@ -1,8 +1,9 @@
-// A shared agent's host never moves a teammate's screen on its own (its activations reach only the
-// owner's windows), so a chat a teammate opens is revealed for their window alone.
+// A teammate's chats on a shared agent's host run in the background there (no host tab), so one is
+// opened the way History opens a chat: the host reveals it for this window alone.
 import { sharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { activateStructuredAgentSessionTabOnOwner } from '../structured-agent-session-tab-activation'
+import { botHostTarget } from '../../bot-hosts'
+import { openExistingStructuredSession } from './open-existing-structured-session'
 
 /** False for any other host's chat, which its host's own activation reveals. */
 export function revealSharedBotChat(
@@ -13,6 +14,9 @@ export function revealSharedBotChat(
   if (!sharedBotHostOf(bot.hostId)) {
     return false
   }
-  activateStructuredAgentSessionTabOnOwner(worktreeId, sessionId, undefined, { callerOnly: true })
+  void openExistingStructuredSession(
+    { workspaceId: worktreeId, sessionId },
+    { target: botHostTarget(bot.hostId), present: () => {} }
+  ).catch((error: unknown) => console.error('Failed to open the shared chat:', error))
   return true
 }

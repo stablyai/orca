@@ -16,8 +16,8 @@ export type SharedBotHomeCleanupDeps = {
 /** Removes each kept share's old home and the folder they lived in; a no-op once they are gone. */
 export async function removeOldSharedBotHomes(deps: SharedBotHomeCleanupDeps): Promise<void> {
   const workspaces = new Set(deps.folderWorkspaceIds())
-  for (const entry of deps.store.list()) {
-    const { homeWorkspaceId, ...rest } = entry
+  let kept = false
+  for (const { shareId, homeWorkspaceId } of deps.store.list()) {
     if (homeWorkspaceId === undefined) {
       continue
     }
@@ -27,10 +27,18 @@ export async function removeOldSharedBotHomes(deps: SharedBotHomeCleanupDeps): P
       } catch (error) {
         // Kept, so the next start tries again.
         console.warn('[shared-agents] could not remove an old shared agent home', error)
+        kept = true
         continue
       }
     }
-    deps.store.put(rest)
+    // Read again: the share may have changed or ended while its home was deleted.
+    const current = deps.store.get(shareId)
+    if (current) {
+      const { homeWorkspaceId: _removed, ...rest } = current
+      deps.store.put(rest)
+    }
   }
-  await rm(join(deps.userDataPath, 'shared-agents'), { recursive: true, force: true })
+  if (!kept) {
+    await rm(join(deps.userDataPath, 'shared-agents'), { recursive: true, force: true })
+  }
 }

@@ -78,16 +78,18 @@ export function registerSharedBotHostsHandlers(args: {
   )
   setSharedHosts((environmentId) => hosts.sharedHost(environmentId))
   setSharedHostsOwner(hosts)
-  void hosts
-    .ready()
-    .then(() =>
-      removeOldSharedBotHomes({
-        ...args.homes,
-        userDataPath: args.userDataPath,
-        store: hosts.store
-      })
-    )
-    .catch((error: unknown) => console.warn('[shared-agents] old home cleanup failed', error))
-  hosts.start()
+  // Started after it, so no refresh rewrites a share while its old home is removed.
+  hosts.start(
+    hosts
+      .ready()
+      .then(() =>
+        removeOldSharedBotHomes({
+          ...args.homes,
+          userDataPath: args.userDataPath,
+          store: hosts.store
+        })
+      )
+      .catch((error: unknown) => console.warn('[shared-agents] old home cleanup failed', error))
+  )
   return hosts
 }

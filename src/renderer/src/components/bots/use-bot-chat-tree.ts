@@ -195,8 +195,8 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
   const acks = useAppStore(
     useShallow((s) => turnPanes.map((paneKey) => s.acknowledgedAgentsByPaneKey[paneKey] ?? 0))
   )
-  // A shared agent's host never sends its tabs (they are its owner's): this computer's own say which
-  // of its chats have one.
+  // A shared agent's host lists its owner's tabs; this window's own say which of this account's
+  // chats have one.
   const sharedHome =
     bot && sharedBotHostOf(bot.hostId) ? folderWorkspaceKey(bot.folderWorkspaceId) : null
   const localTabs = useAppStore(

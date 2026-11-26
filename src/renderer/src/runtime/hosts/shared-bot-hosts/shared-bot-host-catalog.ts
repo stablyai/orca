@@ -21,6 +21,8 @@ let requests: readonly SharedBotRequestView[] = NO_REQUESTS
 let sharing: boolean | null = null
 // Until main first answers, the list says nothing about which shares are gone.
 let hydrated = false
+// Main's first answer, which catalogs listing every host wait for (none outside a desktop window).
+let firstAnswer: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
 
 function setState(next: SharedBotHostsState): void {
@@ -37,9 +39,10 @@ function setState(next: SharedBotHostsState): void {
 /** Follows main's list; a paired web window has no account of its own, so it never has any. */
 export function installSharedBotHostCatalog(): () => void {
   const stop = window.api.sharedBotHosts.onChanged(setState)
-  void window.api.sharedBotHosts.list().then(setState, () => {})
+  firstAnswer = window.api.sharedBotHosts.list().then(setState, () => {})
   return () => {
     stop()
+    firstAnswer = Promise.resolve()
     views = NO_HOSTS
     requests = NO_REQUESTS
     sharing = null
@@ -53,6 +56,11 @@ export function installSharedBotHostCatalog(): () => void {
 /** Whether main has said which agents are shared with this account, so a missing one is gone. */
 export function sharedBotHostsHydrated(): boolean {
   return hydrated
+}
+
+/** Settles once main has first answered (or failed to), so a listing of every host includes these. */
+export function sharedBotHostsAnswered(): Promise<void> {
+  return firstAnswer
 }
 
 export function readSharedBotHosts(): readonly SharedBotHostView[] {

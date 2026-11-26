@@ -16,9 +16,7 @@ import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
-  publishBots,
   readBotHostState,
-  readHostBots,
   readLiveBotHostIds,
   readUpdateNeededBotHosts,
   setBotHostListing,
@@ -189,14 +187,9 @@ export function installBotHostListing(
   setKeptBotHomesReader((hostId, list) =>
     keptBotHomes(hostId, list, selectFolderWorkspaces(store.getState()) ?? [])
   )
-  const stopShared = subscribeSharedBotHosts(() => {
+  const stopShared = subscribeSharedBotHosts(() =>
     sync(store.getState(), statusReads.readStatuses())
-    // Its bot's home is named once main has made it: stamped again on its listed bots.
-    for (const shared of readSharedBotHosts()) {
-      const hostId = toRuntimeExecutionHostId(shared.environmentId)
-      publishBots(readHostBots(hostId), undefined, hostId)
-    }
-  })
+  )
   const stopStore = subscribeStoreWithStatuses(
     store,
     (state, previous, statuses, previousStatuses) => {
