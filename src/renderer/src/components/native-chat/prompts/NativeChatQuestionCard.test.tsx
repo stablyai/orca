@@ -86,7 +86,7 @@ describe('NativeChatQuestionCard', () => {
 
     expect(container.textContent).toContain('1 of 2')
     expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
-    expect(card().getAttribute('aria-label')).toBe('One, 1 of 2')
+    expect(card().getAttribute('aria-label')).toBe('One?, 1 of 2')
   })
 
   it('shows a multi-step question once even when its header repeats it', () => {
@@ -272,7 +272,7 @@ describe('NativeChatQuestionCard', () => {
     const onAnswer = vi.fn()
     renderCard({ prompt: { questions: [question('One'), question('Two')] }, onAnswer })
     expect(document.activeElement).toBe(card())
-    expect(card().getAttribute('aria-label')).toBe('One, 1 of 2: One?')
+    expect(card().getAttribute('aria-label')).toBe('One?, 1 of 2')
     expect(optionRows().map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
     // Enter on the card with nothing answered neither picks option 1 nor moves on.
     pressKey({ key: 'Enter' }, card())
