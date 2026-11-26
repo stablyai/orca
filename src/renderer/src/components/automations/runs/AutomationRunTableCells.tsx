@@ -10,10 +10,10 @@ import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-d
 
 // Run | Result | Workspace | Spend — shared by an automation's history and the Runs page.
 export const AUTOMATION_RUN_TABLE_GRID_CLASS =
-  'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(6rem,8rem)_minmax(8rem,1.2fr)_minmax(4rem,5rem)] gap-3'
+  'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(6rem,8.5rem)_minmax(8rem,1.2fr)_minmax(4rem,5rem)] gap-3'
 // The Runs page adds the automation after the run.
 export const AUTOMATION_RUNS_DASHBOARD_GRID_CLASS =
-  'grid w-full grid-cols-[minmax(8rem,.8fr)_minmax(10rem,1.2fr)_minmax(6rem,8rem)_minmax(8rem,1fr)_minmax(4rem,5rem)] gap-3'
+  'grid w-full grid-cols-[minmax(8rem,.8fr)_minmax(10rem,1.2fr)_minmax(6rem,8.5rem)_minmax(8rem,1fr)_minmax(4rem,5rem)] gap-3'
 
 export function AutomationRunTableHeaderCells({
   withAutomation = false
@@ -69,7 +69,8 @@ export function AutomationRunResultCell({
 }): React.JSX.Element {
   return (
     <div className="flex min-w-0 justify-start">
-      <AutomationRunStatusLabel status={status} />
+      {/* Shrink so a long translation truncates instead of overflowing into Workspace. */}
+      <AutomationRunStatusLabel status={status} className="shrink" />
     </div>
   )
 }

@@ -36,7 +36,6 @@ import {
 } from './agent-session-directories'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
-const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
   resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
@@ -82,6 +81,8 @@ export type AiVaultAgentSource = {
   directoryPredicate?: (name: string, depth: number) => boolean
   // Share the per-agent limit across alternate roots for one install.
   mergeRootDiscoveries?: boolean
+  // Skip a root that resolves (symlink or junction) to an earlier one.
+  dedupeRealRootDirs?: boolean
 }
 
 type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource> &
@@ -98,7 +99,9 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       }),
     extensions: ['.jsonl'],
     // Subagent transcripts are read under their parent instead of duplicating History rows.
-    directoryPredicate: isClaudeProjectBucketDirectory
+    directoryPredicate: isClaudeProjectBucketDirectory,
+    // Account homes link their projects folder to the user's shared one.
+    dedupeRealRootDirs: true
   },
   qoder: {
     rootDirs: (options, wslHomeDirs) =>
@@ -131,14 +134,6 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     filePredicate: (filePath) =>
       !filePath.toLowerCase().endsWith('.zst') ||
       /^rollout-.+\.jsonl\.zst$/.test(basename(filePath))
-  },
-  gemini: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.geminiSessionsDir ?? GEMINI_SESSIONS_DIR, wslHomeDirs, [
-        '.gemini',
-        'tmp'
-      ]),
-    extensions: ['.json', '.jsonl']
   },
   copilot: {
     rootDirs: (options, wslHomeDirs) =>

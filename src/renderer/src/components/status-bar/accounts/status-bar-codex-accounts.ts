@@ -4,6 +4,8 @@ import {
 } from '../../../../../shared/agent-accounts/managed-account-display-names'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayDetail,
@@ -48,7 +50,7 @@ export function normalizeCodexStatusRuntimeTarget(
 }
 
 export function getCodexStatusActiveId(
-  state: CodexRateLimitAccountsState,
+  state: Pick<CodexRateLimitAccountsState, 'activeAccountId' | 'activeAccountIdsByRuntime'>,
   target: CodexStatusRuntimeTarget
 ): string | null {
   const selection = state.activeAccountIdsByRuntime
@@ -61,6 +63,30 @@ export function getCodexStatusActiveId(
   }
   const selectedIds = Array.from(new Set(Object.values(selection?.wsl ?? {}).filter(Boolean)))
   return selectedIds.length === 1 ? selectedIds[0] : null
+}
+
+export function scopeCodexAuthFailure(
+  limits: ProviderRateLimits,
+  activeAccountId: string | null
+): ProviderRateLimits {
+  const account = limits.usageMetadata?.authFailureAccount
+  // Settings and usage can arrive separately during an account switch.
+  if (
+    account &&
+    account.accountId !== activeAccountId &&
+    limits.status === 'error' &&
+    isCodexUsageSignInRequired(limits)
+  ) {
+    return {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      status: 'fetching',
+      error: null
+    }
+  }
+  return limits
 }
 
 function getCodexStatusAccountsForTarget(

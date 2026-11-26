@@ -1,5 +1,5 @@
 type ParsedVersion = {
-  core: [number, number, number]
+  core: [string, string, string]
   prerelease: string[]
 }
 
@@ -13,7 +13,7 @@ function parseVersion(value: string): ParsedVersion | null {
   }
 
   return {
-    core: [Number(match[1]), Number(match[2]), Number(match[3])],
+    core: [match[1], match[2], match[3]],
     prerelease: match[4]?.split('.') ?? []
   }
 }
@@ -46,7 +46,9 @@ function compareIdentifiers(left: string, right: string): number {
   const rightNumeric = /^\d+$/.test(right)
 
   if (leftNumeric && rightNumeric) {
-    return Number(left) - Number(right)
+    const leftDigits = left.replace(/^0+(?=\d)/, '')
+    const rightDigits = right.replace(/^0+(?=\d)/, '')
+    return leftDigits.length - rightDigits.length || compareAscii(leftDigits, rightDigits)
   }
   if (leftNumeric) {
     return -1
@@ -54,7 +56,11 @@ function compareIdentifiers(left: string, right: string): number {
   if (rightNumeric) {
     return 1
   }
-  return left.localeCompare(right, 'en')
+  return compareAscii(left, right)
+}
+
+function compareAscii(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1
 }
 
 /** Returns negative if left < right, 0 if equal, positive if left > right. */
@@ -68,8 +74,9 @@ export function compareAppVersions(left: string, right: string): number {
   for (let index = 0; index < leftVersion.core.length; index += 1) {
     const leftPart = leftVersion.core[index]
     const rightPart = rightVersion.core[index]
-    if (leftPart !== rightPart) {
-      return leftPart - rightPart
+    const comparison = compareIdentifiers(leftPart, rightPart)
+    if (comparison !== 0) {
+      return comparison
     }
   }
 

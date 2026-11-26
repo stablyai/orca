@@ -15,6 +15,11 @@ const RUN_ELSEWHERE = new Set([
   // ast-grep-gates.mjs checks it from the ast-grep lint scan instead of scanning again.
   'check-flaky-test-pattern-ratchet.mjs'
 ])
+const MAIN_BLOCKING_RATCHETS = new Set([
+  'check-main-blocking-api-ratchet.mjs',
+  'check-main-blocking-helper-ratchet.mjs',
+  'check-main-sync-fs-ratchet.mjs'
+])
 
 export function listRatchetScripts(scriptsDir) {
   return readdirSync(scriptsDir, { recursive: true })
@@ -28,10 +33,21 @@ export function listRatchetScripts(scriptsDir) {
     })
 }
 
+const MAIN_BLOCKING_RUNNER = path.join(
+  'static-analysis',
+  'ratchet-runner',
+  'run-main-blocking-ratchets.mjs'
+)
+const HEAVY_RATCHETS = new Set(['check-react-compiler-compat-ratchet.mjs'])
+
 function runRatchet(scriptsDir, name, root) {
   return new Promise((resolve) => {
     let output = ''
-    const child = spawn(process.execPath, [path.join(scriptsDir, name)], { cwd: root })
+    const runtime =
+      name === MAIN_BLOCKING_RUNNER && process.env.ORCA_MAIN_BLOCKING_RATCHET_RUNTIME === 'bun'
+        ? 'bun'
+        : process.execPath
+    const child = spawn(runtime, [path.join(scriptsDir, name)], { cwd: root })
     child.stdout.on('data', (chunk) => (output += chunk))
     child.stderr.on('data', (chunk) => (output += chunk))
     child.on('error', (error) =>
@@ -41,13 +57,20 @@ function runRatchet(scriptsDir, name, root) {
   })
 }
 
-// Each ratchet is a single-threaded scan; half the cores leaves room for the overlapping typecheck.
 async function main(root) {
   const scriptsDir = path.join(root, 'config', 'scripts')
-  const pending = listRatchetScripts(scriptsDir)
+  const discovered = listRatchetScripts(scriptsDir).filter(
+    (name) => !MAIN_BLOCKING_RATCHETS.has(path.basename(name))
+  )
+  // Schedule the heaviest ratchets first so they do not become late stragglers.
+  const pending = [
+    MAIN_BLOCKING_RUNNER,
+    ...discovered.filter((name) => HEAVY_RATCHETS.has(path.basename(name))),
+    ...discovered.filter((name) => !HEAVY_RATCHETS.has(path.basename(name)))
+  ]
   const failed = []
   await Promise.all(
-    Array.from({ length: Math.max(2, Math.floor(availableParallelism() / 2)) }, async () => {
+    Array.from({ length: Math.max(2, availableParallelism()) }, async () => {
       while (pending.length > 0) {
         const result = await runRatchet(scriptsDir, pending.shift(), root)
         // Whole per-script blocks, so concurrent ratchets never interleave their lines.

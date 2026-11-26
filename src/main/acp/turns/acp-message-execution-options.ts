@@ -6,6 +6,7 @@ import {
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-version'
+import { confirmsListedEffortAtSend } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { AcpAgentError } from '../transport/acp-errors'
 import { AcpModelCommandRefusedError } from './acp-model-command'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
@@ -35,6 +36,18 @@ export async function applyAcpMessageOptions(
   // Thinking precedes effort, so a model's effort is set on the thinking mode it runs.
   for (const key of ['interactionMode', 'model', 'thinking', 'effort', 'fastMode'] as const) {
     const value = key === 'effort' ? offeredEffort(session, options.effort) : options[key]
+    if (
+      key === 'effort' &&
+      value !== undefined &&
+      confirmsListedEffortAtSend(session.spec.agent) &&
+      session.options.refusesEffort(value)
+    ) {
+      const detail = `the selected model has no ${value} reasoning effort. Choose another effort and send again`
+      throw withProviderDiagnostic(
+        new AgentSessionOptionRejectedError(detail),
+        providerDiagnostic(detail, 'person')
+      )
+    }
     if (
       value === undefined ||
       (key === 'interactionMode'

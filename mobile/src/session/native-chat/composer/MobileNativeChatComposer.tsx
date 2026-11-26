@@ -23,6 +23,8 @@ import { useMobileNativeChatPickerPresentation } from '../input/session-options/
 import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
 import { mobileNativeChatComposerPasteHandler } from './attachments/mobile-native-chat-composer-paste'
 import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-composer-menu'
+import { useMobileNativeChatMentionBots } from './menus/use-mobile-native-chat-mention-bots'
+import { shownDictationPreview } from './menus/mobile-native-chat-bot-mention-display'
 import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
@@ -83,6 +85,7 @@ export function MobileNativeChatComposer({
   filePaths = NO_FILE_PATHS,
   roomMentions,
   onNeedFiles,
+  fileReference,
   skillDiscovery,
   onNeedSkills,
   stop = null,
@@ -106,6 +109,8 @@ export function MobileNativeChatComposer({
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText
   })
+  // Only a structured chat's sends reach the host's mention context, as on the desktop.
+  const mentionBots = useMobileNativeChatMentionBots(!roomMentions && structured !== null)
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
   const orca = useMobileNativeChatOrcaCommands({
     structured,
@@ -148,7 +153,9 @@ export function MobileNativeChatComposer({
     onPickInteractionMode: (mode) => sessionOptions?.controller.setOption('interactionMode', mode),
     filePaths,
     roomMentions,
+    mentionBots,
     onNeedFiles,
+    fileReference,
     skillDiscovery,
     onNeedSkills,
     onSlashMenuOpen: structured?.onSlashMenuOpen,
@@ -245,6 +252,7 @@ export function MobileNativeChatComposer({
         anchorRef={groupRef}
         rows={menu.rows}
         onPick={menu.pick}
+        onOpenBotChats={menu.openBotChats}
         nestedScrollEnabled={editSession ? true : undefined}
       />
       <View style={styles.composerInset} testID="native-chat-composer-inset">
@@ -261,7 +269,7 @@ export function MobileNativeChatComposer({
           />
           <MobileNativeChatComposerField
             ref={fieldRef}
-            value={value}
+            value={menu.display.text}
             skillToken={menu.skillToken}
             onChangeText={menu.onFieldChange}
             onKeyboardSubmit={() => {
@@ -285,15 +293,23 @@ export function MobileNativeChatComposer({
             onWebPaste={onWebPaste}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
-            dictationPreview={dictation.preview}
+            dictationPreview={shownDictationPreview(dictation.preview)}
             onSelectionChange={(e) => {
-              dictation.readSelection(e)
+              dictation.readSelection(menu.dictationAnchor(e))
               menu.onSelectionChange(e.nativeEvent.selection)
             }}
             placeholder={
               goal.placeholder ??
               placeholder ??
-              t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands')
+              (mentionBots && mentionBots.bots.length > 0
+                ? t(
+                    'bots.chat.mentionPlaceholder',
+                    'Ask anything, @ to mention bots or files, / for commands'
+                  )
+                : t(
+                    'chat.composer.placeholder',
+                    'Ask anything, @ to mention files, / for commands'
+                  ))
             }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}

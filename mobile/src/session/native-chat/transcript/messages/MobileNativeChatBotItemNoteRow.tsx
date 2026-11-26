@@ -28,10 +28,7 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { Prose } from '../message-content/MobileNativeChatProse'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
-import {
-  MobileNativeChatActivityJoinContext,
-  mobileNativeChatActivityJoinMargins
-} from './mobile-native-chat-activity-join'
+import { MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP } from './mobile-native-chat-activity-join'
 import { scaledType, styles as messageStyles } from './mobile-native-chat-message-styles'
 
 /** Chips a bulk line shows before "+N more", as on the desktop. */
@@ -240,7 +237,7 @@ function CommentLine({
   // The comment's images go with its mail, so the [Image #N] its send wrote go, as on desktop.
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
-    // A message, so a row gap below what the note drew above it, not the lines' 2 pt.
+    // A message, so a row gap below what the note drew above it, not the lines' 3 pt.
     <View style={[messageStyles.userBubble, styles.comment, belowAnother && styles.belowAnother]}>
       <View style={styles.commentOn}>
         <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
@@ -268,10 +265,8 @@ export function MobileNativeChatBotItemNoteRow({
   fontScale: number
 }): React.JSX.Element {
   const t = useMobileTranslation()
-  const join = useContext(MobileNativeChatActivityJoinContext)
-  const edges = mobileNativeChatActivityJoinMargins(join, spacing.xs)
   return (
-    <View style={[styles.row, edges]} testID={mobileNativeChatRowId(rowId)}>
+    <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
       {noteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
           <CommentLine
@@ -313,7 +308,7 @@ const styles = themedStyleSheet(() => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    gap: spacing.xxs
+    gap: MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP
   },
   line: {
     flexDirection: 'row',
@@ -385,7 +380,7 @@ const styles = themedStyleSheet(() => ({
     gap: spacing.xs
   },
   // With the lines' gap, the 12 pt a note row (4) and a message row (8) leave between them.
-  belowAnother: { marginTop: spacing.md - spacing.xxs },
+  belowAnother: { marginTop: spacing.md - MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP },
   commentOn: {
     flexDirection: 'row',
     alignItems: 'center',

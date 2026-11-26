@@ -1,3 +1,5 @@
+import { readProcessReportHeader } from '../orcad/native-runtime/native-host-abi'
+
 export type GlibcVersion = { major: number; minor: number }
 export type LinuxLibcFacts = { libc: 'glibc' | 'musl'; glibc: GlibcVersion | null }
 
@@ -78,8 +80,7 @@ export function isMuslHost(): boolean {
   }
   if (muslHost === undefined) {
     // glibc builds report their runtime glibc version; musl builds have none.
-    const report: unknown = process.report?.getReport()
-    const header = report && typeof report === 'object' && 'header' in report ? report.header : null
+    const header = readProcessReportHeader()
     muslHost = !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
   }
   return muslHost

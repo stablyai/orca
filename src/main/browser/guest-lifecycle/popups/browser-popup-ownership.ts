@@ -9,3 +9,10 @@ export type BrowserPopupPage = {
   webContentsId: number
   openerBrowserPageId: string
 }
+
+/** A popup a server page opened on a paired client's click; that client moves to it. */
+export type ServerPagePopupPresentation = {
+  worktreeId: string
+  browserPageId: string
+  pairedDeviceId: string
+}

@@ -25,7 +25,7 @@ import type {
 } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type * as HistorySeedProtocol from '../history/seed-transfer/terminal-history-seed-transfer-protocol'
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
-import type { TerminalSnapshot } from './terminal-snapshot'
+import type { TerminalSnapshot, TerminalSnapshotReadOptions } from './terminal-snapshot'
 import type { SetLaunchNoteRequest } from './daemon-launch-note-protocol'
 
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -197,10 +197,7 @@ export type ShutdownRequest = {
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
-  payload: {
-    sessionId: string
-    scrollbackRows?: number
-  }
+  payload: { sessionId: string } & TerminalSnapshotReadOptions
 }
 
 // Read applied dimensions to detect dropped or coerced fire-and-forget resizes.
@@ -291,8 +288,8 @@ export type RpcResponseError = {
 
 export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError
 
-export type GetSnapshotResult = {
-  snapshot: TerminalSnapshot | null
+export type GetSnapshotResult<Snapshot = TerminalSnapshot> = {
+  snapshot: Snapshot | null
 }
 
 export type ListSessionsResult = {

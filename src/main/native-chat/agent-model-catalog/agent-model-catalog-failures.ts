@@ -1,9 +1,17 @@
 import type { AgentSessionUnavailable } from '../../../shared/agent-session/failures/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from './agent-model-catalog-unavailable'
+import { isAgentSessionPreSpawnError } from '../agent-session-wire/providers/structured-agent-session-adapter-errors'
 
-// Only probes establish chat unavailability; live listings cannot replace that verdict.
+// Probes and Command lookups establish chat unavailability; live listings cannot replace it.
 
 export const AGENT_MODEL_CATALOG_FAILURE_TTL_MS = 30_000
+
+/** A chat here would be refused the same way, so a read says why instead of listing nothing. */
+export function agentModelCatalogCommandRefusal(error: unknown): AgentSessionUnavailable | null {
+  return isAgentSessionPreSpawnError(error) && error.reason === 'agentCommandNotRunnable'
+    ? { reason: error.reason }
+    : null
+}
 
 /** Cancelled or folderless probes establish nothing about account health and are not cached. */
 export class AgentModelCatalogListingStoppedError extends Error {}
@@ -83,15 +91,17 @@ export class AgentModelCatalogFailures {
     }
   }
 
-  /** Failed probes replace prior verdicts without inventing unavailability reasons. */
+  /** Failed probes replace prior verdicts; only a reason a chat start would give is held. */
   probeFailed(fingerprint: string, agent: string, error: unknown): void {
+    const unavailable =
+      error instanceof AgentModelCatalogUnavailableError
+        ? error.unavailable
+        : agentModelCatalogCommandRefusal(error)
     this.failures.set(fingerprint, {
       agent,
       detail: error instanceof Error ? error.message : String(error),
       failedAt: this.now(),
-      ...(error instanceof AgentModelCatalogUnavailableError
-        ? { unavailable: error.unavailable }
-        : {})
+      ...(unavailable ? { unavailable } : {})
     })
   }
 }

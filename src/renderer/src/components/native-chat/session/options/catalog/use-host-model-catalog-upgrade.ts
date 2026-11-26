@@ -86,7 +86,8 @@ export function useHostModelCatalogUpgrade(args: {
   const unavailable = verdict?.key === waitKey ? verdict.unavailable : null
   const [rereads, setRereads] = useState(0)
   const recheck = useCallback(() => setRereads((count) => count + 1), [])
-  const said = unavailable !== null
+  // Rechecking a refused Command spawns a login shell, so focus and turn edges leave it to picker opens.
+  const said = unavailable !== null && unavailable.reason !== 'agentCommandNotRunnable'
   const turnWhileSaid = said ? (args.turnId ?? null) : null
   const reportedUnpickedModel = args.reportedUnpickedModel === true
   // Agent start/stop invalidates reasons derived from its previous run.

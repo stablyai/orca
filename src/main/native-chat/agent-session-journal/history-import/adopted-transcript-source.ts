@@ -7,8 +7,8 @@ import {
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
-  isPathInsideOrEqual,
-  normalizeRuntimePathForComparison
+  normalizeRuntimePathForComparison,
+  relativePathInsideRoot
 } from '../../../../shared/file-access/cross-platform-path'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { extractString } from '../../../../shared/text/trimmed-string'
@@ -86,18 +86,20 @@ async function adoptedSourceFolder(
   }
   // Agents record a resolved folder; a dot segment could name one outside the workspace.
   const nested = !cwd.split(/[\\/]/).some((segment) => segment === '.' || segment === '..')
-  if (nested && isPathInsideOrEqual(workspaceCwd.trim(), cwd)) {
-    return cwd
+  // A sub-folder is spelled from the workspace path, the one every other path on this host uses.
+  const inside = nested ? relativePathInsideRoot(workspaceCwd.trim(), cwd) : null
+  if (inside) {
+    return join(workspaceCwd, inside)
   }
   // Pi's launch compares real paths, so its adoption must agree with that compare.
   if (agent === 'pi' && (await samePiDirectory(cwd, workspaceCwd))) {
     return workspaceCwd
   }
-  const relation = await adoptedDirectoryProbes.relate(workspaceCwd, cwd, signal)
-  if (relation === 'inside' && nested) {
-    return cwd
+  const relative = await adoptedDirectoryProbes.relate(workspaceCwd, cwd, signal)
+  if (relative && nested) {
+    return join(workspaceCwd, relative)
   }
-  return relation === 'same' && agent !== 'pi' ? workspaceCwd : null
+  return relative === '' && agent !== 'pi' ? workspaceCwd : null
 }
 
 // Observe metadata from the same lines imported into the journal.

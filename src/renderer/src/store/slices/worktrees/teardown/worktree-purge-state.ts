@@ -193,6 +193,9 @@ export function buildFullWorktreePurgeState(
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
     remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
+    gitRebaseIndexObservationByWorktree: omitByWorktree(
+      s.gitRebaseIndexObservationByWorktree ?? {}
+    ),
     gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
     gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),

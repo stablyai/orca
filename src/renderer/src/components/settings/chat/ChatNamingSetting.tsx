@@ -14,7 +14,7 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
-import { getChatNamingSearchEntry } from './chat-naming-search'
+import { CHAT_NAME_AGENT_SECTION_ID, getChatNamingSearchEntry } from './chat-naming-search'
 
 type ChatNamingSettingProps = {
   settings: GlobalSettings
@@ -136,6 +136,7 @@ export function ChatNamingSetting({
                 ) : null}
                 <SourceControlActionRecipeRow
                   actionId="conversationName"
+                  sectionId={CHAT_NAME_AGENT_SECTION_ID}
                   source={config}
                   onTextModelChoiceChange={(_id, modelChoice, agentArgs, modelEdits) =>
                     updateDraft({ ...value, modelChoice, agentArgs, modelEdits })
@@ -165,9 +166,6 @@ export function ChatNamingSetting({
                   draftValue={value}
                   baseValue={persisted}
                   hasUnsavedChanges={dirty}
-                  defaultTuiAgent={
-                    cliAgent && cliAgent !== 'custom' ? cliAgent : settings.defaultTuiAgent
-                  }
                   isSavingTemplate={isSaving}
                   onAgentChange={(_id, selected) => void saveAgent(selected)}
                   onTemplateChange={(_id, template) =>

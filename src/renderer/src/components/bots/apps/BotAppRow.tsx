@@ -1,13 +1,17 @@
 import React, { useContext } from 'react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { composioLogoUrl } from '../../../../../shared/composio/composio-apps'
 import { COMPOSIO_DARK_MARKS, LOGO_TILES } from './brand-logo-tiles'
+import { BotAppLogoBadge } from './BotAppStepParts'
 
-/** A coloured tile's mark colour and its hairline on a dark page; the white tile otherwise. */
+/** A coloured tile's mark colour and its hairline on a dark page; the white tile, with its hairline on a
+ *  light page, otherwise. */
 export function brandTileClass(tile: string | undefined): string {
   return tile
     ? 'text-brand-mark dark:outline-1 dark:-outline-offset-1 dark:outline-white/14'
-    : 'bg-brand-mark text-brand-mark-foreground'
+    : 'bg-brand-mark text-brand-mark-foreground outline-1 -outline-offset-1 outline-black/8 dark:outline-0'
 }
 
 /** A Composio app's logo (Orca's bundled icon first) and, for a full-square one, the colour of the tile it fills. */
@@ -77,8 +81,8 @@ export function BotAppLogo({
   plain?: boolean
   /** A bundled mark's tile colour from LOGO_TILES.brand; white without one. */
   tile?: string
-  /** md: a list row; lg: a setup step's heading. */
-  size?: 'sm' | 'md' | 'lg'
+  /** sm: a face in a stack; md: a connector row; catalog: Add apps' list rows; lg: a setup step's heading. */
+  size?: 'sm' | 'md' | 'catalog' | 'lg'
 }): React.JSX.Element {
   const bare = useContext(BotLogoBare)
   const image = icon || !(slug || logo) ? undefined : composioLogo(slug, logo)
@@ -98,7 +102,7 @@ export function BotAppLogo({
       data-size={size}
       style={{ backgroundColor: background }}
       className={cn(
-        'relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg data-[size=lg]:size-11 data-[size=lg]:rounded-xl data-[size=md]:size-8 data-[size=sm]:size-5 data-[size=sm]:rounded',
+        'relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg data-[size=catalog]:size-10 data-[size=lg]:size-11 data-[size=lg]:rounded-xl data-[size=md]:size-8 data-[size=sm]:size-5 data-[size=sm]:rounded',
         plain ? 'bg-muted text-muted-foreground' : brandTileClass(background)
       )}
     >
@@ -124,64 +128,88 @@ export function BotAppLogo({
   )
 }
 
-/** One app in Add to <bot>: its mark, name and one line, then its one action. */
+/** One app in Add apps: its mark (with a check once the bot has it), name and one line, then its actions. */
 export function BotAppRow({
   logo,
+  added = false,
   name,
   tag,
   line,
   action
 }: {
   logo: React.ReactNode
+  added?: boolean
   name: string
   /** Muted after the name, e.g. "via Composio" where routes mix. */
   tag?: string
-  line: React.ReactNode
+  line: string
   action: React.ReactNode
 }): React.JSX.Element {
   return (
-    <li className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent/40">
-      {logo}
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-sm leading-[18px] font-medium whitespace-nowrap">
-          {name}
+    <li className="@container/app-row flex h-15 min-w-0 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-accent/40 has-[+li[data-github-recovery]]:col-span-full">
+      <span className="relative shrink-0">
+        {logo}
+        {added ? <BotAppLogoBadge kind="added" size="sm" /> : null}
+      </span>
+      {/* A floor for the line, so a long action label (de) truncates before the line vanishes. */}
+      <span className="min-w-24 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5 text-sm leading-[18px] font-medium">
+          <span className="truncate" title={name}>
+            {name}
+          </span>
           {tag ? (
-            <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
-              {tag}
-            </span>
+            <Badge variant="referenceLabel" className="max-w-[45%]">
+              <span className="truncate" title={tag}>
+                {tag}
+              </span>
+            </Badge>
           ) : null}
         </span>
-        <span className="block truncate text-xs leading-4 text-muted-foreground">{line}</span>
+        <span className="block truncate text-xs leading-4 text-muted-foreground" title={line}>
+          {line}
+        </span>
       </span>
       {action}
     </li>
   )
 }
 
-/** A list's caption, with its count. */
+/** A row's pill action: Add, Manage, Set up. */
+export function BotAppRowButton({
+  variant = 'secondary',
+  ...props
+}: React.ComponentProps<typeof Button>): React.JSX.Element {
+  return <Button variant={variant} size="pill" {...props} />
+}
+
+/** Rows follow reading order across two columns when the list is wide enough. */
+export function BotAppGrid({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <ul className="grid grid-cols-1 gap-x-4 gap-y-0.5 @min-[700px]:grid-cols-2">{children}</ul>
+}
+
+/** A list's caption, with its count and an optional action at its end. */
 export function BotAppCaption({
   id,
   title,
   count,
-  icon
+  action
 }: {
   id?: string
   title: string
   count?: number
-  icon?: React.ReactNode
+  action?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <h3
-      id={id}
-      className="flex items-center gap-1.5 px-2 pt-3.5 pb-1 text-2xs font-semibold text-muted-foreground"
-    >
-      {icon}
-      <span className="min-w-0 truncate" title={title}>
-        {title}
-      </span>
-      {count !== undefined ? (
-        <span className="shrink-0 font-medium tabular-nums">{count}</span>
-      ) : null}
-    </h3>
+    <div className="flex min-h-6 items-center justify-between gap-1.5 px-2 pt-4 pb-1 text-2xs text-muted-foreground">
+      <h3 id={id} className="flex min-w-0 items-center gap-1.5 font-semibold">
+        <span className="min-w-0 truncate" title={title}>
+          {title}
+        </span>
+        {count !== undefined ? (
+          <span className="shrink-0 font-medium tabular-nums">{count}</span>
+        ) : null}
+      </h3>
+      {action}
+    </div>
   )
 }

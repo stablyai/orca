@@ -54,7 +54,13 @@ export async function getWorkItemWithRepository(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
-  includeIssueDetails = false
+  {
+    includeIssueDetails = false,
+    includeChecksSummary
+  }: {
+    includeIssueDetails?: boolean
+    includeChecksSummary?: boolean
+  } = {}
 ): Promise<WorkItemRepositoryLookup> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
     await acquire()
@@ -97,7 +103,8 @@ export async function getWorkItemWithRepository(
             number,
             connectionId,
             localGitOptions,
-            preference
+            preference,
+            { includeChecksSummary }
           ),
           repository: null
         }
@@ -135,7 +142,8 @@ export async function getWorkItemWithRepository(
           number,
           connectionId,
           localGitOptions,
-          preference
+          preference,
+          { includeChecksSummary }
         ),
         repository: null
       }
@@ -175,7 +183,11 @@ export async function getWorkItemWithExactRepository(
   type: 'issue' | 'pr',
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { preview?: boolean; issueDetails?: { fresh: boolean } } = {}
+  options: {
+    preview?: boolean
+    issueDetails?: { fresh: boolean }
+    includeChecksSummary?: boolean
+  } = {}
 ): Promise<WorkItemRepositoryLookup> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
     const matchedRepository = await resolveGitHubWorkItemLinkRepository(
@@ -235,7 +247,8 @@ export async function getWorkItemWithExactRepository(
           matchedRepository,
           number,
           connectionId,
-          localGitOptions
+          localGitOptions,
+          options
         ),
         repository: matchedRepository
       }

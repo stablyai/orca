@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
@@ -27,7 +28,8 @@ import {
   readRemoteBrowserPageObservation
 } from './remote-browser-page-observation'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
-import { javaScriptDialogPrompt } from '../page-prompts/browser-javascript-dialog-prompt'
+import { remoteBrowserPagePromptAsks } from './remote-browser-page-prompt-asks'
+import { useRemoteBrowserStreamViewerState } from './use-remote-browser-stream-viewer-state'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -72,6 +74,7 @@ export function useRemoteBrowserPageLifecycle({
   // The lifecycle is built once; bridge committed callbacks to avoid stale render closures.
   const streamBridgeRef = useRef<RemoteBrowserStreamBridge>(NO_REMOTE_BROWSER_STREAM_BRIDGE)
   const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
+  const viewer = useRemoteBrowserStreamViewerState(() => currentBrowserTabIdRef.current)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   // Stable for the provider's life, so the once-built lifecycle may hold it.
@@ -134,12 +137,13 @@ export function useRemoteBrowserPageLifecycle({
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
+      viewerEvents: viewer.viewerEvents,
       closeMissingRemotePage: (remotePageId) =>
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
       syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
-      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
+      ...remoteBrowserPagePromptAsks(confirm)
     })
   }
   const lifecycle = lifecycleRef.current
@@ -255,14 +259,17 @@ export function useRemoteBrowserPageLifecycle({
         return
       }
       const state = useAppStore.getState()
-      const currentEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-      const pageStillExists =
-        useAppStore
-          .getState()
-          .browserPagesByWorkspace[browserTab.workspaceId]?.some(
-            (page) => page.id === browserTab.id
-          ) ?? false
-      if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
+      const page = state.browserPagesByWorkspace[browserTab.workspaceId]?.find(
+        (candidate) => candidate.id === browserTab.id
+      )
+      // A page can run on another runtime than its workspace (a paired desktop's page in an SSH host's workspace).
+      if (
+        page &&
+        getBrowserPageRuntimeEnvironmentId(
+          page,
+          runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        ) === activeRuntimeEnvironmentId
+      ) {
         return
       }
       const removedHandle = state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
@@ -292,6 +299,10 @@ export function useRemoteBrowserPageLifecycle({
     streamStatus,
     frameUrl,
     frameMetadata,
+    // Only the live stream's report is current; a new stream's ready replaces it.
+    pagePointer: streamStatus.kind === 'live' ? viewer.pagePointer : null,
+    // Kept through drops: the phone still holds the page, and the next stream's `driver` follows its ready.
+    pageDriver: viewer.pageDriver,
     runtimeWorktree,
     runtimeTarget,
     createRemoteOperationToken,

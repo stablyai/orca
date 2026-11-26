@@ -1,7 +1,7 @@
 // A received link's review pages: each part's items, and each item's exact text as Create writes it.
 // The desktop's BotShareReviewPages.
 import { BOT_SHARE_MEMORY_INDEX } from '../../../../src/shared/bots/bot-share-received'
-import { reviewPartFiles } from '../../../../src/shared/bots/bot-share-review-files'
+import { reviewPartFiles, toolHost } from '../../../../src/shared/bots/bot-share-review-files'
 import { ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsSection } from '../../settings/settings-screen-frame'
@@ -103,8 +103,14 @@ export function MobileBotShareReviewPage(props: { page: ReviewPage; ctx: ReviewC
         </SettingsSection>
       )
     case 'tools':
-      return (
-        <ReviewToolTicks review={review} toolIds={ctx.toolIds} setToolIds={ctx.setToolIds} first />
+      return ctx.consent ? (
+        <ReviewToolTicks review={review} {...ctx.consent} first />
+      ) : (
+        <SettingsSection first>
+          {bot.tools.map((tool) => (
+            <ListRow key={tool.id} title={tool.name} subtitle={toolHost(tool.url)} />
+          ))}
+        </SettingsSection>
       )
     case 'accounts': {
       const note = reviewPartFiles(review, 'note')

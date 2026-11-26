@@ -4,6 +4,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { cn } from '@/lib/class-names'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import type { WorkspaceCleanupReport } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { Button } from '../../ui/button'
@@ -139,7 +140,7 @@ export function WorkspaceCleanupAutomaticSection({
       newRun ? formatLastRun(newRun, readAt, t) : null,
       running && !announcement.running ? runningText : null
     ].filter((part): part is string => part !== null)
-    const text = parts.length > 0 ? parts.join(' ') : null
+    const text = parts.length > 0 ? joinSentences(parts) : null
     setAnnouncement({
       running,
       runId,
@@ -190,7 +191,7 @@ export function WorkspaceCleanupAutomaticSection({
     </span>
   )
   const description =
-    details.length > 0 ? <span className="tabular-nums">{details.join(' ')}</span> : null
+    details.length > 0 ? <span className="tabular-nums">{joinSentences(details)}</span> : null
   const action = anyRuleOn ? (
     <Button variant="outline" size="sm" disabled={running} onClick={onCleanUpNow}>
       {running ? (

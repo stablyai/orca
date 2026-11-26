@@ -3,8 +3,9 @@
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireStructuredHost } from './bot-chat-session'
 
-/** A chat whose last turn failed holds other agents' mail until its owner resumes or sends there, or
- *  automatic continue runs at a usage-limit reset; an unreadable chat is taken as not holding it. */
+/** A chat whose last turn stopped at a usage limit holds other agents' mail until automatic continue
+ *  runs at the reset or its owner continues it; other failures do not hold it. An unreadable chat is
+ *  taken as not holding it. */
 export async function chatHoldsAgentMail(
   runtime: OrcaRuntimeService,
   sessionId: string

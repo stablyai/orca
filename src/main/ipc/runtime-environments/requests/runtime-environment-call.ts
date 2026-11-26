@@ -13,4 +13,6 @@ export type RuntimeEnvironmentCall = {
   signal?: AbortSignal
   prepareRequest?: RuntimeRequestPreparation
   prepareGuard?: RuntimeRequestGuard
+  /** A background request (a poll): an idle host's passive control socket doesn't count it as use. */
+  idlePassive?: boolean
 }

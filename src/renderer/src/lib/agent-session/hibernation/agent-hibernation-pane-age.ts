@@ -63,7 +63,14 @@ export function observeHibernationPtyBindings(args: {
   }
 }
 
-export function getHibernationPtyBindingFirstSeenAtByPaneKey(): Record<string, number> {
+/** Every pane's binding age, or just `onlyPaneKey`'s for a one-pane re-check. */
+export function getHibernationPtyBindingFirstSeenAtByPaneKey(
+  onlyPaneKey?: string
+): Record<string, number> {
+  if (onlyPaneKey !== undefined) {
+    const firstSeenAt = ptyBindingByPaneKey.get(onlyPaneKey)?.firstSeenAt
+    return firstSeenAt === undefined ? {} : { [onlyPaneKey]: firstSeenAt }
+  }
   const out: Record<string, number> = {}
   for (const [paneKey, binding] of ptyBindingByPaneKey) {
     out[paneKey] = binding.firstSeenAt
@@ -78,6 +85,12 @@ export function recordHibernationBoundaryResolved(paneKey: string, now: number):
   }
 }
 
-export function getHibernationBoundaryResolvedAtByPaneKey(): Record<string, number> {
+export function getHibernationBoundaryResolvedAtByPaneKey(
+  onlyPaneKey?: string
+): Record<string, number> {
+  if (onlyPaneKey !== undefined) {
+    const resolvedAt = boundaryResolvedAtByPaneKey.get(onlyPaneKey)
+    return resolvedAt === undefined ? {} : { [onlyPaneKey]: resolvedAt }
+  }
   return Object.fromEntries(boundaryResolvedAtByPaneKey)
 }

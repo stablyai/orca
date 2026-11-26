@@ -209,7 +209,8 @@ const SIGN_IN: BotNeedView[] = [
 const STOPPED = ['Nightly PR sweep', 'Morning digest'].map((name, index) => ({
   ...fixtureAutomation(`a-${index}`, name, 'FREQ=DAILY;BYHOUR=9'),
   needsSignIn: true,
-  latestRunId: `r${index}`
+  latestRunId: `r${index}`,
+  hostId: fixtureCos.hostId
 }))
 
 /** A sign-in with the two runs it stopped: listed as context after it, never counted. */

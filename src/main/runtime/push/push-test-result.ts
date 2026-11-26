@@ -10,7 +10,8 @@ export function pushTestResult(
   if (!result.ok) {
     return {
       accepted: false,
-      reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected'
+      reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected',
+      ...clockSkew(result.clockSkewMs)
     }
   }
   const status = result.results.find((entry) => entry.registrationId === registrationId)?.status
@@ -22,4 +23,13 @@ export function pushTestResult(
     reason:
       status === 'rate_limited' ? 'rate_limited' : status === 'dead' ? 'not_registered' : 'rejected'
   }
+}
+
+/** A wrong host clock blocks the sign-in registration needs, so the phone can say so. */
+export function unregisteredTestResult(clockSkewMs: number | null): MobilePushTestResult {
+  return { accepted: false, reason: 'not_registered', ...clockSkew(clockSkewMs ?? undefined) }
+}
+
+function clockSkew(skewMs: number | undefined): { clockSkewSeconds?: number } {
+  return skewMs === undefined ? {} : { clockSkewSeconds: Math.round(skewMs / 1000) }
 }

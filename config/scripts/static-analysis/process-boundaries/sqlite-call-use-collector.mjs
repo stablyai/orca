@@ -16,14 +16,17 @@ const METHODS = new Set([
 const SQLITE_MODULE =
   /^(?:node:sqlite|better-sqlite3)$|(?:^|\/)(?:sync-database|sqlite-statement)(?:\.[cm]?[jt]s)?$/
 
-export function countSqliteCalls(file, contents) {
-  return collectSqliteCallSites(file, contents).length
+export function countSqliteCalls(file, contents, source) {
+  return collectSqliteCallSites(file, contents, source).length
 }
 
 // Local syntax only: imported SQLite types, typed receivers, constructors and prepare() results.
 /** Start offsets of each synchronous SQLite call. */
-export function collectSqliteCallSites(file, contents) {
-  const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
+export function collectSqliteCallSites(
+  file,
+  contents,
+  source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
+) {
   if (source.parseDiagnostics.length) {
     throw new Error(`Cannot parse ${file}; SQLite ratchet must not skip it.`)
   }

@@ -3,7 +3,7 @@
 // is their own message, headed by the item's chip. A run of the owner's quick changes to one item
 // folds into one row that opens into each change; a line stays on one line (chips and a worker's name
 // cut short, a cut-short note opens whole), and a bulk line shows a few chips then "+N more".
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ListTodo, MessageSquare } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,6 +24,10 @@ import {
   NATIVE_CHAT_ROW_SHARE
 } from '../messages/events/native-chat-inline-chip'
 import { NativeChatUserBubble } from '../messages/rows/NativeChatUserBubble'
+import {
+  NATIVE_CHAT_UNKERNED_CSS,
+  nativeChatTextHasUnkernedRun
+} from '../composer/editor/native-chat-unkerned-runs'
 import { useBotItemChipPreview } from './bot-item-chip-preview'
 import {
   botItemNoteLines,
@@ -282,15 +286,23 @@ function CommentRow({
   belowAnother: boolean
 }) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
+  const unkerned = useMemo(() => nativeChatTextHasUnkernedRun(text), [text])
   return (
-    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.
-    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-4')}>
+    // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.5.
+    <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-3.5')}>
       {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
       <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
         {/* A bubble's head, not a row's share: it fits the bubble instead. */}
         <ItemChip item={line.item} className="max-w-full flex-none" />
-        {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
+        {text.trim() ? (
+          <div
+            className="whitespace-pre-wrap [overflow-wrap:anywhere]"
+            style={unkerned ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+          >
+            {text}
+          </div>
+        ) : null}
       </NativeChatUserBubble>
     </div>
   )
@@ -321,7 +333,7 @@ export function NativeChatBotItemNoteRow({
   const t = useTranslate()
   if (!note.run) {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <Lines note={note} at={note.at ?? timestamp} />
       </div>
     )

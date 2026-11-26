@@ -22,11 +22,12 @@ import {
   type BotTemplate,
   type BotTemplateCategory
 } from '../../../src/shared/bots/bot-templates'
+import { botTemplateGroups, botTemplateMatches } from '../../../src/shared/bots/bot-template-view'
 import {
-  botTemplateGroups,
-  botTemplateMatches,
-  freeBotName
-} from '../../../src/shared/bots/bot-template-view'
+  botTemplateBotName,
+  botTemplateText,
+  botTemplateWord
+} from '../../../src/shared/bots/bot-template-text'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotTemplateDetail } from './MobileBotTemplateDetail'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
@@ -62,13 +63,15 @@ export function MobileBotTemplatesSheet(props: {
   const groups = botTemplateGroups(
     (template) =>
       (category === null || template.category === category) &&
-      botTemplateMatches(template, query, label)
+      botTemplateMatches(template, query, label, (english) => botTemplateText(english, t))
   )
   const pick = (template: BotTemplate) => {
     props.onPick({
-      proposal: templateProposal(template, { name: freeBotName(template.name, props.botNames) }),
+      proposal: templateProposal(template, {
+        name: botTemplateBotName(template, props.botNames, t)
+      }),
       origin: t('bots.templates.originTemplateNamed', 'From the {{template}} template', {
-        template: template.name
+        template: botTemplateWord(template, 'name', t)
       })
     })
   }
@@ -125,8 +128,8 @@ export function MobileBotTemplatesSheet(props: {
                       size={AVATAR_SIZE}
                     />
                   }
-                  title={template.name}
-                  subtitle={template.line}
+                  title={botTemplateWord(template, 'name', t)}
+                  subtitle={botTemplateWord(template, 'line', t)}
                   navigates
                   onPress={() => {
                     // The search field stays mounted under the page, so its keyboard would cover the detail.

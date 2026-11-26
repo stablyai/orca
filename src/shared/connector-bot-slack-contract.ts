@@ -111,6 +111,11 @@ export function slackTeamState(
   )
 }
 
+/** Slack's own link to an app's direct messages in its workspace: it opens the Slack app there. */
+export function slackAppMessagesUrl(appId: string, teamId: string): string {
+  return `https://slack.com/app_redirect?${new URLSearchParams({ app: appId, team: teamId }).toString()}`
+}
+
 export type SlackPostAs = 'person' | 'computer'
 
 // POST `${bots}/<id>/slack/post-as`: applied at once (the setup's own pick, naming its install link's
@@ -131,7 +136,9 @@ export const ConnectorBotSlackMembersResponse = z.object({
       id: z.string(),
       name: z.string(),
       // Left out when they have none, or by a cloud that predates it.
-      avatarUrl: optionalConnectorAvatarUrl
+      avatarUrl: optionalConnectorAvatarUrl,
+      // Another Slack app's bot user, not a person; its name already says "(app)".
+      app: z.literal(true).optional().catch(undefined)
     })
   ),
   complete: z.boolean()
@@ -140,6 +147,9 @@ export type ConnectorBotSlackMembersResponse = z.infer<typeof ConnectorBotSlackM
 
 /** A bot-Slack call's answer as the renderer sees it: the cloud's error code, or one of the desktop's. */
 export type BotSlackResult<T> = { ok: true; value: T } | { ok: false; error: string }
+
+/** A bare 404 on `${slack}/connect`: a cloud from before Sign in with Slack. */
+export const BOT_SLACK_SIGN_IN_OFF = 'slack_sign_in_off'
 
 /** The desktop's own codes, beside the cloud's (grant_expired, unknown_bot, wrong_workspace, …). */
 export const BOT_SLACK_DESKTOP_ERRORS = {

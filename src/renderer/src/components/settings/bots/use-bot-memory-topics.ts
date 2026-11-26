@@ -1,11 +1,9 @@
 // The topic files in a bot's memory/ folder, for the Memory row's state line and the Memory page's list.
 import { useEffect, useState } from 'react'
+import { BOT_MEMORY_ARCHIVE } from '../../../../../shared/bots/bot-memory-archive'
 import { isConfirmedFileNotFoundError } from '../../../../../shared/file-write/file-write-disk-precondition'
 import { type BotHome, botHomeKey, readBotHomeDir } from './bot-home-files'
 import { useStableBotHome } from './use-bot-home-file'
-
-/** Where tidy-ups move old lines; listed apart from the topics. */
-export const BOT_MEMORY_ARCHIVE = 'archive.md'
 
 export type BotMemoryTopics = {
   /** Topic file names, sorted; the archive is not one. */

@@ -3,11 +3,13 @@ import {
   withGitHubRepoExecution,
   type LocalGitExecOptions
 } from '../repositories/github-repository-identity'
-import type { PRCheckDetail } from '../../../shared/github/checks/check-types'
+import { normalizePRCheckHeadSha } from '../../../shared/github/checks/pr-check-head'
 
 import type { GitHubWorkItemDetails } from '../../../shared/github/work-items/work-item-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
-import { getPRChecks } from '../client/check/get-pr-checks'
+import { getPRChecksObservation } from '../client/check/get-pr-checks'
+import type { PRChecksObservation } from '../client/check/pr-checks-last-outcome'
+import { ownerRepoFromPullRequestUrl } from '../client/github-exec-scope'
 import { getPRComments } from '../client/fetch/get-pr-comments'
 import {
   getWorkItemWithRepository,
@@ -53,25 +55,26 @@ async function getPRChecksForDetails(
   prNumber: number,
   headSha: string | undefined,
   repository: GitHubApiRepository | null,
+  canonical: boolean,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<PRCheckDetail[]> {
+): Promise<PRChecksObservation> {
   if (!repository) {
-    return []
+    return { checks: [] }
   }
   try {
-    return await getPRChecks(
+    return await getPRChecksObservation(
       repoPath,
       prNumber,
       headSha,
       repository,
-      undefined,
+      { noCache: true, userRefresh: canonical },
       connectionId,
       ...localGitOptionArgs(localGitOptions)
     )
   } catch (error) {
     console.warn('getWorkItemDetails PR checks failed:', error)
-    return []
+    return { checks: [] }
   }
 }
 
@@ -121,7 +124,7 @@ export async function getWorkItemDetails(
             type === 'pr' ? 'pr' : 'issue',
             connectionId,
             localGitOptions,
-            { issueDetails: { fresh: canonical } }
+            { issueDetails: { fresh: canonical }, includeChecksSummary: false }
           )
         : await getWorkItemWithRepository(
             repoPath,
@@ -130,7 +133,7 @@ export async function getWorkItemDetails(
             connectionId,
             localGitOptions,
             preference,
-            type === 'issue' && !canonical
+            { includeIssueDetails: type === 'issue' && !canonical, includeChecksSummary: false }
           )
       if (!item) {
         return null
@@ -140,8 +143,14 @@ export async function getWorkItemDetails(
       const resolvedRepository =
         item.type === 'issue' || repositoryTarget
           ? selectedRepository
-          : (await resolveGitHubRepoExecution(repoPath, item.prRepo, connectionId, localGitOptions))
-              .ownerRepo
+          : (
+              await resolveGitHubRepoExecution(
+                repoPath,
+                item.prRepo ?? ownerRepoFromPullRequestUrl(item.url),
+                connectionId,
+                localGitOptions
+              )
+            ).ownerRepo
 
       if (item.type === 'issue') {
         return withWorkItemDetailsPermit(async () => {
@@ -246,7 +255,8 @@ export async function getWorkItemDetails(
           : Promise.resolve([])
       ])
 
-      const [mentionParticipants, checks] = await Promise.all([
+      const headSha = metadata.headSha ?? item.headSha
+      const [mentionParticipants, { checks, summary }] = await Promise.all([
         withWorkItemDetailsPermit(() =>
           getMentionParticipants(
             repoPath,
@@ -261,8 +271,9 @@ export async function getWorkItemDetails(
         getPRChecksForDetails(
           repoPath,
           item.number,
-          metadata.headSha,
+          headSha,
           resolvedRepository,
+          canonical,
           connectionId,
           localGitOptions
         )
@@ -270,7 +281,17 @@ export async function getWorkItemDetails(
 
       return {
         item: enrichItemDisplayAvatars(
-          resolvedRepository ? { ...item, prRepo: resolvedRepository } : item,
+          {
+            ...item,
+            ...(resolvedRepository ? { prRepo: resolvedRepository } : {}),
+            checksSummary:
+              summary &&
+              item.number === number &&
+              summary.headSha === normalizePRCheckHeadSha(headSha) &&
+              summary.headSha === normalizePRCheckHeadSha(item.headSha)
+                ? summary.value
+                : undefined
+          },
           mentionParticipants
         ),
         body: metadata.body,

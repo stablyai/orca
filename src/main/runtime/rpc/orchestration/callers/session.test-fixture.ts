@@ -119,6 +119,7 @@ export function createSessionCallerHarness(
     observeConversationPublications: () => () => {}
   }
   hostRef.current = {
+    publishBackgroundTasks: () => {},
     ...mailSource,
     deps: {
       store: {

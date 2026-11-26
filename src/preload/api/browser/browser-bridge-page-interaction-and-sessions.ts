@@ -1,5 +1,6 @@
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { ipcRenderer } from 'electron'
+import type { BrowserServerDownloadCopyArgs } from '../../../shared/browser/downloads/browser-server-download-copy'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
@@ -13,7 +14,10 @@ import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
-import type { BrowserProfileCookieImportArgs } from '../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserClientHostCookieImportArgs,
+  BrowserProfileCookieImportArgs
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserSitePermissionKey,
   BrowserSitePermissionDecision
@@ -130,6 +134,10 @@ export const browserPageInteractionAndSessionsApi = {
   },
   cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelDownload', args),
+  copyServerDownload: (args: BrowserServerDownloadCopyArgs): Promise<{ destinationPath: string }> =>
+    ipcRenderer.invoke('browser:copyServerDownload', args),
+  cancelServerDownloadCopy: (args: { copyId: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:cancelServerDownloadCopy', args),
   setGrabMode: (args: { browserPageId: string; enabled: boolean }) =>
     ipcRenderer.invoke('browser:setGrabMode', args),
   awaitGrabSelection: (args: { browserPageId: string; opId: string }) =>
@@ -192,7 +200,7 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:deleteProfile', args),
   sessionImportCookies: (args: BrowserProfileCookieImportArgs) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
-  sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
+  sessionImportCookiesForClientHost: (args: BrowserClientHostCookieImportArgs) =>
     ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),
@@ -202,20 +210,21 @@ export const browserPageInteractionAndSessionsApi = {
   sessionImportFromBrowser: (
     args: BrowserProfileCookieImportArgs & { browserFamily: string; browserProfile?: string }
   ) => ipcRenderer.invoke('browser:session:importFromBrowser', args),
-  sessionImportFromBrowserForClientHost: (args: {
-    environmentId: string
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-  }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
-  sessionClientRouteImportSources: (args: { environmentId: string }) =>
+  sessionImportFromBrowserForClientHost: (
+    args: BrowserClientHostCookieImportArgs & { browserFamily: string; browserProfile?: string }
+  ) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+  sessionClientRouteImportSources: (args: { environmentId: string } | { sshTargetId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
   sessionGoogleCookieClearTarget: (args: { profileId: string; environmentId: string | null }) =>
     ipcRenderer.invoke('browser:session:googleCookieClearTarget', args),
   sessionClearGoogleCookies: (target: GoogleCookieClearLocalTarget) =>
     ipcRenderer.invoke('browser:session:clearGoogleCookies', target),
-  sessionClearDefaultCookies: (): Promise<boolean> =>
-    ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+  sessionClearCookies: (args: { profileId: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:session:clearCookies', args),
+  sessionClearCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
+    ipcRenderer.invoke('browser:session:clearCookiesForClientHost', args),
+  sessionClearCookiesForSshHost: (args: { sshTargetId: string; profileId: string }) =>
+    ipcRenderer.invoke('browser:session:clearCookiesForSshHost', args),
   sitePermissionsList: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:sitePermissions:list', args),
   sitePermissionsSet: (args: {

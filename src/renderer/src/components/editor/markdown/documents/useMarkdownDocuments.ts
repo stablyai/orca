@@ -8,9 +8,10 @@ import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-o
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { acquireEditorFileOperation } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
+import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import {
-  createMarkdownDocumentIndex,
+  getMarkdownDocumentIndex,
   getMarkdownDocLinkAnchor,
   resolveMarkdownDocLink
 } from './markdown-doc-links'
@@ -78,6 +79,13 @@ export function useMarkdownDocuments(
     null
   )
   const requestRef = useRef(0)
+  // Only the latest listing, once settled, proves membership: an in-flight one may predate a delete.
+  const settledListingRef = useRef<{ requestId: number; relativePaths: Set<string> } | null>(null)
+
+  const isListed = useCallback((relativePath: string): boolean => {
+    const listing = settledListingRef.current
+    return listing?.requestId === requestRef.current && listing.relativePaths.has(relativePath)
+  }, [])
 
   const refreshMarkdownDocuments = useCallback(
     async (
@@ -128,6 +136,10 @@ export function useMarkdownDocuments(
         )
         if (requestRef.current !== requestId) {
           return
+        }
+        settledListingRef.current = {
+          requestId,
+          relativePaths: new Set(documents.map((document) => document.relativePath))
         }
         setSnapshot({ key: scopeKey, documents })
       } catch (err) {
@@ -250,7 +262,8 @@ export function useMarkdownDocuments(
     enabled: isMarkdown && !!worktreeId,
     worktreePath,
     runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-    refresh: refreshMarkdownDocuments
+    refresh: refreshMarkdownDocuments,
+    isListed
   })
 
   const markdownDocuments = useMemo(
@@ -265,25 +278,28 @@ export function useMarkdownDocuments(
 
   const mdSave = useCallback(
     (content: string) =>
-      saveMarkdownAndRefreshDocuments(content, onSave, () => refreshMarkdownDocuments(true)),
-    [onSave, refreshMarkdownDocuments]
-  )
-
-  const docIndex = useMemo(
-    () => createMarkdownDocumentIndex(markdownDocuments),
-    [markdownDocuments]
+      saveMarkdownAndRefreshDocuments(content, onSave, async () => {
+        const relativePath = worktreePath
+          ? relativePathInsideRoot(worktreePath, activeFile.filePath)
+          : null
+        // Saving a listed document cannot change membership; only a new one needs a listing.
+        if (relativePath === null || !isListed(relativePath)) {
+          await refreshMarkdownDocuments(true)
+        }
+      }),
+    [activeFile.filePath, isListed, onSave, refreshMarkdownDocuments, worktreePath]
   )
 
   const onOpenDocLink = useCallback(
     (target: string) => {
-      const resolution = resolveMarkdownDocLink(target, docIndex)
+      const resolution = resolveMarkdownDocLink(target, getMarkdownDocumentIndex(markdownDocuments))
       if (resolution.status === 'resolved') {
         void openMarkdownDocument(resolution.document, {
           anchor: getMarkdownDocLinkAnchor(target)
         })
       }
     },
-    [docIndex, openMarkdownDocument]
+    [markdownDocuments, openMarkdownDocument]
   )
 
   return { markdownDocuments, openMarkdownDocument, onOpenDocLink, previewProps, mdSave }

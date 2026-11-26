@@ -162,7 +162,7 @@ function ShareBody({
         !retried &&
         (result.code === BOT_SHARE_ERRORS.expired || result.code === BOT_SHARE_ERRORS.prepareAgain)
       ) {
-        const rebuilt = await state.select({}, shown.bot.setupNote ?? '')
+        const rebuilt = await state.select({}, { setupNote: shown.bot.setupNote ?? '' })
         if (rebuilt) {
           if (rebuilt.botDigest !== shown.botDigest) {
             setPhase({ kind: 'idle' })

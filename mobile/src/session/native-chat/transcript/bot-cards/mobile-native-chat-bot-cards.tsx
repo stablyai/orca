@@ -1,5 +1,5 @@
 // The phone's renderer for every bot card kind. The map's type comes from the shared card table, so a
-// kind marked `phoneCard` without a renderer here fails the typecheck; deferred kinds say so explicitly.
+// kind without a renderer here fails the typecheck.
 import {
   nativeChatBotCardsOf,
   type NativeChatBlockBotCard,
@@ -50,8 +50,14 @@ const MOBILE_BOT_CARDS: NativeChatPhoneBotCardRenderers<
   importDone: (done, { fontScale }) => (
     <MobileBotImportDoneCard done={done} fontScale={fontScale} />
   ),
-  botRequest: (card, { cardId, fallback, fontScale }) => (
-    <MobileBotRequestCard card={card} cardId={cardId} fallback={fallback} fontScale={fontScale} />
+  botRequest: (card, { cardId, timestamp, fallback, fontScale }) => (
+    <MobileBotRequestCard
+      card={card}
+      cardId={cardId}
+      timestamp={timestamp}
+      fallback={fallback}
+      fontScale={fontScale}
+    />
   ),
   googleSetup: (card, { fallback, fontScale }) => (
     <MobileGoogleSetupCard card={card} fallback={fallback} fontScale={fontScale} />
@@ -80,10 +86,10 @@ type AnyCard = NativeChatBlockBotCard | NativeChatMessageBotCard | NativeChatDir
 function draw<K extends AnyCard['kind']>(
   card: { kind: K; value: NativeChatBotCardValues[K] },
   context: MobileBotCardContext
-): React.JSX.Element | null | 'phoneFallback' {
+): React.JSX.Element | null {
   const render: NativeChatPhoneBotCardRenderers<React.JSX.Element | null, MobileBotCardContext>[K] =
     MOBILE_BOT_CARDS[card.kind]
-  return render === 'phoneFallback' ? render : render(card.value, context)
+  return render(card.value, context)
 }
 
 /** The first card a status line carries that the phone draws; null to show the host's line. */
@@ -93,7 +99,7 @@ export function mobileNativeChatBotCard(
 ): React.JSX.Element | null {
   for (const card of nativeChatBotCardsOf(block)) {
     const drawn = draw(card, context)
-    if (drawn !== 'phoneFallback' && drawn !== null) {
+    if (drawn !== null) {
       return drawn
     }
   }
@@ -105,6 +111,5 @@ export function mobileNativeChatOtherBotCard(
   card: NativeChatMessageBotCard | NativeChatDirectiveBotCard,
   context: MobileBotCardContext
 ): React.JSX.Element | null {
-  const drawn = draw(card, context)
-  return drawn === 'phoneFallback' ? null : drawn
+  return draw(card, context)
 }

@@ -79,7 +79,8 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'follow_up_mail_at',
   'creator_turn_source',
   'origin_ref',
-  'for_message_id'
+  'for_message_id',
+  'chat_lineage'
 ] as const satisfies readonly (keyof DispatchContextRow)[]
 
 export const WORKER_DISPATCH_COLUMNS = [

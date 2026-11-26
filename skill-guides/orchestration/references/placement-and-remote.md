@@ -7,11 +7,12 @@ the Git repo to create the worktree in.
 
 Local `current`, `new-child` and `new-top-level` stay in the caller's project;
 `new-child` also uses the caller's workspace as its parent. Omit `--repo` for
-same-project work. Pass it only to deliberately target another project, or for
-the connected-server creation described below. The project visible in the app
-is not the caller's project. For direct `worktree create`, likewise omit
-`--repo`/`--project` for same-project work and use `--parent-worktree active`
-when requesting a child of the current workspace.
+same-project Git work. Pass it for `new-child` or `new-top-level` from a folder
+workspace, to deliberately target another project, or for connected-server
+creation. The project visible in the app is not the caller's project. For
+direct `worktree create`, likewise omit `--repo`/`--project` for same-project
+work and use `--parent-worktree active` when requesting a child of the current
+workspace.
 
 ```text
 # Child of the current worktree.
