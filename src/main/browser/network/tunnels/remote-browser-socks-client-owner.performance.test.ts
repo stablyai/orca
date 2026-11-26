@@ -8,14 +8,13 @@ import {
 } from './remote-browser-socks-client-owner'
 
 // STA-18499: on macOS a client that left while its owner lookup waited still got a full scan ahead
-// of live connections. Paired forwards accept paused, half-open sockets, which don't see the client
-// leave unless they read.
+// of live connections. Paired forwards accept paused sockets, which don't see a reset unless they read.
 describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed clients', () => {
   const realPlatform = process.platform
   let helper: Awaited<ReturnType<typeof useVouchingSocketOwnerHelper>>
   const servers: Server[] = []
   beforeAll(async () => {
-    helper = await useVouchingSocketOwnerHelper(3_000)
+    helper = await useVouchingSocketOwnerHelper(4_000)
   })
   afterEach(async () => {
     Object.defineProperty(process, 'platform', { value: realPlatform })
@@ -50,7 +49,7 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
   }
 
   it.each([100, 1_000])(
-    'scans none of %i clients that leave while queued, and checks the live one next',
+    'scans none of %i clients that reset while queued, and checks the live ones next',
     async (n) => {
       Object.defineProperty(process, 'platform', { value: 'darwin' })
       const release = holdSocksClientOwnerLookup()
@@ -66,21 +65,25 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
           Array.from({ length: Math.min(50, n - index) }, () => connectClient(port))
         )
         await expect.poll(() => accepted.length).toBe(index + batch.length)
-        // Half close politely, half reset: neither is a connection anyone will answer.
-        batch.forEach((client, offset) =>
-          offset % 2 === 0 ? client.end() : client.resetAndDestroy()
-        )
+        for (const client of batch) {
+          client.resetAndDestroy()
+        }
       }
       // Each departed connection is dropped, and its server side destroyed, while the first lookup is held.
       await expect
         .poll(() => accepted.filter((socket) => socket.destroyed).length, { timeout: 2_500 })
         .toBe(n)
+      // A half-close is still a live connection: the client may be waiting for the server to speak.
+      const halfClosed = await connectClient(port)
+      halfClosed.end()
       const live = await connectClient(port)
       await inFlight
-      await expect.poll(() => admitted.length, { timeout: 5_000 }).toBe(1)
-      const scans = (await helper.scans()).slice(before)
-      expect(scans).toHaveLength(2)
-      expect(scans[1]).toBe(`127.0.0.1 ${live.localPort} 127.0.0.1 ${port}`)
+      await expect.poll(() => admitted.length, { timeout: 5_000 }).toBe(2)
+      expect((await helper.scans()).slice(before).slice(1)).toEqual([
+        `127.0.0.1 ${halfClosed.localPort} 127.0.0.1 ${port}`,
+        `127.0.0.1 ${live.localPort} 127.0.0.1 ${port}`
+      ])
+      halfClosed.destroy()
       live.destroy()
       for (const socket of admitted) {
         socket.destroy()

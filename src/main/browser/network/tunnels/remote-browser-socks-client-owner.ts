@@ -56,22 +56,15 @@ export function createSocksClientAdmission(
       socket.destroy()
       return
     }
-    // A connection that closes before its owner check never costs one. A half-close with nothing
-    // sent is a closed connection too: there is no request to answer.
+    // A connection that closes before its owner check never costs one. A half-close is not a close:
+    // forwards stay half-open, and the client may still be reading.
     const closed = new AbortController()
     const abort = (): void => closed.abort()
-    const abortIfEmpty = (): void => {
-      if (socket.bytesRead === 0) {
-        closed.abort()
-      }
-    }
     socket.once('close', abort)
-    socket.once('end', abortIfEmpty)
-    // A pauseOnConnect socket doesn't notice its peer leaving until it reads; bytes stay buffered.
+    // A pauseOnConnect socket doesn't notice a reset until it reads; bytes stay buffered.
     socket.read(0)
     void verifySocksClientOwner(socket, undefined, closed.signal).then((verdict) => {
       socket.off('close', abort)
-      socket.off('end', abortIfEmpty)
       if (socket.destroyed) {
         return
       }
