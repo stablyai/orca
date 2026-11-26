@@ -188,9 +188,13 @@ export function requiresAcquisition(
     if (!session) {
       return undefined
     }
-    // Claude's own settings have no mode to send: after a live pick only a fresh agent has them.
+    // Claude's own settings have no mode to send: only an agent launched on them and still in the
+    // mode they gave it has them; any other (a live pick, an earlier app's launch) is replaced.
     if (mode === 'own') {
-      return session.permissionPick !== undefined ? true : undefined
+      const own =
+        session.permissionPick === undefined &&
+        keptClaudeAgentRelay(session.connection)?.ownSettings
+      return own ? undefined : true
     }
     return bypassRefused(session, mode)
   }

@@ -34,6 +34,8 @@ export type ClaudeKeptAgentRelay = {
   workCarried: boolean
   /** Claude's last reported mode as the daemon kept it, when it kept one. */
   confirmedMode: string | null | undefined
+  /** It runs the user's own Claude settings, as launched: only then does that choice keep it. */
+  ownSettings: boolean
 }
 
 export type ClaudeKeptAgentConnection = ClaudeStreamJsonConnection & {
@@ -152,7 +154,7 @@ export async function openKeptClaudeAgentConnection(
   const { managed, child } = relayed
   const reattachedStdout = handlers.onReattach?.()
   // Ahead of every replayed or pending line, so a waiting request reads the mode Claude confirmed.
-  const confirmedMode = feedClaudeKeptModeLines(child, handlers.onStdout)
+  const mode = feedClaudeKeptModeLines(child, handlers.onStdout)
   const records = child.stdout.relayRecords
   records.claim()
   const exited = Promise.withResolvers<Error>()
@@ -309,7 +311,8 @@ export async function openKeptClaudeAgentConnection(
       releaseOutput: () => child.releaseOutput(),
       taskIds: claudeRelayAttachTaskIds(child.attachResult),
       workCarried: child.attachResult?.openWork !== undefined,
-      confirmedMode
+      confirmedMode: mode.confirmed,
+      ownSettings: mode.ownSettings
     },
     exited: exited.promise,
     spawned: Promise.resolve(),

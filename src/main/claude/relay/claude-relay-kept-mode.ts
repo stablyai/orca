@@ -14,12 +14,33 @@ export const CLAUDE_RELAY_KEEP: ProviderRelayKeepSpec = {
   outstanding: []
 }
 
+/** The note a relay launched with no permission flag carries: Claude runs the user's own settings. */
+const OWN_SETTINGS_NOTE = 'own-settings'
+
+/** The keep spec for a launch's arguments, noting a launch that left the mode to Claude's settings. */
+export function claudeRelayKeepFor(args: readonly string[]): ProviderRelayKeepSpec {
+  const flagged = args.some(
+    (arg) =>
+      arg === '--dangerously-skip-permissions' ||
+      arg === '--permission-mode' ||
+      arg.startsWith('--permission-mode=')
+  )
+  return flagged ? CLAUDE_RELAY_KEEP : { ...CLAUDE_RELAY_KEEP, note: OWN_SETTINGS_NOTE }
+}
+
+export type ClaudeKeptMode = {
+  /** Claude's last reported mode as the daemon kept it, when it kept one. */
+  confirmed: string | null | undefined
+  /** Launched on the user's own settings and still in the mode its init reported from them. */
+  ownSettings: boolean
+}
+
 /** Hands the kept mode lines to `observe` in the order Claude wrote them, once; a relay spawned
  *  without the keep spec has none, so Claude's mode stays unknown until it reports. */
 export function feedClaudeKeptModeLines(
   child: RelayedProviderChild,
   observe: ((chunk: string) => void) | undefined
-): string | null | undefined {
+): ClaudeKeptMode {
   const names = new Set(CLAUDE_RELAY_KEEP.lines.map((marker) => `l:${marker}`))
   const lines = (child.attachResult?.kept ?? [])
     .filter(({ name }) => names.has(name))
@@ -29,12 +50,18 @@ export function feedClaudeKeptModeLines(
       return line === undefined ? [] : [line]
     })
   child.kept.drop()
-  let mode: string | null | undefined
+  let confirmed: string | null | undefined
+  let launched: string | null | undefined
   for (const line of lines) {
     observe?.(`${line}\n`)
-    mode = readKeptMode(line) ?? mode
+    const mode = readKeptMode(line)
+    if (mode !== undefined && line.startsWith(INIT)) {
+      launched = mode
+    }
+    confirmed = mode ?? confirmed
   }
-  return mode
+  const ownLaunch = child.attachResult?.launchNote === OWN_SETTINGS_NOTE
+  return { confirmed, ownSettings: ownLaunch && launched != null && confirmed === launched }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
