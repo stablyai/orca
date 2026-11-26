@@ -86,6 +86,7 @@ export function draftExtraAgentArgsNeedFreshSession(
     | 'agentId'
     | 'extraAgentArgs'
     | 'reuseSession'
+    | 'updateCodexBeforeRun'
     | 'workspaceMode'
     | 'surface'
     | 'launchPreferences'
@@ -98,5 +99,10 @@ export function draftExtraAgentArgsNeedFreshSession(
     Object.keys(choices ?? {}).length > 0 ||
     (draft.surface !== 'chat' &&
       (draft.agentArgs !== undefined || hasExtraAgentArgs(draft.extraAgentArgs)))
-  return consumed && draft.workspaceMode === 'existing' && draft.reuseSession
+  return (
+    consumed &&
+    draft.workspaceMode === 'existing' &&
+    draft.reuseSession &&
+    !(draft.agentId === 'codex' && draft.updateCodexBeforeRun === true)
+  )
 }

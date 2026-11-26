@@ -35,6 +35,7 @@ import {
 } from '../ownership/orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { CODEX_UPDATE_HOST_UNSUPPORTED } from '../launch/automation-codex-launch'
 
 export { AutomationDispatchCancelledError }
 
@@ -54,6 +55,12 @@ type DispatchContext = Pick<
   launcher(): AutomationLauncher | null
   botDispatcher: AutomationBotLauncher | null
   chatDispatcher?: AutomationLauncher | null
+  prepareCodexRun?(
+    automation: Automation,
+    target: AutomationRepoRunTarget,
+    signal: AbortSignal
+  ): Promise<string>
+  signal?: AbortSignal
   resolveTarget(automation: Automation): AutomationRunTargetResult
   /** A claimed run skipped before launch; repeats of one refusal fold before the claim. */
   onRunRefused?(automation: Automation, error: string): void
@@ -192,42 +199,63 @@ export async function requestAutomationDispatch(
           ? { applied: true, run: ctx.runs.updateRun({ runId: run.id, ...result }) }
           : { applied: false, run: returnDurable(current) }
       },
-      dispatcher: (request) => {
-        if (readRun().status !== 'dispatching') {
-          throw new AutomationDispatchCancelledError(
-            'The run changed before its agent could launch.'
-          )
-        }
-        // Saved automations can name a removed agent (Gemini CLI); refuse before either surface looks it up.
-        if (!isTuiAgent(automation.agentId)) {
-          throw new Error(UNSUPPORTED_AUTOMATION_AGENT_MESSAGE)
-        }
-        const latestTarget = resolveCurrentTarget()
-        if (!latestTarget.ok) {
-          if ('bot' in launchTarget) {
-            ctx.onRunRefused?.(automation, latestTarget.error)
+      dispatcher,
+      prepareLaunch: () => {
+        const currentTarget = () => {
+          if (readRun().status !== 'dispatching') {
+            throw new AutomationDispatchCancelledError(
+              'The run changed before its agent could launch.'
+            )
           }
-          // A bot paused or removed during the precheck skips the run, as it would at the claim.
-          const { ok: _ok, ...failure } = latestTarget
-          throw 'bot' in launchTarget
-            ? new AutomationDispatchRefusedError(failure)
-            : new AutomationDispatchCancelledError(latestTarget.error)
+          // Saved automations can name a removed agent (Gemini CLI); refuse before either surface looks it up.
+          if (!isTuiAgent(automation.agentId)) {
+            throw new Error(UNSUPPORTED_AUTOMATION_AGENT_MESSAGE)
+          }
+          const latestTarget = resolveCurrentTarget()
+          if (!latestTarget.ok) {
+            if ('bot' in launchTarget) {
+              ctx.onRunRefused?.(automation, latestTarget.error)
+            }
+            // A bot paused or removed during the precheck skips the run, as it would at the claim.
+            const { ok: _ok, ...failure } = latestTarget
+            throw 'bot' in launchTarget
+              ? new AutomationDispatchRefusedError(failure)
+              : new AutomationDispatchCancelledError(latestTarget.error)
+          }
+          // Recheck WSL moves after a potentially long precheck so refusal remains a skip.
+          const latestRefusal = describeScheduledRefusal({
+            target: latestTarget,
+            canDispatch: true
+          })
+          if (latestRefusal) {
+            throw new AutomationDispatchRefusedError(latestRefusal)
+          }
+          // The destination check already refuses a changed kind; this narrows the type.
+          if (!sameKind(latestTarget)) {
+            throw new AutomationDispatchCancelledError(
+              'The automation destination changed before this run could launch.'
+            )
+          }
+          return latestTarget
         }
-        // Recheck WSL moves after a potentially long precheck so refusal remains a skip.
-        const latestRefusal = describeScheduledRefusal({
-          target: latestTarget,
-          canDispatch: true
-        })
-        if (latestRefusal) {
-          throw new AutomationDispatchRefusedError(latestRefusal)
+        const latestTarget = currentTarget()
+        if (
+          !('repo' in latestTarget) ||
+          automation.agentId !== 'codex' ||
+          automation.updateCodexBeforeRun !== true
+        ) {
+          return { automation, run, target: latestTarget }
         }
-        // The destination check already refuses a changed kind; this narrows the type.
-        if (!sameKind(latestTarget)) {
-          throw new AutomationDispatchCancelledError(
-            'The automation destination changed before this run could launch.'
-          )
+        if (!ctx.prepareCodexRun || !ctx.signal) {
+          throw new Error(CODEX_UPDATE_HOST_UNSUPPORTED)
         }
-        return dispatcher({ ...request, target: latestTarget })
+        const signal = ctx.signal
+        return ctx
+          .prepareCodexRun(automation, latestTarget, signal)
+          .then((verifiedCodexProgram) => {
+            signal.throwIfAborted()
+            return { automation, run, target: currentTarget(), verifiedCodexProgram }
+          })
       }
     })
   if ('bot' in target) {

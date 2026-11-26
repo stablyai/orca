@@ -33,7 +33,7 @@ import {
   AgentLaunchReplay,
   type AgentLaunchParams
 } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
-import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
+import { agentLaunchSurfaceFactory, type AgentLaunchHostPolicy } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
   agentLaunchFailureCode,
@@ -56,9 +56,7 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 
-type HostLaunchContext = RpcContext & {
-  agentLaunchPolicy?: { onSurfacePublished?: (surface: AgentLaunchResult) => void }
-}
+type HostLaunchContext = RpcContext & { agentLaunchPolicy?: AgentLaunchHostPolicy }
 
 async function runAgentLaunch(
   { intent, decidedMode }: Awaited<ReturnType<typeof resolveUnlaunchedIntent>>,
@@ -67,6 +65,7 @@ async function runAgentLaunch(
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
   const callerNavigationId = agentLaunchCallerNavigationId(context)
+  const verifiedCodexProgram = context.agentLaunchPolicy?.verifiedCodexProgram
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
@@ -78,9 +77,10 @@ async function runAgentLaunch(
       // Worktree creation keeps host-wide chat activation, so a windowless host's other clients open the new worktree on the chat.
       callerNavigationId !== null && intent.target.kind !== 'create-worktree',
       replaySafe?.terminalSpawn,
-      view
+      view,
+      verifiedCodexProgram
     ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent, verifiedCodexProgram),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: async (surface) => {
       try {

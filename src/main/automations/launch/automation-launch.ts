@@ -37,6 +37,7 @@ export type AutomationMainLauncher<Target> = (request: {
   automation: Automation
   run: AutomationRun
   target: Target
+  verifiedCodexProgram?: string
 }) => Promise<AutomationLaunch>
 
 export type AutomationLauncher = AutomationMainLauncher<AutomationRepoRunTarget>

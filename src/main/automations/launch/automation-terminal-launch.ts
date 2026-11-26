@@ -16,7 +16,11 @@ import type { AutomationRun } from '../../../shared/automations/history/automati
 import { findReusableAutomationRun } from '../../../shared/automations/history/automation-session-reuse'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
-import { AutomationRunLaunchError, type AutomationLaunch } from './automation-launch'
+import {
+  AutomationRunLaunchError,
+  type AutomationLaunch,
+  type AutomationLauncher
+} from './automation-launch'
 import { AutomationDispatchRefusedError } from '../dispatch/automation-launch-runner'
 import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
 import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
@@ -36,14 +40,9 @@ export type AutomationTerminalAgentLaunch = Omit<AutomationLaunch, 'completion'>
 
 export async function launchAutomationTerminalAgent(
   runtime: OrcaRuntimeService,
-  request: {
-    automation: Automation
-    run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
-    target: AutomationRepoRunTarget
-    runs: readonly AutomationRun[]
-  }
+  request: Parameters<AutomationLauncher>[0] & { runs: readonly AutomationRun[] }
 ): Promise<AutomationTerminalAgentLaunch> {
-  const { automation, run, target } = request
+  const { automation, run, target, verifiedCodexProgram } = request
   const agent = automation.agentId
   const selectedTarget =
     automation.workspaceMode === 'existing'
@@ -52,7 +51,12 @@ export async function launchAutomationTerminalAgent(
   const selectedWorkspace = selectedTarget?.managedWorktree
   // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
   const text = automation.prompt?.trim()
-  if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
+  if (
+    !verifiedCodexProgram &&
+    automation.reuseSession &&
+    automation.workspaceMode === 'existing' &&
+    text
+  ) {
     const reused = await sendToReusableSession(
       runtime,
       { ...request, text },
@@ -91,6 +95,7 @@ export async function launchAutomationTerminalAgent(
             startupTerminalCreation = terminal
           },
           ...create,
+          ...(verifiedCodexProgram ? { verifiedCodexProgram } : {}),
           startupAgent,
           ...(startupPrompt ? { startupPrompt } : {})
         })
@@ -136,6 +141,7 @@ export async function launchAutomationTerminalAgent(
             prompt: startupPrompt ?? '',
             title: run.title,
             suppressStartupUpdatePrompt: true,
+            ...(verifiedCodexProgram ? { verifiedCodexProgram } : {}),
             ...automationTerminalLaunchInputs(automation),
             // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
             ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const }),

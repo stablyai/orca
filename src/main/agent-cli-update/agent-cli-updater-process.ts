@@ -15,12 +15,15 @@ export type UpdaterRun = Awaited<ReturnType<typeof runProcess>> & {
   stoppedBecause: string | null
 }
 
-export async function runAgentCliUpdater(spec: {
-  program: string
-  args: readonly string[]
-  cwd: string
-  env: Record<string, string>
-}): Promise<UpdaterRun> {
+export async function runAgentCliUpdater(
+  spec: {
+    program: string
+    args: readonly string[]
+    cwd: string
+    env: Record<string, string>
+  },
+  signal?: AbortSignal
+): Promise<UpdaterRun> {
   const stop = new AbortController()
   let stoppedBecause: string | null = null
   let idle: ReturnType<typeof setTimeout> | undefined
@@ -43,8 +46,8 @@ export async function runAgentCliUpdater(spec: {
         args: [...spec.args],
         timeoutMs: UPDATER_MAX_MS,
         maxOutputBytes: OUTPUT_BYTES,
-        terminationBarrier: true,
-        signal: stop.signal,
+        terminationBarrier: signal ? 'wait-for-posix-group' : true,
+        signal: signal ? AbortSignal.any([signal, stop.signal]) : stop.signal,
         // Spawned here, as runProcess would, so its output and exit can be watched as they happen.
         launch: (launchSpec) => {
           const child = spawnProcess(launchSpec)

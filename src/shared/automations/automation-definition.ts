@@ -50,6 +50,7 @@ export type Automation = {
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  updateCodexBeforeRun?: boolean
   surface?: 'chat' | 'terminal'
   launchSetup?: AutomationLaunchSetup
   launchPreferences?: AutomationLaunchPreferences
@@ -111,6 +112,7 @@ export type AutomationCreateInput = {
   prompt: string
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
+  updateCodexBeforeRun?: boolean
   launchSetupPatch?: AutomationLaunchSetupPatch
   /** Empty or whitespace means no extras. */
   extraAgentArgs?: string
@@ -144,6 +146,7 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'prompt'
     | 'precheck'
     | 'agentId'
+    | 'updateCodexBeforeRun'
     | 'extraAgentArgs'
     | 'runContext'
     | 'sourceContext'

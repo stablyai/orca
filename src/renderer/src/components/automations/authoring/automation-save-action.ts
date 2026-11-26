@@ -40,6 +40,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       draft.extraAgentArgs !== draftAtOpen.extraAgentArgs ||
       draft.agentId !== draftAtOpen.agentId ||
       draft.reuseSession !== draftAtOpen.reuseSession ||
+      draft.updateCodexBeforeRun !== draftAtOpen.updateCodexBeforeRun ||
       draft.workspaceMode !== draftAtOpen.workspaceMode
     const { hour, minute } = parseDraftTime(draft.time)
     const botTarget = draft.bot

@@ -84,6 +84,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   onStartupTerminalCreated?: (terminal: RuntimeTerminalCreate) => void
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
+  verifiedCodexProgram?: string
   /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */
   startupExtraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into the startup agent once it starts. */

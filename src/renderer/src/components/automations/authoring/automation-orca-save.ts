@@ -7,6 +7,7 @@ import {
   automationChatSupport,
   automationDraftLaunchSetup,
   automationCopyLaunchSetup,
+  automationLaunchSettingEdits,
   automationLaunchWorkspace
 } from './automation-launch-surface'
 import { toast } from 'sonner'
@@ -191,13 +192,7 @@ export async function saveOrcaAutomation(
     ...(edited('name') ? { name: draft.name } : {}),
     ...(edited('prompt') ? { prompt: draft.prompt } : {}),
     ...(edited('precheckCommand') || edited('precheckTimeoutSeconds') ? { precheck } : {}),
-    ...(edited('agentId') ? { agentId: draft.agentId } : {}),
-    ...(!currentAutomation ||
-    draft.launchSetupPatch ||
-    edited('surface') ||
-    edited('extraAgentArgs')
-      ? launchSetup
-      : {}),
+    ...automationLaunchSettingEdits(draft, currentAutomation, launchSetup, edited),
     ...(targetEdited
       ? {
           runContext,
@@ -225,6 +220,7 @@ export async function saveOrcaAutomation(
     prompt: currentAutomation ? currentAutomation.prompt : draft.prompt,
     precheck: currentAutomation ? currentAutomation.precheck : precheck,
     agentId: currentAutomation ? currentAutomation.agentId : draft.agentId,
+    updateCodexBeforeRun: currentAutomation?.updateCodexBeforeRun,
     ...launchSetup,
     runContext: currentAutomation ? currentAutomation.runContext : runContext,
     projectId: currentAutomation ? currentAutomation.projectId : draft.projectId,

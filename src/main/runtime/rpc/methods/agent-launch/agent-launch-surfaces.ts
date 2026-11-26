@@ -1,4 +1,6 @@
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
+import { assertVerifiedCodexChatLaunch } from '../../../agent-session/launch/verified-codex-chat-launch'
+import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
 
@@ -35,6 +37,11 @@ import {
   type AgentLaunchView
 } from './agent-launch-tab-publication'
 
+export type AgentLaunchHostPolicy = {
+  onSurfacePublished?: (surface: AgentLaunchResult) => void
+  verifiedCodexProgram?: string
+}
+
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
   context: RpcContext,
@@ -44,7 +51,8 @@ export function agentLaunchSurfaceFactory(
   callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
   // Read the early pane at spawn: publication and user close can finish after admission.
-  view: AgentLaunchView = { early: null, presentation: undefined }
+  view: AgentLaunchView = { early: null, presentation: undefined },
+  verifiedCodexProgram?: string
 ): AgentLaunchSurfaceFactory {
   const movesHostWindow = agentLaunchMovesHostWindow(context)
   const { early: earlyTab, presentation } = view
@@ -60,6 +68,13 @@ export function agentLaunchSurfaceFactory(
       firstMessage,
       signal
     }) => {
+      const verifyCodex = verifiedCodexProgram
+        ? () =>
+            assertVerifiedCodexChatLaunch(context.runtime, worktreeId, verifiedCodexProgram, signal)
+        : undefined
+      if (verifyCodex && !firstMessage) {
+        await verifyCodex()
+      }
       const sessionId = requested ?? createOrcaSessionId(randomUUID)
       const supported = supportedStructuredSeedOptions(
         agent,
@@ -96,6 +111,7 @@ export function agentLaunchSurfaceFactory(
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
         ...(firstMessage ? { firstMessage } : {}),
+        ...(verifyCodex && firstMessage ? { beforeFirstMessage: verifyCodex } : {}),
         ...(signal ? { signal } : {}),
         activate:
           !callerPresentsSurface &&
@@ -144,6 +160,9 @@ export function agentLaunchSurfaceFactory(
         wslUserAct: true,
         // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
+        ...(verifiedCodexProgram
+          ? { verifiedCodexProgram, suppressStartupUpdatePrompt: true }
+          : {}),
         terminalImageViewerSupported: terminalImageViewerSupported(context),
         // The runtime reports typed-line prompt carry; paste only when the command did not carry it.
         ...(startupPrompt

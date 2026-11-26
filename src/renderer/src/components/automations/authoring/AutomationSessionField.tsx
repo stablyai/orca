@@ -15,6 +15,7 @@ export function AutomationSessionField({
   onDraftChange
 }: AutomationSessionFieldProps): React.JSX.Element {
   const t = useTranslate()
+  const requiresFresh = draft.agentId === 'codex' && draft.updateCodexBeforeRun === true
   return (
     <Field
       labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
@@ -47,7 +48,11 @@ export function AutomationSessionField({
       <ToggleGroup
         type="single"
         spacing={1}
-        value={draft.workspaceMode === 'existing' && draft.reuseSession ? 'reuse' : 'fresh'}
+        value={
+          !requiresFresh && draft.workspaceMode === 'existing' && draft.reuseSession
+            ? 'reuse'
+            : 'fresh'
+        }
         onValueChange={(value) => {
           if (!value) {
             return
@@ -64,7 +69,7 @@ export function AutomationSessionField({
         <ToggleGroupItem value="fresh">
           {t('auto.components.automations.AutomationSessionField.c90888ee94', 'Fresh')}
         </ToggleGroupItem>
-        <ToggleGroupItem value="reuse">
+        <ToggleGroupItem value="reuse" disabled={requiresFresh}>
           {t('auto.components.automations.AutomationSessionField.f3c76dce51', 'Reuse')}
         </ToggleGroupItem>
       </ToggleGroup>

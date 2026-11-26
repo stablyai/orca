@@ -126,6 +126,7 @@ export function botAutomationTarget(bot: Bot): RuntimeAutomationTarget {
 
 type BotOwnedSettings = {
   agentId?: string
+  updateCodexBeforeRun?: boolean
   extraAgentArgs?: string
   reuseSession?: boolean
   runContext?: unknown
@@ -151,6 +152,7 @@ export function botAutomationAgent(
 export function assertNoBotOwnedSettings(input: BotOwnedSettings, botAgent: string): void {
   if (
     (input.agentId !== undefined && input.agentId !== botAgent) ||
+    input.updateCodexBeforeRun ||
     hasExtraAgentArgs(input.extraAgentArgs) ||
     input.reuseSession ||
     input.runContext ||

@@ -7,6 +7,7 @@ import type { GlobalSettings } from '../../shared/settings/global-settings-types
 import type { AgentCliUpdateAgent } from '../../shared/agent-launch/installation/agent-cli-update'
 import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { pathEnvRelativeTo } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import {
   resolveHostStructuredAgentLaunchEnvironment,
@@ -34,7 +35,8 @@ const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z]\//i
 
 export async function findOwnAgentCli(
   agent: AgentCliUpdateAgent,
-  settings: AgentCliUpdateSettings
+  settings: AgentCliUpdateSettings,
+  cwd?: string
 ): Promise<OwnAgentCli | null> {
   // A Command setting may name a wrapper, which has no update of its own.
   if (hasExplicitTuiLaunchCommand(settings, agent)) {
@@ -45,8 +47,9 @@ export async function findOwnAgentCli(
   // ACP chats also search their installers' folders after PATH.
   const spec = acpLaunchSpecFor(agent)
   const command = spec?.command ?? agent
+  const shellPath = env.PATH ?? env.Path
   const pathEnv = [
-    env.PATH ?? env.Path,
+    cwd ? pathEnvRelativeTo(shellPath, cwd) : shellPath,
     ...(spec?.installDirectories({ env, homePath: homePath ?? homedir() }) ?? [])
   ]
     .filter(Boolean)
