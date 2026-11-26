@@ -5,20 +5,22 @@ import { terminalTabSchema } from '../../workspace-session/workspace-session-sch
 import { terminalPaneLayoutNodeSchema } from './terminal-layout-snapshot-schema'
 
 // The creation fields of the tab the renderer made, so main need not wait for its save.
-const NewTabRow = terminalTabSchema
-  .pick({
-    title: true,
-    defaultTitle: true,
-    customTitle: true,
-    color: true,
-    createdAt: true,
-    startupCwd: true,
-    quickCommandLabel: true,
-    launchAgent: true,
-    viewMode: true
-  })
-  .extend({ shellOverride: z.string().optional() })
-  .partial()
+const NewTabRow = lazyZodSchema(() =>
+  terminalTabSchema
+    .pick({
+      title: true,
+      defaultTitle: true,
+      customTitle: true,
+      color: true,
+      createdAt: true,
+      startupCwd: true,
+      quickCommandLabel: true,
+      launchAgent: true,
+      viewMode: true
+    })
+    .extend({ shellOverride: z.string().optional() })
+    .partial()
+)
 
 // Optional fields degrade alone: a malformed one is dropped, not the whole placement.
 const NewTabPlacement = lazyZodSchema(() =>
