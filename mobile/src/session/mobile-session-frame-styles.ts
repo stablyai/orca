@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const mobileSessionFrameStyles = themedStyleSheet(() => ({
@@ -63,16 +63,5 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   markdownEditor: {
     flex: 1,
     position: 'relative'
-  },
-  markdownState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.md
-  },
-  markdownError: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
   }
 }))

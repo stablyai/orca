@@ -1199,14 +1199,10 @@
       "linkUrl": "URL du lien"
     },
     "richMarkdownToolbar": {
-      "body": "Corps de texte",
       "bold": "Gras",
       "bulletList": "Liste à puces",
       "checklist": "Liste de tâches",
       "codeBlock": "Bloc de code",
-      "heading1": "H1",
-      "heading2": "H2",
-      "heading3": "H3",
       "image": "Image",
       "inlineCode": "Code en ligne",
       "italic": "Italique",
@@ -2814,10 +2810,6 @@
     "markdownReader": {
       "changedOnDesktop": "Modifié sur l'ordinateur",
       "copyLoaded": "Copier le contenu chargé",
-      "copyLoadedSource": "Copier la source Markdown chargée",
-      "copyPath": "Copier le chemin",
-      "copyPathLabel": "Copier le chemin du fichier Markdown",
-      "copySource": "Copier la source Markdown",
       "discard": "Abandonner",
       "previewTruncated": "Aperçu tronqué.",
       "readOnly": "Lecture seule"
@@ -2963,16 +2955,12 @@
     "sheets": {
       "browser": "Navigateur",
       "chat": "Chat",
-      "copyAllAndLeave": "Tout copier et quitter",
-      "copyDraftsFailed": "Impossible de copier les brouillons",
       "copyNotes": "Copier les notes",
       "copyNotesFailed": "Impossible de copier les notes",
       "copyPath": "Copier le chemin",
       "discard": "Abandonner",
-      "discardAndLeave": "Abandonner et quitter",
       "discardChanges": "Abandonner les modifications",
       "discardMessage": "Remplacer le brouillon du téléphone par la dernière version du fichier sur l'ordinateur ?",
-      "draftsHint": "Copiez ou abandonnez les brouillons du téléphone avant de quitter.",
       "file": "Fichier",
       "markdown": "Markdown",
       "markdownNote": "Note Markdown",
@@ -2990,7 +2978,6 @@
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
-      "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "allowAutoClose": "Autoriser la fermeture automatique",
       "agents": "Agents",
       "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"

@@ -6,6 +6,7 @@ import {
   wrapSelection
 } from './editor-selection'
 import { editorElement } from './editor-surface'
+import { reportFormatState } from './editor-format-state'
 import { isSafeUrl } from '../serialization/markdown-escaping'
 import type { MobileRichMarkdownCommand } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorScope } from '../document/document-scope'
@@ -157,4 +158,6 @@ export async function runCommand(
     }
   }
   emitChange(scope)
+  // A collapsed-caret Bold moves no selection, so its lit state needs its own report.
+  reportFormatState(scope)
 }
