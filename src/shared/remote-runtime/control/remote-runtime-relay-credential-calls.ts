@@ -1,3 +1,4 @@
+import { unrefTimer } from '../../timers/unref-timer'
 import { isRpcResponse, type RpcResponse } from '../rpc/rpc-response-shape'
 import type { RelayRequestPort } from '../relay/client/relay-resume-credential'
 
@@ -25,7 +26,7 @@ export function createRelayCredentialCalls(
           pending.delete(id)
           reject(new Error(`${method} timed out`))
         }, CREDENTIAL_CALL_TIMEOUT_MS)
-        timer.unref?.()
+        unrefTimer(timer)
         const settle = (): void => {
           clearTimeout(timer)
           pending.delete(id)
