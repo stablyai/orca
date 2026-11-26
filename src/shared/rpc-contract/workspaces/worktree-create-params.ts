@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { PipelineStart } from '../../pipelines/pipeline-contracts'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
@@ -28,6 +29,7 @@ import {
 export const WorktreeCreate = lazyZodSchema(() =>
   z
     .object({
+      pipeline: PipelineStart.optional(),
       repo: z
         .unknown()
         .transform((v) => (typeof v === 'string' ? v : ''))

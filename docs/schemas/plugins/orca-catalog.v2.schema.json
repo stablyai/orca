@@ -575,6 +575,7 @@
             "newFiles",
             "settings",
             "statusBarItems",
+            "pipelineProfiles",
             "mcpServers"
           ],
           "description": "Contribution point.",

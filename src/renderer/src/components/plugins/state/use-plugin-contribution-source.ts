@@ -49,6 +49,7 @@ function useInstalledPluginContributionSource(
       })),
       languagePacks: ours(languagePacks),
       panels: plugin.panels.map((panel) => panel.title),
+      pipelineProfiles: plugin.pipelineProfiles?.map((profile) => profile.title) ?? [],
       customEditors: plugin.customEditors ?? [],
       vmRecipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? [],
       newFiles: plugin.newFiles ?? [],

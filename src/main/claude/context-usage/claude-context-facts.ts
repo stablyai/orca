@@ -173,6 +173,38 @@ export class ClaudeContextFacts {
       }
     } else {
       this.turn.settle(end, facts, stopped)
+      const usage = claudeRecord(message.usage)
+      if (
+        end.outcome === 'success' &&
+        message.type === 'result' &&
+        isRootClaudeFrame(message) &&
+        usage &&
+        [
+          usage.input_tokens,
+          usage.cache_creation_input_tokens,
+          usage.cache_read_input_tokens,
+          usage.output_tokens
+        ].every((count) => typeof count === 'number' && Number.isSafeInteger(count) && count >= 0)
+      ) {
+        const tokens = {
+          uncachedInput: Number(usage.input_tokens),
+          cacheReadInput: Number(usage.cache_read_input_tokens),
+          cacheWriteInput: Number(usage.cache_creation_input_tokens),
+          output: Number(usage.output_tokens),
+          reasoningOutputSubset: null
+        }
+        if (
+          tokens.uncachedInput + tokens.cacheReadInput + tokens.cacheWriteInput + tokens.output >
+          0
+        ) {
+          writeAgentJournalTurnRow(
+            this.sink,
+            { identity: settled },
+            { tokenAccounting: { provider: 'claude', tokens } },
+            { publish: true }
+          )
+        }
+      }
     }
     this.requestReport(settled)
   }

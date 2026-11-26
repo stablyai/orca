@@ -87,6 +87,7 @@ function catalogTypeLabel(type: PluginCatalogType, t: Translate = translate): st
 }
 
 const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
+  pipelineProfiles: <Blocks />,
   themes: <Palette />,
   terminalThemes: <SquareTerminal />,
   iconThemes: <Blocks />,
@@ -251,6 +252,7 @@ function useContributionRowActions(
       case 'vmRecipes':
       case 'mcpServers':
       case 'statusBarItems':
+      case 'pipelineProfiles':
         // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
     }

@@ -26,6 +26,7 @@ import {
   loadPluginDevFolder,
   unloadPluginDevFolder
 } from '../../../../plugins/development/plugin-dev-folders'
+import { observePluginPipelineProfiles } from '../../../pipelines/pipeline-profile-events'
 
 /** Expose desktop IPC's plugin consent/actions over serve/headless RPC through the same PluginService permission boundary. */
 
@@ -51,6 +52,7 @@ export function setPluginServiceForRpc(
   }
 ): void {
   pluginServiceForRpc = service
+  observePluginPipelineProfiles(service)
   pluginConsentForRpc = writes?.applyConsent ?? null
   pluginEnablementForRpc = writes?.applyEnablement ?? null
   pluginDevPathsForRpc = writes?.setDevPluginPaths ?? null

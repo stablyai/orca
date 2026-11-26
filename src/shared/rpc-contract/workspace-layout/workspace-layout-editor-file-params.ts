@@ -21,6 +21,7 @@ const EDITOR_VIEW_MODES: ReadonlySet<unknown> = new Set<EditorTabView['mode']>([
   'markdown-preview',
   'conflict-review',
   'check-details',
+  'pipeline-run',
   'git-graph'
 ])
 

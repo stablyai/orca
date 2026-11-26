@@ -9,6 +9,7 @@ import { SERVE_PAIRING_HANDLER_GROUPS } from '../server/serve-pairing-handler-gr
 import { PLUGIN_HANDLER_GROUPS } from '../plugins/plugin-handler-groups'
 import { HOST_HANDLER_GROUPS } from '../hosts/host-handler-groups'
 import { WORKTREE_HANDLER_GROUPS } from '../workspaces/worktree-handler-groups'
+import { PIPELINE_HANDLER_GROUP } from '../pipelines/pipeline-handler-group'
 
 export type HandlerGroup = {
   name: string
@@ -18,6 +19,7 @@ export type HandlerGroup = {
 }
 
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
+  PIPELINE_HANDLER_GROUP,
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,

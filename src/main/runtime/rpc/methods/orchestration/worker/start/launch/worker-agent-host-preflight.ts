@@ -48,11 +48,18 @@ export async function preflightWorkerAgentOnHost(args: {
   creationTarget?: { repoSelector: string }
   /** `--terminal` hands the task to an agent already running there. */
   terminal?: string
+  existingChat?: boolean
 }): Promise<WorkerStartModeReceipt> {
   const { runtime, agent, creationTarget } = args
   const place = args.resolvedWorktree ? { worktreeId: args.resolvedWorktree.id } : creationTarget
   // The chat check adds "new enough" for chats; a too-old CLI falls back or refuses there.
-  const mode = await resolveWorkerStartModeOnHost(runtime, args.mode, place, agent)
+  const mode = await resolveWorkerStartModeOnHost(
+    runtime,
+    args.mode,
+    place,
+    agent,
+    args.existingChat
+  )
   const repoSelector = creationTarget?.repoSelector ?? args.resolvedWorktree?.repoId
   // Installed is checked for every mode: a chat check alone never proves the CLI is there.
   await refuseUninstalledWorkerAgent(runtime, { agent, repoSelector, terminal: args.terminal })

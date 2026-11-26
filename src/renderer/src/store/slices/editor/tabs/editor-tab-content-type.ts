@@ -20,7 +20,7 @@ export function isEditorTabContentType(
 
 /** Editor tabs with no file behind them: their path is a synthetic id, never a workspace path. */
 export function isVirtualEditorFile(file: Pick<OpenFile, 'mode'>): boolean {
-  return file.mode === 'check-details' || file.mode === 'git-graph'
+  return file.mode === 'check-details' || file.mode === 'git-graph' || file.mode === 'pipeline-run'
 }
 
 export function editorTabContentTypeForMode(mode: OpenFile['mode']): EditorTabContentType {

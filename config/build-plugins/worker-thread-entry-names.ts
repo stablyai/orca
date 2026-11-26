@@ -5,6 +5,7 @@ export const WORKER_THREAD_ENTRY_NAMES = [
   'foreign-sqlite-reader-entry',
   'agent-identity-worker-entry',
   'bots-db-worker-entry',
+  'pipeline-store-worker-entry',
   'orchestration-reader-entry',
   'session-search-worker-entry',
   'journal-sql-worker-entry',

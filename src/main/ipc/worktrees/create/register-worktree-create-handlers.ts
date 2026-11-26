@@ -34,6 +34,7 @@ import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-proje
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/lifecycle/worktree-lifecycle-event'
+import { PipelineStart } from '../../../../shared/pipelines/pipeline-contracts'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -42,6 +43,21 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     'worktrees:create',
     async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
+      if (args.pipeline) {
+        const result = await runtime.createManagedWorktree({
+          ...args,
+          pipeline: PipelineStart.parse(args.pipeline),
+          repoSelector: `id:${args.repoId}`,
+          activate: true,
+          wslUserAct: true,
+          lineage: {
+            parentWorkspace: args.parentWorkspace,
+            crossStoreParent: args.crossStoreParent,
+            parentWorkspaceOrigin: args.parentWorkspace ? 'manual' : undefined
+          }
+        })
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(args.repoId) }
+      }
       // Parent Git spans without recording user branch names or remote URLs.
       return withWorktreeSpan({ stage: 'create' }, async (span) => {
         const repo = store.getRepo(args.repoId)

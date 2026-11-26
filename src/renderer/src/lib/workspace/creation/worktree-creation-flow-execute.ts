@@ -92,6 +92,7 @@ export async function executeWorktreeCreation(
         preparedRequest.compareBaseRef,
         {
           ...setupCreateArgs(preparedRequest),
+          ...(preparedRequest.pipeline ? { pipeline: preparedRequest.pipeline } : {}),
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
           ...worktreeCreationAgentLaunchOptions(preparedRequest),

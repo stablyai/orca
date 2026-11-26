@@ -1,4 +1,5 @@
 import type { ComposerModalData } from './composer-modal-data'
+import { composerRecoverySnapshot } from '../composer-recovery-snapshot'
 import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
@@ -46,6 +47,7 @@ import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-r
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useComposerPipeline } from '../use-composer-pipeline'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -203,6 +205,7 @@ function QuickTabBody({
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  const pipeline = useComposerPipeline(cardProps, modalData.recovery)
   const chipAgentIds =
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
@@ -216,7 +219,8 @@ function QuickTabBody({
       : undefined
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
-  const createDisabled = formDisabled || !launchSelection.ready
+  const createDisabled =
+    formDisabled || pipeline.blocked || (!pipeline.profile && !launchSelection.ready)
 
   const handleQuickAgentChange = useCallback(
     (
@@ -236,6 +240,8 @@ function QuickTabBody({
       return
     }
     await submitQuick(quickAgent, {
+      pipeline: pipeline.selection,
+      pipelineRuntimeId: pipeline.runtimeId,
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
@@ -243,22 +249,13 @@ function QuickTabBody({
         if (isSubmissionCancelled()) {
           return
         }
-        const snapshot = {
-          ...modalData,
-          prefilledName: cardProps.name,
-          initialRepoId: cardProps.repoId,
-          initialBaseBranch: cardProps.baseBranch,
-          initialWorkspaceTarget:
-            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
-              ? {
-                  projectId: cardProps.selectedProjectId,
-                  hostId: cardProps.selectedRepoExecutionHostId,
-                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
-                }
-              : modalData.initialWorkspaceTarget,
-          linkedWorkItem: cardProps.linkedWorkItem,
-          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
-        }
+        const snapshot = composerRecoverySnapshot(modalData, cardProps, {
+          ...quickAgentPick,
+          agent: quickAgent,
+          note: cardProps.note,
+          pipeline: pipeline.selection,
+          pipelineRuntimeId: pipeline.runtimeId
+        })
         toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
           action: {
             label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
@@ -285,7 +282,8 @@ function QuickTabBody({
     quickAgentPick,
     isSubmissionCancelled,
     modalData,
-    cardProps
+    cardProps,
+    pipeline
   ])
   const {
     addProjectOpen,
@@ -373,6 +371,8 @@ function QuickTabBody({
         }
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
+        pipelineSelected={Boolean(pipeline.profile)}
+        pipelinePicker={pipeline.picker}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}
         createDisabled={createDisabled}

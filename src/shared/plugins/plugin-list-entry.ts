@@ -64,6 +64,7 @@ export type PluginHostFont = {
 }
 
 export type PluginHostListEntry = {
+  pipelineProfiles?: { id: string; title: string; version: string }[]
   pluginKey: string
   consentFingerprint: string | null
   name: string

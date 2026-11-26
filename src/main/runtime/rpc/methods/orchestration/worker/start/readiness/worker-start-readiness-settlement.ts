@@ -51,6 +51,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   /** When the caller's timeout runs out; a structured preamble waits on its agent until then. */
   readinessDeadline: number
   effects: WorkerEffect[]
+  taskOnly?: boolean
+  decorateTask?: (task: string, cliCommand: string) => string
   terminalRevealWarning: string | undefined
   /** Keeps the caller's failure receipt naming the stage that actually failed. */
   onStage: (stage: 'dispatch_input' | 'turn_observation') => void
@@ -71,6 +73,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     runId: run.id,
     taskId: task.id,
     taskSpec: task.spec,
+    taskOnly: args.taskOnly,
+    decorateTask: args.decorateTask,
     coordinatorHandle: args.coordinatorHandle,
     devMode: args.devMode,
     requestId: args.requestId,
@@ -211,6 +215,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     effects,
     ...(deliveredPrompt ? { prompt: deliveredPrompt } : {}),
     residualResources: [],
+    ...(turnStart.clientMessageId ? { clientMessageId: turnStart.clientMessageId } : {}),
     ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
   }
 }

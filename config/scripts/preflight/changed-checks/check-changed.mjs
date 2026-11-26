@@ -1,6 +1,6 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { setMaxListeners } from 'node:events'
 import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
@@ -19,6 +19,7 @@ import {
   selectImportingTests
 } from './check-changed-direct-tests.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
+import { runChangedCheckTasks, selectChangedCheckTasks } from './changed-check-task-pool.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
 
@@ -38,6 +39,10 @@ function parseArgs(argv) {
     related: false,
     base: null,
     maxWorkers: null,
+    checkConcurrency: null,
+    checkGroup: 'all',
+    report: null,
+    typecheckCompiler: null,
     stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
   }
   for (const argument of argv) {
@@ -49,13 +54,25 @@ function parseArgs(argv) {
       options.related = true
     } else if (argument.startsWith('--base=')) {
       options.base = argument.slice('--base='.length)
+    } else if (/^--check-group=(all|types-and-tests|static)$/.test(argument)) {
+      options.checkGroup = argument.split('=')[1]
+    } else if (argument.startsWith('--report=') && argument.length > '--report='.length) {
+      options.report = argument.slice('--report='.length)
     } else if (/^--max-?workers=\d+$/i.test(argument)) {
       options.maxWorkers = argument.split('=')[1]
+    } else if (/^--check-concurrency=[1-9]\d*$/.test(argument)) {
+      const concurrency = Number(argument.split('=')[1])
+      if (!Number.isSafeInteger(concurrency)) {
+        throw new Error('Check concurrency must be a positive safe integer')
+      }
+      options.checkConcurrency = concurrency
     } else if (/^--timeout=\d+$/.test(argument)) {
       options.stepTimeoutMs = Number(argument.split('=')[1]) * 60_000
+    } else if (/^--typecheck-compiler=(auto|tsrs|bun|native)$/.test(argument)) {
+      options.typecheckCompiler = argument.split('=')[1]
     } else {
       throw new Error(
-        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
+        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --check-concurrency=<n>, --check-group=all|types-and-tests|static, --report=<path>, --timeout=<minutes>, --typecheck-compiler=auto|tsrs|bun|native.`
       )
     }
   }
@@ -187,7 +204,11 @@ function buildWorkspacePackages(root, env) {
   }
 }
 
-function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive }) {
+function buildTasks(
+  root,
+  plan,
+  { files, mergeBase, maxWorkers, typecheckCompiler, bun, transitive }
+) {
   const node = process.execPath
   const oxlint = resolveOxcCliInvocation('oxlint', 'oxlint', root)
   const oxfmt = resolveOxcCliInvocation('oxfmt', 'oxfmt', root)
@@ -198,10 +219,12 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive 
   if (plan.typecheckProjects.length > 0) {
     tasks.push({
       name: `typecheck (${plan.typecheckProjects.map((config) => path.basename(config, '.json')).join(', ')})`,
+      exclusive: true,
       steps: [
         step(node, [
           'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs',
           ...plan.typecheckProjects.map((config) => `--project=${config}`),
+          ...(typecheckCompiler ? [`--compiler=${typecheckCompiler}`] : []),
           // A worker cap means a shared host; 4 checkers cut typecheck CPU by about a third.
           ...(maxWorkers ? [`--checkers=${Math.max(2, Number(maxWorkers) * 2)}`] : [])
         ])
@@ -225,6 +248,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive 
       ])
     tasks.push({
       name: useRelated ? 'unit tests (related)' : 'unit tests',
+      exclusive: true,
       steps: [
         step(node, [
           'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
@@ -358,19 +382,6 @@ async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   return { task, ok: true, output, elapsed: seconds(startedAt) }
 }
 
-async function runPool(tasks, concurrency, run, signal) {
-  const results = []
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
-      while (!signal?.aborted && next < tasks.length) {
-        results.push(await run(tasks[next++]))
-      }
-    })
-  )
-  return results
-}
-
 export async function main(root, argv) {
   const options = parseArgs(argv)
   if (process.platform === 'win32') {
@@ -419,8 +430,15 @@ async function runChangedChecks(root, options, signal) {
     console.log(`check:changed: no changes against ${ref}.`)
     return 0
   }
-  const hash = computePassHash(root, mergeBase)
-  if (!options.force && !options.related && readPassHash(root) === hash) {
+  const hash = `${computePassHash(root, mergeBase)}:${options.typecheckCompiler ?? 'auto'}`
+  const fullGate = options.checkGroup === 'all'
+  if (
+    fullGate &&
+    !options.report &&
+    !options.force &&
+    !options.related &&
+    readPassHash(root) === hash
+  ) {
     console.log('Nothing changed since last passing run.')
     return 0
   }
@@ -482,19 +500,23 @@ async function runChangedChecks(root, options, signal) {
   const { resolvePinnedBunExecutable } =
     await import('../../tool-invocation/pinned-bun-executable.mjs')
   const bun = () => resolvePinnedBunExecutable(root, runProcessSync) ?? 'bun'
-  const tasks = buildTasks(root, plan, {
+  const plannedTasks = buildTasks(root, plan, {
     files,
     mergeBase,
     maxWorkers: options.maxWorkers,
+    typecheckCompiler: options.typecheckCompiler,
     bun,
     transitive: options.related
   })
+  const tasks = selectChangedCheckTasks(plannedTasks, options.checkGroup)
+  const selection = fullGate ? '' : ` of ${plannedTasks.length} (${options.checkGroup})`
   console.log(
-    `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length} check(s).`
+    `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length}${selection} check(s).`
   )
 
   // Typecheck and tests lead the queue: they take longest, so the short checks fill in around them.
-  const concurrency = Math.max(3, Math.floor(availableParallelism() / 3))
+  const concurrency =
+    options.checkConcurrency ?? Math.max(3, Math.floor(availableParallelism() / 3))
   const running = new Map()
   // Why: output is buffered until a task ends, so long test runs would otherwise look hung.
   const heartbeat = setInterval(() => {
@@ -502,7 +524,7 @@ async function runChangedChecks(root, options, signal) {
     console.log(`… ${seconds(startedAt)} elapsed; running: ${active.join(', ')}`)
   }, HEARTBEAT_MS)
   heartbeat.unref()
-  const results = await runPool(
+  const results = await runChangedCheckTasks(
     tasks,
     concurrency,
     async (task) => {
@@ -521,10 +543,27 @@ async function runChangedChecks(root, options, signal) {
       }
       return result
     },
-    signal
+    signal,
+    { isolateResourceChecks: options.checkConcurrency !== null }
   ).finally(() => clearInterval(heartbeat))
   if (signal?.aborted) {
     return signal.reason
+  }
+  if (options.report) {
+    writeFileSync(
+      path.resolve(root, options.report),
+      `${JSON.stringify(
+        {
+          mergeBase,
+          group: options.checkGroup,
+          plannedChecks: plannedTasks.map((task) => task.name),
+          selectedChecks: tasks.map((task) => task.name),
+          results: results.map(({ task, ok }) => ({ name: task.name, ok }))
+        },
+        null,
+        2
+      )}\n`
+    )
   }
   const failed = results.filter((result) => !result.ok)
   if (failed.length > 0) {
@@ -533,7 +572,9 @@ async function runChangedChecks(root, options, signal) {
     )
     return 1
   }
-  writePassHash(root, hash)
+  if (fullGate) {
+    writePassHash(root, hash)
+  }
   console.log(`✓ ${results.length} check(s) passed in ${seconds(startedAt)}.`)
   return 0
 }

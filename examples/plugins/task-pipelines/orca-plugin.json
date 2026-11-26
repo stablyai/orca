@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "task-pipelines",
+  "name": "Task Pipelines",
+  "version": "0.1.0",
+  "description": "Native development pipeline pilot: one primary session, verified checks and independent review.",
+  "engines": { "orca": ">=1.4.255" },
+  "pluginApi": 1,
+  "contributes": {
+    "pipelineProfiles": [
+      {
+        "id": "standard-development",
+        "version": "1",
+        "title": "Development with independent review",
+        "roles": { "primary": { "agent": "codex" }, "reviewer": { "agent": "codex" } },
+        "checks": ["test"],
+        "maxFixCycles": 2
+      }
+    ],
+    "panels": [
+      { "id": "pipelines", "title": "Task Pipelines", "icon": "check", "entry": "panel.html" }
+    ]
+  },
+  "capabilities": [{ "kind": "workspace:read" }]
+}

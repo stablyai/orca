@@ -22,12 +22,17 @@ import type {
   StructuredAgentSessionRevisionOptions
 } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { JournalTimelineView } from '../agent-session-journal/writing/journal-timeline-view'
+import {
+  reviseAgentJournalTurnTokens,
+  type AgentJournalTurnTokenWrite
+} from './agent-journal-turn-token-accounting'
 
 type TurnRowView = Pick<JournalTimelineView, 'itemBody' | 'newestTurn' | 'contextWindowHeld'>
 
 export type AgentJournalTurnRowTarget = { identity: AgentJournalItemIdentity } | { newest: true }
 
 export type AgentJournalTurnRowWrite = {
+  tokenAccounting?: AgentJournalTurnTokenWrite
   /** Lifecycle writers own all lifecycle fields. */
   lifecycle?: AgentJournalTurnItem
   /** Replace only the supplied context parts. */
@@ -86,10 +91,21 @@ function reviseTurnBody(
   const { lifecycle, contextUsage } = write
   const base =
     lifecycle && current ? { ...withoutLifecycle(current), ...lifecycle } : (lifecycle ?? current)
-  if (!base || !contextUsage) {
+  if (!base) {
     return base
   }
-  return { ...base, contextUsage: { ...current?.contextUsage, ...contextUsage } }
+  return {
+    ...base,
+    ...(contextUsage ? { contextUsage: { ...current?.contextUsage, ...contextUsage } } : {}),
+    ...(write.tokenAccounting
+      ? {
+          tokenAccounting: reviseAgentJournalTurnTokens(
+            current?.tokenAccounting,
+            write.tokenAccounting
+          )
+        }
+      : {})
+  }
 }
 
 function withoutLifecycle(turn: AgentJournalTurnItem) {

@@ -1,4 +1,6 @@
 import type { WorktreeCatalogVersion } from './catalog/catalog-version'
+import type { z } from 'zod'
+import type { PipelineStart } from '../pipelines/pipeline-contracts'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { ArchiveHookOverride } from './removal/archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace/creation/workspace-source'
@@ -94,6 +96,7 @@ export type SparsePreset = {
 }
 
 export type CreateWorktreeArgs = {
+  pipeline?: z.infer<typeof PipelineStart>
   repoId: string
   name: string
   /** Retire only generator-chosen names. User-typed pool names remain reusable; omitted callers retain legacy behavior. */

@@ -1,3 +1,4 @@
+import type { PipelineAssociation } from '../pipelines/pipeline-association'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { WorktreeCatalogVersion } from './catalog/catalog-version'
 import type { AutomationExecutionTargetType } from '../automations/automation-definition'
@@ -92,6 +93,7 @@ export type WorkspaceStatusDefinition = {
 }
 
 export type Worktree = {
+  pipeline?: PipelineAssociation
   id: string // `${repoId}::${path}`
   instanceId?: string
   /** Immutable host/instance identity. Optional while legacy rows migrate. */

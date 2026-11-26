@@ -91,7 +91,7 @@ export type AwaitingWorkerStart = {
    *  fails on a Setup that did not succeed or could not be watched. */
   handOver: (ready: RuntimeTerminalWait | Awaited<ReturnType<StructuredSetupWait>>) => Promise<void>
   /** Records the terminal as this worker's own, as a hand-over does first. */
-  bindTerminal: () => void
+  bindTerminal: () => void | Promise<void>
   /** Fails the start as the caller's own failure would. */
   fail: (error: unknown, failedStage: string) => Promise<void>
 }
@@ -299,7 +299,7 @@ async function failNeverReady(start: AwaitingWorkerStart): Promise<void> {
   }
   // The terminal stays open, so worker-release must find it as this worker's to close it.
   try {
-    start.bindTerminal()
+    await start.bindTerminal()
   } catch (error) {
     console.warn('[orchestration] could not bind a never-ready worker terminal', dispatchId, error)
   }

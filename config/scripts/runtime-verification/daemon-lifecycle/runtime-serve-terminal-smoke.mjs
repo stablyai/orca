@@ -13,6 +13,7 @@ import {
 } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { packagedNodeRuntimePath } from '../../orcad-distribution/prebuilds/build-orcad-node.mjs'
 import { currentTarget } from '../../orcad-distribution/prebuilds/server-build-target.mjs'
+import { quotePowerShellLiteral } from '../../../../src/shared/shell/launch/powershell-native-argument.ts'
 
 const projectDir = resolve(import.meta.dirname, '../../../..')
 const serveEntry = join(projectDir, 'out', 'main', 'index.js')
@@ -309,7 +310,13 @@ async function main() {
       log('browser navigate/evaluate/screenshot round trip OK')
     }
 
-    const terminal = orca(pairingCode, ['terminal', 'create', '--worktree', created.id])?.terminal
+    const terminal = orca(pairingCode, [
+      'terminal',
+      'create',
+      '--worktree',
+      created.id,
+      ...(process.platform === 'win32' ? ['--shell', 'powershell.exe'] : [])
+    ])?.terminal
     if (!terminal?.handle) {
       throw new Error('terminal.create returned no handle')
     }
@@ -317,20 +324,27 @@ async function main() {
 
     // Why invoke node rather than `echo`: the shell differs per platform, node does not.
     const nonce = randomBytes(8).toString('hex')
+    const script = `console.log('ORCA_SMOKE_' + '${nonce}')`
+    const command =
+      process.platform === 'win32'
+        ? `& ${quotePowerShellLiteral(process.execPath)} -e ${quotePowerShellLiteral(script)}`
+        : `"${process.execPath}" -e "${script}"`
     orca(pairingCode, [
       'terminal',
       'send',
       '--terminal',
       terminal.handle,
       '--text',
-      `"${process.execPath}" -e "console.log('ORCA_SMOKE_' + '${nonce}')"`,
+      command,
       '--enter'
     ])
 
     if (!(await waitForNonce(pairingCode, terminal.handle, `ORCA_SMOKE_${nonce}`))) {
+      const read = orca(pairingCode, ['terminal', 'read', '--terminal', terminal.handle])
+      log(`terminal diagnostic: ${JSON.stringify(read?.terminal?.tail ?? []).slice(-3000)}`)
       throw new Error(
         `terminal produced no output containing ${nonce} within ${OUTPUT_TIMEOUT_MS}ms — ` +
-          `the server started and answered RPC, but its PTY path is dead`
+          `the server answered RPC but the terminal command did not complete`
       )
     }
     log('terminal round trip OK')
@@ -374,7 +388,7 @@ async function main() {
       // Remove empty workspaces/repo parent left behind by worktree rm to avoid leaks.
       const worktreePath = seeded.worktreeId.split('::')[1]
       if (removed.status === 0 && worktreePath) {
-        rmSync(dirname(worktreePath), { recursive: true, force: true })
+        rmSync(dirname(worktreePath), { recursive: true, force: true, maxRetries: 3 })
       }
       if (removed.status !== 0) {
         log(
@@ -396,9 +410,9 @@ async function main() {
         fail(`server did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of SIGTERM`)
       }
     }
-    rmSync(userDataDir, { recursive: true, force: true })
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 3 })
     if (seeded?.repoPath) {
-      rmSync(seeded.repoPath, { recursive: true, force: true })
+      rmSync(seeded.repoPath, { recursive: true, force: true, maxRetries: 3 })
     }
   }
 

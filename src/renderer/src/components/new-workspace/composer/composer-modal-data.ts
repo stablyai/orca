@@ -11,6 +11,8 @@ import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../..
 import type { WorkspaceStatus } from '../../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
+import type { PipelineSelection } from '../../../../../shared/pipelines/pipeline-contracts'
+import type { PipelineV2TemplateSelection } from '../../../../../shared/pipelines/v2/pipeline-v2-template-contracts'
 
 export type ComposerModalData = {
   recovery?: {
@@ -20,6 +22,8 @@ export type ComposerModalData = {
     draft?: AgentPickerDraft
     entry?: AgentPickerEntry
     contextKey?: string
+    pipeline?: PipelineSelection | PipelineV2TemplateSelection
+    pipelineRuntimeId?: string
   }
   directSetup?: DirectWorkItemSetupRequest
   prefilledName?: string

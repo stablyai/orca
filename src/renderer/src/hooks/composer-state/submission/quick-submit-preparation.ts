@@ -218,7 +218,8 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        trimmedNote
+        trimmedNote,
+        pipelineNote: note
       })
     },
     [

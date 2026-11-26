@@ -1,4 +1,26 @@
 export const FLAG_HELP_TEXT: Record<string, string> = {
+  'api-version': '--api-version 1|2      Explicit pipeline contract; version 1 remains the default',
+  'project-id': '--project-id <id>       Scope pipeline reads and controls to one project',
+  'instance-id': '--instance-id <id>      Pin the exact pipeline workspace instance',
+  'runtime-id': '--runtime-id <id>       Require the reviewed runtime identity',
+  'request-id': '--request-id <id>       Stable identity for an exact mutation replay or receipt',
+  'expected-revision': '--expected-revision <n> Require the exact saved revision before a write',
+  'input-file': '--input-file <path>     Bounded JSON; v2 template save accepts at most 320 KiB',
+  'input-json': '--input-json <json>     Literal bounded JSON (64 KiB), never shell code',
+  'draft-id': '--draft-id <id>         Select a project-scoped pipeline draft',
+  'stage-id': '--stage-id <id>         Select one custom pipeline stage',
+  'visit-id': '--visit-id <id>         Select one exact stage visit',
+  'visit-cursor':
+    '--visit-cursor <n>      Page durable pipeline visits without reconstructing events',
+  'artifact-id': '--artifact-id <id>      Read one complete immutable pipeline artifact',
+  'artifact-cursor':
+    '--artifact-cursor <n> Page complete pipeline artifacts within the context budget',
+  'enabled-only': '--enabled-only         List only enabled pipeline template versions',
+  'pipeline-project-id': '--pipeline-project-id <id> Pin the project for v2 worktree creation',
+  'pipeline-runtime-id': '--pipeline-runtime-id <id> Require a specific runtime before v2 creation',
+  'pipeline-task': '--pipeline-task <text>  Literal v2 task, separate from the worktree name',
+  'pipeline-task-file':
+    '--pipeline-task-file <path> Plain UTF-8 v2 task, preserved without trimming',
   org: '--org <id|name>        Organization to use when your Orca account has more than one',
   switch: '--switch               Replace the Orca account this host is already signed in to',
   'external-worktree-visibility':
@@ -10,7 +32,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
   command: '--command <text>       Command to run in the terminal on startup',
   comment: '--comment <text>       Comment stored in Orca metadata',
-  cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
+  cursor: '--cursor <n>           Cursor from the previous scoped read',
   action: '--action <name>       Secondary accessibility action name',
   activate: '--activate             Reveal the new worktree in the Orca app',
   app: '--app <app>            App name, bundle ID, or pid:N',
@@ -125,7 +147,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   attachments: '--attachments          Include attachment metadata and URLs',
   relations: '--relations            Include blocking, related, and duplicate links',
   activity: '--activity             Include issue field-change history',
-  full: '--full                 Include all supported V1 issue context within caps',
+  full: '--full                 Include the complete supported record within caps',
   'full-tree':
     '--full-tree           Return the whole accessibility tree instead of changes since the last snapshot',
   'reuse-session':

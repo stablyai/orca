@@ -1,4 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
+import { PIPELINE_COMMAND_SPECS } from './pipeline'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { AUTH_COMMAND_SPECS } from './auth'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
@@ -49,6 +50,7 @@ import { WORKSPACE_CLEANUP_COMMAND_SPECS } from './workspace-cleanup'
 import { MCP_COMMAND_SPECS } from './mcp'
 
 export const COMMAND_SPECS: CommandSpec[] = [
+  ...PIPELINE_COMMAND_SPECS,
   ...CORE_COMMAND_SPECS,
   ...REFERENCE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,

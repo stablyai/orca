@@ -15,6 +15,7 @@ import { layoutHoldsOnlyOverlayViews } from './released-layout-eligibility'
 import { useIsQuickCommandEditorOpen } from '../../tab-bar/quick-commands/quick-command-editor-presence'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
+import { PipelineWorkspaceStrip } from '../../pipelines/PipelineWorkspaceStrip'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
@@ -74,42 +75,45 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
     <div
       className={
         isVisible
-          ? 'absolute inset-0 flex'
+          ? 'absolute inset-0 flex flex-col'
           : shouldKeepPaintable
-            ? 'absolute inset-0 flex opacity-0 pointer-events-none'
+            ? 'absolute inset-0 flex flex-col opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
       inert={!isVisible}
       aria-hidden={!isVisible}
       data-workspace-surface-id={worktreeId}
     >
-      {surfaceReleased ? null : (
-        <TabGroupSplitLayout
-          layout={layout}
+      <PipelineWorkspaceStrip worktreeId={worktreeId} visible={isVisible} />
+      <div className="relative flex min-h-0 flex-1">
+        {surfaceReleased ? null : (
+          <TabGroupSplitLayout
+            layout={layout}
+            worktreeId={worktreeId}
+            focusedGroupId={focusedGroupId}
+            isWorktreeActive={isVisible}
+          />
+        )}
+        <WorkspacePaneOverlayLayers
           worktreeId={worktreeId}
-          focusedGroupId={focusedGroupId}
-          isWorktreeActive={isVisible}
+          worktreePath={worktreePath}
+          isVisible={isVisible}
+          shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+          hiddenTerminalPrewarm={prewarmStage === 'mount' ? null : prewarmStage}
+          shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
+          isForceParked={isForceParked}
+          activityTerminalPortals={activityTerminalPortals}
+          backgroundMountTabIds={backgroundMountTabIds}
+          activationDeferredMountTabIds={activationDeferredMountTabIds}
+          surfaceReleased={surfaceReleased}
+          mountRetainedBrowserOverlay={shouldMountRetainedBrowserOverlay({
+            isWorktreeVisible: isVisible,
+            hasDeferredBackgroundMounts: hasPendingBackgroundMounts,
+            needsBrowserGuestPaint
+          })}
+          mountEmulatorOverlay={isVisible || !hasPendingBackgroundMounts}
         />
-      )}
-      <WorkspacePaneOverlayLayers
-        worktreeId={worktreeId}
-        worktreePath={worktreePath}
-        isVisible={isVisible}
-        shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
-        hiddenTerminalPrewarm={prewarmStage === 'mount' ? null : prewarmStage}
-        shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
-        isForceParked={isForceParked}
-        activityTerminalPortals={activityTerminalPortals}
-        backgroundMountTabIds={backgroundMountTabIds}
-        activationDeferredMountTabIds={activationDeferredMountTabIds}
-        surfaceReleased={surfaceReleased}
-        mountRetainedBrowserOverlay={shouldMountRetainedBrowserOverlay({
-          isWorktreeVisible: isVisible,
-          hasDeferredBackgroundMounts: hasPendingBackgroundMounts,
-          needsBrowserGuestPaint
-        })}
-        mountEmulatorOverlay={isVisible || !hasPendingBackgroundMounts}
-      />
+      </div>
     </div>
   )
 })

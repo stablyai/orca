@@ -8,6 +8,7 @@ import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { personStopDecidesTurn, turnEndAfterStop } from './context-epochs/journal-stop-turn-end'
 import { boundRunningToolOutput } from './item-lifecycle/journal-payload-bounds'
 import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage-schema'
+import { AgentSessionTurnTokenAccountingSchema } from '../../../shared/agent-session/conversation-context/agent-session-turn-token-accounting'
 
 export function journalDomainLatestStop(
   db: Database.Database,
@@ -54,6 +55,14 @@ export function normalizeJournalDomainItemBody(
   stopSettle?: JournalStopSettleFact
 ): AgentJournalItemBody {
   let body = item.body
+  if (
+    body.kind === 'turn' &&
+    body.tokenAccounting !== undefined &&
+    !AgentSessionTurnTokenAccountingSchema.safeParse(body.tokenAccounting).success
+  ) {
+    const { tokenAccounting: _accounting, ...usable } = body
+    body = usable
+  }
   if (
     body.kind === 'turn' &&
     body.contextUsage !== undefined &&

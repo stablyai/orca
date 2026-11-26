@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Task Pipelines</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      color: var(--orca-foreground);
+      background: var(--orca-background);
+      font-family: var(--orca-font-sans);
+      font-size: 13px;
+    }
+    button {
+      padding: 6px 10px;
+      margin: 4px;
+      font: inherit;
+      border: 1px solid var(--orca-border);
+      border-radius: 6px;
+      background: var(--orca-secondary);
+      color: var(--orca-secondary-foreground);
+    }
+    button:focus-visible {
+      outline: 2px solid var(--orca-ring);
+    }
+    article {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--orca-border);
+    }
+    p {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+  </style>
+  <h1>Task Pipelines</h1>
+  <button id="refresh">Refresh</button>
+  <p id="message" role="status"></p>
+  <main id="runs"></main>
+  <script>
+    const message = document.getElementById('message')
+    const container = document.getElementById('runs')
+    async function load() {
+      try {
+        const { runs } = await orca.host.call('pipeline.read')
+        container.replaceChildren()
+        message.textContent = runs.length
+          ? ''
+          : 'No task pipelines. Select a profile when creating a local Git worktree.'
+        for (const run of runs) {
+          const card = document.createElement('article')
+          const title = document.createElement('strong')
+          title.textContent = run.title
+          const detail = document.createElement('p')
+          detail.textContent = `${run.workspaceId}\n${run.stage} · ${run.state} · fix cycles ${run.fixCycles}/2${run.reason ? '\n' + run.reason : ''}`
+          card.append(title, detail)
+          const verify = document.createElement('button')
+          verify.textContent = 'Verify current revision'
+          verify.onclick = async () => {
+            try {
+              const result = await orca.host.call('pipeline.read', { id: run.id })
+              message.textContent = result.runs[0]?.ready
+                ? 'Current revision passed checks and review.'
+                : 'Current revision is not ready for review.'
+            } catch (error) {
+              message.textContent = error.message
+            }
+          }
+          card.append(verify)
+          if (['running', 'waiting_setup', 'paused', 'waiting_owner'].includes(run.state)) {
+            const control = document.createElement('button')
+            const pause = ['running', 'waiting_setup'].includes(run.state)
+            control.textContent = pause ? 'Pause' : 'Resume'
+            control.onclick = async () => {
+              control.disabled = true
+              try {
+                await orca.host.call(pause ? 'pipeline.pause' : 'pipeline.resume', {
+                  id: run.id,
+                  expectedRevision: run.revision,
+                  requestId: crypto.randomUUID()
+                })
+                await load()
+              } catch (error) {
+                message.textContent = error.message
+                control.disabled = false
+              }
+            }
+            card.append(control)
+          }
+          container.append(card)
+        }
+      } catch (error) {
+        message.textContent = error.message
+      }
+    }
+    document.getElementById('refresh').onclick = load
+    load()
+  </script>
+</html>

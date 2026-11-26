@@ -21,6 +21,9 @@ export function restoresSavedContentTab(
   if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
     return false
   }
+  if (tab.contentType === 'editor' && tab.entityId.startsWith('pipeline-run:')) {
+    return keepsView()
+  }
   if (!isTransientEditorContentType(tab.contentType)) {
     return true
   }

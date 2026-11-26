@@ -11,7 +11,11 @@ import { runBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree
 import type { ComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
 import { translate } from '@/i18n/i18n'
 import { prepareQuickComposerStartup } from './quick-startup-plan'
-import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
+import {
+  buildQuickCreationRequest,
+  bindQuickPipeline,
+  type QuickSubmitOptions
+} from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from '../linked-work-items/source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
@@ -87,10 +91,12 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        trimmedNote
+        trimmedNote,
+        pipelineNote
       } = prepared
 
-      const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
+      const promptLinkedWorkItem =
+        agent === null && !options?.pipeline ? null : submitLinkedWorkItem
 
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
         resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
@@ -149,7 +155,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
       const quickStartup = await prepareQuickComposerStartup({
-        agent,
+        agent: options?.pipeline ? null : agent,
         linkedWorkItem: submitLinkedWorkItem,
         note: trimmedNote,
         repoId,
@@ -194,8 +200,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedIssue: submitLinkedIssueNumber,
         linkedPR: submitLinkedPR,
         pushTarget: submitPushTarget,
-        agent,
-        agentLaunchRoute,
+        agent: options?.pipeline ? null : agent,
+        agentLaunchRoute: options?.pipeline ? 'terminal-tui' : agentLaunchRoute,
         launchInputs: options?.launchInputs,
         legacyLaunchInputs: options?.legacyLaunchInputs,
         creationStartup: quickStartup.creationStartup,
@@ -240,6 +246,18 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         suppressTerminalFocusOnCompletion: createMultiple,
         setupOnly: options?.setupOnly === true
       })
+
+      if (options?.pipeline) {
+        if (!selectedRepoIsGit || selectedRepoExecutionHostId !== 'local' || ephemeralVmRecipe) {
+          throw new Error('Pipelines require a local Git project')
+        }
+        bindQuickPipeline(request, options, {
+          workspaceName,
+          note: pipelineNote,
+          prompt: quickPrompt,
+          linkedWorkItem: submitLinkedWorkItem
+        })
+      }
 
       if (isSubmissionCancelled()) {
         return

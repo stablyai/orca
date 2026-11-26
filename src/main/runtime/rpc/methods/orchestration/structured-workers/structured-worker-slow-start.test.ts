@@ -64,10 +64,17 @@ function briefSends(current: QueuedMessageTestRig): number {
   ).length
 }
 
+async function sendBriefToHeldStart(current: QueuedMessageTestRig): Promise<void> {
+  const sent = sendBrief(current)
+  await eventually(() => expect(current.starts).toHaveBeenCalled())
+  expect(await sent).not.toBe('accepted')
+  expect(current.host.reads.agentStarting(SESSION)).toBe(true)
+}
+
 describe('a structured worker whose agent is slow to start', () => {
-  it('reads as starting past the budget, then delivers its brief once when the agent attaches', async () => {
+  it('holds its brief while the agent starts, then delivers once when it attaches', async () => {
     const { current, release } = await workerWithHeldStart()
-    expect(await sendBrief(current)).toBe('starting')
+    await sendBriefToHeldStart(current)
     expect(briefSends(current)).toBe(0)
     release()
     await eventually(() => expect(briefSends(current)).toBe(1))
@@ -77,10 +84,9 @@ describe('a structured worker whose agent is slow to start', () => {
 
   it('returns from a stop at once while the acquire never settles, without claiming stopped', async () => {
     const { current, release } = await workerWithHeldStart()
-    expect(await sendBrief(current)).toBe('starting')
+    await sendBriefToHeldStart(current)
     // Held for the whole stop: the acquire never settles while the stop runs.
     // A close before the acquire begins cancels the start before any spawn; this case needs it held.
-    await eventually(() => expect(current.starts).toHaveBeenCalled())
     const closed = await closeStructuredAgentSessionChild(SESSION)
     expect(closed).toMatchObject({
       stopped: false,
@@ -99,9 +105,8 @@ describe('a structured worker whose agent is slow to start', () => {
 
   it('closes the child a cancelled acquire brings up late, then settles stopped', async () => {
     const { current, release } = await workerWithHeldStart()
-    expect(await sendBrief(current)).toBe('starting')
+    await sendBriefToHeldStart(current)
     // A close before the acquire begins cancels the start before any spawn; this case needs it held.
-    await eventually(() => expect(current.starts).toHaveBeenCalled())
     const closed = await closeStructuredAgentSessionChild(SESSION)
     expect(closed.stopped).toBe(false)
     // The acquire ignored the abort and returns a live child after the close.
@@ -115,9 +120,8 @@ describe('a structured worker whose agent is slow to start', () => {
   it('stops reading as starting once the ceiling fails a start whose acquire never returns', async () => {
     pinnedNow = 0
     const { current, release } = await workerWithHeldStart(300)
-    expect(await sendBrief(current)).toBe('starting')
+    await sendBriefToHeldStart(current)
     // Pass the ceiling only once the acquire is held, so it fails a start that is acquiring.
-    await eventually(() => expect(current.starts).toHaveBeenCalled())
     pinnedNow = 300
     // The ceiling rejects the held brief; the worker must not keep claiming its agent is starting.
     await eventually(async () => {

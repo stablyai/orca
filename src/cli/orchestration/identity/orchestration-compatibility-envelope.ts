@@ -5,6 +5,13 @@ import { BOT_ITEM_WRITE_METHOD_NAMES } from '../../../shared/bots/bot-items'
 import { CONNECTOR_POST_METHOD_NAMES } from '../../../shared/connector-action-contract'
 import type { RuntimeOrchestrationEnvelope } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
+export function renewCompatibilityInvocation(
+  envelope: RuntimeOrchestrationEnvelope,
+  requestId?: string
+): RuntimeOrchestrationEnvelope {
+  return { ...envelope, compatibilityInvocationId: requestId ?? envelope.compatibilityInvocationId }
+}
+
 export function createOrchestrationCompatibilityEnvelope(
   env: NodeJS.ProcessEnv
 ): RuntimeOrchestrationEnvelope {
@@ -67,7 +74,11 @@ export class OrchestrationRequestEvidence {
     method: string,
     request: { remote: boolean; mutation: boolean; requestId: string | undefined }
   ): RuntimeOrchestrationEnvelope {
-    if (method.startsWith('orchestration.')) {
+    if (
+      method.startsWith('orchestration.') ||
+      method === 'pipeline.submit' ||
+      method === 'pipeline.v2.submit'
+    ) {
       const base = request.remote && !request.mutation ? this.remoteRead : this.orchestration
       return {
         ...base,

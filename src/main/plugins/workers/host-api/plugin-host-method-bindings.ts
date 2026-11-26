@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   isPluginHostMethodName,
   PLUGIN_HOST_API,
@@ -43,6 +43,7 @@ import type {
   PluginActionConfirmation,
   PluginConfirmationSubject
 } from '../../consent/plugin-confirmation-subject'
+import { PLUGIN_PIPELINE_HANDLERS } from '../plugin-host-pipeline-method-bindings'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -139,6 +140,7 @@ const worktreeShowAnswer = z.object({ worktree: z.object({ id: z.string() }) })
 const OK = { ok: true } as const
 
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
+  ...PLUGIN_PIPELINE_HANDLERS,
   'appearance.read': bind(api['appearance.read'], async (_params, { services }) => {
     if (!services.appearance) {
       throw new PluginHostCallError('unavailable', 'desktop appearance service is unavailable')

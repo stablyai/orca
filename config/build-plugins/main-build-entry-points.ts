@@ -41,6 +41,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
     'src/main/agent-hooks/identity/agent-identity-worker-entry.ts'
   ),
   'bots-db-worker-entry': resolve('src/main/bots/db-worker/bots-db-worker-entry.ts'),
+  'pipeline-store-worker-entry': resolve(
+    'src/main/runtime/pipelines/pipeline-store-worker-entry.ts'
+  ),
   'orchestration-reader-entry': resolve(
     'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts'
   ),

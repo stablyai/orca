@@ -36,6 +36,7 @@ export function buildManagedWorktreeCreateArgs(
     provenance.automationProvenance !== undefined &&
     provenance.automationProvenance.origin !== 'client'
   return {
+    pipeline: params.pipeline,
     repoSelector: worktreeCreateRepoSelector(params),
     // A phone's retry key is the identity of its creation.
     creationId: params.creationId ?? params.clientMutationId,

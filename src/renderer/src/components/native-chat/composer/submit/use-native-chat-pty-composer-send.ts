@@ -1,10 +1,12 @@
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
+import { sendPipelineSessionDiscussion } from '@/components/pipelines/pipeline-session-discussion-send'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
 } from '../../paste/native-chat-composer-pasted-text-references'
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import { translate } from '@/i18n/i18n'
@@ -59,8 +61,12 @@ export function useNativeChatPtyComposerSend(args: {
   clearImageAttachments: () => void
   setNotice: (notice: string | null) => void
 }): (retry?: { text: string; imagePaths?: string[] }) => boolean {
+  const probingPipeline = useRef(false)
   return useCallback(
     (retry) => {
+      if (probingPipeline.current) {
+        return false
+      }
       let text = retry?.text ?? args.draft
       const imagePaths =
         retry?.imagePaths ??
@@ -97,84 +103,129 @@ export function useNativeChatPtyComposerSend(args: {
         args.setNotice(translate('components.native-chat.messageNotSent', 'Message not sent'))
         return false
       }
-      let pendingId: string | undefined
-      const sendOptions =
-        args.agent === 'claude' && classification === 'chat'
-          ? {
-              ...launchSendOptions,
-              onWriteRejected: () => {
-                if (pendingId) {
-                  args.optimisticSendOutcome?.reject(pendingId)
-                }
-              },
-              onWriteUnconfirmed: () => {
-                if (pendingId) {
-                  args.optimisticSendOutcome?.holdUnconfirmed(pendingId)
+      const sendUnmanaged = () => {
+        let pendingId: string | undefined
+        const sendOptions =
+          args.agent === 'claude' && classification === 'chat'
+            ? {
+                ...launchSendOptions,
+                onWriteRejected: () => {
+                  if (pendingId) {
+                    args.optimisticSendOutcome?.reject(pendingId)
+                  }
+                },
+                onWriteUnconfirmed: () => {
+                  if (pendingId) {
+                    args.optimisticSendOutcome?.holdUnconfirmed(pendingId)
+                  }
                 }
               }
-            }
-          : launchSendOptions
-      let pendingHandle: NativeChatSendHandle | null = null
-      // Why: slash-like text must not silently drop its attached images.
-      if (classification !== 'chat' && imagePaths.length === 0) {
-        pendingHandle =
-          args.agent === 'codex' && isSlashCommandDraft(text)
-            ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
-            : sendNativeChatMessage(target.ptyId, text, sendOptions)
-      } else if (imagePaths.length > 0) {
-        pendingHandle = sendNativeChatMessageWithImageAttachments(
-          args.agent,
-          target.ptyId,
-          text,
-          imagePaths,
-          sendOptions
-        )
-      } else if (text.trim().length > 0) {
-        pendingHandle = sendNativeChatMessage(target.ptyId, text, sendOptions)
-      } else {
-        submitNativeChatPrompt(target.ptyId)
-      }
-      if (classification !== 'chat') {
-        if (pendingHandle) {
-          args.trackPendingSend(pendingHandle)
+            : launchSendOptions
+        let pendingHandle: NativeChatSendHandle | null = null
+        // Why: slash-like text must not silently drop its attached images.
+        if (classification !== 'chat' && imagePaths.length === 0) {
+          pendingHandle =
+            args.agent === 'codex' && isSlashCommandDraft(text)
+              ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
+              : sendNativeChatMessage(target.ptyId, text, sendOptions)
+        } else if (imagePaths.length > 0) {
+          pendingHandle = sendNativeChatMessageWithImageAttachments(
+            args.agent,
+            target.ptyId,
+            text,
+            imagePaths,
+            sendOptions
+          )
+        } else if (text.trim().length > 0) {
+          pendingHandle = sendNativeChatMessage(target.ptyId, text, sendOptions)
+        } else {
+          submitNativeChatPrompt(target.ptyId)
         }
-        if (classification === 'command') {
-          args.onSlashCommand?.(text.trim())
-          args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
+        if (classification !== 'chat') {
           if (pendingHandle) {
-            args.onCommandSent?.(text.trim(), pendingHandle)
+            args.trackPendingSend(pendingHandle)
+          }
+          if (classification === 'command') {
+            args.onSlashCommand?.(text.trim())
+            args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
+            if (pendingHandle) {
+              args.onCommandSent?.(text.trim(), pendingHandle)
+            }
+          }
+        } else {
+          pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)
+          if (pendingHandle) {
+            args.trackPendingSend(pendingHandle, pendingId)
+            if (retry && pendingId) {
+              const id = pendingId
+              void pendingHandle.outcome?.then((outcome) => {
+                if (outcome === 'not-submitted') {
+                  args.optimisticSendOutcome?.reject(id)
+                } else if (outcome === 'uncertain') {
+                  args.optimisticSendOutcome?.holdUnconfirmed(id)
+                }
+              })
+            }
           }
         }
-      } else {
-        pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)
-        if (pendingHandle) {
-          args.trackPendingSend(pendingHandle, pendingId)
-          if (retry && pendingId) {
-            const id = pendingId
-            void pendingHandle.outcome?.then((outcome) => {
-              if (outcome === 'not-submitted') {
-                args.optimisticSendOutcome?.reject(id)
-              } else if (outcome === 'uncertain') {
-                args.optimisticSendOutcome?.holdUnconfirmed(id)
-              }
-            })
-          }
+        emitNativeChatMessageSent({
+          agent: args.agent,
+          runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+        })
+        args.onSubmitted?.()
+        if (!retry && readNativeChatComposerDraft(args.draftScopeKey).text === submitted.text) {
+          args.setDraft('')
+          args.setCaret(0)
+          args.clearSkillOrigin()
+          args.clearImageAttachments()
+          args.setNotice(null)
+          useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
         }
+        return true
       }
-      emitNativeChatMessageSent({
-        agent: args.agent,
-        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
-      })
-      args.onSubmitted?.()
-      if (!retry) {
-        args.setDraft('')
-        args.setCaret(0)
-        args.clearSkillOrigin()
-        args.clearImageAttachments()
-        args.setNotice(null)
-        useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
+      if (
+        classification === 'chat' &&
+        !nativeChatComposerTargetIsRemote(target.ptyId) &&
+        window.api?.pipelineOwner
+      ) {
+        probingPipeline.current = true
+        void sendPipelineSessionDiscussion({
+          requestId: createBrowserUuid(),
+          ptyId: target.ptyId,
+          message: text,
+          hasAttachments: imagePaths.length > 0
+        })
+          .then((result) => {
+            if (!result.handled) {
+              sendUnmanaged()
+              return
+            }
+            if (!result.accepted) {
+              args.setNotice(
+                result.rejected ??
+                  'Pipeline discussion delivery is unconfirmed. Inspect the run before retrying.'
+              )
+              return
+            }
+            args.onSubmitted?.()
+            if (!retry && readNativeChatComposerDraft(args.draftScopeKey).text === submitted.text) {
+              args.setDraft('')
+              args.setCaret(0)
+              args.clearSkillOrigin()
+              args.setNotice(null)
+            }
+          })
+          .catch((error) =>
+            args.setNotice(
+              error instanceof Error ? error.message : 'Pipeline discussion was not sent'
+            )
+          )
+          .finally(() => {
+            probingPipeline.current = false
+          })
+        return true
       }
-      return true
+      return sendUnmanaged()
     },
     [args]
   )

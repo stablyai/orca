@@ -1,4 +1,5 @@
 import { GitGraphTab } from './git-graph/git-graph-tab'
+import { PipelineRunTab } from '../pipelines/PipelineRunTab'
 import { useAppStore } from '@/store'
 import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
@@ -146,6 +147,9 @@ export function EditorContent({
         tabId={viewStateScopeId}
       />
     )
+  }
+  if (activeFile.mode === 'pipeline-run') {
+    return <PipelineRunTab worktreeId={activeFile.worktreeId} runAddress={activeFile.filePath} />
   }
 
   if (activeFile.mode === 'check-details') {

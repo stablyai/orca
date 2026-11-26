@@ -38,6 +38,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   runId: string
   taskId: string
   taskSpec: string
+  taskOnly?: boolean
+  decorateTask?: (task: string, cliCommand: string) => string
   coordinatorHandle: string
   devMode: boolean | undefined
   requestId: string
@@ -54,25 +56,30 @@ export async function deliverWorkerDispatchPreamble(args: {
   const chat = structuredSession
     ? null
     : chatAssigneeOf(resolveDispatchAssigneeParty(terminalHandle, args.db))
-  const preamble = buildDispatchPreamble({
-    // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
-    canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
-    taskId: args.taskId,
-    dispatchId: args.dispatchId,
-    taskSpec: args.taskSpec,
-    coordinatorHandle: orcaSessionIdOrHandle(args.coordinatorHandle, args.db),
-    coordinatedFrom: args.db.getPeerRun(args.runId)?.home_label,
-    // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
-    workerHandle:
-      structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)
-        ? formatOrcaSessionAddress(canonicalOrcaSessionId(structuredSession.identity.sessionId))
-        : chat
-          ? formatOrcaSessionAddress(chat)
-          : terminalHandle,
-    devMode: args.devMode,
-    ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
-    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
-  })
+  const cliTarget = runtime.getTerminalOrchestrationCliTarget(terminalHandle)
+  const taskSpec = args.decorateTask?.(args.taskSpec, cliTarget.cliCommand) ?? args.taskSpec
+  const preamble = args.taskOnly
+    ? taskSpec
+    : buildDispatchPreamble({
+        // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
+        canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
+        taskId: args.taskId,
+        dispatchId: args.dispatchId,
+        taskSpec,
+        coordinatorHandle: orcaSessionIdOrHandle(args.coordinatorHandle, args.db),
+        coordinatedFrom: args.db.getPeerRun(args.runId)?.home_label,
+        // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
+        workerHandle:
+          structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)
+            ? formatOrcaSessionAddress(canonicalOrcaSessionId(structuredSession.identity.sessionId))
+            : chat
+              ? formatOrcaSessionAddress(chat)
+              : terminalHandle,
+        devMode: args.devMode,
+        ...cliTarget,
+        unreadMail:
+          args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
+      })
   if (chat) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)
     if (!dispatch) {
@@ -82,29 +89,43 @@ export async function deliverWorkerDispatchPreamble(args: {
       )
     }
     const from = workerTaskSource(args)
-    const delivery = await sendChatTask({ db: args.db, dispatch, from, preamble })
-    return { structuredTurnStart: chatTaskTurnStart(delivery) }
+    let clientMessageId: string | undefined
+    const delivery = await sendChatTask({
+      db: args.db,
+      dispatch,
+      from,
+      preamble,
+      onSubmitted: (id) => {
+        clientMessageId = id
+      }
+    })
+    return { structuredTurnStart: { ...chatTaskTurnStart(delivery), clientMessageId } }
   }
   if (structuredSession) {
     // A stop that landed after the start's last wait hands the worker back, as the terminal path does.
     if (args.db.getWorkerDispatch(args.dispatchId)?.state !== 'starting') {
       throw new Error('request_aborted')
     }
+    let clientMessageId: string | undefined
     const delivery = await sendStructuredWorkerPreamble({
       host: structuredSession.host,
       sessionId: structuredSession.identity.sessionId,
       dispatchId: args.dispatchId,
       preamble,
+      onSubmitted: (id) => {
+        clientMessageId = id
+      },
       from: workerTaskSource(args),
       ...(args.readinessTimeoutMs === undefined ? {} : { budgetMs: args.readinessTimeoutMs })
     })
     return {
       structuredTurnStart:
         delivery === 'accepted'
-          ? { verdict: 'observed' }
+          ? { verdict: 'observed', clientMessageId }
           : delivery === 'starting'
             ? {
                 verdict: 'unobserved',
+                clientMessageId,
                 agentStarting: true,
                 reason:
                   "The worker's agent hasn't finished starting. Orca holds the task and hands it " +
@@ -112,6 +133,7 @@ export async function deliverWorkerDispatchPreamble(args: {
                   'Orca sends an error report.'
               }
             : {
+                clientMessageId,
                 verdict: 'unobserved',
                 reason:
                   'The dispatch preamble was accepted, but the agent had not started to take it. It ' +

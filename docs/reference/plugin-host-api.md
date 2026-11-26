@@ -30,6 +30,9 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`plugin.request`](#pluginrequest) | none | panel, editor | no | 1.2 | Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. |
 | [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 (`workspaceId`: 1.10) | The agents in the focused workspace, or in the one `workspaceId` names (rejected when no workspace has it): their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after. |
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you. |
+| [`pipeline.read`](#pipelineread) | `workspace:read` | worker, panel, editor | no | 1.4 | Reads bounded summaries of this plugin’s pipelines; an explicit id also verifies current source evidence. |
+| [`pipeline.pause`](#pipelinepause) | none | panel, editor | yes | 1.4 | An owner click pauses future stages of this plugin’s pipeline at the expected revision; active workers can still report. |
+| [`pipeline.resume`](#pipelineresume) | none | panel, editor | yes | 1.4 | An owner click resumes this plugin’s paused pipeline after inspection; unknown effects remain fenced. |
 | [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. A plugin with `main` and status bar items has its worker started when it is enabled and kept running while it stays enabled, so a worker can poll and update its items without an event or a hook. |
 | [`appearance.read`](#appearanceread) | `appearance:write` | worker | no | 1.4 | Reads the current desktop appearance revision for a conditional update. |
 | [`appearance.apply`](#appearanceapply) | `appearance:write` | worker | yes | 1.4 | Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement. |
@@ -197,6 +200,30 @@ Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; n
 
 ```ts
 (params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed" }) => { ok: true }
+```
+
+### `pipeline.read`
+
+Reads bounded summaries of this plugin’s pipelines; an explicit id also verifies current source evidence.
+
+```ts
+(params?: { id?: string }) => { runs: { id: string; workspaceId: string; title: string; stage: string; state: string; revision: number; fixCycles: number; reason?: string; ready: boolean | null }[] }
+```
+
+### `pipeline.pause`
+
+An owner click pauses future stages of this plugin’s pipeline at the expected revision; active workers can still report.
+
+```ts
+(params: { id: string; requestId: string; expectedRevision: number; expectedRuntimeId?: string }) => { accepted: true }
+```
+
+### `pipeline.resume`
+
+An owner click resumes this plugin’s paused pipeline after inspection; unknown effects remain fenced.
+
+```ts
+(params: { id: string; requestId: string; expectedRevision: number; expectedRuntimeId?: string }) => { accepted: true }
 ```
 
 ### `statusBar.update`

@@ -261,6 +261,7 @@ export async function sendStructuredWorkerPreamble(args: {
   from: AgentMessageSource
   /** The worker start's readiness budget, which the agent's start counts against. */
   budgetMs?: number
+  onSubmitted?: (clientMessageId: string) => void
 }): Promise<'accepted' | 'pending' | 'starting'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
@@ -289,6 +290,7 @@ export async function sendStructuredWorkerPreamble(args: {
     throw new Error(`The dispatch preamble was refused: ${outcome.refusal.message}`)
   }
   const state = outcome.kind === 'queued' ? 'pending' : preambleDispatchState(outcome.submission)
+  args.onSubmitted?.(outcome.clientMessageId)
   return state === 'pending' && args.host.reads.agentStarting(args.sessionId) ? 'starting' : state
 }
 

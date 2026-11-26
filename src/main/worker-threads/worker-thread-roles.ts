@@ -2,6 +2,7 @@
 export type WorkerThreadRole =
   | 'orca-agent-identity'
   | 'orca-bots-db'
+  | 'orca-pipeline-store'
   | 'orca-child-process-spawner'
   | 'orca-claude-profile-setup'
   | 'orca-claude-rewind-transcript'

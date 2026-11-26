@@ -6,6 +6,21 @@ import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { AgentMessageSender } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
+import { readLaunchPermissionChoice } from '../../../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
+import {
+  narrowStructuredLaunchSeedOptions,
+  parseStructuredLaunchSeedOptions
+} from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
+
+export function structuredWorkerLaunchOptions(
+  preferences: AgentLaunchPreferences | undefined
+): Record<string, string> | undefined {
+  return parseStructuredLaunchSeedOptions({
+    ...narrowStructuredLaunchSeedOptions(preferences),
+    [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: readLaunchPermissionChoice(preferences)
+  })
+}
 
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null

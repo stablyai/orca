@@ -1,5 +1,9 @@
 import { app } from 'electron'
 import { registerAppHandlers } from '../app'
+import {
+  registerPipelineRuntimeHandlers,
+  setTrustedPipelineRendererWebContentsId
+} from '../pipeline-owner-ipc'
 import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
 import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
 import { installProjectRuntimeGitRouter } from '../../workspaces/execution-host/project-runtime-git-router'
@@ -132,12 +136,14 @@ export async function registerCoreHandlers(
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
+  setTrustedPipelineRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
   const { rendererCheckpoint } = lifecycleOptions
   if (!rendererCheckpoint) {
     throw new Error('Renderer shutdown checkpoint must be composed before core handlers')
   }
   return (registration ??= (async () => {
+    registerPipelineRuntimeHandlers(runtime)
     registerAppHandlers(store, {
       rendererCheckpoint,
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
