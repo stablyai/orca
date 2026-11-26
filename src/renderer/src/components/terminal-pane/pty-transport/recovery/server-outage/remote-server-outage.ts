@@ -7,6 +7,7 @@ import { tailscaleHostOfEndpoint } from '../../../../../../../shared/remote-runt
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RemoteRuntimeRecoveryCause } from '../../remote-runtime/recovery/remote-runtime-recovery-copy'
+import { reviveRemoteRuntimePtyRecoveriesForEnvironment } from '../../remote-runtime/recovery/remote-runtime-pty-control-ready-revivers'
 
 /** Read shared server reconnection once so individual panes do not announce the same outage. */
 export function selectRetryingOutageEnvironmentId(
@@ -54,4 +55,10 @@ export function useRetryingOutageEnvironmentId(
   return useAppStoreWithHostStatuses((state, statuses) =>
     selectRetryingOutageEnvironmentId(state, statuses, worktreeId)
   )
+}
+
+/** Try the server now: advance the shared connection's backoff and replay this server's waiting or stopped panes. */
+export function reconnectRemoteServerNow(environmentId: string): void {
+  void window.api?.runtimeEnvironments?.retryConnectionsNow?.().catch(() => undefined)
+  reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId)
 }

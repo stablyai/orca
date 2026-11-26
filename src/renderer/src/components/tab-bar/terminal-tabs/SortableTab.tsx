@@ -29,6 +29,7 @@ import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { useTabHasDownServer } from '../../terminal-pane/pty-transport/recovery/server-outage/remote-server-outage-signals'
 import {
   isTerminalTabActivityLive,
   terminalTabHasUnreadActivity
@@ -185,6 +186,7 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
+  const hasDownServer = useTabHasDownServer(tab.id)
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
     <div
@@ -273,11 +275,20 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <span
-          className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
-        >
-          {titleNode}
-        </span>
+        <>
+          {hasDownServer ? (
+            <span
+              aria-hidden
+              data-tab-server-down=""
+              className="mr-1 size-1.5 shrink-0 rounded-full bg-status-warning"
+            />
+          ) : null}
+          <span
+            className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
+          >
+            {titleNode}
+          </span>
+        </>
       )}
       {tab.color && !isEditing && (
         <span

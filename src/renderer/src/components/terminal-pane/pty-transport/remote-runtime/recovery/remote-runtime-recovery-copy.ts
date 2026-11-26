@@ -150,3 +150,23 @@ export function fallbackRemoteServerName(): string {
     'the server'
   )
 }
+
+/** "25m": the one-line server card's timer. */
+export function remoteRuntimeDownForCompactLabel(
+  downForMs: number,
+  intlLocale: string = getIntlLocale()
+): string {
+  const seconds = Math.max(0, Math.floor(downForMs / 1000))
+  const [value, unit] = seconds < 60 ? [seconds, 'second'] : [Math.floor(seconds / 60), 'minute']
+  return new Intl.NumberFormat(intlLocale, { style: 'unit', unit, unitDisplay: 'narrow' }).format(
+    value
+  )
+}
+
+export function remoteServerCantReachTitle(serverName: string, t: Translate = translate): string {
+  return t(
+    'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.cantReachTitle',
+    "Can't reach {{server}}",
+    { server: serverName }
+  )
+}
