@@ -34,15 +34,13 @@ export function controlChannelOpener(
   >,
   binaryChannels: boolean
 ): AuthenticatedRuntimeChannelOpener {
+  const clientCapabilities = remoteRuntimeClientCapabilities([
+    ...(options.clientCapabilities ?? []),
+    ...(binaryChannels ? [RUNTIME_BINARY_CHANNELS_CAPABILITY] : [])
+  ])
   return (
-    options.openChannel ??
-    directRuntimeChannelOpener(connection, {
-      clientCapabilities: remoteRuntimeClientCapabilities([
-        ...(options.clientCapabilities ?? []),
-        ...(binaryChannels ? [RUNTIME_BINARY_CHANNELS_CAPABILITY] : [])
-      ]),
-      liveness: options.liveness
-    })
+    options.openChannel?.(clientCapabilities) ??
+    directRuntimeChannelOpener(connection, { clientCapabilities, liveness: options.liveness })
   )
 }
 

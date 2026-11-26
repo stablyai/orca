@@ -31,7 +31,10 @@ import type {
   RemoteRuntimeTransportSubscription,
   RemoteRuntimeTransportSubscriptionCallbacks
 } from './remote-runtime-subscription-contract'
-import { remoteRuntimeOneLinkFor } from '../control/remote-runtime-one-link'
+import {
+  refuseRelayOnlyHostWithoutLink,
+  remoteRuntimeOneLinkFor
+} from '../control/remote-runtime-one-link'
 
 export async function subscribeRemoteRuntimeTransport<TResult>(
   connection: PairedRuntimeConnection,
@@ -50,6 +53,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       idlePassive: options?.idlePassive
     })
   }
+  refuseRelayOnlyHostWithoutLink(connection)
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,

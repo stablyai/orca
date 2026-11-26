@@ -1,3 +1,4 @@
+import { isTestRelayRuntimeDevice } from '../../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import type { DeviceEntry } from './device-entry'
 import type { BotShareCallerScope, RpcCallerScope } from '../../callers/rpc-caller-scope'
 import type { BotShareDevice, BotShareGrant } from './bot-share-device-store'
@@ -28,7 +29,11 @@ export function devicePrincipalOf(device: DeviceEntry): DevicePrincipal {
 export function callerScopeOf(device: DeviceEntry): RpcCallerScope {
   return device.scope === 'mobile'
     ? { kind: 'mobile', delegated: device.parentDeviceId !== undefined }
-    : { kind: 'runtime-paired', grants: device.grants ?? [] }
+    : {
+        kind: 'runtime-paired',
+        grants: device.grants ?? [],
+        ...(isTestRelayRuntimeDevice(device) ? { relayCredentialSelf: true as const } : {})
+      }
 }
 
 /** A share device signs in by key alone, so it is its own client and federation owner. */

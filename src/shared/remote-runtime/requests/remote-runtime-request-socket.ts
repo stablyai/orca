@@ -1,4 +1,5 @@
 import {
+  refuseRelayOnlyHostWithoutLink,
   remoteRuntimeOneLinkFor,
   sendRemoteRuntimeRequestOnOneLink
 } from '../control/remote-runtime-one-link'
@@ -52,6 +53,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       responseTimeoutMs
     })
   }
+  refuseRelayOnlyHostWithoutLink(connection)
   return await sendRemoteRuntimeRequestOnOwnSocket<TResult>(
     connection,
     method,

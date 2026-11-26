@@ -117,16 +117,17 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     for (const device of plan) {
       const { deviceId } = device
       // Keep ancestors until child cleanup is durable so retry can rediscover them.
+      // Any device Relay admits (a phone, or a computer paired over Relay) loses its credential there.
+      if (device.relayBinding && !this.queueRelayDeviceRevoke(device.relayBinding)) {
+        return false
+      }
       if (device.scope === 'mobile') {
-        if (device.relayBinding && !this.queueRelayDeviceRevoke(device.relayBinding)) {
-          return false
-        }
         this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
         // Its keys to agents shared with this computer's account end on their hosts too.
         void sharedHostPhoneGrants().then((phones) => phones?.forgetPhone(deviceId))
       }
       registry.removeDevice(deviceId)
-      if (device.scope === 'mobile') {
+      if (device.scope === 'mobile' || device.relayBinding) {
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
       }
       this.runtime.forgetClientNavigationState(deviceId)

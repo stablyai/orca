@@ -1,3 +1,5 @@
+import { withTestRelayReach } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
+import { clearRelayDialHolds } from '../connections/runtime-environment-relay-link'
 import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import { sharedHostStatusSnapshots } from '../requests/runtime-environment-shared-hosts'
 import {
@@ -81,7 +83,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       args: { name: string; pairingCode: string }
     ): Promise<{ environment: PublicKnownRuntimeEnvironment }> => {
       // An unverified code must not replace a working pairing.
-      const environment = await addEnvironmentFromPairingCode(getUserDataPath(), args)
+      const environment = await addEnvironmentFromPairingCode(getUserDataPath(), {
+        ...args,
+        pairingCode: withTestRelayReach(args.pairingCode)
+      })
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
     }
@@ -131,6 +136,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       assertWslHostReachable(environment)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       noteRuntimeEnvironmentConnectRequested(environment.id)
+      clearRelayDialHolds(environment.id)
       clearSshCredentialDeclinedForEnvironment(environment)
       await liftSshUserDisconnectForEnvironment(environment)
       await connectThroughOwningService(environment)

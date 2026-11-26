@@ -1,3 +1,4 @@
+import { hostReadsTokenCapabilities } from '../../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
 import { publicKeyFromBase64 } from '../../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { parseRemoteRuntimeJsonText } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-frames'
@@ -18,7 +19,7 @@ const V2_DEVICE_KEY_KEYS = new Set(['clientCapabilities', 'deviceId', 'devicePro
 export function classifyE2EEAuth(
   plaintext: string,
   v2Session: DesktopMobileE2EEV2Session | null,
-  // Direct sockets only: Relay token auth stays the exact mobile shape.
+  // Direct sockets; over Relay only for the test pairing (runtime-relay-endpoint.ts).
   v2TokenCapabilities = false
 ): ClassifiedE2EEAuth {
   let auth: Record<string, unknown>
@@ -97,23 +98,42 @@ export type DeviceKeyResolution<TDevice> =
   | { kind: 'refused' }
   | { kind: 'unavailable' }
 
-export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>(args: {
+export function authenticateMobileE2EE<
+  TDevice extends { deviceToken?: string; scope?: string }
+>(args: {
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
   v2TokenCapabilities?: boolean
+  /** Decides v2TokenCapabilities when it isn't given (runtime-relay-endpoint.ts). */
+  transport?: 'direct' | 'relay'
   resolveDevice: (token: string) => TDevice | null
   // Absent on a host that does not accept device keys: key auth is then bad_auth, as before.
   resolveDeviceKey?: (deviceId: string) => DeviceKeyResolution<TDevice>
 }):
   | { ok: true; device: TDevice; clientCapabilities: unknown }
   | { ok: false; code: MobileE2EEAuthFailureCode; deviceId?: string } {
-  const auth = classifyE2EEAuth(args.plaintext, args.v2Session, args.v2TokenCapabilities)
+  const auth = classifyE2EEAuth(
+    args.plaintext,
+    args.v2Session,
+    args.v2TokenCapabilities ??
+      (args.transport ? hostReadsTokenCapabilities(args.transport) : false)
+  )
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
     // Why: a keyed row has no token, so presenting one can never match it.
-    return device?.deviceToken === auth.deviceToken
-      ? { ok: true, device, clientCapabilities: auth.clientCapabilities }
-      : { ok: false, code: 'unauthorized' }
+    if (device?.deviceToken !== auth.deviceToken) {
+      return { ok: false, code: 'unauthorized' }
+    }
+    // Only a paired computer's v2 Relay auth carries capabilities; a phone's keeps its exact shape.
+    if (
+      args.v2Session &&
+      args.transport === 'relay' &&
+      auth.clientCapabilities !== undefined &&
+      device.scope !== 'runtime'
+    ) {
+      return { ok: false, code: 'bad_auth' }
+    }
+    return { ok: true, device, clientCapabilities: auth.clientCapabilities }
   }
   if (auth.kind === 'invalid' || !args.resolveDeviceKey || !args.v2Session) {
     return { ok: false, code: 'bad_auth' }

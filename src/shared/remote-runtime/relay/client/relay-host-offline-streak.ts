@@ -1,6 +1,8 @@
-import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
-import { isHostAttachTimeout } from './relay-recovery-failure-count'
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
+import { RelayOuterError } from './relay-e2ee-link'
+import {
+  MOBILE_RELAY_CLOSE_CODE,
+  MOBILE_RELAY_PHONE_CLOSE_REASON
+} from '../mobile-relay-close-codes'
 
 // 4404s further apart than this belong to separate episodes (the phone slept, or went direct).
 const EPISODE_GAP_MS = 2 * 60_000
@@ -58,4 +60,13 @@ export class RelayHostOfflineStreak {
     this.lastResolveAt = now
     return true
   }
+}
+
+// Attach timeout means desktop control was seated; retry the same cell rather than re-resolving its assignment.
+export function isHostAttachTimeout(error: Error | null): boolean {
+  return (
+    error instanceof RelayOuterError &&
+    error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE &&
+    error.closeReason === MOBILE_RELAY_PHONE_CLOSE_REASON.HOST_ATTACH_TIMEOUT
+  )
 }

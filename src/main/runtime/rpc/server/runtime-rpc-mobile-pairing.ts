@@ -4,6 +4,7 @@ import {
   type MobileRelayMintFailure
 } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
+import { withTestRelayInvite } from './pairing/runtime-relay-test-invite'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './pairing/network/network-exposure-guidance'
 import { createOwnerPairingOffer } from './pairing/pairing-offer-requests'
@@ -264,6 +265,24 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcBotShareOffers {
         relay: relayPairing.relay
       })
     }
+  }
+
+  /** Test-only, dev builds (runtime-relay-endpoint.ts): a paired-desktop offer with a Relay invite. */
+  withTestRelayInvite<T extends { pairingUrl: string; deviceId: string }>(offer: T) {
+    return withTestRelayInvite(offer, {
+      provider: async () => {
+        if (!this.mobileRelayPairingProvider && this.mobileRelayPairingProviderInstaller) {
+          await withTimeout(
+            this.mobileRelayPairingProviderInstaller(),
+            RELAY_PROVIDER_INSTALL_WAIT_MS,
+            undefined
+          )
+        }
+        return this.mobileRelayPairingProvider
+      },
+      bind: (deviceId, binding) => this.setRelayDeviceBinding(deviceId, binding),
+      retain: (deviceId, binding) => this.queueOrRetainRelayDeviceRevoke(deviceId, binding)
+    })
   }
 
   protected relayPairingRequestSuperseded(): PairingOfferUnavailable {

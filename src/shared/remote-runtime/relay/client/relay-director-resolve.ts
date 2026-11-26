@@ -1,9 +1,10 @@
 import * as z from 'zod'
-import { parseRetryAfterHeaderMs } from '../../../../src/shared/network/retry-after-header'
-import { MOBILE_RELAY_RETRY_AFTER_MAX_MS } from './mobile-relay-retry-delays'
-import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
+import { parseRetryAfterHeaderMs } from '../../../network/retry-after-header'
+import type { MobileRelayEndpoint } from '../mobile-relay-credential-contract'
 
 const MAX_RESPONSE_BYTES = 16 * 1024
+// Cap director pacing so one header cannot park recovery indefinitely.
+export const RELAY_DIRECTOR_RETRY_AFTER_MAX_MS = 120_000
 
 // Honor bounded director Retry-After pacing instead of redialing overloaded service on local backoff.
 export class RelayDirectorHttpError extends Error {
@@ -58,7 +59,7 @@ const ResolveResponseSchema = z
   })
   .strict()
 
-export async function resolveMobileRelayEndpoint(args: {
+export async function resolveRelayEndpoint(args: {
   relay: MobileRelayEndpoint
   resumeToken: string
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>
@@ -84,7 +85,7 @@ export async function resolveMobileRelayEndpoint(args: {
         response.status,
         parseRetryAfterHeaderMs(
           response.headers.get('retry-after'),
-          MOBILE_RELAY_RETRY_AFTER_MAX_MS
+          RELAY_DIRECTOR_RETRY_AFTER_MAX_MS
         )
       )
     }

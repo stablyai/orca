@@ -6,7 +6,7 @@ import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/
 import { connect } from '../rpc/direct-rpc-connect'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from '../relay/mobile-relay-rpc-session'
-import { resolveMobileRelayEndpoint } from '../relay/mobile-relay-resume-director'
+import { resolveRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/client/relay-director-resolve'
 import {
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
@@ -115,7 +115,7 @@ function createSupervisor(
         onLog,
         hostId: host.id
       }),
-    resolveRelay: resolveMobileRelayEndpoint,
+    resolveRelay: resolveRelayEndpoint,
     readBundle: readMobileRelayCredentialBundle,
     writeBundle: writeMobileRelayCredentialBundle,
     setRelayRouting,

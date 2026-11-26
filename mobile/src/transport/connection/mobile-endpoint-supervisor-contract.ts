@@ -3,7 +3,7 @@ import type { RelayHostCloseReason } from '../../../../src/shared/remote-runtime
 import type { HostGoodPath } from './host-path-memory'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from '../relay/mobile-relay-rpc-session-contract'
-import type { resolveMobileRelayEndpoint } from '../relay/mobile-relay-resume-director'
+import type { resolveRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/client/relay-director-resolve'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ScheduleTimer } from '../../platform/timer-scheduler'
@@ -21,7 +21,7 @@ export type MobileEndpointSupervisorDependencies = {
     confirmReqId: string,
     onHostCloseReason?: (reason: RelayHostCloseReason) => void
   ) => MobileRelayRpcSession
-  resolveRelay: typeof resolveMobileRelayEndpoint
+  resolveRelay: typeof resolveRelayEndpoint
   readBundle: (hostId: string) => Promise<MobileRelayCredentialBundle | null>
   writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
   setRelayRouting: (hostId: string, relay: MobileRelayEndpoint) => Promise<void>

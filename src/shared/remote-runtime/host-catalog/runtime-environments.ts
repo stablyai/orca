@@ -6,6 +6,7 @@ import {
   type PairedRuntimeConnection
 } from '../pairing/paired-runtime-connection'
 import { classifyRemotePairingHostname } from '../pairing/remote-pairing-address'
+import { redactRuntimeRelayEndpoint } from '../pairing/runtime-relay-endpoint'
 import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
 import {
   OrcadWslDeploymentLinkSchema,
@@ -176,7 +177,10 @@ export function redactRuntimeEnvironment(
   return {
     ...environment,
     endpoints: environment.endpoints.map(
-      ({ deviceToken: _deviceToken, publicKeyB64: _key, ...rest }) => rest
+      ({ deviceToken: _deviceToken, publicKeyB64: _key, ...rest }) => ({
+        ...rest,
+        endpoint: redactRuntimeRelayEndpoint(rest.endpoint)
+      })
     )
   }
 }

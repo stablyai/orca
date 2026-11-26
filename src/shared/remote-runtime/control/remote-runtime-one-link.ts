@@ -1,3 +1,4 @@
+import { relayOnlyEndpointRefusal } from '../pairing/runtime-relay-endpoint'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
@@ -154,4 +155,12 @@ export async function sendRemoteRuntimeRequestOnOneLink<TResult>(
     }
   )
   return await sent
+}
+
+/** A host paired over Relay has no address to dial: without its link, say so instead of dialing. */
+export function refuseRelayOnlyHostWithoutLink(connection: PairedRuntimeConnection): void {
+  const refusal = relayOnlyEndpointRefusal(connection.endpoint)
+  if (refusal) {
+    throw refusal
+  }
 }

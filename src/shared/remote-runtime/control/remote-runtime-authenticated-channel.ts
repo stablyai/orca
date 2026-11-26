@@ -40,3 +40,17 @@ export type AuthenticatedRuntimeChannelOpener = (
 ) =>
   | { ok: true; channel: AuthenticatedRuntimeChannel }
   | { ok: false; error: RemoteRuntimeClientError }
+
+/**
+ * Opener refusals a redial cannot fix: no credential left, one link turned off, or Relay resumed
+ * another credential. The connection stops retrying; the next call or a new pairing opens again.
+ */
+const CHANNEL_REFUSALS_THAT_END_RETRY = new Set([
+  'relay_credential_unavailable',
+  'relay_one_link_off',
+  'relay_credential_mismatch'
+])
+
+export function channelRefusalEndsRetry(error: RemoteRuntimeClientError): boolean {
+  return CHANNEL_REFUSALS_THAT_END_RETRY.has(error.code)
+}

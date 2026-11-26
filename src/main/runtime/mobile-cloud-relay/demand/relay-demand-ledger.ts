@@ -1,3 +1,4 @@
+import { isTestRelayRuntimeDevice } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import type { DeviceRegistry } from '../../rpc/server/pairing/device-registry'
 import type { RelayDeviceBinding, RelayRevokeOutbox } from '../pairing/relay-revoke-outbox'
 
@@ -59,7 +60,9 @@ export class RelayDemandLedger {
   /** Phones and teammates' share devices: what reaches this host through Relay. */
   private relayClients(): readonly { relayBinding?: RelayDeviceBinding }[] {
     return [
-      ...this.options.deviceRegistry.listDevices().filter((device) => device.scope === 'mobile'),
+      ...this.options.deviceRegistry
+        .listDevices()
+        .filter((device) => device.scope === 'mobile' || isTestRelayRuntimeDevice(device)),
       ...(this.options.botShareDevices?.() ?? [])
     ]
   }
