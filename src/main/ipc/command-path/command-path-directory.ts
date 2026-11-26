@@ -2,6 +2,7 @@ import type { Dir, Stats } from 'node:fs'
 import { access, constants as fsConstants, opendir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import {
+  isMissingPathError,
   UNVERIFIED_FS_PROBE,
   type InventoryFsProbes
 } from '../../../shared/shell/command-resolution/inventory-fs-probes'
@@ -40,29 +41,15 @@ export async function checkExecutableFile(
     return stats.isFile() ? 'executable' : 'missing'
   }
   if (probes) {
-    const result = await probes.read(candidate, 'access', async () => {
-      await access(candidate, fsConstants.X_OK)
-      return true
-    })
+    const result = await probes.executableAccess(candidate, stats)
     return result === UNVERIFIED_FS_PROBE ? 'unknown' : result ? 'executable' : 'missing'
   }
   try {
     await access(candidate, fsConstants.X_OK)
     return 'executable'
   } catch (error) {
-    return isMissingPathError(error, true) ? 'missing' : 'unknown'
+    return isMissingPathError(error, (stats.mode & 0o111) === 0) ? 'missing' : 'unknown'
   }
-}
-
-function isMissingPathError(error: unknown, checkedFile = false): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error.code === 'ENOENT' ||
-      error.code === 'ENOTDIR' ||
-      (checkedFile && (error.code === 'EACCES' || error.code === 'EPERM')))
-  )
 }
 
 export function detectionDirectoryKey(dir: string, isWin: boolean): string {

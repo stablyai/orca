@@ -39,7 +39,7 @@ export type InstalledAgentDetectionOptions = {
   onlyTuiAgent?: TuiAgent
   /** Publication sequence from this caller's incomplete detect reply. */
   afterPublication?: number
-  /** Skip the launch deadline while keeping any caller-provided cancellation. */
+  /** Wait for the complete publication within the request budget. */
   waitForCompletion?: boolean
 }
 
@@ -129,7 +129,7 @@ export async function detectInstalledAgentInventory(
   options?: InstalledAgentDetectionOptions,
   refresh = false,
   signal?: AbortSignal,
-  prepare?: (signal?: AbortSignal) => Promise<void>
+  prepare?: (signal: AbortSignal) => Promise<void>
 ): Promise<InstalledAgentInventory> {
   const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)

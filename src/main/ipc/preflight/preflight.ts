@@ -86,7 +86,7 @@ export function registerPreflightHandlers(
               ...detectionOptions(args),
               afterPublication: args.afterPublication
             })
-          : detectAgentsOnHost(host, detectionOptions(args))
+          : detectAgentsOnHost(host, { ...detectionOptions(args), waitForCompletion: false })
       })
     }
   )

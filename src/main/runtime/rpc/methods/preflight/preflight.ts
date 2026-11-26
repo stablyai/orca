@@ -121,7 +121,7 @@ export const PREFLIGHT_METHODS = [
       await assertAgentDetectionHostRunning(host)
       return refreshAgentsOnHost(
         host,
-        { ...hostDetectionOptions(runtime), waitForCompletion: true },
+        hostDetectionOptions(runtime),
         params.userInitiated,
         params.withManagedAgentCommands,
         signal

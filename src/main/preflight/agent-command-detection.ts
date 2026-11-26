@@ -5,7 +5,6 @@ import {
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
 import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
-import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
 import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
@@ -15,13 +14,14 @@ import {
 } from '../../shared/concurrency/abort-signal-reason'
 import {
   currentInventoryPublication,
-  localInventory,
+  INVENTORY_WAIT_MS,
   readInventory,
-  wslInventory,
   type InventorySlot
 } from './agent-command-inventory'
+import { getLocalInventory, wslInventory } from './agent-command-inventory-host'
 
-const INVENTORY_WAIT_MS = 10_000
+const INVENTORY_COMPLETION_WAIT_MS = 60_000
+
 export class AgentInventoryDeadlineError extends Error {
   readonly data?: { afterPublication: number }
 
@@ -33,25 +33,24 @@ export class AgentInventoryDeadlineError extends Error {
   }
 }
 
-function getLocalInventory() {
-  return localInventory(buildLocalPreflightEnv)
-}
-
 export async function withAgentInventoryDeadline<T>(
   operation: (signal: AbortSignal) => Promise<T>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs?: number
 ): Promise<T> {
-  if (signal) {
-    throwIfSignalAborted(signal)
+  throwIfSignalAborted(signal)
+  if (signal && timeoutMs === undefined) {
     return operation(signal)
   }
   const controller = new AbortController()
   const timer = setTimeout(
     () => controller.abort(new AgentInventoryDeadlineError()),
-    INVENTORY_WAIT_MS
+    timeoutMs ?? INVENTORY_WAIT_MS
   )
   try {
-    return await operation(controller.signal)
+    return await operation(
+      signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
+    )
   } finally {
     clearTimeout(timer)
   }
@@ -119,15 +118,26 @@ export async function selectTerminalAgentProgram(
   return withAgentInventoryDeadline<TerminalAgentProgramSelection>(async (waitSignal) => {
     const slot = wsl ? await wslInventory(wsl, waitSignal) : getLocalInventory()
     throwIfSignalAborted(waitSignal)
-    const inventory = slot
-      ? await waitForPromiseWithSignal(
-          readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
-            acceptAnyMatch: true,
-            revalidateUnavailable: options.revalidateUnavailable
-          }),
-          waitSignal
-        )
+    const read = slot
+      ? readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
+          acceptAnyMatch: true,
+          revalidateUnavailable: options.revalidateUnavailable,
+          waitForCompletion: true
+        })
+      : undefined
+    const publication = read
+      ? await waitForPromiseWithSignal(read.result, waitSignal).catch((error: unknown) => {
+          if (
+            !wsl &&
+            error instanceof AgentInventoryDeadlineError &&
+            isAbortSignalReason(waitSignal, error)
+          ) {
+            return read.snapshot()
+          }
+          throw error
+        })
       : null
+    const inventory = publication?.inventory
     if (!inventory || (!wsl && slot !== getLocalInventory())) {
       return { program: preferred, result: { kind: 'unknown' } }
     }
@@ -147,7 +157,10 @@ export async function selectTerminalAgentProgram(
       }
     }
     return { program: preferred, result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
-  }, signal).catch(() => ({ program: preferred, result: { kind: 'unknown' as const } }))
+  }, signal).catch((): TerminalAgentProgramSelection => ({
+    program: preferred,
+    result: { kind: 'unknown' }
+  }))
 }
 
 type CommandDetectionOptions = {
@@ -159,7 +172,7 @@ type CommandDetectionOptions = {
   afterPublication?: number
   waitForCompletion?: boolean
   signal?: AbortSignal
-  prepare?: (signal?: AbortSignal) => Promise<void>
+  prepare?: (signal: AbortSignal) => Promise<void>
 }
 
 export async function detectAgentCommandsOnHost(
@@ -179,7 +192,7 @@ function completeInventoryAfter(
     latest.sequence > sequence &&
     !latest.inventory.incomplete &&
     commands.every((command) => latest.inventory.probed.has(command))
-    ? latest.inventory
+    ? latest
     : undefined
 }
 
@@ -194,8 +207,9 @@ export async function detectAgentCommandInventoryOnHost(
   const targeted = options.onlyRequested ?? false
   const ordinaryMode = targeted ? 'read' : 'detect'
   const refreshMode = targeted ? 'revalidate' : 'refresh'
-  const detect = async (waitSignal?: AbortSignal) => {
+  const detect = async (waitSignal: AbortSignal) => {
     let slot: InventorySlot | undefined
+    let read: ReturnType<typeof readInventory> | undefined
     try {
       slot = wslTarget ? await wslInventory(wslTarget, waitSignal) : getLocalInventory()
       const before = slot?.published?.sequence ?? 0
@@ -203,65 +217,66 @@ export async function detectAgentCommandInventoryOnHost(
       if (slot && !options.refresh && options.afterPublication !== undefined) {
         const completed = completeInventoryAfter(slot, options.afterPublication, commands)
         if (completed) {
-          return { slot, inventory: completed }
+          return { slot, publication: completed }
         }
       }
       if (options.prepare) {
-        await options.prepare(waitSignal)
+        await waitForPromiseWithSignal(options.prepare(waitSignal), waitSignal)
         throwIfSignalAborted(waitSignal)
       }
       if (!slot) {
-        return { slot, inventory: null }
+        return { slot, publication: null }
       }
-      let inventory =
-        (!options.refresh ? completeInventoryAfter(slot, before, commands) : undefined) ??
-        (await waitForPromiseWithSignal(
-          readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
-            targeted
-          }),
-          waitSignal
-        ))
-      if (!wslTarget && options.waitForCompletion) {
-        while (inventory) {
-          const { probed, retryProbes } = inventory
-          if (!retryProbes?.retryWhen || commands.every((command) => probed.has(command))) {
-            break
-          }
-          const beforeRetry = slot.published?.sequence ?? 0
-          await waitForPromiseWithSignal(retryProbes.retryWhen, waitSignal)
-          throwIfSignalAborted(waitSignal)
-          inventory =
-            completeInventoryAfter(slot, beforeRetry, commands) ??
-            (await waitForPromiseWithSignal(
-              readInventory(slot, commands, ordinaryMode, { targeted, retryProbes }),
-              waitSignal
-            ))
-        }
+      const completed = !options.refresh
+        ? completeInventoryAfter(slot, before, commands)
+        : undefined
+      if (completed) {
+        return { slot, publication: completed }
       }
-      throwIfSignalAborted(waitSignal)
-      return { slot, inventory }
+      read = readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
+        targeted,
+        waitForCompletion:
+          options.waitForCompletion || (!options.refresh && options.afterPublication !== undefined)
+      })
+      return { slot, publication: await waitForPromiseWithSignal(read.result, waitSignal) }
     } catch (error) {
-      const latest = slot?.published?.inventory
       if (error instanceof AgentInventoryDeadlineError && isAbortSignalReason(waitSignal, error)) {
+        const published = slot && currentInventoryPublication(slot)
+        if (options.waitForCompletion) {
+          throw new AgentInventoryDeadlineError(published?.sequence ?? 0)
+        }
+        const latest = read?.snapshot() ?? published
         return {
           slot,
-          afterPublication: slot?.published?.sequence ?? 0,
-          inventory: {
-            found: latest?.found ?? new Set<string>(),
-            matches: latest?.matches ?? new Map<string, AgentPathMatch>(),
-            probed: new Set<string>(),
-            incomplete: true
+          publication: {
+            sequence: latest?.sequence ?? 0,
+            partial: true,
+            inventory: {
+              found: latest?.inventory.found ?? new Set<string>(),
+              matches: latest?.inventory.matches ?? new Map<string, AgentPathMatch>(),
+              probed: new Set<string>(),
+              incomplete: true
+            }
           }
         }
       }
       throw error
     }
   }
-  const { slot, inventory, afterPublication } = options.waitForCompletion
-    ? await detect(options.signal)
-    : await withAgentInventoryDeadline(detect, options.signal)
-  if (!inventory || (!wslTarget && slot !== getLocalInventory())) {
+  const { slot, publication } = await withAgentInventoryDeadline(
+    detect,
+    options.signal,
+    options.waitForCompletion ? INVENTORY_COMPLETION_WAIT_MS : INVENTORY_WAIT_MS
+  )
+  if (!publication || (!wslTarget && slot !== getLocalInventory())) {
     throw new Error(`Could not complete ${wslTarget ? 'WSL' : 'local'} agent inventory`)
+  }
+  const { inventory } = publication
+  const incomplete =
+    inventory.incomplete || commands.some((command) => !inventory.probed.has(command))
+  const afterPublication = publication.partial ? publication.sequence : undefined
+  if (incomplete && options.waitForCompletion && (!wslTarget || options.refresh)) {
+    throw new AgentInventoryDeadlineError(afterPublication)
   }
   const shell = process.platform === 'win32' ? 'powershell' : 'posix'
   const found = new Set(commands.filter((command) => inventory.found.has(command)))
@@ -275,9 +290,7 @@ export async function detectAgentCommandInventoryOnHost(
   }
   return {
     found,
-    ...(inventory.incomplete || commands.some((command) => !inventory.probed.has(command))
-      ? { incomplete: true }
-      : {}),
+    ...(incomplete ? { incomplete: true } : {}),
     ...(afterPublication === undefined ? {} : { afterPublication })
   }
 }

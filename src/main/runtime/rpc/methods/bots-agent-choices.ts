@@ -20,6 +20,7 @@ import {
 } from '../../../preflight/workspace-agent-detection'
 import { defineMethod } from '../core'
 import { hostDetectionOptions } from './preflight/preflight'
+import { AgentInventoryDeadlineError } from '../../../preflight/agent-command-detection'
 import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 
 // The first health snapshot probes every agent; past this the answer goes out without it.
@@ -64,8 +65,13 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService, signal?: 
       { ...hostDetectionOptions(runtime), waitForCompletion: true },
       signal
     )
-      .then(({ agents, incomplete }) => (incomplete ? null : agents))
-      .catch(() => null),
+      .then(({ agents }) => agents)
+      .catch((error: unknown) => {
+        if (error instanceof AgentInventoryDeadlineError) {
+          throw error
+        }
+        return null
+      }),
     availabilitySnapshot(runtime, signal)
   ])
   throwIfSignalAborted(signal)

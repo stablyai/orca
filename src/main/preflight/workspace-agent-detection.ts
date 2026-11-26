@@ -209,47 +209,42 @@ export async function refreshAgentsOnHost(
     throw new SshHostNotServedError(host.connectionId)
   }
   const wsl = getPreflightWslTarget(host.context)
-  const waitForCompletion =
-    options?.waitForCompletion ?? (userInitiated || !withManagedAgentCommands)
-  const refresh = async (signal?: AbortSignal): Promise<RefreshAgentsResult> => {
-    let path: Awaited<ReturnType<typeof refreshAgentShellPath>> | undefined
-    const inventory = await detectInstalledAgentInventory(
-      host.context,
-      { ...options, waitForCompletion },
-      true,
-      signal,
-      async () => {
-        const preparePath = () => refreshAgentShellPath(host.context, signal)
-        path = wsl
-          ? await preparePath()
-          : await waitForPromiseWithSignal(
-              refreshAtRestCommandContext(() => {
-                throwIfSignalAborted(signal)
-                return captureHostShellEnvironment(preparePath)
-              }),
-              signal
-            )
-      }
-    )
-    if (!signal?.aborted) {
-      notifyAgentsRefreshedOnHost(userInitiated && !wsl)
+  let path: Awaited<ReturnType<typeof refreshAgentShellPath>> | undefined
+  let waitSignal: AbortSignal | undefined
+  const inventory = await detectInstalledAgentInventory(
+    host.context,
+    { ...options, waitForCompletion: userInitiated },
+    true,
+    requestSignal,
+    async (signal) => {
+      waitSignal = signal
+      const preparePath = () => refreshAgentShellPath(host.context, signal)
+      path = wsl
+        ? await preparePath()
+        : await waitForPromiseWithSignal(
+            refreshAtRestCommandContext(() => {
+              throwIfSignalAborted(signal)
+              return captureHostShellEnvironment(preparePath)
+            }),
+            signal
+          )
     }
-    if (inventory.incomplete && !withManagedAgentCommands) {
-      throw new AgentInventoryDeadlineError(inventory.afterPublication)
-    }
-    return {
-      ...inventory,
-      ...(path ?? {
-        addedPathSegments: [],
-        shellHydrationOk: false,
-        pathSource: 'sync_seed_only',
-        pathFailureReason: 'timeout'
-      })
-    }
+  )
+  if (!waitSignal?.aborted) {
+    notifyAgentsRefreshedOnHost(userInitiated && !wsl)
   }
-  return waitForCompletion
-    ? refresh(requestSignal)
-    : withAgentInventoryDeadline(refresh, requestSignal)
+  if (inventory.incomplete && !withManagedAgentCommands) {
+    throw new AgentInventoryDeadlineError(inventory.afterPublication)
+  }
+  return {
+    ...inventory,
+    ...(path ?? {
+      addedPathSegments: [],
+      shellHydrationOk: false,
+      pathSource: 'sync_seed_only',
+      pathFailureReason: 'timeout'
+    })
+  }
 }
 
 /** A prospective workspace uses the create route's resolved repo, never a client host guess. */

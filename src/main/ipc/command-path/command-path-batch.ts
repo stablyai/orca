@@ -72,10 +72,11 @@ export async function findCommandsOnLocalPath(
     matches?: Map<string, string>
     inventory?: AgentPathInventory
     unverified?: Set<string>
+    found?: Set<string>
     probes?: InventoryFsProbes
   } = {}
 ): Promise<Set<string>> {
-  const found = new Set<string>()
+  const found = options.found ?? new Set<string>()
   const remaining = new Set<string>()
   const isWin = (options.platform ?? process.platform) === 'win32'
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
@@ -109,6 +110,9 @@ export async function findCommandsOnLocalPath(
       }
     })
   )
+  if (remaining.size === 0) {
+    return found
+  }
   const rawDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '').split(isWin ? ';' : ':')
   if (isWin && !inventory) {
     rawDirs.unshift(options.cwd ?? process.cwd())
@@ -242,15 +246,13 @@ export async function findCommandsOnLocalPath(
       found.add(command)
     }
   }
-  if (remaining.size) {
-    await scanDetectionDirectories(
-      directories,
-      commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
-      scan,
-      commit,
-      () => remaining.size === 0
-    )
-  }
+  await scanDetectionDirectories(
+    directories,
+    commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
+    scan,
+    commit,
+    () => remaining.size === 0
+  )
   if (inventory) {
     for (const [command, match] of inventory.matches) {
       if (match.user) {

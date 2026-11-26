@@ -1,6 +1,5 @@
 import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs'
-import { access, lstat, open, readdir, readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { access, open, readdir, readFile, stat } from 'node:fs/promises'
 import { UNVERIFIED_FS_PROBE, type InventoryFsProbes } from './inventory-fs-probes'
 import {
   hasNativeExecutableMagic,
@@ -85,27 +84,10 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
 
 export type CliFsProbeOptions = { probes: InventoryFsProbes; onUnverified: () => void }
 
-async function readInstallDirectories(
-  path: string,
-  probes: InventoryFsProbes
-): Promise<string[] | null | typeof UNVERIFIED_FS_PROBE> {
-  // Dirent conversion can schedule an unbounded set of lstats on filesystems without entry types.
-  const names = await probes.read(path, 'dirs', () => readdir(path))
-  if (!names || names === UNVERIFIED_FS_PROBE) {
-    return names
-  }
-  const directories: string[] = []
-  for (const name of names) {
-    const entry = join(path, name)
-    const stats = await probes.read(entry, 'lstat', () => lstat(entry))
-    if (stats === UNVERIFIED_FS_PROBE) {
-      return stats
-    }
-    if (stats?.isDirectory()) {
-      directories.push(name)
-    }
-  }
-  return directories
+async function readInstallDirectories(path: string): Promise<string[]> {
+  return (await readdir(path, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
 }
 
 async function readAsync(
@@ -122,12 +104,7 @@ async function readAsync(
         if (stats === UNVERIFIED_FS_PROBE || !stats?.isFile()) {
           return stats === UNVERIFIED_FS_PROBE ? stats : false
         }
-        return read.platform === 'win32'
-          ? true
-          : await probes.read(read.path, 'access', async () => {
-              await access(read.path, constants.X_OK)
-              return true
-            })
+        return read.platform === 'win32' ? true : await probes.executableAccess(read.path, stats)
       }
       case 'file': {
         const stats = await (probes
@@ -142,10 +119,8 @@ async function readAsync(
       }
       case 'dirs':
         return probes
-          ? await readInstallDirectories(read.path, probes)
-          : (await readdir(read.path, { withFileTypes: true }))
-              .filter((entry) => entry.isDirectory())
-              .map((entry) => entry.name)
+          ? await probes.read(read.path, 'dirs', () => readInstallDirectories(read.path))
+          : await readInstallDirectories(read.path)
       case 'native':
         return await isNativeExecutableAsync(read.path)
     }

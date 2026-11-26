@@ -9,7 +9,17 @@ export type ShellProbeLifetime = {
   release: () => void
 }
 
-// No signal listeners: one would replace Electron's graceful signal quit, and every owner turns INT/TERM into an exit.
+const activeProbes = new Set<() => void>()
+
+export function killActiveShellProbes(): void {
+  for (const kill of activeProbes) {
+    kill()
+  }
+  activeProbes.clear()
+  process.off('exit', killActiveShellProbes)
+}
+
+// Signal handlers belong to the process owner so Electron can shut down normally.
 export function bindShellProbeLifetime(child: ChildProcess): ShellProbeLifetime {
   const kill = (): void => {
     if (process.platform === 'win32') {
@@ -24,6 +34,17 @@ export function bindShellProbeLifetime(child: ChildProcess): ShellProbeLifetime 
     // The probe's own group holds its rc's jobs (job control starts after the rc) and outlives the shell.
     void signalProcessTree(child, 'SIGKILL')
   }
-  process.once('exit', kill)
-  return { kill, release: () => process.off('exit', kill) }
+  if (activeProbes.size === 0) {
+    process.once('exit', killActiveShellProbes)
+  }
+  activeProbes.add(kill)
+  return {
+    kill,
+    release: () => {
+      activeProbes.delete(kill)
+      if (activeProbes.size === 0) {
+        process.off('exit', killActiveShellProbes)
+      }
+    }
+  }
 }

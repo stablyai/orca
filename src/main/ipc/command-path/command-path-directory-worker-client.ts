@@ -66,7 +66,7 @@ export class DetectionDirectoryWorkerClient {
   }
 
   read(dir: string): Promise<Map<string, string> | null> {
-    if (this.pending.size >= MAX_PENDING_LISTINGS) {
+    if (!this.retainPending && this.pending.size >= MAX_PENDING_LISTINGS) {
       return Promise.resolve(null)
     }
     const worker = this.host.ensure()

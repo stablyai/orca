@@ -1,4 +1,5 @@
 import { forkProcess } from '@orca/process-host/fork-process'
+import { killActiveShellProbes } from '../../main/startup/shell-environment/shell-probe-lifetime'
 import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
@@ -31,14 +32,23 @@ export async function readCliSkillAgentInventory(
   } finally {
     child.unref()
     child.channel?.unref()
-    if (child.pid && child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGKILL')
+    if (child.connected) {
+      child.disconnect()
     }
   }
 }
 
 export async function sendCliSkillAgentInventory(): Promise<void> {
-  process.once('disconnect', () => process.kill(process.pid, 'SIGKILL'))
+  const stop = (): void => {
+    killActiveShellProbes()
+    // Force exit only after cleanup, since Node can hang joining native filesystem work.
+    process.kill(process.pid, 'SIGKILL')
+  }
+  process.once('disconnect', stop)
+  if (!process.connected) {
+    stop()
+    return
+  }
   try {
     const { detectInstalledAgentsWithShellPathHydration } =
       await import('../../main/preflight/installed-agent-detection.js')
