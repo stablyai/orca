@@ -1,5 +1,15 @@
+import { createContext, useContext } from 'react'
 import type { ViewStyle } from 'react-native'
 import { useReleasedSideInset, type ReleasedSideInset } from '../layout/released-side-inset'
+
+/** True when the session row already pads for the strip, so a child must not reserve it again. */
+const SideStripReservedByRowContext = createContext(false)
+
+export function useSideStripReservedByRow(): boolean {
+  return useContext(SideStripReservedByRowContext)
+}
+
+export const SideStripReservedByRowProvider = SideStripReservedByRowContext.Provider
 
 /**
  * Where the session keeps clear of a released side strip (the iPhone Duo's status column). With a

@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useShellSideRail } from '../../../layout/use-shell-side-rail'
 import { useReleasedSideInset } from '../../../layout/released-side-inset'
 import { toggleDuoChatExpanded, useDuoChatExpanded } from '../../duo-chat-width'
-import { sideStripMargin } from '../../session-side-strip-inset'
+import { sideStripMargin, useSideStripReservedByRow } from '../../session-side-strip-inset'
 
 export type ChatWidthToggle = { expanded: boolean; onToggle: () => void }
 
@@ -21,6 +21,7 @@ export function useChatBottomFit(keyboardInset: number): {
   const sideRail = useShellSideRail()
   const released = useReleasedSideInset()
   const expanded = useDuoChatExpanded()
+  const reservedByRow = useSideStripReservedByRow()
   const bottomInset = sideRail ? 0 : insets.bottom
   return {
     bottomPad: keyboardInset > 0 ? keyboardInset + bottomInset : bottomInset,
@@ -28,6 +29,7 @@ export function useChatBottomFit(keyboardInset: number): {
       fitScreenCorners: sideRail && keyboardInset === 0,
       widthToggle: released ? { expanded, onToggle: toggleDuoChatExpanded } : null
     },
-    transcriptInset: expanded ? null : sideStripMargin(released)
+    // A docked panel already pads the row by the strip; the transcript must not reserve it again.
+    transcriptInset: expanded || reservedByRow ? null : sideStripMargin(released)
   }
 }
