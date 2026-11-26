@@ -8,9 +8,7 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import { removeImageWithReferences } from '../../composer/editor/native-chat-composer-image-references'
 import { records } from '../../drafts/native-chat-composer-draft-memory'
-import { imageReferenceToken } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
-
-const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+import { nativeChatNotesSendWordsUnchanged } from './native-chat-notes-send-words'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import {
   clearNativeChatAttachmentNotes,
@@ -89,12 +87,15 @@ export function nativeChatNotesSoleEditor(
 }
 
 /** Replacing a reopened chip while another viewer edits it would end that edit under it: refused,
- *  with the words kept here. */
+ *  with the words kept here. Checked again just before the replacement, since another viewer can
+ *  open the chip while the image is prepared; then the marked copies just `attached` come back out. */
 export function assertNativeChatNotesSoleEditor(
   scopeKey: string,
-  replacedId: string | undefined
+  replacedId: string | undefined,
+  attached: readonly string[] = []
 ): void {
   if (!nativeChatNotesSoleEditor(scopeKey, replacedId)) {
+    detachNativeChatNotes(scopeKey, attached)
     throw new NativeChatNotesEditedElsewhereError()
   }
 }
@@ -171,21 +172,13 @@ export function submitNativeChatNotesIfApproved(
   const draft = readNativeChatComposerDraft(scopeKey)
   const kept = approved.imageIds.filter((id) => id !== replacedId)
   const expected = new Set([...kept, ...ids])
-  // The editor writes a chip token for each image it adds or removes, with a space on either side;
-  // those are this hand-off's own changes. Everything else, line breaks and indents included, must
-  // be exactly as it was.
-  const words = (text: string, tokens: readonly (string | undefined)[]): string =>
-    tokens.reduce<string>(
-      (rest, id) =>
-        id ? rest.split(new RegExp(` ?${escapeRegExp(imageReferenceToken(id))} ?`)).join('') : rest,
-      text
-    )
   if (
     now?.scopeKey !== scopeKey ||
     // The same mounted message box; its current handle is the one that sends.
     now.element !== approved.element ||
     now.handle.notesBlocked?.() !== null ||
-    words(draft.text, [...ids, replacedId]) !== words(approved.text, [replacedId]) ||
+    // Only this hand-off's own chips changed the words; line breaks and indents are as they were.
+    !nativeChatNotesSendWordsUnchanged(approved.text, draft.text, ids, replacedId) ||
     draft.images.length !== expected.size ||
     draft.images.some(({ id }) => !expected.has(id)) ||
     // The images that were already there keep their order.
