@@ -60,8 +60,7 @@ export function installExternalConversations(
     | null,
   runtime: {
     getOrchestrationDb: () => DeliveryReceiptDb & OrchestrationDb
-    listAutomationRuns: BotConversationActsForSources['listAutomationRuns']
-    showAutomation: BotConversationActsForSources['showAutomation']
+    findLiveAutomationOfRunChat: BotConversationActsForSources['findLiveAutomationOfRunChat']
     onWorktreeLifecycle: (listener: (event: RuntimeWorktreeLifecycleEvent) => void) => () => void
     agentTransitions: Pick<AgentTransitionDetector, 'latestRow' | 'subscribe'>
     onConversationLinked?: () => void

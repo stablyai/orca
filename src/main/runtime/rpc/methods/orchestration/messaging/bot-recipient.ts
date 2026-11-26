@@ -259,8 +259,10 @@ export async function readBotTurn(
   db: OrchestrationDb,
   sessionId: string,
   opening?: AgentJournalMessageItem,
-  /** Only whom the turn acts for: where an automation's run happened is not read. */
-  { askersOnly = false }: { askersOnly?: boolean } = {}
+  /** Only whom the turn acts for, by index alone: where an automation's run happened is not read,
+   *  an unopened /clear root is not opened, and a turn only the whole chat could place throws
+   *  `JournalWindowNotIndexed`, so the read's cost never grows with the chat's history. */
+  { indexedOnly = false }: { indexedOnly?: boolean } = {}
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -274,7 +276,7 @@ export async function readBotTurn(
   const host = await requireStructuredHost(runtime)
   const root = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
   let recorded = readBotConversationActsFor(runtime, root)
-  if (!recorded) {
+  if (!recorded && (!indexedOnly || host.hasSession(root))) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
     // says, and is kept as the record.
     const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
@@ -288,7 +290,7 @@ export async function readBotTurn(
     isBotRequest: (messageId: string) => db.getBotRequest(messageId) !== undefined,
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
-    ...(askersOnly
+    ...(indexedOnly
       ? {}
       : {
           automationPlace: (run?: AutomationRunMessage) =>
@@ -298,7 +300,12 @@ export async function readBotTurn(
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
-    : await readNewestBotActingTurn(await host.journalReads(sessionId), lookups)
+    : await readNewestBotActingTurn(
+        await host.journalReads(sessionId),
+        lookups,
+        undefined,
+        indexedOnly ? 'indexed' : 'widening'
+      )
   // The prompt that opened the turn names its event; a conversation an automation or request started keeps it.
   const triggeredBy = turn.triggeredBy ?? recorded?.triggeredBy ?? null
   return { turn, conversation, actsFor, triggeredBy }

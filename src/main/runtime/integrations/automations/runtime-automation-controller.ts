@@ -102,6 +102,13 @@ export class RuntimeAutomationController {
     return this.store.listAutomationRuns(automationId)
   }
 
+  findLiveAutomationOfRunChat(chatSessionId: string): string | null {
+    if (!this.store?.findLiveAutomationOfRunChat) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.findLiveAutomationOfRunChat(chatSessionId)
+  }
+
   listRunsByAutomation(automationIds: readonly string[]): Map<string, AutomationRun[]> {
     if (!this.store?.listAutomationRunsByAutomation) {
       throw new Error('runtime_unavailable')

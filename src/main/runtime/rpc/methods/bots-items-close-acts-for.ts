@@ -7,7 +7,8 @@ import { readBotTurn } from './orchestration/messaging/bot-recipient'
 
 /** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was:
  *  read as every check reads a turn, so a teammate's request taken in the owner's own chat is
- *  theirs. Unknown, never the owner, when it can't be read. Only who, not where they asked. */
+ *  theirs, but by index alone, so a close costs the same however long the chat ran. Unknown, never
+ *  the owner, when that read can't say. Only who, not where they asked. */
 export async function closingTurnActsFor(
   runtime: OrcaRuntimeService,
   writer: Pick<BotItemWriter, 'sessionId'>
@@ -18,7 +19,7 @@ export async function closingTurnActsFor(
       runtime.getOrchestrationDb(),
       writer.sessionId,
       undefined,
-      { askersOnly: true }
+      { indexedOnly: true }
     )
     // A device Orca can't place as the owner typed in it: the owner's chat, but not known to be them.
     const askers: readonly BotRequestAsker[] = turnActsForOwner(turn)
@@ -39,7 +40,10 @@ export async function closingTurnActsFor(
         : asker
     )
   } catch (error) {
-    console.warn('[bots] could not read whom a closing turn acts for', error)
+    // A turn only the whole chat could place is unknown, as designed: never the owner.
+    if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
+      console.warn('[bots] could not read whom a closing turn acts for', error)
+    }
     return [{ kind: 'unknown' }]
   }
 }

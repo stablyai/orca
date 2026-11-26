@@ -18,6 +18,8 @@ import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readNewestBotActingTurn } from '../../bots/bot-acting-turn-read'
+import { OWNER_ACTS_FOR } from '../../../shared/bots/bot-acts-for'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 // #47529: opening one ended turn of a bot group room reads it through the operation window. Guards
@@ -551,5 +553,31 @@ it('stops its look back for the turn ahead at the nearest match, however long th
   expect([look(100), look(1000)]).toEqual([
     { found: true, tested: 1, probes: 0 },
     { found: true, tested: 1, probes: 0 }
+  ])
+})
+
+// #49889: a bot's close reads whom its turn acts for by index alone. An unanswered send at the
+// chat's start would pin a widening read back to the whole chat; this one examines the same rows.
+it("reads a closing turn's askers with the same work however long the chat ran, an old unanswered send included", async () => {
+  const examined = async (turns: number) => {
+    const db = chat(turns, () => true, 0)
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    const turn = await readNewestBotActingTurn(
+      { operationWindow: async (anchors) => readJournalDomainOperationWindow(scope, anchors) },
+      {
+        isBotRequest: () => false,
+        botRequestActsFor: () => null,
+        conversationActsFor: OWNER_ACTS_FOR,
+        conversationWorkspaceId: null
+      },
+      undefined,
+      'indexed'
+    )
+    db.close()
+    return { rows: scope.work.rows, opener: turn.rootItemId !== null }
+  }
+  expect([await examined(500), await examined(5_000)]).toEqual([
+    { rows: 74, opener: true },
+    { rows: 74, opener: true }
   ])
 })

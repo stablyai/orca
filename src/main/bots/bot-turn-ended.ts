@@ -80,8 +80,8 @@ function activeWorkSlot(
 export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
   const isOwnerChat = createBotOwnerChatCheck({
     getOrchestrationDb: () => runtime.getOrchestrationDb(),
-    listAutomationRuns: () => runtime.listAutomationRuns(),
-    showAutomation: (id) => runtime.showAutomation(id),
+    findLiveAutomationOfRunChat: (chatSessionId) =>
+      runtime.findLiveAutomationOfRunChat(chatSessionId),
     lookAround: {
       botOfLook: (sessionId) => runtime.lookAround.botOfLook(sessionId),
       botOfTidyUp: (sessionId) => runtime.lookAround.botOfTidyUp(sessionId)

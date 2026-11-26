@@ -14,10 +14,13 @@ export async function readNewestBotActingTurn(
   reads: Pick<JournalSqlReads, 'operationWindow'>,
   lookups: BotActingTurnLookups,
   before?: string,
-  /** False reads only the newest turn, by index alone (an unreadable one throws), settling as if
-   *  it were the whole chat: enough for what that turn alone can say, such as where its work started. */
-  widen = true
+  /** `newest` reads only the newest turn, settling as if it were the whole chat: enough for what
+   *  that turn alone can say, such as where its work started. `indexed` widens as the default does.
+   *  Both read by index alone, and throw `JournalWindowNotIndexed` where only the whole chat
+   *  answers, so their cost never grows with the chat's history. */
+  read: 'widening' | 'indexed' | 'newest' = 'widening'
 ): Promise<BotActingTurn> {
+  const widen = read !== 'newest'
   if (!widen && before !== undefined) {
     // Finding a turn before another may need older turns, which an unwidened read never reads.
     throw new Error('an unwidened acting-turn read takes no earlier turn')
@@ -28,7 +31,7 @@ export async function readNewestBotActingTurn(
       // Who a turn acted for is in its messages and turn rows; its tool calls would only fill memory.
       turnShape: true,
       // Its own sends say all one turn can; an older unanswered one would only pin the read back.
-      ...(widen ? {} : { anchorsOnly: true, indexedOnly: true })
+      ...(read === 'widening' ? {} : { anchorsOnly: true, indexedOnly: true })
     })
     let items = snapshot.items
     if (before !== undefined) {

@@ -8,15 +8,25 @@ import type { BotConversationActsFor } from '../../orchestration/db/bot-requests
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { closingTurnActsFor } from './bots-items-close-acts-for'
+import { findLiveAutomationOfRunChat } from '../../../persistence/scheduling-automations/automation-run-chat-lookup'
 
 const CHAT = '11111111-1111-4111-8111-111111111111'
 const host = {
   deps: {},
   journals: new Map<string, AgentJournalRenderItem[]>(),
+  /** The window reads the close asked for. */
+  windows: new Array<Record<string, unknown>>(),
+  hasSession: (id: string) => host.journals.has(id),
   journalReads: async (id: string) => {
+    if (!host.journals.has(id)) {
+      throw new Error('opened a conversation')
+    }
     const items = host.journals.get(id) ?? []
     return {
-      operationWindow: async () => ({ complete: true, snapshot: { items, submissions: [] } }),
+      operationWindow: async (anchors: Record<string, unknown>) => {
+        host.windows.push(anchors)
+        return { complete: true, snapshot: { items, submissions: [] } }
+      },
       promptItem: async () => items[0] ?? null
     }
   }
@@ -91,28 +101,29 @@ function closing(input: {
       return askers ? { record: JSON.stringify({ askers }) } : undefined
     }
   } as unknown as OrchestrationDb
-  const listed = { runs: 0 }
+  // The run history and automations as persistence keeps them: each change replaces the array.
+  const history = {
+    automationRuns: input.runs ?? [],
+    automations: (input.automations ?? []).map((id) => ({ id }))
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these of the runtime's methods.
   const runtime = {
     ensureStructuredAgentSessionHost: async () => undefined,
     getExternalConversationSeam: () => null,
     getOrchestrationDb: () => db,
-    listAutomationRuns: () => (listed.runs++, input.runs ?? []),
-    showAutomation: (id: string) => {
-      if (!input.automations?.includes(id)) {
-        throw new Error('gone')
-      }
-      return { id }
-    }
+    findLiveAutomationOfRunChat: (chat: string) => findLiveAutomationOfRunChat(history, chat)
   } as unknown as OrcaRuntimeService
   return {
-    listed,
+    history,
     close: () => closingTurnActsFor(runtime, { sessionId: CHAT })
   }
 }
 
 describe('whom a close keeps its closing turn acting for', () => {
-  beforeEach(() => host.journals.clear())
+  beforeEach(() => {
+    host.journals.clear()
+    host.windows.length = 0
+  })
 
   it("keeps a teammate's request taken in the owner's own chat as theirs, naming who but not where", async () => {
     const { close } = closing({
@@ -121,6 +132,10 @@ describe('whom a close keeps its closing turn acting for', () => {
       requests: { 'req-1': [DANA] }
     })
     expect(await close()).toEqual([{ kind: 'owner' }, KEPT])
+    // By index alone: an old unanswered send never pins the read back to the whole chat.
+    expect(host.windows).toEqual([
+      { latestTurns: 8, turnShape: true, anchorsOnly: true, indexedOnly: true }
+    ])
   })
 
   it("keeps the owner's own turn in the owner's chat as the owner's", async () => {
@@ -157,22 +172,21 @@ describe('whom a close keeps its closing turn acting for', () => {
     expect(await close()).toEqual([KEPT])
   })
 
-  it("keeps an old automation chat whose automation still exists as the owner's, searching its runs once", async () => {
-    const legacy = {
-      record: {
-        actsFor: [...OWNER_ACTS_FOR, { kind: 'unknown' as const }],
-        triggeredBy: { source: 'slack' }
-      },
-      runs: [{ chatSessionId: CHAT, automationId: 'auto-1' }]
+  it("keeps an old automation chat as the owner's while its automation exists, and again once a run lands in it", async () => {
+    const record = {
+      actsFor: [...OWNER_ACTS_FOR, { kind: 'unknown' as const }],
+      triggeredBy: { source: 'slack' }
     }
-    const kept = closing({ ...legacy, automations: ['auto-1'] })
-    expect([await kept.close(), await kept.close()]).toEqual([
-      [{ kind: 'owner' }],
-      [{ kind: 'owner' }]
-    ])
-    expect(kept.listed.runs).toBe(1)
-    const gone = closing({ ...legacy, record: { ...legacy.record } })
+    const run = { chatSessionId: CHAT, automationId: 'auto-1' }
+    const kept = closing({ record, runs: [run], automations: ['auto-1'] })
+    expect(await kept.close()).toEqual([{ kind: 'owner' }])
+    const gone = closing({ record, runs: [run] })
     expect(await gone.close()).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
+    // Its run aged out of the history, then the automation ran in the chat again.
+    const pruned = closing({ record, automations: ['auto-1'] })
+    expect(await pruned.close()).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
+    pruned.history.automationRuns = [run]
+    expect(await pruned.close()).toEqual([{ kind: 'owner' }])
   })
 
   it('is unknown, never the owner, when the read fails', async () => {
