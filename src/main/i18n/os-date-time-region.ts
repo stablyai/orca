@@ -43,7 +43,7 @@ function readOsDateTimeRegion(): OsDateTimeRegion {
   }
 }
 
-/** Read on the first renderer's request, off the startup path; a changed OS setting applies on the next launch. */
+/** Read once, beside window creation (or before a startup dialog); a changed OS setting applies on the next launch. */
 export function getOsDateTimeRegion(): OsDateTimeRegion | null {
   if (!app.isReady()) {
     return null

@@ -41,6 +41,7 @@ import {
 import { profileStateDesktopRecoveryArgs } from './startup/profile-startup/profile-state-recovery-preflight'
 import { profileStateRepairSectionApproval } from '../shared/orca-profiles/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
+import { getOsDateTimeRegion } from './i18n/os-date-time-region'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
@@ -229,6 +230,7 @@ if (preflightReady) {
       if (!state.isServeMode && !isBackgroundLaunch()) {
         try {
           await prepareEarlyMainUiLanguage()
+          getOsDateTimeRegion()
           const userDataPath = getProfileUserDataPath()
           if (isDivergedProfileStateFailure(error)) {
             const choice = await chooseProfileStateCopy({
