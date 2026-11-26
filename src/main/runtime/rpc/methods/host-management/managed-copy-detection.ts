@@ -16,6 +16,10 @@ import {
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { runtimeReleaseMayBePublished } from '../../../../node-runtime/managed-runtime-release'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
+import {
+  isOrcaAgentRuntimePath,
+  withoutOrcaAgentRuntimeDirectories
+} from '../../../../managed-agent-cli/managed-agent-cli-path'
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
@@ -34,10 +38,6 @@ import {
   stockLaunchProgram,
   type ManagedAgentCommands
 } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
-import {
-  inferLaunchShell,
-  readLaunchPosition
-} from '../../../../../shared/agent-launch/startup/launch-position'
 import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLoginShellEnvironment } from '../../../../startup/shell-environment/login-shell-environment'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -100,7 +100,7 @@ async function managedAgentLauncherOnceRead(agent: string): Promise<string | nul
   return installedManagedAgentLauncher(agent)
 }
 
-/** An installed copy that may run is an installed agent to menus and Settings. Until launch reclaim
+/** An installed chat copy can be used by its native-chat provider. Until launch reclaim
  *  has read Orca's releases, detection looks for them itself, so no reader waits for that read. */
 export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource): void {
   detectionSettings = runtime
@@ -125,7 +125,7 @@ export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource)
       console.warn('[managed-runtime] Orca-installed agents left out of detection:', error)
       return []
     }
-  }, managedAgentLauncherOnceRead)
+  })
 }
 
 /** Launch reclaim has read Orca's releases: detection answers from them from now on, and a copy the
@@ -230,27 +230,6 @@ function onTerminalPath(file: string, pathEnv: string, shell?: AgentStartupShell
   })
 }
 
-function withoutManagedDirectories(
-  agent: TuiAgent,
-  pathEnv: string,
-  pathFromSpawn?: boolean
-): string {
-  if (!isManagedAgentCli(agent)) {
-    return pathEnv
-  }
-  const root = managedAgentCli(agent).runtime.root(getProfileUserDataPath())
-  return pathEnv
-    .split(delimiter)
-    .filter((entry) => {
-      const directory =
-        pathFromSpawn && isQuotedWindowsPathEntry(entry)
-          ? normalizePathEntry('win32', entry)
-          : entry
-      return !isPathInsideOrEqual(root, directory)
-    })
-    .join(delimiter)
-}
-
 async function lookUpTerminalProgram(
   program: string,
   pathEnv: string,
@@ -270,54 +249,68 @@ async function lookUpTerminalProgram(
   return lookUpOwnProgram(program, pathEnv)
 }
 
-/** Launch selection uses the captured shell PATH, installers' directories, then the current registry launcher. */
+type HostPathOptions = {
+  pathEnv?: string
+  shell?: AgentStartupShell
+}
+
+async function resolveHostPath(pathEnv: string | undefined): Promise<string> {
+  if (pathEnv !== undefined) {
+    return pathEnv
+  }
+  const env = await resolveLoginShellEnvironment()
+  return env.PATH ?? env.Path ?? ''
+}
+
+async function findUserProgram(
+  program: string,
+  pathEnv: string,
+  options: HostPathOptions
+): Promise<string> {
+  const own = await lookUpTerminalProgram(
+    program,
+    withoutOrcaAgentRuntimeDirectories(pathEnv),
+    process.platform === 'win32' && !acceptsQuotedPathEntries(options.shell)
+  )
+  return isOrcaAgentRuntimePath(own) ? program : own
+}
+
+/** A native-chat login uses the host's own CLI first, then the installed chat runtime. */
+export async function resolveNativeChatSignInProgram(
+  agent: TuiAgent,
+  program: string,
+  settings: LaunchSettings,
+  options: HostPathOptions
+): Promise<string | null> {
+  const pathEnv = await resolveHostPath(options.pathEnv)
+  const own = await findUserProgram(program, pathEnv, options)
+  if (own === program) {
+    return managedCopyFor(agent, program, settings)
+  }
+  return isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell) ? own : null
+}
+
+/** Full paths to user installs that the target shell cannot reach by name. */
 export async function readHostManagedAgentCommands(
   settings: LaunchSettings,
   agents: readonly TuiAgent[],
-  options: {
-    pathEnv?: string
-    shell?: AgentStartupShell
-    forDelivery?: boolean
-    /** Native chat's system sign-in is the only terminal launch that may resolve Claude here. */
-    claudeSystemSignIn?: boolean
-    /** A bare executable name with an explicit Windows extension. */
-    explicitExecutable?: string
-  } = {}
+  options: HostPathOptions = {}
 ): Promise<ManagedAgentCommands> {
   const selections = agents.flatMap((agent) => {
     const program = stockLaunchProgram(agent, process.platform)
     const override = settings.agentCmdOverrides?.[agent]?.trim()
-    return options.forDelivery ||
-      !override ||
-      readLaunchPosition(override, options.shell ?? inferLaunchShell(override))?.executable ===
-        program
-      ? [{ agent, program }]
-      : []
+    return !override || override === program ? [{ agent, program }] : []
   })
   const commands: ManagedAgentCommands = {}
   if (selections.length === 0) {
     return commands
   }
-  const env = options.pathEnv === undefined ? await resolveLoginShellEnvironment() : undefined
-  const pathEnv = options.pathEnv ?? env?.PATH ?? env?.Path ?? ''
-  const preferUnquotedPath =
-    process.platform === 'win32' &&
-    options.forDelivery === true &&
-    !acceptsQuotedPathEntries(options.shell)
+  const pathEnv = await resolveHostPath(options.pathEnv)
   await Promise.all(
     selections.map(async ({ agent, program }) => {
       try {
-        const ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
-        const executable = options.explicitExecutable ?? program
-        const own = await lookUpTerminalProgram(executable, ownPath, preferUnquotedPath)
-        if (own === executable) {
-          if (agent !== 'claude' || options.claudeSystemSignIn) {
-            const managed = await managedCopyFor(agent, program, settings)
-            if (managed) {
-              commands[agent] = managed
-            }
-          }
-        } else if (isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
+        const own = await findUserProgram(program, pathEnv, options)
+        if (isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
           commands[agent] = own
         }
       } catch (error) {

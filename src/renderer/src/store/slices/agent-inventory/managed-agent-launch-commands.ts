@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { ManagedAgentCommands } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 
 // Host facts launches read synchronously, kept out of Zustand: one entry per host, never per
 // workspace, so the map is bounded by the paired hosts and drops with them.
@@ -14,11 +15,14 @@ export function runtimeManagedAgentHost(environmentId: string): string {
   return `runtime:${environmentId}`
 }
 
-/** A host's detection reply: older hosts answer the agent list alone, and a WSL guest reports no
- *  paths (Orca's copies live on the host). */
+/** Older hosts can report the agent list alone, or mix managed copies into their CLI paths. */
 export type AgentDetectionReply =
   | readonly string[]
-  | { agents: readonly string[]; managedAgentCommands?: Record<string, string> }
+  | {
+      agents: readonly string[]
+      outsidePath?: Record<string, string>
+      managedAgentCommands?: Record<string, string>
+    }
 
 export type AgentDetectionReading = {
   agents: TuiAgent[]
@@ -32,15 +36,26 @@ export function beginAgentDetection(
 ): (reply: AgentDetectionReply) => AgentDetectionReading {
   const started = ++lastStarted
   return (reply) => {
-    const paths = 'agents' in reply ? reply.managedAgentCommands : undefined
+    const legacyPaths =
+      'agents' in reply && !reply.outsidePath
+        ? Object.entries(reply.managedAgentCommands ?? {})
+        : []
+    const managedOnly = new Set(
+      legacyPaths
+        .filter(([agent, path]) => isLegacyManagedAgentPath(agent, path))
+        .map(([agent]) => agent)
+    )
+    const paths = 'agents' in reply ? (reply.outsidePath ?? reply.managedAgentCommands) : undefined
     return {
-      agents: ('agents' in reply ? reply.agents : reply).filter(isTuiAgent),
+      agents: ('agents' in reply ? reply.agents : reply).filter(
+        (agent): agent is TuiAgent => isTuiAgent(agent) && !managedOnly.has(agent)
+      ),
       keepManagedAgentCommands: () => {
         const kept = byHost.get(host)
         if (!paths || started <= (kept?.started ?? 0)) {
           return
         }
-        const commands = typedCommands(paths)
+        const commands = typedCommands(paths, managedOnly)
         const changed = !kept || !sameCommands(kept.commands, commands)
         // An unchanged reply keeps the same object, so readers see no change.
         byHost.set(host, { started, commands: changed ? commands : kept.commands })
@@ -76,10 +91,28 @@ function sameCommands(a: ManagedAgentCommands, b: ManagedAgentCommands): boolean
   )
 }
 
-function typedCommands(paths: Record<string, string>): ManagedAgentCommands {
+function isLegacyManagedAgentPath(agent: string, path: string): boolean {
+  if (!isTuiAgent(agent) || typeof path !== 'string') {
+    return false
+  }
+  const release = normalizeRuntimePathForComparison(path).match(
+    /\/agent-runtimes\/(claude|codex|opencode2?|cursor|copilot|grok|kimi|omp|agy)\/\d+\.\d+(?:\.\d+)?(?:-[^/]+)?\//
+  )
+  return release?.[1] === (agent === 'antigravity' ? 'agy' : agent)
+}
+
+function typedCommands(
+  paths: Record<string, string>,
+  managedOnly: ReadonlySet<string>
+): ManagedAgentCommands {
   const typed: ManagedAgentCommands = {}
   for (const [agent, path] of Object.entries(paths)) {
-    if (isTuiAgent(agent) && typeof path === 'string' && path.length > 0) {
+    if (
+      isTuiAgent(agent) &&
+      typeof path === 'string' &&
+      path.length > 0 &&
+      !managedOnly.has(agent)
+    ) {
       typed[agent] = path
     }
   }

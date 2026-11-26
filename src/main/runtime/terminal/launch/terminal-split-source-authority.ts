@@ -14,6 +14,7 @@ import {
 import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { splitPanePendingError } from './terminal-split-retry'
+import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 import {
   SPLIT_PANE_APPEAR_TIMEOUT_MS,
   SPLIT_PANE_START_TIMEOUT_MS
@@ -142,16 +143,23 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     paneKey: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
-  }): Promise<{ env: Record<string, string> }> {
+  }): Promise<{ env: Record<string, string>; envToDelete?: string[]; outsidePath?: string }> {
     const handle = this.getTerminalHandleForPaneKey(args.paneKey)
     if (!handle) {
       throw new Error('claude_agent_teams_requires_orca_terminal')
     }
-    return await this.prepareClaudeAgentTeamsLeaderForHandle({
+    const launch = await this.prepareClaudeAgentTeamsLeaderForHandle({
       handle,
       baseEnv: args.baseEnv,
       prepareAuth: args.prepareAuth
     })
+    const pty = this.getLivePtyForHandle(handle)?.pty
+    const pathEnv = launch.env.PATH ?? args.baseEnv?.PATH
+    const outsidePath =
+      pty && !pty.connectionId && !pty.isWsl && pathEnv !== undefined
+        ? (await readHostManagedAgentCommands({}, ['claude'], { pathEnv, shell: 'posix' })).claude
+        : undefined
+    return { ...launch, ...(outsidePath ? { outsidePath } : {}) }
   }
 
   async prepareClaudeAgentTeamsLeaderForHandle(args: {

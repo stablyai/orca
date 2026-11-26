@@ -110,7 +110,7 @@ function resumeCommandOverrides(
   }
 }
 
-/** OMP's resume line is rebuilt from its recorded command, so Orca's copy goes in there. */
+/** OMP rebuilds its resume line from the recorded command, including a user CLI found outside PATH. */
 function ompResumeProgram(
   recorded: string | undefined,
   args: AiVaultResumeStartupArgs,
@@ -124,6 +124,7 @@ function ompResumeProgram(
     recorded ?? getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.omp, platform),
     {
       agent: 'omp',
+      cmdOverrides: resumeCommandOverrides(args),
       managedAgentCommands: args.managedAgentCommands,
       platform,
       shell: resolveStartupShell(platform, shell)

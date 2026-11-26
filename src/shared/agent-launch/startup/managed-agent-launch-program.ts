@@ -1,11 +1,10 @@
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
-import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
 import { clearEnvCommand, quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
-/** Full paths to CLIs the terminal can't launch by name, including Orca's copies. */
+/** Full paths to user-installed CLIs the terminal can't launch by name. */
 export type ManagedAgentCommands = Partial<Record<TuiAgent, string>>
 
 /** A program as the head of a launch, through the call operator for PowerShell. */
@@ -89,6 +88,7 @@ export function withManagedAgentProgram(
   command: string,
   args: {
     agent: TuiAgent
+    cmdOverrides?: Partial<Record<TuiAgent, string | undefined>>
     managedAgentCommands?: ManagedAgentCommands | null
     platform: NodeJS.Platform
     shell: AgentStartupShell
@@ -96,18 +96,12 @@ export function withManagedAgentProgram(
   }
 ): string {
   const path = args.managedAgentCommands?.[args.agent]
-  // Older hosts also reported Orca's versioned Claude release here.
-  if (
-    !path ||
-    (args.agent === 'claude' &&
-      /\/agent-runtimes\/claude\/\d+\.\d+(?:\.\d+)?\/claude(?:\.exe)?$/.test(
-        normalizeRuntimePathForComparison(path)
-      ))
-  ) {
+  const override = args.cmdOverrides?.[args.agent]?.trim()
+  const stock = stockLaunchProgram(args.agent, args.platform, args.isRemote)
+  if (!path || (override && override !== stock)) {
     return command
   }
   const launch = readLaunchPosition(command, args.shell)
-  const stock = stockLaunchProgram(args.agent, args.platform, args.isRemote)
   // A result for the bare stock program can't answer a lookup for an explicit executable.
   return launch &&
     (args.platform === 'win32'

@@ -89,7 +89,7 @@ export async function resolveWorktreeStartupDraftAgent(
   return pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
 }
 
-/** Orca's copies live on this host, so launches over SSH or inside WSL never run them. */
+/** Only use installer paths from the host actually running the terminal. */
 function launchManagedAgentCommands(
   repo: Parameters<typeof repoIsRemote>[0],
   platform: NodeJS.Platform,

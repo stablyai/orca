@@ -199,17 +199,19 @@ function useNativeChatSignIn(
   const login = useNativeChatSignInCommand(input)
   // agy signs in from Orca, so its terminal command (`system`) never runs from here.
   const antigravity = useNativeChatAgySignIn(input.agent, input.account, input.target)
-  const { agent } = input
+  const { agent, account } = input
+  const remote = input.target.kind === 'environment'
   const viaTerminal = useMemo(
     () =>
       login && terminal
         ? {
             signingIn: terminal.opening,
-            signIn: () => void terminal.open(login, agentSessionSignInEnv(agent)),
+            signIn: () =>
+              void terminal.open(login, agentSessionSignInEnv(agent), { agent, account, remote }),
             loginCommand: login
           }
         : null,
-    [agent, login, terminal]
+    [agent, account, remote, login, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
   return accountId ? managed : (antigravity ?? viaTerminal)

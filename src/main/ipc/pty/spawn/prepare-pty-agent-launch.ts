@@ -41,12 +41,15 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       : 'powershell'
     : paneShell
   const command = sequenced || input.launchCommand
-  const startupCommand = connectionId
-    ? command
-    : await alignManagedAgentLaunchAtSpawn(
-        { ...input, launchCommand: command, ...(sequenced ? { sourceShell: paneShell } : {}) },
-        shell
-      )
+  const startupCommand = await alignManagedAgentLaunchAtSpawn(
+    {
+      ...input,
+      launchCommand: command,
+      sshTarget: Boolean(connectionId),
+      ...(sequenced ? { sourceShell: paneShell } : {})
+    },
+    shell
+  )
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: startupCommand,
     agent: launchAgent,

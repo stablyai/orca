@@ -165,10 +165,11 @@ export function MobileBotFirstScreen({
     .flatMap((message) => message.blocks)
     .findLast((block) => block.type === 'text' && block.failure !== undefined)
   const runInTerminal = notices.onRunInTerminal
-  const signInCommand =
-    owed && runInTerminal
-      ? agentSessionSignInCommand(notices.agentName, { account: owed.account, remote: true })
+  const signIn =
+    owed && notices.agentName
+      ? { agent: notices.agentName, account: owed.account, remote: true }
       : null
+  const signInCommand = signIn && agentSessionSignInCommand(signIn.agent, signIn)
   const tryAgain = () => {
     if (!client) {
       return
@@ -238,7 +239,7 @@ export function MobileBotFirstScreen({
               }
               accessory={
                 <View style={styles.actions}>
-                  {signInCommand && runInTerminal ? (
+                  {signIn && signInCommand && runInTerminal ? (
                     <MobileNativeChatNoticePill
                       label={t('chat.notice.signIn', 'Sign in')}
                       accessibilityHint={t(
@@ -246,7 +247,7 @@ export function MobileBotFirstScreen({
                         'Opens a terminal on the computer running this chat'
                       )}
                       primary
-                      onPress={() => runInTerminal(signInCommand)}
+                      onPress={() => runInTerminal(signInCommand, signIn)}
                     />
                   ) : null}
                   <MobileNativeChatNoticePill

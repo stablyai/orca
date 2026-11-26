@@ -9,6 +9,12 @@ import {
   renderLaunchInvocation
 } from '../../../agent-launch/startup/managed-agent-launch-program'
 
+export type NativeChatSignInRequest = {
+  agent: string
+  account?: AgentSessionAccountKind
+  remote: boolean
+}
+
 /** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
   {

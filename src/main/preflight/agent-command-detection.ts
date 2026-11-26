@@ -9,6 +9,10 @@ import { findCommandsOnLocalPath } from '../ipc/command-path/command-path-resolv
 import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
 import { readGuestWindowsDriveMounts } from '../wsl/filesystem/wsl-guest-windows-drive-path'
 import { hasPathSeparatorToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
+import {
+  isOrcaAgentRuntimePath,
+  withoutOrcaAgentRuntimeDirectories
+} from '../managed-agent-cli/managed-agent-cli-path'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
@@ -29,21 +33,30 @@ export async function detectAgentCommandsOnHost(
     return detectWslCommandsOnPath(wslTarget, commands)
   }
   // Bounded directory scans avoid repeated probes for missing commands (#34636).
-  const onPathCommands = await findCommandsOnLocalPath(commands, {
-    env: buildLocalPreflightEnv()
+  const guestMounts = readGuestWindowsDriveMounts()
+  const env = buildLocalPreflightEnv(guestMounts) ?? process.env
+  const pathKey =
+    process.platform === 'win32' && env.PATH === undefined
+      ? (Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH')
+      : 'PATH'
+  const pathEnv = withoutOrcaAgentRuntimeDirectories(env[pathKey] ?? '')
+  const userCommands = commands.filter((cmd) => !isOrcaAgentRuntimePath(cmd))
+  const onPathCommands = await findCommandsOnLocalPath(userCommands, {
+    env: { ...env, [pathKey]: pathEnv }
   })
   // A path was already checked directly; the install-dir fallback would count any absolute path as found.
-  const missedCommands = commands.filter(
+  const missedCommands = userCommands.filter(
     (cmd) => !onPathCommands.has(cmd) && !hasPathSeparatorToken(cmd)
   )
-  // Resolve cold-GUI install dirs once; use the same WSL-filtered PATH while retaining process PATH elsewhere.
-  const guestMounts = readGuestWindowsDriveMounts()
   // The batch includes the fallback's PATH normalization and Windows executable names.
-  const installDirCommands = await detectCommandsInInstallDirs(
-    missedCommands,
-    guestMounts.length > 0 ? buildLocalPreflightEnv(guestMounts)?.PATH : undefined,
-    { skipPathSearch: true }
-  )
+  const installDirCommands = await detectCommandsInInstallDirs(missedCommands, pathEnv, {
+    skipPathSearch: true
+  })
+  for (const [command, path] of installDirCommands) {
+    if (isOrcaAgentRuntimePath(path)) {
+      installDirCommands.delete(command)
+    }
+  }
   const foundCommands = new Set(
     commands.filter((cmd) => onPathCommands.has(cmd) || installDirCommands.has(cmd))
   )

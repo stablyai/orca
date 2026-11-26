@@ -59,6 +59,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         lifecycle.keptThroughFailure
       ),
     ensureNativeDetectedAgents: (): Promise<TuiAgent[]> => {
+      // This is the desktop host's CLI inventory, including under a WSL project.
       nativeInventoryRequested = true
       return actions.ensureDetectedAgents(undefined, true)
     },

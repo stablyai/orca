@@ -9,6 +9,7 @@ import { listInstalledWorkspaceAgents } from './installed-agents'
 import { runPreflightCheck } from '../../../../preflight/agent-detection'
 import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight/preflight-remote-windows-terminal-capabilities'
 import { prepareQueuedAgentLaunch } from '../../../../preflight/prepare-queued-agent-launch'
+import { prepareNativeChatSignIn } from '../../../../managed-agent-cli/prepare-native-chat-sign-in'
 
 import {
   assertAgentDetectionHostRunning,
@@ -74,6 +75,15 @@ export const PREFLIGHT_METHODS = [
         return runtime.detectProjectLaunchContext(params.project.repo)
       }
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
+      if (params.nativeChatSignIn) {
+        return {
+          preparedCommand: await prepareNativeChatSignIn(
+            host,
+            runtime.requireStore().getSettings(),
+            params.nativeChatSignIn
+          )
+        }
+      }
       // A client's inventory read is background work: it must not start a stopped WSL distro (E9).
       await assertAgentDetectionHostRunning(host)
       return params.withManagedAgentCommands

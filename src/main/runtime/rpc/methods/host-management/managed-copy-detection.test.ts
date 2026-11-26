@@ -1,80 +1,109 @@
 import { mkdir, mkdtemp, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { buildAgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { agentSessionSignInCommand } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { readHostManagedAgentCommands } from './managed-copy-detection'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
-import { rememberManagedAgentRelease } from '../../../../managed-agent-cli/managed-agent-cli-registry'
+import { prepareNativeChatSignIn } from '../../../../managed-agent-cli/prepare-native-chat-sign-in'
+import { launchProgramHead } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import { mayResolveQueuedAgentLaunch } from '../../../../../shared/agent-launch/startup/queued-agent-launch'
+import { readLaunchPosition } from '../../../../../shared/agent-launch/startup/launch-position'
+import {
+  managedAgentCli,
+  rememberManagedAgentRelease
+} from '../../../../managed-agent-cli/managed-agent-cli-registry'
 
+const profile = vi.hoisted(() => ({ path: '' }))
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
-  getProfileUserDataPath: () => (process.platform === 'win32' ? 'C:\\data\\orca' : '/data/orca')
+  getProfileUserDataPath: () => profile.path
 }))
 vi.mock('../../../../startup/shell-environment/login-shell-environment', () => ({
-  captureLoginShellEnvironment: async () => ({ status: 'fallback', env: {} })
+  captureLoginShellEnvironment: async () => ({ status: 'fallback', env: {} }),
+  resolveLoginShellEnvironment: async () => ({ PATH: profile.path })
 }))
 vi.mock('../../../../../shared/shell/command-resolution/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: () => []
 }))
 
-it("leaves Claude terminals to the shell and uses Orca's Claude for native chat sign-in", async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'orca-claude-sign-in-'))
-  const release = join(dir, 'agent-runtimes', 'claude', '1.0')
-  const windows = process.platform === 'win32'
-  const shell = windows ? 'powershell' : 'posix'
-  const bin = join(release, windows ? 'claude.exe' : 'claude')
-  const plan = (claude: string) =>
-    buildAgentStartupPlan({
-      agent: 'claude',
-      platform: process.platform,
-      shell,
-      prompt: '',
-      allowEmptyPromptLaunch: true,
-      cmdOverrides: {},
-      managedAgentCommands: { claude }
-    })
-  const prepare = (launchCommand: string | undefined) =>
-    alignManagedAgentLaunchAtSpawn(
-      { launchCommand, queuedPath: dir, getSettings: () => ({}) },
-      shell
-    )
-  try {
-    await mkdir(release, { recursive: true })
-    await writeFile(bin, '', { mode: 0o755 })
-    rememberManagedAgentRelease('claude', release)
-    vi.stubEnv(windows ? 'USERPROFILE' : 'HOME', dir)
-    vi.stubEnv('FNM_DIR', dir)
+it.each(['claude', 'codex'] as const)(
+  'keeps %s terminal launches on the user CLI while allowing native-chat sign-in',
+  async (agent) => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-agent-terminal-'))
+    profile.path = dir
+    const cli = managedAgentCli(agent)
+    const release = join(cli.runtime.root(dir), '1.0')
+    const bin = cli.executable(release)
+    const windows = process.platform === 'win32'
+    const shell = windows ? 'powershell' : 'posix'
+    const pathEnv = dirname(bin)
+    const prepare = (launchCommand: string | undefined) =>
+      alignManagedAgentLaunchAtSpawn({ launchCommand, queuedPath: pathEnv }, shell)
+    const plannedProgram = (managedAgentCommands: Partial<Record<typeof agent, string>>) => {
+      const plan = buildAgentStartupPlan({
+        agent,
+        platform: process.platform,
+        shell,
+        prompt: '',
+        allowEmptyPromptLaunch: true,
+        cmdOverrides: {},
+        managedAgentCommands
+      })
+      return plan && readLaunchPosition(plan.launchCommand ?? '', shell)?.executable
+    }
+    try {
+      await mkdir(pathEnv, { recursive: true })
+      await writeFile(bin, '', { mode: 0o755 })
+      rememberManagedAgentRelease(agent, release)
+      vi.stubEnv(windows ? 'USERPROFILE' : 'HOME', dir)
+      vi.stubEnv('FNM_DIR', dir)
 
-    expect(await readHostManagedAgentCommands({}, ['claude'], { pathEnv: dir, shell })).toEqual({})
-    expect(plan(bin)?.launchCommand).toBe('claude')
-    expect(
-      plan(windows ? 'C:\\user\\.local\\bin\\claude.exe' : '/user/.local/bin/claude')?.launchCommand
-    ).toBe(windows ? "& 'C:\\user\\.local\\bin\\claude.exe'" : "'/user/.local/bin/claude'")
-    expect(await prepare('claude --verbose')).toBe('claude --verbose')
-    expect(
-      await prepare(
-        windows
-          ? "& 'C:\\data\\orca\\agent-runtimes\\claude\\1.0\\claude.exe' --verbose"
-          : "'/data/orca/agent-runtimes/claude/1.0/claude' --verbose"
+      const commands = await readHostManagedAgentCommands({}, [agent], { pathEnv, shell })
+      expect(commands).toEqual({})
+      expect(plannedProgram(commands)).toBe(agent)
+      const stock = `${agent} --version`
+      expect(mayResolveQueuedAgentLaunch(stock, shell)).toBe(false)
+      expect(await prepare(stock)).toBe(stock)
+      const saved = `${launchProgramHead(bin, shell)} --version`
+      expect(mayResolveQueuedAgentLaunch(saved, shell)).toBe(true)
+      expect(await prepare(saved)).toBe(windows ? `& ${stock}` : stock)
+
+      const userPath = join(
+        dir,
+        'user',
+        'agent-runtimes',
+        agent,
+        '1.0',
+        windows ? `${agent}.exe` : agent
       )
-    ).toBe(windows ? '& claude --verbose' : 'claude --verbose')
-    const userCommand = windows
-      ? "& 'C:\\user\\agent-runtimes\\claude\\1.0\\claude.exe' --verbose"
-      : "'/user/agent-runtimes/claude/1.0/claude' --verbose"
-    expect(await prepare(userCommand)).toBe(userCommand)
+      const userCommand = launchProgramHead(userPath, shell)
+      expect(plannedProgram({ [agent]: userPath })).toBe(userPath)
+      expect(await prepare(`${userCommand} --version`)).toBe(`${userCommand} --version`)
 
-    const signIn = agentSessionSignInCommand('claude', { account: 'system', remote: false, shell })
-    const preparedSignIn = await prepare(signIn ?? undefined)
-    expect(preparedSignIn).toContain(bin)
-    expect(preparedSignIn).toContain(' auth login')
-  } finally {
-    rememberManagedAgentRelease('claude', null)
-    vi.unstubAllEnvs()
-    await rm(dir, { recursive: true, force: true })
+      if (agent === 'claude') {
+        const signIn = agentSessionSignInCommand(agent, { account: 'system', remote: false, shell })
+        const preparedSignIn = await prepare(signIn ?? undefined)
+        expect(preparedSignIn).toContain(bin)
+        expect(preparedSignIn).toContain(' auth login')
+      } else {
+        const signIn = await prepareNativeChatSignIn(
+          { kind: 'local' },
+          {},
+          { agent, account: 'system', remote: true }
+        )
+        expect(signIn).toContain(bin)
+        expect(signIn).toContain('--device-auth')
+        expect(await prepare(signIn ?? undefined)).toBe(signIn)
+      }
+    } finally {
+      rememberManagedAgentRelease(agent, null)
+      vi.unstubAllEnvs()
+      await rm(dir, { recursive: true, force: true })
+    }
   }
-})
+)
 
 it('keeps the stock Codex name on an unquoted PATH for every shell', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'orca-codex-path-'))
@@ -119,57 +148,6 @@ it.runIf(process.platform === 'win32')(
 )
 
 it.runIf(process.platform === 'win32')(
-  'uses codex.exe from PATH or Orca when PATH also contains codex.cmd',
-  async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-codex-path-'))
-    const a = join(dir, 'A')
-    const b = join(dir, 'B')
-    const exe = join(b, 'codex.exe')
-    const managed = join(dir, 'managed')
-    const managedExe = join(managed, 'bin', 'codex.exe')
-    const launch = (queuedPath: string) =>
-      alignManagedAgentLaunchAtSpawn(
-        {
-          launchCommand: 'codex.exe --version',
-          queuedPath,
-          getSettings: () => ({ agentCmdOverrides: { codex: 'codex.exe' } })
-        },
-        'powershell'
-      )
-    try {
-      await mkdir(a)
-      await mkdir(b)
-      await writeFile(join(a, 'codex.cmd'), '')
-      await writeFile(exe, '')
-      expect(await launch(`${a};${b}`)).toBe('codex.exe --version')
-      expect(await launch(`${a};"${b}"`)).toBe(`& '${exe}' --version`)
-
-      await mkdir(join(managed, 'bin'), { recursive: true })
-      await writeFile(managedExe, '')
-      rememberManagedAgentRelease('codex', managed)
-      vi.stubEnv('USERPROFILE', dir)
-      vi.stubEnv('FNM_DIR', dir)
-      expect(await launch(a)).toBe(`& '${managedExe}' --version`)
-      expect(
-        await alignManagedAgentLaunchAtSpawn(
-          {
-            launchCommand: '.\\B\\codex --version',
-            cwd: dir,
-            queuedPath: '',
-            getSettings: () => ({})
-          },
-          'powershell'
-        )
-      ).toBe('.\\B\\codex --version')
-    } finally {
-      rememberManagedAgentRelease('codex', null)
-      vi.unstubAllEnvs()
-      await rm(dir, { recursive: true, force: true })
-    }
-  }
-)
-
-it.runIf(process.platform === 'win32')(
   'keeps the stock Codex name when a quoted user PATH entry precedes an unquoted one',
   async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-codex-path-'))
@@ -184,50 +162,17 @@ it.runIf(process.platform === 'win32')(
       expect(
         await readHostManagedAgentCommands({}, ['codex'], {
           pathEnv,
-          shell: 'powershell',
-          forDelivery: true
+          shell: 'powershell'
         })
       ).toEqual({})
       expect(
         await readHostManagedAgentCommands({}, ['codex'], {
           pathEnv,
-          shell: 'cmd',
-          forDelivery: true
+          shell: 'cmd'
         })
       ).toEqual({})
     } finally {
       await rm(dir, { recursive: true, force: true })
-    }
-  }
-)
-
-it.skipIf(process.platform === 'win32')(
-  'uses a reattached cwd and inline PATH to replace a retired managed path with the stock name',
-  async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-queued-launch-'))
-    const repo = join(cwd, 'repo')
-    const tools = join(repo, 'tools')
-    const bin = join(tools, 'codex')
-    try {
-      await mkdir(tools, { recursive: true })
-      await writeFile(bin, '', { mode: 0o755 })
-      expect(
-        await alignManagedAgentLaunchAtSpawn(
-          {
-            launchCommand:
-              "cd repo && env PATH=./tools '/data/orca/agent-runtimes/codex/1.0/bin/codex' --resume abc",
-            readCwd: async () => cwd,
-            queuedPath: '/spawn/bin',
-            getSettings: () => ({})
-          },
-          'posix'
-        )
-      ).toBe('cd repo && env PATH=./tools codex --resume abc')
-    } finally {
-      await unlink(bin)
-      await rmdir(tools)
-      await rmdir(repo)
-      await rmdir(cwd)
     }
   }
 )

@@ -190,7 +190,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
         shell: agentLaunchQuotingShell(runtime),
         sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
-        // Orca's copies live on this host, so launches over SSH or inside WSL never run them.
+        // Only use installer paths from the host actually running the terminal.
         ...(!isRemote && runtime.platform === process.platform
           ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [agent]) }
           : {})

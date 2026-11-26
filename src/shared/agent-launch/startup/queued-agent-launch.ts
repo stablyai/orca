@@ -1,9 +1,8 @@
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
-import { stockLaunchProgram, stockProgramKey } from './managed-agent-launch-program'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { readLaunchPosition } from './launch-position'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
+import { agentSessionSignInCommand } from '../../agent-session/lifecycle/launch/agent-session-setup-commands'
 
 export type QueuedAgentLaunch = {
   /** An app PTY id for desktop IPC, or the serving runtime's terminal handle for RPC. */
@@ -18,32 +17,18 @@ export type QueuedAgentLaunch = {
 
 export type PreparedAgentLaunch = { preparedCommand: string | null }
 
-const stockPrograms = new Set(
-  Object.keys(TUI_AGENT_CONFIG)
-    .filter(isTuiAgent)
-    .flatMap((agent) => [
-      stockLaunchProgram(agent, 'linux'),
-      stockLaunchProgram(agent, 'linux', true),
-      stockProgramKey(stockLaunchProgram(agent, 'win32'), 'win32'),
-      stockLaunchProgram(agent, 'darwin')
-    ])
-)
-
-export function mayResolveQueuedAgentLaunch(
-  command: string,
-  shell: AgentStartupShell,
-  platform: NodeJS.Platform
-): boolean {
-  if (isFreshOmpLaunchCommand(command)) {
+export function mayResolveQueuedAgentLaunch(command: string, shell: AgentStartupShell): boolean {
+  const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
+  if (
+    prefix.includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR') &&
+    command === agentSessionSignInCommand('claude', { account: 'system', remote: false, shell })
+  ) {
     return true
   }
-  const executable = readLaunchPosition(command, shell)?.executable
-  const program = executable && stockProgramKey(executable, platform)
-  return (
-    program !== 'claude' &&
-    (command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS).includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR') ||
-      Boolean(program && (stockPrograms.has(program) || /[\\/]agent-runtimes[\\/]/i.test(program))))
-  )
+  const executable = isFreshOmpLaunchCommand(command)
+    ? prefix
+    : readLaunchPosition(command, shell)?.executable
+  return /[\\/]agent-runtimes[\\/]/i.test(executable ?? '')
 }
 
 /** The launch's PATH seed can be set, deleted, or inherited. The other values stay in the PTY. */

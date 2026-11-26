@@ -1,4 +1,4 @@
-// Orca's own copies of agent CLIs, for hosts without the user's own; the user's install always wins.
+// Orca's agent CLI copies support native chat and its host-side integrations.
 
 import { dirname } from 'node:path'
 import type { ManagedAgentCli } from '../node-runtime/managed-runtime-release'
@@ -150,7 +150,7 @@ export function installedManagedAgentFolder(agent: ManagedAgentCliId): string | 
   return installedFolders.get(agent) ?? null
 }
 
-/** The program a terminal launch of Orca's installed copy runs, by full path; null without one. */
+/** The installed CLI entry point for a native-chat sign-in, including any launcher alias. */
 export function installedManagedAgentLauncher(agent: ManagedAgentCliId): string | null {
   const folder = installedFolders.get(agent)
   const cli = MANAGED_AGENT_CLIS[agent]

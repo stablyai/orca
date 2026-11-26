@@ -168,7 +168,7 @@ export async function detectAgentsOnHost(
   return detectInstalledAgentsWithShellPathHydration(host.context, options)
 }
 
-/** The host's agents and the full paths to Orca's copies it would launch. */
+/** The host's terminal agents and user CLI paths outside PATH. */
 export async function detectAgentInventoryOnHost(
   host: AgentDetectionHost,
   options?: InstalledAgentDetectionOptions

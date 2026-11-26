@@ -123,8 +123,9 @@ async function detectCommandRuntime(
 
 export type RefreshAgentsResult = {
   agents: string[]
-  /** Full paths to Orca's copies of agents the host has none of its own of; absent from older hosts. */
+  /** Legacy wire name for outsidePath. */
   managedAgentCommands?: ManagedAgentCommands
+  outsidePath?: ManagedAgentCommands
   addedPathSegments: string[]
   /** False means detection used existing PATH after shell failure. */
   shellHydrationOk: boolean
@@ -142,10 +143,9 @@ export async function refreshShellPathAndDetectAgents(
   if (wslTarget) {
     // Discard cached guest PATH before detecting a newly installed WSL CLI.
     invalidateWslGuestEnvironment(wslTarget.distro)
-    const { agents, managedAgentCommands } = await detectInstalledAgentInventory(context, options)
+    const inventory = await detectInstalledAgentInventory(context, options)
     return {
-      agents,
-      managedAgentCommands,
+      ...inventory,
       addedPathSegments: [],
       shellHydrationOk: true,
       pathSource: 'sync_seed_only',
@@ -155,10 +155,9 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
-  const { agents, managedAgentCommands } = await detectInstalledAgentInventory(context, options)
+  const inventory = await detectInstalledAgentInventory(context, options)
   return {
-    agents,
-    managedAgentCommands,
+    ...inventory,
     addedPathSegments: added,
     shellHydrationOk: hydration.ok,
     pathSource: hydration.ok ? 'shell_hydrate' : 'sync_seed_only',

@@ -59,7 +59,7 @@ export type MobileTerminalResumeCommand = MobileTerminalCommand & {
   resumeProviderSession: AgentProviderSessionMetadata
 }
 
-/** Orca's copies live on this host, so launches over SSH or inside WSL never run them. */
+/** Only use installer paths from the host actually running the terminal. */
 function runsOnThisHost(
   workspace: TerminalWorkspaceLaunchScope,
   launchRuntime: { platform: NodeJS.Platform }

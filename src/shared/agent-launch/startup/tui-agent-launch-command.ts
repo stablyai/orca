@@ -110,7 +110,7 @@ export function resolveAgentLaunchCommand(args: {
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })
-  // Records keep the stock program: Orca's copy moves with each update, so resumes look it up again.
+  // Saved sessions resolve the stock program on their current host.
   const program = withManagedAgentProgram(command, args)
   const suppressionArgs = args.suppressStartupUpdatePrompt
     ? (STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS[args.agent] ?? [])

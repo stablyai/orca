@@ -7,10 +7,16 @@ import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminal
 import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-failure-notice'
 import { startStoppedWslHostForUserAct } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { NativeChatSignInRequest } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export type NativeChatHostCommandTerminal = {
   opening: boolean
-  open: (command: string, env?: Record<string, string>) => Promise<boolean>
+  open: (
+    command: string,
+    env?: Record<string, string>,
+    nativeChatSignIn?: NativeChatSignInRequest
+  ) => Promise<boolean>
 }
 
 /** Opens a visible terminal on the chat's own host running a setup command; null without a workspace. */
@@ -25,7 +31,7 @@ export function useNativeChatHostCommandTerminal(input: {
   // Why a ref: a notice and a transcript row can both press, and state lags a double press.
   const openingRef = useRef(false)
   const open = useCallback(
-    (command: string, env?: Record<string, string>) => {
+    (command: string, env?: Record<string, string>, nativeChatSignIn?: NativeChatSignInRequest) => {
       if (!worktreeId || openingRef.current) {
         return Promise.resolve(false)
       }
@@ -37,6 +43,14 @@ export function useNativeChatHostCommandTerminal(input: {
         }
         if (!command) {
           return false
+        }
+        if (nativeChatSignIn) {
+          const prepared = await callRuntimeRpc<{ preparedCommand?: string | null }>(
+            environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
+            'preflight.detectAgents',
+            { worktreeId, nativeChatSignIn }
+          ).catch(() => null)
+          command = prepared?.preparedCommand ?? command
         }
         if (environmentId) {
           const outcome = await createWebRuntimeSessionTerminalOnHost(

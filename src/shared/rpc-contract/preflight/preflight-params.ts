@@ -56,13 +56,24 @@ export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend
   /** Answer `{ agents, managedAgentCommands }`; older hosts drop it and answer the list alone. */
   withManagedAgentCommands: z.boolean().optional(),
   launch: PreflightQueuedAgentLaunch.optional(),
+  nativeChatSignIn: z
+    .object({
+      agent: z.string().min(1).max(128),
+      account: z.enum(['system', 'managed']).optional(),
+      remote: z.boolean()
+    })
+    .optional(),
   project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
     .strict()
     .optional()
 }).refine(
   (value) =>
     !value.project ||
-    (!value.worktreeId && !value.repoId && !value.worktreeHostId && !value.launch),
+    (!value.worktreeId &&
+      !value.repoId &&
+      !value.worktreeHostId &&
+      !value.launch &&
+      !value.nativeChatSignIn),
   'Choose project, repository or worktree'
 )
 

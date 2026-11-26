@@ -23,7 +23,7 @@ function launch(args: {
   })
 }
 
-describe("launching Orca's copy of an agent", () => {
+describe('launching a user CLI found outside PATH', () => {
   it('runs it by full path, quoted for each shell', () => {
     expect(launch({ platform: 'darwin', managed: MAC_OPENCODE })?.launchCommand).toBe(
       "'/Users/a b/Library/Application Support/orca/opencode/bin/opencode'"
@@ -45,26 +45,24 @@ describe("launching Orca's copy of an agent", () => {
     expect(
       launch({ platform: 'darwin', managed: MAC_OPENCODE, override: 'opencode --verbose' })
         ?.launchCommand
-    ).toBe("'/Users/a b/Library/Application Support/orca/opencode/bin/opencode' --verbose")
+    ).toBe('opencode --verbose')
   })
 
-  it('uses the same program replacement for stock settings with launch environment prefixes', () => {
+  it('preserves commands with launch environment prefixes', () => {
     expect(
       launch({
         platform: 'darwin',
         managed: MAC_OPENCODE,
         override: "env -u TRACE DEBUG=1 opencode   '--verbose'"
       })?.launchCommand
-    ).toBe(
-      "env -u TRACE DEBUG=1 '/Users/a b/Library/Application Support/orca/opencode/bin/opencode'   '--verbose'"
-    )
+    ).toBe("env -u TRACE DEBUG=1 opencode   '--verbose'")
     expect(
       launch({
         platform: 'darwin',
         managed: MAC_OPENCODE,
         override: 'DEBUG=1 opencode --verbose'
       })?.launchCommand
-    ).toBe("DEBUG=1 '/Users/a b/Library/Application Support/orca/opencode/bin/opencode' --verbose")
+    ).toBe('DEBUG=1 opencode --verbose')
     expect(
       launch({
         platform: 'darwin',
@@ -74,7 +72,7 @@ describe("launching Orca's copy of an agent", () => {
     ).toBe("/bin/sh -c 'opencode --verbose'")
   })
 
-  it('records the stock name, so a resume finds the copy the host has then', () => {
+  it('records the stock name, so a resume finds the user CLI on its host', () => {
     expect(launch({ platform: 'darwin', managed: MAC_OPENCODE })?.launchConfig.agentCommand).toBe(
       'opencode'
     )
@@ -89,7 +87,7 @@ describe("launching Orca's copy of an agent", () => {
     expect(resumed?.launchCommand).toBe("'/opt/orca/opencode' --model opus '--session' 'abc'")
   })
 
-  it('signs in through it by full path', () => {
+  it('renders native-chat sign-in with a resolved executable', () => {
     expect(
       agentSessionSignInCommand('codex', {
         remote: false,

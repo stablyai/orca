@@ -100,11 +100,11 @@ export function withFreshOmpLaunch(command: string, shell: AgentStartupShell, su
 }
 
 /** Rebuild only Orca's guard when a previously built launch reaches the execution host. */
-export async function prepareFreshOmpLaunch(
+export function prepareFreshOmpLaunch(
   command: string,
   shell: AgentStartupShell,
-  prepare: (inner: string) => Promise<string>
-): Promise<string> {
+  prepare: (inner: string) => string
+): string {
   if (command.length > TERMINAL_INPUT_MAX_BYTES || !isFreshOmpLaunchCommand(command)) {
     return command
   }
@@ -123,7 +123,7 @@ export async function prepareFreshOmpLaunch(
   ) {
     return command
   }
-  const prepared = await prepare(body)
+  const prepared = prepare(body)
   if (prepared === body) {
     return command
   }

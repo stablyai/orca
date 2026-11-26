@@ -40,12 +40,10 @@ export type AgentDetectionArgs = PreflightRuntimeContext & {
 export type AgentInventoryReply = {
   agents: string[]
   managedAgentCommands?: Record<string, string>
+  outsidePath?: Record<string, string>
 }
 
-export type RefreshAgentsResult = {
-  agents: string[]
-  /** Full paths to Orca's copies of agents the host has none of its own of. */
-  managedAgentCommands?: Record<string, string>
+export type RefreshAgentsResult = AgentInventoryReply & {
   addedPathSegments: string[]
   shellHydrationOk: boolean
   /** shell_hydrate uses the full shell PATH; sync_seed_only uses the packaged PATH seed. */
@@ -64,7 +62,7 @@ export type PreflightApi = {
     args?: PreflightRuntimeContext & { force?: boolean; wakeWslDistro?: boolean }
   ) => Promise<PreflightStatus>
   /** Complete by default; background callers opt into host-owned enabled preferences.
-   *  `withManagedAgentCommands` adds the full paths to Orca's copies the host would launch. */
+   *  `withManagedAgentCommands` adds user CLI paths found outside PATH. */
   detectAgents: {
     (args: { launch: QueuedAgentLaunch }): Promise<PreparedAgentLaunch>
     (args: AgentDetectionArgs & { withManagedAgentCommands: true }): Promise<AgentInventoryReply>

@@ -64,7 +64,7 @@ type Props = {
   onOpenUrlInOrca?: (url: string) => void
   linkOpenMode: MobileLinkOpenMode
   /** Opens a host terminal tab in this chat's workspace running `command`. */
-  onRunInTerminal: (command: string) => void
+  onRunInTerminal: import('./native-chat-terminal-runner').NativeChatTerminalRunner
   hostOutage?: MobileNativeChatHostOutage | null
 }
 
@@ -114,7 +114,7 @@ function MobileNativeChatOverlayContent({
   hostName,
   onOpenUrlInOrca,
   linkOpenMode,
-  onRunInTerminal,
+  onRunInTerminal: openTerminal,
   hostOutage = null,
   onOpenAccounts
 }: Props): React.JSX.Element {
@@ -237,11 +237,11 @@ function MobileNativeChatOverlayContent({
     ]
   )
   // Why a ref: rows read this through context, and the route's callback changes every render.
-  const runInTerminalRef = useRef(onRunInTerminal)
+  const runner = useRef(openTerminal)
   useLayoutEffect(() => {
-    runInTerminalRef.current = onRunInTerminal
-  }, [onRunInTerminal])
-  const runInTerminal = useCallback((command: string) => runInTerminalRef.current(command), [])
+    runner.current = openTerminal
+  }, [openTerminal])
+  const runInTerminal = useCallback<typeof openTerminal>((...args) => runner.current(...args), [])
   const t = useMobileTranslation()
   const continuation = controller.nativeChatInterruptedContinue
   const noticeView = useMemo(
