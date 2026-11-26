@@ -1,6 +1,7 @@
 import type * as WorkerThreadChildProcessModule from '../worker-thread-child-process/worker-thread-child-process'
 import type { WorkerThreadChildRequest } from '../worker-thread-child-process/worker-thread-child-process-protocol'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { workerSpawn, wslAwareSpawnMock } = vi.hoisted(() => ({
   workerSpawn: vi.fn(),
@@ -22,7 +23,14 @@ vi.mock('./bundled-ripgrep-path', () => ({
 
 import { WorkerThreadChildProcess } from '../worker-thread-child-process/worker-thread-child-process'
 import { listMarkdownDocuments } from '../ipc/filesystem/search/markdown-documents'
-import { killSpawnedRipgrepProcess } from '../../shared/ripgrep/ripgrep-process-availability'
+import {
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess
+} from '../../shared/ripgrep/ripgrep-process-availability'
+import {
+  createWorkerThreadChildProcessTestEntry,
+  createWorkerThreadChildProcessTestHost
+} from '../worker-thread-child-process/worker-thread-child-process-worker.test-fixtures'
 import { spawnBundledRipgrep } from './bundled-ripgrep-spawn'
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -142,5 +150,35 @@ describe('bundled rg on the Windows process worker', () => {
     child.receive({ type: 'close', id: 7, code: 0, signal: null })
 
     expect(events).toEqual(['a', 'é', '€', '�', 'close'])
+  })
+})
+
+describe('a missing bundled rg on a real process worker', () => {
+  let entry: Awaited<ReturnType<typeof createWorkerThreadChildProcessTestEntry>>
+  let host: ReturnType<typeof createWorkerThreadChildProcessTestHost>
+  beforeAll(async () => {
+    entry = await createWorkerThreadChildProcessTestEntry()
+    host = createWorkerThreadChildProcessTestHost(entry.entryPath)
+    host.releaseOutput()
+  }, 60_000)
+  afterAll(async () => {
+    await host.dispose()
+    await entry.dispose()
+  })
+
+  it('reaches its error listener as a failed spawn, as a Node child does', async () => {
+    workerSpawn.mockImplementation((spec) => host.spawn(spec))
+    const rg = spawnBundledRipgrep(['--files'], {
+      cwd: tmpdir(),
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+
+    const seen = await new Promise<{ code: unknown; unavailable: boolean }>((resolve) => {
+      rg.once('error', (error: NodeJS.ErrnoException) =>
+        resolve({ code: error.code, unavailable: isRipgrepUnavailableExit(rg, null, null) })
+      )
+    })
+
+    expect(seen).toEqual({ code: 'ENOENT', unavailable: true })
   })
 })

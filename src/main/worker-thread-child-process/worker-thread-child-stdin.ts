@@ -126,6 +126,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
         }
         return
       case 'error':
+        // Node reports a child it could not create (ENOENT) as an error before any spawn; mark it as Node does.
+        if (this.pid === undefined && event.error.syscall?.startsWith('spawn')) {
+          this.pid = undefined
+        }
         if (isWorkerChildStdinWriteError(event.error) && this.stdin.listenerCount('error') > 0) {
           this.stdin.emit('error', toWorkerChildError(event.error))
           return
