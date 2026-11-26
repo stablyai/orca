@@ -145,6 +145,7 @@ function connector(
 ) {
   const turns: string[] = []
   const starts: string[] = []
+  const automationsTaken: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
   const seam = {
     receipts,
@@ -186,6 +187,14 @@ function connector(
   }
   const machine = {
     runTrigger: async () => false,
+    turnAutomations: (entries: readonly { automationId: string }[]) =>
+      entries.length
+        ? {
+            note: 'automation',
+            record: async () =>
+              entries.forEach((entry) => automationsTaken.push(entry.automationId))
+          }
+        : null,
     threadMute: (
       delivery: Parameters<typeof handleThreadMute>[1],
       record: Parameters<typeof handleThreadMute>[2],
@@ -202,7 +211,7 @@ function connector(
       () => 60_000
     )
   const deliver = async (raw: unknown) => await dispatch(raw)?.done
-  return { dispatch, deliver, turns, starts }
+  return { dispatch, deliver, turns, starts, automationsTaken }
 }
 
 const TURN_ID = 1_800_000_000_300
@@ -380,6 +389,27 @@ describe('a muted bot thread', () => {
       reason: 'delivery_id_reused'
     })
     expect(starts).toEqual([])
+  })
+
+  it('does not mark a silenced fresh start automation as handled when its receipt replays', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, starts, automationsTaken } = connector(store)
+    const quiet = start(FIRST, 'quiet', {
+      mentioned: false,
+      automations: [
+        {
+          automationId: 'a1',
+          triggerId: 't1',
+          botId: 'bot1',
+          event: { key: THREAD, actorId: 'U1', occurredAt: 1_800_000_000_000, text: 'quiet' }
+        }
+      ]
+    })
+
+    expect(await deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
+    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(starts).toEqual([])
+    expect(automationsTaken).toEqual([])
   })
 
   it('admits no unmentioned reply, and one turn for a mention that unmutes it on disk', async () => {
