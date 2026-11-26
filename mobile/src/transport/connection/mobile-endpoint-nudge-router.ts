@@ -60,16 +60,18 @@ export class MobileEndpointNudgeRouter {
       const liftGate = () => {
         this.cancelTrailingLift()
         this.lastGateLiftAt = args.now()
-        args.onExternalSignal()
         args.controller.handleActiveNudge(args.logical, reason)
       }
       const sinceLift = args.now() - this.lastGateLiftAt
       if (sinceLift >= GATED_NETWORK_NUDGE_WINDOW_MS) {
         liftGate()
-        void this.routeNetworkChange()
+        void this.routeNetworkChange(args.onExternalSignal)
         return
       }
-      void this.routeNetworkChange(liftGate)
+      void this.routeNetworkChange(() => {
+        args.onExternalSignal()
+        liftGate()
+      })
       // A suppressed callback may be connectivity returning, so it still earns one retry when the window ends.
       this.trailingLift ??= args.setTimer(() => {
         this.trailingLift = null

@@ -81,6 +81,7 @@ export class MobileEndpointSupervisor {
       controller: this.relayReconnect,
       openRelay: dependencies.openRelay,
       randomBytes: dependencies.randomBytes,
+      now: dependencies.now,
       writeBundle: dependencies.writeBundle,
       isActive: () => this.isActive(),
       isForeground: () => this.backgroundGrace.isForeground(),

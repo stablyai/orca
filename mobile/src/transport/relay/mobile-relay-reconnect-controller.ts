@@ -334,7 +334,8 @@ export class RelayReconnectController {
     if (this.timer) {
       return
     }
-    this.timerDueAt = this.dependencies.now() + delay
+    // A director Retry-After (booked in nextAttemptAt) is a floor for reprobes too.
+    this.timerDueAt = Math.max(this.dependencies.now() + delay, this.nextAttemptAt)
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
       // Advance cadence once per fired tick, not on repeated arm attempts.
@@ -344,7 +345,7 @@ export class RelayReconnectController {
         this.gateReprobePending = true
       }
       this.onRetry()
-    }, delay)
+    }, this.timerDueAt - this.dependencies.now())
   }
 
   // Keep only slow reprobes under a gate, and no timers while backgrounded/stopped.

@@ -21,6 +21,10 @@ import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
 const PENDING_DIAL_BUDGET = 3
+// A paused pending still gets one automatic try per window, doubling up to an hour, so a valid one
+// is never stranded without a resume or network change.
+const PENDING_PAUSE_MIN_MS = 5 * 60_000
+const PENDING_PAUSE_MAX_MS = 60 * 60_000
 
 function isHostOffline(error: Error): boolean {
   return error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
@@ -48,6 +52,8 @@ export class MobileRelaySessionEstablisher {
   // Pending is speculative: it gets a few failed dials, then pauses until a resume or network change
   // refills the budget, so failures behind an unchanged state cost a bounded number of dials.
   private pendingFailures = 0
+  private pendingPausedUntil = 0
+  private pendingPauseMs = PENDING_PAUSE_MIN_MS
   private resolvedThisAttempt = false
 
   constructor(
@@ -56,6 +62,7 @@ export class MobileRelaySessionEstablisher {
       controller: RelayReconnectController
       openRelay: MobileEndpointSupervisorDependencies['openRelay']
       randomBytes: (length: number) => Uint8Array
+      now: () => number
       writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
       isActive: () => boolean
       isForeground: () => boolean
@@ -80,6 +87,7 @@ export class MobileRelaySessionEstablisher {
 
   refillPendingBudget(): void {
     this.pendingFailures = 0
+    this.pendingPauseMs = PENDING_PAUSE_MIN_MS
   }
 
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
@@ -114,6 +122,10 @@ export class MobileRelaySessionEstablisher {
     }
     this.directorTried = kept
     const lastTried = (token: string) => this.directorTried.get(token) ?? -1
+    if (this.pendingFailures >= PENDING_DIAL_BUDGET && this.args.now() >= this.pendingPausedUntil) {
+      // The window lapsed: one more try, and a failure pauses for twice as long.
+      this.pendingFailures = PENDING_DIAL_BUDGET - 1
+    }
     const pendingPaused = this.pendingFailures >= PENDING_DIAL_BUDGET
     const ordered = credentials
       .filter((credential) => !(pendingPaused && credential.token === pending?.token))
@@ -129,7 +141,7 @@ export class MobileRelaySessionEstablisher {
       const result = await this.dial(credential, !this.resolvedThisAttempt)
       if (result.ok) {
         this.directorTried.clear()
-        this.pendingFailures = 0
+        this.refillPendingBudget()
         return { outcome: 'established' }
       }
       if (result.error instanceof RelayDialAbortedError) {
@@ -143,7 +155,10 @@ export class MobileRelaySessionEstablisher {
       }
       // A 4404 comes after the cell accepted the credential, so it proves pending rather than spends it.
       if (usedPending && !isHostOffline(result.error)) {
-        this.pendingFailures++
+        if (++this.pendingFailures === PENDING_DIAL_BUDGET) {
+          this.pendingPausedUntil = this.args.now() + this.pendingPauseMs
+          this.pendingPauseMs = Math.min(this.pendingPauseMs * 2, PENDING_PAUSE_MAX_MS)
+        }
       }
       if (isExplicitCredentialRejection(result.error)) {
         // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared:
