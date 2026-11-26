@@ -74,9 +74,11 @@ export function watchPluginWorkspaceStatus(input: {
         return
       }
       consecutiveFailures = 0
-      for (const id of lastById.keys()) {
-        if (!statuses.byId.has(id)) {
-          lastById.delete(id)
+      if (!statuses.truncated) {
+        for (const id of lastById.keys()) {
+          if (!statuses.byId.has(id)) {
+            lastById.delete(id)
+          }
         }
       }
       for (const [workspaceId, status] of statuses.byId) {

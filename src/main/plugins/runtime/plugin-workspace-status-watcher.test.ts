@@ -385,4 +385,103 @@ describe('watchPluginWorkspaceStatus', () => {
       vi.useRealTimers()
     }
   })
+
+  it('preserves cached statuses for omitted workspaces on truncated reads and prunes on full reads', async () => {
+    vi.useFakeTimers()
+    try {
+      const makeEntry = (worktreeId: string, state: 'working' | 'done' | 'inactive') => ({
+        worktreeId,
+        status: state,
+        unread: false,
+        liveTerminalCount: state === 'inactive' ? 0 : 1,
+        hasHostSidebarActivity: state !== 'inactive',
+        isActive: state !== 'inactive',
+        isPinned: false,
+        workspaceStatus: 'in-progress'
+      })
+      type PsResponse = {
+        worktrees: ReturnType<typeof makeEntry>[]
+        truncated?: boolean
+      }
+      const calls: Deferred<PsResponse>[] = []
+      const emitted: unknown[] = []
+      let fireAgentStatus!: () => void
+
+      const stop = watchPluginWorkspaceStatus({
+        delegate: {
+          callRuntime: () => {
+            const d = deferred<PsResponse>()
+            calls.push(d)
+            return d.promise
+          }
+        },
+        events: {
+          wantsEvent: () => true,
+          emitEvent: (_event, payload) => emitted.push(payload)
+        },
+        onAgentStatus: (listener) => {
+          fireAgentStatus = listener
+          return () => {}
+        },
+        onSessionWritten: () => () => {},
+        onStateWritten: () => () => {},
+        delayMs: 10
+      })
+
+      // Initial full read caches wt-1 and wt-2.
+      fireAgentStatus()
+      await vi.advanceTimersByTimeAsync(10)
+      calls[0].resolve({
+        worktrees: [makeEntry('wt-1', 'working'), makeEntry('wt-2', 'working')],
+        truncated: false
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(emitted).toHaveLength(2)
+
+      // Truncated read omits wt-2 and updates wt-1: wt-1 emits, wt-2 stays cached.
+      fireAgentStatus()
+      await vi.advanceTimersByTimeAsync(10)
+      calls[1].resolve({
+        worktrees: [makeEntry('wt-1', 'done')],
+        truncated: true
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(emitted).toHaveLength(3)
+      expect(emitted[2]).toMatchObject({ workspaceId: 'wt-1', status: { state: 'done' } })
+
+      // Subsequent full read with unchanged wt-2 must not re-emit wt-2.
+      fireAgentStatus()
+      await vi.advanceTimersByTimeAsync(10)
+      calls[2].resolve({
+        worktrees: [makeEntry('wt-1', 'done'), makeEntry('wt-2', 'working')],
+        truncated: false
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(emitted).toHaveLength(3)
+
+      // Full read omitting wt-2 prunes wt-2 so it emits again when it returns.
+      fireAgentStatus()
+      await vi.advanceTimersByTimeAsync(10)
+      calls[3].resolve({
+        worktrees: [makeEntry('wt-1', 'done')],
+        truncated: false
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(emitted).toHaveLength(3)
+
+      fireAgentStatus()
+      await vi.advanceTimersByTimeAsync(10)
+      calls[4].resolve({
+        worktrees: [makeEntry('wt-1', 'done'), makeEntry('wt-2', 'working')],
+        truncated: false
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(emitted).toHaveLength(4)
+      expect(emitted[3]).toMatchObject({ workspaceId: 'wt-2', status: { state: 'working' } })
+
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
