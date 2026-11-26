@@ -28371,7 +28371,8 @@
         "clearAll": "Filtreleri temizle",
         "label": "Öğeleri filtrele",
         "needsYou": "Yalnızca sizi bekleyenler",
-        "remove": "{{name}} filtresini kaldır"
+        "remove": "{{name}} filtresini kaldır",
+        "owner": "Sahip"
       },
       "homeChat": "Ana sohbet",
       "link": {

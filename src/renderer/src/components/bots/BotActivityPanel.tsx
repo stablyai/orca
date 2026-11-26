@@ -39,12 +39,11 @@ import {
   type BotItemsPeople
 } from './items/BotItemsFilter'
 import {
-  botChatPeople,
   botItemsPersonPick,
-  botPickAccount,
+  botItemsWhoseOfPick,
   type BotChatPersonPick
 } from '../../../../shared/bots/bot-chat-people'
-import { useBotOwnPersonLabel } from './BotPersonPickItems'
+import { useBotItemsPeople } from './BotPersonPickItems'
 import { BotItemsSection } from './items/BotItemsSection'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
@@ -151,23 +150,20 @@ function BotActivityTab({
     setReturnTo(null)
     setFilterState(next)
   }
-  // Whose items, per screen: a shared bot opens on the owner's own.
-  const people = useMemo(() => botChatPeople(bot), [bot])
+  // Whose items, per screen: a shared bot opens on the viewer's own, the owner's or a teammate's.
+  const entries = useBotItemsPeople(bot)
   const [picked, setPicked] = useState<BotChatPersonPick | null>(null)
-  const pick = botItemsPersonPick(people, picked)
-  const you = useBotOwnPersonLabel(bot)
-  const personPick: BotItemsPeople | null =
-    people.length > 0
-      ? {
-          you,
-          people,
-          pick,
-          onPick: (next) => {
-            setReturnTo(null)
-            setPicked(next)
-          }
+  const pick = botItemsPersonPick(entries, picked)
+  const personPick: BotItemsPeople | null = entries
+    ? {
+        entries,
+        pick,
+        onPick: (next) => {
+          setReturnTo(null)
+          setPicked(next)
         }
-      : null
+      }
+    : null
   const picture = useBotPictureSetting(bot, (updates) => updateBotReporting(bot, updates))
   // "Today at…" and "next" roll over with the clock; a minute is fine-grained enough.
   const clock = useNow(60_000)
@@ -178,7 +174,7 @@ function BotActivityTab({
     filter,
     clock,
     seenAtOpen ?? '',
-    botPickAccount(pick)
+    botItemsWhoseOfPick(pick, entries !== null)
   )
   // Failures of the read the list shows: the person's or chats' own when scoped.
   const shownRead = botItemsShownReadState(list, items)
@@ -274,7 +270,8 @@ function BotActivityTab({
           ) : null
         }
       />
-      <fieldset disabled={offline || readOnly} className="contents">
+      {/* Items act for a teammate as for the owner; only the agent's settings stay the owner's. */}
+      <fieldset disabled={offline} className="contents">
         {read ? (
           <BotItemsFilterChips filter={filter} onFilter={setFilter} people={personPick} />
         ) : null}

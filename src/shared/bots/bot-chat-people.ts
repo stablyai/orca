@@ -34,24 +34,88 @@ export function botChatPickHas(pick: BotChatPersonPick, chat: BotChatTreeChat): 
   }
 }
 
-/** Whom a shared bot's Items tab shows: the owner's own until another pick, and everyone's for a bot
- *  shared with no one. A teammate whose share went away falls back to the owner's own. */
-export function botItemsPersonPick(
-  people: readonly BotChatPerson[],
-  picked: BotChatPersonPick | null
-): BotChatPersonPick {
-  if (people.length === 0) {
-    return { kind: 'everyone' }
+/** One person the pick offers, the viewer ("you") first; `name` null when the host doesn't know it. */
+export type BotPeopleEntry = { pick: BotChatPersonPick; name: string | null }
+
+/** Whom an agent's Items filter offers, as its viewer sees them: the viewer first, then the owner (on
+ *  a teammate's copy) and the teammates; null for an agent shared with no one. The owner's own copy
+ *  reads its share list; a teammate's, the people its host named (`shareViewer`). */
+export function botPeoplePicker(
+  bot: Pick<Bot, 'shares' | 'shareViewer'>,
+  ownerName: string | null
+): BotPeopleEntry[] | null {
+  const viewer = bot.shareViewer
+  if (viewer) {
+    const self = viewer.teammates.find((person) => person.accountId === viewer.accountId)
+    return [
+      {
+        pick: { kind: 'person', person: self ?? { accountId: viewer.accountId, name: '' } },
+        name: self?.name ?? null
+      },
+      { pick: { kind: 'owner' }, name: viewer.ownerName },
+      ...viewer.teammates.flatMap((person) =>
+        person.accountId === viewer.accountId
+          ? []
+          : [{ pick: { kind: 'person' as const, person }, name: person.name }]
+      )
+    ]
   }
-  if (picked?.kind === 'person') {
-    const person = people.find((entry) => entry.accountId === picked.person.accountId)
-    return person ? { kind: 'person', person } : { kind: 'owner' }
-  }
-  return picked ?? { kind: 'owner' }
+  const people = botChatPeople(bot)
+  return people.length === 0
+    ? null
+    : [
+        { pick: { kind: 'owner' }, name: ownerName },
+        ...people.map((person) => ({
+          pick: { kind: 'person' as const, person },
+          name: person.name
+        }))
+      ]
 }
 
-/** The list read's person for a pick: a teammate's account, null for the owner's own, undefined for
- *  everyone's. */
-export function botPickAccount(pick: BotChatPersonPick): string | null | undefined {
-  return pick.kind === 'person' ? pick.person.accountId : pick.kind === 'owner' ? null : undefined
+export function sameBotPersonPick(a: BotChatPersonPick, b: BotChatPersonPick): boolean {
+  return a.kind === 'person'
+    ? b.kind === 'person' && a.person.accountId === b.person.accountId
+    : a.kind === b.kind
+}
+
+/** Whom the Items tab shows: the viewer's own until another pick, and everyone's for an agent shared
+ *  with no one. A pick whose person is gone falls back to the viewer's own. */
+export function botItemsPersonPick(
+  entries: readonly Pick<BotPeopleEntry, 'pick'>[] | null,
+  picked: BotChatPersonPick | null
+): BotChatPersonPick {
+  if (!entries) {
+    return { kind: 'everyone' }
+  }
+  if (picked?.kind === 'everyone') {
+    return picked
+  }
+  const found = picked && entries.find((entry) => sameBotPersonPick(entry.pick, picked))
+  return (found ?? entries[0]!).pick
+}
+
+/** Whose items a list read asks for: the caller's default (`default`), everyone's, the owner's own,
+ *  or one teammate's. */
+export type BotItemsWhose = 'default' | 'everyone' | 'owner' | `person:${string}`
+
+/** A pick's read: an agent shared with no one reads its default list. */
+export function botItemsWhoseOfPick(pick: BotChatPersonPick, shared: boolean): BotItemsWhose {
+  if (!shared) {
+    return 'default'
+  }
+  return pick.kind === 'person' ? `person:${pick.person.accountId}` : pick.kind
+}
+
+/** The list read's params for whose items it asks. */
+export function botItemsWhoseParams(whose: BotItemsWhose): {
+  everyone?: true
+  person?: string | null
+} {
+  if (whose === 'default') {
+    return {}
+  }
+  if (whose === 'everyone') {
+    return { everyone: true }
+  }
+  return { person: whose === 'owner' ? null : whose.slice('person:'.length) }
 }

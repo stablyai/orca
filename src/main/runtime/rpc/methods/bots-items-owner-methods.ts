@@ -22,10 +22,9 @@ import {
   getAgentSessionAttachmentStore
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { botChatTakingMail } from './bots-chats'
-import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
-import { defineMethod, type RpcContext } from '../core'
+import { defineMethod } from '../core'
 import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
-import { ownerOnly } from './bots-caller-gates'
+import { assertItemsOfBot, itemsSeenOf, markItemsSeen, ownerActor } from './bots-items-owner-person'
 import { botItemListScope, botItemsOfPeople } from '../../../bots/bot-item-access'
 import { parseCursor, resolveItem } from './bots-items-write-support'
 import { itemsAccess } from './bots-items-caller'
@@ -35,16 +34,6 @@ import {
   botItemEventsForClient,
   botItemsForClient
 } from './bots-items-waiting-compat'
-
-const REFUSAL = 'Only your owner changes items this way, in Orca.'
-
-function ownerActor(context: RpcContext): BotItemOwnerActor {
-  ownerOnly(context, REFUSAL)
-  context.runtime.bots.assertEnabled()
-  return context.pairedDeviceId
-    ? { kind: 'owner', device: context.pairedDeviceId }
-    : { kind: 'owner' }
-}
 
 const LIST = defineMethod({
   name: 'bots.items.owner.list',
@@ -67,7 +56,10 @@ const LIST = defineMethod({
     // Read after the rows, so a mark another device moved meanwhile is the one sent.
     const seenEventId = (): string =>
       botItemEventId(
-        context.runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
+        itemsSeenOf(
+          context,
+          context.runtime.bots.list().find((bot) => bot.id === params.botId)
+        )
       )
     if (params.uids) {
       // What a notice named: those items (an absent one is deleted or out of scope), with the counts.
@@ -127,9 +119,7 @@ const SHOW = defineMethod({
     ownerActor(context)
     const { botItems } = context.runtime
     const record = await resolveItem(botItems.store(), params.item)
-    if (params.botId !== undefined && record.ownerBotId !== params.botId) {
-      throw new BotItemError('not_found', `No item ${params.item}.`)
-    }
+    assertItemsOfBot(params.botId, [record])
     const after = params.after !== undefined ? parseBotItemEventId(params.after) : 0
     const before = params.before !== undefined ? parseBotItemEventId(params.before) : 0
     if (after === null || before === null) {
@@ -162,13 +152,14 @@ const SHOW = defineMethod({
 const COMMENT = defineMethod({
   name: 'bots.items.owner.comment',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerComment,
   handler: async (params, context) => {
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
     const item = await resolveItem(store, params.item)
+    assertItemsOfBot(params.botId, [item])
     const bot = context.runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
     if (params.images?.length || params.text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)) {
       // The attachment store and its claims come up with the structured chat host.
@@ -211,13 +202,14 @@ const COMMENT = defineMethod({
 const STATUS = defineMethod({
   name: 'bots.items.owner.status',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerStatus,
   handler: async (params, context) => {
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
     const items = await Promise.all(params.items.map((ref) => resolveItem(store, ref)))
+    assertItemsOfBot(params.botId, items)
     const uids = items.map((item) => item.uid)
     const result = await store.ownerStatus(
       {
@@ -244,13 +236,14 @@ const STATUS = defineMethod({
 const SNOOZE = defineMethod({
   name: 'bots.items.owner.snooze',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerSnooze,
   handler: async (params, context) => {
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
     const items = await Promise.all(params.items.map((entry) => resolveItem(store, entry.item)))
+    assertItemsOfBot(params.botId, items)
     const result = await store.ownerSnooze(
       {
         items: items.map((item, index) => ({
@@ -274,23 +267,13 @@ const SNOOZE = defineMethod({
 const OPENED = defineMethod({
   name: 'bots.items.owner.opened',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerOpened,
   handler: async (params, context) => {
     ownerActor(context)
     const { runtime } = context
     const latest = await runtime.botItems.store().latestEventId(params.botId)
-    const saved = runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
-    // One cursor per bot in its settings, so the desktop and a paired phone agree.
-    const seen =
-      latest > saved
-        ? ((
-            await runtime.bots.update(params.botId, (bot) => ({
-              itemsSeen: Math.max(bot.itemsSeen ?? 0, latest)
-            }))
-          ).itemsSeen ?? latest)
-        : saved
-    return { seenEventId: botItemEventId(seen) }
+    return { seenEventId: await markItemsSeen(context, params.botId, latest) }
   }
 })
 

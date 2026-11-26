@@ -3,6 +3,7 @@
 import type { Bot } from '../../../shared/bot-types'
 import { botShareUsable, type BotShare } from '../../../shared/bots/bot-team-shares'
 import { botHome } from '../../../shared/bots/bot-home-of'
+import { botChatPeople } from '../../../shared/bots/bot-chat-people'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type {
   BotShareProvisionedPhone,
@@ -52,12 +53,13 @@ export function botSharedWithAccount(
 }
 
 /** The bots a teammate's share connection lists: the shared bot alone, with only what its row, avatar
- *  and chats show, and their own Home Chat in the Home slot. Its people, connectors, settings and the
- *  owner's chats stay on this host; the fields a Bot requires read empty, as for a shared agent whose
- *  host hasn't answered yet. */
+ *  and chats show, their own Home Chat in the Home slot, and its people as the Items filter names them
+ *  (`shareViewer`). Its connectors, settings and the owner's chats stay on this host; the fields a Bot
+ *  requires read empty, as for a shared agent whose host hasn't answered yet. */
 export function botShareListedBots(
   bots: readonly Bot[],
-  scope: Pick<BotShareCallerScope, 'botId' | 'accountId'>
+  scope: Pick<BotShareCallerScope, 'botId' | 'accountId'>,
+  ownerName: string | null = null
 ): Bot[] {
   return bots
     .filter((bot) => bot.id === scope.botId)
@@ -82,7 +84,8 @@ export function botShareListedBots(
       slack: null,
       linear: null,
       github: null,
-      chatSessionId: botHome(bot, { accountId: scope.accountId })
+      chatSessionId: botHome(bot, { accountId: scope.accountId }),
+      shareViewer: { accountId: scope.accountId, ownerName, teammates: botChatPeople(bot) }
     }))
 }
 

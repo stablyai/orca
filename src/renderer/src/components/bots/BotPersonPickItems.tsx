@@ -1,11 +1,14 @@
-// The person pick both Chats' and Items' filters open with: everyone, the owner's own, or one teammate's.
+// The person pick both Chats' and Items' filters open with: everyone, the viewer's own, or another person's.
 import { Check, Users } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import type { Bot } from '../../../../shared/bot-types'
-import type { BotChatPerson } from '../../../../shared/bots/bot-chat-tree'
-import type { BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
+import {
+  botPeoplePicker,
+  sameBotPersonPick,
+  type BotChatPersonPick
+} from '../../../../shared/bots/bot-chat-people'
 import { BotOwnerAvatar } from './bot-connector-people'
 
 /** The owner as the pick names them: "<name> (you)", else "You". */
@@ -19,9 +22,39 @@ export function useBotOwnPersonLabel(bot: Bot): string {
     : t('bots.chats.filter.you', 'You')
 }
 
+/** One person the pick offers, labelled; the viewer leads. */
+export type BotPersonPickLabelled = { pick: BotChatPersonPick; label: string }
+
 /** What the pick shows by name; null for everyone. */
-export function botPersonPickName(pick: BotChatPersonPick, you: string): string | null {
-  return pick.kind === 'person' ? pick.person.name : pick.kind === 'owner' ? you : null
+export function botPersonPickName(
+  pick: BotChatPersonPick,
+  entries: readonly BotPersonPickLabelled[]
+): string | null {
+  return pick.kind === 'everyone'
+    ? null
+    : (entries.find((entry) => sameBotPersonPick(entry.pick, pick))?.label ?? null)
+}
+
+/** The Items filter's people as its viewer sees them, labelled: "<name> (you)" first. Null for an
+ *  agent shared with no one. */
+export function useBotItemsPeople(bot: Bot): BotPersonPickLabelled[] | null {
+  const t = useTranslate()
+  const ownerLabel = useBotOwnPersonLabel(bot)
+  const entries = botPeoplePicker(bot, null)
+  if (!entries) {
+    return null
+  }
+  return entries.map((entry, index) => ({
+    pick: entry.pick,
+    label:
+      index === 0
+        ? bot.shareViewer
+          ? entry.name
+            ? t('bots.teamShare.you', '{{name}} (you)', { name: entry.name })
+            : t('bots.chats.filter.you', 'You')
+          : ownerLabel
+        : (entry.name ?? t('bots.items.filter.owner', 'Owner'))
+  }))
 }
 
 function PickItem({
@@ -51,13 +84,12 @@ const personLead = (
 )
 
 export function BotPersonPickItems({
-  you,
-  people,
+  entries,
   pick,
   onPick
 }: {
-  you: string
-  people: readonly BotChatPerson[]
+  /** The viewer first, then everyone else. */
+  entries: readonly BotPersonPickLabelled[]
   pick: BotChatPersonPick
   onPick: (pick: BotChatPersonPick) => void
 }): React.JSX.Element {
@@ -72,19 +104,13 @@ export function BotPersonPickItems({
       />
       <DropdownMenuSeparator />
       <div className="scrollbar-sleek max-h-[15rem] overflow-y-auto">
-        <PickItem
-          checked={pick.kind === 'owner'}
-          lead={personLead}
-          label={you}
-          onSelect={() => onPick({ kind: 'owner' })}
-        />
-        {people.map((person) => (
+        {entries.map((entry) => (
           <PickItem
-            key={person.accountId}
-            checked={pick.kind === 'person' && pick.person.accountId === person.accountId}
+            key={entry.pick.kind === 'person' ? entry.pick.person.accountId : entry.pick.kind}
+            checked={sameBotPersonPick(entry.pick, pick)}
             lead={personLead}
-            label={person.name}
-            onSelect={() => onPick({ kind: 'person', person })}
+            label={entry.label}
+            onSelect={() => onPick(entry.pick)}
           />
         ))}
       </div>

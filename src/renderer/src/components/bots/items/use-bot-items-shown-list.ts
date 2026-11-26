@@ -12,13 +12,9 @@ import {
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { botItemCursorPlace, botItemReaches } from '../../../../../shared/bots/bot-item-merge'
+import type { BotItemsWhose } from '../../../../../shared/bots/bot-chat-people'
 import type { BotHostReadState } from '../use-bot-host-read'
-import {
-  readMoreBotItems,
-  useBotChatItems,
-  type BotItemsPerson,
-  type BotItemsRead
-} from './use-bot-items'
+import { readMoreBotItems, useBotChatItems, type BotItemsRead } from './use-bot-items'
 
 /** One Show more: the Closed items it loaded, and whether more remain. */
 export type BotItemsClosedPage = { items: readonly BotItem[]; more: boolean }
@@ -54,12 +50,12 @@ export function useBotItemsShownList(
   filter: BotItemFilter,
   now: number,
   seenEventId: string,
-  /** Whose items it shows; undefined: everyone's. */
-  person: BotItemsPerson = undefined
+  /** Whose items it shows; `default`: the caller's own default list. */
+  whose: BotItemsWhose = 'default'
 ): BotItemsShownList {
   // Some chats or one person shown: their own read, so counts and Closed pages are theirs.
-  const chatRead = useBotChatItems(bot, filter.chatIds, person)
-  const filtered = filter.chatIds !== null || person !== undefined
+  const chatRead = useBotChatItems(bot, filter.chatIds, whose)
+  const filtered = filter.chatIds !== null || whose !== 'default'
   const read = filtered ? chatRead.read : botRead
   // Closed loads as deep as asked inside the read itself: Show more is one more read of it, in turn.
   const items = read?.items ?? NONE

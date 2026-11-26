@@ -29,7 +29,11 @@ export function BotChatsPersonFilter({
   const you = useBotOwnPersonLabel(bot)
   const on = pick.kind !== 'everyone'
   const label = t('bots.chats.filter.label', 'Filter by person')
-  const named = botPersonPickName(pick, you)
+  const entries = [
+    { pick: { kind: 'owner' } as const, label: you },
+    ...people.map((person) => ({ pick: { kind: 'person' as const, person }, label: person.name }))
+  ]
+  const named = botPersonPickName(pick, entries)
   const fullLabel = named ? `${label} · ${named}` : label
   return (
     <DropdownMenu>
@@ -57,7 +61,7 @@ export function BotChatsPersonFilter({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-52">
-        <BotPersonPickItems you={you} people={people} pick={pick} onPick={onPick} />
+        <BotPersonPickItems entries={entries} pick={pick} onPick={onPick} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

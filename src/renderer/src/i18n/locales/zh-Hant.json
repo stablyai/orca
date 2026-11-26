@@ -27239,6 +27239,9 @@
       },
       "empty": {
         "person": "沒有來自 {{name}} 的事項。"
+      },
+      "filter": {
+        "owner": "擁有者"
       }
     },
     "hover": {

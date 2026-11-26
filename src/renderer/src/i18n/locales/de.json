@@ -25240,6 +25240,9 @@
       "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden",
       "empty": {
         "person": "Keine Einträge von {{name}}."
+      },
+      "filter": {
+        "owner": "Inhaber"
       }
     },
     "hover": {

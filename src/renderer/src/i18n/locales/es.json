@@ -25806,6 +25806,9 @@
       "readMoreClosedFailed": "No se pudieron leer más elementos cerrados",
       "empty": {
         "person": "No hay elementos de {{name}}."
+      },
+      "filter": {
+        "owner": "Propietario"
       }
     },
     "hover": {

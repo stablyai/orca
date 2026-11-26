@@ -117,7 +117,7 @@ export function BotItemCommentCard({
   // Its files show as links after them, so their `@path`s go from the words.
   const { words } = botItemCommentFiles(stripSentImagePromptMarkers(shape.body, images.length))
   const { files } = botItemCommentFiles(typeof event.data.text === 'string' ? event.data.text : '')
-  const name = botItemActorName(event, item, t)
+  const name = botItemActorName(event, item, t, bot)
   const fullTime = useNativeChatMessageTimeLabel(event.at)
   const jump =
     'rounded-sm outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50'

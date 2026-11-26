@@ -57,7 +57,17 @@ export const people_default = defineFixture({
         items={[]}
         filter={{ chatIds: null, botIds: null, needsYou: false }}
         onFilter={() => {}}
-        people={{ you: 'Jinwoo (you)', people, pick: { kind: 'owner' }, onPick: () => {} }}
+        people={{
+          entries: [
+            { pick: { kind: 'owner' }, label: 'Jinwoo (you)' },
+            ...people.map((person) => ({
+              pick: { kind: 'person' as const, person },
+              label: person.name
+            }))
+          ],
+          pick: { kind: 'owner' },
+          onPick: () => {}
+        }}
       />
     </div>
   ),

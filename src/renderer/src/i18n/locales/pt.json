@@ -26309,6 +26309,9 @@
       "readMoreClosedFailed": "Não foi possível ler mais itens fechados",
       "empty": {
         "person": "Nenhum item de {{name}}."
+      },
+      "filter": {
+        "owner": "Proprietário"
       }
     },
     "hover": {

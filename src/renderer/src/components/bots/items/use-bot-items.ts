@@ -13,6 +13,7 @@ import type {
   BotItemEvent,
   BotItemStatus
 } from '../../../../../shared/bots/bot-items'
+import { botItemsWhoseParams, type BotItemsWhose } from '../../../../../shared/bots/bot-chat-people'
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
 import { BOT_ITEM_LIMITS } from '../../../../../shared/bots/bot-items'
 import {
@@ -44,20 +45,17 @@ export const KEPT_ITEM_LISTS = 20
 /** Rows need no description, done means or close note: the opened item reads its own. */
 const SUMMARY = { summary: true }
 
-/** Whose items a read lists: a teammate's account, null for the owner's own, undefined for everyone's. */
-export type BotItemsPerson = string | null | undefined
-
 /** The list call for a bot (or some of its chats, or one person's), every read a summary. */
 function listCall(
   bot: BotRef,
   chatIds: readonly string[] | null,
-  person: BotItemsPerson
+  whose: BotItemsWhose
 ): BotItemsListCall {
   return (params) =>
     callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
       botId: bot.id,
       ...chatScope(chatIds),
-      ...(person !== undefined ? { person } : {}),
+      ...botItemsWhoseParams(whose),
       ...SUMMARY,
       ...params
     })
@@ -78,7 +76,7 @@ const itemsRead: BotHostRead<BotItemsRead> = createBotHostRead<BotItemsRead>(
     // The first read after a reopen builds on the kept list, whose deeper pages missed the notices while
     // it was closed: it reads every loaded page again, not only once the first page moves.
     load: (bot, previous, ask, show, live, waiting) =>
-      loadBotItemsList(listCall(bot, null, undefined), previous, ask, {
+      loadBotItemsList(listCall(bot, null, 'default'), previous, ask, {
         show,
         live,
         waiting,
@@ -127,12 +125,7 @@ export function useStableBotItemChats(chatIds: readonly string[] | null): readon
 // while it re-reads, as the bot's whole list does.
 const keptScopedReads = new Map<string, BotItemsRead>()
 
-function scopedReadKey(
-  bot: BotRef,
-  chats: readonly string[] | null,
-  person: BotItemsPerson
-): string {
-  const whose = person === undefined ? '*' : person === null ? '' : `p:${person}`
+function scopedReadKey(bot: BotRef, chats: readonly string[] | null, whose: BotItemsWhose): string {
   return JSON.stringify([botRefKey(bot), chats, whose])
 }
 
@@ -152,7 +145,7 @@ function keepScopedRead(key: string, value: BotItemsRead): void {
 export function useBotChatItems(
   bot: BotRef,
   chatIds: readonly string[] | null,
-  person: BotItemsPerson = undefined
+  whose: BotItemsWhose = 'default'
 ): {
   read: BotItemsRead | null
   failed: boolean
@@ -162,7 +155,7 @@ export function useBotChatItems(
 } {
   const { hostId, id } = bot
   const chats = useStableBotItemChats(chatIds)
-  type Scoped = { chats: readonly string[] | null; person: BotItemsPerson; value: BotItemsRead }
+  type Scoped = { chats: readonly string[] | null; whose: BotItemsWhose; value: BotItemsRead }
   const [read, setRead] = useState<Scoped | null>(null)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -170,18 +163,18 @@ export function useBotChatItems(
   // The last read of this scope outlives a Retry, so it keeps its loaded Closed depth.
   const kept = useRef<Scoped | null>(null)
   useEffect(() => {
-    if (chats === null && person === undefined) {
+    if (chats === null && whose === 'default') {
       return
     }
-    const call = listCall({ hostId, id }, chats, person)
-    const key = scopedReadKey({ hostId, id }, chats, person)
+    const call = listCall({ hostId, id }, chats, whose)
+    const key = scopedReadKey({ hostId, id }, chats, whose)
     let live = true
     let last: BotItemsRead | null =
-      kept.current?.chats === chats && kept.current.person === person
+      kept.current?.chats === chats && kept.current.whose === whose
         ? kept.current.value
         : (keptScopedReads.get(key) ?? null)
     if (last) {
-      setRead({ chats, person, value: last })
+      setRead({ chats, whose, value: last })
     }
     let missed = false
     // One read out at a time; asks during it share one more after it, so the last to land is newest.
@@ -202,9 +195,9 @@ export function useBotChatItems(
       const land = (value: BotItemsRead): void => {
         if (live && value !== last) {
           last = value
-          kept.current = { chats, person, value }
+          kept.current = { chats, whose, value }
           keepScopedRead(key, value)
-          setRead({ chats, person, value })
+          setRead({ chats, whose, value })
         }
       }
       loadBotItemsList(call, last, ask, { show: land, live: () => live, pageUnmoved: true })
@@ -259,11 +252,11 @@ export function useBotChatItems(
       stop()
       more.splice(0).forEach((told) => told(null))
     }
-  }, [hostId, id, chats, person, attempt])
+  }, [hostId, id, chats, whose, attempt])
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
   const readMore = useCallback(() => moreRef.current(), [])
   return {
-    read: read && read.chats === chats && read.person === person ? read.value : null,
+    read: read && read.chats === chats && read.whose === whose ? read.value : null,
     failed,
     retry,
     readMore
@@ -300,6 +293,7 @@ export function commentOnBotItem(
   skipped: readonly number[] = []
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
+    botId: bot.id,
     item: uid,
     text,
     // An older host refuses these fields, so a comment without them leaves them off.
@@ -338,6 +332,7 @@ export function setBotItemsStatus(
   note?: string
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.status', {
+    botId: bot.id,
     items: uids,
     ...botItemStatusFields(status, note, botHostTakes(bot, BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY))
   })
@@ -351,6 +346,7 @@ export function snoozeBotItems(
   until: number | null
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.snooze', {
+    botId: bot.id,
     items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
     until
   })

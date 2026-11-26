@@ -27923,6 +27923,9 @@
       },
       "empty": {
         "person": "{{name}}님의 항목이 없습니다."
+      },
+      "filter": {
+        "owner": "소유자"
       }
     },
     "hover": {

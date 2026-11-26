@@ -51,7 +51,9 @@ export function botItemChangeMail(
   const actor = changes[0]?.event.actor
   const who =
     actor?.kind === 'owner'
-      ? 'Your owner'
+      ? actor.person
+        ? `Your owner's teammate ${actor.person.name}`
+        : 'Your owner'
       : actor?.kind === 'bot'
         ? actor.botId === changes[0]?.item.ownerBotId
           ? 'Your other chat'
@@ -98,10 +100,10 @@ export function botItemChangeMail(
   const answered = lines.some(({ event }) => isAnswer(event))
   const next = [
     answered
-      ? 'Your owner answered your question, and the item is In progress again: carry on with that answer. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.'
+      ? `${who} answered your question, and the item is In progress again: carry on with that answer. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.`
       : null,
     replied
-      ? 'Your owner replied to your question, so the item moved to In progress. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.'
+      ? `${who} replied to your question, so the item moved to In progress. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.`
       : null,
     tos.some(isClosed)
       ? 'If something linked to a closed item is still running, stop or redirect it.'

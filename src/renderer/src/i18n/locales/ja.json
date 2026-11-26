@@ -26394,6 +26394,9 @@
       "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした",
       "empty": {
         "person": "{{name}} の項目はありません。"
+      },
+      "filter": {
+        "owner": "オーナー"
       }
     },
     "hover": {

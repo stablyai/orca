@@ -28517,7 +28517,8 @@
         "clearAll": "清除筛选",
         "label": "筛选事项",
         "needsYou": "仅显示需要你处理的",
-        "remove": "移除筛选条件 {{name}}"
+        "remove": "移除筛选条件 {{name}}",
+        "owner": "所有者"
       },
       "group": {
         "closed": "已关闭",

@@ -101,9 +101,17 @@ function FieldChange({
   )
 }
 
-function EventBody({ event, item }: { event: BotItemEvent; item: BotItem }): React.JSX.Element {
+function EventBody({
+  event,
+  item,
+  bot
+}: {
+  event: BotItemEvent
+  item: BotItem
+  bot: Bot
+}): React.JSX.Element {
   const t = useTranslate()
-  const by = <b className={ACTOR}>{botItemActorName(event, item, t)}</b>
+  const by = <b className={ACTOR}>{botItemActorName(event, item, t, bot)}</b>
   const { data } = event
   switch (event.kind) {
     case 'commented':
@@ -326,7 +334,7 @@ export function BotItemActivityList({
                 {entry.kind === 'worker' ? (
                   <WorkerBody entry={entry} />
                 ) : (
-                  <EventBody event={entry.event} item={item} />
+                  <EventBody event={entry.event} item={item} bot={bot} />
                 )}
               </div>
               <NativeChatMessageTimestamp

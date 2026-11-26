@@ -112,7 +112,11 @@ export const BotItemsShow = z.object({
   limit: OptionalPositiveInt
 })
 
-const Owner = { requestId: OptionalString }
+const Owner = {
+  requestId: OptionalString,
+  /** The bot whose items they are; a teammate's call names its shared bot. */
+  botId: OptionalString
+}
 
 /** The owner's panel: one bot's own items, open ones all, closed ones by page. */
 export const BotItemsOwnerList = z.object({

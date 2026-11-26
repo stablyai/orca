@@ -30608,7 +30608,8 @@
         "clearAll": "Clear filters",
         "label": "Filter items",
         "needsYou": "Needs you only",
-        "remove": "Remove filter {{name}}"
+        "remove": "Remove filter {{name}}",
+        "owner": "Owner"
       },
       "group": {
         "closed": "Closed",

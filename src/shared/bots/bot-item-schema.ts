@@ -106,7 +106,11 @@ const linkSchema: z.ZodType<BotItemLinkView, unknown> = z.discriminatedUnion('ki
 
 const actorSchema: z.ZodType<BotItemActor, unknown> = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('bot'), botId: z.string(), chatId: z.string() }),
-  z.looseObject({ kind: z.literal('owner'), device: salvagedOptional('device', z.string()) }),
+  z.looseObject({
+    kind: z.literal('owner'),
+    device: salvagedOptional('device', z.string()),
+    person: salvagedOptional('person', z.looseObject({ accountId: z.string(), name: z.string() }))
+  }),
   z.looseObject({ kind: z.literal('orca'), why: z.string() })
 ])
 

@@ -167,7 +167,9 @@ export function botItemLinksOnePerChain(links: readonly BotItemLinkView[]): BotI
 
 export type BotItemActor =
   | { kind: 'bot'; botId: string; chatId: string }
-  | { kind: 'owner'; device?: string }
+  /** The owner, or with `person` a teammate on a shared agent acting from their own panel as the owner
+   *  does. Events from before teammates name no one: the owner's. */
+  | { kind: 'owner'; device?: string; person?: BotChatPerson }
   | { kind: 'orca'; why: string }
 
 export const BOT_ITEM_EVENT_KINDS = [

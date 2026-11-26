@@ -45,6 +45,22 @@ export const BotShareSchema = z.discriminatedUnion('kind', [
   })
 ])
 export type BotShare = z.infer<typeof BotShareSchema>
+
+/** A bot's fields for its people beyond the owner. Older hosts drop both. */
+export const BotSharePeopleFields = {
+  /** Each teammate's own `itemsSeen`, by Orca account. */
+  itemsSeenBy: z.record(z.string(), z.number().int().nonnegative()).optional().catch(undefined),
+  /** On a teammate's copy only: who is looking, the owner's name (null signed out) and the usable
+   *  teammates, as its host names them for the Items filter. Absent on the owner's own. */
+  shareViewer: z
+    .object({
+      accountId: z.string(),
+      ownerName: z.string().nullable(),
+      teammates: z.array(z.object({ accountId: z.string(), name: z.string() }))
+    })
+    .optional()
+    .catch(undefined)
+}
 export type BotAccountShare = Extract<BotShare, { kind: 'account' }>
 
 /** Read entry by entry, so one a newer Orca wrote (or a bad one) is dropped, never the whole list. */

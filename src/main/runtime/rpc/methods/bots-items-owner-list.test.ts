@@ -6,6 +6,7 @@ import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import { BotItemsStore } from '../../../bots/bot-items-store'
 import { botItemListScope, botItemsOfPeople } from '../../../bots/bot-item-access'
 import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
+import { ownerActor } from './bots-items-owner-person'
 
 const AGENT: BotItemBotActor = { kind: 'bot', botId: 'bot-1', chatId: 'chat-1' }
 const BOT = {
@@ -115,4 +116,13 @@ it("counts only the owner's own Needs you for the badge, the same items the defa
   expect(badge).toHaveLength(1)
   expect((await list(store, null)).counts.needs_you).toBe(badge.length)
   expect(store.needsYou(botItemListScope({ kind: 'everyone' }))).toHaveLength(2)
+})
+
+it("writes the owner's own panel actions as the owner, naming no teammate", () => {
+  const context = { runtime: { bots: { assertEnabled: () => {} } } }
+  expect(ownerActor(context as never)).toEqual({ kind: 'owner' })
+  expect(ownerActor({ ...context, pairedDeviceId: 'phone' } as never)).toEqual({
+    kind: 'owner',
+    device: 'phone'
+  })
 })

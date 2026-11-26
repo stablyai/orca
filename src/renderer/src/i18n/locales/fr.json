@@ -25830,6 +25830,9 @@
       "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés",
       "empty": {
         "person": "Aucun élément de {{name}}."
+      },
+      "filter": {
+        "owner": "Propriétaire"
       }
     },
     "hover": {
