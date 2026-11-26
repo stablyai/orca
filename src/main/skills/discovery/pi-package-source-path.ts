@@ -249,7 +249,7 @@ export async function inspectPiSkillDir(
   try {
     signal?.throwIfAborted()
     const entries = await readdir(dirPath, { withFileTypes: true })
-    const skillEntry = entries.find((e) => e.name.toLowerCase() === 'skill.md')
+    const skillEntry = entries.find((e) => e.name === 'SKILL.md')
     const hasSkillFile = skillEntry
       ? skillEntry.isFile() ||
         (skillEntry.isSymbolicLink() &&
@@ -258,7 +258,7 @@ export async function inspectPiSkillDir(
             () => false
           )))
       : false
-    const dirCandidates = entries.filter((e) => e.name.toLowerCase() !== 'skill.md')
+    const dirCandidates = entries.filter((e) => e.name !== 'SKILL.md')
     const childDirs = (
       await Promise.all(
         dirCandidates.map(async (e) => {

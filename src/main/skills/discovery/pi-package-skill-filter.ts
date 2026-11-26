@@ -92,10 +92,8 @@ async function expandPositivePattern(
     const rel = relative(packageRoot, child).replace(/\\/g, '/')
     return matchesPiSkillGlob(normalized, rel)
   })
-  return matched.filter(
-    (candidate) =>
-      !matched.some((other) => other !== candidate && isPathWithinPackageRoot(other, candidate))
-  )
+  // Scans stop at skill folders, so a nested match is not covered by its ancestor's scan.
+  return matched
 }
 
 function isBasenamePattern(pattern: string): boolean {
@@ -251,11 +249,37 @@ export async function filterPiManifestRoots(
     return [...pathMatches, ...basenameMatches]
   }
 
-  const candidates = positive.length > 0 ? await expandWithinManifest(positive) : [...manifestRoots]
+  const isShadowedBySkillDir = async (candidate: string): Promise<boolean> => {
+    const base = manifestRoots.find(
+      (root) => root !== candidate && isPathWithinPackageRoot(root, candidate)
+    )
+    if (!base) {
+      return false
+    }
+    for (let dir = base; dir !== candidate && isPathWithinPackageRoot(dir, candidate);) {
+      if ((await inspectPiSkillDir(dir, signal)).hasSkillFile) {
+        return true
+      }
+      const next = resolve(dir, relative(dir, candidate).split(/[\\/]/)[0])
+      if (next === dir) {
+        break
+      }
+      dir = next
+    }
+    return false
+  }
+  const reachable = async (roots: readonly string[]): Promise<string[]> => {
+    const flags = await Promise.all(roots.map(isShadowedBySkillDir))
+    return roots.filter((_, index) => !flags[index])
+  }
+
+  const candidates = await reachable(
+    positive.length > 0 ? await expandWithinManifest(positive) : [...manifestRoots]
+  )
   const filtered = await applyExclusions(packageRoot, candidates, exclusions, signal)
   const exactForceIncludes = forceIncludes.filter((p) => !hasGlobMeta(p))
   if (exactForceIncludes.length > 0) {
-    filtered.push(...(await expandWithinManifest(exactForceIncludes)))
+    filtered.push(...(await reachable(await expandWithinManifest(exactForceIncludes))))
   }
   const exactForceExcludes = forceExcludes.filter((p) => !hasGlobMeta(p))
   return Array.from(
