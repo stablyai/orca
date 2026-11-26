@@ -2,6 +2,7 @@
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { useNativeChatLinkClick } from '../../native-chat/links/actions/native-chat-link-click-context'
 import { useNativeChatFileLinkExists } from '../../native-chat/links/actions/use-native-chat-file-link-existence'
+import { NativeChatCodeBlock } from '../../native-chat/markdown/code/NativeChatCodeBlock'
 
 export function BotItemMarkdown({ text }: { text: string }): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
@@ -12,6 +13,7 @@ export function BotItemMarkdown({ text }: { text: string }): React.JSX.Element {
       onLinkClick={onLinkClick}
       allowFileUriLinks={onLinkClick !== undefined}
       fileLinkExists={fileLinkExists}
+      renderCodeBlock={NativeChatCodeBlock}
       // Paragraphs render as spans: blocks with a gap, as in chat, or blank lines run them together.
       className="text-[13px] leading-[19px] text-foreground [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2"
     />

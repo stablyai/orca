@@ -44,23 +44,15 @@ export function CommentMarkdownDocumentPre({
 }): React.JSX.Element {
   const renderMermaid = useContext(CommentMarkdownMermaidContext)
   const keepSource = useContext(CommentMarkdownMermaidSourceContext)
-  const blockStartLine = useContext(CommentMarkdownBlockLineContext)
   if (renderMermaid && !keepSource && isMermaidPre(children)) {
     return <>{children}</>
   }
   const child = React.Children.toArray(children)[0]
-  const language = React.isValidElement<{ className?: string; children?: React.ReactNode }>(child)
-    ? child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
-    : undefined
   // Render as a component so its hooks cannot join this early-returning component’s hook order.
-  const CodeBlock = renderCodeBlock
-  const code = CodeBlock ? (
-    <CodeBlock
-      language={language}
-      sourceLine={blockLine === undefined ? undefined : blockStartLine + blockLine - 1}
-    >
+  const code = renderCodeBlock ? (
+    <CommentMarkdownCodeBlock renderCodeBlock={renderCodeBlock} blockLine={blockLine}>
       {children}
-    </CodeBlock>
+    </CommentMarkdownCodeBlock>
   ) : (
     <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
       {children}
@@ -71,4 +63,29 @@ export function CommentMarkdownDocumentPre({
     React.isValidElement<{ children?: React.ReactNode }>(child)
     ? renderMermaidFence(child.props.children, diagramClassName, code, renderMermaid)
     : code
+}
+
+/** A fence drawn by the caller's code block; diagrams stay source. */
+export function CommentMarkdownCodeBlock({
+  children,
+  renderCodeBlock: CodeBlock,
+  blockLine
+}: {
+  children?: React.ReactNode
+  renderCodeBlock: DocumentCodeBlockRenderer
+  blockLine?: number
+}): React.JSX.Element {
+  const blockStartLine = useContext(CommentMarkdownBlockLineContext)
+  const child = React.Children.toArray(children)[0]
+  const language = React.isValidElement<{ className?: string }>(child)
+    ? child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
+    : undefined
+  return (
+    <CodeBlock
+      language={language}
+      sourceLine={blockLine === undefined ? undefined : blockStartLine + blockLine - 1}
+    >
+      {children}
+    </CodeBlock>
+  )
 }
