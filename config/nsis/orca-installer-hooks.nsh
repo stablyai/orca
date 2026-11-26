@@ -31,6 +31,7 @@
 ; old uninstaller had moved Orca.exe to $PLUGINSDIR\old-install, link tracking retargeted it there.
 ; Rewrite only shortcuts that still exist (a deleted one stays deleted), with the same args and AUMI
 ; as electron-builder's addStartMenuLink/addDesktopLink, so pins and taskbar grouping are kept.
+; The taskbar pin is its own .lnk copy and is retargeted the same way.
 !macro ORCA_REWRITE_SHORTCUT LINK
   ${if} ${FileExists} "${LINK}"
     CreateShortCut "${LINK}" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
@@ -49,6 +50,7 @@
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".tsv" "${TABULAR_PROGID}"
   !insertmacro ORCA_REWRITE_SHORTCUT "$newStartMenuLink"
   !insertmacro ORCA_REWRITE_SHORTCUT "$newDesktopLink"
+  !insertmacro ORCA_REWRITE_SHORTCUT "$QUICKLAUNCH\User Pinned\TaskBar\${SHORTCUT_NAME}.lnk"
   ; Why: Explorer caches the association list until told otherwise.
   System::Call "shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)"
 !macroend
