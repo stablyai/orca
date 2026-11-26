@@ -157,7 +157,6 @@ export function useBotItemWalk(list: BotItemWalkList, botKey: string): BotItemWa
         prev?.uid !== uid ? prev : prev.restored ? null : prev.gone ? prev : { ...prev, gone: true }
       ),
     close: () => {
-      cancelPendingBotThreadOpen()
       const left = current ? { uid: current.uid, walk: current.walk } : null
       settle(null)
       return left

@@ -48,10 +48,11 @@ export async function openLinkedBotItem(bot: Bot, link: PendingBotItemLink): Pro
       return false
     }
   )
+  if (signal.aborted) {
+    return
+  }
   if (!opened) {
-    if (!signal.aborted) {
-      sayUnreadable(bot)
-    }
+    sayUnreadable(bot)
     return
   }
   // Settings standing in the panel would hide the item.

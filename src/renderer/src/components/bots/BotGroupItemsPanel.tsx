@@ -73,6 +73,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     openItem(uid)
   }
   const back = (): void => {
+    cancelPendingBotThreadOpen()
     facePictures.retryFailed()
     const left = walk.close()
     const listed = BOT_ITEM_GROUP_IDS.flatMap((id) =>

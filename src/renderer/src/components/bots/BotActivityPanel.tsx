@@ -140,6 +140,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     openItem(uid)
   }
   const back = (): void => {
+    cancelPendingBotThreadOpen()
     const left = walk.close()
     const listed = BOT_ITEM_GROUP_IDS.flatMap((id) => list.groups[id].map((item) => item.uid))
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
