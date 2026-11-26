@@ -18,7 +18,9 @@ export function useActivityThreadSelection({
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   onSelectThread: (thread: AgentPaneThread) => void
 }): {
+  renderedThreads: readonly AgentPaneThread[]
   selectedKeys: ReadonlySet<string>
+  selectedThreads: readonly AgentPaneThread[]
   handleSelectThread: (thread: AgentPaneThread, event: ActivityThreadClickEvent) => void
   getContextMenuTargets: (thread: AgentPaneThread) => readonly AgentPaneThread[]
 } {
@@ -60,5 +62,11 @@ export function useActivityThreadSelection({
     []
   )
 
-  return { selectedKeys: selection.selectedKeys, handleSelectThread, getContextMenuTargets }
+  return {
+    renderedThreads,
+    selectedKeys: selection.selectedKeys,
+    selectedThreads: selection.selectedItems,
+    handleSelectThread,
+    getContextMenuTargets
+  }
 }

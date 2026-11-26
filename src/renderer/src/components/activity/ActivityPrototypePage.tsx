@@ -260,6 +260,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setSelectedPaneKey
   })
 
+  const clearSelectedPaneKey = useCallback(() => setSelectedPaneKey(null), [])
+
   const worktreesByRepo = selectWorktreesByRepo(storeData)
   const detectedWorktreesByRepo = selectDetectedWorktreesByRepo(storeData)
   const folderWorkspaces = selectFolderWorkspaces(storeData)
@@ -348,6 +350,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           canJumpToWorkspace={canJumpToWorkspace}
           isThreadListResizing={isThreadListResizing}
           onResizeStart={onResizeStart}
+          onInboxDeselect={clearSelectedPaneKey}
         />
         <ActivityThreadDetailPane
           selectedThread={selectedThread}

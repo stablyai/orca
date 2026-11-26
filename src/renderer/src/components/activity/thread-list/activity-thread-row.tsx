@@ -19,6 +19,7 @@ import {
 import { ProjectChip } from '@/components/repo/project-chip'
 import type { ActivityGroupBy } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import { ActivityThreadIndexHint } from './activity-thread-index-hint'
 import type { ActivityThreadClickEvent } from './use-activity-thread-selection'
 
 function ActivityThreadRowAction({
@@ -75,7 +76,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   disableMarkUnread = false,
   showJumpAction = true,
   previewSuppressed = false,
-  groupBy = 'none'
+  groupBy = 'none',
+  indexHint
 }: {
   thread: AgentPaneThread
   selected: boolean
@@ -92,6 +94,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   showJumpAction?: boolean
   previewSuppressed?: boolean
   groupBy?: ActivityGroupBy
+  /** Select-by-index number, shown in place of the time while its chord is held. */
+  indexHint?: number
 }): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
@@ -142,11 +146,15 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               >
                 {taskTitle}
               </button>
-              <EventTime
-                timestamp={thread.latestTimestamp}
-                compact
-                className="shrink-0 whitespace-nowrap py-0.5 text-xs font-medium text-foreground/60 hover:text-foreground/60"
-              />
+              {indexHint !== undefined ? (
+                <ActivityThreadIndexHint number={indexHint} />
+              ) : (
+                <EventTime
+                  timestamp={thread.latestTimestamp}
+                  compact
+                  className="shrink-0 whitespace-nowrap py-0.5 text-xs font-medium text-foreground/60 hover:text-foreground/60"
+                />
+              )}
             </div>
 
             {statusLine ? (

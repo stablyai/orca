@@ -24,6 +24,7 @@ src/renderer/src/components/native-chat/session/options/structured/use-structure
 src/renderer/src/components/terminal/workbench/use-terminal-controller.ts
 
 # Caches keyed on a TanStack virtualizer, which mutates in place (hazard virtualizer-in-memo-block).
+src/renderer/src/components/activity/thread-list/use-activity-inbox-shortcuts.ts
 src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-section-list.tsx
 src/renderer/src/components/editor/markdown-preview/search/use-markdown-preview-search-reveal.ts
 src/renderer/src/components/editor/markdown-preview/viewport/use-markdown-preview-scroll-anchor.ts

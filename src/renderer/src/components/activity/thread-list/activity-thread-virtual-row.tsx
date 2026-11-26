@@ -28,7 +28,8 @@ export function ActivityThreadVirtualRow({
   canMarkThreadUnread,
   compactMode,
   showJumpAction,
-  groupBy
+  groupBy,
+  indexHints
 }: {
   item: ActivityVirtualItemDescriptor
   collapsed: boolean
@@ -48,6 +49,7 @@ export function ActivityThreadVirtualRow({
   compactMode: boolean
   showJumpAction: boolean
   groupBy: ActivityGroupBy
+  indexHints: ReadonlyMap<string, number> | null
 }): React.JSX.Element {
   const t = useTranslate()
   if (item.type === 'header') {
@@ -102,6 +104,7 @@ export function ActivityThreadVirtualRow({
             showJumpAction={showJumpAction}
             groupBy={groupBy}
             previewSuppressed={menuOpen}
+            indexHint={indexHints?.get(item.thread.paneKey)}
           />
         </div>
       )}

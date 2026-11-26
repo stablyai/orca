@@ -199,10 +199,13 @@ export function findKeybindingConflictsForDefinitions(
     .filter(
       ({ actionIds }) =>
         actionIds.size > 1 &&
-        // Why: the two digit ranges may share a modifier on purpose (see tab.selectByIndex's definition).
+        // Why: the tab and workspace digit ranges may share a modifier on purpose (see tab.selectByIndex's definition).
+        // Activity's range has no routing precedence over them, so its overlaps stay conflicts.
         !(
           options.includeMainProcessInterception &&
-          Array.from(actionIds).every(isDigitIndexActionId)
+          Array.from(actionIds).every(
+            (actionId) => isDigitIndexActionId(actionId) && actionId !== 'activity.selectByIndex'
+          )
         ) &&
         setIntersects(actionIds, customizedActions)
     )
