@@ -5372,7 +5372,8 @@
             "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
             "title": "Terminal issue",
             "errorTitle": "Terminal error",
-            "copyErrorDetails": "Copy error details"
+            "copyErrorDetails": "Copy error details",
+            "waitingForFolder": "Orca will reopen this terminal automatically when the folder is available again."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",

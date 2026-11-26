@@ -3,6 +3,7 @@ import { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import { useExitedPaneActions } from '../process-exit/use-exited-pane-actions'
 import { useSavedPanePtyBindings } from '../layout/ownership/use-saved-pane-pty-bindings'
 import { useReadyPaneAccountRestarts } from '../account-restart/use-ready-pane-account-restarts'
+import { useMissingFolderPaneRetry } from '../process-exit/use-missing-folder-pane-retry'
 
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 
@@ -43,6 +44,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     suppressPtyExit,
     syncPanePtyLayoutBinding,
     tabId,
+    terminalErrorsByPaneId,
     updateTabPtyId,
     updateTabTitle,
     worktreeId
@@ -86,6 +88,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     updateTabTitle,
     worktreeId
   })
+
+  useMissingFolderPaneRetry({ terminalErrorsByPaneId, paneTransportsRef, handleRestartPane })
 
   const { handleRestartExitedPane, handleCloseExitedPane } = useExitedPaneActions({
     executeClosePane,

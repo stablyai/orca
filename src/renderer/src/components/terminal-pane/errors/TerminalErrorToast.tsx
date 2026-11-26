@@ -20,6 +20,7 @@ import {
 } from './terminal-spawn-error-display'
 import { isWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSignInRequiredTerminalError } from './terminal-ssh-sign-in-error'
+import { readMissingWorkingDirectory } from '../../../../../shared/terminal/pty/lifecycle/missing-working-directory-message'
 
 export function TerminalErrorToast({
   error,
@@ -52,6 +53,8 @@ export function TerminalErrorToast({
   const showClientEnvironment = paneOnClient && !ssh
   const paneOwnerUnverified = isPaneOwnerRecoveryError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+  // Why: a local pane's missing folder is usually an unmounted volume, and the pane restarts itself once it returns.
+  const waitsForFolder = paneOnClient && !ssh && readMissingWorkingDirectory(error) !== null
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =
     !ssh &&
@@ -60,7 +63,8 @@ export function TerminalErrorToast({
     !isAgentLaunchOnlyError(error) &&
     !isExplainedTerminalError(error) &&
     !isFolderWorkspacePathOnlyError(error) &&
-    !isWslDistroHoldText(error)
+    !isWslDistroHoldText(error) &&
+    !waitsForFolder
   const humanizedError = humanizeTerminalError(error, agentId, t)
   // Why: the toast appends its own linked request, so the host's plain-text one would repeat it.
   const displayError = showIssueLink
@@ -175,6 +179,13 @@ export function TerminalErrorToast({
               {t('auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699', 'file an issue')}
             </a>
             .
+          </p>
+        ) : waitsForFolder ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {t(
+              'auto.components.terminal.pane.TerminalErrorToast.waitingForFolder',
+              'Orca will reopen this terminal automatically when the folder is available again.'
+            )}
           </p>
         ) : null}
         {footer ? (

@@ -46,3 +46,15 @@ export const smallSplit = defineFixture({
     </div>
   )
 })
+
+const MISSING_FOLDER_ERROR =
+  'Working directory "/Volumes/Projects/app" does not exist. It may have been deleted or is on an unmounted volume (cwd: /Volumes/Projects/app, arch: arm64, platform: darwin 24.0.0, orca: 1.0.0).'
+
+export const missingFolder = defineFixture({
+  width: 680,
+  render: () => (
+    <div className="relative h-72 bg-background">
+      <TerminalErrorToast error={MISSING_FOLDER_ERROR} onDismiss={() => {}} />
+    </div>
+  )
+})
