@@ -1,9 +1,10 @@
 // The keyed attention reader (STA-18283) must always agree with reading every watched workspace.
 import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
+import { makeBrowserTab } from '@/store/slices/browser/browser-tab.test-fixture'
+import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { createWatchedAttentionReader, workspaceHasAttention } from './bot-sidebar-attention'
 
 function report(paneKey: string, tabId: string, worktreeId: string, state: 'working' | 'done') {
@@ -71,17 +72,11 @@ it('agrees with a full read after every kind of write', () => {
   expectFullRead()
 
   // An awake structured chat counts until its host answers that it sleeps.
-  const chatTab = {
-    id: 'chat',
-    entityId: 'session',
-    contentType: 'agent-session',
-    agentSessionAgent: 'claude',
-    worktreeId: 'wt-0'
-  }
+  const chatTab = makeStructuredChatTab({ id: 'chat', entityId: 'session', worktreeId: 'wt-0' })
   watched = [...watched, 'wt-0']
   expectFullRead()
   useAppStore.setState({
-    unifiedTabsByWorktree: { 'wt-0': [chatTab] } as unknown as AppState['unifiedTabsByWorktree']
+    unifiedTabsByWorktree: { 'wt-0': [chatTab] }
   })
   expect(expectFullRead()).toContain('wt-0')
   useAppStore.setState({
@@ -92,8 +87,8 @@ it('agrees with a full read after every kind of write', () => {
   // A browser tab makes a workspace live.
   useAppStore.setState({
     browserTabsByWorktree: {
-      'wt-0': [{ id: 'page' }]
-    } as unknown as AppState['browserTabsByWorktree']
+      'wt-0': [makeBrowserTab({ id: 'page', worktreeId: 'wt-0', url: 'https://example.com' })]
+    }
   })
   expect(expectFullRead()).toContain('wt-0')
   useAppStore.setState({ browserTabsByWorktree: {} })

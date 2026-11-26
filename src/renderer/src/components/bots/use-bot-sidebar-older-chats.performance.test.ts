@@ -38,7 +38,15 @@ const NO_CHATS = {}
 
 /** Timers the list holds once mounted with these chats. */
 function timersFor(chats: BotChatTreeChat[]): number {
-  const views = chats.map((read) => ({ chat: read }) as BotSidebarChatView<Worktree>)
+  const views = chats.map((read): BotSidebarChatView<Worktree> => ({
+    chat: read,
+    foldable: false,
+    open: false,
+    trailing: null,
+    lines: [],
+    paging: null,
+    steps: 0
+  }))
   const { unmount } = renderHook(() =>
     useBotSidebarOlderChats({
       bot: BOT,
