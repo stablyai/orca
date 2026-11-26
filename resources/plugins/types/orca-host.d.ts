@@ -138,7 +138,7 @@ declare module 'orca/host' {
     }
     /** Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you. Since host API 1.2. */
     "events.subscribe": {
-      params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed" }
+      params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "workspace.status.changed" | "editor.typography.changed" }
       result: { ok: true }
       surfaces: "panel" | "editor"
     }
@@ -163,7 +163,7 @@ declare module 'orca/host' {
     /** Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. `hostId` is the host a row records (`local`, `ssh:…`, `runtime:…`), or null when it records none, as for a project-group folder on this machine. Since host API 1.3. */
     "workspace.list": {
       params: { includeStatus?: boolean } | undefined
-      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
+      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; workingMode?: "monitoring"; workspaceStatus?: string; isPinned?: boolean; isSleeping?: boolean; muteNotifications?: boolean; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
       surfaces: "worker"
     }
     /** Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`. Since host API 1.7. */
@@ -314,6 +314,8 @@ declare module 'orca/host' {
     "agent.status.changed": { workspaceId: string | null; workspaceListId?: string; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number }; sessionId?: string }
     /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context. */
     "workspace.changed": { context: { workspaceId?: string; branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
+    /** A workspace's status changed (agent state, monitoring mode, board status, pin, sleep, notification mute, unread dot, or terminal count); `workspaceId` matches `workspace.list` and `status` matches `workspace.list({ includeStatus: true })`. */
+    "workspace.status.changed": { workspaceId: string; status: { state: "working" | "permission" | "done" | "active" | "inactive"; workingMode?: "monitoring"; workspaceStatus?: string; isPinned?: boolean; isSleeping?: boolean; muteNotifications?: boolean; unread: boolean; terminalCount: number; lastActivityAt: number | null } }
     /** What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability. */
     "editor.typography.changed": { fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean }
   }
