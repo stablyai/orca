@@ -62,7 +62,7 @@ function renderTriggerLabel(
         <RepoBadgeLabel
           name={first.repo.displayName}
           color={first.repo.badgeColor}
-          badgeClassName="size-1.5"
+          repo={first.repo}
         />
       ) : null}
       {second ? <span className="text-muted-foreground">, {second.repo.displayName}</span> : null}
@@ -318,6 +318,7 @@ export default function TaskProjectSourceCombobox({
                         <RepoBadgeLabel
                           name={group.repo.displayName}
                           color={group.repo.badgeColor}
+                          repo={group.repo}
                           className="max-w-full"
                         />
                       </span>

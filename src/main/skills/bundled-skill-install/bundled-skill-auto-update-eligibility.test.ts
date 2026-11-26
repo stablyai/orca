@@ -141,8 +141,11 @@ describe('per-skill silent update of unedited Orca copies', () => {
     // The shared backup directory refuses writes, as when it is not writable by this user.
     const unwritableBackups = (filesystem: BundledSkillFilesystem): BundledSkillFilesystem => ({
       ...filesystem,
-      moveToBackup: async () => {
-        throw Object.assign(new Error('denied'), { code: 'EACCES' })
+      rename: async (source, target) => {
+        if (basename(dirname(target)) === '.orca-skill-backups') {
+          throw Object.assign(new Error('denied'), { code: 'EACCES' })
+        }
+        return filesystem.rename(source, target)
       }
     })
 

@@ -41,6 +41,14 @@ export const GoogleAccountRecordSchema = z.object({
   choices: z.array(z.enum(GOOGLE_SERVICE_CHOICES)).optional(),
   status: z.enum(['connected', 'reconnect']),
   reason: z.string().optional(),
+  /** Google's own words when it ended the grant. */
+  googleError: z
+    .object({
+      error: z.string(),
+      subtype: z.string().optional(),
+      description: z.string().optional()
+    })
+    .optional(),
   services: z.array(ServiceReadinessSchema),
   checkedAt: z.number().optional(),
   connectedAt: z.number()

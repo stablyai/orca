@@ -273,6 +273,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorkspaceSleep: subscribeWebWorkspaceSleep,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is desktop-host-scoped and never reaches web.
     onResumeSleepingAgents: () => noopUnsubscribe,
+    onSleepingMailChanged: () => noopUnsubscribe,
+    replySleepingAgentWake: () => {},
+    notifySleepingMailAvailability: () => {},
+    requestSleepingMailSnapshot: () => {},
     onTerminalZoom: subscribeWebContextualZoom,
     onRegionZoom: () => noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.

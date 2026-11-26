@@ -1,3 +1,4 @@
+import type { SleepingMailChange } from '../../../../shared/workspace/lifecycle/sleeping-mail-change'
 import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -181,7 +182,14 @@ export type RuntimeNotifier = {
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
   // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
-  resumeSleepingAgents?(worktreeId: string): void
+  /** False when the window could not take it (reloading, gone); the next send is then the whole set. */
+  sleepingMailChanged?(change: SleepingMailChange): boolean | void
+  resumeSleepingAgents?(
+    worktreeId: string,
+    paneKey?: string,
+    prepareOnly?: boolean,
+    launchToken?: string
+  ): void | Promise<boolean>
   /** The window applies a client's Agents-list change with its own actions and answers with the verdicts it leaves. */
   applyAgentPaneActivity?(change: AgentPaneActivityChange): Promise<AgentListPublication>
   terminalFitOverrideChanged(

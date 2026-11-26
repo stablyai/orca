@@ -11,6 +11,10 @@ import {
   useWorkspaceKanbanOutsideDismiss
 } from '../sidebar/workspace-board/surface/use-workspace-kanban-outside-dismiss'
 import {
+  trackWorkspaceBoardBounds,
+  workspaceBoardSheetWidth
+} from '../sidebar/workspace-board/surface/workspace-board-sheet-bounds'
+import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../../app-shell/chrome/workspace-chrome-metrics'
@@ -18,7 +22,6 @@ import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMen
 import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
-import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
 import { resolveSidebarDrawerLeftEdge } from '@/components/sidebar/chrome/sidebar-drawer-left-edge'
 import { selectAppRailWidth, selectWorkspaceListOpen } from '@/components/app-rail/app-rail-layout'
 
@@ -218,7 +221,7 @@ export function AgentDashboardDrawer({
       <SheetContent
         side="left"
         showCloseButton={false}
-        ref={trackSidebarLiveWidth}
+        ref={trackWorkspaceBoardBounds}
         aria-describedby={undefined}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{
@@ -235,7 +238,7 @@ export function AgentDashboardDrawer({
           top: WORKSPACE_TOP_CHROME_HEIGHT,
           bottom: drawerBottom,
           height: 'auto',
-          width: `min(calc(100vw / var(--web-panel-zoom, 1) - ${drawerLeftCss}), 1294px)`
+          width: workspaceBoardSheetWidth(drawerLeftCss)
         }}
         data-agent-dashboard-sheet=""
         onOpenAutoFocus={(event) => {

@@ -1,11 +1,7 @@
 // What an item reply the host refused as replaced gives back to the comment box, on desktop and phone.
-import { botItemAnswersText, botItemNamedAnswers } from './bot-item-answer-lines'
+import { botItemAnswersText } from './bot-item-answer-lines'
+import { botItemHeldAnswerWas, readBotItemHeldAnswers } from './bot-item-held-answers'
 import type { BotItemPendingIntent } from './bot-item-pending-comments'
-
-/** The same words, as a held line writes them. */
-export function botItemHeldWordsMatch(held: string | null, sent: string): boolean {
-  return held !== null && held === sent.replace(/\s+/g, ' ').trim()
-}
 
 /** What a refused reply gives back to the comment box. An ask of several questions keeps the answers
  *  its held picks (`held`, the ask's held-answers draft) still have on its card, so a resend can't post
@@ -19,11 +15,11 @@ export function botItemRefusedReplyText(
     return text
   }
   const { shape, answers, rideAlongText } = intent
-  const kept = botItemNamedAnswers(shape, held)
+  const kept = readBotItemHeldAnswers(shape, held)
   // Image marks alone go: the box gets words back, not the images.
   const unheld = answers.flatMap((words, index) =>
     words?.replace(/\[Image #\d+\]/g, '').trim() &&
-    !botItemHeldWordsMatch(kept[index] ?? null, words)
+    !botItemHeldAnswerWas(kept[index] ?? null, words)
       ? [words.trim()]
       : []
   )

@@ -656,8 +656,11 @@ import { LinkPreviewGetParams } from './link-preview/link-preview-params'
 import {
   McpServerAdd,
   McpServerAgentFilesAllow,
+  McpServerConnect,
   McpServerDiscover,
   McpServerImport,
+  McpServerMove,
+  McpServerPreviewPaste,
   McpServerProblems,
   McpServerSessions,
   McpServerSetAgentEnabled,
@@ -979,7 +982,10 @@ import {
 } from './structured-agent-session/structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session/structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session/structured-agent-session-send-recorded-params'
-import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
+import {
+  LiveTextShownParams,
+  SubscribeParams
+} from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
@@ -1170,6 +1176,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.read': AgentReadParams,
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
+  'agentActivity.orchestration': null,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
@@ -1196,6 +1203,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
   'agentSession.item': ItemParams,
+  'agentSession.liveTextShown': LiveTextShownParams,
   'agentSession.mcp': AgentSessionMcpParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
@@ -1910,11 +1918,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'mcpServers.add': McpServerAdd,
   'mcpServers.agentFiles.allow': McpServerAgentFilesAllow,
   'mcpServers.cancelProblems': McpServersList,
+  'mcpServers.connect': McpServerConnect,
   'mcpServers.copy': McpServerImport,
   'mcpServers.details': McpServerTarget,
   'mcpServers.discover': McpServerDiscover,
   'mcpServers.list': McpServersList,
-  'mcpServers.move': McpServerImport,
+  'mcpServers.move': McpServerMove,
+  'mcpServers.previewPaste': McpServerPreviewPaste,
   'mcpServers.problems': McpServerProblems,
   'mcpServers.remove': McpServerTarget,
   'mcpServers.sessions.restart': McpServerSessions,
