@@ -4,7 +4,20 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
-import { cancelProviderRelayExitProbes } from './provider-relay-exit-probes'
+import {
+  forgetProviderRelayRunVerdict,
+  providerRelayRunAskUnfenced,
+  providerRelayRunUnknown
+} from './provider-relay-run-verdicts'
+export {
+  beginProviderRelayRunAsk,
+  forgetIdleProviderRelayRunVerdict,
+  forgetProviderRelayRunVerdict,
+  noteProviderRelayRunVerdict,
+  providerRelayRunAskAwaitsProof,
+  providerRelayRunAskCurrent,
+  providerRelayRunUnknown
+} from './provider-relay-run-verdicts'
 
 const LIST_TIMEOUT_MS = 3_000
 /** Launch waits this long for the daemon before treating its relays as unknown (not absent). */
@@ -110,8 +123,7 @@ export async function placeKeptProviderRelay(
     return
   }
   // The row and its token are published together, so no ask ever sees a row whose token is pending.
-  const { pid, exit } = relay.info
-  const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
+  const token = await sharedTokenRead(chatKey, relay.info)
   if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
@@ -121,6 +133,27 @@ export async function placeKeptProviderRelay(
   } else {
     spawnTokens.delete(chatKey)
   }
+}
+
+/** One token read in flight per chat and relay, however many asks overlap it. */
+const tokenReads = new Map<string, { relayId: string; read: Promise<string | null> }>()
+
+function sharedTokenRead(chatKey: string, info: ProviderRelayInfo): Promise<string | null> {
+  const inFlight = tokenReads.get(chatKey)
+  if (inFlight?.relayId === info.relayId) {
+    return inFlight.read
+  }
+  const entry = {
+    relayId: info.relayId,
+    read: info.pid !== null && info.exit === null ? readSpawnToken(info.pid) : Promise.resolve(null)
+  }
+  tokenReads.set(chatKey, entry)
+  void entry.read.finally(() => {
+    if (tokenReads.get(chatKey) === entry) {
+      tokenReads.delete(chatKey)
+    }
+  })
+  return entry.read
 }
 
 async function readSpawnToken(pid: number): Promise<string | null> {
@@ -144,6 +177,10 @@ type InstanceListing = {
   listing: Promise<ReadonlyMap<string, ProviderRelayInfo> | null>
   /** The answer's cleanup, run once by the first ask that acts on it; an observer never runs it. */
   kept: Promise<void> | null
+  /** Its cleanup is still running: every ask joins this listing until it ends, fresh or not. */
+  cleaning: boolean
+  /** The answer once it arrived, for reads that need no ask. */
+  answer: ReadonlyMap<string, ProviderRelayInfo> | null
   keep: () => Promise<void>
 }
 /** By daemon start; bounded by the daemons this app has talked to. */
@@ -164,7 +201,13 @@ export async function listProviderRelayInstance(
   const entry = instanceListing(client, instance, fresh)
   const listing = await entry.listing
   if (listing && !observe) {
-    entry.kept ??= entry.keep()
+    if (!entry.kept) {
+      entry.cleaning = true
+      entry.kept = entry.keep().finally(() => {
+        entry.cleaning = false
+        entry.settledAt = Date.now()
+      })
+    }
     await entry.kept
   }
   return listing
@@ -175,6 +218,7 @@ function instanceListing(client: DaemonClient, instance: string, fresh: boolean)
   if (
     cached &&
     (cached.settledAt === Number.POSITIVE_INFINITY ||
+      cached.cleaning ||
       (!fresh && cached.answered && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
   ) {
     return cached
@@ -185,6 +229,8 @@ function instanceListing(client: DaemonClient, instance: string, fresh: boolean)
     answered: false,
     listing: Promise.resolve(null),
     kept: null,
+    cleaning: false,
+    answer: null,
     keep: async () => {}
   }
   entry.listing = withTimeout(
@@ -199,14 +245,15 @@ function instanceListing(client: DaemonClient, instance: string, fresh: boolean)
       }
       entry.keep = () => keep(channel, result.relays)
       entry.answered = true
-      return new Map(result.relays.map((info) => [info.relayId, info]))
+      entry.answer = new Map(result.relays.map((info) => [info.relayId, info]))
+      return entry.answer
     })
     .finally(() => {
       entry.settledAt = Date.now()
     })
   // Only a settled answer within its 2 s is ever reused: older ones (a restarted daemon's) go.
   for (const [key, old] of instanceListings) {
-    if (Date.now() - old.settledAt >= INSTANCE_LISTING_FRESH_MS) {
+    if (!old.cleaning && Date.now() - old.settledAt >= INSTANCE_LISTING_FRESH_MS) {
       instanceListings.delete(key)
     }
   }
@@ -272,84 +319,9 @@ export function forgetListedProviderRelayChat(chatKey: string): void {
   spawnTokens.delete(chatKey)
 }
 
-/** Chats whose current run's daemon start couldn't say at their newest applied ask. */
-const unknownRuns = new Set<string>()
-let askSeq = 0
-/**
- * Per chat with an ask in flight: how many, and the newest ask a later answer, close, deletion or
- * new run fenced off. An ask's verdict applies only when it started after that floor.
- */
-const asks = new Map<
-  string,
-  { inFlight: number; floor: number; unknownFloor: number; fence: number }
->()
-
-/** Starts one ask; its number is passed back with its verdict. */
-export function beginProviderRelayRunAsk(chatKey: string): number {
-  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0, unknownFloor: 0, fence: 0 }
-  ask.inFlight += 1
-  asks.set(chatKey, ask)
-  askSeq += 1
-  return askSeq
-}
-
-/** Ends one ask; a thrown ask (null) or one older than the floor leaves the verdict as it was. */
-export function noteProviderRelayRunVerdict(
-  chatKey: string,
-  seq: number,
-  verdict: 'kept' | 'gone' | 'unknown' | null
-): void {
-  const ask = asks.get(chatKey)
-  if (!ask) {
-    return
-  }
-  if (verdict === 'unknown' && seq > ask.floor && seq > ask.unknownFloor) {
-    ask.floor = seq
-    unknownRuns.add(chatKey)
-  } else if ((verdict === 'kept' || verdict === 'gone') && seq > ask.floor) {
-    ask.floor = seq
-    // No ask already in flight can undo this answer with an unknown.
-    ask.unknownFloor = askSeq
-    unknownRuns.delete(chatKey)
-    cancelProviderRelayExitProbes(chatKey)
-  }
-  ask.inFlight -= 1
-  if (ask.inFlight <= 0) {
-    asks.delete(chatKey)
-  }
-}
-
-/** The ask may still end as unknown: no fence and no conclusive answer since it started. */
-export function providerRelayRunAskAwaitsProof(chatKey: string, seq: number): boolean {
-  const ask = asks.get(chatKey)
-  return ask !== undefined && seq > ask.floor && seq > ask.unknownFloor
-}
-
-/** No close, deletion or new run since the ask began (a newer answer about the same run is fine). */
-function providerRelayRunAskUnfenced(chatKey: string, seq: number): boolean {
-  const ask = asks.get(chatKey)
-  return ask !== undefined && seq > ask.fence
-}
-
-export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolean {
-  const ask = asks.get(chatKey)
-  return ask !== undefined && seq > ask.floor
-}
-
-/** Its chat closed or was deleted, or a new run replaced the one asked about. */
-export function forgetProviderRelayRunVerdict(chatKey: string): void {
-  unknownRuns.delete(chatKey)
-  cancelProviderRelayExitProbes(chatKey)
-  const ask = asks.get(chatKey)
-  if (ask) {
-    ask.floor = askSeq
-    ask.fence = askSeq
-  }
-}
-
-/** Its daemon start couldn't say at the last ask; the host holds the chat until it can. */
-export function providerRelayRunUnknown(chatKey: string): boolean {
-  return unknownRuns.has(chatKey)
+/** Its daemon start's latest answer (asked by anyone) says the daemon idle-stopped this relay. */
+export function providerRelayListedIdleStopped(instance: string, relayId: string): boolean {
+  return instanceListings.get(instance)?.answer?.get(relayId)?.exit?.idleStopped === true
 }
 
 export function forgetKeptProviderRelay(chatKey: string, relay: KeptProviderRelay): void {
@@ -395,7 +367,7 @@ export function noteProviderRelayReattachedFromLastRun(chatKey: string): void {
 export function providerRelayKeptFromLastRun(chatKey: string): boolean {
   return (
     reattachedFromLastRun.has(chatKey) ||
-    unknownRuns.has(chatKey) ||
+    providerRelayRunUnknown(chatKey) ||
     keptRunningProviderRelayPid(chatKey) !== null
   )
 }
