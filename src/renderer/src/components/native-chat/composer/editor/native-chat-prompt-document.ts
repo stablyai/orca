@@ -128,6 +128,8 @@ export function insertPromptMention(
             label: agent.label,
             address: agent.address,
             hostKey: agent.hostKey,
+            kind: agent.kind ?? '',
+            session: agent.session ?? '',
             agentType: agent.agentType ?? ''
           }
         },
