@@ -588,11 +588,17 @@ it("reads a closing turn's askers with the same work however long the chat ran, 
   ])
 })
 
-// #49889: whom a turn acts for is in its people's messages, so its read never decodes the agent's
-// prose: the bytes it decodes stay the same however much the newest turn wrote.
+// #49889: whom a turn acts for is in its people's messages, so its read leaves out the agent's prose
+// by its indexed role: SQLite never parses it, and the bytes decoded stay the same however much the
+// newest turn wrote. The tally counts the payload bytes SQLite parses, through a wrapped json_valid.
 it("reads a turn's askers without the agent's prose, however much it wrote", () => {
   const decoded = (bytes: number) => {
     const db = chat(10, () => true, undefined, 0, 0, 1, undefined, 'x'.repeat(bytes))
+    let parsed = 0
+    db.function('parsed', (json) => ((parsed += String(json).length), 1))
+    const prepare = db.prepare.bind(db)
+    db.prepare = (sql: string) =>
+      prepare(sql.replaceAll('json_valid(payload_json)', 'parsed(payload_json)'))
     const scope = new JournalSqlScope(db, 'chat', 'epoch')
     const { snapshot } = readJournalDomainOperationWindow(scope, {
       latestTurns: 1,
@@ -604,12 +610,9 @@ it("reads a turn's askers without the agent's prose, however much it wrote", () 
     const prose = snapshot.items.find(
       (item) => item.body.kind === 'message' && item.body.role === 'assistant'
     )
-    return {
-      bytes: scope.work.decodedBytes,
-      prose: prose?.body.kind === 'message' && prose.body.blocks
-    }
+    return { bytes: scope.work.decodedBytes, parsed, prose: prose !== undefined }
   }
   const short = decoded(1024 * 1024)
   expect(decoded(10 * 1024 * 1024)).toEqual(short)
-  expect(short.prose).toEqual([])
+  expect(short.prose).toBe(false)
 })

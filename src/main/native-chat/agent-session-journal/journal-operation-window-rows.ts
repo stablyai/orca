@@ -13,11 +13,12 @@ const WITHOUT_TOOL_OUTPUT = `CASE WHEN kind='tool-call' AND json_valid(payload_j
     '$.body.output.stored')
   ELSE payload_json END`
 
-const TURN_SHAPE = `AND (kind IN ('message','turn','status') OR turn_scope_kind='unknown')`
-
-// Whom a turn acts for is in its people's messages: the agent's prose and reasoning come back empty.
-const withoutProse = (projected: string) => `CASE WHEN kind='message' AND json_valid(payload_json)
-  AND json_extract(payload_json,'$.body.role') IN ('assistant','reasoning')
+// Whom a turn acts for is in its people's messages: the agent's prose and reasoning are left out by
+// their indexed role, unread. A row of no known turn stays (it ends a turn's reach), its text emptied.
+const AGENT_PROSE = `kind='message' AND message_role IN ('assistant','reasoning')`
+const TURN_SHAPE = `AND ((kind IN ('message','turn','status') AND NOT (${AGENT_PROSE}))
+  OR turn_scope_kind='unknown')`
+const withoutProse = (projected: string) => `CASE WHEN ${AGENT_PROSE} AND json_valid(payload_json)
   THEN json_set(payload_json,'$.body.blocks',json('[]')) ELSE ${projected} END`
 
 // Rows share one reply: past this total, the largest have their tool output or patch cut.
