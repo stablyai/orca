@@ -1718,7 +1718,9 @@
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
-        "permissionFullAccessDescription": "Never asks before edits or commands"
+        "permissionFullAccessDescription": "Never asks before edits or commands",
+        "permissionReadOnly": "Read-only",
+        "permissionReadOnlyDescription": "Uses the agent’s read-only sandbox without approval escalation"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -3344,6 +3346,10 @@
     },
     "orcaCommands": {
       "desktopOnly": "Available in the desktop app"
+    },
+    "currentSideChat": {
+      "open": "New side chat",
+      "mark": "btw"
     }
   },
   "chat": {

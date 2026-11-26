@@ -65,7 +65,15 @@ export type MobileSessionTab =
       } & MobileTerminalTabPhoneFields)
   | (Pick<
       RuntimeMobileSessionAgentTab,
-      'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive' | 'forked' | 'unread'
+      | 'type'
+      | 'id'
+      | 'title'
+      | 'sessionId'
+      | 'agent'
+      | 'isActive'
+      | 'forked'
+      | 'unread'
+      | 'sideChat'
     > & {
       chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
     })

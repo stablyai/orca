@@ -81,6 +81,15 @@ function readNamingNote(value: unknown): AgentSessionConversationName | null {
   return {
     sessionId: value.sessionId,
     conversationName: name,
+    ...('sideChat' in value &&
+    value.sideChat &&
+    typeof value.sideChat === 'object' &&
+    'sourceSessionId' in value.sideChat &&
+    typeof value.sideChat.sourceSessionId === 'string'
+      ? { sideChat: { sourceSessionId: value.sideChat.sourceSessionId } }
+      : 'sideChat' in value
+        ? { sideChat: null }
+        : {}),
     ...(namingError ? { namingError } : {}),
     ...(typeof agent === 'string' && agent && agent.length <= 64 ? { agent } : {}),
     // Provenance only from a frame that also says whether the chat is a fork.
@@ -106,6 +115,7 @@ function sameNamingNote(
     a.namingError?.failedAt === b.namingError?.failedAt &&
     a.conversationNameSource === b.conversationNameSource &&
     a.agent === b.agent &&
+    a.sideChat?.sourceSessionId === b.sideChat?.sourceSessionId &&
     'forkedFrom' in a === 'forkedFrom' in b &&
     agentSessionForkNamingEqual(a.forkedFrom, b.forkedFrom)
   )

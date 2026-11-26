@@ -144,6 +144,7 @@ export type RuntimeMobileSessionAgentTab = {
   /** Host-registered agent; gate names beyond Claude/Codex on client registered-agents capability. */
   agent: StructuredAgentId
   /** The chat is a fork, so its title follows the fork mark. Old hosts omit it. */
+  sideChat?: true
   forked?: true
   /** The host's structured status row for this chat. Optional: old hosts never send it. */
   chatStatus?: RuntimeMobileSessionAgentTabStatus

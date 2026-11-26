@@ -50,6 +50,7 @@ import {
 import { assertReservedTabUnheld } from '../records/agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
+  sideChat?: AgentSessionRecord['sideChat']
   forkedFrom?: AgentSessionRecord['forkedFrom']
   /** Host-resolved floating directory committed with the first owner reservation. */
   launchDirectory?: string

@@ -59,6 +59,7 @@ export type AgentSessionAttachParams = {
     withAdmission: <T>(run: () => Promise<T>) => Promise<T>
     historyOrigin?: NativeCopyOrigin
   }
+  sideChat?: AgentSessionRecord['sideChat']
   options?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
@@ -71,6 +72,7 @@ export type AgentSessionAttachParams = {
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
     source?: AdoptedTranscriptSource
+    historyOrigin?: NativeCopyOrigin
     /** The source conversation's title; derived, so not part of the attach fingerprint. */
     conversationName?: string
   }
@@ -213,6 +215,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.sideChat ? { sideChat: params.sideChat } : {}),
     ...(params.options ? { options: params.options, models: input.models } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }

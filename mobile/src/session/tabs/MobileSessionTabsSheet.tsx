@@ -1,19 +1,19 @@
+import { MobileSessionTabTile } from './MobileSessionTabTile'
 import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import { Pressable, Text, View } from 'react-native'
-import { Bell, Check, Columns2, CornerDownRight, Plus, X } from 'lucide-react-native'
+import { Check, Columns2, CornerDownRight, Plus, X } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
 import { TailClippedText } from '../../components/list/TailClippedText'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
-import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
@@ -29,7 +29,6 @@ import { MobileSessionTabMark } from './MobileSessionTabMark'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
 const TILE_SIZE = 34
-const TILE_DOT_RING = 2
 const GROUP_ORDER: readonly MobileSessionTabGroup[] = ['needs-you', 'working', 'other']
 
 type Entry = MobileSessionTabEntry<MobileSessionTabRow>
@@ -150,14 +149,21 @@ function MobileSessionTabsSheetContent({
         onPress={() => open(row.tab)}
         onSwipeClose={() => void handleCloseSessionTab(row.tab)}
       >
-        <Tile
+        <MobileSessionTabTile
           badge={row.dotState}
           unreadBell={row.unread && row.group === 'other'}
           mark={<MobileSessionTabMark row={row} size={17} />}
         />
         <View style={styles.text}>
           <Text style={styles.title} numberOfLines={1}>
-            {isForkedChatTab(row.tab) ? <MobileForkMarkedName name={row.title} /> : row.title}
+            {isForkedChatTab(row.tab) ? (
+              <MobileForkMarkedName
+                name={row.title}
+                sideChat={row.tab.type === 'agent-session' && row.tab.sideChat}
+              />
+            ) : (
+              row.title
+            )}
           </Text>
           <RowDetail row={row} />
         </View>
@@ -196,7 +202,7 @@ function MobileSessionTabsSheetContent({
         onPress={() => open(target.tab)}
         onSwipeClose={() => void closePanes(panes)}
       >
-        <Tile
+        <MobileSessionTabTile
           badge={badgeState}
           unreadBell={unreadBell}
           mark={<Columns2 size={17} color={colors.textSecondary} strokeWidth={2.1} />}
@@ -321,32 +327,6 @@ function SheetRow({
   )
 }
 
-function Tile({
-  mark,
-  badge,
-  unreadBell
-}: {
-  mark: ReactNode
-  badge: MobileSessionTabSummary['dotState']
-  unreadBell: boolean
-}) {
-  const dot = badge && badge !== 'idle' ? badge : undefined
-  return (
-    <View style={styles.tile}>
-      {mark}
-      {unreadBell || dot ? (
-        <View style={styles.tileBadge}>
-          {unreadBell ? (
-            <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
-          ) : dot ? (
-            <AgentStateDot state={dot} decorative />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
 // The second line only when it adds to the title; paths and URLs keep their end in view.
 function RowDetail({ row }: { row: MobileSessionTabRow }) {
   if (!row.stateWord && !row.content) {
@@ -396,23 +376,6 @@ const styles = themedStyleSheet(() => ({
     bottom: 0,
     left: 0,
     backgroundColor: colors.translucentFill
-  },
-  tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    borderRadius: radii.tile,
-    backgroundColor: colors.translucentFill,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  // The state dot on the tile's corner, ringed in the group's colour.
-  tileBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    padding: TILE_DOT_RING,
-    borderRadius: radii.pill,
-    backgroundColor: colors.sheetGroup
   },
   paneMark: { width: 24, alignItems: 'center' },
   text: { flex: 1, minWidth: 0, gap: 1 },

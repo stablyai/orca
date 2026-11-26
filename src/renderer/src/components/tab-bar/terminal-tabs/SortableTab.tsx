@@ -41,6 +41,7 @@ import {
   NativeChatNamingErrorBlock,
   NativeChatNamingFailedDialog
 } from '../session-actions/NativeChatNamingFailure'
+import { SideChatMarkedName } from './SideChatMarkedName'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
 import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
 
@@ -79,6 +80,7 @@ export default function SortableTab({
   canPin = true,
   isBotHome = false,
   canContinueInTerminal = true,
+  sideChat,
   identityIcon,
   identityDetail,
   unread = false,
@@ -185,7 +187,16 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
-  const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
+  const titleNode = sideChat ? (
+    <SideChatMarkedName
+      name={displayTitle}
+      mark={t('components.native-chat.currentSideChat.mark', 'btw')}
+    />
+  ) : fork ? (
+    <ForkMarkedName name={displayTitle} narrowIcon />
+  ) : (
+    displayTitle
+  )
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -201,7 +212,7 @@ export default function SortableTab({
       aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
       {...attributes}
       {...dragListeners}
-      className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`${fork || sideChat ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return

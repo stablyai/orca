@@ -1,3 +1,4 @@
+import type { NewGroupSplit } from '../../../workspace-layout/workspace-layout-command-types'
 import type { StructuredAgentId } from '../provider-handles/agent-session-provider-handle'
 import type { AgentJournalMessageItem } from '../../journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../agent-session-wire'
@@ -17,7 +18,9 @@ export type StructuredAgentSessionResumeSource = {
 }
 
 /** The source chat and the response whose turn the fork copies through. */
-export type StructuredAgentSessionForkSource = { sessionId: string; throughItemId: string }
+export type StructuredAgentSessionForkSource =
+  | { sessionId: string; throughItemId: string; current?: never; permission?: never }
+  | { sessionId: string; current: true; permission: 'inherit'; throughItemId?: never }
 
 export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
@@ -32,7 +35,7 @@ export type StructuredAgentSessionCreateParams = {
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY`. */
-  tabPlacement?: { groupId?: string; afterTabId?: string }
+  tabPlacement?: { groupId?: string; afterTabId?: string; index?: number; split?: NewGroupSplit }
 }
 
 export type StructuredAgentSessionFirstMessage = {

@@ -19455,7 +19455,9 @@
         "loadingBotChats": "Cargando los chats de {{name}}…",
         "noMatchingChats": "No hay chats coincidentes",
         "noOtherChats": "No hay otros chats",
-        "retryChats": "Reintentar"
+        "retryChats": "Reintentar",
+        "permissionReadOnly": "Solo lectura",
+        "permissionReadOnlyDescription": "Usa el entorno de solo lectura del agente sin elevar permisos"
       },
       "tool": {
         "result": "Resultado",
@@ -20946,6 +20948,11 @@
           "plugin": "Plugin",
           "session": "Sesión"
         }
+      },
+      "currentSideChat": {
+        "open": "Nuevo chat paralelo",
+        "pane": "Agrupar chats paralelos en un panel separado",
+        "mark": "btw"
       }
     },
     "tab": {

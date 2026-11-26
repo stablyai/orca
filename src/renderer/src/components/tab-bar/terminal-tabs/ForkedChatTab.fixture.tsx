@@ -12,12 +12,14 @@ function ChatTab({
   id,
   title,
   forked,
+  sideChat = false,
   width,
   active = false
 }: {
   id: string
   title: string
   forked: boolean
+  sideChat?: boolean
   width?: number
   active?: boolean
 }): React.JSX.Element {
@@ -25,7 +27,8 @@ function ChatTab({
     <div className="flex h-8" style={width ? { width } : undefined}>
       <SortableTab
         tab={{ id, worktreeId: 'fixture', title, customTitle: null, color: null }}
-        agent="claude"
+        agent={sideChat ? 'codex' : 'claude'}
+        sideChat={sideChat}
         unifiedTabId={id}
         groupId="fixture-group"
         tabCount={3}
@@ -154,6 +157,47 @@ export const russianNarrow = defineFixture({
     <Strip>
       <ChatTab id="fork-200" title="Annotate capabilities" forked active width={200} />
       <ChatTab id="fork-170" title="Annotate capabilities" forked width={170} />
+    </Strip>
+  )
+})
+
+export const sideChats = defineFixture({
+  width: 900,
+  render: () => (
+    <Strip>
+      <ChatTab id="main-chat" title="Main conversation" forked={false} width={280} />
+      <ChatTab
+        id="side-1"
+        title="Review the deployment plan"
+        forked={false}
+        sideChat
+        active
+        width={300}
+      />
+      <ChatTab id="side-2" title="Investigate the failure" forked={false} sideChat width={300} />
+    </Strip>
+  )
+})
+
+export const crowdedSideChats = defineFixture({
+  width: 480,
+  render: () => (
+    <Strip>
+      <ChatTab id="side-1" title="Review deployment" forked={false} sideChat active width={120} />
+      <ChatTab id="side-2" title="Investigate failure" forked={false} sideChat width={120} />
+      <ChatTab id="side-3" title="Check tests" forked={false} sideChat width={120} />
+      <ChatTab id="side-4" title="Compare approaches" forked={false} sideChat width={120} />
+    </Strip>
+  )
+})
+
+export const sideChatWidths = defineFixture({
+  width: 550,
+  render: () => (
+    <Strip>
+      <ChatTab id="parent" title="Plan a release" forked={false} width={150} />
+      <ChatTab id="side-narrow" title="Review the API" forked={false} sideChat width={150} active />
+      <ChatTab id="side-wide" title="Compare approaches" forked={false} sideChat width={220} />
     </Strip>
   )
 })

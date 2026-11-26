@@ -11,6 +11,9 @@ function holdsLaunchIdentity(state: StructuredLaunchState, requestId?: string): 
     return false
   }
   // A fork of one response holds like a resume, so a lost reply replays rather than copies again.
+  if (state.intent.params.forkFrom?.current) {
+    return requestId !== undefined && state.callers.attempt.requestId === requestId
+  }
   if (state.intent.params.resumeFrom || state.intent.params.forkFrom) {
     return true
   }

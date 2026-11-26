@@ -67,6 +67,8 @@ export const PINNED_PROTECTED_COPY = [
       'components.native-chat.composer.permissionFullAccessCodexDescription',
       'components.native-chat.composer.permissionFullAccessDescription',
       'components.native-chat.composer.permissionFullAccessSharedDescription',
+      'components.native-chat.composer.permissionReadOnly',
+      'components.native-chat.composer.permissionReadOnlyDescription',
       'components.native-chat.composer.permissions',
       'components.native-chat.composer.pillAccessibleName',
       'components.native-chat.composer.planMode'

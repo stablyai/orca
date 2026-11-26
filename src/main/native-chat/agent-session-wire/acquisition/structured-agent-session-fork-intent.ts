@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionForkSource } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import { prepareStructuredAgentSessionCurrentFork } from './structured-agent-session-current-fork'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import { prepareStructuredAgentSessionFork } from './structured-agent-session-fork'
 import { resolveCommittedStructuredAgentSessionAdoptionIntent } from '../../../runtime/agent-session/ownership/structured-agent-session-create-adoption'
@@ -10,7 +12,7 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 
 export async function resolveStructuredAgentSessionForkIntent(input: {
   host: StructuredAgentSessionHost | null
-  forkFrom: { sessionId: string; throughItemId: string }
+  forkFrom: StructuredAgentSessionForkSource
   agent: StructuredAgentId
   location: AgentSessionExecutionLocation
   envelope: { sessionId: string; clientOperationId: string }
@@ -26,13 +28,15 @@ export async function resolveStructuredAgentSessionForkIntent(input: {
   }
   const resolved =
     resolveCommittedStructuredAgentSessionAdoptionIntent({ ...input, host }) ??
-    (await prepareStructuredAgentSessionFork({
-      ...input,
-      host,
-      sessionId: input.forkFrom.sessionId,
-      throughItemId: input.forkFrom.throughItemId,
-      envelope: { ...input.envelope, expectedRuntimeFence: null, payloadFingerprint: '' }
-    }))
+    (input.forkFrom.current
+      ? await prepareStructuredAgentSessionCurrentFork({ ...input, host, forkFrom: input.forkFrom })
+      : await prepareStructuredAgentSessionFork({
+          ...input,
+          host,
+          sessionId: input.forkFrom.sessionId,
+          throughItemId: input.forkFrom.throughItemId,
+          envelope: { ...input.envelope, expectedRuntimeFence: null, payloadFingerprint: '' }
+        }))
   // A fork in its source's workspace runs where the source runs; its copied conversation is kept
   // under that folder.
   const source = host.deps.store.getRecord(input.forkFrom.sessionId)

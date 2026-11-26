@@ -5,6 +5,8 @@ import type { Translate } from '../i18n/mobile-i18n'
 
 export function mobilePermissionModeLabel(mode: AgentChatPermissionMode, t: Translate): string {
   switch (mode) {
+    case 'read-only':
+      return t('components.native-chat.composer.permissionReadOnly', 'Read-only')
     case 'ask':
       return t('components.native-chat.composer.permissionAsk', 'Ask for approval')
     case 'accept-edits':
@@ -22,6 +24,11 @@ export function mobilePermissionModeDescription(
   t: Translate
 ): string {
   switch (mode) {
+    case 'read-only':
+      return t(
+        'components.native-chat.composer.permissionReadOnlyDescription',
+        'Uses the agent’s read-only sandbox without approval escalation'
+      )
     case 'ask':
       return agent === 'claude'
         ? t(

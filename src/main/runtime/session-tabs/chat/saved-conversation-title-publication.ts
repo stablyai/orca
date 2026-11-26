@@ -99,7 +99,8 @@ export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends O
       const next = retitleStructuredConversationTabs(
         snapshot,
         names,
-        (sessionId) => !!nameStore?.getConversation(sessionId)?.forkedFrom
+        (sessionId) => !!nameStore?.getConversation(sessionId)?.forkedFrom,
+        (sessionId) => !!nameStore?.getConversation(sessionId)?.sideChat
       )
       if (next) {
         this.storeMobileSessionSnapshot(workspaceId, next)

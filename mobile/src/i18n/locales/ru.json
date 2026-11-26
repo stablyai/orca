@@ -1939,7 +1939,9 @@
         "backToBots": "Назад к ботам",
         "loadingBotChats": "Загрузка чатов {{name}}…",
         "noOtherChats": "Других чатов нет",
-        "noMatchingChats": "Подходящих чатов нет"
+        "noMatchingChats": "Подходящих чатов нет",
+        "permissionReadOnly": "Только чтение",
+        "permissionReadOnlyDescription": "Использует песочницу агента только для чтения без повышения разрешений"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"
@@ -4231,6 +4233,10 @@
     },
     "tabMenu": {
       "closeTab": "Закрыть вкладку"
+    },
+    "currentSideChat": {
+      "open": "Новый параллельный чат",
+      "mark": "btw"
     }
   },
   "settings": {

@@ -19945,7 +19945,9 @@
         "loadingBotChats": "{{name}} のチャットを読み込み中…",
         "noMatchingChats": "一致するチャットがありません",
         "noOtherChats": "ほかのチャットはありません",
-        "retryChats": "再試行"
+        "retryChats": "再試行",
+        "permissionReadOnly": "読み取り専用",
+        "permissionReadOnlyDescription": "権限昇格を許可せず Agent の読み取り専用サンドボックスを使用"
       },
       "tool": {
         "result": "結果",
@@ -21337,6 +21339,11 @@
           "plugin": "プラグイン",
           "session": "セッション"
         }
+      },
+      "currentSideChat": {
+        "open": "新しいサイドチャット",
+        "pane": "サイドチャットを専用ペインにまとめる",
+        "mark": "btw"
       }
     },
     "tab": {

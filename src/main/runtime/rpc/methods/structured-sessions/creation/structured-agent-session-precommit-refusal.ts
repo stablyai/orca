@@ -6,11 +6,15 @@ import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError,
   refuseUnclassified,
+  refuse,
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
 } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import { AgentConversationCopyError } from '../../../../../native-chat/conversation-adoption/agent-conversation-copy-error'
+import {
+  AgentConversationCopyError,
+  AgentConversationCopyStartError
+} from '../../../../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import { tuiAgentDisplayName } from '../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export type StructuredCreateRefused = { refusal: AgentSessionWireRefusal }
@@ -38,6 +42,9 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
 const PRECOMMIT_REFUSAL_MESSAGE = 'Orca cannot open a structured agent chat for this workspace.'
 
 function precommitRefusal(error: unknown, agent?: string): AgentSessionWireRefusal {
+  if (error instanceof AgentConversationCopyStartError) {
+    return refuse('agent_session_operation_unknown', { reason: 'outcomeUnknown' }, error.message)
+  }
   // A refusal the host raised keeps its situation; a bare code names none.
   if (isAgentSessionRefusalError(error)) {
     const refusal = agentSessionRefusalFromReference(

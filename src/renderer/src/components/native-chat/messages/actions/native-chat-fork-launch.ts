@@ -33,6 +33,7 @@ export type NativeChatForkRequest = {
   forkFrom: StructuredAgentSessionForkSource
   /** Client-only admission requirement; reacquired from the child after reload. */
   forkRequiresInheritedOriginal?: boolean
+  beforeCreate?: () => boolean
   surfaceAddress: StructuredLaunchSurfaceAddress
 }
 
@@ -85,6 +86,7 @@ export async function launchNativeChatFork(
       executionHostId: executionHostIdFor(request.target),
       forkFrom: request.forkFrom,
       forkRequiresInheritedOriginal: request.forkRequiresInheritedOriginal,
+      beforeCreate: request.beforeCreate,
       // A side chat is selected once it sits beside its source.
       activate: request.side === undefined,
       surfaceAddress: request.surfaceAddress,

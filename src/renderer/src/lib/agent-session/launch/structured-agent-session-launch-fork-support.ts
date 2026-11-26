@@ -1,5 +1,6 @@
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_CURRENT_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
 } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
@@ -34,7 +35,9 @@ export async function requireHostForkSupport(
   }
   const support = await structuredAgentSessionHostCapabilityState(
     intent.target,
-    AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
+    intent.params.forkFrom.current
+      ? AGENT_SESSION_CREATE_CURRENT_FORK_RUNTIME_CAPABILITY
+      : AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
   )
   if (support === 'supported') {
     return
@@ -79,7 +82,7 @@ async function requiresInheritedOriginal(
   intent: StructuredAgentSessionLaunchIntent
 ): Promise<boolean> {
   const source = intent.params.forkFrom
-  if (!source) {
+  if (!source || source.current) {
     return false
   }
   if (intent.forkRequiresInheritedOriginal !== undefined) {

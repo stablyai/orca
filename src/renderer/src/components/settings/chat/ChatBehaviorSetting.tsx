@@ -1,3 +1,4 @@
+import { groupCurrentSideChats } from '../../native-chat/messages/actions/current-side-chat-launch'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -58,6 +59,7 @@ export function ChatBehaviorSetting({
     ...(settings.nativeChatPermissionMode !== undefined
       ? [getChatPermissionSearchEntry(typedPermissions)]
       : []),
+    entries.sideChatPane,
     entries.resumeOnRestart,
     entries.idleStop,
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
@@ -86,6 +88,25 @@ export function ChatBehaviorSetting({
         updateSettings={updateSettings}
         forceVisible={forceVisible}
       />
+      <SearchableSetting
+        {...entries.sideChatPane}
+        id={entries.sideChatPane.targetSectionId}
+        forceVisible={forceVisible}
+      >
+        <SettingsSwitchRow
+          label={entries.sideChatPane.title}
+          checked={settings.nativeChatSideChatPane === true}
+          onChange={() => {
+            const enabled = settings.nativeChatSideChatPane !== true
+            void Promise.resolve(updateSettings({ nativeChatSideChatPane: enabled })).then(() => {
+              const worktreeId = useAppStore.getState().activeWorktreeId
+              if (enabled && worktreeId) {
+                groupCurrentSideChats(worktreeId)
+              }
+            })
+          }}
+        />
+      </SearchableSetting>
       <SearchableSetting
         {...entries.resumeOnRestart}
         id={entries.resumeOnRestart.targetSectionId}

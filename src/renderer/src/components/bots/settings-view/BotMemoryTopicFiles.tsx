@@ -58,7 +58,6 @@ export function BotMemoryTopicFiles({
       ? t('bots.share.oneLine', '1 line')
       : t('bots.share.lines', '{{count}} lines', { count })
   }
-  const open = (name: string) => () => openBotHomeFileTab(bot, home, memoryPath(name))
   const openIcon = <ExternalLink className="size-3.5 text-muted-foreground" />
   return (
     <div className="flex flex-col gap-3.5">
@@ -71,7 +70,7 @@ export function BotMemoryTopicFiles({
               title={name}
               detail={lines(name)}
               end={openIcon}
-              onOpen={open(name)}
+              onOpen={() => openBotHomeFileTab(bot, home, memoryPath(name))}
             />
           ))}
         </SettingsInsetGroup>
@@ -83,7 +82,7 @@ export function BotMemoryTopicFiles({
             title={BOT_MEMORY_ARCHIVE}
             detail={lines(BOT_MEMORY_ARCHIVE)}
             end={openIcon}
-            onOpen={open(BOT_MEMORY_ARCHIVE)}
+            onOpen={() => openBotHomeFileTab(bot, home, memoryPath(BOT_MEMORY_ARCHIVE))}
           />
         </SettingsInsetGroup>
       ) : null}

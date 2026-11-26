@@ -66,6 +66,9 @@ async function readAdoptedTranscript(
   if (!adopt) {
     return null
   }
+  if (adopt.historyOrigin) {
+    return []
+  }
   if (!adopt.transcriptPath) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptNotFound'
@@ -135,6 +138,7 @@ export async function importAdoptedTranscript(
       await attached.journal.write({
         kind: 'epoch-replace',
         reason: params.adopt ? 'legacy_import' : 'session_created',
+        ...(params.adopt?.historyOrigin ? { historyOrigin: params.adopt.historyOrigin } : {}),
         fence: record.lease.runtimeFence,
         items: prepared ?? []
       })
@@ -163,6 +167,7 @@ async function applyAdoptedTranscript(
       {
         kind: 'epoch-replace',
         reason: 'legacy_import',
+        ...(adopt.historyOrigin ? { historyOrigin: adopt.historyOrigin } : {}),
         fence: record.lease.runtimeFence,
         items: prepared
       },

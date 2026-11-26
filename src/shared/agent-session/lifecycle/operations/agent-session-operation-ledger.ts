@@ -31,6 +31,8 @@ export type AgentSessionOperationOutcome =
       optionResult?: unknown
       /** Store the whole launch answer: changed settings cannot reconstruct its mode/downgrade reason. Keep unknown and do not validate at row admission: stricter isAgentLaunchResult checks could drop old rows and permit duplicate effects. Narrow at replay read, where an unreadable payload costs only that reply. */
       launch?: unknown
+      /** Frozen inherited context; narrow at copy replay without dropping durable effect evidence. */
+      conversationCopyCoverage?: unknown
     }
   | {
       status: 'failed'

@@ -21670,7 +21670,9 @@
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort",
         "modelsLoading": "Loading models…",
-        "signInForModels": "Sign in to see the models you can use."
+        "signInForModels": "Sign in to see the models you can use.",
+        "permissionReadOnly": "Read-only",
+        "permissionReadOnlyDescription": "Uses the agent’s read-only sandbox without approval escalation"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -23108,6 +23110,11 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "currentSideChat": {
+        "open": "New side chat",
+        "pane": "Group side chats in a separate pane",
+        "mark": "btw"
       }
     },
     "tab": {

@@ -55,6 +55,7 @@ export type SortableTabProps = {
   /** False for a bot's chats, which stay native chats. */
   canContinueInTerminal?: boolean
   /** Shown in place of the agent's icon, as a bot's picture on its chats. */
+  sideChat?: boolean
   identityIcon?: React.ReactNode
   /** Who the identity icon stands for when it cannot show all of them, as a group's members. */
   identityDetail?: string

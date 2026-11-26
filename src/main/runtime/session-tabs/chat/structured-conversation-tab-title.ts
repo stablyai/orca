@@ -8,29 +8,41 @@ export type StructuredConversationForked = (sessionId: string) => boolean
 function titledTab(
   tab: RuntimeMobileSessionAgentTab,
   name: string | null | undefined,
-  forked: StructuredConversationForked
+  forked: StructuredConversationForked,
+  sideChat?: StructuredConversationForked
 ): RuntimeMobileSessionAgentTab {
   const title = name ?? defaultAgentChatLabel(tab.agent)
   const isFork = forked(tab.sessionId)
-  if (tab.title === title && (tab.forked === true) === isFork) {
+  const isSideChat = sideChat?.(tab.sessionId) ?? tab.sideChat === true
+  if (
+    tab.title === title &&
+    (tab.forked === true) === isFork &&
+    (tab.sideChat === true) === isSideChat
+  ) {
     return tab
   }
-  const { forked: _forked, ...rest } = tab
-  return { ...rest, title, ...(isFork ? { forked: true as const } : {}) }
+  const { forked: _forked, sideChat: _sideChat, ...rest } = tab
+  return {
+    ...rest,
+    title,
+    ...(isFork ? { forked: true as const } : {}),
+    ...(isSideChat ? { sideChat: true as const } : {})
+  }
 }
 
 /** Project the one durable conversation name onto each structured tab's display title. */
 export function titleStructuredConversationTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   nameFor: (sessionId: string) => string | null | undefined,
-  forked: StructuredConversationForked
+  forked: StructuredConversationForked,
+  sideChat?: StructuredConversationForked
 ): RuntimeMobileSessionTabsSnapshot {
   let changed = false
   const tabs = snapshot.tabs.map((tab) => {
     if (tab.type !== 'agent-session') {
       return tab
     }
-    const next = titledTab(tab, nameFor(tab.sessionId), forked)
+    const next = titledTab(tab, nameFor(tab.sessionId), forked, sideChat)
     changed ||= next !== tab
     return next
   })
@@ -41,14 +53,15 @@ export function titleStructuredConversationTabs(
 export function retitleStructuredConversationTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   names: ReadonlyMap<string, string | null>,
-  forked: StructuredConversationForked
+  forked: StructuredConversationForked,
+  sideChat?: StructuredConversationForked
 ): RuntimeMobileSessionTabsSnapshot | null {
   let changed = false
   const tabs = snapshot.tabs.map((tab) => {
     if (tab.type !== 'agent-session' || !names.has(tab.sessionId)) {
       return tab
     }
-    const next = titledTab(tab, names.get(tab.sessionId), forked)
+    const next = titledTab(tab, names.get(tab.sessionId), forked, sideChat)
     changed ||= next !== tab
     return next
   })

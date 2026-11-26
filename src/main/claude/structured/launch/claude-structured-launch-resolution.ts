@@ -11,6 +11,7 @@ import {
   claudeStructuredPermissionOptions,
   type ClaudePermissionOptions
 } from './claude-structured-permission-options'
+export { claudeStructuredPermissionOptions } from './claude-structured-permission-options'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,

@@ -8,7 +8,7 @@ import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
-import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
+import { resolveHiddenProbeCwdAsync } from '../../../lib/hidden-probe-cwd'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { CODEX_STRUCTURED_AGENT } from '../launch/codex-structured-agent-definition'
@@ -47,7 +47,7 @@ export async function codexProviderProbeCwd(
       throw error
     }
   }
-  return resolveHiddenProbeCwd()
+  return resolveHiddenProbeCwdAsync()
 }
 
 const RENAME_TIMEOUT_MS = 15_000

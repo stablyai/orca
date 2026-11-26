@@ -19782,7 +19782,9 @@
         "loadingBotChats": "Chargement des chats du bot {{name}}…",
         "noMatchingChats": "Aucun chat correspondant",
         "noOtherChats": "Aucun autre chat",
-        "retryChats": "Réessayer"
+        "retryChats": "Réessayer",
+        "permissionReadOnly": "Lecture seule",
+        "permissionReadOnlyDescription": "Utilise le bac à sable en lecture seule sans élévation des autorisations"
       },
       "tool": {
         "result": "Résultat",
@@ -21273,6 +21275,11 @@
           "plugin": "Plugin",
           "session": "Session"
         }
+      },
+      "currentSideChat": {
+        "open": "Nouveau chat parallèle",
+        "pane": "Regrouper les chats parallèles dans un volet séparé",
+        "mark": "btw"
       }
     },
     "tab": {

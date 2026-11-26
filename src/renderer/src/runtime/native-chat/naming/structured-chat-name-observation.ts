@@ -64,7 +64,8 @@ export function getStructuredChatTabNames(): StructuredChatTabNames {
         !previous ||
         previous.owner !== value.owner ||
         previous.sessionId !== value.sessionId ||
-        previous.savedName !== value.savedName
+        previous.savedName !== value.savedName ||
+        previous.sideChat !== value.sideChat
       )
     })
   ) {
@@ -199,7 +200,8 @@ export function useWorktreeStructuredChatTabNames(
         ? JSON.stringify(
             worktreeChatNameEntries(getStructuredChatTabNames(), worktree).map(([tab, value]) => [
               tab.id,
-              value.savedName
+              value.savedName,
+              value.sideChat
             ])
           )
         : ''

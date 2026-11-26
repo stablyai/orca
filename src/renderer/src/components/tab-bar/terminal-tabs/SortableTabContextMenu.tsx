@@ -1,3 +1,4 @@
+import { CurrentSideChatMenu } from '../session-actions/CurrentSideChatMenu'
 import { CopyX, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
@@ -166,6 +167,8 @@ export function SortableTabContextMenu({
       animation="none"
       className="min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap"
     >
+      {nativeChat ? <CurrentSideChatMenu worktreeId={tab.worktreeId} tabId={unifiedTabId} /> : null}
+
       <TerminalTabSplitMenuSection
         unifiedTabId={unifiedTabId}
         groupId={groupId}

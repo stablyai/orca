@@ -20485,7 +20485,9 @@
         "loadingBotChats": "{{name}}의 채팅 불러오는 중…",
         "noMatchingChats": "일치하는 채팅 없음",
         "noOtherChats": "다른 채팅 없음",
-        "retryChats": "다시 시도"
+        "retryChats": "다시 시도",
+        "permissionReadOnly": "읽기 전용",
+        "permissionReadOnlyDescription": "권한 상승 없이 에이전트의 읽기 전용 샌드박스 사용"
       },
       "tool": {
         "result": "결과",
@@ -21986,6 +21988,11 @@
           "plugin": "플러그인",
           "session": "세션"
         }
+      },
+      "currentSideChat": {
+        "open": "새 사이드 채팅",
+        "pane": "사이드 채팅을 별도 창에 모으기",
+        "mark": "btw"
       }
     },
     "tab": {

@@ -140,7 +140,7 @@ export function structuredSummaryHostProgram(
 
 type StructuredSummaryNaming = Pick<
   AgentSessionStatusSummary,
-  'conversationName' | 'namingError' | 'conversationNameSource' | 'forkedFrom'
+  'conversationName' | 'namingError' | 'conversationNameSource' | 'forkedFrom' | 'sideChat'
 >
 
 /** The record's name, its provenance, and the failure to replace it only while that is still the
@@ -150,10 +150,11 @@ export function structuredSummaryConversationNaming(
   failure: StructuredChatNamingFailure | undefined
 ): StructuredSummaryNaming {
   if (!record) {
-    return {}
+    return { sideChat: null }
   }
   const name = record.conversationName
   const provenance: StructuredSummaryNaming = {
+    ...(record.sideChat ? { sideChat: { sourceSessionId: record.sideChat.sourceSessionId } } : {}),
     forkedFrom: record.forkedFrom
       ? {
           sessionId: record.forkedFrom.sessionId,
@@ -189,6 +190,7 @@ export function renamedStructuredStatusSummary(
     namingError: _error,
     conversationNameSource: _source,
     forkedFrom: _forkedFrom,
+    sideChat: _sideChat,
     sleptAt: _sleptAt,
     ...rest
   } = previous

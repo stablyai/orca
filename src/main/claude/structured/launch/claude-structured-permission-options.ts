@@ -14,12 +14,15 @@ const CLAUDE_PERMISSION_MODES = {
   ask: 'default',
   'accept-edits': 'acceptEdits',
   auto: 'auto'
-} as const satisfies Record<Exclude<AgentChatPermissionMode, 'full-access'>, PermissionMode>
+} as const satisfies Partial<Record<AgentChatPermissionMode, PermissionMode>>
 
 /** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
 export function claudeStructuredPermissionOptions(
   mode: AgentChatPermissionChoice
 ): ClaudePermissionOptions {
+  if (mode === 'read-only') {
+    throw new Error('Claude does not support the read-only permission mode.')
+  }
   if (mode === 'own') {
     // An omitted mode lets the CLI apply the user's settings defaultMode.
     return {}

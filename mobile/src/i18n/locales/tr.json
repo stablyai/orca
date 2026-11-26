@@ -1835,7 +1835,9 @@
         "permissionAcceptEditsDescription": "Dosya düzenlemelerini ve dosya komutlarını onaylar; diğer işlemler için sorar",
         "permissionAutoDescription": "Onay isteklerini sizin yerinize değerlendirir",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",
-        "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz"
+        "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
+        "permissionReadOnly": "Salt okunur",
+        "permissionReadOnlyDescription": "İzin yükseltmeden ajanın salt okunur korumalı alanını kullanır"
       },
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"
@@ -4013,6 +4015,10 @@
       "skip": "Atla",
       "stop": "Durdur",
       "yes": "Evet"
+    },
+    "currentSideChat": {
+      "open": "Yeni yan sohbet",
+      "mark": "btw"
     }
   },
   "settings": {

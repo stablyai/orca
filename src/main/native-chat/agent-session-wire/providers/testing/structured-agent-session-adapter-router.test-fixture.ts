@@ -93,6 +93,7 @@ function implementedBy(
     capabilities: {
       ...declared,
       fork: adapter.copyConversation ? declared.fork : undefined,
+      currentFork: adapter.copyConversation ? declared.currentFork : undefined,
       compact: declared.compact && Boolean(adapter.compact),
       threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
       rewind:

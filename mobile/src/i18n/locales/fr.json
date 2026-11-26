@@ -1236,7 +1236,9 @@
     "native-chat": {
       "composer": {
         "planMode": "Planifier",
-        "exitPlanMode": "Quitter le mode plan"
+        "exitPlanMode": "Quitter le mode plan",
+        "permissionReadOnly": "Lecture seule",
+        "permissionReadOnlyDescription": "Utilise le bac à sable en lecture seule sans élévation des autorisations"
       },
       "goal": {
         "sentAsGoal": "Envoyé comme objectif"
@@ -2958,6 +2960,10 @@
       "next": "Onglet suivant",
       "previous": "Onglet précédent",
       "hint": "Affiche tous les onglets"
+    },
+    "currentSideChat": {
+      "open": "Nouveau chat parallèle",
+      "mark": "btw"
     }
   },
   "settings": {
