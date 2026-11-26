@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import '../contract-constants'
 import '../messages/mailbox-routing-page'
@@ -15,8 +15,11 @@ let directory: string
 let db: OrchestrationDb
 let runId: string
 const chat = createOrcaSessionId(randomUUID)
+// Rows are stamped and read at one fixed time.
+const NOW = Date.UTC(2026, 10, 26, 12)
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOW })
   directory = mkdtempSync(join(tmpdir(), 'orca-connector-worker-candidates-'))
   db = new OrchestrationDb(join(directory, 'orchestration.db'))
   runId = db.createRun({
@@ -27,6 +30,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   db.close()
   rmSync(directory, { recursive: true, force: true })
 })
@@ -59,7 +63,7 @@ function startWorker(creatorDispatchId?: string): string {
 }
 
 const openChildrenOf = () =>
-  readConnectorWorkerCandidates(db, [chat], Date.now()).candidates.map((candidate) => [
+  readConnectorWorkerCandidates(db, [chat], NOW).candidates.map((candidate) => [
     candidate.row.dispatchId,
     candidate.openChildren
   ])

@@ -78,7 +78,7 @@ function harness(
     turnEndPending?: () => boolean
   } = {}
 ) {
-  const clock = { now: START, running: null as number | null }
+  const clock: { now: number; running: number | null } = { now: START, running: null }
   const timers: { at: number; run: () => void }[] = []
   const sent: (ConnectorReplyBody & { at: number })[] = []
   const answers = options.answers ?? []

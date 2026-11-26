@@ -43,9 +43,14 @@ export function withBotLine(fact: ThreadStatusFact & { armed: Armed }, at: numbe
 /** Orca's pending line posted: counted for the day, and the next one waits longer. */
 export function withHostLine(fact: ThreadStatusFact & { armed: Armed }, at: number) {
   const counted = { ...fact, day: utcDay(at), dayCount: linesToday(fact, at) + 1 }
-  const dueStep = Math.min(fact.armed.dueStep + 1, 2) as Armed['dueStep']
+  const dueStep = nextDueStep(fact.armed.dueStep)
   const lines = (fact.armed.lines ?? 0) + 1
   return withArmed(counted, { ...fact.armed, lastLineAt: at, dueStep, lines })
+}
+
+/** The backoff step after a host line: 30 min, then 60, then 120 from there on. */
+export function nextDueStep(step: Armed['dueStep']): Armed['dueStep'] {
+  return step === 0 ? 1 : 2
 }
 
 export function withoutPending(fact: ThreadStatusFact): ThreadStatusFact {

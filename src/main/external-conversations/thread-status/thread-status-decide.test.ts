@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ThreadStatusFact } from '../../../shared/connectors/external-conversation-link'
+import { nextDueStep } from './thread-status-fact'
 import {
   decideThreadStatus,
   mayArm,
@@ -67,7 +68,7 @@ describe('decideThreadStatus', () => {
         armed: {
           ...armed,
           lastLineAt: now,
-          dueStep: Math.min(armed.dueStep + 1, 2) as 0 | 1 | 2,
+          dueStep: nextDueStep(armed.dueStep),
           lines: (armed.lines ?? 0) + 1
         }
       }
