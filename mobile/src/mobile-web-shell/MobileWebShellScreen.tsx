@@ -113,6 +113,7 @@ export function MobileWebShellScreen({
     reportPageBackClaim,
     reportSwapSafe,
     pageReady,
+    documentLoaded,
     pageFrame,
     backClaimed,
     ownsHostArea,
@@ -148,6 +149,7 @@ export function MobileWebShellScreen({
   const usageRail = useShellPageUsageRail({
     hostId,
     sessionId: readySessionId,
+    documentOpen: documentLoaded,
     ownsHostArea,
     routeGrants,
     shown: !overlay && state.kind === 'ready',

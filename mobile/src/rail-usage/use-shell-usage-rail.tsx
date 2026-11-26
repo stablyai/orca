@@ -60,7 +60,7 @@ export function useFocusedUsageRail(snapshot: AccountsSnapshot | null): void {
   useSideRailContent(node)
 }
 
-type PageReport<T> = { sessionId: string; value: T }
+type PageReport<T> = { sessionId: string; epoch: number; value: T }
 
 /**
  * A web shell's rings, from what its page last reported: across the whole rail, in the span a chat
@@ -69,6 +69,8 @@ type PageReport<T> = { sessionId: string; value: T }
 export function useShellPageUsageRail(args: {
   hostId: string
   sessionId: string | null
+  /** False from document-started until the replacement document loads. Session id stays the same. */
+  documentOpen: boolean
   ownsHostArea: boolean
   routeGrants: readonly string[]
   shown: boolean
@@ -79,18 +81,28 @@ export function useShellPageUsageRail(args: {
 } {
   const { sessionId } = args
   const focused = useScreenFocused()
+  const [reportEpoch, setReportEpoch] = useState(0)
+  const [documentWasOpen, setDocumentWasOpen] = useState(args.documentOpen)
+  if (documentWasOpen !== args.documentOpen) {
+    setDocumentWasOpen(args.documentOpen)
+    // document-started keeps the session id, so the epoch is what retires the previous document's reports.
+    if (documentWasOpen && !args.documentOpen) {
+      setReportEpoch((epoch) => epoch + 1)
+    }
+  }
   const [location, setLocation] = useState<PageReport<string> | null>(null)
   const [cover, setCover] = useState<PageReport<{
     covered: boolean
     free: BridgeSideStripFree | null
   }> | null>(null)
-  const current = cover?.sessionId === sessionId ? cover.value : null
+  const current = cover?.sessionId === sessionId && cover.epoch === reportEpoch ? cover.value : null
   const room = pageSideStripRoom({
     ownsHostArea: args.ownsHostArea,
     routeGrants: args.routeGrants,
     covered: current?.covered ?? null,
     free: current?.free ?? null,
-    location: location?.sessionId === sessionId ? location.value : null,
+    location:
+      location?.sessionId === sessionId && location.epoch === reportEpoch ? location.value : null,
     keyRailClaimed: args.keyRailClaimed
   })
   const ringsDuringChats = useRailRingsDuringChats()
@@ -107,12 +119,12 @@ export function useShellPageUsageRail(args: {
   return {
     recordLocation: (href) => {
       if (sessionId !== null) {
-        setLocation({ sessionId, value: href })
+        setLocation({ sessionId, epoch: reportEpoch, value: href })
       }
     },
     recordCover: (covered, free) => {
       if (sessionId !== null) {
-        setCover({ sessionId, value: { covered, free } })
+        setCover({ sessionId, epoch: reportEpoch, value: { covered, free } })
       }
     }
   }

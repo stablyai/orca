@@ -28,6 +28,7 @@ import {
 } from '../diagnostics/shell-lifecycle-log'
 import { shellPageFrame, type ShellPageFrame } from '../page-document/shell-page-frame'
 import { createShellPageDeadline } from './shell-page-deadline'
+import { useShellDocumentFacts } from './use-shell-document-facts'
 import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
@@ -63,6 +64,7 @@ export type MobileWebShellSessionView = {
   readonly reportSwapSafe: (safe: boolean, round: number) => void
   // Project document facts into React state: page-ready alone changes no session-state identity to trigger a render.
   readonly pageReady: boolean
+  readonly documentLoaded: boolean
   // Project paint for the same reason: the ready state itself does not change.
   readonly pageFrame: ShellPageFrame
   // Project Back claims so claim-only events still rerender.
@@ -90,7 +92,7 @@ export function useMobileWebShellSession(args: {
 
   const sessionRef = useRef(createMobileWebShellSession(routePathname, wide, appNamesRoute))
   const [state, setState] = useState(sessionRef.current.state)
-  const [pageReady, setPageReady] = useState(sessionRef.current.pageReady)
+  const { pageReady, documentLoaded, projectFacts } = useShellDocumentFacts(sessionRef.current)
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
   const [backClaimed, setBackClaimed] = useState(() => shellPageBackClaimed(sessionRef.current))
   const [downloadProgress] = useState(createDownloadProgressFeed)
@@ -157,7 +159,7 @@ export function useMobileWebShellSession(args: {
         downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
       }
       setState(next)
-      setPageReady(stepped.session.pageReady)
+      projectFacts(stepped.session)
       setPageFrame(shellPageFrame(stepped.session))
       setBackClaimed(shellPageBackClaimed(stepped.session))
       for (const effect of stepped.effects) {
@@ -211,7 +213,7 @@ export function useMobileWebShellSession(args: {
     sessionRef.current = createMobileWebShellSession(routePathname, wide, appNamesRoute)
     startedAtRef.current = runtime.now()
     setState(sessionRef.current.state)
-    setPageReady(sessionRef.current.pageReady)
+    projectFacts(sessionRef.current)
     setPageFrame(shellPageFrame(sessionRef.current))
     return invalidate
   }, [appNamesRoute, hostId, invalidate, routePathname, runtime])
@@ -320,6 +322,7 @@ export function useMobileWebShellSession(args: {
     state,
     downloadProgress,
     pageReady,
+    documentLoaded,
     pageFrame,
     pageRoutes: sessionRef.current.pageRoutes,
     pageRouteGrants: sessionRef.current.pageRouteGrants,
