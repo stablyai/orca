@@ -23000,6 +23000,7 @@
         "annotateTooLarge": "Bu görsel not çizmek için çok büyük (33 megapikselden fazla).",
         "sendWhileEditing": "Notlarını düzenlediğiniz görseli kapatın, sonra gönderin.",
         "undoUnsaved": "Geri alınamadı: önceki notlar kaydedilemedi. Bu notlar mesajınızda kalıyor.",
+        "undoRemoveFailed": "Görsel notlarıyla birlikte geri konamadı. Geri Al’ı yeniden deneyin.",
         "alreadyAdded": "Bu notlar başka bir pencereden mesajınıza zaten eklendi.",
         "editedElsewhere": "Bu görsel başka bir yerde düzenleniyor. Önce orada bitirin; notlarınız hâlâ burada.",
         "removeWhileEditing": "Önce diğer yerdeki düzenlemeyi bitirin."

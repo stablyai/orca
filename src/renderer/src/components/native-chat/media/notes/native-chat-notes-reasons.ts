@@ -90,3 +90,11 @@ export function nativeChatNotesKeptText(
       )
   }
 }
+
+/** Undo of a removed or cleared marked image couldn't put it back with its notes. */
+export function undoRemoveFailedText(t: Translate): string {
+  return t(
+    'components.native-chat.notes.undoRemoveFailed',
+    'Couldn’t put the image back with its notes. Try Undo again.'
+  )
+}

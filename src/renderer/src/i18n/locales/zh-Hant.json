@@ -22542,6 +22542,7 @@
         "annotateTooLarge": "這張圖片太大，無法繪製備註（超過 3300 萬像素）。",
         "sendWhileEditing": "請先關閉正在編輯備註的圖片，再傳送。",
         "undoUnsaved": "無法復原：先前的備註無法儲存。這些備註會保留在你的訊息中。",
+        "undoRemoveFailed": "無法將圖片連同備註放回。請再次嘗試復原。",
         "alreadyAdded": "這些備註已從另一個視窗加入你的訊息。",
         "editedElsewhere": "這張圖片正在別處編輯。請先在那裡完成；你的備註仍在這裡。",
         "removeWhileEditing": "請先在別處完成編輯。"

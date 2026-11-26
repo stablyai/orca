@@ -16,8 +16,10 @@ import {
 } from '../../media/notes/native-chat-chip-notes'
 import {
   dismissNativeChatNotesNoticeFor,
+  nativeChatNotesRetryingUndo,
   showNativeChatNotesNotice
 } from '../../media/notes/native-chat-notes-notice'
+import { undoRemoveFailedText } from '../../media/notes/native-chat-notes-reasons'
 import { nativeChatNotesImageName } from '../../media/notes/native-chat-media-notes'
 import {
   nativeChatNotesMediaKey,
@@ -292,7 +294,7 @@ function NativeChatImageThumbnail({
         defaultValue_one: '{{count}} note removed',
         count: notes.notes.length
       }),
-      undo: putBack
+      undo: nativeChatNotesRetryingUndo(notesScopeKey, putBack, undoRemoveFailedText(t))
     })
   }
 
@@ -361,8 +363,10 @@ function NativeChatImageThumbnail({
         initialNotes={notes && original.src ? notes.notes : undefined}
         // Numbering goes on from the copy these notes were first drawn on.
         offset={notes?.offset}
-        // Without its clean original a marked image can only be viewed: new marks would land on old ones.
-        annotatable={Boolean(onRemove) && (!notes || Boolean(original.src))}
+        // Notes go to a chat's message box: a chip outside one (an item comment, the browser's
+        // annotation strip) only views. Without its clean original a marked image can only be
+        // viewed too: new marks would land on old ones.
+        annotatable={Boolean(onRemove && notesScopeKey) && (!notes || Boolean(original.src))}
         replacesAttachmentId={attachment.id}
         // The marked image takes this chip's place; Undo puts this chip and its notes back.
         onAttached={

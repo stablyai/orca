@@ -123,3 +123,17 @@ it('a marked chip another viewer is editing can’t be removed from under it', (
   expect(readNativeChatAttachmentNotes(scope, 'chip-1')?.notes[0]?.text).toBe('keep me')
   end()
 })
+
+it('a chip outside a chat’s message box (an item comment, the browser strip) opens view-only', () => {
+  // Removable there, but with no chat draft for notes to go to.
+  render(
+    createElement(NativeChatImageAttachmentPreview, {
+      attachment: { id: 'comment-1', path: '/tmp/shot.png', previewUrl: 'data:image/png;base64,' },
+      onRemove: vi.fn()
+    })
+  )
+  fireEvent.click(screen.getByTitle('shot.png'))
+  expect(screen.getByRole('button', { name: /Annotate/ }).getAttribute('title')).toBe(
+    'Notes can’t be drawn on this image.'
+  )
+})

@@ -22876,6 +22876,7 @@
         "annotateTooLarge": "Esta imagem é grande demais para desenhar notas (mais de 33 megapixels).",
         "sendWhileEditing": "Feche a imagem cujas notas você está editando e depois envie.",
         "undoUnsaved": "Não foi possível desfazer: as notas anteriores não puderam ser salvas. Estas continuam na sua mensagem.",
+        "undoRemoveFailed": "Não foi possível devolver a imagem com suas notas. Tente Desfazer novamente.",
         "alreadyAdded": "Estas notas já foram adicionadas à sua mensagem a partir de outra janela.",
         "editedElsewhere": "Esta imagem está sendo editada em outro lugar. Termine lá primeiro; suas notas continuam aqui.",
         "removeWhileEditing": "Termine a edição em outro lugar primeiro."

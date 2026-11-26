@@ -21337,6 +21337,7 @@
         "annotateTooLarge": "Dieses Bild ist zu groß, um Notizen darauf zu zeichnen (über 33 Megapixel).",
         "sendWhileEditing": "Schließe das Bild, dessen Notizen du bearbeitest, und sende dann.",
         "undoUnsaved": "Rückgängig nicht möglich: Die früheren Notizen konnten nicht gespeichert werden. Diese bleiben in deiner Nachricht.",
+        "undoRemoveFailed": "Das Bild konnte nicht mit seinen Notizen zurückgelegt werden. Versuche „Rückgängig“ erneut.",
         "alreadyAdded": "Diese Notizen wurden bereits aus einem anderen Fenster zu deiner Nachricht hinzugefügt.",
         "editedElsewhere": "Dieses Bild wird an anderer Stelle bearbeitet. Schließe es dort zuerst ab; deine Notizen sind noch hier.",
         "removeWhileEditing": "Bearbeite es zuerst anderswo fertig."

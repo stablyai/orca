@@ -31,6 +31,20 @@ export function showNativeChatNotesNotice(scopeKey: string, notice: NotesNotice)
   return dismiss
 }
 
+/** Undo for a line whose `putBack` can fail: failing, it says so in `failed`, with Undo again. */
+export function nativeChatNotesRetryingUndo(
+  scopeKey: string,
+  putBack: () => boolean,
+  failed: string
+): () => void {
+  const undo = (): void => {
+    if (!putBack()) {
+      showNativeChatNotesNotice(scopeKey, { text: failed, undo })
+    }
+  }
+  return undo
+}
+
 /** Removes the line, only while it is still `notice` when given, so a newer line survives. */
 export function dismissNativeChatNotesNotice(scopeKey: string, notice?: NotesNotice): void {
   if (notice && notices.get(scopeKey) !== notice) {
