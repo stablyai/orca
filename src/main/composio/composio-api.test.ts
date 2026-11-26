@@ -13,12 +13,15 @@ describe('Composio 403s', () => {
     const api = new ComposioApi('key', forbidden('APIKey_InsufficientPermissions', SESSION_WRITE))
     const error = await api.createSession('user').catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(ComposioKeyScopeError)
-    expect((error as ComposioKeyScopeError).message).toBe(
-      'This Composio key can’t create sessions. It needs Session management: Read and write.'
-    )
-    expect((error as ComposioKeyScopeError).data.botFailure).toEqual({
-      code: 'composioKeyCantCreateSessions',
-      params: { permission: 'Session management: Read and write' }
+    expect(error).toMatchObject({
+      message:
+        'This Composio key can’t create sessions. It needs Session management: Read and write.',
+      data: {
+        botFailure: {
+          code: 'composioKeyCantCreateSessions',
+          params: { permission: 'Session management: Read and write' }
+        }
+      }
     })
     const health = new ComposioKeyHealth(() => {})
     health.failed(error)
@@ -46,6 +49,6 @@ describe('Composio 403s', () => {
     const api = new ComposioApi('key', forbidden('Project_Suspended', 'This project is suspended.'))
     const error = await api.app('notion').catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(ComposioUnavailableError)
-    expect((error as Error).message).toBe('Composio: This project is suspended.')
+    expect(error).toMatchObject({ message: 'Composio: This project is suspended.' })
   })
 })
