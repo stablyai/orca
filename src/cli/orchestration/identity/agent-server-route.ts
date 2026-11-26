@@ -10,7 +10,7 @@ import {
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY
 } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 
-type AgentServerRoutedCommand = 'send' | 'worker-start' | 'check' | 'progress'
+type AgentServerRoutedCommand = 'send' | 'worker-start' | 'check'
 
 /** The server a remote client was pointed at, as the caller spelled it. */
 function serverSelector(
@@ -75,12 +75,6 @@ export async function refuseAgentServerRoute(
     throw new RuntimeClientError(
       'mailbox_is_local',
       `Your mailbox is on this Orca; replies from ${name} arrive here. Drop ${route}.`
-    )
-  }
-  if (command === 'progress') {
-    throw new RuntimeClientError(
-      'dispatch_is_local',
-      `Your worker Dispatch is on this Orca; passive progress updates belong here. Drop ${route}.`
     )
   }
   const verb = command === 'send' ? 'message an agent' : 'start a worker'

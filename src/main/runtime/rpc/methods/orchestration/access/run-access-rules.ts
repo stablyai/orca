@@ -1,5 +1,4 @@
 import type { RunRow, TaskRow } from '../../../../orchestration/db/orchestration-records'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { taskNotFoundError } from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
 import { resolveRunScope } from '../runs/run-scope'
 import { parseOrchestrationTaskDepsFlag } from '../../../../orchestration/coordinator/dispatch/task-deps-flag'
@@ -50,20 +49,6 @@ export function taskCreateAccess(
 ): RunAccess & { deps: string[] | undefined } {
   const deps = input.params.deps ? parseOrchestrationTaskDepsFlag(input.params.deps) : undefined
   return { ...coordinatedRunAccess(input), deps }
-}
-
-export function taskUpdateAccess(
-  input: OrchestrationAccessRuleInput<RunScopedParams & { id: string }>
-): RunAccess {
-  const { run } = coordinatedRunAccess(input)
-  const existing = input.ctx.runtime.getOrchestrationDb().getTask(input.params.id)
-  if (!existing || existing.run_id !== run.id) {
-    throw new OrchestrationError(
-      'task_not_found',
-      `Task ${input.params.id} was not found in Run ${run.id}.`
-    )
-  }
-  return { run }
 }
 
 export function dispatchAccess(

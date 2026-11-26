@@ -14,7 +14,7 @@ export type BotWorkerSummary = {
   state: OrchestrationSessionWorkerState | null
   /** Its Dispatch is open but its agent waits, on its coordinator or an answer. */
   idle?: boolean
-  /** Passive live progress note recorded via `orchestration progress` while working. */
+  /** Passive live progress note recorded via `orchestration task-update --note` while working. */
   progressNote?: string | null
   dispatchId: string
   workspace: string | null

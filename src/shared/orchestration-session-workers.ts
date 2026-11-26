@@ -51,7 +51,7 @@ export type OrchestrationSessionWorker = {
   chatSessionId: string | null
   /** The Task's recorded result, clipped; absent from older hosts. */
   summary?: string | null
-  /** Passive live status recorded via `orchestration progress`; absent when unset or on older hosts. */
+  /** Passive live status recorded via `orchestration task-update --note`; absent when unset or on older hosts. */
   progressNote?: string | null
   progressUpdatedAt?: number | null
   /** Epoch ms the Dispatch started. */

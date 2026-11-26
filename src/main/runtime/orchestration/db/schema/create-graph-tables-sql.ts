@@ -167,6 +167,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     )),
   deps          TEXT NOT NULL DEFAULT '[]',
   result        TEXT,
+  progress_note TEXT,
+  progress_updated_at TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at  TEXT
 );

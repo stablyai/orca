@@ -1,6 +1,7 @@
 import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
+import { ORCHESTRATION_TASK_UPDATE_METHOD } from './task-update-method'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { inspectedRunAccess, taskCreateAccess, taskUpdateAccess } from '../access/run-access-rules'
+import { inspectedRunAccess, taskCreateAccess } from '../access/run-access-rules'
 import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
 import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration/orchestration-task-summary'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
@@ -11,7 +12,6 @@ import {
   TaskCreateParams,
   TaskListParams
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
-import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,
@@ -125,23 +125,5 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     }
   }),
 
-  defineOrchestrationMethod({
-    name: 'orchestration.taskUpdate',
-    permission: 'workspace',
-    params: TaskUpdateParams,
-    access: {
-      kind: 'writes',
-      caller: 'callerTerminalHandle',
-      targets: { id: 'task', run: 'run' },
-      rule: taskUpdateAccess
-    },
-    handler: (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      const task = db.updateTaskStatus(params.id, params.status, params.result)
-      if (!task) {
-        throw new Error(`Task not found: ${params.id}`)
-      }
-      return { task }
-    }
-  })
+  ORCHESTRATION_TASK_UPDATE_METHOD
 ]

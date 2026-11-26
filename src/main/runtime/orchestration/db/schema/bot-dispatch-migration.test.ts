@@ -71,6 +71,8 @@ describe('v47-v48 bot dispatch migrations', () => {
     try {
       expect(db.db.pragma('user_version', { simple: true })).toBe(52)
       expect(db.hasColumn('dispatch_contexts', 'chat_lineage')).toBe(true)
+      expect(db.hasColumn('tasks', 'progress_note')).toBe(true)
+      expect(db.hasColumn('tasks', 'progress_updated_at')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'progress_note')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'progress_updated_at')).toBe(true)
       expect(TAKE_COLUMNS.filter(([table, column]) => !db.hasColumn(table, column))).toEqual([])

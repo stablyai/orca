@@ -58,7 +58,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { from: 'caller' },
     repeatableFlags: ['file'],
     notes: [
-      'orchestration send always wakes the recipient (except internal --type heartbeat). Use send only when the recipient needs to act, answer, or change course (blocker/concern, new owner rule, lane to rerun, PR/task ready, question, handoff, or worker_done). Never send routine progress updates ("committed fix, checks running", "round 2 running", play-by-play receipts) via send; record passive worker progress with `orca orchestration progress --note "<text>"` instead.',
+      'send = always wakes the recipient; task-update --note = passive, never wakes.',
+      'Use send only when the recipient needs to act, answer, or change course (blocker/concern, new owner rule, lane to rerun, PR/task ready, question, handoff, or worker_done). Never send routine progress updates ("committed fix, checks running", "round 2 running", play-by-play receipts) via send; record passive worker progress with `orca orchestration task-update --note "<text>"` instead.',
       'Valid --type values: status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat.',
       'To answer a worker question, use orchestration reply --id <msg_id> --body <text> with the same Orca CLI executable.',
       'Group addresses (@all, @idle, @codex, ...) reach the live Dispatches of your own Run; a sender in no Run must use run:<id> or dispatch:<id>. @worktree:<id> names one workspace.',
@@ -168,13 +169,26 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'task-update'],
-    summary: 'Update a task status',
+    summary: 'Update a task status or record a passive worker note',
     usage:
-      'orca orchestration task-update --id <task_id> --status <status> [--result <text>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result', 'run', 'from', 'retry-request'],
+      'orca orchestration task-update [--id <task_id>] [--status <status>] [--result <text>] [--note <text> | --note-file <path|->] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'id',
+      'status',
+      'result',
+      'note',
+      'note-file',
+      'run',
+      'from',
+      'dispatch-capability',
+      'retry-request'
+    ],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
+      'send = always wakes the recipient; task-update --note = passive, never wakes.',
+      "With no --id, targets the caller's own active worker task/Dispatch; a worker's --note-only call never changes task status, never inserts coordinator mail, and never wakes anyone (<= 500 characters).",
+      'Valid --status values: pending, ready, dispatched, completed, failed, blocked. --note can combine with --status; workers are refused if --id names a task they do not own.',
       'To cancel a Task, stop or abandon its worker, then set --status failed --result cancelled; a later worker-start --retry-of reopens it.'
     ]
   },

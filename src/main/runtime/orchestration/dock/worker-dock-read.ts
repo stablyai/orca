@@ -1,4 +1,5 @@
 export { workerDockSession } from './worker-dock-source'
+import { workerRowTitle } from '../workers/identity/worker-identity'
 import { workerDockSession } from './worker-dock-source'
 export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
@@ -161,7 +162,7 @@ export function readWorkerDock(
         ? db.db
             .prepare(`SELECT f.dispatch_id, f.source, f.changed_at, f.report_id, f.reason,
       w.start_options, w.created_at, w.last_error, w.state,
-      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, d.progress_note, COALESCE(t.task_title, t.spec) AS title, t.display_name
+      EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS remote, d.last_failure, d.progress_note, t.task_title, t.spec, t.display_name
       FROM json_each(?) selected CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value
       CROSS JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
       CROSS JOIN dispatch_contexts d ON d.id = f.dispatch_id CROSS JOIN tasks t ON t.id = d.task_id`)
@@ -180,7 +181,7 @@ export function readWorkerDock(
         ...identity,
         source,
         name: row.display_name ?? launch.name ?? launch.agent ?? 'Worker',
-        title: row.title,
+        title: workerRowTitle(row),
         model: workerLaunchModel(launch.launch),
         changedAt: identity.changedAt,
         startedAt: epoch(row.created_at),
@@ -238,7 +239,7 @@ export function readWorkerDockResult(
   const row = db.db
     .prepare(`SELECT f.dispatch_id, f.report_id, f.settlement, f.changed_at, f.state, w.last_error, d.last_failure,
     NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS owner_actions_available,
-    COALESCE(t.task_title, t.spec) AS title, t.display_name,
+    t.task_title, t.spec, t.display_name,
     COALESCE(w.worktree_id, (SELECT r.worktree_id FROM worker_terminal_resources r WHERE r.owner_dispatch_id = f.dispatch_id LIMIT 1)) AS workspace_id, w.start_options, m.body, m.payload, accepted.payload AS accepted_payload,
     EXISTS(SELECT 1 FROM worker_dock_acknowledgments a WHERE a.source = f.source
       AND a.dispatch_id = f.dispatch_id AND a.settlement = f.settlement) AS acknowledged
@@ -281,7 +282,7 @@ export function readWorkerDockResult(
       launchOptions(row.start_options).name ??
       launchOptions(row.start_options).agent ??
       'Worker',
-    title: row.title,
+    title: workerRowTitle(row),
     outcome,
     body: row.body ?? (stopped ? '' : failureReason),
     report: typeof row.body === 'string',

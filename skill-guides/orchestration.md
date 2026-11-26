@@ -21,12 +21,12 @@ description: >-
 
 If your prompt has a preamble with Task and Dispatch IDs, you are a worker:
 follow the preamble. To ask your coordinator, run `ask`, then end your turn;
-Orca wakes you with the answer. `ORCA orchestration send` always wakes its
-recipient: use it only when the coordinator must act, answer, or change course,
+Orca wakes you with the answer. `send` = always wakes the recipient; `task-update --note` = passive, never wakes.
+Use `ORCA orchestration send` only when the coordinator must act, answer, or change course,
 or for your final `worker_done` — never mail routine progress updates
-("committed fix, checks running", "round 2 running", play-by-play receipts) via
-`send`. Record passive live progress without waking anyone via
-`ORCA orchestration progress --note "<status>"`. To hand work off with nothing
+("committed fix, checks running", "round 2 running", play-by-play receipts) via `send`.
+Record passive live progress without waking anyone via
+`ORCA orchestration task-update --note "<status>"`. To hand work off with nothing
 back, use `orca-cli`.
 When you report your effort, take it from the dispatch's `--effort` or your process
 argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 scale

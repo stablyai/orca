@@ -275,6 +275,8 @@ export type TaskRow = {
   status: TaskStatus
   deps: string
   result: string | null
+  progress_note: string | null
+  progress_updated_at: string | null
   created_at: string
   completed_at: string | null
 }
@@ -316,7 +318,7 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
-  /** Concise passive progress note set by `orchestration progress`; never mailed. */
+  /** Concise passive progress note set by `orchestration task-update --note`; never mailed. */
   progress_note: string | null
   progress_updated_at: string | null
   /** The settled Dispatch whose worker this follow-up continues. */

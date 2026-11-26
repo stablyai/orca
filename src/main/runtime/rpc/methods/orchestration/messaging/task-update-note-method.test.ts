@@ -12,7 +12,7 @@ const WORKER_PANE = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const OTHER_WORKER_HANDLE = 'term_other'
 const OTHER_WORKER_PANE = 'tab_other:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
-describe('orchestration.progress passive worker status', () => {
+describe('orchestration.taskUpdate passive --note and ownership contract', () => {
   const harness = createOrchestrationRpcHarness()
   afterEach(() => harness.cleanup())
 
@@ -20,7 +20,7 @@ describe('orchestration.progress passive worker status', () => {
     state: ReturnType<typeof harness.setup>,
     handle = WORKER_HANDLE,
     paneKey = WORKER_PANE,
-    spec = 'Implement passive progress'
+    spec = '# Implement passive task notes\n\nDetails that stay out of the dock title.'
   ) {
     if (!isOrcaSessionId(CREATOR_SESSION)) {
       throw new Error('Expected valid creator session UUID')
@@ -45,7 +45,7 @@ describe('orchestration.progress passive worker status', () => {
     return { task, dispatch }
   }
 
-  it('updates workerShow, sessionWorkers, and workerDock without inserting mail or waking recipients, while send --type status still wakes', async () => {
+  it('records passive worker notes on its own active task without changing status, mailing, or waking, while send --type status still wakes', async () => {
     const state = harness.setup()
     const { db, runtime, ctx, activeRunId } = state
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -61,37 +61,47 @@ describe('orchestration.progress passive worker status', () => {
     })
 
     const { task, dispatch } = startSupervisedWorker(state)
+    // Simulate a legacy/raw task with null task_title so worker-dock title normalization is exercised too.
+    db.db.prepare('UPDATE tasks SET task_title = NULL WHERE id = ?').run(task.id)
+
+    expect(() => harness.findMethod('orchestration.progress')).toThrow(/Method not found/)
 
     const firstReceipt = await harness.call(
-      'orchestration.progress',
-      { from: WORKER_HANDLE, note: '  round 1 checks green  ' },
+      'orchestration.taskUpdate',
+      { callerTerminalHandle: WORKER_HANDLE, note: '  round 1 checks green  ' },
       ctx
     )
     expect(firstReceipt).toMatchObject({
+      task: { id: task.id, status: 'dispatched', progress_note: 'round 1 checks green' },
       dispatchId: dispatch.id,
-      taskId: task.id,
-      runId: activeRunId,
-      note: 'round 1 checks green'
+      progressNote: 'round 1 checks green'
     })
 
+    // Worker can also combine --note with explicit own --id and matching --status dispatched without changing status.
     const replacedReceipt = await harness.call(
-      'orchestration.progress',
-      { from: WORKER_HANDLE, dispatchId: dispatch.id, note: 'round 2 running on PR #42' },
+      'orchestration.taskUpdate',
+      {
+        id: task.id,
+        status: 'dispatched',
+        callerTerminalHandle: WORKER_HANDLE,
+        note: 'round 2 running on PR #49416'
+      },
       ctx
     )
     expect(replacedReceipt).toMatchObject({
+      task: { id: task.id, status: 'dispatched', progress_note: 'round 2 running on PR #49416' },
       dispatchId: dispatch.id,
-      note: 'round 2 running on PR #42'
+      progressNote: 'round 2 running on PR #49416'
     })
 
-    // Passive progress never writes coordinator mail and never triggers notifyMessageArrived.
+    // Passive task-update --note never inserts coordinator mail and never triggers notifyMessageArrived.
     expect(db.db.prepare('SELECT COUNT(*) AS count FROM messages').get()).toEqual({ count: 0 })
     expect(wakes).toEqual([])
 
     const shown = await harness.call('orchestration.workerShow', { dispatch: dispatch.id }, ctx)
     expect(shown).toMatchObject({
       dispatch: {
-        progressNote: 'round 2 running on PR #42',
+        progressNote: 'round 2 running on PR #49416',
         progressUpdatedAt: expect.any(String)
       }
     })
@@ -102,13 +112,45 @@ describe('orchestration.progress passive worker status', () => {
       ctx
     )
     expect(sessionWorkers).toMatchObject({
-      workers: [{ dispatchId: dispatch.id, progressNote: 'round 2 running on PR #42' }]
+      workers: [{ dispatchId: dispatch.id, progressNote: 'round 2 running on PR #49416' }]
+    })
+
+    const listed = await harness.call('orchestration.taskList', {}, ctx)
+    expect(listed).toMatchObject({
+      tasks: [{ id: task.id, status: 'dispatched', progress_note: 'round 2 running on PR #49416' }]
     })
 
     const dockWhileRunning = readWorkerDock(db, { party: CREATOR_PARTY, direction: 'around' })
     expect(dockWhileRunning.rows).toMatchObject([
-      { dispatchId: dispatch.id, progressNote: 'round 2 running on PR #42' }
+      {
+        dispatchId: dispatch.id,
+        title: 'Implement passive task notes',
+        progressNote: 'round 2 running on PR #49416'
+      }
     ])
+
+    // Coordinator can combine --status and --note on an unstarted task in its Run without waking anyone.
+    const pendingTask = db.createTask({ spec: 'Follow-up cleanup' })
+    const coordCombined = await harness.call(
+      'orchestration.taskUpdate',
+      {
+        id: pendingTask.id,
+        status: 'blocked',
+        note: 'waiting on upstream release',
+        callerTerminalHandle: 'term_coord'
+      },
+      ctx
+    )
+    expect(coordCombined).toMatchObject({
+      task: {
+        id: pendingTask.id,
+        status: 'blocked',
+        progress_note: 'waiting on upstream release'
+      },
+      progressNote: 'waiting on upstream release'
+    })
+    expect(wakes).toEqual([])
+    expect(db.db.prepare('SELECT COUNT(*) AS count FROM messages').get()).toEqual({ count: 0 })
 
     // Existing send --type status keeps its wake behavior unchanged for genuine one-way alerts.
     await harness.call(
@@ -117,7 +159,7 @@ describe('orchestration.progress passive worker status', () => {
         from: WORKER_HANDLE,
         to: `run:${activeRunId}`,
         type: 'status',
-        subject: 'PR #42 ready for merge',
+        subject: 'PR #49416 ready for merge',
         body: 'All required checks passed.'
       },
       ctx
@@ -126,7 +168,7 @@ describe('orchestration.progress passive worker status', () => {
     expect(db.db.prepare('SELECT COUNT(*) AS count FROM messages').get()).toEqual({ count: 1 })
   })
 
-  it('enforces the 500-character bound and rejects empty notes without mutating dispatch state', async () => {
+  it('enforces the 500-character bound and rolls back atomic --status + --note refusals', async () => {
     const state = harness.setup()
     const { db, runtime, ctx } = state
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -136,34 +178,56 @@ describe('orchestration.progress passive worker status', () => {
           ? WORKER_PANE
           : null
     )
-    const { dispatch } = startSupervisedWorker(state)
+    const { task, dispatch } = startSupervisedWorker(state)
 
     const maxNote = 'x'.repeat(500)
     await expect(
-      harness.call('orchestration.progress', { from: WORKER_HANDLE, note: maxNote }, ctx)
+      harness.call(
+        'orchestration.taskUpdate',
+        { callerTerminalHandle: WORKER_HANDLE, note: maxNote },
+        ctx
+      )
     ).resolves.toMatchObject({
       dispatchId: dispatch.id,
-      note: maxNote
+      progressNote: maxNote
     })
 
     expect(() =>
-      harness.findMethod('orchestration.progress').params?.parse({
-        from: WORKER_HANDLE,
+      harness.findMethod('orchestration.taskUpdate').params?.parse({
+        callerTerminalHandle: WORKER_HANDLE,
         note: 'x'.repeat(501)
       })
     ).toThrow(/at most 500 characters/)
 
     expect(() =>
-      harness.findMethod('orchestration.progress').params?.parse({
-        from: WORKER_HANDLE,
+      harness.findMethod('orchestration.taskUpdate').params?.parse({
+        callerTerminalHandle: WORKER_HANDLE,
         note: '   '
       })
-    ).toThrow(/Missing --note/)
+    ).toThrow(/--note cannot be empty/)
+
+    expect(() =>
+      harness.findMethod('orchestration.taskUpdate').params?.parse({
+        id: task.id
+      })
+    ).toThrow(/Choose --status, --note, or both/)
+
+    // A worker trying to settle its own task via --status completed + --note is refused atomically without overwriting progress_note.
+    await expect(
+      harness.call(
+        'orchestration.taskUpdate',
+        { callerTerminalHandle: WORKER_HANDLE, status: 'completed', note: 'must not persist' },
+        ctx
+      )
+    ).rejects.toMatchObject({
+      code: 'task_not_startable'
+    })
 
     expect(db.getDispatchContextById(dispatch.id)?.progress_note).toBe(maxNote)
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
-  it('rejects callers outside an active worker Dispatch and cross-worker dispatchId claims', async () => {
+  it('refuses workers targeting unowned task --id, inactive dispatches, and legacy remote attachments', async () => {
     const state = harness.setup()
     const { db, runtime, ctx } = state
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => {
@@ -183,26 +247,35 @@ describe('orchestration.progress passive worker status', () => {
     const first = startSupervisedWorker(state, WORKER_HANDLE, WORKER_PANE, 'Task A')
     const second = startSupervisedWorker(state, OTHER_WORKER_HANDLE, OTHER_WORKER_PANE, 'Task B')
 
-    // Coordinator has no active worker Dispatch and gets clear guidance distinguishing send.
-    await expect(
-      harness.call('orchestration.progress', { from: 'term_coord', note: 'coordinating' }, ctx)
-    ).rejects.toMatchObject({
-      code: 'dispatch_inactive',
-      message: expect.stringContaining('orca orchestration send')
-    })
-
-    // Worker A cannot write progress onto Worker B's active Dispatch.
+    // Coordinator without an active worker Dispatch must supply --id.
     await expect(
       harness.call(
-        'orchestration.progress',
-        { from: WORKER_HANDLE, dispatchId: second.dispatch.id, note: 'wrong target' },
+        'orchestration.taskUpdate',
+        { callerTerminalHandle: 'term_coord', note: 'coordinating' },
         ctx
       )
     ).rejects.toMatchObject({
-      code: 'sender_not_assignee'
+      code: 'dispatch_inactive',
+      message: expect.stringContaining('pass --id <task_id>')
     })
 
-    // Settled worker cannot record passive progress after worker_done.
+    // Worker A cannot target Worker B's task via --id.
+    await expect(
+      harness.call(
+        'orchestration.taskUpdate',
+        {
+          id: second.task.id,
+          callerTerminalHandle: WORKER_HANDLE,
+          note: 'wrong task target'
+        },
+        ctx
+      )
+    ).rejects.toMatchObject({
+      code: 'sender_not_assignee',
+      message: expect.stringContaining(`owns active task ${first.task.id}, not ${second.task.id}`)
+    })
+
+    // Settled worker cannot record passive notes after worker_done, nor target another task.
     await harness.call(
       'orchestration.send',
       {
@@ -219,9 +292,22 @@ describe('orchestration.progress passive worker status', () => {
       ctx
     )
     await expect(
-      harness.call('orchestration.progress', { from: WORKER_HANDLE, note: 'late note' }, ctx)
+      harness.call(
+        'orchestration.taskUpdate',
+        { callerTerminalHandle: WORKER_HANDLE, note: 'late note' },
+        ctx
+      )
     ).rejects.toMatchObject({
       code: 'dispatch_inactive'
+    })
+    await expect(
+      harness.call(
+        'orchestration.taskUpdate',
+        { id: second.task.id, callerTerminalHandle: WORKER_HANDLE, note: 'other task after done' },
+        ctx
+      )
+    ).rejects.toMatchObject({
+      code: 'sender_not_assignee'
     })
 
     // Legacy remote-attached panes reject instead of returning an unstored receipt.
@@ -241,8 +327,8 @@ describe('orchestration.progress passive worker status', () => {
       )
     await expect(
       harness.call(
-        'orchestration.progress',
-        { from: OTHER_WORKER_HANDLE, note: 'remote note' },
+        'orchestration.taskUpdate',
+        { callerTerminalHandle: OTHER_WORKER_HANDLE, note: 'remote note' },
         ctx
       )
     ).rejects.toMatchObject({
@@ -251,7 +337,7 @@ describe('orchestration.progress passive worker status', () => {
     expect(db.getDispatchContextById(second.dispatch.id)?.progress_note).toBeNull()
   })
 
-  it('keeps send wake-only and documents passive progress in worker and bot preambles', () => {
+  it('states the send vs task-update --note wake rule in worker and bot preambles', () => {
     const workerPreamble = buildDispatchPreamble({
       taskId: 'task_1',
       dispatchId: 'ctx_1',
@@ -259,10 +345,13 @@ describe('orchestration.progress passive worker status', () => {
       coordinatorHandle: 'orca_session_id:c2dfa8cd-83ba-4e20-82f9-373cb960ae39',
       workerHandle: 'orca_session_id:02526aea-9198-4034-9fad-99aae5dab8ec'
     })
-    expect(workerPreamble).toContain('`orca orchestration send` always wakes its recipient')
     expect(workerPreamble).toContain(
-      'orca orchestration progress --from orca_session_id:02526aea-9198-4034-9fad-99aae5dab8ec --note "<concise live status>"'
+      'send = always wakes the recipient; task-update --note = passive, never wakes.'
     )
+    expect(workerPreamble).toContain(
+      'orca orchestration task-update --from orca_session_id:02526aea-9198-4034-9fad-99aae5dab8ec --note "<concise live status>"'
+    )
+    expect(workerPreamble).not.toContain('orchestration progress')
 
     const botPreamble = buildBotPreamble({
       name: 'CoordinatorBot',
@@ -270,7 +359,7 @@ describe('orchestration.progress passive worker status', () => {
       soul: null,
       memory: null
     })
-    expect(botPreamble).toContain('orchestration send` always wakes the recipient')
-    expect(botPreamble).toContain('Never send routine progress updates')
+    expect(botPreamble).toContain('`task-update --note` = passive, never wakes')
+    expect(botPreamble).toContain('never send routine progress updates')
   })
 })
