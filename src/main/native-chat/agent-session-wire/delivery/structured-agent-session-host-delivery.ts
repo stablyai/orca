@@ -9,6 +9,7 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-
 import {
   openStructuredAgentSessionConversation,
   resettleOpenStructuredAgentSessionConversation,
+  settleGoneStructuredAgentSessionGeneration,
   type OpenedStructuredAgentSessionConversation,
   type StructuredAgentSessionConversationOpenOptions
 } from '../host/structured-agent-session-conversation-open'
@@ -38,6 +39,7 @@ import {
   retireStructuredAgentSessionChildOnOtherAccount
 } from './structured-agent-session-outgrown-retirement'
 import { closeWhatTheUserClosed } from '../structured-agent-session-user-closed-sends'
+import { reconcileStructuredAgentSessionKeptAtOpen } from '../host/structured-agent-session-kept-at-open'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionStopEnding } from '../termination/structured-agent-session-host-stop-event'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
@@ -201,6 +203,24 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   ): Promise<void> => {
     sessions.set(sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
+    void input
+      .trackStart(
+        reconcileStructuredAgentSessionKeptAtOpen(sessionId, () =>
+          input.serialize(sessionId, async () => {
+            const open = sessions.get(sessionId)
+            if (open === session && !open.child) {
+              await settleGoneStructuredAgentSessionGeneration(deps, sessionId, open)
+            }
+          })
+        )
+      )
+      .catch((error: unknown) =>
+        deps.logger.warn('settling a chat whose agent turned out not kept failed', {
+          scope: 'kept-open-reconcile',
+          sessionId,
+          error
+        })
+      )
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
     if (

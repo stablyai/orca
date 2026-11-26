@@ -274,7 +274,7 @@ export async function recheckKeptProviderRelay(
 }
 
 /** Only ESRCH proves absence; "can't tell" keeps the agent. */
-function processProvenGone(pid: number): boolean {
+export function processProvenGone(pid: number): boolean {
   try {
     process.kill(pid, 0)
     return false
