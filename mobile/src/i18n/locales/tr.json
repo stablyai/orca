@@ -3400,9 +3400,7 @@
       "loading": "Belge yükleniyor…"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}} beceri mevcut",
       "commands": "Komutlar",
-      "fileTypes": "PDF, metin, kod…",
       "files": "Dosyalar",
       "photos": "Fotoğraflar",
       "skills": "Beceriler",

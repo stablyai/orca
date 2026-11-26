@@ -2525,9 +2525,7 @@
       "readOnly": "읽기 전용"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}}개 사용 가능",
       "commands": "명령어",
-      "fileTypes": "PDF, 텍스트, 코드…",
       "files": "파일",
       "photos": "사진",
       "skills": "스킬",

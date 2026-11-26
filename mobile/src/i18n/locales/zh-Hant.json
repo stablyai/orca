@@ -2344,9 +2344,7 @@
       "readOnly": "唯讀"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}} 項可用",
       "commands": "命令",
-      "fileTypes": "PDF、文字、程式碼…",
       "files": "檔案",
       "photos": "照片",
       "skills": "技能",

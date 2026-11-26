@@ -3614,9 +3614,7 @@
       "loading": "Загрузка документа…"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Доступно: {{count}}",
       "commands": "Команды",
-      "fileTypes": "PDF, текст, код…",
       "files": "Файлы",
       "photos": "Фото",
       "skills": "Навыки",

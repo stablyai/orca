@@ -2746,10 +2746,8 @@
     "nativeChatAttachActions": {
       "photos": "Photos",
       "files": "Files",
-      "fileTypes": "PDF, text, code…",
       "workspaceFile": "Workspace file",
       "skills": "Skills",
-      "availableSkills": "{{count}} available",
       "commands": "Commands",
       "plan": "Plan first",
       "goal": "Set a goal"

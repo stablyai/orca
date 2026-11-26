@@ -2346,9 +2346,7 @@
       "readOnly": "読み取り専用"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}} 件が利用可能",
       "commands": "コマンド",
-      "fileTypes": "PDF、テキスト、コード…",
       "files": "ファイル",
       "photos": "写真",
       "skills": "スキル",
