@@ -1,4 +1,5 @@
 // Share detached Vite/headless Chromium between fixtures-shot.mjs and the fixtures MCP server.
+import { existsSync, rmSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
@@ -187,7 +188,13 @@ async function exitAfterBrowser(browserPromise, code) {
   const child = (await browserPromise.catch(() => null))?.server.process()
   if (child) {
     while (child.exitCode === null && child.signalCode === null) {
-      await child.kill('SIGKILL')
+      try {
+        // Why process.kill: child.kill() marks the child killed, which makes Playwright's own
+        // exit-time cleanup skip it. On POSIX the browser leads its own process group.
+        process.kill(process.platform === 'win32' ? child.pid : -child.pid, 'SIGKILL')
+      } catch {
+        child.kill('SIGKILL')
+      }
       await delay(100)
     }
   }
@@ -221,16 +228,42 @@ async function main() {
     // Why: a successor waits for this process to exit, so teardown cannot hang.
     setTimeout(() => void exitAfterBrowser(browserPromise, 0), STOP_GRACE_MS).unref()
     // Leave the last endpoint for the client to probe. A successor may already own it.
-    await (await browserPromise.catch(() => null))?.server.close()
-    await (await vitePromise.catch(() => null))?.close()
-    process.exit(0)
+    try {
+      await (await browserPromise.catch(() => null))?.server.close()
+      await (await vitePromise.catch(() => null))?.close()
+    } catch (error) {
+      console.error(`[fixtures] stop failed: ${error?.stack ?? error}`)
+    }
+    await exitAfterBrowser(browserPromise, 0)
   }
   session.stop = () => void stop()
   // Signals are ours from launch on, so cancelling a startup runs the same teardown as stop.
-  for (const signal of ['SIGINT', 'SIGTERM']) {
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.on(signal, session.stop)
   }
-  const ownSigterm = process.listeners('SIGTERM')
+  // Why: Vite adds SIGTERM and stdin-end handlers that exit before the browser is closed. It
+  // adds them before createServer resolves and again on every restart, so for this process's
+  // whole life drop any foreign one as soon as it is added ('newListener' fires before the add).
+  process.on('newListener', (event, listener) => {
+    if (event === 'SIGTERM' && listener !== session.stop) {
+      queueMicrotask(() => process.off('SIGTERM', listener))
+    }
+  })
+  process.stdin.on('newListener', (event, listener) => {
+    if (event === 'end') {
+      queueMicrotask(() => process.stdin.off('end', listener))
+    }
+  })
+  // Why a file: on Windows a client cannot signal this process into its teardown, so a client
+  // that gives up on it asks through this file instead (POSIX clients also send SIGTERM).
+  const cancelPath = path.join(fixtureCacheDir, `cancel-${process.pid}`)
+  rmSync(cancelPath, { force: true })
+  setInterval(() => {
+    if (existsSync(cancelPath)) {
+      rmSync(cancelPath, { force: true })
+      session.stop()
+    }
+  }, 200).unref()
   vitePromise = createViteServer({
     configFile: 'config/vite.fixtures.config.ts',
     clearScreen: false,
@@ -240,13 +273,6 @@ async function main() {
     plugins: [createFixtureApiPlugin(session)]
   })
   const vite = await vitePromise
-  // Why: Vite's own SIGTERM and stdin-end handler exits before the browser is closed.
-  for (const listener of process.listeners('SIGTERM')) {
-    if (!ownSigterm.includes(listener)) {
-      process.off('SIGTERM', listener)
-    }
-  }
-  process.stdin.removeAllListeners('end')
   await vite.listen()
   const { browser } = await browserPromise
   // Never publish a server that is stopping or whose browser is already gone.

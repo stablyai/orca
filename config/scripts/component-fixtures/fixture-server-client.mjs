@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
-import { closeSync, openSync, readFileSync } from 'node:fs'
+import { closeSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import {
   fixtureCacheDir,
@@ -168,7 +169,11 @@ export async function ensureFixtureServer({ onStart } = {}) {
   } finally {
     if (child && child.pid !== readyPid && child.exitCode === null && child.signalCode === null) {
       // Why: a server this call started but is not returning holds, or waits for, the guard.
-      child.kill()
+      // The file asks it to run its own teardown; on Windows kill() would skip that teardown.
+      writeFileSync(path.join(fixtureCacheDir, `cancel-${child.pid}`), '')
+      if (process.platform !== 'win32') {
+        child.kill()
+      }
     }
     startLock?.release()
   }
