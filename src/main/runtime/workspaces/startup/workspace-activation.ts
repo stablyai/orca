@@ -28,7 +28,7 @@ import {
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
-import { SETUP_AGENT_STARTED } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { SETUP_AGENT_GATE } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { waitForWorktreeSetupGate } from './worktree-setup-gate'
 import {
   provisionWorktreeTerminals,
@@ -288,7 +288,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
-    const gate = options?.terminalCreation?.[SETUP_AGENT_STARTED]
+    const gate = options?.terminalCreation?.[SETUP_AGENT_GATE]?.started
     if (options?.awaitSetupGate || gate) {
       const ptyId = host.getPtyId(handle)
       if (!ptyId) {

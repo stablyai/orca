@@ -7,7 +7,7 @@ import { generatedSetupStartupCommand } from '../../workspaces/startup/worktree-
 import { type PaneStartArgsOf, spawnInAdmittedPane } from './runtime-pane-admission'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import {
-  SETUP_AGENT_STARTED,
+  SETUP_AGENT_GATE,
   type RuntimeTerminalCreate
 } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
@@ -248,7 +248,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithCreat
           const standing = spawnSurfaceClaimSequence(this.graphSequence)
           recordPtySurface(this.terminalIdentity, pty, tabId, paneKey, standing)
         }
-        const setupAgentStarted = pty
+        const setupAgentGate = pty
           ? this.recordCreatedTerminalLaunch(pty, result, launch, launchOpts, gatedStartup)
           : undefined
         if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
@@ -285,7 +285,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithCreat
         const { surface, warning } = reveal instanceof Promise ? await reveal : reveal
         return {
           ...terminalLaunchPublicFacts(result, launch.adoptedStablePane, pty),
-          ...(setupAgentStarted ? { [SETUP_AGENT_STARTED]: setupAgentStarted } : {}),
+          [SETUP_AGENT_GATE]: setupAgentGate,
           handle,
           savedStartupCwd,
           tabId,

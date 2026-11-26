@@ -13,7 +13,11 @@ import {
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
 import { invalidateExactLoginShellEnvironments } from '../startup/shell-environment/login-shell-environment'
-import type { InventorySlot } from './agent-command-inventory'
+import {
+  currentInventoryPublication,
+  readInventory,
+  type InventorySlot
+} from './agent-command-inventory'
 import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -101,4 +105,66 @@ export function qualifyProgram(
   return winner && !isOrcaAgentRuntimePath(winner)
     ? { kind: 'by-name', path: winner }
     : { kind: 'full-path', path: match.user }
+}
+
+export type TerminalAgentProgramSelection = { program: string; result: TerminalAgentProgram }
+
+export async function selectWslTerminalAgentProgram(
+  target: WslPreflightTarget,
+  programs: readonly [string, ...string[]],
+  options: {
+    refresh?: boolean
+    pinForSetup?: boolean
+    revalidateUnavailable?: boolean
+    onWslDistroSelected?: (distro: string) => void
+  },
+  signal: AbortSignal
+): Promise<TerminalAgentProgramSelection> {
+  const slot = await wslInventory(target, signal)
+  if (slot) {
+    await readInventory(slot, programs, options.refresh ? 'revalidate' : 'read', {
+      acceptAnyMatch: true,
+      revalidateUnavailable: options.revalidateUnavailable,
+      waitForCompletion: true
+    }).wait(signal)
+    const inventory = currentInventoryPublication(slot, 'complete')?.inventory
+    if (inventory) {
+      let inconclusive = false
+      for (const program of programs) {
+        if (!inventory.probed.has(program)) {
+          inconclusive = true
+          continue
+        }
+        if (!inventory.found.has(program)) {
+          continue
+        }
+        const match = inventory.matches.get(program)
+        if (!match?.first || !match.user) {
+          return { program, result: { kind: 'unknown' } }
+        }
+        if (slot.distro) {
+          options.onWslDistroSelected?.(slot.distro)
+        }
+        return {
+          program,
+          result: options.pinForSetup
+            ? { kind: 'full-path', path: match.first, canonicalPath: match.user }
+            : { kind: 'by-name', path: program }
+        }
+      }
+      return { program: programs[0], result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
+    }
+  }
+  return { program: programs[0], result: { kind: 'unknown' } }
+}
+
+export function readPublishedLocalTerminalAgentProgram(
+  program: string,
+  shell: AgentStartupShell
+): TerminalAgentProgram {
+  const inventory = currentInventoryPublication(getLocalInventory())?.inventory
+  return qualifyProgram(
+    inventory?.probed.has(program) ? inventory.matches.get(program) : undefined,
+    shell
+  )
 }

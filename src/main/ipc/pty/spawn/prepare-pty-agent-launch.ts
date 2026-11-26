@@ -137,7 +137,7 @@ export async function preparePtyAgentLaunch(
     env,
     shell,
     connectionId,
-    executableUnverified: postSetupProgram !== undefined && postSetupProgram.path === undefined
+    postSetupProgram
   })
   const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const viewedCommand =
@@ -154,7 +154,6 @@ export async function preparePtyAgentLaunch(
   let agentCommand = rootLaunch?.command ?? viewedCommand
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
   let prepared = agentCommand
-  const unsentRequest = env[SETUP_AGENT_NOTICE_ENV]
   if (sequenced) {
     delete env[SETUP_AGENT_NOTICE_ENV]
     delete env[SETUP_AGENT_RECHECK_ENV]
@@ -169,13 +168,14 @@ export async function preparePtyAgentLaunch(
     env[SETUP_AGENT_RECHECK_ENV] = buildSetupAgentRecheck(postSetupProgram.path, shell)
     env[SETUP_AGENT_NOTICE_ENV] = setupAgentBlockedNotice(
       TUI_AGENT_DISPLAY_NAMES[postSetupProgram.agent],
-      unsentRequest,
       getRuntimeDesktopSurface().translateNotification
     )
     if (input.codexRuntime === 'wsl') {
       addSetupAgentWslInteropEnv(env)
     }
-    if (prepared && postSetupProgram.path && !rebuiltHermesQuery) {
+    if (!postSetupProgram.path) {
+      prepared = undefined
+    } else if (prepared && !rebuiltHermesQuery) {
       prepared = await preparePostSetupCommand(prepared, postSetupProgram, shell, images)
     }
   } else if (

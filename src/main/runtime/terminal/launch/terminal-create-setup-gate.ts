@@ -1,3 +1,7 @@
+import type {
+  RuntimeTerminalCreate,
+  SETUP_AGENT_GATE
+} from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { recordAgentStartTelemetry } from '../../../ipc/pty/pane/spawn-telemetry'
 import { waitForWorktreeSetupGate } from '../../workspaces/startup/worktree-setup-gate'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -15,7 +19,7 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
     launch: ReturnType<typeof resolveTerminalLaunchResult>,
     opts: TerminalCreateOptions,
     gatedStartup: string | undefined
-  ): Promise<boolean> | undefined {
+  ): RuntimeTerminalCreate[typeof SETUP_AGENT_GATE] {
     const record = (command: string | undefined): void => {
       this.watchLaunchedAgent(pty, recordTerminalLaunchMetadata(pty, result, launch, command))
       if (!launch.adoptedStablePane) {
@@ -29,7 +33,7 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
       result.agentResumeRefused
     ) {
       record(opts.command)
-      return undefined
+      return gatedStartup ? { started: Promise.resolve(false), verified: false } : undefined
     }
     const signal = this.getPtyLifecycleSignal(pty.ptyId)
     const gate = waitForWorktreeSetupGate(this.getWorktreeStartupReadinessHost(), pty.ptyId, signal)
@@ -43,6 +47,6 @@ export abstract class OrcaRuntimeWithCreateTerminalSetupGate extends OrcaRuntime
         }
       })
       .catch(console.warn)
-    return gate
+    return { started: gate, verified: Boolean(result.launchConfig?.selectedExecutable) }
   }
 }

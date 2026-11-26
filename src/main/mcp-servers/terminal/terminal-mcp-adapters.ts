@@ -270,8 +270,11 @@ export function terminalMcpExecutable(
   if (!parsed.ok) {
     return null
   }
-  const index = findAgentExecutableIndex(parsed.tokens, launch.shell, (token) =>
-    isAgentExecutableToken(token, adapter.executables)
+  const index = findAgentExecutableIndex(
+    parsed.tokens,
+    launch.shell,
+    (token) =>
+      token === launch.verifiedExecutable || isAgentExecutableToken(token, adapter.executables)
   )
   if (index < 0) {
     return null

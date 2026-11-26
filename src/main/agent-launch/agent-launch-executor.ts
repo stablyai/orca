@@ -18,7 +18,6 @@ import {
   argvLaunchPrompt,
   launchPromptCreateInputs,
   deliverTerminalLaunchPrompt,
-  HANDED_TO_TERMINAL,
   promptReceipt,
   settledAtCreation,
   settleLaunchPromptDisposal
@@ -111,35 +110,31 @@ export async function openAgentLaunch(
   try {
     placed = await resolveWorkspace(execution, preflight, launch?.onWorkspaceCreated)
     if (placed.startupTerminalHandle) {
-      const startup = published(execution, {
+      const created: CreatedSurface = {
         outcome: {
           kind: 'terminal',
           handle: placed.startupTerminalHandle,
           ...(placed.startupTerminalPaneKey ? { paneKey: placed.startupTerminalPaneKey } : {})
         },
+        terminalCreation: placed.startupTerminalCreation,
+        promptRodeLaunchCommand: placed.promptRodeLaunchCommand
+      }
+      const startup = published(execution, {
+        outcome: created.outcome,
         worktreeId: placed.worktreeId,
         receipt: preflight,
         ...createdWorkspaceReport(placed),
-        ...promptReceipt(intent, settledAtCreation(intent, placed))
+        ...promptReceipt(intent, settledAtCreation(intent, created))
       })
       surfacePublished = true
       launch?.release()
-      const { startupTerminalHandle, startupTerminalCreation, promptRodeLaunchCommand } = placed
       return opening(
         startup,
         async () => ({
           ...startup,
-          ...promptReceipt(
-            intent,
-            promptRodeLaunchCommand
-              ? HANDED_TO_TERMINAL
-              : await deliverTerminalLaunchPrompt(execution, startupTerminalHandle, {
-                  freshLaunch: true,
-                  terminalCreation: startupTerminalCreation
-                })
-          )
+          ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
         }),
-        startupTerminalCreation
+        created.terminalCreation
       )
     }
 

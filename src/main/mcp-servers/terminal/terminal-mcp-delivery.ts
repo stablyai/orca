@@ -40,6 +40,7 @@ export type TerminalMcpLaunch = {
   envToDelete?: readonly string[]
   cwd: string | undefined
   executableUnverified?: boolean
+  verifiedExecutable?: string
   /** Set when the agent runs in a WSL distro (null: the default one). */
   wsl?: {
     distro: string | null
@@ -155,8 +156,10 @@ export function withArgs(
     launch.command,
     launch.shell,
     (tokens, shell) =>
-      findAgentExecutableIndex(tokens, shell, (token) =>
-        isAgentExecutableToken(token, executables)
+      findAgentExecutableIndex(
+        tokens,
+        shell,
+        (token) => token === launch.verifiedExecutable || isAgentExecutableToken(token, executables)
       ),
     args.map((arg) => ` ${quoteStartupArg(arg, launch.shell)}`).join(''),
     subcommand

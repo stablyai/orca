@@ -72,7 +72,7 @@ async function scanInventory(
   slot: InventorySlot,
   scan: InventoryScan
 ): Promise<CommandInventory | null> {
-  const { commands, mode, targeted, progress, controller } = scan
+  const { commands, mode, targeted } = scan
   if (slot.distro) {
     if (mode === 'refresh') {
       invalidateWslGuestEnvironment(slot.distro)
@@ -97,9 +97,7 @@ async function scanInventory(
     readLoginPath,
     slot.shellPath,
     mode === 'refresh' || mode === 'revalidate',
-    progress,
-    () => notifyScanChange(scan),
-    controller.signal
+    scan
   )
 }
 
@@ -218,7 +216,7 @@ export function readInventory(
   }: InventoryReadOptions = {}
 ): InventoryRead {
   const generation = inventoryGeneration(slot)
-  const published = currentInventoryPublication(slot)
+  const published = currentInventoryPublication(slot, slot.distro ? 'complete' : 'latest')
   const current = published?.inventory
   const hasMatch =
     current && requested.some((cmd) => current.probed.has(cmd) && current.found.has(cmd))
@@ -259,20 +257,23 @@ export function readInventory(
       wsl: slot.distro !== undefined,
       readPublished: () => currentInventoryPublication(slot)
     })
-  if (revalidateMiss && !slot.distro) {
-    mode = 'revalidate'
-  }
+  mode = revalidateMiss && !slot.distro ? 'revalidate' : mode
   const commands = targeted ? requested : [...slot.stockCommands, ...requested]
   const pending = slot.pending
   if (pending) {
     const { active } = pending
-    if (!active.started) {
+    const sharesLocalCapture =
+      !slot.distro &&
+      !active.loginPathCaptured &&
+      mode === 'refresh' &&
+      (active.mode === 'refresh' || active.mode === 'revalidate')
+    if (!active.started || sharesLocalCapture) {
       addScanRequest(active, commands, mode, targeted)
       active.revalidatesMiss ??= revalidateMiss ? requested : undefined
       return readScan(active)
     }
     if (
-      (mode === 'refresh' && slot.distro !== undefined) ||
+      mode === 'refresh' ||
       scanPriority[mode] > scanPriority[active.mode] ||
       !commands.every((cmd) => active.commands.has(cmd))
     ) {

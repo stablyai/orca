@@ -18,6 +18,8 @@ import {
   SETUP_AGENT_RECHECK_ENV
 } from './setup-agent-program'
 
+const SETUP_AGENT_RECHECK_TIMEOUT_SECONDS = 10
+
 export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
@@ -149,7 +151,23 @@ function buildPosixStartupScript(
     'if [ "$status" = "0" ]; then',
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
     `if [ -n "$${SETUP_AGENT_RECHECK_ENV}" ]; then`,
-    `  if ! ${SETUP_AGENT_EXECUTABLE_ENV}=$(eval "$${SETUP_AGENT_RECHECK_ENV}" 2>/dev/null) || [ -z "$${SETUP_AGENT_EXECUTABLE_ENV}" ] || [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
+    `  unset ${SETUP_AGENT_EXECUTABLE_ENV};`,
+    `  if [ -n "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
+    // Keep the waited-on PID off the filesystem and leave no capture pipe for a stalled descendant to hold.
+    `    ( (set -C; eval "$${SETUP_AGENT_RECHECK_ENV}" > ${tmp}) & worker=$!;`,
+    `      trap 'kill -KILL "$worker"; exit 1' TERM; wait "$worker"; ) </dev/null >/dev/null 2>&1 & recheck=$!;`,
+    '    (sleeper=; canceled=;',
+    `     trap 'if [ -n "$sleeper" ]; then kill "$sleeper"; wait "$sleeper"; exit; fi; canceled=1' TERM;`,
+    `     command -p sleep ${SETUP_AGENT_RECHECK_TIMEOUT_SECONDS} & sleeper=$!;`,
+    '     if [ -n "$canceled" ]; then kill "$sleeper"; wait "$sleeper";',
+    '     elif wait "$sleeper"; then kill "$recheck"; fi;',
+    '    ) </dev/null >/dev/null 2>&1 & watchdog=$!;',
+    '    wait "$recheck" 2>/dev/null; recheck_status=$?;',
+    '    kill "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null;',
+    `    if [ "$recheck_status" = 0 ]; then ${SETUP_AGENT_EXECUTABLE_ENV}=$(command -p cat ${tmp}); fi;`,
+    `    rm -f ${tmp} 2>/dev/null;`,
+    '  fi;',
+    `  if [ -z "$${SETUP_AGENT_EXECUTABLE_ENV}" ] || [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
     `    printf '%s\\n' '${SETUP_AGENT_BLOCKED_MESSAGE}' "$${SETUP_AGENT_NOTICE_ENV}" >&2; exit 1; fi;`,
     `  ${SETUP_AGENT_EXECUTABLE_ENV}=\${${SETUP_AGENT_EXECUTABLE_ENV}%.}; export ${SETUP_AGENT_EXECUTABLE_ENV};`,
     `else\n${shellFunctions}fi;`,
@@ -245,12 +263,25 @@ function buildWindowsStartupCommand(
     '      }',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
     `      if ($env:${SETUP_AGENT_RECHECK_ENV}) {`,
-    `        $env:${SETUP_AGENT_EXECUTABLE_ENV} = & ([ScriptBlock]::Create($env:${SETUP_AGENT_RECHECK_ENV}))`,
-    `        if (!$env:${SETUP_AGENT_EXECUTABLE_ENV} -or [string]::IsNullOrWhiteSpace($startup)) {`,
+    '        $pin = $null',
+    '        if (![string]::IsNullOrWhiteSpace($startup)) {',
+    '          $recheck = [powershell]::Create()',
+    '          try {',
+    `            [void]$recheck.AddScript($env:${SETUP_AGENT_RECHECK_ENV})`,
+    '            $pending = $recheck.BeginInvoke()',
+    `            if ($pending.AsyncWaitHandle.WaitOne(${SETUP_AGENT_RECHECK_TIMEOUT_SECONDS * 1000})) {`,
+    '              try { $pin = $recheck.EndInvoke($pending) } finally { $recheck.Dispose() }',
+    '            } else {',
+    '              [void]$recheck.BeginStop($null, $null)',
+    '            }',
+    '          } catch {}',
+    '        }',
+    '        if (!$pin -or $pin.Count -ne 1) {',
     `          [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_AGENT_BLOCKED_MESSAGE)})`,
     `          [Console]::Error.WriteLine($env:${SETUP_AGENT_NOTICE_ENV})`,
     '          exit 1',
     '        }',
+    `        $env:${SETUP_AGENT_EXECUTABLE_ENV} = [string]$pin[0]`,
     '      }',
     '      if ([string]::IsNullOrWhiteSpace($startup)) {',
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',

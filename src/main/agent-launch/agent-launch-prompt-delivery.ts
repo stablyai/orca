@@ -1,4 +1,7 @@
-import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
+import {
+  SETUP_AGENT_GATE,
+  type RuntimeTerminalCreate
+} from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -13,7 +16,6 @@ import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup
 
 import type { CreatedSurface } from './agent-launch-executor'
 import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
-import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
 function structuredLaunchSubmitText(intent: Pick<AgentLaunchIntent, 'prompt'>): string | undefined {
   return intent.prompt?.delivery === 'submit' && intent.prompt.text.trim().length > 0
@@ -44,13 +46,16 @@ const UNCONFIRMED: AgentLaunchPromptDisposal = { outcome: 'unconfirmed' }
 /** Persist owed submits as unconfirmed: a crash during delivery must not invite duplicate turns. */
 export function settledAtCreation(
   intent: Pick<AgentLaunchIntent, 'prompt'>,
-  created: { promptRodeLaunchCommand?: boolean; structured?: AgentLaunchStructuredSurface }
+  created: Pick<CreatedSurface, 'promptRodeLaunchCommand' | 'structured' | 'terminalCreation'>
 ): AgentLaunchPromptDisposal {
   if (created.structured?.firstMessage) {
     return { outcome: 'journaled', messageId: created.structured.firstMessage.clientMessageId }
   }
   if (created.structured) {
     return structuredLaunchSubmitText(intent) === undefined ? NOT_DELIVERED : UNCONFIRMED
+  }
+  if (created.terminalCreation?.[SETUP_AGENT_GATE]?.verified === false) {
+    return NOT_DELIVERED
   }
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
@@ -62,7 +67,7 @@ export async function settleLaunchPromptDisposal(
   execution: AgentLaunchSurfaceExecution,
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
-  if (created.structured) {
+  if (created.structured || created.terminalCreation?.[SETUP_AGENT_GATE]?.verified === false) {
     return settledAtCreation(execution.intent, created)
   }
   if (created.promptRodeLaunchCommand) {

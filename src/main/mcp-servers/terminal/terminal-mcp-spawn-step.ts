@@ -1,5 +1,6 @@
 // The spawn assembly's MCP step, for both spawn lanes (window and runtime).
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { SetupAgentProgram } from '../../../shared/agent-launch/startup/setup-agent-program'
 import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { withTerminalMcpServers, type TerminalMcpPaneLaunch } from './terminal-mcp-launch'
 
@@ -21,11 +22,12 @@ export async function withSpawnTerminalMcpServers(
     env: Record<string, string>
     shell: AgentStartupShell
     connectionId: string | undefined
-    executableUnverified: boolean
+    postSetupProgram?: SetupAgentProgram
   }
 ): Promise<{ command: string | undefined; pane: TerminalMcpPaneLaunch | null }> {
+  const program = launch.postSetupProgram
   return withTerminalMcpServers({
-    launchAgent: launch.launchAgent,
+    launchAgent: launch.launchAgent ?? (program?.path ? program.agent : undefined),
     command: launch.command,
     env: launch.env,
     envToDelete: spawn.envToDelete,
@@ -33,7 +35,8 @@ export async function withSpawnTerminalMcpServers(
     cwd: spawn.cwd,
     worktreeId: spawn.args.worktreeId,
     connectionId: launch.connectionId,
-    executableUnverified: launch.executableUnverified,
+    executableUnverified: program !== undefined && program.path === undefined,
+    verifiedExecutable: program?.path,
     isFreshLaunch: !spawn.preAdoptedStablePane && spawn.launchCommand !== undefined,
     ...(spawn.codexRuntime === 'wsl' ? { wsl: { distro: spawn.expectedWslDistro } } : {}),
     codexHome: spawn.selectedCodexHomePath

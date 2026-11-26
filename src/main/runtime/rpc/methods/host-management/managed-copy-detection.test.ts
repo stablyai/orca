@@ -45,7 +45,7 @@ const fixture = vi.hoisted(() => {
     enumerate: vi.fn(() => []),
     wslProcess: vi.fn(async (): Promise<WslRunner.WslResult> => ({
       code: 0,
-      stdout: '__ORCA_AGENT_PATH__claude\t/opt/tools/bin/claude\n',
+      stdout: '__ORCA_AGENT_PATH__claude\t/opt/tools/bin/claude\t/opt/tools/bin/claude\n',
       stderr: '',
       timedOut: false,
       environmentResolved: true
@@ -440,7 +440,7 @@ it('shares guest inventory until that distro is invalidated', async () => {
   expect(fixture.wslProcess).toHaveBeenCalledTimes(2)
   fixture.wslProcess.mockResolvedValueOnce({
     code: 0,
-    stdout: '__ORCA_AGENT_PATH__codex\t/opt/tools/bin/codex\n',
+    stdout: '__ORCA_AGENT_PATH__codex\t/opt/tools/bin/codex\t/opt/tools/bin/codex\n',
     stderr: '',
     timedOut: false,
     environmentResolved: true
@@ -634,7 +634,7 @@ it('uses WSL fallback hits and retries inconclusive misses after cooldown', asyn
   const target = { distro: 'SlowUbuntu' }
   fixture.wslProcess.mockResolvedValueOnce({
     code: 0,
-    stdout: '__ORCA_AGENT_PATH__codex\t/opt/tools/bin/codex\n',
+    stdout: '__ORCA_AGENT_PATH__codex\t/opt/tools/bin/codex\t/opt/tools/bin/codex\n',
     stderr: '',
     timedOut: false,
     environmentResolved: false
@@ -658,7 +658,7 @@ it('selects and reuses a confirmed WSL Qoder alias with an unverified preferred 
   vi.useFakeTimers()
   fixture.wslProcess.mockResolvedValueOnce({
     code: 0,
-    stdout: '__ORCA_AGENT_PATH__qoder\t/opt/qoder/bin/qoder\n',
+    stdout: '__ORCA_AGENT_PATH__qoder\t/opt/qoder/bin/qoder\t/opt/qoder/bin/qoder\n',
     stderr: '',
     timedOut: false,
     environmentResolved: false

@@ -78,7 +78,6 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupSessionOptions?: Readonly<Record<string, SessionOptionValue>>
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
-  startupRequestText?: string
   /** Main-only: caller delivers any uncarried startupPrompt through a compatible typed line and receives delivery status. */
   onStartupPromptCarry?: (carried: boolean) => void
   /** Main-only completed startup creation; never projected onto the worktree RPC result. */

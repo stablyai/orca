@@ -1,6 +1,5 @@
 import { quotePosixShell } from '../../shell/launch/shell-argument-quoting'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
-import { stripTerminalControl } from '../../terminal/protocol/escape/terminal-control-stripping'
 import type { TuiAgent } from '../catalog/tui-agent'
 
 export const SETUP_AGENT_BLOCKED_MESSAGE = 'Agent startup is blocked.'
@@ -13,19 +12,17 @@ export type SetupAgentProgram = { agent: TuiAgent; launchHead: string; path?: st
 
 export function setupAgentBlockedNotice(
   agent: string,
-  request: string | undefined,
   translate: (key: string, fallback: string, values: { agent: string }) => string = (
     _key,
     fallback,
     values
   ) => fallback.replace('{{agent}}', values.agent)
 ): string {
-  const notice = translate(
+  return translate(
     'terminal.agentStartup.setupBlocked',
     "Setup finished. Orca couldn't verify {{agent}} for this launch. Start it from the agent menu.",
     { agent }
   )
-  return request ? `${notice}\n\n${stripTerminalControl(request.replace(/\r\n?/g, '\n'))}` : notice
 }
 
 export function setupAgentProgramExpression(shell: 'posix' | 'powershell'): string {

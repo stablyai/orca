@@ -2,10 +2,10 @@ import type { TerminalLaunchResult } from '../../agent-session/lifecycle/agent-s
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { StartupCwdFallback } from '../../shell/launch/startup-cwd-fallback'
 
-export const SETUP_AGENT_STARTED = Symbol('setup agent started')
+export const SETUP_AGENT_GATE = Symbol('setup agent gate')
 
 export type RuntimeTerminalCreate = TerminalLaunchResult & {
-  [SETUP_AGENT_STARTED]?: Promise<boolean>
+  [SETUP_AGENT_GATE]?: { started: Promise<boolean>; verified: boolean }
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */

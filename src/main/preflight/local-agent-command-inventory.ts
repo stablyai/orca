@@ -28,6 +28,7 @@ import {
 type LocalInventoryProgress = Omit<CommandInventory, 'probed'> & { probed: Set<string> }
 export type LocalInventoryScan = {
   controller: AbortController
+  loginPathCaptured?: true
   progress: LocalInventoryProgress
   changed: PromiseWithResolvers<void>
   finished?: boolean
@@ -95,10 +96,11 @@ export async function scanLocalAgentCommandInventory(
   readLoginPath: boolean,
   shellPath: string | undefined,
   freshCapture: boolean,
-  { matches, found, probed }: LocalInventoryProgress,
-  onChange: () => void,
-  signal: AbortSignal
+  scan: LocalInventoryScan
 ): Promise<CommandInventory> {
+  const { matches, found, probed } = scan.progress
+  const signal = scan.controller.signal
+  const onChange = () => notifyScanChange(scan)
   const captured =
     shellPath || (freshCapture && process.platform !== 'win32')
       ? await waitForPromiseWithSignal(
@@ -112,6 +114,9 @@ export async function scanLocalAgentCommandInventory(
           signal
         )
       : undefined
+  if (captured) {
+    scan.loginPathCaptured = true
+  }
   const captureFailed = captured?.status === 'fallback'
   const fallbackMisses = captureFailed ? new Set<string>() : undefined
   const env =
@@ -120,6 +125,9 @@ export async function scanLocalAgentCommandInventory(
     (readLoginPath
       ? await waitForPromiseWithSignal(resolveLoginShellEnvironment(), signal)
       : process.env)
+  if (!captured) {
+    scan.loginPathCaptured = true
+  }
   const direct: string[] = []
   const names: string[] = []
   for (const command of commands) {

@@ -12,6 +12,7 @@ import {
   type TerminalAgentProgram,
   withAgentInventoryDeadline
 } from '../../../preflight/agent-command-detection'
+import { readPublishedLocalTerminalAgentProgram } from '../../../preflight/agent-command-inventory-host'
 import {
   canonicalLocalAgentProgram,
   isOrcaAgentRuntimePath
@@ -59,6 +60,9 @@ async function userClaude(caller: Caller): Promise<string> {
   return withAgentInventoryDeadline(async (signal) => {
     const lookup = new AbortController()
     const lookupSignal = AbortSignal.any([signal, lookup.signal])
+    const readyHostPath = () =>
+      directClaudePath(readPublishedLocalTerminalAgentProgram('claude', 'posix'))
+    const hostWasReady = readyHostPath() !== undefined
     const hostResult = readLocalTerminalAgentProgram('claude', 'posix', false, lookupSignal)
     const callerResult = caller.env
       ? resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD, lookupSignal).catch(
@@ -68,7 +72,9 @@ async function userClaude(caller: Caller): Promise<string> {
     try {
       const first = await (callerResult ? Promise.race([hostResult, callerResult]) : hostResult)
       if (typeof first === 'string') {
-        return first
+        return hostWasReady || readyHostPath()
+          ? (directClaudePath(await hostResult) ?? first)
+          : first
       }
       const selection = first ?? (await hostResult)
       const command = directClaudePath(selection) ?? (await callerResult)

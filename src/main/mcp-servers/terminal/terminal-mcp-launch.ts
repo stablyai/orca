@@ -51,6 +51,7 @@ export type TerminalMcpLaunchInput = {
   connectionId: string | undefined
   isFreshLaunch: boolean
   executableUnverified?: boolean
+  verifiedExecutable?: string
   /** Set for a launch in a WSL distro. */
   wsl?: { distro: string | null }
   codexHome: string | null
@@ -154,7 +155,8 @@ function adapterAndExecutable(
     command: input.command,
     shell: input.shell,
     env: input.env,
-    cwd: input.cwd
+    cwd: input.cwd,
+    verifiedExecutable: input.verifiedExecutable
   })
   return executable ? { adapter, executable } : null
 }
@@ -235,6 +237,7 @@ export async function withTerminalMcpServers(
         envToDelete: input.envToDelete,
         cwd: input.cwd,
         executableUnverified: input.executableUnverified,
+        verifiedExecutable: input.verifiedExecutable,
         ...(input.wsl
           ? {
               wsl: {
