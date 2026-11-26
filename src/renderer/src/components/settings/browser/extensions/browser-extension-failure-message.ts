@@ -11,6 +11,8 @@ export function browserExtensionFailureMessage(
 ): string {
   const failure = result.failure
   switch (failure?.reason) {
+    case undefined:
+      return result.error
     case 'support-disabled':
       return t(
         'settings.browser.extensions.failure.supportDisabled',

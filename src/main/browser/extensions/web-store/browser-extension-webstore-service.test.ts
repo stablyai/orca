@@ -1,12 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 const EXTENSION_ID = 'a'.repeat(32)
 
-const mocks = vi.hoisted(() => ({
+type MockState = {
+  supportEnabled: boolean
+  profileExists: boolean
+  installed: { name: string } | null
+  enabledIds: string[]
+  download: Mock<(extensionId: string) => Promise<unknown>>
+}
+
+const mocks = vi.hoisted((): MockState => ({
   supportEnabled: true,
   profileExists: true,
-  installed: null as { name: string } | null,
-  enabledIds: [] as string[],
+  installed: null,
+  enabledIds: [],
   download: vi.fn<(extensionId: string) => Promise<unknown>>()
 }))
 
@@ -59,7 +67,8 @@ vi.mock('./browser-extension-webstore-install-flow', () => ({
 
 const { installBrowserExtensionFromWebStore } = await import('./browser-extension-webstore-service')
 
-const renderer = {} as Electron.WebContents
+// Only forwarded to the (mocked) install prompt, so no WebContents member is ever read.
+const renderer: Electron.WebContents = Object.create(null)
 
 function install(input = EXTENSION_ID): ReturnType<typeof installBrowserExtensionFromWebStore> {
   return installBrowserExtensionFromWebStore('default', input, renderer)

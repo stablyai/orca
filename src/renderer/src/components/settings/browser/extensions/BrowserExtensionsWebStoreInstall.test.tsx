@@ -50,7 +50,7 @@ async function submit(): Promise<void> {
   )
   const user = userEvent.setup()
   const input = screen.getByRole('textbox')
-  expect((input as HTMLInputElement).disabled).toBe(false)
+  expect(input.hasAttribute('disabled')).toBe(false)
   await act(async () => user.type(input, 'a'.repeat(32)))
   await act(async () => user.keyboard('{Enter}'))
 }

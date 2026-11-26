@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vite
 import { i18n } from '@/i18n/i18n'
 import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListing
@@ -80,14 +80,14 @@ async function toggleExtension(): Promise<void> {
         <BrowserExtensionsSection
           profileId="default"
           profileLabel="Default"
-          settings={{ browserExtensionsEnabled: true } as GlobalSettings}
+          settings={{ ...getDefaultSettings('/fixture'), browserExtensionsEnabled: true }}
           updateSettings={vi.fn()}
         />
       </ConfirmationDialogProvider>
     </TooltipProvider>
   )
   const toggle = await screen.findByRole('switch', { name: /Sample/ })
-  expect((toggle as HTMLButtonElement).disabled).toBe(false)
+  expect(toggle.hasAttribute('disabled')).toBe(false)
   await act(async () => userEvent.setup().click(toggle))
 }
 

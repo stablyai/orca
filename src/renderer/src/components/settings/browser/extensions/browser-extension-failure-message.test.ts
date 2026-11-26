@@ -46,17 +46,24 @@ const CASES = {
   { failure: BrowserExtensionFailure; expectedCall: [string, string] | [string, string, object] }
 >
 
-const ROWS = Object.entries(CASES) as [Reason, (typeof CASES)[Reason]][]
+const REASONS = [
+  'support-disabled',
+  'invalid-web-store-input',
+  'profile-unavailable',
+  'already-added'
+] as const satisfies readonly Reason[]
+
+const ROWS = Object.entries(CASES)
 
 function englishCatalogValue(key: string): unknown {
   return key.split('.').reduce<unknown>((node, part) => {
-    return node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined
+    return typeof node === 'object' && node !== null ? Reflect.get(node, part) : undefined
   }, en)
 }
 
 describe('browserExtensionFailureMessage mapping', () => {
   it.each(ROWS)('%s calls t with its exact key, English fallback and options', (_, row) => {
-    const t = vi.fn((key: string) => `T:${key}`) as unknown as Translate & ReturnType<typeof vi.fn>
+    const t = vi.fn<Translate>((key) => `T:${key}`)
     const message = browserExtensionFailureMessage(t, { error: RAW_ERROR, failure: row.failure })
 
     expect(t).toHaveBeenCalledTimes(1)
@@ -65,8 +72,12 @@ describe('browserExtensionFailureMessage mapping', () => {
     expect(englishCatalogValue(row.expectedCall[0])).toBe(row.expectedCall[1])
   })
 
+  it('lists every reason the table covers', () => {
+    expect([...REASONS].sort()).toEqual(Object.keys(CASES).sort())
+  })
+
   it('shows an untagged provider diagnostic unchanged, without translating it', () => {
-    const t = vi.fn() as unknown as Translate & ReturnType<typeof vi.fn>
+    const t = vi.fn<Translate>()
     expect(browserExtensionFailureMessage(t, { error: 'Download is too large' })).toBe(
       'Download is too large'
     )
@@ -124,9 +135,12 @@ describe('browserExtensionFailureMessage with the real translator', () => {
       'profile-unavailable': SEEDED.profileUnavailable,
       'already-added': `«${NAME}» ya está`
     }
-    for (const [reason, row] of ROWS) {
+    for (const reason of REASONS) {
       expect(
-        browserExtensionFailureMessage(translate, { error: RAW_ERROR, failure: row.failure })
+        browserExtensionFailureMessage(translate, {
+          error: RAW_ERROR,
+          failure: CASES[reason].failure
+        })
       ).toBe(expected[reason])
     }
   })
