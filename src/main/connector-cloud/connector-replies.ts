@@ -19,7 +19,9 @@ import type { ConnectorTransport } from './connector-machine'
 import { connectorRetryDelayMs } from './connector-outbox'
 import { matchingSlackPresentation, slackBotPostBody, slackReplyBody } from './connector-slack-text'
 import {
-  takesSlackAnswerPresentation,
+  CONNECTOR_SLACK_PRESENTATION_ACTIONS_PATH,
+  CONNECTOR_SLACK_PRESENTATION_BOT_POSTS_PATH,
+  CONNECTOR_SLACK_PRESENTATION_REPLIES_PATH,
   SLACK_PRESENTATION_POST_VERSION,
   SLACK_PRESENTATION_UNCONFIRMED,
   type SlackAnswerPresentation
@@ -50,14 +52,10 @@ export function foldConnectorReview(written: ConnectorReplyBody): ConnectorReply
   return review ? { ...rest, text: connectorReviewText(body.text, review) } : body
 }
 
-export function replyPresentationFor(
-  body: ConnectorReplyBody,
-  features: ReadonlySet<string> | null
-): ConnectorReplyBody {
+export function replyPresentationFor(body: ConnectorReplyBody): ConnectorReplyBody {
   if (
     body.presentation &&
-    (!takesSlackAnswerPresentation(features) ||
-      body.conversation.source !== 'slack' ||
+    (body.conversation.source !== 'slack' ||
       body.review ||
       !matchingSlackPresentation(body.presentation, body.text))
   ) {
@@ -73,13 +71,29 @@ export function replyPresentationFor(
  *  the usual backoff; `proceed` is asked before each retry, which stops once it says no. */
 export async function postWithRetries<TSchema extends z.ZodType>(
   transport: ConnectorTransport,
-  call: { path: string; body: unknown; schema: TSchema },
+  call: { path: string; compatiblePath?: string; body: unknown; schema: TSchema },
   signal: AbortSignal,
   random: () => number,
   proceed?: () => boolean
 ): Promise<ConnectorResult<z.infer<TSchema>>> {
+  let path = call.path
+  const send = () => transport.call(path, call.body, call.schema, { signal })
   for (let failures = 0; ; failures++) {
-    const sent = await transport.call(call.path, call.body, call.schema, { signal })
+    let sent = await send()
+    if (
+      !sent.ok &&
+      sent.status === 400 &&
+      path === call.path &&
+      call.compatiblePath &&
+      !signal.aborted &&
+      proceed?.() !== false
+    ) {
+      path = call.compatiblePath
+      const compatible = await send()
+      if (compatible.ok || compatible.status !== 404) {
+        sent = compatible
+      }
+    }
     const retryable =
       !sent.ok && (sent.status === null || sent.status === 429 || sent.status >= 500)
     if (!retryable || failures + 1 >= REPLY_ATTEMPTS) {
@@ -107,6 +121,7 @@ export function postConnectorReply(
     transport,
     {
       path: CONNECTOR_PATHS.replies,
+      ...(body.presentation ? { compatiblePath: CONNECTOR_SLACK_PRESENTATION_REPLIES_PATH } : {}),
       body: { v: body.presentation ? SLACK_PRESENTATION_POST_VERSION : 1, ...slackReplyBody(body) },
       schema: ConnectorReplyResponse
     },
@@ -145,15 +160,11 @@ export type ConnectorBotPostBody =
       presentation?: SlackAnswerPresentation
     }
 
-export function botPostPresentationFor(
-  body: ConnectorBotPostBody,
-  features: ReadonlySet<string> | null
-): ConnectorBotPostBody {
+export function botPostPresentationFor(body: ConnectorBotPostBody): ConnectorBotPostBody {
   if (
     'presentation' in body &&
     body.presentation &&
-    (!takesSlackAnswerPresentation(features) ||
-      ('ref' in body && !isRefOf('slack', body.ref)) ||
+    (('ref' in body && !isRefOf('slack', body.ref)) ||
       !matchingSlackPresentation(body.presentation, body.text))
   ) {
     const { presentation: _, ...plain } = body
@@ -179,6 +190,7 @@ export async function postConnectorBotMessage(
       transport,
       {
         path: CONNECTOR_ACTIONS_PATH,
+        ...(presentation ? { compatiblePath: CONNECTOR_SLACK_PRESENTATION_ACTIONS_PATH } : {}),
         body: {
           v: presentation ? SLACK_PRESENTATION_POST_VERSION : 1,
           botId,
@@ -205,6 +217,11 @@ export async function postConnectorBotMessage(
     transport,
     {
       path: `${CONNECTOR_PATHS.bots}/${encodeURIComponent(botId)}/${'issue' in body ? 'linear/comments' : 'posts'}`,
+      ...('presentation' in body && body.presentation
+        ? {
+            compatiblePath: `${CONNECTOR_SLACK_PRESENTATION_BOT_POSTS_PATH}/${encodeURIComponent(botId)}`
+          }
+        : {}),
       body: {
         v: 'presentation' in body && body.presentation ? SLACK_PRESENTATION_POST_VERSION : 1,
         ...body

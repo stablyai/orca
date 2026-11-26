@@ -3,6 +3,10 @@ import * as z from 'zod'
 export const CONNECTOR_SLACK_PRESENTATION_FEATURE = 'slack.answerPresentation'
 export const CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE = 'slack.answerPresentation.text'
 export const CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE = 'slack.answerPresentation.turnEnd'
+export const CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH = '/v1/connector/presented-events'
+export const CONNECTOR_SLACK_PRESENTATION_REPLIES_PATH = '/v1/connector/presented-replies'
+export const CONNECTOR_SLACK_PRESENTATION_BOT_POSTS_PATH = '/v1/connector/presented-bot-posts'
+export const CONNECTOR_SLACK_PRESENTATION_ACTIONS_PATH = '/v1/connector/presented-actions'
 export const SLACK_PRESENTATION_POST_VERSION = 2
 export const SLACK_PRESENTATION_EVENT_VERSION = 3
 export const SLACK_PRESENTATION_TURN_END_VERSION = 4

@@ -66,7 +66,7 @@ export class ConnectorPostRequests {
   readonly reply = (body: ConnectorReplyBody, proceed?: () => boolean) => {
     const send = () => {
       const features = this.deps.features()
-      const eligible = replyPresentationFor(body, features)
+      const eligible = replyPresentationFor(body)
       const sent = features?.has('review') ? eligible : foldConnectorReview(eligible)
       return postConnectorReply(
         this.deps.transport(),
@@ -84,7 +84,7 @@ export class ConnectorPostRequests {
       postConnectorBotMessage(
         this.deps.transport(),
         botId,
-        botPostPresentationFor(body, this.deps.features()),
+        botPostPresentationFor(body),
         this.deps.signal,
         this.deps.random
       )

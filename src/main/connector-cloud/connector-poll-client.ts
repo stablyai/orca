@@ -87,8 +87,8 @@ export class ConnectorPollClient {
       watch: (listener) => this.seam.watch(this.host, listener),
       observe: (event) => this.active.observe(event),
       flush: () => this.eventSender.flush(),
-      post: (body, rev, batch, presented) =>
-        this.postRequests.numbered(CONNECTOR_PATHS.events, rev, body, {
+      post: (body, rev, batch, presented, path = CONNECTOR_PATHS.events) =>
+        this.postRequests.numbered(path, rev, body, {
           requests: options.events.requestsFor(batch),
           presented
         }),

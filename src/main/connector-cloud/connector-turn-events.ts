@@ -71,7 +71,6 @@ export class ConnectorTurnEvents {
   // From the current hello's answer; empty before one.
   private cloudFeatures = NO_CLOUD_FEATURES
   presentationGeneration = 0
-  private readonly heldPresentations = new Set<string>()
   private readonly requestVersions = new Map<number, 1 | 2>()
   private readonly replies: ConnectorReplyOutbox
   // Flushes the running client's events; null while none runs.
@@ -112,12 +111,18 @@ export class ConnectorTurnEvents {
         void this.replies.accepted(batch).then(() => installedLeaveLines()?.turnEndsTaken(batch))
       },
       onSplit: (batch) => this.trace.split(batch),
-      replaceRefused: (event, failure) =>
-        failure?.status === 400 && isTurnEnded(event) && event.presentation
-          ? answerFor(event, NO_CLOUD_FEATURES)
+      lane: (event) =>
+        'conversation' in event
+          ? JSON.stringify([event.conversation.source, event.conversation.externalId])
           : undefined,
+      deferRefused: (event) => isTurnEnded(event) && event.presentation !== undefined,
+      deferredReady: () => this.replyFlush?.(),
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
+        if (isReplyEvent(item) && item.presentation) {
+          this.replies.released(replyDeliveryIds([item]), true, true)
+          return true
+        }
         // A turn end the cloud won't take lets its leave's line go.
         if (isTurnEnded(item)) {
           installedLeaveLines()?.turnEndsTaken([item])
@@ -127,9 +132,7 @@ export class ConnectorTurnEvents {
         // that doesn't stand yet) goes again later.
         if (failure?.status === 400) {
           const ids = replyDeliveryIds([item])
-          const held =
-            isReplyEvent(item) && item.presentation ? this.heldPresentations : this.setAside
-          ids.forEach((id) => held.add(id))
+          ids.forEach((id) => this.setAside.add(id))
           this.replies.released(ids, false)
           return
         }
@@ -180,7 +183,7 @@ export class ConnectorTurnEvents {
       ].some((feature) => this.cloudFeatures.has(feature) !== features.has(feature))
     ) {
       this.presentationGeneration++
-      this.heldPresentations.clear()
+      this.outbox.retryDeferred()
     }
     this.cloudFeatures = features
     // Under a hello without it (the kill switch), this hello's snapshot lets replies in transit go,
@@ -200,6 +203,13 @@ export class ConnectorTurnEvents {
         }
       }
     }
+  }
+
+  takesPresentedEvents(turnEnd: boolean): boolean {
+    return (
+      takesSlackAnswerPresentation(this.cloudFeatures) &&
+      (!turnEnd || this.cloudFeatures.has(CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE))
+    )
   }
 
   /** A hello's stamped version never downgrades a retained audience batch. */
@@ -250,7 +260,7 @@ export class ConnectorTurnEvents {
       },
       outbox: this.repliesOutbox,
       presentations: takesSlackAnswerPresentation(this.cloudFeatures),
-      setAside: { has: (id) => this.setAside.has(id) || this.heldPresentations.has(id) }
+      setAside: this.setAside
     }
   }
 
@@ -339,7 +349,7 @@ export class ConnectorTurnEvents {
     this.stored.clear()
     this.replies.retire()
     this.setAside.clear()
-    this.heldPresentations.clear()
+    this.outbox.retryDeferred()
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

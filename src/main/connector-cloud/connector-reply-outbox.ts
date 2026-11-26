@@ -111,10 +111,10 @@ export class ConnectorReplyOutbox {
     ids.forEach((id) => this.inFlight.delete(id))
   }
 
-  released(ids: readonly string[], retry: boolean): void {
+  released(ids: readonly string[], retry: boolean, prepared = false): void {
     this.forget(ids)
     if (retry) {
-      if (this.hooks.route().presentations) {
+      if (prepared || this.hooks.route().presentations) {
         ids.forEach((id) => this.deferred.add(id))
       }
       this.retryLater()
@@ -183,7 +183,8 @@ export class ConnectorReplyOutbox {
       return
     }
     const route = this.hooks.route()
-    const boundedEvents = route.presentations && route.outbox
+    const boundedEvents =
+      route.outbox && (route.presentations || this.nextPageAfter !== null || this.deferred.size > 0)
     if (boundedEvents && this.inFlight.size > 0) {
       this.awaitingPage = true
       this.rescan = true
@@ -198,7 +199,7 @@ export class ConnectorReplyOutbox {
     for (;;) {
       let page: JournalConnectorReplyRow[]
       try {
-        page = await journal.readOwed(this.account, after, PAGE_ROWS, route.presentations)
+        page = await journal.readOwed(this.account, after, PAGE_ROWS, true)
       } catch (error) {
         // A failed read isn't "nothing owed": the rows wait, and a drain after the usual wait
         // reads them again.
@@ -241,7 +242,7 @@ export class ConnectorReplyOutbox {
         }
         if (outbox) {
           owed.forEach((row) => this.inFlight.add(row.deliveryId))
-          if (presentations) {
+          if (boundedEvents || owed.some((row) => row.fill.presentation)) {
             this.awaitingPage = page.length === PAGE_ROWS
             this.nextPageAfter = this.awaitingPage ? after : null
             if (!this.awaitingPage && this.rescan) {
@@ -290,15 +291,13 @@ export class ConnectorReplyOutbox {
         // Checked just before the wire: still this account, still the kill switch's hello.
         const route = this.hooks.route()
         const { client, outbox, presentations } = route
-        if (
-          this.retired ||
-          !client ||
-          outbox !== false ||
-          (row.fill.presentation && !presentations)
-        ) {
-          this.again ||=
-            outbox === true || Boolean(client && outbox === false && row.fill.presentation)
+        if (this.retired || !client || outbox !== false) {
+          this.again ||= outbox === true
           return null
+        }
+        if (row.fill.presentation && !presentations) {
+          this.scheduleRetry()
+          continue
         }
         const body = drainReplyBody(row, client.hostName)
         const posted = body && (await client.post(body))

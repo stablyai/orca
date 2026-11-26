@@ -18,8 +18,6 @@ import { capAnswer, jsonBytes, unsupported } from './connector-snapshot'
 import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
 import { isSlackConversation } from './connector-slack-text'
 import {
-  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
-  takesSlackAnswerPresentation,
   SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
 } from '../../shared/connectors/slack-answer-presentation'
@@ -157,14 +155,9 @@ export function answerFor(
   // One already within the cap goes as the same object: what binds to a sent event still finds it.
   if (event.kind === 'turn-ended' && event.lastAssistantMessage !== undefined) {
     if (event.presentation) {
-      if (
-        takesSlackAnswerPresentation(cloudFeatures) &&
-        cloudFeatures.has(CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE)
-      ) {
-        const text = slackAnswerText(event.presentation)
-        if (answerTextFor(redactLocalPaths(text), cloudFeatures) === text) {
-          return { ...event, lastAssistantMessage: text }
-        }
+      const text = slackAnswerText(event.presentation)
+      if (redactLocalPaths(text) === text) {
+        return { ...event, lastAssistantMessage: text }
       }
       const { presentation: _, ...plain } = event
       return { ...plain, lastAssistantMessage: SLACK_PRESENTATION_UNCONFIRMED }
@@ -185,10 +178,12 @@ export function answerFor(
     const prose = answerTextFor(said, cloudFeatures)
     if (
       event.presentation &&
-      (!takesSlackAnswerPresentation(cloudFeatures) ||
-        !isSlackConversation(event.conversation) ||
-        prose !== slackAnswerText(event.presentation))
+      isSlackConversation(event.conversation) &&
+      said === slackAnswerText(event.presentation)
     ) {
+      return said === event.prose ? event : { ...event, prose: said }
+    }
+    if (event.presentation) {
       const { presentation: _, ...plain } = event
       return { ...plain, prose: SLACK_PRESENTATION_UNCONFIRMED }
     }

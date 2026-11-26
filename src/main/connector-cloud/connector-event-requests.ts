@@ -1,6 +1,7 @@
 import type { ConnectorEvent } from '../../shared/connectors/connector-cloud-contract'
 import { CONNECTOR_AUDIENCE_EVENTS_VERSION } from '../../shared/connectors/connector-cloud-contract'
 import {
+  CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH,
   SLACK_PRESENTATION_EVENT_VERSION,
   SLACK_PRESENTATION_TURN_END_VERSION
 } from '../../shared/connectors/slack-answer-presentation'
@@ -24,7 +25,8 @@ export class ConnectorEventRequests {
         body: unknown,
         helloRev: number,
         events: readonly ConnectorEvent[],
-        presented: boolean
+        presented: boolean,
+        path?: string
       ) => Promise<ConnectorFailure | null>
       rejected: (helloRev: number, failure: ConnectorFailure) => Promise<null> | null
     }
@@ -65,22 +67,38 @@ export class ConnectorEventRequests {
     const presentedReply =
       !presentedTurnEnd && events.some((event) => event.kind === 'reply' && event.presentation)
     const presented = presentedTurnEnd || presentedReply
-    const generation = this.deps.events.presentationGeneration
-    const failure = await this.deps.post(
-      {
-        v: presentedTurnEnd
-          ? SLACK_PRESENTATION_TURN_END_VERSION
-          : presentedReply
-            ? SLACK_PRESENTATION_EVENT_VERSION
-            : v,
-        helloRev,
-        seq,
-        events
-      },
+    if (presented && !this.deps.events.takesPresentedEvents(presentedTurnEnd)) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'presentation_receiver_unavailable',
+        retryAfterMs: null
+      }
+    }
+    const body = {
+      v: presentedTurnEnd
+        ? SLACK_PRESENTATION_TURN_END_VERSION
+        : presentedReply
+          ? SLACK_PRESENTATION_EVENT_VERSION
+          : v,
       helloRev,
-      events,
-      presented
-    )
+      seq,
+      events
+    }
+    const generation = this.deps.events.presentationGeneration
+    let failure = await this.deps.post(body, helloRev, events, presented)
+    if (failure?.status === 400 && presented && events.length === 1) {
+      const compatible = await this.deps.post(
+        body,
+        helloRev,
+        events,
+        true,
+        CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH
+      )
+      if (compatible?.status !== 404) {
+        failure = compatible
+      }
+    }
     if (failure?.status === 400) {
       // An older receiver rejects the version before it can apply any event.
       if (presented && this.presentationRehelloGeneration !== generation) {

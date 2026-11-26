@@ -2,6 +2,7 @@ import { CONNECTOR_MAX_RETRY_AFTER_MS, type ConnectorFailure } from './connector
 
 const RETRY_BASE_MS = 1_000
 const RETRY_MAX_MS = 30_000
+const DEFERRED_LANE_RETRY_MS = 30_000
 
 /** Random doubling from 1 s to 30 s (or maxMs); a cloud's Retry-After wins when longer, up to 10 minutes. */
 export function connectorRetryDelayMs(
@@ -31,6 +32,8 @@ export type ConnectorOutboxHead<T> = { stamp: ConnectorStamp; batch: T[] }
 export class ConnectorOutbox<T> {
   private items: T[]
   private stamp: ConnectorStamp | null = null
+  private deferredLanes: Set<string> | null = null
+  private deferredRetry: ReturnType<typeof setTimeout> | undefined
 
   constructor(
     private readonly options: {
@@ -47,10 +50,12 @@ export class ConnectorOutbox<T> {
       onStamped?: (batch: readonly T[], stamp: ConnectorStamp) => void
       /** A refused head was halved, keeping its number. */
       onSplit?: (batch: readonly T[], from: ConnectorStamp, to: ConnectorStamp) => void
-      /** A definitely refused item may have a replacement at the same queue position. */
-      replaceRefused?: (item: T, failure?: ConnectorFailure) => T | undefined
+      /** A refused lane stays owed while unrelated lanes go on. */
+      lane?: (item: T) => string | undefined
+      deferRefused?: (item: T, failure?: ConnectorFailure) => boolean
+      deferredReady?: () => void
       /** A single refused item was dropped, with why the cloud refused it. */
-      onDropped?: (item: T, stamp: ConnectorStamp, failure?: ConnectorFailure) => void
+      onDropped?: (item: T, stamp: ConnectorStamp, failure?: ConnectorFailure) => boolean | void
     }
   ) {
     this.items = options.initial ?? []
@@ -69,6 +74,12 @@ export class ConnectorOutbox<T> {
     this.replace([...this.items, ...items])
   }
 
+  retryDeferred(): void {
+    clearTimeout(this.deferredRetry)
+    this.deferredRetry = undefined
+    this.deferredLanes = null
+  }
+
   /** Numbering starts again from 0 with `first` in front, keeping what `keep` accepts. */
   restart(first: T[], keep: (item: T) => boolean): void {
     this.stamp = null
@@ -82,17 +93,34 @@ export class ConnectorOutbox<T> {
   next(helloRev: number): ConnectorOutboxHead<T> | null {
     let stamp = this.stamp
     if (stamp?.helloRev !== helloRev || stamp.size === 0) {
-      if (this.items.length === 0) {
+      const eligible = this.readyItems()
+      if (eligible.length === 0) {
         return null
       }
       stamp = this.stamp = {
         helloRev,
         seq: stamp?.helloRev === helloRev ? stamp.seq + 1 : 0,
-        size: Math.max(1, Math.min(this.options.headSize(this.items), this.items.length))
+        size: Math.max(1, Math.min(this.options.headSize(eligible), eligible.length))
       }
       this.options.onStamped?.(this.items.slice(0, stamp.size), stamp)
     }
     return { stamp, batch: this.items.slice(0, stamp.size) }
+  }
+
+  private readyItems(): readonly T[] {
+    const lanes = this.deferredLanes
+    const lane = this.options.lane
+    if (!lanes || !lane) {
+      return this.items
+    }
+    const ready: T[] = []
+    const deferred: T[] = []
+    for (const item of this.items) {
+      const key = lane(item)
+      ;(key !== undefined && lanes.has(key) ? deferred : ready).push(item)
+    }
+    this.items = [...ready, ...deferred]
+    return ready
   }
 
   /** The cloud took `stamp`'s head under the hello still current; a superseded stamp changes nothing. */
@@ -120,18 +148,24 @@ export class ConnectorOutbox<T> {
       return null
     }
     const head = this.items[0]
-    const replacement =
-      head === undefined ? undefined : this.options.replaceRefused?.(head, failure)
-    if (replacement !== undefined) {
-      this.items[0] = replacement
-      this.notify()
+    const lane = head === undefined ? undefined : this.options.lane?.(head)
+    if (head !== undefined && lane !== undefined && this.options.deferRefused?.(head, failure)) {
+      ;(this.deferredLanes ??= new Set()).add(lane)
+      this.stamp = { ...stamp, size: 0 }
+      if (!this.deferredRetry) {
+        this.deferredRetry = setTimeout(() => {
+          this.retryDeferred()
+          this.options.deferredReady?.()
+        }, DEFERRED_LANE_RETRY_MS)
+        this.deferredRetry.unref?.()
+      }
       return null
     }
     const [dropped] = this.items.splice(0, 1)
     this.stamp = { ...stamp, size: 0 }
     this.notify()
-    if (dropped !== undefined) {
-      this.options.onDropped?.(dropped, stamp, failure)
+    if (dropped !== undefined && this.options.onDropped?.(dropped, stamp, failure)) {
+      return null
     }
     return dropped ?? null
   }
@@ -150,7 +184,10 @@ export class ConnectorOutbox<T> {
 // can't stand up yet is split down and set aside the same way, so the events behind it still go;
 // its row stays unsent and drains again later.
 const isRefusedAsSent = (failure: ConnectorFailure): boolean =>
-  failure.status === 413 || failure.status === 400 || failure.error === 'reply_not_accepted'
+  failure.status === 413 ||
+  failure.status === 400 ||
+  failure.error === 'reply_not_accepted' ||
+  failure.error === 'slack_answer_draining'
 
 /** Sends a head; null when the cloud answered 204. */
 export type ConnectorBatchSender<T> = (
