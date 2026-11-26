@@ -1333,7 +1333,8 @@
         "save": "Save",
         "commandPlaceholder": "my-agent",
         "envNamePlaceholder": "NAME",
-        "envValuePlaceholder": "value"
+        "envValuePlaceholder": "value",
+        "availability": "{{value0}} availability"
       }
     },
     "followSymlinkedDirectoriesKeywords": {

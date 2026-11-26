@@ -48,10 +48,10 @@ export function newTabMenuChatAgents(input: {
   ].filter(isTuiAgent)
   const host = input.customAgentsHost
   const customAgents = host
-    ? (listed ?? []).flatMap(({ agent, label }): CustomAcpAgentMenuRow[] => {
+    ? (listed ?? []).flatMap(({ agent, label, disabled }): CustomAcpAgentMenuRow[] => {
         const availability = published?.get(agent)
         // A published roster that no longer reports the agent means its host dropped it.
-        if (!isCustomAcpAgentId(agent) || (published && !availability)) {
+        if (!isCustomAcpAgentId(agent) || disabled || (published && !availability)) {
           return []
         }
         const missing = availability?.chatProgram === 'missing'

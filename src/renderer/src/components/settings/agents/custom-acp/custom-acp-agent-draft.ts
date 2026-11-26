@@ -19,6 +19,8 @@ export type CustomAcpAgentDraft = {
   command: string
   args: CustomAcpArgRow[]
   env: CustomAcpEnvRow[]
+  /** Kept through an edit; the row's switch changes it. */
+  disabled?: true
 }
 
 let nextRowKey = 0
@@ -40,7 +42,8 @@ export function customAcpAgentDraftFrom(agent: CustomAcpAgent): CustomAcpAgentDr
     name: agent.name,
     command: agent.command,
     args: agent.args.map((value) => ({ key: draftRowKey(), value })),
-    env: Object.entries(agent.env).map(([name, value]) => ({ key: draftRowKey(), name, value }))
+    env: Object.entries(agent.env).map(([name, value]) => ({ key: draftRowKey(), name, value })),
+    ...(agent.disabled ? { disabled: agent.disabled } : {})
   }
 }
 
@@ -77,7 +80,8 @@ export function saveCustomAcpAgentDraft(
       draft.env
         .map(({ name, value }) => [name.trim(), value] as const)
         .filter(([name]) => name !== '')
-    )
+    ),
+    ...(draft.disabled ? { disabled: draft.disabled } : {})
   }
   return draft.id && saved.some(({ id }) => id === draft.id)
     ? saved.map((existing) => (existing.id === draft.id ? agent : existing))

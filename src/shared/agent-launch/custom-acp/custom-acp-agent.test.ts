@@ -10,11 +10,15 @@ describe('normalizeCustomAcpAgents', () => {
       { id: 'custom-acp-b2', name: '', command: 'blank-name' },
       { id: 'custom-acp-c3', name: 'Bad env', command: 'x', env: { 'BAD NAME': '1' } },
       { id: 'custom-acp-d4', name: 'Env', command: '/opt/agent', env: { API_KEY: 'k' } },
+      { id: 'custom-acp-e5', name: 'Off', command: 'off', disabled: true },
+      { id: 'custom-acp-f6', name: 'Bad flag', command: 'on', disabled: 'yes' },
       'not an object'
     ])
     expect(agents).toEqual([
       { id: 'custom-acp-a1', name: 'Mine', command: 'my-agent', args: ['acp', '--x y'], env: {} },
-      { id: 'custom-acp-d4', name: 'Env', command: '/opt/agent', args: [], env: { API_KEY: 'k' } }
+      { id: 'custom-acp-d4', name: 'Env', command: '/opt/agent', args: [], env: { API_KEY: 'k' } },
+      { id: 'custom-acp-e5', name: 'Off', command: 'off', args: [], env: {}, disabled: true },
+      { id: 'custom-acp-f6', name: 'Bad flag', command: 'on', args: [], env: {} }
     ])
   })
 

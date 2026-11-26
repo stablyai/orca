@@ -10,7 +10,10 @@ import {
   type AgentSessionAvailabilityFrame
 } from '../../../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import { listStructuredAgentRuntimeMetadata } from '../../../../agent-session/installation/structured-agent-runtime-metadata'
-import { customAcpAgentName } from '../../../../../acp/custom/custom-acp-agent-registry'
+import {
+  customAcpAgentDisabled,
+  customAcpAgentName
+} from '../../../../../acp/custom/custom-acp-agent-registry'
 import { defineMethod, defineStreamingMethod } from '../../../core'
 import { isMcpServersFeatureEnabled } from '../../../../../mcp-servers/mcp-servers-feature'
 import { requireStructuredCapability } from '../creation/structured-agent-session-gate'
@@ -46,7 +49,8 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
                 ...(isMcpServersFeatureEnabled() ? { mcpServers: true } : {})
               },
               ...(definition.managedRuntime?.() ? { managedRuntime: true as const } : {}),
-              ...(label ? { label } : {})
+              ...(label ? { label } : {}),
+              ...(customAcpAgentDisabled(definition.agent) ? { disabled: true as const } : {})
             }
           })
       }

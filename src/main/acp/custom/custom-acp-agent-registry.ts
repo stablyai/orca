@@ -59,6 +59,11 @@ export function customAcpAgentName(agent: string): string | null {
 // Chat names and notices made here use the agent's name, not its id.
 setConfiguredAgentLabelSource(customAcpAgentName)
 
+/** Whether the host's settings switched a custom agent off for new chats. */
+export function customAcpAgentDisabled(agent: string): boolean {
+  return isCustomAcpAgentId(agent) && entries.get(agent)?.agent.disabled === true
+}
+
 export function listCustomAcpAgents(): readonly CustomAcpAgent[] {
   return [...entries.values()].map(({ agent }) => agent)
 }

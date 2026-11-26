@@ -13,6 +13,8 @@ import { reloadLocalHostStructuredAgents } from '@/runtime/native-chat/agent-cat
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
+import { Switch } from '../../../ui/switch'
+import { cn } from '@/lib/class-names'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import {
   customAcpAgentCommandLine,
@@ -88,6 +90,17 @@ export function CustomAcpAgentsSetting({ settings, updateSettings }: Props): Rea
             agent={agent}
             disabled={draft !== null}
             onEdit={() => setDraft(customAcpAgentDraftFrom(agent))}
+            onSetEnabled={(enabled) =>
+              save(
+                saved.map((existing) => {
+                  if (existing.id !== agent.id) {
+                    return existing
+                  }
+                  const { disabled: _disabled, ...rest } = existing
+                  return enabled ? rest : { ...rest, disabled: true }
+                })
+              )
+            }
             onRemove={() => save(saved.filter(({ id }) => id !== agent.id))}
           />
         )
@@ -101,11 +114,13 @@ function CustomAcpAgentRow({
   agent,
   disabled,
   onEdit,
+  onSetEnabled,
   onRemove
 }: {
   agent: CustomAcpAgent
   disabled: boolean
   onEdit: () => void
+  onSetEnabled: (enabled: boolean) => void
   onRemove: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -115,12 +130,20 @@ function CustomAcpAgentRow({
   })
   return (
     <div data-settings-row="" className="flex items-center gap-3 py-2.5">
-      <div className="min-w-0 flex-1">
+      <div className={cn('min-w-0 flex-1', agent.disabled && 'opacity-40')}>
         <div className="truncate text-sm font-medium">{agent.name}</div>
         <div className="truncate font-mono text-xs text-muted-foreground">
           {customAcpAgentCommandLine(agent)}
         </div>
       </div>
+      <Switch
+        checked={!agent.disabled}
+        disabled={disabled}
+        onCheckedChange={onSetEnabled}
+        aria-label={t('settings.agents.customAcp.availability', '{{value0}} availability', {
+          value0: agent.name
+        })}
+      />
       <Button
         type="button"
         variant="ghost"
