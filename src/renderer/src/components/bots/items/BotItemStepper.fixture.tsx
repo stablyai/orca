@@ -248,3 +248,28 @@ export const openAskTr560 = asking(560, { question: OPEN_ASK, locale: 'tr', tota
 export const openAskZh520 = asking(520, { question: OPEN_ASK, locale: 'zh' })
 export const openAskZh560 = asking(560, { question: OPEN_ASK, locale: 'zh', total: 1204 })
 export const openAskEn760 = asking(760, { question: OPEN_ASK, total: 1204 })
+
+/** Opened in a 400px pane (stacked), then widened to 800px: the box comes back to one row. */
+export const askWidens = defineFixture({
+  ...asking(400),
+  width: 832,
+  interact: async (frame) => {
+    await switchLocale('en')
+    frame.querySelector<HTMLElement>('[style*="width"]')?.style.setProperty('width', '800px')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
+
+/** Opened at 800px with a two-line draft (stacked), then emptied: the box comes back to one row. */
+export const askDraftCleared = defineFixture({
+  ...asking(800, { text: 'First line\nSecond line' }),
+  width: 832,
+  interact: async (frame) => {
+    await switchLocale('en')
+    const editor = frame.querySelector<HTMLElement>('[contenteditable="true"]')
+    editor?.focus()
+    document.execCommand('selectAll')
+    document.execCommand('delete')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})

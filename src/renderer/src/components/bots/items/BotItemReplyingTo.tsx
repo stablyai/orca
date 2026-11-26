@@ -128,7 +128,8 @@ export function BotItemReplyingTo({ mark }: { mark: BotItemReplyMark }): React.J
 
 /** Whether `text` fits on one line of the editor, in its own font: beside the controls (`inline`), and on
  *  the text's own row (`ownRow`). The room beside the controls is the row less what is not text there,
- *  read while the text sits beside them and kept while it is stacked, so stacking never feeds back. */
+ *  read while the text sits beside them and kept while it is stacked, so stacking never feeds back. Not
+ *  read yet (the box opened stacked), it counts as fitting: the text tries the row once and is read there. */
 function usePlaceholderRoom(
   box: RefObject<HTMLDivElement | null>,
   field: RefObject<HTMLDivElement | null>,
@@ -174,7 +175,7 @@ function usePlaceholderRoom(
       if (!stacked) {
         besideText.current = rowWidth - textWidth
       }
-      const inline = besideText.current !== null && rowWidth - besideText.current >= needed
+      const inline = besideText.current === null || rowWidth - besideText.current >= needed
       // Stacked, the text's row is the whole row; beside the controls it would get that once stacked.
       const ownRow = (stacked ? textWidth : rowWidth) >= needed
       setRoom((last) =>
