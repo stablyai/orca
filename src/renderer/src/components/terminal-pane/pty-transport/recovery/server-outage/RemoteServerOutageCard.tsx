@@ -232,7 +232,7 @@ export function RemoteServerOutageCardLine({
             <PopoverTrigger asChild>
               <Button
                 size="xs"
-                variant="ghost-muted"
+                variant="ghost-muted-disclosure"
                 className="shrink-0"
                 data-remote-server-outage-details=""
               >
