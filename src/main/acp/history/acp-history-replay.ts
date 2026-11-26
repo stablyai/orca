@@ -1,6 +1,7 @@
 // Replay grouping uses provider message/turn IDs and preserves source arrival order.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { NativeChatBlock } from '../../../shared/native-chat/native-chat-types'
 
 /** What one load may keep for catch-up; a larger history is not caught up at all. */
@@ -64,37 +65,45 @@ export type AcpHistoryTurn = {
 /** A replayed turn under the agent's own id. */
 export type AcpIdentifiedHistoryTurn = AcpHistoryTurn & { turn: string }
 
-const sessionSchema = z.object({ sessionId: z.string() })
-const looseRecord = z.record(z.string(), z.unknown())
-const frameSchema = z.looseObject({
-  update: z.looseObject({
-    sessionUpdate: z.string(),
-    messageId: z.string().optional(),
-    prompt_id: z.string().optional(),
-    content: z.unknown().optional(),
-    _meta: z.looseObject({ promptIndex: z.number().int().nonnegative().optional() }).optional()
-  }),
-  _meta: z
-    .looseObject({
-      promptId: z.string().optional(),
-      eventId: z.string().min(1).optional(),
-      agentTimestampMs: z.number().optional()
-    })
-    .optional()
-})
-const contentSchema = z.discriminatedUnion('type', [
+const sessionSchema = lazyZodSchema(() => z.object({ sessionId: z.string() }))
+const looseRecord = lazyZodSchema(() => z.record(z.string(), z.unknown()))
+const frameSchema = lazyZodSchema(() =>
   z.looseObject({
-    type: z.literal('text'),
-    text: z.string(),
-    _meta: z.looseObject({ displayText: z.unknown().optional() }).optional()
-  }),
-  z.looseObject({ type: z.literal('image'), mimeType: z.string(), data: z.string() }),
-  z.looseObject({ type: z.literal('resource_link'), uri: z.string(), name: z.string().optional() }),
-  z.looseObject({
-    type: z.literal('resource'),
-    resource: z.looseObject({ uri: z.string(), text: z.string().optional() })
+    update: z.looseObject({
+      sessionUpdate: z.string(),
+      messageId: z.string().optional(),
+      prompt_id: z.string().optional(),
+      content: z.unknown().optional(),
+      _meta: z.looseObject({ promptIndex: z.number().int().nonnegative().optional() }).optional()
+    }),
+    _meta: z
+      .looseObject({
+        promptId: z.string().optional(),
+        eventId: z.string().min(1).optional(),
+        agentTimestampMs: z.number().optional()
+      })
+      .optional()
   })
-])
+)
+const contentSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    z.looseObject({
+      type: z.literal('text'),
+      text: z.string(),
+      _meta: z.looseObject({ displayText: z.unknown().optional() }).optional()
+    }),
+    z.looseObject({ type: z.literal('image'), mimeType: z.string(), data: z.string() }),
+    z.looseObject({
+      type: z.literal('resource_link'),
+      uri: z.string(),
+      name: z.string().optional()
+    }),
+    z.looseObject({
+      type: z.literal('resource'),
+      resource: z.looseObject({ uri: z.string(), text: z.string().optional() })
+    })
+  ])
+)
 
 /** OpenCode names reasoning `<message id>:reasoning:<n>`; the message is what its store keys. */
 const REASONING_SUFFIX = /:reasoning:\d+$/

@@ -163,7 +163,7 @@ export type BrowserScreencastDownloadResult =
   | {
       type: 'downloadFinished'
       download: BrowserDownloadFinishedEvent
-      // Only for a viewer that asked with `downloadCopies: 1`: browser.readDownloadCopy copies the saved file once.
+      // Only for a viewer that asked with `downloadCopyStreams: 1`: browser.downloadCopyStream sends the saved file once.
       copyId?: string
     }
 /** Sent only to a viewer that asked with `prints: 1`, when its own input made the page call print(); it reads the PDF printed then with browser.readPrintPdf. */

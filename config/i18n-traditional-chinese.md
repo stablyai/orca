@@ -37,9 +37,17 @@ The catalog lives at `src/renderer/src/i18n/locales/zh-Hant.json` and is maintai
 | access token / model tokens    | 權杖 / token                        |
 | credential / notification      | 憑證 / 通知                         |
 | thread / schedule / emulator   | 討論串 / 排程 / 模擬器              |
+| comment / daemon               | 留言 / 常駐程式                     |
+| identity / open (verb)         | 身分 / 開啟                         |
+| collapse / fold (code, diff)   | 收合 / 摺疊                         |
+| reset / VM                     | 重設 / 虛擬機器                     |
+| environment recipe             | 環境範本                            |
+| Full Disk Access (macOS)       | 完全取用磁碟                        |
+| shared link                    | 共用連結                            |
 
 ## Style
 
+- Address the user as 你, never 您.
 - Quote UI text with 「」, and use 『』 for nested quotes. Do not use “”.
 - Put a half-width space between CJK text and Latin letters or digits.
 - Keep product, provider, model and CLI names in their original form (Orca, Claude Code, Codex, GitHub, Git, SSH, WSL).

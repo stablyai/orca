@@ -19,6 +19,7 @@ import {
   BotGroupStop,
   BotGroupUpdate
 } from '../bots/bot-group'
+import { BotOfferAnswerParams } from '../bots/bot-offer-answers'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelBeginParams,
@@ -112,6 +113,7 @@ import {
 } from './accounts/usage-credentials-params'
 import {
   AgentActivityClearParams,
+  AgentActivityOrchestrationParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
 import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
@@ -138,6 +140,12 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import {
+  BotAvatarRead,
+  BotAvatarUpload,
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from './bot-avatar-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -205,8 +213,6 @@ import {
   BotAccessDecide,
   BotAccessRedeem,
   BotActivityRead,
-  BotAvatarRead,
-  BotAvatarUpload,
   BotChat,
   BotChatReset,
   BotChatSearch,
@@ -246,7 +252,8 @@ import {
   BotToolSignInWait,
   BotToolTarget,
   BotToolUpdate,
-  BotToolsList
+  BotToolsList,
+  BotToolsSetHostMcpServers
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
 import {
@@ -322,9 +329,9 @@ import {
   Wait
 } from './browser/browser-params'
 import {
+  DownloadCopyStream,
   FileChooserAnswer,
   PagePromptAnswer,
-  ReadDownloadCopy,
   ReadPrintPdf,
   ReleaseDownloadCopy,
   ReleasePrintPdf,
@@ -375,6 +382,7 @@ import {
 } from './computer/computer-schemas-params'
 import {
   ConnectorAct,
+  ConnectorLeaveThread,
   ConnectorReact,
   ConnectorReply,
   ConnectorSlackMirrorPost,
@@ -647,6 +655,27 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
+import {
+  McpServerAdd,
+  McpServerAgentFilesAllow,
+  McpServerConnect,
+  McpServerDiscover,
+  McpServerImport,
+  McpServerMove,
+  McpServerPreviewPaste,
+  McpServerProblems,
+  McpServerSessions,
+  McpServerSetAgentEnabled,
+  McpServerSetSharedProcess,
+  McpServerSetWorkspaces,
+  McpServerSignInFinish,
+  McpServerSignInFlow,
+  McpServerSignInStart,
+  McpServerSignInWait,
+  McpServerTarget,
+  McpServerUpdate,
+  McpServersList
+} from './mcp-servers-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
@@ -836,6 +865,7 @@ import {
   GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
+  GitContinueRebase,
   GitCreateBranch,
   GitDiff,
   GitDiscoverCommitMessageModels,
@@ -954,7 +984,10 @@ import {
 } from './structured-agent-session/structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session/structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session/structured-agent-session-send-recorded-params'
-import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
+import {
+  LiveTextShownParams,
+  SubscribeParams
+} from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
@@ -1048,6 +1081,8 @@ import { WorktreeCreate, WorktreePrefetchCreateBase } from './workspaces/worktre
 import {
   WorktreeActivate,
   WorktreeArchive,
+  WorktreeAutoNameParams,
+  WorktreeAutoNameWaitParams,
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
@@ -1145,6 +1180,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.read': AgentReadParams,
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
+  'agentActivity.orchestration': AgentActivityOrchestrationParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
@@ -1171,6 +1207,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
   'agentSession.item': ItemParams,
+  'agentSession.liveTextShown': LiveTextShownParams,
   'agentSession.mcp': AgentSessionMcpParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
@@ -1242,6 +1279,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.activity': BotActivityRead,
   'bots.agentChoices': null,
   'bots.avatar.read': BotAvatarRead,
+  'bots.avatar.slackIcon.upload': BotSlackIconUpload,
+  'bots.avatar.slackIcon.wanted': BotSlackIconWanted,
   'bots.avatar.upload': BotAvatarUpload,
   'bots.chat.open': BotChat,
   'bots.chat.reset': BotChatReset,
@@ -1327,6 +1366,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.memory.forget': BotMemoryForget,
   'bots.memory.history': BotChat,
   'bots.memory.undo': BotMemoryUndo,
+  'bots.offer.answer': BotOfferAnswerParams,
   'bots.request.outcome': BotRequestOutcomeParams,
   'bots.roster': BotRoster,
   'bots.sendRunAgain': BotRunSendAgainParams,
@@ -1364,6 +1404,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.tools.list': BotToolsList,
   'bots.tools.problems': BotToolProblems,
   'bots.tools.remove': BotToolTarget,
+  'bots.tools.setHostMcpServers': BotToolsSetHostMcpServers,
   'bots.tools.signIn.cancel': BotToolSignInFlow,
   'bots.tools.signIn.finish': BotToolSignInFinish,
   'bots.tools.signIn.start': BotToolSignInStart,
@@ -1403,6 +1444,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogAccept': DialogAccept,
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
+  'browser.downloadCopyStream': DownloadCopyStream,
   'browser.drag': Drag,
   'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
@@ -1453,7 +1495,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.profileDetectBrowsers': null,
   'browser.profileImportFromBrowser': ProfileImportFromBrowser,
   'browser.profileList': null,
-  'browser.readDownloadCopy': ReadDownloadCopy,
   'browser.readImage': ReadImage,
   'browser.readPrintPdf': ReadPrintPdf,
   'browser.releaseDownloadCopy': ReleaseDownloadCopy,
@@ -1524,6 +1565,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
+  'connector.leaveThread': ConnectorLeaveThread,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
@@ -1624,6 +1666,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.commitDiff': GitCommitDiff,
   'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.continueRebase': GitContinueRebase,
   'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -1638,6 +1681,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.mutationInFlight': WorktreeSelectorOfGitParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
+  'git.rebaseAutoStash': WorktreeSelectorOfGitParams,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
@@ -1876,7 +1920,31 @@ export const RPC_PARAMS_BY_METHOD = {
   'managedServer.update': ManagedServerUpdate,
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
+  'mcpServers.add': McpServerAdd,
+  'mcpServers.agentFiles.allow': McpServerAgentFilesAllow,
+  'mcpServers.cancelProblems': McpServersList,
+  'mcpServers.connect': McpServerConnect,
+  'mcpServers.copy': McpServerImport,
+  'mcpServers.details': McpServerTarget,
+  'mcpServers.discover': McpServerDiscover,
+  'mcpServers.list': McpServersList,
+  'mcpServers.move': McpServerMove,
+  'mcpServers.previewPaste': McpServerPreviewPaste,
+  'mcpServers.problems': McpServerProblems,
+  'mcpServers.remove': McpServerTarget,
+  'mcpServers.sessions.restart': McpServerSessions,
+  'mcpServers.sessions.stale': McpServerSessions,
+  'mcpServers.setAgentEnabled': McpServerSetAgentEnabled,
+  'mcpServers.setSharedProcess': McpServerSetSharedProcess,
+  'mcpServers.setWorkspaces': McpServerSetWorkspaces,
+  'mcpServers.signIn.cancel': McpServerSignInFlow,
+  'mcpServers.signIn.finish': McpServerSignInFinish,
+  'mcpServers.signIn.start': McpServerSignInStart,
+  'mcpServers.signIn.wait': McpServerSignInWait,
+  'mcpServers.signOut': McpServerTarget,
+  'mcpServers.update': McpServerUpdate,
   'mobileRelay.hosts.list': null,
+  'mobileRelay.hosts.unwatchRows': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,
   'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
@@ -2239,6 +2307,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
+  'worktree.autoName.availability': WorktreeAutoNameParams,
+  'worktree.autoName.dismiss': WorktreeAutoNameParams,
+  'worktree.autoName.retry': WorktreeAutoNameParams,
+  'worktree.autoName.wait': WorktreeAutoNameWaitParams,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,

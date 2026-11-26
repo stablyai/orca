@@ -33,6 +33,7 @@ import { prepareFederatedAttachmentAuthority } from './federation-attachment-aut
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
 import { federatedAttachmentChatLineage } from '../legacy-remote-home/federated-worker-chat-lineage'
+import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineOrchestrationMethod({
@@ -84,6 +85,15 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           })
         )
       }
+      // The same installed-agent check as every start, before anything is created here.
+      await refuseUninstalledWorkerAgent(runtime, {
+        agent,
+        terminal: params.terminal,
+        repoSelector: createsWorktree
+          ? params.repo
+          : (await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => undefined))
+              ?.repoId
+      })
 
       const db = runtime.getOrchestrationDb()
       const chatLineage = federatedAttachmentChatLineage(params.chatLineage, context)
@@ -252,7 +262,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
               subWorkersInOwnRun: true,
-              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+              ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
               preserveHumanCommitCredit: chatLineage
             })
           }

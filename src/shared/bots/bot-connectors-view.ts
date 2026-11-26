@@ -4,7 +4,13 @@ import { botLinearWorkspaces, botSlackApps, type Bot } from '../bot-types'
 import { CONNECTOR_OFFER_NAMES, type ConnectorOfferSource } from './bot-connector-offer'
 import type { GoogleAccountView, GoogleServiceReadiness } from '../google/google-connect-types'
 import { GOOGLE_SERVICE_INFO } from '../google/google-scopes'
-import { googleBotConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
+import { botGoogleConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
+import {
+  botGoogleAccess,
+  botGoogleDefault,
+  googleEmailKey,
+  type GoogleDefaultRead
+} from '../google/google-bot-accounts'
 
 export type BotConnectorService = {
   source: ConnectorOfferSource
@@ -41,13 +47,13 @@ export const LINEAR_NO_KEY =
 // linear: a Linear API key or a Connect Linear login on this computer.
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
-// googleDefault: the account a call without --account uses.
+// googleDefault: this computer's default as the host reads it: an account, none, or unreadable.
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
   linear: boolean
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
-  googleDefault?: string | null
+  googleDefault?: GoogleDefaultRead
 }
 
 const OFFER_GOOGLE = '`orca bot connectors --offer google`'
@@ -67,25 +73,32 @@ const GOOGLE_STATES: Record<GoogleServiceReadiness['state'], string> = {
 
 /** Google's row: the owner's accounts on this computer, if the owner turned Google on for this bot. */
 function googleService(
-  bot: Pick<Bot, 'google'>,
-  accounts: readonly GoogleAccountView[],
+  bot: Pick<Bot, 'google' | 'googleAccounts'>,
+  hostAccounts: readonly GoogleAccountView[],
   app: boolean,
-  defaultAccount: string | null
+  computerDefault: GoogleDefaultRead
 ): BotConnectorService {
-  const connected = accounts.filter((account) => account.status === 'connected')
-  const { allowed, host } = googleBotConnectState({
-    allowed: bot.google === true,
+  // Only the accounts the bot may use, and the default its calls without --account go to: the
+  // host's rule, so an unreadable default marks none.
+  const { allowed, host, accounts } = botGoogleConnectState(bot, {
     client: app,
-    accounts
+    accounts: hostAccounts
   })
+  const read = botGoogleDefault(botGoogleAccess(bot), computerDefault)
+  const defaultAccount = 'email' in read ? read.email : null
+  const isDefault = (account: GoogleAccountView): boolean =>
+    defaultAccount !== null && googleEmailKey(account.email) === defaultAccount
+  const connected = accounts.filter((account) => account.status === 'connected')
   const gap = !allowed
     ? `Run ${OFFER_GOOGLE} to ask your owner.`
     : host === 'connected'
       ? undefined
-      : GOOGLE_HOST_GAPS[host]
+      : accounts.length === 0 && hostAccounts.length > 0
+        ? `None of the Google accounts on this computer is chosen for you; ${OFFER_GOOGLE} asks your owner.`
+        : GOOGLE_HOST_GAPS[host]
   // A signed-out default stays listed: calls without --account still go to it, and fail.
   const signedOutDefault = accounts.find(
-    (account) => account.email === defaultAccount && account.status !== 'connected'
+    (account) => isDefault(account) && account.status !== 'connected'
   )
   const detail = [
     ...(signedOutDefault
@@ -93,7 +106,7 @@ function googleService(
       : []),
     ...connected.map(
       (account) =>
-        `${account.email}${account.email === defaultAccount ? ' (default)' : ''}: ${account.services
+        `${account.email}${isDefault(account) ? ' (default)' : ''}: ${account.services
           .map(
             (service) =>
               `${GOOGLE_SERVICE_INFO[service.service].label} ${GOOGLE_STATES[service.state]}`
@@ -124,7 +137,10 @@ export type CloudSource = { source: string; approveUrl?: string }
  * Cloud's sources, when it answered; without them, the Slack app this computer set up stands.
  */
 export function botConnectorServices(
-  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google'>,
+  bot: Pick<
+    Bot,
+    'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google' | 'googleAccounts'
+  >,
   local: LocalSignIns,
   cloud?: readonly CloudSource[]
 ): BotConnectorService[] {
@@ -161,7 +177,14 @@ export function botConnectorServices(
       ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },
     ...(local.google
-      ? [googleService(bot, local.google, local.googleApp === true, local.googleDefault ?? null)]
+      ? [
+          googleService(
+            bot,
+            local.google,
+            local.googleApp === true,
+            local.googleDefault ?? { email: null }
+          )
+        ]
       : [])
   ]
 }

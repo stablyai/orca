@@ -70,10 +70,6 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   other: {
     marginBottom: spacing.xs
   },
-  // The last choice row keeps the card's edge where the footer would sit.
-  choiceOnlyEnd: {
-    height: ASK_CARD_PADDING - 6
-  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -97,6 +93,17 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   progress: {
     color: colors.textSecondary,
     fontSize: typography.metaSize
+  },
+  // A failed answer, quiet in the bar rather than a banner over the card.
+  notice: {
+    flexShrink: 1,
+    textAlign: 'center',
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  // Stays at the bar's end when nothing sits before it.
+  confirm: {
+    marginLeft: 'auto'
   },
   next: {
     minHeight: MIN_TOUCH_TARGET,

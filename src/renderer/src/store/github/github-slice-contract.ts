@@ -128,6 +128,10 @@ export type GitHubSlice = {
     prNumber: number,
     options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null; userRefresh?: boolean }
   ) => Promise<PRComment[]>
+  /** Null when the provider is unavailable and there is no cached result. */
+  readPRComments: (
+    ...args: Parameters<GitHubSlice['fetchPRComments']>
+  ) => Promise<PRComment[] | null>
   addPRConversationComment: (
     repoPath: string,
     prNumber: number,

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
@@ -7,6 +8,7 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import {
   getExperimentalSearchEntry,
+  getOptInOnlyExperimentVisibility,
   sharedCodexServersSettingAvailable
 } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
@@ -41,12 +43,20 @@ export function ExperimentalPane({
   const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
-  const showAgentDashboard = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().agentDashboard
-  ])
-  const showTerminalAttention = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().terminalAttention
-  ])
+  // Why latch: switching one off must not make its row vanish mid-click. The pane unmounts when
+  // the user leaves the Experimental section, so the row is gone the next time they come back.
+  const [optInOnlyOnAtOpen] = useState(() => getOptInOnlyExperimentVisibility(settings))
+  const optInOnlyOnNow = getOptInOnlyExperimentVisibility(settings)
+  const showAgentDashboard =
+    (hiddenExperimentalUnlocked ||
+      optInOnlyOnAtOpen.agentDashboard ||
+      optInOnlyOnNow.agentDashboard) &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().agentDashboard])
+  const showTerminalAttention =
+    (hiddenExperimentalUnlocked ||
+      optInOnlyOnAtOpen.terminalAttention ||
+      optInOnlyOnNow.terminalAttention) &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().terminalAttention])
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])

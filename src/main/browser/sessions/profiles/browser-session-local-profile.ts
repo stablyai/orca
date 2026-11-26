@@ -11,10 +11,14 @@ const DEFAULT_BROWSER_PROFILE_ID = 'default'
  * default stands in for. Every other server profile is the server's own, even when its id matches.
  */
 export function localBrowserProfileIdForSession(webSession: Session): string | null {
-  const own = browserSessionRegistry.profileIdForSession(webSession)
-  if (own) {
-    return own
-  }
+  return (
+    browserSessionRegistry.profileIdForSession(webSession) ??
+    routedLocalBrowserProfileId(webSession)
+  )
+}
+
+/** The local profile an SSH or This-device page's session stands for, by its route alone. */
+export function routedLocalBrowserProfileId(webSession: Session): string | null {
   const ssh = localSshBrowserProfileIdForSession(webSession)
   if (ssh) {
     return ssh

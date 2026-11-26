@@ -77,7 +77,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
           preserveHumanCommitCredit: chatLineage,
-          ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
+          ...(assignee ? runtime.getTerminalOrchestrationCliTarget(assignee) : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
@@ -174,7 +174,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           ctx.id,
           (sessionId) => botOfSession(runtime.bots, sessionId) !== null
         ),
-        cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
+        ...runtime.getTerminalOrchestrationCliTarget(to)
       })
 
       let injected = false
@@ -264,7 +264,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
               ctx.id,
               (sessionId) => botOfSession(runtime.bots, sessionId) !== null
             ),
-          ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
+          ...(ctx ? runtime.getTerminalOrchestrationCliTarget(workerHandle) : {})
         })
         return { dispatch: ctx ?? null, preamble }
       }

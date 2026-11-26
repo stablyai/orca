@@ -52,6 +52,9 @@ function getConfigPath(): string {
   return join(getKimiHome(), 'config.toml')
 }
 
+const UNMERGEABLE_CONFIG_DETAIL =
+  "Could not add Orca's [[hooks]] without making Kimi config.toml invalid. Remove the inline `hooks = [...]` line from config.toml or convert it to [[hooks]] tables, then restart Orca."
+
 // Kimi uses cmd.exe on Windows and sh elsewhere; Git Bash is only for its Shell tool.
 const POSIX_SCRIPT_FILE_NAME = 'kimi-hook.sh'
 const WINDOWS_SCRIPT_FILE_NAME = 'kimi-hook.cmd'
@@ -216,10 +219,27 @@ export class KimiHookService {
       }
     }
     const scriptPath = getManagedScriptPath()
-    const command = getManagedCommand(scriptPath)
-    // Write the script first so config.toml never points at a missing script.
-    writeManagedScript(scriptPath, getManagedScript())
-    writeConfigToml(configPath, applyManagedKimiHooks(text, command, isManagedKimiCommand))
+    const next = applyManagedKimiHooks(text, getManagedCommand(scriptPath), isManagedKimiCommand)
+    if (next?.installed) {
+      // Write the script first so config.toml never points at a missing script.
+      writeManagedScript(scriptPath, getManagedScript())
+    }
+    // A refused merge still writes the repaired text that drops a stale duplicate block.
+    if (next) {
+      writeConfigToml(configPath, next.text)
+    }
+    if (!next?.installed) {
+      console.warn(
+        `[agent-hooks] Kimi managed hook install failed for ${configPath}: ${UNMERGEABLE_CONFIG_DETAIL}`
+      )
+      return {
+        agent: 'kimi',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: UNMERGEABLE_CONFIG_DETAIL
+      }
+    }
     return this.getStatus()
   }
 
@@ -235,14 +255,20 @@ export class KimiHookService {
     try {
       // Kimi creates config lazily; a missing remote file starts empty.
       const text = (await readTextFileRemote(sftp, remoteConfigPath)) ?? ''
-      const command = wrapPosixHookCommand(remoteScriptPath)
+      const next = applyManagedKimiHooks(
+        text,
+        wrapPosixHookCommand(remoteScriptPath),
+        isManagedKimiCommand
+      )
+      if (!next?.installed) {
+        if (next) {
+          await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.text)
+        }
+        throw new Error(UNMERGEABLE_CONFIG_DETAIL)
+      }
       // Write the script first so config.toml never points at a missing script.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeTextFileRemoteAtomic(
-        sftp,
-        remoteConfigPath,
-        applyManagedKimiHooks(text, command, isManagedKimiCommand)
-      )
+      await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.text)
       return {
         agent: 'kimi',
         state: 'installed',

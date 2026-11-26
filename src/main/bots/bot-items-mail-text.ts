@@ -1,6 +1,8 @@
 // What item mail tells the bot (Orca's voice, workflow only). The owner's and other chats' words are
 // fenced, so a comment can't pose as Orca's instructions; each mail names its event for `show --after`.
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
+import { agentSessionAttachmentUploadIdOfPath } from '../../shared/agent-session/agent-session-attachments'
+import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import {
   botItemCommentImages,
   botItemCommentSkills,
@@ -9,7 +11,10 @@ import {
   type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
-import { offsetSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import {
+  offsetSentImagePromptMarkers,
+  remapSentImagePromptMarkers
+} from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { statusOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemRecord } from './bot-items-schema'
 
@@ -118,7 +123,7 @@ export function botItemChangeMail(
       ...body,
       '',
       ...(next.length > 0 ? [next.join(' '), ''] : []),
-      `Check with \`orca bot item show <n>\` before acting: items may have changed since, and mail can repeat after a crash. If nothing needs doing, end the turn without a chat reply.`
+      `Check with \`orca bot item show <n>\` before acting: items may have changed since, and mail can repeat after a crash. If nothing needs doing, stay silent with ${BOT_QUIET_MARKER}.`
     ].join('\n')
   }
 }
@@ -128,7 +133,7 @@ export function botItemChangeMail(
 function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
-  const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
+  const said = text.trim() ? `:\n${fenceQuotedText(text)}` : ''
   return `${said}${skippedNote(event.data.skipped)}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
 }
 
@@ -186,6 +191,31 @@ export function botItemMailImages(changes: readonly { event: BotItemEventRecord 
   )
 }
 
+export function botItemMailWithoutExpiredImages(
+  changes: readonly Change[],
+  expired: ReadonlySet<string>
+): Change[] {
+  return changes.map(({ event, item }) => {
+    if (event.kind !== 'commented') {
+      return { event, item }
+    }
+    const kept: BotItemCommentImage[] = []
+    const positions = botItemCommentImages(event.data).map((image) => {
+      const uploadId = agentSessionAttachmentUploadIdOfPath(image.path)
+      if (uploadId && expired.has(uploadId)) {
+        return null
+      }
+      kept.push(image)
+      return kept.length
+    })
+    if (kept.length === positions.length) {
+      return { event, item }
+    }
+    const text = remapSentImagePromptMarkers(str(event.data.text) ?? '', positions)
+    return { event: { ...event, data: { ...event.data, text, images: kept } }, item }
+  })
+}
+
 function changeWords(event: BotItemEventRecord): string | null {
   switch (event.kind) {
     case 'commented':
@@ -237,6 +267,6 @@ export function botItemMakerCommentMail(
 ): { subject: string; body: string } {
   return {
     subject: `${makerName} commented (${itemName(item)})`,
-    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}${imagesNote(images, 0, false)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, end the turn without a chat reply.`
+    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}${imagesNote(images, 0, false)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, stay silent with ${BOT_QUIET_MARKER}.`
   }
 }
