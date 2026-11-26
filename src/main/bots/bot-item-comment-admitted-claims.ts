@@ -7,12 +7,13 @@ const ADMITTED_CLAIMS_MAX = 64
 
 export type AdmittedCommentClaim = { sessionId: string; uploadIds: ReadonlySet<string> }
 
-function claimKey({ sessionId, uploadIds }: AdmittedCommentClaim): string {
-  return [sessionId, ...[...uploadIds].sort()].join('\n')
+function claimKey(eventId: number, { sessionId, uploadIds }: AdmittedCommentClaim): string {
+  return [eventId, sessionId, ...[...uploadIds].sort()].join('\n')
 }
 
 export function rememberAdmittedCommentClaim(
   store: BotItemsRemote,
+  eventId: number,
   claim: AdmittedCommentClaim
 ): void {
   let claims = admitted.get(store)
@@ -20,7 +21,7 @@ export function rememberAdmittedCommentClaim(
     claims = new Set()
     admitted.set(store, claims)
   }
-  claims.add(claimKey(claim))
+  claims.add(claimKey(eventId, claim))
   // Admissions whose mail never went out (a deleted chat) age out oldest first.
   for (const key of claims) {
     if (claims.size <= ADMITTED_CLAIMS_MAX) {
@@ -30,10 +31,11 @@ export function rememberAdmittedCommentClaim(
   }
 }
 
-/** True once when this store's admission already claimed exactly these uploads for `sessionId`. */
+/** True once when this store's admission of comment `eventId` claimed exactly these uploads for `sessionId`. */
 export function takeAdmittedCommentClaim(
   store: BotItemsRemote,
+  eventId: number,
   claim: AdmittedCommentClaim
 ): boolean {
-  return admitted.get(store)?.delete(claimKey(claim)) ?? false
+  return admitted.get(store)?.delete(claimKey(eventId, claim)) ?? false
 }

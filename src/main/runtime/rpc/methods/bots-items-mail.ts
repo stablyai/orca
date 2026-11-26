@@ -124,7 +124,7 @@ export async function sendBotItemMail(
   const expired = new Set<string>()
   const comment = owed.changes.find(({ event }) => event.kind === 'commented')?.event
   const attachment = comment ? ownerCommentAttachmentBody(comment) : null
-  if (attachment) {
+  if (comment && attachment) {
     const store = getAgentSessionAttachmentStore()
     const claim = getAgentSessionAttachmentClaimer()
     if (!store || !claim) {
@@ -135,7 +135,7 @@ export async function sendBotItemMail(
       const items = runtime.botItems.store()
       // The outbox keeps the uploads until the actual recipient claims them.
       for (let attempt = 0; ; attempt++) {
-        if (attempt > 0 || !takeAdmittedCommentClaim(items, { sessionId, uploadIds })) {
+        if (attempt > 0 || !takeAdmittedCommentClaim(items, comment.id, { sessionId, uploadIds })) {
           await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
         }
         if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {

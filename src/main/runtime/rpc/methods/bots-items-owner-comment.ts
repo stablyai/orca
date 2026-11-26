@@ -91,8 +91,8 @@ async function postOwnerComment(
     params.skills,
     params.skipped
   )
-  if (attached.claimed) {
-    rememberAdmittedCommentClaim(store, attached.claimed)
+  if (attached.claimed && outcome.eventId !== null) {
+    rememberAdmittedCommentClaim(store, outcome.eventId, attached.claimed)
   }
   return outcome.eventId
 }
