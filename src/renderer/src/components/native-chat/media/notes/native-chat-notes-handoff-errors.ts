@@ -48,7 +48,7 @@ export function nativeChatNotesHandOffErrorText(t: Translate, error: unknown): s
   if (error instanceof NativeChatNotesEditedElsewhereError) {
     return t(
       'components.native-chat.notes.editedElsewhere',
-      'This image is open for editing in another window. Finish there first; your notes are still here.'
+      'This image is open for editing elsewhere. Finish there first; your notes are still here.'
     )
   }
   if (error instanceof NativeChatNotesAlreadyAddedError) {

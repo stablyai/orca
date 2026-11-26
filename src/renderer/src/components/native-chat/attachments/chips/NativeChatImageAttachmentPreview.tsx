@@ -280,7 +280,7 @@ function NativeChatImageThumbnail({
       showNativeChatNotesNotice(notesScopeKey, {
         text: t(
           'components.native-chat.notes.removeWhileEditing',
-          'This image is open for editing in another window. Finish there first.'
+          'Finish editing elsewhere first.'
         )
       })
       return

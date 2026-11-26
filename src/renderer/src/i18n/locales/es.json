@@ -21028,8 +21028,8 @@
         "sendWhileEditing": "Cierra la imagen cuyas notas estás editando y luego envía.",
         "undoUnsaved": "No se pudo deshacer: no se pudieron guardar las notas anteriores. Estas se quedan en tu mensaje.",
         "alreadyAdded": "Estas notas ya se añadieron a tu mensaje desde otra ventana.",
-        "editedElsewhere": "Esta imagen se está editando en otra ventana. Termina allí primero; tus notas siguen aquí.",
-        "removeWhileEditing": "Esta imagen se está editando en otra ventana. Termina allí primero."
+        "editedElsewhere": "Esta imagen se está editando en otro lugar. Termina allí primero; tus notas siguen aquí.",
+        "removeWhileEditing": "Termina primero la edición en otro lugar."
       }
     },
     "tab": {

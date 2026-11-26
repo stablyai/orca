@@ -23187,8 +23187,8 @@
         "sendWhileEditing": "Close the image you’re editing notes on, then send.",
         "undoUnsaved": "Couldn’t undo: the earlier notes couldn’t be saved. These stay in your message.",
         "alreadyAdded": "These notes were already added to your message from another window.",
-        "editedElsewhere": "This image is open for editing in another window. Finish there first; your notes are still here.",
-        "removeWhileEditing": "This image is open for editing in another window. Finish there first."
+        "editedElsewhere": "This image is open for editing elsewhere. Finish there first; your notes are still here.",
+        "removeWhileEditing": "Finish editing elsewhere first."
       }
     },
     "tab": {

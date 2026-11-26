@@ -21355,8 +21355,8 @@
         "sendWhileEditing": "Fermez l’image dont vous modifiez les notes, puis envoyez.",
         "undoUnsaved": "Impossible d’annuler : les notes précédentes n’ont pas pu être enregistrées. Celles-ci restent dans votre message.",
         "alreadyAdded": "Ces notes ont déjà été ajoutées à votre message depuis une autre fenêtre.",
-        "editedElsewhere": "Cette image est en cours de modification dans une autre fenêtre. Terminez d’abord là-bas ; vos notes sont toujours ici.",
-        "removeWhileEditing": "Cette image est en cours de modification dans une autre fenêtre. Terminez d’abord là-bas."
+        "editedElsewhere": "Cette image est en cours de modification ailleurs. Terminez d’abord là-bas ; vos notes sont toujours ici.",
+        "removeWhileEditing": "Terminez d’abord la modification ailleurs."
       }
     },
     "tab": {

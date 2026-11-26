@@ -23008,8 +23008,8 @@
         "sendWhileEditing": "Notlarını düzenlediğiniz görseli kapatın, sonra gönderin.",
         "undoUnsaved": "Geri alınamadı: önceki notlar kaydedilemedi. Bu notlar mesajınızda kalıyor.",
         "alreadyAdded": "Bu notlar başka bir pencereden mesajınıza zaten eklendi.",
-        "editedElsewhere": "Bu görsel başka bir pencerede düzenleniyor. Önce orada bitirin; notlarınız hâlâ burada.",
-        "removeWhileEditing": "Bu görsel başka bir pencerede düzenleniyor. Önce orada bitirin."
+        "editedElsewhere": "Bu görsel başka bir yerde düzenleniyor. Önce orada bitirin; notlarınız hâlâ burada.",
+        "removeWhileEditing": "Önce diğer yerdeki düzenlemeyi bitirin."
       }
     },
     "tab": {
