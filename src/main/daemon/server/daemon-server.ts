@@ -115,6 +115,7 @@ export class DaemonServer {
     const relays = createDaemonProviderRelays({
       ...options,
       protocolVersion,
+      daemonInstance: launchNonce,
       acceptsWork: this.providerWork.acceptsProviderWork,
       onLiveCountChanged: () => this.lifecycle.reevaluateIdleShutdown(),
       log: this.log
