@@ -1,8 +1,10 @@
+import { pluginPanelAnswerOutput } from '../../workers/plugin-panel-answer-output'
+import { pluginPanelBytesNotBinary } from '../../workers/plugin-panel-bridge-protocol'
 import { hostError } from './testing-host-error'
 
 /** What the stand-in Orca holds for the plugin, and the worker handlers it fakes. */
 export type MockPluginDataOptions = {
-  /** `plugin.request` handlers by name: the answer, or a function of the input (it may throw
+  /** `plugin.request` and `plugin.requestBytes` handlers by name: the answer, or a function of the input (it may throw
    *  `hostError(...)`, which the panel then sees). An unlisted name is `unknown_method`. */
   requests?: Record<string, unknown>
   /** The plugin's storage before the panel runs, by key. */
@@ -17,6 +19,7 @@ export type MockPluginDataSnapshot = Record<MockPluginDataArea, Record<string, u
 
 const HANDLED = new Set([
   'plugin.request',
+  'plugin.requestBytes',
   'events.subscribe',
   'storage.get',
   'storage.set',
@@ -76,6 +79,19 @@ export function createMockPluginData(options: MockPluginDataOptions) {
     return { output: output ?? null }
   }
 
+  // The same handlers as `plugin.request`; the answer is refused or handed over as Orca does it.
+  async function requestBytes(params: unknown): Promise<{ bytes: ArrayBuffer }> {
+    const name = String(field(params, 'name'))
+    const answer = pluginPanelAnswerOutput(name, (await request(params)).output)
+    if ('error' in answer) {
+      throw hostError(answer.error.code, answer.error.message)
+    }
+    if (!(answer.output instanceof ArrayBuffer)) {
+      throw hostError('action_failed', pluginPanelBytesNotBinary(name))
+    }
+    return { bytes: answer.output }
+  }
+
   return {
     handles: (method: string): boolean => HANDLED.has(method),
     async answer(method: string, params: unknown): Promise<unknown> {
@@ -84,6 +100,8 @@ export function createMockPluginData(options: MockPluginDataOptions) {
       switch (method) {
         case 'plugin.request':
           return request(params)
+        case 'plugin.requestBytes':
+          return requestBytes(params)
         case 'storage.get':
           return { value: areas.storage.get(key) ?? null }
         case 'storage.keys':

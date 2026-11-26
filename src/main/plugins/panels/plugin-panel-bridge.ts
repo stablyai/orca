@@ -16,6 +16,7 @@ import {
   PLUGIN_PANEL_POST_RATE_LIMIT,
   PLUGIN_PANEL_REQUEST_DEFAULT_TIMEOUT_MS,
   PLUGIN_PANEL_RESULT_MAX_BYTES,
+  pluginPanelBytesNotBinary,
   pluginPanelBytesTooLarge,
   type PluginDataArea,
   type PluginPanelCaller,
@@ -170,10 +171,7 @@ export class PluginPanelBridge {
   async requestBytes(request: PluginPanelRequest): Promise<ArrayBuffer> {
     const output = await this.askWorker(request)
     if (!(output instanceof ArrayBuffer)) {
-      throw new PluginHostCallError(
-        'action_failed',
-        `${request.name} answered with a value that is not binary data`
-      )
+      throw new PluginHostCallError('action_failed', pluginPanelBytesNotBinary(request.name))
     }
     // The worker runtime already refuses this; main does not trust the worker process.
     if (output.byteLength > PLUGIN_PANEL_BYTES_RESULT_MAX_BYTES) {

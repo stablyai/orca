@@ -72,7 +72,8 @@ declare module 'orca/testing' {
     }
   }
   /** A stand-in for the plugin's worker: each `plugin.request` name's answer, or a function of
-   *  its input (it may throw `hostError(...)`). An unlisted name rejects with `unknown_method`. */
+   *  its input (it may throw `hostError(...)`). An unlisted name rejects with `unknown_method`.
+   *  `plugin.requestBytes` asks the same names; answer it with an `ArrayBuffer` or a typed array. */
   export type MockRequests = {
     [K in keyof PluginRequests]?:
       | PluginRequestOutput<K>

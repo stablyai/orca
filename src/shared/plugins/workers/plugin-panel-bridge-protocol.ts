@@ -26,6 +26,8 @@ export const PLUGIN_PANEL_BYTES_RESULT_MAX_BYTES = 2 * 1024 * 1024
 /** One text for the worker runtime, which refuses such an answer before it leaves, and for main. */
 export const pluginPanelBytesTooLarge = (name: string): string =>
   `${name} answered with more than 2 MiB`
+export const pluginPanelBytesNotBinary = (name: string): string =>
+  `${name} answered with a value that is not binary data`
 
 /** Who asked: one open panel or editor of the plugin. `id` stays the same while it stays open. */
 export const pluginPanelCallerSchema = z.object({
