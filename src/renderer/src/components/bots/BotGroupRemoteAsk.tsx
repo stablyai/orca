@@ -67,14 +67,18 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
           {status}
         </span>
       </div>
-      {detail ? <p className="text-xs text-chat-foreground-faint">{detail}</p> : null}
+      {detail ? (
+        <p className="text-xs text-chat-foreground-faint [overflow-wrap:anywhere]">{detail}</p>
+      ) : null}
       {quiet?.words ? <NativeChatMarkdown content={quiet.words} variant="document" /> : null}
       {quiet?.nothingToReport ? (
         <p className="text-xs text-chat-foreground-faint">
           {t('bots.chat.nothingToReport', 'Nothing to report')}
         </p>
       ) : null}
-      {shortened ? <p className="text-xs text-chat-foreground-faint">{shortened}</p> : null}
+      {shortened ? (
+        <p className="text-xs text-chat-foreground-faint [overflow-wrap:anywhere]">{shortened}</p>
+      ) : null}
     </section>
   )
 }

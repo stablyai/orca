@@ -87,12 +87,15 @@ function AttachmentButton({
         type="button"
         variant="outline"
         size="sm"
+        className="max-w-full"
         onClick={() => visible && (opener ? opener(path) : setOpen(true))}
       >
-        {chatTextAttachmentName(
-          path,
-          t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
-        )}
+        <span className="truncate">
+          {chatTextAttachmentName(
+            path,
+            t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
+          )}
+        </span>
       </Button>
       {open && visible ? (
         <NativeChatTextAttachmentPreview

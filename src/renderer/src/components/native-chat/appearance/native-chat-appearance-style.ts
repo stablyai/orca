@@ -23,9 +23,9 @@ export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat
 /** A subagent sheet's header already tops its transcript, so it pads like the sheet's body. */
 export function nativeChatTranscriptOuterClass(railVisible: boolean, inSheet = false): string {
   if (inSheet) {
-    return 'px-4 py-3'
+    return 'overflow-x-clip px-4 py-3'
   }
-  return `native-chat-transcript-inset pt-10 pb-5 ${railVisible ? 'px-9' : 'px-3 sm:px-4'}`
+  return `native-chat-transcript-inset overflow-x-clip pt-10 pb-5 ${railVisible ? 'px-9' : 'px-3 sm:px-4'}`
 }
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'

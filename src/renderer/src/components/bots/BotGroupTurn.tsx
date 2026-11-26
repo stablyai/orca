@@ -284,7 +284,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
             }
           />
           {rejection ? (
-            <p role="alert" className="text-sm text-chat-warning">
+            <p role="alert" className="text-sm text-chat-warning [overflow-wrap:anywhere]">
               {rejection}
             </p>
           ) : null}

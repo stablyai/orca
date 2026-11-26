@@ -288,7 +288,10 @@ export function BotGroupChat({
               tabId={tabId}
               isVisible={isVisible}
             >
-              <NativeChatTranscriptColumn ref={follow.contentRef} className="space-y-6 py-6">
+              <NativeChatTranscriptColumn
+                ref={follow.contentRef}
+                className="space-y-6 overflow-x-clip py-6"
+              >
                 {data?.hasEarlier ? (
                   <Button variant="ghost" size="sm" onClick={loadEarlier}>
                     {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}
