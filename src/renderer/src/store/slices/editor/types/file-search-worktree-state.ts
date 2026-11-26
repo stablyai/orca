@@ -19,6 +19,6 @@ export type FileSearchWorktreeState = {
   focusRequestId?: number
   /** In memory: the Files query is non-empty, so search results cover the tree. */
   active?: boolean
-  /** In memory: the field's text when it unmounted; `query` stays the last searched text. */
-  draft?: string
+  /** In memory: identifies the field that set `active`, so only its own draft can be restored. */
+  draftToken?: number
 }

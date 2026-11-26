@@ -1,14 +1,8 @@
 import type React from 'react'
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import type {
-  SearchFileResult,
-  SearchMatch
-} from '../../../../../../shared/file-search/code-search-types'
-import { buildSearchRows } from '../content-search/search-rows'
-import { cancelRevealFrame, openMatchResult } from '../content-search/search-match-open'
 import type { SearchFiltersProps } from '../content-search/SearchFilters'
-import { isTextSearchQuery, useFileSearchRunner } from '../content-search/useFileSearchRunner'
+import { useFileSearchRunner } from '../content-search/useFileSearchRunner'
 import { useFileSearchScope } from '../content-search/useFileSearchScope'
 import {
   COMBINED_SEARCH_LISTBOX_ID,
@@ -20,11 +14,13 @@ import type { CombinedSearchFieldState, CombinedSearchResultsState } from './com
 import { useCombinedSearchNavigation } from './use-combined-search-navigation'
 import { useCombinedSearchSeed } from './use-combined-search-seed'
 import { useSearchDraftLifecycle, type InitialSearchDraft } from './use-search-draft-lifecycle'
+import { useCombinedTextResults } from './use-combined-text-results'
+import { useOpenSearchMatch } from './use-open-search-match'
 import type { NameMatch, NameMatchResults } from './name-match-results'
 
 const EMPTY_COLLAPSED_FILES = new Set<string>()
 // Results computed under the previous options must not stay clickable while the rerun debounces.
-const STALE_RESULTS = { results: null, resultOwner: null } as const
+const STALE_RESULTS = { results: null, resultOwner: null, error: null } as const
 
 /** Drives one query into the name rows (immediate) and the text search (debounced), with shared keyboard navigation. */
 export function useCombinedSearch({
@@ -56,20 +52,14 @@ export function useCombinedSearch({
   filters: SearchFiltersProps
   results: CombinedSearchResultsState
 } {
-  const openFile = useAppStore((s) => s.openFile)
-  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const searchState = useAppStore((s) =>
     activeWorktreeId ? s.fileSearchStateByWorktree[activeWorktreeId] : null
   )
-  const committedQuery = searchState?.query ?? ''
   const caseSensitive = searchState?.caseSensitive ?? false
   const wholeWord = searchState?.wholeWord ?? false
   const useRegex = searchState?.useRegex ?? false
   const includePattern = searchState?.includePattern ?? ''
   const excludePattern = searchState?.excludePattern ?? ''
-  const storedResults = searchState?.results ?? null
-  const storedResultOwner = searchState?.resultOwner ?? null
-  const textLoading = searchState?.loading ?? false
   const collapsedFiles = searchState?.collapsedFiles ?? EMPTY_COLLAPSED_FILES
   const seedRequestId = searchState?.seedRequestId
   const focusRequestId = searchState?.focusRequestId
@@ -79,8 +69,6 @@ export function useCombinedSearch({
   const clearFileSearch = useAppStore((s) => s.clearFileSearch)
 
   const inputRef = useRef<HTMLInputElement>(null)
-  const revealRafRef = useRef<number | null>(null)
-  const revealInnerRafRef = useRef<number | null>(null)
   const includeInputRef = useRef<HTMLInputElement>(null)
   const excludeInputRef = useRef<HTMLInputElement>(null)
 
@@ -113,44 +101,22 @@ export function useCombinedSearch({
     updateActiveSearchState
   })
 
-  useEffect(() => {
-    return () => {
-      cancelRevealFrame(revealRafRef)
-      cancelRevealFrame(revealInnerRafRef)
-    }
-  }, [])
-
-  const textQueryActive =
-    isTextSearchQuery(query) || (forcedShortQuery === query && query.trim().length > 0)
-  // Only results committed for the live draft are shown or activated, never a previous query's.
-  const resultsAreCurrent =
-    textQueryActive && committedQuery === query && isCurrentOwner(storedResultOwner)
-  const committedResults = useMemo(
-    () => ({
-      results: resultsAreCurrent ? storedResults : null,
-      owner: resultsAreCurrent ? storedResultOwner : null
-    }),
-    [resultsAreCurrent, storedResultOwner, storedResults]
-  )
-  // Large result sets render at lower priority so the field and name rows stay responsive.
-  const deferredResults = useDeferredValue(committedResults)
-  const textRows = useMemo(
-    () => buildSearchRows(deferredResults.results, collapsedFiles),
-    [collapsedFiles, deferredResults.results]
-  )
-  const textError = resultsAreCurrent ? (searchState?.error ?? null) : null
+  const { deferredResults, deferredIsLive, textRows, textError, textPending } =
+    useCombinedTextResults({
+      query,
+      forcedShortQuery,
+      searchState,
+      collapsedFiles,
+      isCurrentOwner
+    })
   const hasQuery = query.trim().length > 0
-  // Results are null only before a scan settles (a settled miss is an empty result), so that is pending too.
-  const textPending =
-    textQueryActive &&
-    (committedQuery !== query || textLoading || (storedResults === null && !searchState?.error))
 
   const model = useMemo(
     () =>
       createCombinedSearchRows({
         names: nameMatches,
         // Gate the deferred payload on the live generation so a cleared or replaced result never lingers a frame.
-        textResult: resultsAreCurrent ? deferredResults.results : null,
+        textResult: deferredIsLive ? deferredResults.results : null,
         textRows,
         textPending,
         namesError: hasQuery ? namesError : null,
@@ -163,7 +129,7 @@ export function useCombinedSearch({
       namesError,
       textError,
       textPending,
-      resultsAreCurrent,
+      deferredIsLive,
       textRows
     ]
   )
@@ -177,8 +143,18 @@ export function useCombinedSearch({
     }
   }, [activeWorktreeId, cancelPendingSearch, clearFileSearch, setQuery])
 
+  // The latest draft for activation guards that run after the render that built the rows.
+  const liveQueryRef = useRef(query)
+  useLayoutEffect(() => {
+    liveQueryRef.current = query
+  })
+
   const handleQueryChange = useCallback(
     (value: string) => {
+      // A seeded short query is admitted once; retyping it later is ordinary typing.
+      if (forcedShortQuery !== null && value !== forcedShortQuery) {
+        setForcedShortQuery(null)
+      }
       if (!value.trim()) {
         clearQuery()
         setQuery(value)
@@ -187,7 +163,7 @@ export function useCombinedSearch({
       setQuery(value)
       runTextSearch(value)
     },
-    [clearQuery, runTextSearch, setQuery]
+    [clearQuery, forcedShortQuery, runTextSearch, setQuery]
   )
 
   const rerunTextSearch = useCallback(() => {
@@ -196,23 +172,12 @@ export function useCombinedSearch({
     }
   }, [query, runTextSearch])
 
-  const openMatch = useCallback(
-    (fileResult: SearchFileResult, match: SearchMatch) => {
-      if (!isCurrentOwner(deferredResults.owner)) {
-        return
-      }
-      openMatchResult({
-        resultOwner: deferredResults.owner,
-        fileResult,
-        match,
-        openFile,
-        setPendingEditorReveal,
-        revealRafRef,
-        revealInnerRafRef
-      })
-    },
-    [deferredResults.owner, isCurrentOwner, openFile, setPendingEditorReveal]
-  )
+  const openMatch = useOpenSearchMatch({
+    resultOwner: deferredResults.owner,
+    resultQuery: deferredResults.query,
+    liveQueryRef,
+    isCurrentOwner
+  })
 
   const openRow = useCallback(
     (row: CombinedSearchRow, permanent: boolean) => {

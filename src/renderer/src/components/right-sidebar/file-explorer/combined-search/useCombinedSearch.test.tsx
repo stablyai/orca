@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -42,6 +42,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  mounted.field = null
+  mounted.renders = []
   vi.useRealTimers()
   useAppStore.setState(initial, true)
 })
@@ -56,7 +58,7 @@ function renderField(worktreeId: string) {
       worktreePath: '/repo',
       query,
       setQuery,
-      nameMatches: { total: 0, matches: [] },
+      nameMatches: query.trim() ? { total: 0, matches: [] } : null,
       namesLoading: false,
       namesError: null,
       onOpenName: noop,
@@ -67,6 +69,36 @@ function renderField(worktreeId: string) {
 }
 
 type Field = ReturnType<typeof renderField>['result']
+
+type FieldState = ReturnType<typeof useCombinedSearch>
+const mounted: { field: FieldState | null; renders: string[] } = { field: null, renders: [] }
+
+function FieldHost({ worktreeId }: { worktreeId: string }): null {
+  const [start] = useState(() => getInitialSearchDraft(worktreeId))
+  const [query, setQuery] = useState(start.text)
+  mounted.field = useCombinedSearch({
+    activeWorktreeId: worktreeId,
+    worktreePath: '/repo',
+    query,
+    setQuery,
+    nameMatches: query.trim() ? { total: 0, matches: [] } : null,
+    namesLoading: false,
+    namesError: null,
+    onOpenName: noop,
+    onShowAllNames: noop,
+    initial: start
+  })
+  const { model } = mounted.field.results
+  mounted.renders.push(Array.from({ length: model.count }, (_, i) => model.getKey(i)).join(','))
+  return null
+}
+
+function field(): FieldState {
+  if (!mounted.field) {
+    throw new Error('field not mounted')
+  }
+  return mounted.field
+}
 
 function textRowKeys(result: Field): string[] {
   const { model } = result.current.results
@@ -108,17 +140,25 @@ describe('combined search text state', () => {
     expect(result.current.field.loading).toBe(true)
   })
 
-  it('reopens on the newest draft, not the last searched query', async () => {
-    const first = renderField('wt-remount')
-    act(() => first.result.current.field.onQueryChange('cart'))
+  it('reopens on the newest draft when the field is swapped in one update', async () => {
+    // FileExplorer keys the pane by route owner, so an owner change replaces the field in one commit.
+    const { rerender } = render(<FieldHost key="local" worktreeId="wt-remount" />)
+    act(() => field().field.onQueryChange('cart'))
     await pause()
     await act(async () => pending[0].resolve(resultFor('cart')))
-    act(() => first.result.current.field.onQueryChange('cars'))
-    first.unmount()
-
-    const second = renderField('wt-remount')
-    expect(second.result.current.field.query).toBe('cars')
+    act(() => field().field.onQueryChange('cars'))
+    rerender(<FieldHost key="runtime" worktreeId="wt-remount" />)
+    expect(field().field.query).toBe('cars')
     await pause()
     expect(pending.at(-1)?.query).toBe('cars')
+  })
+
+  it('renders no global miss between a scan settling and its rows arriving', async () => {
+    render(<FieldHost worktreeId="wt-deferred" />)
+    act(() => field().field.onQueryChange('cart'))
+    await pause()
+    await act(async () => pending[0].resolve(resultFor('cart')))
+    expect(mounted.renders.filter((keys) => keys.includes('no-results'))).toEqual([])
+    expect(mounted.renders.at(-1)).toContain('match:/repo/cart.ts')
   })
 })
