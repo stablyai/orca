@@ -18822,6 +18822,9 @@
           "output": "출력",
           "runNumber": "실행 #{{number}}",
           "runFailed": "실행하지 못했습니다.",
+          "runReplyLabel": "명령에 응답",
+          "runReplyPlaceholder": "응답을 입력하고 Enter로 보내기",
+          "runStop": "중지",
           "scheduledAt": "예약 시각 {{time}}",
           "startedAt": "{{time}}에 시작",
           "noFailureReason": "이번 실행이 시작되지 않았으며 기록된 이유가 없습니다."

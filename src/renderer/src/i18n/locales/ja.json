@@ -20369,6 +20369,9 @@
       "runTimedOut": "5 分後に停止しました",
       "runClosed": "完了前にターミナルが閉じました",
       "runFailed": "実行できませんでした",
+      "runReplyLabel": "コマンドに応答",
+      "runReplyPlaceholder": "応答を入力し、Enter で送信",
+      "runStop": "停止",
       "context": {
         "unavailable": "コンテキストの使用量はまだ不明です。Agent が次に応答すると表示されます。",
         "summary": "コンテキスト: {{used}} / {{window}} トークン ({{percent}}%)、最後の応答から推定。",

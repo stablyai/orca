@@ -19462,6 +19462,9 @@
           "output": "輸出",
           "runNumber": "執行 #{{number}}",
           "runFailed": "執行失敗。",
+          "runReplyLabel": "回覆指令",
+          "runReplyPlaceholder": "輸入回覆，按 Enter 傳送",
+          "runStop": "停止",
           "scheduledAt": "排定於 {{time}}",
           "startedAt": "開始於 {{time}}",
           "noFailureReason": "此次執行未啟動，且未記錄原因。"

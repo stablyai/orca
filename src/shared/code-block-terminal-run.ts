@@ -6,9 +6,15 @@ import { createNonSecureContextUuid } from './identifiers/non-secure-context-uui
 export type CodeBlockRunCall = <T>(method: string, params: unknown) => Promise<T>
 
 export type CodeBlockRunState =
-  | { status: 'running'; output: string }
+  | { status: 'running'; output: string; input?: CodeBlockRunInput }
   | { status: 'done'; output: string; exitCode: number }
   | { status: 'failed'; output: string; reason: 'closed' | 'timeout' | 'error'; message?: string }
+
+/** Answers a running block's prompts: a line typed back to it, or Ctrl+C. */
+export type CodeBlockRunInput = {
+  send: (line: string) => Promise<void>
+  interrupt: () => Promise<void>
+}
 
 /** What a chat hands its code blocks: run `block`, reporting each new read of its output. */
 export type CodeBlockScriptRunner = (
@@ -79,7 +85,12 @@ export async function runCodeBlockScript(args: {
       focus: false,
       presentation: 'background'
     })
-    handle = created.terminal.handle
+    const terminal = created.terminal.handle
+    handle = terminal
+    const input: CodeBlockRunInput = {
+      send: (line) => call('terminal.send', { terminal, text: line, enter: true }).then(() => {}),
+      interrupt: () => call('terminal.send', { terminal, interrupt: true }).then(() => {})
+    }
     const deadline = Date.now() + TIMEOUT_MS
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_MS))
@@ -94,7 +105,7 @@ export async function runCodeBlockScript(args: {
         onUpdate({ status: 'failed', output, reason: 'closed' })
         return
       }
-      onUpdate({ status: 'running', output })
+      onUpdate({ status: 'running', output, input })
     }
     onUpdate({ status: 'failed', output, reason: 'timeout' })
   } catch (error) {

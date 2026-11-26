@@ -2,6 +2,7 @@ import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { CodeBlockRunState } from '../../../../../../shared/code-block-terminal-run'
+import { NativeChatCodeBlockRunInput } from './NativeChatCodeBlockRunInput'
 
 /** A Play run's output, under its code block. */
 export function NativeChatCodeBlockRunOutput({
@@ -36,6 +37,9 @@ export function NativeChatCodeBlockRunOutput({
       >
         {status}
       </div>
+      {state.status === 'running' && state.input ? (
+        <NativeChatCodeBlockRunInput input={state.input} />
+      ) : null}
     </div>
   )
 }

@@ -20041,6 +20041,9 @@
       "runTimedOut": "Detenido tras 5 minutos",
       "runClosed": "El terminal se cerró antes de terminar",
       "runFailed": "No se pudo ejecutar",
+      "runReplyLabel": "Responder al comando",
+      "runReplyPlaceholder": "Escribe una respuesta, Intro para enviar",
+      "runStop": "Detener",
       "context": {
         "unavailable": "El uso del contexto aún no se conoce. Estará disponible cuando el agente vuelva a responder.",
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}} %), estimado a partir de la última respuesta.",

@@ -19782,6 +19782,9 @@
           "output": "Çıktı",
           "runNumber": "Çalıştırma #{{number}}",
           "runFailed": "Çalıştırma başarısız oldu.",
+          "runReplyLabel": "Komuta yanıt ver",
+          "runReplyPlaceholder": "Bir yanıt yazın, göndermek için Enter",
+          "runStop": "Durdur",
           "scheduledAt": "Planlanan zaman: {{time}}",
           "startedAt": "Başlangıç: {{time}}",
           "noFailureReason": "Bu çalıştırma başlatılamadı. Nedeni kaydedilmedi."

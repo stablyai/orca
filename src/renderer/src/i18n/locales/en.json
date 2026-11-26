@@ -19947,6 +19947,9 @@
           "output": "Output",
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
+          "runReplyLabel": "Reply to the command",
+          "runReplyPlaceholder": "Type a reply, Enter to send",
+          "runStop": "Stop",
           "scheduledAt": "Scheduled {{time}}",
           "startedAt": "Started {{time}}",
           "noFailureReason": "This run did not start, and no reason was recorded."

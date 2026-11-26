@@ -20305,6 +20305,9 @@
       "runTimedOut": "Nach 5 Minuten gestoppt",
       "runClosed": "Das Terminal wurde vor dem Ende geschlossen",
       "runFailed": "Konnte nicht ausgeführt werden",
+      "runReplyLabel": "Dem Befehl antworten",
+      "runReplyPlaceholder": "Antwort eingeben, Enter zum Senden",
+      "runStop": "Stopp",
       "context": {
         "unavailable": "Die Kontextnutzung ist noch nicht bekannt. Nach der nächsten Antwort des Agenten ist sie verfügbar.",
         "summary": "Kontext: {{used}} / {{window}} Token ({{percent}} %), anhand der letzten Antwort geschätzt.",

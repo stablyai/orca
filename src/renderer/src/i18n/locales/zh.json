@@ -19056,6 +19056,9 @@
           "output": "输出",
           "runNumber": "运行 #{{number}}",
           "runFailed": "运行失败",
+          "runReplyLabel": "回复命令",
+          "runReplyPlaceholder": "输入回复，按 Enter 发送",
+          "runStop": "停止",
           "scheduledAt": "计划于 {{time}}",
           "startedAt": "开始于 {{time}}",
           "noFailureReason": "此次运行未启动，且没有记录原因"
