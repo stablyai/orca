@@ -29,15 +29,22 @@ import {
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 /** What an import too big to land throws: retrying it unchanged lands nothing either. */
 const OVER_CAPS = new Set(['too-large', 'history-workspace-too-large'])
-/** Per chat, the transcript state and saved row a first-turn import was over the caps at. */
-const overCapsFirstTurns = new Map<string, string>()
+/** Per chat with no saved turn end, for this app run: null when it isn't on its first turn (it never
+ *  imports), else the transcript state its first turn was last imported or found over the caps at. */
+const settledFirstTurns = new Map<string, { filePath: string; key: string } | null>()
 
-/** What would change a first-turn import's outcome: the transcript's size and write time, and
- *  the newest row the chat holds. */
-async function firstTurnImportKey(filePath: string, leaf: string): Promise<string | undefined> {
+/** What would change a first-turn import's outcome: the transcript's size and write time. */
+async function transcriptKey(filePath: string): Promise<string | undefined> {
   const info = await stat(filePath).catch(() => null)
-  return info ? `${info.size}:${info.mtimeMs}:${leaf}` : undefined
+  return info ? `${info.size}:${info.mtimeMs}` : undefined
 }
+
+/** Settled this run and unchanged since: an open reads neither the journal nor the transcript. */
+async function firstTurnSettled(sessionId: string): Promise<boolean> {
+  const settled = settledFirstTurns.get(sessionId)
+  return settled === null || (!!settled && (await transcriptKey(settled.filePath)) === settled.key)
+}
+
 type ClaudeHistoryView = {
   physicalCursor: AgentJournalCursor
   origin: JournalHistoryOrigin | null
@@ -65,8 +72,11 @@ export async function catchUpClaudeTranscript(input: {
   timeoutMs?: number
   logger?: StructuredAgentSessionLogger
 }): Promise<boolean> {
+  if (input.leafUuid === '' && input.fromFirstPrompt && (await firstTurnSettled(input.sessionId))) {
+    return false
+  }
   let complete = false
-  let noteOverCaps: (() => void) | undefined
+  let settle: (() => void) | undefined
   const outcome = await runHistoryCatchUp({
     agentName: 'Claude',
     scope: 'claude-transcript-catch-up',
@@ -110,16 +120,20 @@ export async function catchUpClaudeTranscript(input: {
             : undefined
         return { hasRows, newest, origin, covered, turns }
       }),
-    // An import over the caps leaves nothing behind; noted, so an unchanged chat doesn't retry it.
+    // An import over the caps leaves nothing behind; settled, so an unchanged chat doesn't retry it.
     prepare: (context) =>
       prepare(context).catch((error: unknown) => {
         if (error instanceof Error && OVER_CAPS.has(error.message)) {
-          noteOverCaps?.()
+          settle?.()
         }
         throw error
       })
   })
-  return complete && (outcome === 'committed' || outcome === 'checked')
+  const caughtUp = complete && (outcome === 'committed' || outcome === 'checked')
+  if (caughtUp) {
+    settle?.()
+  }
+  return caughtUp
 
   async function prepare({
     view,
@@ -136,6 +150,9 @@ export async function catchUpClaudeTranscript(input: {
     const afterFirstPrompt =
       input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt && planned.turns === 1
     if (input.leafUuid === '' && !planned.covered && !afterFirstPrompt) {
+      if (input.fromFirstPrompt && planned.turns > 1) {
+        settledFirstTurns.set(input.sessionId, null)
+      }
       return null
     }
     const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
@@ -150,21 +167,19 @@ export async function catchUpClaudeTranscript(input: {
     if (!filePath) {
       return null
     }
+    // Taken before any read, so a write landing during the import makes the next open retry.
+    const key = afterFirstPrompt ? await transcriptKey(filePath) : undefined
+    const settleHere = () => {
+      if (key !== undefined) {
+        settledFirstTurns.set(input.sessionId, { filePath, key })
+      }
+    }
+    settle = settleHere
     // A first turn imported before reads on from its newest row, so a later open repeats nothing.
     const leaf = afterFirstPrompt
       ? ((await newestClaudeRow(history.reads, input.providerSessionId)) ?? '')
       : input.leafUuid
     check()
-    const skipKey = afterFirstPrompt ? await firstTurnImportKey(filePath, leaf) : undefined
-    if (skipKey !== undefined && overCapsFirstTurns.get(input.sessionId) === skipKey) {
-      return null
-    }
-    const overCaps = () => {
-      if (skipKey !== undefined) {
-        overCapsFirstTurns.set(input.sessionId, skipKey)
-      }
-    }
-    noteOverCaps = overCaps
     let leafAbsent = leaf === '' && (!!planned.covered || afterFirstPrompt)
     const tail = leafAbsent
       ? null
@@ -180,7 +195,7 @@ export async function catchUpClaudeTranscript(input: {
     check()
     if (!tail && !(leafAbsent && (planned.covered || afterFirstPrompt))) {
       // Past the tail's read budget: as over the caps as a too-large import.
-      overCaps()
+      settleHere()
       warn('leaf-not-in-tail')
       return null
     }
