@@ -87,9 +87,7 @@ export class OrchestrationMutationExecutor {
     if (
       isPromptMutation &&
       !existingPromptReceipt &&
-      !(await isTerminalSendRefusedBeforeWake(
-        params as Parameters<typeof isTerminalSendRefusedBeforeWake>[0]
-      ))
+      !(await isTerminalSendRefusedBeforeWake(params))
     ) {
       await this.runtime.wakeSleptAgentHandle((params as { terminal: string }).terminal, {})
     }
