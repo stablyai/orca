@@ -2,7 +2,7 @@
 // host checks.
 import { z } from 'zod'
 import type { BotItemStatus } from '../../shared/bots/bot-items'
-import { BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY } from '../../shared/bot-runtime-capabilities'
+import { BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY } from '../../shared/bots/bot-item-version-capability'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
