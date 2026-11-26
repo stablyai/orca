@@ -15,6 +15,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from '../selection/useFileExplorerKeys'
+import { useFileExplorerClickRename } from '../selection/use-file-explorer-click-rename'
 import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
 
 type UseFileExplorerNodeCommandsParams = {
@@ -91,6 +92,7 @@ export function useFileExplorerNodeCommands({
     },
     [handleClick]
   )
+  useFileExplorerClickRename({ containerRef, rowProjection, startRename })
   useFileExplorerKeys({
     containerRef,
     rowProjection,

@@ -26673,6 +26673,7 @@
       "fileExplorerCopyPath": "Copy file path",
       "fileExplorerCopyRelativePath": "Copy relative file path",
       "fileExplorerDelete": "Delete file",
+      "fileExplorerRename": "Rename file",
       "terminalCopySelection": "Copy terminal selection",
       "terminalSelectAll": "Select all terminal text",
       "terminalPaste": "Paste into terminal",
