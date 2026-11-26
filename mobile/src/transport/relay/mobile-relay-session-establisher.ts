@@ -123,21 +123,29 @@ export class MobileRelaySessionEstablisher {
       if (isDirectorRefusal(result.error)) {
         this.directorTried.set(credential.token, ++this.directorTrySeq)
       }
+      // Pending's budget spends on refusals and on any failure under a standing refusal verdict, so it
+      // can't redial forever behind that verdict; a plain outage spends nothing.
+      if (
+        usedPending &&
+        (isExplicitCredentialRejection(result.error) ||
+          isDirectorRefusal(result.error) ||
+          this.args.logical.getRelayHostReachability() === 'credential-refused') &&
+        ++this.pendingRefusals >= PENDING_REFUSAL_RETRIES
+      ) {
+        this.args.controller.recordRejectedCredential(credential.version)
+      }
       if (isExplicitCredentialRejection(result.error)) {
-        // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared:
-        // its install can still commit after this refusal, and the gated reprobe retries it slowly.
-        if (!usedPending || ++this.pendingRefusals >= PENDING_REFUSAL_RETRIES) {
+        // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared
+        // (above): its install can still commit after this refusal, and the gated reprobe retries it.
+        if (!usedPending) {
           this.args.controller.recordRejectedCredential(credential.version)
         }
         continue
       }
       // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
-      // the next credential without condemning this one; only speculative pending has a refusal budget.
+      // the next credential without condemning this one.
       if (!isDirectorRefusal(result.error)) {
         break
-      }
-      if (usedPending && ++this.pendingRefusals >= PENDING_REFUSAL_RETRIES) {
-        this.args.controller.recordRejectedCredential(credential.version)
       }
     }
     return {
