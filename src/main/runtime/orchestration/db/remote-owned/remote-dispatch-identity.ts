@@ -31,7 +31,7 @@ export function ensureRemoteDispatchRecord(
          FROM remote_placements WHERE task_id = ?5 AND conversation_id = ?2
          UNION ALL
          SELECT creator_orca_session_id, creator_pane_key, 2
-         FROM remote_dispatches WHERE dispatch_id = ?8
+         FROM remote_dispatches WHERE dispatch_id = ?8 AND conversation_id = ?2
        ),
        chosen AS (
          SELECT session, pane FROM creator WHERE session IS NOT NULL OR pane IS NOT NULL

@@ -291,12 +291,13 @@ async function forwardToLink(
 }
 
 /** A Dispatch the server's answer names (a follow-up it started for the subject) is its; record it
- *  so commands about it route there and it lists under the subject's chat. */
+ *  so commands about it route there and it lists under the subject's chat. One the queue recorded
+ *  first (an older server's, or a background-wait follow-up) gets what it is missing. */
 function seedNamedDispatches(db: OrchestrationDb, subject: RemoteSubject, answer: unknown): void {
   const named: Values = answer && typeof answer === 'object' ? { ...answer } : {}
   const dispatchId = stringField(named, 'dispatchId')
   const taskId = stringField(named, 'taskId')
-  if (!dispatchId || !taskId || getRemoteDispatch(db, dispatchId)) {
+  if (!dispatchId || !taskId) {
     return
   }
   const seen = { taskId, dispatchId, worktreeId: answeredWorktreeId(answer) }

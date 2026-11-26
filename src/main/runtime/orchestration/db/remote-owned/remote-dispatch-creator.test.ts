@@ -139,4 +139,21 @@ describe('the creator of a worker a paired server runs', () => {
       completedAtKnown: true
     })
   })
+
+  it("never takes another link's Dispatch as the earlier one, though its id matches", () => {
+    const first = startOnServer(TASK, 'repo::/first')
+    importQueue()
+    const otherRun = home.createRun({
+      objective: 'o2',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    const other = openRemoteRunLink(home, otherRun.id, { ...SERVER, environmentId: 'env_other' })
+    adoptRemoteAttempt(home, other, {
+      taskId: 'task_elsewhere001',
+      dispatchId: 'ctx_elsewhere0001',
+      earlierDispatchId: first
+    })
+    expect(stamp('ctx_elsewhere0001').creator).toBeNull()
+  })
 })
