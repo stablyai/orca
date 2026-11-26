@@ -391,7 +391,12 @@ function BotItemCommentField({
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}
               onBlur={editorBlur}
-              className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-[13px] leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
+              // On its own row the text starts on the chip's and the buttons' left edge.
+              className={cn(
+                'scrollbar-sleek block overflow-y-auto bg-transparent py-1.5 text-[13px] leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate',
+                stacked ? 'px-0' : 'px-1 @max-[440px]/item-pane:px-0',
+                height
+              )}
             />
           </div>
           {/* Beside the text the arrows keep their counter's width; on their own row they take the free space.
