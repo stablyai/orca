@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { SharedBotHostStore, type SharedBotHostEntry } from './shared-bot-host-store'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 import type { SharedBotLink } from './shared-bot-pairing'
@@ -53,15 +53,16 @@ function grants() {
     store,
     listed: () => store.list(),
     reach: async () => link,
-    request: async (_entry, method, params): Promise<RpcResponse> => {
+    request: async (_entry, method, params): Promise<RuntimeRpcResponse<unknown>> => {
       asked.push([method, params])
       return method === 'botShare.provisionPhone'
         ? {
             id: method,
             ok: true,
-            result: { deviceId: `phone-key-${++devices}`, sealedOffer: 'sealed' }
+            result: { deviceId: `phone-key-${++devices}`, sealedOffer: 'sealed' },
+            _meta: { runtimeId: 'host' }
           }
-        : { id: method, ok: true, result: { revoked: true } }
+        : { id: method, ok: true, result: { revoked: true }, _meta: { runtimeId: 'host' } }
     },
     account: () => 'acct-teammate',
     origin: () => 'https://cloud.example',

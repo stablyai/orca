@@ -8,6 +8,7 @@ import {
   pairedOrchestrationPeers,
   type OrchestrationEnvironmentTransport
 } from '../../../runtime/orchestration/federation/environment-transport'
+import { pairedRuntimeConnectionIdentity } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 /** Dials this host's paired servers for cross-server orchestration; host-free, so desktop and orcad share it. */
 export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironmentTransport {
@@ -20,7 +21,10 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
       return {
         environmentId: environment.id,
         name: environment.name,
-        ...pairedOrchestrationPeers(connection.hostPublicKeyB64, connection.credential.deviceToken),
+        ...pairedOrchestrationPeers(
+          connection.hostPublicKeyB64,
+          pairedRuntimeConnectionIdentity(connection)
+        ),
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },

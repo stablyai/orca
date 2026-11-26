@@ -1,4 +1,4 @@
-import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
+import { ipcMain } from 'electron'
 import {
   BrowserClientHostPlacementPreparationRequest,
   type BrowserPageCreationPlacement
@@ -10,7 +10,7 @@ export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {
   getUserDataPath: () => string
   getSettings: () => Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'>
 }): void {
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:prepareBrowserClientHostPlacement',
     async (_event, input: unknown): Promise<BrowserPageCreationPlacement> => {
       const args = BrowserClientHostPlacementPreparationRequest.parse(input)

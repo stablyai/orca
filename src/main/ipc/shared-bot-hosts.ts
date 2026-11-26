@@ -1,11 +1,10 @@
-// Window-only: this desktop's view of the agents shared with its Orca account. Calls and streams to
-// their hosts go through runtimeEnvironments, which routes them here; this computer's own phones only
+// Window-only: this desktop's view of the agents shared with its Orca account. Their hosts are reached
+// as paired servers through runtimeEnvironments (shared-host-keys.ts); this computer's own phones only
 // ask for keys of their own (bots-share-phone.ts).
 import { BrowserWindow, ipcMain } from 'electron'
 import { z } from 'zod'
 import { BotShareIdSchema } from '../../shared/bots/bot-team-shares'
 import type { SharedBotHostsState } from '../../shared/bots/shared-bot-hosts'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
@@ -13,12 +12,9 @@ import {
   reportingSharedBotsCloud,
   SharedBotHostFailures
 } from '../bots/shared-with-me/shared-bot-host-failures'
-import {
-  routeSharedHostsThrough,
-  sharedHostsChanged
-} from './runtime-environments/requests/runtime-environment-shared-hosts'
+import { setSharedHostsOwner } from './runtime-environments/requests/runtime-environment-shared-hosts'
+import { setSharedHosts } from '../../shared/remote-runtime/pairing/shared-host-keys'
 import { SharedBotHomes, type SharedBotHomeDeps } from '../bots/shared-with-me/shared-bot-home'
-import { isBotShareMethod, isBotShareStreamMethod } from '../runtime/rpc/methods/rpc-method-share'
 
 const ShareArgs = z.object({ shareId: BotShareIdSchema })
 const SendAgainArgs = z.object({
@@ -37,7 +33,6 @@ export function registerSharedBotHostsHandlers(args: {
   const hosts = new SharedBotHosts({
     userDataPath: args.userDataPath,
     homes: new SharedBotHomes({ ...args.homes, userDataPath: args.userDataPath }),
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     cloud: () => {
       const cloud = args.cloud()
       return cloud ? reportingSharedBotsCloud(sharedBotsCloud(cloud), failures) : null
@@ -47,7 +42,6 @@ export function registerSharedBotHostsHandlers(args: {
     account: () => args.cloud()?.signedInAccount() ?? null,
     connectorOrigin: () => args.cloud()?.origin() ?? null,
     publish: (state: SharedBotHostsState) => {
-      sharedHostsChanged()
       hosts.phones.noteListed(args.phoneSharesChanged)
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.webContents.isDestroyed()) {
@@ -80,10 +74,8 @@ export function registerSharedBotHostsHandlers(args: {
   ipcMain.handle('sharedBotHosts:decline', (_event, raw: unknown) =>
     hosts.decline(ShareArgs.parse(raw).shareId)
   )
-  routeSharedHostsThrough({
-    hosts,
-    methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
-  })
+  setSharedHosts((environmentId) => hosts.sharedHost(environmentId))
+  setSharedHostsOwner(hosts)
   hosts.start()
   return hosts
 }

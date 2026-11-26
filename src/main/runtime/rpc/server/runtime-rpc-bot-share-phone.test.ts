@@ -20,7 +20,7 @@ import {
 } from '../../../../shared/bots/bot-share-phone'
 import { SharedBotHostStore } from '../../../bots/shared-with-me/shared-bot-host-store'
 import { SharedBotPhoneGrants } from '../../../bots/shared-with-me/shared-bot-phone-grants'
-import { routeSharedHostsThrough } from '../../../ipc/runtime-environments/requests/runtime-environment-shared-hosts'
+import { setSharedHostsOwner } from '../../../ipc/runtime-environments/requests/runtime-environment-shared-hosts'
 import { BotSharePhoneCredentialOutbox } from '../../../bots/team-share/bot-share-phone-credentials'
 import * as secureWrite from '../../../../shared/secure-storage/secure-file-async-write'
 
@@ -252,7 +252,7 @@ describe('a phone the share is gone for', () => {
 })
 
 describe('a phone asking its own computer for a key', () => {
-  afterEach(() => routeSharedHostsThrough(null))
+  afterEach(() => setSharedHostsOwner(null))
 
   it('gets a grant through the computer’s link to the host, and a delegated phone gets nothing', async () => {
     const computer = await teammateComputer()
@@ -292,29 +292,20 @@ describe('a phone asking its own computer for a key', () => {
       request: async (_entry, method, params) => ({
         id: method,
         ok: true,
-        result: await server.callAs(computer, method, params)
+        result: await server.callAs(computer, method, params),
+        _meta: { runtimeId: 'host' }
       }),
       account: () => null,
       origin: () => 'https://cloud.example',
       requests: () => [],
       answer: async () => false
     })
-    routeSharedHostsThrough({
-      hosts: {
-        ready: async () => {},
-        settled: async () => {},
-        reaches: () => false,
-        views: () => [],
-        store,
-        call: async () => {
-          throw new Error('unused')
-        },
-        subscribe: async () => {
-          throw new Error('unused')
-        },
-        phones
-      },
-      methods: { allows: () => false, streams: () => false }
+    setSharedHostsOwner({
+      ready: async () => {},
+      settled: async () => {},
+      answerHere: async () => null,
+      endedAnswer: async () => null,
+      phones
     })
     const { seal, params } = phoneAsk()
 

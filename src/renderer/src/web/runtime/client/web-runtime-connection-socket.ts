@@ -7,6 +7,7 @@ import type { PairedRuntimeConnection } from '../../../../../shared/remote-runti
 import type { PairedE2EEClientHandshake } from '../../../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import type { WebRuntimeAuthPlan } from '../security/web-runtime-credential-source'
 import type { WebRuntimeConnectionTimers } from './web-runtime-connection-timers'
+import { pairedRuntimeConnectionToken } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 export function installWebRuntimeSocket({
   socket,
@@ -124,7 +125,7 @@ export function sendWebRuntimeSocketAuth(
   const socket = owner.ws
   const auth = authOwner.sendAuth({
     handshake,
-    fallbackToken: connection.credential.deviceToken,
+    fallbackToken: pairedRuntimeConnectionToken(connection),
     // Why: the socket may have closed or been replaced while the auth step ran.
     isCurrent: () =>
       owner.handshake === handshake &&

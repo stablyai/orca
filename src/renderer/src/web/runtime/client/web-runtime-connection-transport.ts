@@ -27,6 +27,7 @@ import {
   runtimeEnvironmentSetupFailure,
   type RuntimeEnvironmentSetupFailure
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
+import { pairedRuntimeConnectionToken } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 
@@ -63,13 +64,13 @@ export class WebRuntimeConnectionTransport {
       isIntentionallyClosed: () => this.intentionallyClosed
     })
     this.subscriptionRegistry = new WebRuntimeSubscriptionRegistry({
-      deviceToken: connection.credential.deviceToken,
+      deviceToken: pairedRuntimeConnectionToken(connection),
       nextId: () => this.nextId(),
       sendEncrypted: (message) => this.sendEncrypted(message)
     })
     this.subscriptions = this.subscriptionRegistry.subscriptions
     this.requestRegistry = new WebRuntimeRequestRegistry({
-      deviceToken: connection.credential.deviceToken,
+      deviceToken: pairedRuntimeConnectionToken(connection),
       nextId: () => this.nextId(),
       waitForConnected: (timeoutMs, signal) => this.connectionWaiters.wait(timeoutMs, signal),
       sendEncrypted: (message) => this.sendEncrypted(message)
@@ -82,7 +83,7 @@ export class WebRuntimeConnectionTransport {
       sendProbe: () =>
         this.sendEncrypted({
           id: `web-heartbeat-${this.nextId()}`,
-          deviceToken: this.connection.credential.deviceToken,
+          deviceToken: pairedRuntimeConnectionToken(this.connection),
           method: 'status.get'
         }),
       handleDeadSocket: (socket) => this.handleSocketClosed(socket)

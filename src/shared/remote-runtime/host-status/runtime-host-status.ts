@@ -89,7 +89,13 @@ export function runtimeHostStatusError(error: unknown): RuntimeRpcFailure {
   return runtimeHostStatusFailure(code, error instanceof Error ? error.message : String(error))
 }
 
-const ACCESS_REVOKED_CODES = ['unauthorized', 'forbidden']
+// A Relay credential the cell refused, with none left to dial, ends as a refusal does: no retry.
+const ACCESS_REVOKED_CODES = [
+  'unauthorized',
+  'forbidden',
+  'relay_credential_unavailable',
+  'relay_credential_mismatch'
+]
 
 /** Null when the failure is transient and verification should keep retrying. */
 export function runtimeHostStatusBlockedReason(

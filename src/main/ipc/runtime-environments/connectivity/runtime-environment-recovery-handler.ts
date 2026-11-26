@@ -1,4 +1,3 @@
-import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import { ipcMain } from 'electron'
 import { retryRemoteRuntimeSharedControlConnectionsNow } from '../connections/runtime-environment-request-connections'
 import { clearRelayDialHolds } from '../connections/runtime-environment-relay-link'
@@ -8,7 +7,7 @@ const RETRY_CONNECTIONS_NOW_CHANNEL = 'runtimeEnvironments:retryConnectionsNow'
 
 export function registerRuntimeEnvironmentRecoveryHandler(): void {
   ipcMain.removeHandler(RETRY_CONNECTIONS_NOW_CHANNEL)
-  handleRuntimeEnvironmentChannel(RETRY_CONNECTIONS_NOW_CHANNEL, () => {
+  ipcMain.handle(RETRY_CONNECTIONS_NOW_CHANNEL, () => {
     // OS wake or network return: a Relay host held offline is dialed now too.
     clearRelayDialHolds()
     retryRemoteRuntimeSharedControlConnectionsNow()

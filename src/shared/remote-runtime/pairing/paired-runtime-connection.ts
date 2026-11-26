@@ -1,11 +1,15 @@
-import type { PairedE2EEAuthCredential } from '../e2ee/paired-e2ee-client-handshake'
+import type {
+  PairedE2EEAuthCredential,
+  PairedE2EEDeviceKeyCredential
+} from '../e2ee/paired-e2ee-client-handshake'
 import type { PairingOffer } from './mobile-relay-pairing-offer'
 
 // Connections carry credentials that may evolve beyond tokens; PairingOffer describes pairing input instead.
 export type PairedRuntimeConnection = {
   endpoint: string
   hostPublicKeyB64: string
-  credential: PairedE2EEAuthCredential
+  /** A pairing's device token, or a device key (a shared agent's host, signed in by key alone). */
+  credential: PairedE2EEAuthCredential | PairedE2EEDeviceKeyCredential
   pairedDeviceId?: string
 }
 
@@ -26,7 +30,14 @@ export function pairedRuntimeConnectionFromOffer(
   }
 }
 
-// The token request envelopes still carry on the wire.
+// The token request envelopes still carry on the wire; a keyed socket carries none.
 export function pairedRuntimeConnectionToken(connection: PairedRuntimeConnection): string {
-  return connection.credential.deviceToken
+  return connection.credential.kind === 'token' ? connection.credential.deviceToken : ''
+}
+
+/** What names this pairing among the host's: its token, or its device key's id. */
+export function pairedRuntimeConnectionIdentity(connection: PairedRuntimeConnection): string {
+  return connection.credential.kind === 'token'
+    ? connection.credential.deviceToken
+    : `device-key:${connection.credential.deviceId}`
 }

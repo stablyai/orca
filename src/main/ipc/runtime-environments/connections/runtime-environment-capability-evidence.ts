@@ -1,4 +1,5 @@
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { pairedRuntimeConnectionIdentity } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 export type RuntimeEnvironmentCapabilityVerdict = 'capable' | 'absent'
 
@@ -148,7 +149,9 @@ export function isRuntimeEnvironmentCapabilityPaused(environmentId: string): boo
 export function runtimeEnvironmentConnectionPairingKey(
   connection: PairedRuntimeConnection
 ): string {
-  return [connection.endpoint, connection.credential.deviceToken, connection.hostPublicKeyB64].join(
-    '\0'
-  )
+  return [
+    connection.endpoint,
+    pairedRuntimeConnectionIdentity(connection),
+    connection.hostPublicKeyB64
+  ].join('\0')
 }

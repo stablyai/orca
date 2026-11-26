@@ -8,9 +8,11 @@ import type { RemoteRuntimeSharedControlConnectionOptions } from '../../../../sh
 import { remoteRuntimeOneLinkAllowed } from './runtime-environment-one-link'
 import { onTeamCapabilitiesInvalidated } from '../../../orca-profiles/cloud-auth/active-team-capabilities'
 import type { AuthenticatedRuntimeChannelOpener } from '../../../../shared/remote-runtime/control/remote-runtime-authenticated-channel'
+import { sharedHostKey } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 import {
   relayRuntimeChannelOpener,
-  runtimeRelayLinkEntry
+  runtimeRelayLinkEntry,
+  type RuntimeRelayCredentialStore
 } from '../../../../shared/remote-runtime/control/remote-runtime-relay-authenticated-channel'
 import { RelayRuntimeDialMemory } from '../../../../shared/remote-runtime/control/remote-runtime-relay-dial-memory'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
@@ -18,6 +20,7 @@ import { isRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairin
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import type { SharedHostLinkEntry } from '../../../../shared/remote-runtime/relay/client/shared-host-relay-link'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
+import { pairedRuntimeConnectionIdentity } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 // Test-only Relay pairings keep their resume credential for this app run; a restart pairs again.
 const entries = new Map<string, SharedHostLinkEntry>()
@@ -37,19 +40,27 @@ export function relayControlChannelOpener(
   // Across this connection's dials: its 4404 hold and streak, the cell the director last named.
   memory = new RelayRuntimeDialMemory(),
   // Tests reach a stand-in cell; the app dials the real one.
-  platform = NODE_RELAY_CLIENT_PLATFORM
+  platform = NODE_RELAY_CLIENT_PLATFORM,
+  // A shared agent's host keeps its Relay credentials with its share; a test pairing, here.
+  sharedHostRelay?: RuntimeRelayCredentialStore
 ): ((clientCapabilities: readonly string[]) => AuthenticatedRuntimeChannelOpener) | null {
   if (!isRuntimeRelayEndpoint(connection.endpoint)) {
     return null
   }
-  const key = connection.credential.deviceToken
+  const key = pairedRuntimeConnectionIdentity(connection)
+  // A host signed in to by key is a share's: once the share is gone, nothing is left to dial.
+  const store: RuntimeRelayCredentialStore =
+    sharedHostRelay ??
+    (connection.credential.kind === 'device-key'
+      ? { entry: () => undefined, save: () => {} }
+      : {
+          entry: () => entries.get(key) ?? runtimeRelayLinkEntry(connection) ?? undefined,
+          save: (entry) => void entries.set(key, entry)
+        })
   return (clientCapabilities) => {
     const relay = relayRuntimeChannelOpener(connection, {
       platform,
-      store: {
-        entry: () => entries.get(key) ?? runtimeRelayLinkEntry(connection) ?? undefined,
-        save: (entry) => void entries.set(key, entry)
-      },
+      store,
       clientCapabilities,
       randomBytes: (length) => new Uint8Array(randomBytes(length)),
       newId: randomUUID,
@@ -97,7 +108,8 @@ export function controlLinkOptions(
     connection,
     () => remoteRuntimeOneLinkAllowed(environmentId, connection),
     memory,
-    platform
+    platform,
+    sharedHostKey(environmentId)?.relay
   )
   if (openChannel) {
     dialMemories.set(environmentId, memory)

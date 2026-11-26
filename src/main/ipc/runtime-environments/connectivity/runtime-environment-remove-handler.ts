@@ -1,4 +1,4 @@
-import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
+import { ipcMain } from 'electron'
 import {
   removeEnvironment,
   resolveEnvironment
@@ -34,7 +34,7 @@ export function registerRuntimeEnvironmentRemoveHandler({
   getUserDataPath,
   invalidateTransport
 }: ConnectivityHandlerOptions): void {
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:remove',
     async (
       _event,

@@ -28,11 +28,36 @@ import {
 import { shouldUseSharedControlEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
 import { resumeAfterIdleStop } from './runtime-environment-idle-stop-resume'
-import { resolveRuntimeEnvironmentHost } from './runtime-environment-shared-hosts'
+import { answerSharedHostFirst } from './runtime-environment-shared-hosts'
+import { openRelayHostLink } from '../connections/runtime-environment-relay-host-link'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
+type CallOptions = {
+  prepareGuard?: Rpc.RuntimeRequestGuard
+  prepareRequest?: Rpc.RuntimeRequestPreparation
+  signal?: AbortSignal
+  expectedEnvironmentRuntimeId?: string
+  preparation?: ManagedRuntimeCallPreparation
+  /** Support-routed reply budget once the host is reachable; timeoutMs still bounds connect and handshake. */
+  responseTimeoutMs?: number
+  /** A poll, not the user: it is no use of an idle host. */
+  background?: boolean
+  /** The user asked for it: it may wake a WSL host Orca stopped idle (#46567). */
+  wake?: boolean
+}
+
 export async function callRuntimeEnvironment(
+  ...args: Parameters<typeof callPairedRuntimeEnvironment>
+): Promise<Rpc.RuntimeRpcResponse<unknown>> {
+  const [userDataPath, selector, method, params, ...rest] = args
+  return answerSharedHostFirst(selector, method, params, (sent, sentParams) =>
+    callPairedRuntimeEnvironment(userDataPath, selector, sent, sentParams, ...rest)
+  )
+}
+
+/** callRuntimeEnvironment past the share's own answers; for a caller that asked them already. */
+export async function callPairedRuntimeEnvironment(
   userDataPath: string,
   selector: string,
   method: string,
@@ -40,24 +65,8 @@ export async function callRuntimeEnvironment(
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
   envelope?: Rpc.RuntimeOrchestrationEnvelope,
-  options?: {
-    prepareGuard?: Rpc.RuntimeRequestGuard
-    prepareRequest?: Rpc.RuntimeRequestPreparation
-    signal?: AbortSignal
-    expectedEnvironmentRuntimeId?: string
-    preparation?: ManagedRuntimeCallPreparation
-    /** Support-routed reply budget once the host is reachable; timeoutMs still bounds connect and handshake. */
-    responseTimeoutMs?: number
-    /** A poll, not the user: it is no use of an idle host. */
-    background?: boolean
-    /** The user asked for it: it may wake a WSL host Orca stopped idle (#46567). */
-    wake?: boolean
-  }
+  options?: CallOptions
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
-  const host = await resolveRuntimeEnvironmentHost(selector)
-  if (host.kind === 'shared') {
-    return host.route.call(method, params)
-  }
   if (method === 'status.get') {
     let statusOptions = options
     // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
@@ -113,6 +122,7 @@ export async function callRuntimeEnvironment(
           }
           const { environment: currentEnvironment, expected } = prepared
           const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
+          openRelayHostLink(currentEnvironment.id, pairedConnection)
           endpoint = pairedConnection.endpoint
           const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
           const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)

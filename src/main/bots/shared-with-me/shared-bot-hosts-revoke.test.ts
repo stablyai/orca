@@ -1,10 +1,9 @@
-// A call to a shared agent on a link that isn't live waits for the share list to say whether the owner
-// stopped sharing it: for that list only, and never longer than its cap.
+// A call to a shared agent whose owner stopped sharing it is answered here as no longer shared, never
+// sent to the host as a paired server's call (which would read as an unknown server).
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   SHARED_BOT_HOST_ERRORS,
   SHARED_BOT_UNSHARED_MESSAGE
@@ -17,7 +16,6 @@ import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
 afterEach(() => {
-  vi.useRealTimers()
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -32,8 +30,6 @@ const share = (shareId: string): MineShare => ({
   state: 'ready',
   held: []
 })
-
-const never = <T>() => new Promise<T>(() => {})
 
 /** The account's shared hosts over a cloud whose list and accepts answer as each test says. */
 function hosts(cloud: {
@@ -55,7 +51,6 @@ function hosts(cloud: {
     userDataPath: dir,
     account: () => 'ada',
     cloud: () => sharesCloud,
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: () => {},
     homes: memorySharedBotHomes(dir).homes,
     now: () => 1_000
@@ -65,51 +60,22 @@ function hosts(cloud: {
 const errorOf = (response: RuntimeRpcResponse<unknown>) => (response.ok ? null : response.error)
 const unshared = { code: SHARED_BOT_HOST_ERRORS.unshared, message: SHARED_BOT_UNSHARED_MESSAGE }
 
+const sendNever = () => Promise.reject(new Error('sent to the host'))
+
 describe('a call to a shared agent whose owner stopped sharing it', () => {
-  it('answers no longer shared while the cloud read that drops the share is out, and after', async () => {
-    let answer: ((shares: MineShare[]) => void) | null = null
-    let mine: () => MineShare[] | Promise<MineShare[]> = () => [share('a')]
-    const service = hosts({ mine: () => mine(), accept: async () => {} })
-    await service.refresh()
-    const { environmentId } = service.views()[0]!
-    mine = () => new Promise((resolve) => (answer = resolve))
-    const read = service.refresh()
-    const during = service.call(environmentId, 'bots.list', {})
-    await vi.waitFor(() => expect(answer).not.toBeNull())
-    answer!([])
-    await read
-    const after = await service.call(environmentId, 'bots.list', {})
-    service.stop()
-    expect([errorOf(await during), errorOf(after)]).toEqual([unshared, unshared])
-    expect(service.reaches(environmentId)).toBe(true)
-  })
-
-  it('answers once the list is applied, not after another share’s pairing that never ends', async () => {
+  it('answers no longer shared once the share list drops it, and sends a kept share’s calls on', async () => {
     let mine = [share('a')]
-    const service = hosts({
-      mine: () => mine,
-      accept: (shareId) => (shareId === 'b' ? never() : Promise.resolve())
-    })
+    const service = hosts({ mine: () => mine, accept: async () => {} })
     await service.refresh()
     const { environmentId } = service.views()[0]!
-    mine = [share('b')]
-    void service.refresh()
-    const answer = await service.call(environmentId, 'bots.list', {})
-    service.stop()
-    expect(errorOf(answer)).toEqual(unshared)
-  })
-
-  it('waits at most its cap for a cloud read that never answers, then reads as offline', async () => {
-    let mine: () => MineShare[] | Promise<MineShare[]> = () => [share('a')]
-    const service = hosts({ mine: () => mine(), accept: async () => {} })
+    // Kept: the paired path sends it.
+    expect(await service.answerHere(environmentId, 'bots.list', {}, sendNever)).toBeNull()
+    mine = []
     await service.refresh()
-    const { environmentId } = service.views()[0]!
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    mine = never
-    void service.refresh()
-    const answer = service.call(environmentId, 'bots.list', {})
-    await vi.advanceTimersByTimeAsync(5_000)
+    const after = await service.answerHere(environmentId, 'bots.list', {}, sendNever)
     service.stop()
-    expect(errorOf(await answer)?.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    expect(after && errorOf(after)).toEqual(unshared)
+    // Never one of these shares: the paired path answers it as any other server.
+    expect(await service.answerHere('env-unknown', 'bots.list', {}, sendNever)).toBeNull()
   })
 })

@@ -2,14 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
 import { memorySharedBotHomes } from '../../bots/shared-with-me/shared-bot-home.test-fixture'
-import { routeSharedHostsThrough } from '../runtime-environments/requests/runtime-environment-shared-hosts'
-import {
-  isBotShareMethod,
-  isBotShareStreamMethod
-} from '../../runtime/rpc/methods/rpc-method-share'
+import { setSharedHostsOwner } from '../runtime-environments/requests/runtime-environment-shared-hosts'
 import nacl from 'tweetnacl'
 import { openBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
 import {
@@ -19,10 +14,7 @@ import {
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import type { ConnectorShareHoldRequest } from '../../../shared/connector-share-contract'
-import {
-  resolveAttachmentEnvironmentId,
-  uploadBufferToAgentSessionAttachments
-} from './agent-session-attachment-upload'
+import { uploadBufferToAgentSessionAttachments } from './agent-session-attachment-upload'
 
 // Every paired-server path starts by resolving its selector in the registry.
 const paired = vi.hoisted(() => ({ resolve: vi.fn() }))
@@ -32,7 +24,7 @@ vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', (
 
 const dirs: string[] = []
 afterEach(() => {
-  routeSharedHostsThrough(null)
+  setSharedHostsOwner(null)
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -49,7 +41,6 @@ async function awayHost(hostKey?: string) {
     userDataPath,
     account: () => 'ada',
     homes: memorySharedBotHomes(userDataPath).homes,
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     cloud: () => ({
       mine: async () => ({
         ok: true,
@@ -78,31 +69,13 @@ async function awayHost(hostKey?: string) {
     }),
     publish: () => {}
   })
-  routeSharedHostsThrough({
-    hosts,
-    methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
-  })
+  setSharedHostsOwner(hosts)
   await hosts.refresh()
   hosts.stop()
   return { hosts, userDataPath, holds }
 }
 
 describe('attachment uploads to a shared agent’s host', () => {
-  it('go through runtimeEnvironments to its share link, never the paired-server registry', async () => {
-    const { hosts, userDataPath } = await awayHost()
-    const environmentId = hosts.views()[0]!.environmentId
-    expect(await resolveAttachmentEnvironmentId(userDataPath, environmentId)).toBe(environmentId)
-    // Its owner's computer is away, so the share link answers; the paired registry is never asked.
-    await expect(
-      uploadBufferToAgentSessionAttachments(
-        { environmentId, sessionId: 'chat-0001', expectedEnvironmentRuntimeId: 'r', userDataPath },
-        'shot.png',
-        Buffer.from('png')
-      )
-    ).rejects.toThrow('Jinwoo Hong’s computer is offline')
-    expect(paired.resolve).not.toHaveBeenCalled()
-  })
-
   // Held sends are off while SHARED_HOSTS_HOLD_WHILE_AWAY is: this runs again when it is on.
   it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)(
     'are kept here for a chat whose message will be held, and sealed into that message',
@@ -120,7 +93,7 @@ describe('attachment uploads to a shared agent’s host', () => {
         'shot.png',
         Buffer.from('png bytes')
       )
-      const sent = await hosts.call(
+      const sent = await hosts.answerHere(
         environmentId,
         'agentSession.send',
         structuredAgentSessionMessageSendMutation({
@@ -135,9 +108,10 @@ describe('attachment uploads to a shared agent’s host', () => {
               { type: 'image-ref', path: stored.path }
             ]
           }
-        })
+        }),
+        () => Promise.reject(new Error('no host here'))
       )
-      expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+      expect(sent?.ok ? null : sent?.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
       const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
         hostSecretKey: HOST.secretKey,
         hostKey: HOST_KEY,

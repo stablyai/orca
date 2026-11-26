@@ -12,7 +12,7 @@ import {
   type SharedBotsPhoneList,
   type SharedBotsPhoneProvisionParams
 } from '../../../shared/bots/bot-share-phone'
-import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   sharedBotHostKey,
   type SharedBotHostEntry,
@@ -27,7 +27,11 @@ export type SharedBotPhoneGrantsDeps = {
   listed: () => readonly SharedBotHostEntry[]
   /** The entry's link once any dial it can make has settled. */
   reach: (entry: SharedBotHostEntry) => Promise<SharedBotLink>
-  request: (entry: SharedBotHostEntry, method: string, params: unknown) => Promise<RpcResponse>
+  request: (
+    entry: SharedBotHostEntry,
+    method: string,
+    params: unknown
+  ) => Promise<RuntimeRpcResponse<unknown>>
   /** The signed-in Orca account the shares are with; null signed out. */
   account: () => string | null
   /** Orca Cloud's connector origin, which the phone holds messages at; null without a cloud. */

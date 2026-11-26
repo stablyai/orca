@@ -4,7 +4,6 @@ import {
   SHARED_BOT_HOST_ERRORS,
   SHARED_BOT_UNSHARED_MESSAGE
 } from '../../../shared/bots/shared-bot-hosts'
-import { relayStreamError } from '../../../shared/remote-runtime/relay/client/relay-rpc-streams'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import type { SharedBotHostEntry } from './shared-bot-host-store'
@@ -23,18 +22,6 @@ export function sharedBotAnswer(
   return response.ok
     ? { ...response, _meta: { runtimeId: response._meta?.runtimeId ?? entry.environmentId } }
     : response
-}
-
-/** One event of a subscription on the host's link, as the window reads it. */
-export function sharedBotStreamAnswer(
-  entry: Pick<SharedBotHostEntry, 'environmentId'>,
-  method: string,
-  result: unknown
-): RuntimeRpcResponse<unknown> {
-  const error = relayStreamError(result)
-  return error === null
-    ? { id: method, ok: true, result, _meta: { runtimeId: entry.environmentId } }
-    : sharedBotFailure(method, SHARED_BOT_HOST_ERRORS.offline, error)
 }
 
 /** A call the host wasn't reached for, and nothing was held for. */
