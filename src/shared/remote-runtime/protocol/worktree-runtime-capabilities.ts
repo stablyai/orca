@@ -122,6 +122,9 @@ export const PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY =
 export const WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY =
   'worktree.create.exact-name.v1' as const
 // Hosts that publish worktreeRowsChanged (only while the sidebar feed is off), so a phone's workspace list polls worktree.ps only as a backstop.
+// Older hosts strip unknown worktree.set keys, so a task group edit sent there would quietly not save.
+export const WORKTREE_AGENT_TASK_GROUPS_RUNTIME_CAPABILITY =
+  'worktree.agent-task-groups.v1' as const
 export const WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'worktree.rows-changed-event.v1' as const
 
@@ -156,5 +159,6 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY,
+  WORKTREE_AGENT_TASK_GROUPS_RUNTIME_CAPABILITY,
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [] : [WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY])
 ] as const

@@ -208,6 +208,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   diffCommentsBase: z.array(DiffCommentSchema).optional(),
   // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
+  // The workspace's whole task group set; the host normalizes it, and null clears it.
+  agentTaskGroups: z.record(z.string(), z.unknown()).nullable().optional(),
   parentWorktree: OptionalString,
   matchFolderWorkspaces: MatchFolderWorkspaces,
   /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */

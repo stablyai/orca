@@ -81,8 +81,8 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       }
       const meta = store.setWorktreeMeta(target, sanitizedUpdates)
       // Local optimistic state is current; notifying it would re-sort the sidebar (#209).
-      if (args.updates.displayName !== undefined) {
-        // Remote clients need rename pushes; per-click unread changes must remain event-free.
+      if (args.updates.displayName !== undefined || args.updates.agentTaskGroups !== undefined) {
+        // Remote clients need rename and task group pushes; per-click unread changes must remain event-free.
         runtime.notifyWorktreesChangedForRemoteClients(getRepoIdFromWorktreeId(args.worktreeId))
       }
       return meta

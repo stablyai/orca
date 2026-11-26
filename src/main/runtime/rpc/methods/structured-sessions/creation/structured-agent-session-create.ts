@@ -66,6 +66,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  launchDirectory?: string
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
@@ -99,6 +100,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     agent: args.agent,
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
+    ...(args.launchDirectory ? { launchDirectory: args.launchDirectory } : {}),
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
     ...(args.forkFrom ? { forkFrom: args.forkFrom } : {})
   })

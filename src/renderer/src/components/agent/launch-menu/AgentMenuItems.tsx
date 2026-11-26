@@ -11,6 +11,11 @@ import {
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
+import { resolveTaskGroupLaunchTarget } from '@/components/sidebar/workspace-card/task-groups/agent-task-group-launch-target'
+import {
+  fileLaunchInTaskGroup,
+  taskGroupFolderLaunchArgs
+} from '@/components/sidebar/workspace-card/task-groups/agent-task-group-chat-filing'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -107,6 +112,11 @@ export function useTabAgentMenuLaunch({
       const { agent } = row
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
+      // The tab bar's + files into the task group you are in (or the one picked in its menu).
+      const taskGroup =
+        launchSource === 'tab_bar_quick_launch'
+          ? resolveTaskGroupLaunchTarget(useAppStore.getState(), worktreeId)
+          : null
       const result = launchAgentInNewTabWithOutcome({
         requestId: createNonSecureContextUuid(),
         focusIntent: captureNativeChatComposerFocusIntent(),
@@ -129,6 +139,9 @@ export function useTabAgentMenuLaunch({
           : {}),
         worktreeId,
         groupId,
+        ...(taskGroup?.group
+          ? taskGroupFolderLaunchArgs(taskGroup.group.folderPath, taskGroup.executionHostId)
+          : {}),
         // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.
         ...(prompt !== undefined ? { prompt } : draft?.prompt ? { prompt: draft.prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
@@ -139,6 +152,14 @@ export function useTabAgentMenuLaunch({
       })
       if (!result || 'refused' in result) {
         return false
+      }
+      if (taskGroup?.group) {
+        fileLaunchInTaskGroup({
+          outcome: result,
+          worktreeId,
+          workspaceKey: taskGroup.workspaceKey,
+          groupId: taskGroup.group.id
+        })
       }
       if (onPromptHandedOff && result.promptDeliveryResult) {
         const outcome = newAgentPromptOutcome({ delivery: result.promptDeliveryResult })

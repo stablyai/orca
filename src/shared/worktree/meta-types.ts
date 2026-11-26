@@ -15,6 +15,7 @@ import type { OrcaWorkspaceLayout } from './paths/orca-workspace-layout'
 import type { DiffComment, MobileDiffReviewState } from '../file-review/diff-comment-types'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
 import type { ExternalConversationLink } from '../connectors/external-conversation-link'
+import type { WorkspaceAgentTaskGroups } from '../agent-task-groups/agent-task-groups'
 
 export type ArchivedCheckout = {
   branch: string
@@ -111,4 +112,6 @@ export type WorktreeMeta = {
   cliProvenance?: CliWorkspaceProvenance
   /** System-owned connector threads whose agents run here; never published on `Worktree`. */
   externalConversations?: ExternalConversationLink[]
+  /** Sidebar task groups, kept on the host so every connected device shows the same ones; null clears them. */
+  agentTaskGroups?: WorkspaceAgentTaskGroups | null
 }

@@ -39,6 +39,8 @@ export type StructuredAgentSessionCreateIntentInput = {
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  /** A folder inside the workspace the new chat runs in. */
+  launchDirectory?: string
 }
 
 export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {

@@ -32,6 +32,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   /** On terminals, a flag `agentArgs` sets itself wins over the inherited saved choice. */
   sessionOptionsYieldToAgentArgs?: true
   initialCwd?: string | null
+  /** A folder inside the workspace (a task group's): chat runs there, and a terminal starts there. */
+  chatLaunchDirectory?: string
   /** Unsaved section root whose trust is prepared without changing placement. */
   trustWorktreeId?: string
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */

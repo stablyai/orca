@@ -69,7 +69,8 @@ function openAgentInNewTab(
     prompt,
     agentArgs,
     sessionOptions,
-    initialCwd,
+    initialCwd: explicitCwd,
+    chatLaunchDirectory,
     trustWorktreeId,
     promptDelivery = 'auto-submit',
     launchSource,
@@ -97,7 +98,7 @@ function openAgentInNewTab(
     workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
     prompt: trimmedPrompt,
     promptDelivery: routePromptDelivery,
-    tuiCustomization: { cwd: initialCwd },
+    tuiCustomization: { cwd: explicitCwd },
     ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
     ...(args.chatSessionOptions !== undefined
       ? { chatLaunchOptions: args.chatSessionOptions }
@@ -120,6 +121,7 @@ function openAgentInNewTab(
       worktreeId,
       ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
       ...(groupId ? { groupId } : {}),
+      ...(chatLaunchDirectory ? { launchDirectory: chatLaunchDirectory } : {}),
       ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
       // The host's "no" opens this same launch as a terminal, with the caller's arguments.
@@ -133,6 +135,7 @@ function openAgentInNewTab(
               ? { prompt: undefined, activate: false, presentsRefusal: true as const }
               : {}),
             requestId: undefined,
+            initialCwd: explicitCwd ?? chatLaunchDirectory,
             agentSessionLaunchPlan: terminalPlan
           },
           notifyFailure
@@ -144,6 +147,7 @@ function openAgentInNewTab(
     }
     return structured
   }
+  const initialCwd = explicitCwd ?? chatLaunchDirectory
 
   const executionContext = resolveAgentLaunchExecutionContext(store, {
     worktreeId,

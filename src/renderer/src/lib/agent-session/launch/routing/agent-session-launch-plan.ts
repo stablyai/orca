@@ -90,6 +90,8 @@ export type AgentSessionLaunchTarget = {
   executionHostId?: ExecutionHostId
   /** The saved selection that host said create will seed. */
   seedOptions?: Readonly<Record<string, string>>
+  /** A folder inside the workspace the chat runs in (a task group's). */
+  launchDirectory?: string
 }
 
 export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
@@ -144,7 +146,8 @@ function beginStructuredPlanLaunch(
         ...structuredLaunchOptions(verdict),
         ...(target?.surfaceAddress ? { surfaceAddress: target.surfaceAddress } : {}),
         ...(executionHostId ? { executionHostId } : {}),
-        ...(target?.seedOptions ? { hostSeedOptions: target.seedOptions } : {})
+        ...(target?.seedOptions ? { hostSeedOptions: target.seedOptions } : {}),
+        ...(target?.launchDirectory ? { launchDirectory: target.launchDirectory } : {})
       },
       hooks
     )

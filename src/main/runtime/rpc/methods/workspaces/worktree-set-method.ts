@@ -2,6 +2,7 @@ import { WorktreeSet } from '../../../../../shared/rpc-contract/workspaces/workt
 import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/metadata/display-name-provenance'
 import { getWorkspaceStatusWarning } from '../../../../../shared/workspace/status/workspace-status-warning'
 import { defineMethod } from '../../core'
+import { normalizeWorkspaceAgentTaskGroups } from '../../../../../shared/agent-task-groups/agent-task-groups'
 
 export const WORKTREE_SET_METHOD = defineMethod({
   name: 'worktree.set',
@@ -62,6 +63,10 @@ export const WORKTREE_SET_METHOD = defineMethod({
         ? { diffCommentsBase: params.diffCommentsBase }
         : {}),
       mobileDiffReview: params.mobileDiffReview,
+      agentTaskGroups:
+        params.agentTaskGroups === undefined
+          ? undefined
+          : normalizeWorkspaceAgentTaskGroups(params.agentTaskGroups),
       lineage:
         params.parentWorktree || params.crossStoreParent || params.noParent === true
           ? {

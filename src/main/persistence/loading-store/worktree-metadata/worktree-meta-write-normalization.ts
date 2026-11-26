@@ -13,6 +13,7 @@ import {
   applyDiffCommentWrite,
   type DiffCommentBaseMutation
 } from '../../../../shared/file-review/diff-comment-mutation'
+import { normalizeWorkspaceAgentTaskGroups } from '../../../../shared/agent-task-groups/agent-task-groups'
 
 type WorktreeMetaIdentity = {
   instanceId: string
@@ -56,6 +57,15 @@ export function mergeWorktreeMetaForWrite(
   )
     ? sourceContext
     : null
+  if (updates.agentTaskGroups !== undefined) {
+    // Clients send the whole set; one with no valid group clears it rather than storing junk.
+    const groups = normalizeWorkspaceAgentTaskGroups(updates.agentTaskGroups)
+    if (groups) {
+      updated.agentTaskGroups = groups
+    } else {
+      delete updated.agentTaskGroups
+    }
+  }
   updated.instanceId ||= randomUUID()
   return updated
 }

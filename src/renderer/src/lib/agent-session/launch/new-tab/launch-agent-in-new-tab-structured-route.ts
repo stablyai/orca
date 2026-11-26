@@ -26,6 +26,8 @@ export function launchStructuredAgentFromNewTab(args: {
   plan: AgentSessionLaunchPlan
   worktreeId: string
   groupId?: string
+  /** A folder inside the workspace the chat runs in. */
+  launchDirectory?: string
   focusIntent?: NativeChatComposerFocusIntent
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
   onHostDeclined?: () => StructuredLaunchTerminal
@@ -39,7 +41,10 @@ export function launchStructuredAgentFromNewTab(args: {
     plan,
     hooks: {},
     ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
-    target: { worktreeId: args.worktreeId },
+    target: {
+      worktreeId: args.worktreeId,
+      ...(args.launchDirectory ? { launchDirectory: args.launchDirectory } : {})
+    },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),
     ...(args.onHostDeclined ? { declinedOpensCallerSurface: true as const } : {}),
     onHostDeclined: (_target, activate) => {

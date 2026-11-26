@@ -33,6 +33,8 @@ export type StructuredAgentSessionCreateParams = {
   options?: Readonly<Record<string, string>>
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY`. */
   tabPlacement?: { groupId?: string; afterTabId?: string }
+  /** A folder inside the workspace the chat runs in (a task group's); the host checks it. Outside the fingerprint. */
+  launchDirectory?: string
 }
 
 export type StructuredAgentSessionFirstMessage = {
@@ -56,6 +58,7 @@ export function structuredAgentSessionCreateParams(args: {
   options?: Readonly<Record<string, string>>
   /** A display hint, outside the fingerprint: a retry may name a place that moved. */
   tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
+  launchDirectory?: string
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
@@ -83,6 +86,7 @@ export function structuredAgentSessionCreateParams(args: {
       })
     },
     ...fields,
-    ...(args.tabPlacement ? { tabPlacement: args.tabPlacement } : {})
+    ...(args.tabPlacement ? { tabPlacement: args.tabPlacement } : {}),
+    ...(args.launchDirectory ? { launchDirectory: args.launchDirectory } : {})
   }
 }

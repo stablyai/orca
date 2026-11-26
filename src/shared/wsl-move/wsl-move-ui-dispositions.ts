@@ -25,6 +25,10 @@ export const UI_STATE_DISPOSITIONS = {
   gitGraphFiltersByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   showDotfilesByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   notificationsMutedByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
+  agentTaskGroupsByWorkspace: notApplicableDisposition(
+    38,
+    'Keyed by host-qualified workspace identity; a moved workspace starts ungrouped and its conversations are untouched.'
+  ),
   filterRepoIds: moveDisposition(38),
   agentsFilterRepoIds: moveDisposition(38),
   setupScriptPromptDismissedRepoIds: moveDisposition(38),

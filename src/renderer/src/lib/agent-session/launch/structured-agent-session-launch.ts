@@ -188,7 +188,8 @@ function structuredAgentLaunchState(
     options.resumeFrom,
     options.hostSeedOptions,
     options.activate,
-    options.forkFrom
+    options.forkFrom,
+    options.launchDirectory
   )
   // A fork inherits its source's options.
   intent.explicitLaunchOptions =
