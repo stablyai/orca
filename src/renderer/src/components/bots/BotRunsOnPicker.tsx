@@ -89,7 +89,8 @@ export function BotRunsOnPicker({
   onAddHost,
   name,
   showSubmitFeedback = false,
-  variant = 'row'
+  variant = 'row',
+  agentFieldRef
 }: {
   /** The computer it runs on (`useBotCreateHost`). */
   hostChoice: BotCreateHostChoice
@@ -109,6 +110,8 @@ export function BotRunsOnPicker({
   /** `row` is a boxed summary that opens to the fields; `fields` shows Computer and Agent side by side,
    *  and leaves Use chat defaults to the dialog's footer. */
   variant?: 'row' | 'fields'
+  /** The Agent field, for focus to land on (`fields` only). */
+  agentFieldRef?: React.Ref<HTMLDivElement>
 }): React.JSX.Element {
   const t = useTranslate()
   const computerErrorId = useId()
@@ -221,6 +224,7 @@ export function BotRunsOnPicker({
       <div className="min-w-0 space-y-1">
         <Label variant={labelVariant}>{agentLabel}</Label>
         <div
+          ref={fields ? agentFieldRef : undefined}
           role={fields ? 'group' : undefined}
           tabIndex={fields ? -1 : undefined}
           aria-label={fields ? agentLabel : undefined}

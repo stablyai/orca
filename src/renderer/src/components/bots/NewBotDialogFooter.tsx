@@ -17,7 +17,8 @@ export function NewBotDialogFooter({
   onTemplate,
   shareSource,
   creating,
-  hostBusy
+  hostBusy,
+  agentFieldRef
 }: {
   setup: BotAgentSetup
   /** False while the Agent field shows a placeholder; the link resets only a setup on screen. */
@@ -28,6 +29,8 @@ export function NewBotDialogFooter({
   shareSource?: NewBotShareSource
   creating: boolean
   hostBusy: boolean
+  /** Where focus goes after a reset while Create is disabled. */
+  agentFieldRef: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   const chatDefaults = agentPickerShown ? botAgentSetupOnDefaults(setup, true) : undefined
@@ -51,8 +54,13 @@ export function NewBotDialogFooter({
               disabled={creating}
               onClick={() => {
                 onSetupChange(chatDefaults, true)
-                // The link unmounts; keep keyboard focus in the footer instead of the dialog's top.
-                createRef.current?.focus()
+                // The link unmounts; keep keyboard focus off the dialog's top: Create, else the Agent picker.
+                const create = createRef.current
+                if (create && !create.disabled) {
+                  create.focus()
+                } else {
+                  agentFieldRef.current?.querySelector<HTMLElement>('button')?.focus()
+                }
               }}
             >
               {t('bots.new.useChatDefaults', 'Use chat defaults')}

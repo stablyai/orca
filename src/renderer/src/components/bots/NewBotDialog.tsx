@@ -138,6 +138,7 @@ export function NewBotDialog({
   const menu = useNewBotAgentMenu(hostId, open)
   // A bot from someone else's link starts on Ask, whatever the owner's chats do.
   const agentSetup = useBotAgentSetup(menu, hostId, initialAgent, fromShare && 'ask')
+  const agentFieldRef = useRef<HTMLDivElement>(null)
   const agentPlaceholder = useBotAgentFieldPlaceholder(hostChoice, menu.model, menu.choices)
   const [creating, setCreating] = useState(false)
   const createInFlight = useRef(false)
@@ -378,6 +379,7 @@ export function NewBotDialog({
               keptPermission={agentSetup.intent}
               onAddHost={hosts ? undefined : setAddHostMode}
               showSubmitFeedback={submitted}
+              agentFieldRef={agentFieldRef}
             />
             {template ? <NewBotTakesOver worktrees={proposal?.worktrees} /> : null}
             {template ? (
@@ -421,6 +423,7 @@ export function NewBotDialog({
             shareSource={fromShare}
             creating={creating}
             hostBusy={hostChoice.busy}
+            agentFieldRef={agentFieldRef}
           />
         </form>
       </DialogContent>
