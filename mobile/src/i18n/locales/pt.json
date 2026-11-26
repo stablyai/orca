@@ -3007,7 +3007,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "Ouvindo",
-      "liveInput": "Entrada em tempo real",
       "preparingMic": "Preparando microfone",
       "processing": "Processando",
       "releaseMicHint": "Solte o microfone para parar",
@@ -4545,27 +4544,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Conectar",
-      "connectLinearWorkspace": "Conectar espaço de trabalho do Linear",
-      "createIssue": "Criar Issue",
       "createWorkspaceIn": "Criar Espaço de Trabalho em",
       "description": "Descrição",
-      "descriptionPlaceholder": "Adicionar contexto",
-      "fileIn": "Criar em {{slug}}",
-      "issueSource": "Origem da issue",
       "keySecurityHint": "Sua chave é criptografada pelo chaveiro do sistema operacional do host e armazenada localmente.",
-      "linearConnectSubtitle": "Cole uma chave de API pessoal para consultar as issues desse espaço de trabalho.",
       "linearSettingsLink": "Abrir configurações do Linear",
       "linearTeam": "Equipe do Linear",
-      "linearTeamSubtitle": "Crie uma issue na equipe selecionada do Linear.",
-      "newIssueTitle": "Nova Issue do {{providerLabel}}",
       "origin": "Origin",
       "personalApiKey": "Chave de API pessoal",
       "repository": "Repositório",
-      "repositorySubtitle": "Crie uma issue no repositório selecionado.",
       "team": "Equipe",
       "title": "Título",
-      "titlePlaceholder": "Título da tarefa",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Nova issue",
+      "create": "Criar",
+      "fileInRow": "Registrar em",
+      "connectLinear": "Conectar Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Terminal em Branco"
@@ -4625,7 +4618,6 @@
       "directories_other": "{{count}} diretórios",
       "editSparsePreset": "Editar predefinição de checkout esparso",
       "nameLabel": "Nome",
-      "namePlaceholder": "Interface do renderizador",
       "newSparsePreset": "Nova predefinição de checkout esparso",
       "runSetupAndCreate": "Executar configuração e criar",
       "setupSubtitle": "Escolha se deseja executar a configuração de {{name}} antes de criar este espaço de trabalho.",
@@ -5146,7 +5138,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
@@ -5313,6 +5304,11 @@
         "skipped": "Ignoradas",
         "heldImagesLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} fotos. Remova algumas e tente novamente.",
         "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Remova algumas e tente novamente."
+      },
+      "wait": {
+        "offlineSave": "{{host}} está offline. O que você digitou fica guardado; Salvar volta a funcionar quando ele voltar.",
+        "placeholder": "Aguardando",
+        "count": "{{count}} itens"
       }
     },
     "needs": {

@@ -13,6 +13,7 @@ import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { TextField } from '../composer-input/TextField'
+import { composerInputStyles } from '../composer-input/composer-input-styles'
 import { runAfterInteractions } from '../../platform/after-interactions'
 
 // Delay focus until opening chrome settles; native autoFocus alone often shows caret without iOS/Android keyboard.
@@ -128,7 +129,7 @@ export function MobileSearchField({
       onSubmitEditing={onSubmitEditing}
       onBlur={onBlur}
       onFocus={onFocus}
-      style={style}
+      style={[composerInputStyles.filledField, style]}
       clearButtonMode="never"
       accessibilityLabel={accessibilityLabel ?? placeholder}
     />

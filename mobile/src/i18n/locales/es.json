@@ -2645,7 +2645,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "Escuchando",
-      "liveInput": "Entrada directa",
       "preparingMic": "Preparando micrófono",
       "processing": "Procesando",
       "releaseMicHint": "Suelta el micrófono para detener la grabación",
@@ -4033,27 +4032,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Conectar",
-      "connectLinearWorkspace": "Conectar espacio de trabajo de Linear",
-      "createIssue": "Crear issue",
       "createWorkspaceIn": "Crear espacio de trabajo en",
       "description": "Descripción",
-      "descriptionPlaceholder": "Añade contexto",
-      "fileIn": "Crear en {{slug}}",
-      "issueSource": "Fuente de issues",
       "keySecurityHint": "Tu clave se cifra con el llavero del sistema operativo del host y se guarda localmente.",
-      "linearConnectSubtitle": "Pega una clave API personal para consultar los issues de ese espacio de trabajo.",
       "linearSettingsLink": "Abrir ajustes de Linear",
       "linearTeam": "Equipo de Linear",
-      "linearTeamSubtitle": "Crea un issue en el equipo de Linear seleccionado.",
-      "newIssueTitle": "Nuevo issue de {{providerLabel}}",
       "origin": "Origen",
       "personalApiKey": "Clave API personal",
       "repository": "Repositorio",
-      "repositorySubtitle": "Crea un issue en el repositorio seleccionado.",
       "team": "Equipo",
       "title": "Título",
-      "titlePlaceholder": "Título de la tarea",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Nueva incidencia",
+      "create": "Crear",
+      "fileInRow": "Archivar en",
+      "connectLinear": "Conectar Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Terminal en blanco"
@@ -4112,7 +4105,6 @@
       "directories_other": "{{count}} directorios",
       "editSparsePreset": "Editar preajuste de checkout disperso",
       "nameLabel": "Nombre",
-      "namePlaceholder": "Interfaz del renderizador",
       "newSparsePreset": "Nuevo preajuste de checkout disperso",
       "runSetupAndCreate": "Ejecutar configuración y crear",
       "setupSubtitle": "{{name}} requiere que decidas si ejecutar la configuración antes de crear este espacio de trabajo.",
@@ -4572,7 +4564,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
@@ -4739,6 +4730,11 @@
         "skipped": "Omitidas",
         "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} fotos. Quita algunas e inténtalo de nuevo.",
         "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Quita algunas e inténtalo de nuevo."
+      },
+      "wait": {
+        "offlineSave": "{{host}} está sin conexión. Lo que escribiste se conserva; Guardar volverá a funcionar cuando vuelva.",
+        "placeholder": "Esperando a",
+        "count": "{{count}} elementos"
       }
     },
     "needs": {

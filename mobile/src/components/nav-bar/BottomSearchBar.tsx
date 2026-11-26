@@ -239,9 +239,13 @@ const styles = themedStyleSheet(() => ({
     flex: 1,
     minWidth: 0
   },
+  // The pill wears the round buttons' fill and hairline, so the bar reads as one set.
   field: {
     minHeight: BUTTON_SIZE,
     borderRadius: radii.pill,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.composerBorder,
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 12,

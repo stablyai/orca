@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input/text-input-font-size'
+import { COMPOSER_TEXT_SIZE } from '../../components/composer-input/composer-input-styles'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
@@ -129,11 +129,14 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     lineHeight: 20,
     marginTop: spacing.sm
   },
+  // A dialog card isn't a sheet, so the field takes the filled grey, not the group's fill.
   dialogInput: {
     height: 36,
     marginTop: spacing.md,
     paddingHorizontal: spacing.md,
-    fontSize: TEXT_INPUT_FONT_SIZE
+    borderRadius: radii.control,
+    backgroundColor: colors.translucentFill,
+    fontSize: COMPOSER_TEXT_SIZE
   },
   dialogButtonDisabled: {
     opacity: 0.5
@@ -189,8 +192,9 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     flex: 1,
     height: 34,
     paddingHorizontal: spacing.md,
-    // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
-    fontSize: TEXT_INPUT_FONT_SIZE,
+    borderRadius: radii.control,
+    backgroundColor: colors.translucentFill,
+    fontSize: COMPOSER_TEXT_SIZE,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
   },

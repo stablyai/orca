@@ -2563,7 +2563,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆聽",
-      "liveInput": "即時輸入",
       "preparingMic": "正在準備麥克風",
       "processing": "處理中",
       "releaseMicHint": "放開按鈕即可停止錄音",
@@ -3925,27 +3924,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "連線",
-      "connectLinearWorkspace": "連線至 Linear 工作區",
-      "createIssue": "建立議題",
       "createWorkspaceIn": "選擇建立工作區的存放庫",
       "description": "描述",
-      "descriptionPlaceholder": "補充上下文",
-      "fileIn": "在 {{slug}} 建立議題",
-      "issueSource": "議題來源",
       "keySecurityHint": "您的金鑰會透過主機作業系統的鑰匙圈加密，並儲存於本機。",
-      "linearConnectSubtitle": "貼上個人 API 金鑰，即可瀏覽該工作區的議題。",
       "linearSettingsLink": "開啟 Linear 設定",
       "linearTeam": "Linear 團隊",
-      "linearTeamSubtitle": "在所選 Linear 團隊中建立議題。",
-      "newIssueTitle": "新增 {{providerLabel}} 議題",
       "origin": "origin",
       "personalApiKey": "個人 API 金鑰",
       "repository": "存放庫",
-      "repositorySubtitle": "在所選存放庫中建立議題。",
       "team": "團隊",
       "title": "標題",
-      "titlePlaceholder": "任務標題",
-      "upstream": "上游"
+      "upstream": "上游",
+      "newIssue": "新增 Issue",
+      "create": "建立",
+      "fileInRow": "提交至",
+      "connectLinear": "連接 Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "空白終端機"
@@ -4003,7 +3996,6 @@
       "directories_other": "{{count}} 個目錄",
       "editSparsePreset": "編輯稀疏預設",
       "nameLabel": "名稱",
-      "namePlaceholder": "算繪器介面",
       "newSparsePreset": "新增稀疏預設",
       "runSetupAndCreate": "執行設定並建立",
       "setupSubtitle": "建立此工作區前，請先選擇是否為 {{name}} 執行設定。",
@@ -4460,7 +4452,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -4624,6 +4615,11 @@
         "skipped": "已略過",
         "heldImagesLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 張照片。請移除一些後再試一次。",
         "heldSkillsLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 個技能。請移除一些後再試一次。"
+      },
+      "wait": {
+        "offlineSave": "{{host}} 已離線。你輸入的內容會保留，恢復連線後即可儲存。",
+        "placeholder": "等待",
+        "count": "{{count}} 項"
       }
     },
     "needs": {

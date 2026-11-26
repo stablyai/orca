@@ -2744,7 +2744,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "듣는 중",
-      "liveInput": "실시간 입력",
       "preparingMic": "마이크 준비 중",
       "processing": "처리 중",
       "releaseMicHint": "중지하려면 마이크에서 손을 떼세요",
@@ -4106,27 +4105,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "연결",
-      "connectLinearWorkspace": "Linear 워크스페이스 연결",
-      "createIssue": "이슈 생성",
       "createWorkspaceIn": "워크스페이스 생성 저장소",
       "description": "설명",
-      "descriptionPlaceholder": "배경 설명 추가",
-      "fileIn": "{{slug}}에 이슈 등록",
-      "issueSource": "이슈 소스",
       "keySecurityHint": "키는 호스트 OS 키체인을 통해 암호화되어 로컬에 저장됩니다.",
-      "linearConnectSubtitle": "해당 워크스페이스의 이슈를 보려면 개인 API 키를 붙여넣으세요.",
       "linearSettingsLink": "Linear 설정 열기",
       "linearTeam": "Linear 팀",
-      "linearTeamSubtitle": "선택한 Linear 팀에 이슈를 생성하세요.",
-      "newIssueTitle": "새 {{providerLabel}} 이슈",
       "origin": "origin",
       "personalApiKey": "개인 API 키",
       "repository": "저장소",
-      "repositorySubtitle": "선택한 저장소에 이슈를 생성하세요.",
       "team": "팀",
       "title": "제목",
-      "titlePlaceholder": "작업 제목",
-      "upstream": "업스트림"
+      "upstream": "업스트림",
+      "newIssue": "새 이슈",
+      "create": "만들기",
+      "fileInRow": "등록 위치",
+      "connectLinear": "Linear 연결"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "빈 터미널"
@@ -4184,7 +4177,6 @@
       "directories_other": "디렉터리 {{count}}개",
       "editSparsePreset": "스파스 프리셋 편집",
       "nameLabel": "이름",
-      "namePlaceholder": "렌더러 UI",
       "newSparsePreset": "새 스파스 프리셋",
       "runSetupAndCreate": "설정 실행 후 만들기",
       "setupSubtitle": "{{name}}의 워크스페이스를 만들려면 먼저 설정 스크립트 실행 여부를 선택해야 합니다.",
@@ -4641,7 +4633,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -5196,6 +5187,11 @@
         "skipped": "건너뜀",
         "heldImagesLimit": "답변은 댓글 하나로 보내지며, 사진은 최대 {{max}}장까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요.",
         "heldSkillsLimit": "답변은 댓글 하나로 보내지며, 스킬은 최대 {{max}}개까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요."
+      },
+      "wait": {
+        "offlineSave": "{{host}}이(가) 오프라인입니다. 입력한 내용은 유지되며, 다시 연결되면 저장할 수 있습니다.",
+        "placeholder": "대기 사유",
+        "count": "항목 {{count}}개"
       }
     },
     "needs": {
