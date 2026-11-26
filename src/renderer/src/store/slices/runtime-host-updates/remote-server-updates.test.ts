@@ -42,7 +42,7 @@ function setup() {
       ({
         ...createRemoteServerUpdatesSlice(...args),
         setRuntimeEnvironments: () => {}
-      }) as AppState
+      }) as unknown as AppState
   )
   return { state: store.getState, call }
 }
