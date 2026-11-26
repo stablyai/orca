@@ -128,6 +128,13 @@ export function listProviderRelaysAtLaunch(): Promise<void> {
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
 }
 
+/** Proves a chat opened as kept, that no listing placed, ended since; it settles that chat too. */
+let keptUnverifiedProof: ((chatKey: string) => Promise<boolean>) | null = null
+
+export function installProviderRelayKeptUnverifiedProof(proof: typeof keptUnverifiedProof): void {
+  keptUnverifiedProof = proof
+}
+
 /** The shared launch listing, never asked again here: true once every daemon has answered. */
 export async function providerRelayListingSettled(): Promise<boolean> {
   await listProviderRelaysAtLaunch()
@@ -263,7 +270,11 @@ export async function launchRelayedProviderProcess(
   // Opened as kept while the listing was late: ask once more, and never start a second agent.
   if (!inventoryComplete() && providerRelayKeptUnverified(relay.chatKey)) {
     await listKeptProviderRelays(() => installed.all(), true)
-    if (!inventoryComplete() && !keptProviderRelay(relay.chatKey)) {
+    if (
+      !inventoryComplete() &&
+      !keptProviderRelay(relay.chatKey) &&
+      !(await keptUnverifiedProof?.(relay.chatKey).catch(() => false))
+    ) {
       throw new KeptProviderRelayUnreachableError(relay.chatKey)
     }
   }

@@ -2,10 +2,6 @@ import {
   keptRunningProviderRelayPid,
   listProviderRelaysAtLaunchWithin,
   noteProviderRelayKeptUnverified,
-  providerRelayInventoryCompleted,
-  providerRelayKeptFromLastRun,
-  providerRelayKeptUnverified,
-  providerRelayListingSettled,
   providerRelayMayKeepChat
 } from '../../../provider-relay/app-provider-relays'
 import { probeAgentSessionProcessIdentity } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
@@ -13,7 +9,6 @@ import { readEchoedAgentSessionSpawnToken } from '../../../runtime/agent-session
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import {
   restoreJournalSqlFailure,
@@ -21,7 +16,7 @@ import {
 } from '../../agent-session-journal/journal-sql-failure'
 
 /** Gone, or its pid now names another process: pid reuse never keeps a dead chat's last run. */
-async function ownerProvenGone(owner: AgentSessionProcessIdentity): Promise<boolean> {
+export async function ownerProvenGone(owner: AgentSessionProcessIdentity): Promise<boolean> {
   const probe = await probeAgentSessionProcessIdentity({
     identity: owner,
     deps: { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken }
@@ -61,77 +56,6 @@ export async function structuredAgentSessionKeptAtOpen(
   }
   noteProviderRelayKeptUnverified(sessionId)
   return true
-}
-
-/**
- * Once the late listing answers, a chat opened as kept whose agent wasn't kept settles as gone. While
- * no listing hears every daemon, only its owner proven gone settles it; otherwise it waits for
- * whichever later listing does.
- */
-export function reconcileStructuredAgentSessionKeptAtOpen(
-  sessionId: string,
-  logger: Pick<StructuredAgentSessionLogger, 'warn'>,
-  owner: () => AgentSessionProcessIdentity | null,
-  settleGone: () => Promise<void>
-): Promise<void> {
-  const settleLogged = (): Promise<void> =>
-    settleGone().catch((error: unknown) =>
-      logger.warn('settling a chat whose agent turned out not kept failed', {
-        scope: 'kept-open-reconcile',
-        sessionId,
-        error
-      })
-    )
-  return reconcile(sessionId, owner, settleLogged).catch(settleFailed(logger, sessionId))
-}
-
-function settleFailed(logger: Pick<StructuredAgentSessionLogger, 'warn'>, sessionId: string) {
-  return (error: unknown): void =>
-    logger.warn('reconciling a chat opened as kept failed', {
-      scope: 'kept-open-reconcile',
-      sessionId,
-      error
-    })
-}
-
-async function reconcile(
-  sessionId: string,
-  owner: () => AgentSessionProcessIdentity | null,
-  settleGone: () => Promise<void>
-): Promise<void> {
-  if (!providerRelayKeptUnverified(sessionId)) {
-    return
-  }
-  if (!(await providerRelayListingSettled())) {
-    const ownerNow = owner()
-    if (ownerNow === null || !(await ownerProvenGone(ownerNow))) {
-      waitForInventory(sessionId, settleGone)
-      return
-    }
-  }
-  if (!providerRelayKeptFromLastRun(sessionId)) {
-    await settleGone()
-  }
-}
-
-/** One waiter per chat, the latest open's, so an outage holds at most one per chat, never per open. */
-const waitingForInventory = new Map<string, () => Promise<void>>()
-
-function waitForInventory(sessionId: string, settleGone: () => Promise<void>): void {
-  const first = waitingForInventory.size === 0
-  waitingForInventory.set(sessionId, settleGone)
-  if (!first) {
-    return
-  }
-  void providerRelayInventoryCompleted().then(async () => {
-    const waiting = [...waitingForInventory]
-    waitingForInventory.clear()
-    for (const [chat, settle] of waiting) {
-      if (!providerRelayKeptFromLastRun(chat)) {
-        await settle()
-      }
-    }
-  })
 }
 
 /**
