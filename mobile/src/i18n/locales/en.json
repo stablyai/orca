@@ -2439,8 +2439,7 @@
       "createTab": "Create Tab",
       "fileTitle": "File",
       "terminalTakingLonger": "Terminal is taking longer than expected",
-      "loadingTerminal": "Loading terminal",
-      "retryLoadingTerminal": "Retry loading terminal"
+      "loadingTerminal": "Loading terminal"
     },
     "commandDock": {
       "liveInputLabel": "Live terminal input",
@@ -3207,20 +3206,15 @@
     "terminalLayoutSheet": {
       "title": "Terminal layout",
       "oneTerminal": "One terminal",
-      "selected": "Selected",
       "auto": "Auto",
-      "autoHint": "Split to fit the available space",
       "sideBySide": "Side by side",
-      "sideBySideHint": "Two columns, even with the sidebar open",
       "stacked": "Stacked",
-      "stackedHint": "Two rows in any orientation",
-      "selectedHint": "Selected · {{hint}}"
+      "needsSecondTerminal": "Open a second terminal first"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, focused",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, tap to focus",
-      "inputPane": "{{title}} · Input"
+      "tapToFocusPane": "{{title}}, tap to focus"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout could not be saved",
@@ -5487,7 +5481,7 @@
       "code": "code {{code}}",
       "rendererCrashed": "renderer crashed",
       "title": "Terminal failed to load",
-      "reload": "Reload"
+      "message": "The session on your computer is still running."
     },
     "webviewNotificationDispatch": {
       "unknownError": "Unknown terminal error"

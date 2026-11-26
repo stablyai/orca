@@ -2160,7 +2160,6 @@
       "fileTitle": "Archivo",
       "loadingTerminal": "Cargando terminal",
       "noTabs": "No hay pestañas en esta sesión",
-      "retryLoadingTerminal": "Reintentar cargar la terminal",
       "terminalTakingLonger": "La terminal está tardando más de lo esperado"
     },
     "agentChildRow": {
@@ -2938,14 +2937,9 @@
     "terminalLayoutSheet": {
       "title": "Diseño del terminal",
       "oneTerminal": "Un terminal",
-      "selected": "Seleccionado",
       "auto": "Automático",
-      "autoHint": "Dividir según el espacio disponible",
       "sideBySide": "En paralelo",
-      "sideBySideHint": "Dos columnas, incluso con la barra lateral abierta",
-      "stacked": "Apilados",
-      "stackedHint": "Dos filas en cualquier orientación",
-      "selectedHint": "Seleccionado · {{hint}}"
+      "stacked": "Apilados"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "No se pudo guardar el diseño",
@@ -2966,8 +2960,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, enfocado",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, toca para enfocar",
-      "inputPane": "{{title}} · Entrada"
+      "tapToFocusPane": "{{title}}, toca para enfocar"
     },
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
@@ -4393,7 +4386,6 @@
     },
     "webviewEngineErrorState": {
       "code": "código {{code}}",
-      "reload": "Recargar",
       "rendererCrashed": "el proceso de renderizado se cerró inesperadamente",
       "status": "estado {{statusCode}}",
       "title": "No se pudo cargar la terminal"

@@ -7,7 +7,8 @@ import {
   terminalPaneDirection,
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { useWindowDimensions, View } from 'react-native'
+import { CircleAlert } from 'lucide-react-native'
 import { MobileBrowserTabBody } from '../browser/MobileBrowserTabBody'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
@@ -18,7 +19,6 @@ import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -33,6 +33,7 @@ import { useHostProfile } from '../host-catalog/use-host-profile'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { FileReader } from '../files/session-documents/MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
+import { MobileStateView } from '../components/feedback/MobileStateView'
 import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
@@ -47,7 +48,12 @@ export function MobileSessionActiveContent({
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const [paneFrame, setPaneFrame] = useState({ width: 0, height: 0 })
-  const paneDirection = terminalPaneDirection(paneFrame, controller.terminalSplitLayout)
+  const windowWidth = useWindowDimensions().width
+  const paneDirection = terminalPaneDirection(
+    paneFrame,
+    controller.terminalSplitLayout,
+    windowWidth
+  )
   const {
     hostId,
     worktreeId,
@@ -240,36 +246,27 @@ export function MobileSessionActiveContent({
         {toast}
       </View>
     ) : activePendingTerminalTab ? (
-      <View style={styles.emptyState}>
-        {!isPendingTerminalRecoveryParked && (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        )}
-        <Text style={styles.emptyText}>
-          {isPendingTerminalRecoveryParked
-            ? t(
-                'session.activeContent.terminalTakingLonger',
-                'Terminal is taking longer than expected'
-              )
-            : activePendingTerminalTab.title ||
-              t('session.activeContent.loadingTerminal', 'Loading terminal')}
-        </Text>
-        {isPendingTerminalRecoveryParked && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              'session.activeContent.retryLoadingTerminal',
-              'Retry loading terminal'
-            )}
-            style={({ pressed }) => [
-              styles.createButton,
-              pressed && styles.newTerminalButtonPressed
-            ]}
-            onPress={() => void retryPendingTerminalRecovery()}
-          >
-            <Text style={styles.createButtonText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        )}
-      </View>
+      isPendingTerminalRecoveryParked ? (
+        <MobileStateView
+          icon={CircleAlert}
+          title={t(
+            'session.activeContent.terminalTakingLonger',
+            'Terminal is taking longer than expected'
+          )}
+          action={{
+            label: t('common.retry', 'Retry'),
+            onPress: () => void retryPendingTerminalRecovery()
+          }}
+        />
+      ) : (
+        <MobileStateView
+          loading
+          title={
+            activePendingTerminalTab.title ||
+            t('session.activeContent.loadingTerminal', 'Loading terminal')
+          }
+        />
+      )
     ) : (
       <View style={styles.terminalFrame}>
         <MountedTerminalPanes terminals={terminals} visibleHandles={visibleTerminalHandles}>
