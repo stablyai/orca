@@ -37,19 +37,21 @@ export function NewBotDialogFooter({
   const createRef = useRef<HTMLButtonElement>(null)
   return (
     <DialogFooter
-      className="mt-0 shrink-0"
+      // One row in every locale: the link gives way (ellipsis) while Back and Create keep their labels.
+      className="mt-0 shrink-0 flex-nowrap [&>[data-slot=dialog-footer-actions]]:shrink-0"
       start={
         chatDefaults ? (
           // Off the Agent field and muted, so the form reads as Computer and Agent. Wrapped so the
           // footer's 13px button rule skips it and it stays caption-sized.
-          <div className="flex">
+          <div className="flex min-w-0">
             <Button
               type="button"
               variant="link-muted"
               size="inlineText"
+              className="min-w-0 shrink"
               title={t(
                 'bots.new.useChatDefaultsHint',
-                "Reset the agent's model and options to your chat defaults"
+                "Reset the agent's model, options and permissions to your chat defaults"
               )}
               disabled={creating}
               onClick={() => {
@@ -63,7 +65,7 @@ export function NewBotDialogFooter({
                 }
               }}
             >
-              {t('bots.new.useChatDefaults', 'Use chat defaults')}
+              <span className="truncate">{t('bots.new.useChatDefaults', 'Use chat defaults')}</span>
             </Button>
           </div>
         ) : null

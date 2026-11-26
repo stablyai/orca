@@ -1,3 +1,4 @@
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
@@ -322,6 +323,18 @@ const fromLink = (width: 340 | 480) => ({
 // The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
 export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
+
+// The shared link in the locales with the longest Use chat defaults: the footer stays on one row.
+const linkIn = (language: 'de' | 'es' | 'ru') => ({
+  ...fromLink(340),
+  interact: async () => {
+    await i18n.changeLanguage(await loadRendererUiLanguage(language))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
+export const linkDe340 = defineFixture(linkIn('de'))
+export const linkEs340 = defineFixture(linkIn('es'))
+export const linkRu340 = defineFixture(linkIn('ru'))
 
 // A model picked, so Use chat defaults shows on the footer's left.
 const pickModelOnly = async (): Promise<void> => {
