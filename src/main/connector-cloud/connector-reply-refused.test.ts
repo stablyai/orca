@@ -387,7 +387,10 @@ it('drains a real journal page and a later turn and approval while a prepared en
   onTestFinished(() => client.stop())
   await settle()
   emit(preparedEnd)
-  await settle()
+  await settle(1_000)
+  expect(h.fake.events).toContainEqual(
+    expect.objectContaining({ kind: 'turn-ended', turnId: preparedEnd.turnId, stateOnly: true })
+  )
   const nextTurn = preparedEnd.turnId + 1
   emit({
     kind: 'turn-started',
