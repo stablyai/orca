@@ -10,8 +10,8 @@ import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { readJournalSqlQueue } from './journal-sql-queue-read'
 import { JournalSqlScope } from './journal-sql-scope'
 
-// #49876: Exit release checks the mail hold. A newer Resume makes its old status rows irrelevant.
-it.each([128, 1_280])('skips %i status rows when Resume lifted the mail hold', (count) => {
+// #49876: Exit release reads the active usage-limit row and skips a failure lifted by Resume.
+it.each([128, 1_280])('reads one usage-limit candidate among %i status rows', (count) => {
   const db = new Database(':memory:')
   const target = { sessionId: 'chat', epoch: 'epoch' }
   const now = 1_800_000_000_000
@@ -55,16 +55,17 @@ it.each([128, 1_280])('skips %i status rows when Resume lifted the mail hold', (
       },
       options: { fence: 1, turnScope }
     })
+    const statements = vi.spyOn(db, 'prepare')
+    const statusReads = () =>
+      statements.mock.calls.filter(([sql]) => sql.includes("kind='status' AND turn_item_id=?"))
     expect(mailHold()).toEqual({ kind: 'failure-holds', held: true })
+    expect(statusReads()).toHaveLength(1)
     applyJournalDomainControlCommand(db, target, { kind: 'queue-resume', fence: 1 }, {}, now)
     db.exec('COMMIT')
 
-    const statements = vi.spyOn(db, 'prepare')
+    statements.mockClear()
     expect(mailHold()).toEqual({ kind: 'failure-holds', held: false })
-    const scopedStatuses = statements.mock.calls.filter(([sql]) =>
-      sql.includes("kind='status' AND turn_item_id=?")
-    )
-    expect(scopedStatuses).toHaveLength(0)
+    expect(statusReads()).toHaveLength(0)
   } finally {
     db.close()
   }
