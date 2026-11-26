@@ -6,9 +6,13 @@ import {
   pluginImageRuleError,
   type PluginImageKind
 } from '../../../shared/plugins/images/plugin-image-fields'
+import {
+  pluginPanelIconSlot,
+  pluginPanelImageIconPath
+} from '../../../shared/plugins/contributions/plugin-panel-image-icon'
 
 /** The images a format 2 manifest declares, each with the URL slot it is served under and the
- *  rules it must meet. Editor and new-file icons follow the plugin icon's rules. */
+ *  rules it must meet. Editor, new-file and panel image icons follow the plugin icon's rules. */
 export function declaredPluginImages(
   manifest: PluginManifest
 ): { kind: PluginImageKind; path: string; slot: string }[] {
@@ -33,6 +37,9 @@ export function declaredPluginImages(
     ),
     ...manifest.contributes.newFiles.flatMap((newFile, index) =>
       icon(`new-file-${index}`, newFile.icon)
+    ),
+    ...manifest.contributes.panels.flatMap((panel, index) =>
+      icon(pluginPanelIconSlot(index), pluginPanelImageIconPath(panel.icon))
     )
   ]
 }

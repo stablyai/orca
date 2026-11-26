@@ -1,8 +1,6 @@
-import { resolvePluginPanelPathIcon } from '../../../shared/plugins/contributions/plugin-panel-path-icon'
-import type { PluginPanelContribution } from '../../../shared/plugins/contributions/plugin-panel-contribution'
+import { projectPluginPanels } from './plugin-panel-icon-projection'
 import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { needsReconsent } from '../../../shared/plugins/approval/plugin-consent-state'
-import { pluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import type { PluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from './plugin-discovery'
 import { pluginFontSlot } from '../../../shared/plugins/contributions/plugin-font-contribution'
@@ -25,7 +23,6 @@ import { pluginCatalogTypes } from '../../../shared/plugins/catalog/plugin-catal
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import type {
   PluginHostListEntry,
-  PluginHostPanel,
   PluginHostStatus
 } from '../../../shared/plugins/plugin-list-entry'
 import {
@@ -87,17 +84,6 @@ const devChangeCountOf = (plugin: DiscoveredPlugin) =>
   plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
-
-/** A name stays in `icon`; a path icon goes to `iconPath` so older clients never see an object. */
-export function projectPluginPanelIcon(
-  icon: PluginPanelContribution['icon']
-): Pick<PluginHostPanel, 'icon' | 'iconPath'> {
-  if (typeof icon === 'string') {
-    return { icon }
-  }
-  const iconPath = icon ? resolvePluginPanelPathIcon(icon) : null
-  return iconPath ? { iconPath } : {}
-}
 
 export async function buildPluginList(
   service: PluginService,
@@ -173,10 +159,14 @@ export async function buildPluginList(
           ? candidateLockEntry
           : undefined
       // Why format 2 only: the image protocol serves no format 1 image, so a URL would 404.
-      const contributionIcon = (slot: string, path: string | undefined) =>
+      const contributionImageUrl = (slot: string, path: string | undefined) =>
         path !== undefined && plugin.manifest.manifestVersion === 2
-          ? { icon: pluginInstalledImageUrl(plugin.pluginKey, plugin.contentHash ?? 'dev', slot) }
-          : {}
+          ? pluginInstalledImageUrl(plugin.pluginKey, plugin.contentHash ?? 'dev', slot)
+          : null
+      const contributionIcon = (slot: string, path: string | undefined) => {
+        const icon = contributionImageUrl(slot, path)
+        return icon ? { icon } : {}
+      }
       const bundled = lockEntry?.source.kind === 'bundled'
       const managedByTeams =
         lockEntry?.source.kind === 'marketplace'
@@ -217,12 +207,7 @@ export async function buildPluginList(
           kind: capability.kind,
           description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
         })),
-        panels: plugin.manifest.contributes.panels.map((panel) => ({
-          id: panel.id,
-          title: panel.title,
-          ...projectPluginPanelIcon(panel.icon),
-          tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
-        })),
+        panels: projectPluginPanels(plugin, contributionImageUrl),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({
           id: editor.id,
           title: editor.title,

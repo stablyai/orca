@@ -7,10 +7,17 @@ import {
   pluginPanelPathIconIssue,
   resolvePluginPanelPathIcon
 } from '../contributions/plugin-panel-path-icon'
+import {
+  isPluginPanelImageIcon,
+  pluginPanelImageIconIssue
+} from '../contributions/plugin-panel-image-icon'
 import { stripUnsafeDisplayCharacters } from '../../text/display-text-safety'
 import { orcaEngineRangeSchema, satisfiesOrcaEngineRange } from './plugin-manifest-engine-range'
 import { isPluginJsonObject } from './plugin-json-object'
-import { PLUGIN_PANEL_PATH_ICON_SINCE } from './plugin-schema-field-docs'
+import {
+  PLUGIN_PANEL_IMAGE_ICON_SINCE,
+  PLUGIN_PANEL_PATH_ICON_SINCE
+} from './plugin-schema-field-docs'
 
 const BUILT_IN_ICONS: ReadonlySet<string> = new Set(PLUGIN_PANEL_ICONS)
 // Why: warnings quote manifest text into logs and terminals; one line, no control characters.
@@ -34,7 +41,10 @@ function isFileIcon(icon: unknown): icon is string {
  *  stays a schema error. */
 function panelIconIssue(icon: unknown): string | null {
   if (isFileIcon(icon)) {
-    return 'file icons are not supported; use icon.path'
+    return 'file icons are not supported; use icon.path, or icon.image for a PNG or WebP file'
+  }
+  if (isPluginPanelImageIcon(icon)) {
+    return pluginPanelImageIconIssue(icon)
   }
   return isObjectIcon(icon) ? pluginPanelPathIconIssue(icon) : null
 }
@@ -78,11 +88,13 @@ function legacyPanelIconWarnings(raw: unknown): string[] {
     if (typeof icon === 'string' && canonicalPluginPanelIcon(icon)) {
       return []
     }
-    const reason = isObjectIcon(icon)
-      ? 'path icons require manifest format 2'
-      : isFileIcon(icon)
-        ? 'file icons are not supported; use icon.path with manifest format 2'
-        : "isn't a built-in icon name"
+    const reason = isPluginPanelImageIcon(icon)
+      ? 'image icons require manifest format 2'
+      : isObjectIcon(icon)
+        ? 'path icons require manifest format 2'
+        : isFileIcon(icon)
+          ? 'file icons are not supported; use icon.path with manifest format 2'
+          : "isn't a built-in icon name"
     return [pluginPanelIconWarning(title, reason)]
   })
 }
@@ -121,6 +133,15 @@ export function withDrawablePluginPanelIcons(raw: unknown): { raw: unknown; warn
     : { raw, warnings }
 }
 
+/** The release an object or `.svg` icon needs, drawable or not, or null for a name. An image
+ *  icon counts even when dropped: its author means a color image, which needs the newer host. */
+function panelIconSince(icon: unknown): string | null {
+  if (isPluginPanelImageIcon(icon)) {
+    return PLUGIN_PANEL_IMAGE_ICON_SINCE
+  }
+  return isObjectIcon(icon) || isFileIcon(icon) ? PLUGIN_PANEL_PATH_ICON_SINCE : null
+}
+
 /** Why from the raw manifest: a dropped icon never reaches the engine-floor walk, yet Orca
  *  before the path icon release refuses any object or `.svg` icon, failing the whole plugin. */
 export function pluginPanelIconEngineFloorError(raw: unknown): string | null {
@@ -131,13 +152,19 @@ export function pluginPanelIconEngineFloorError(raw: unknown): string | null {
   if (typeof declared !== 'string' || !orcaEngineRangeSchema.safeParse(declared).success) {
     return null
   }
-  if (satisfiesOrcaEngineRange(declared.slice(2), `>=${PLUGIN_PANEL_PATH_ICON_SINCE}`)) {
-    return null
+  // Why the highest unmet release: one error then names the floor that fixes every panel.
+  let unmet: { index: number; since: string } | undefined
+  for (const [index, panel] of rawPanels(raw).entries()) {
+    const since = isPluginJsonObject(panel) ? panelIconSince(panel.icon) : null
+    if (
+      since &&
+      !satisfiesOrcaEngineRange(declared.slice(2), `>=${since}`) &&
+      (!unmet || !satisfiesOrcaEngineRange(unmet.since, `>=${since}`))
+    ) {
+      unmet = { index, since }
+    }
   }
-  const index = rawPanels(raw).findIndex(
-    (panel) => isPluginJsonObject(panel) && (isObjectIcon(panel.icon) || isFileIcon(panel.icon))
-  )
-  return index === -1
-    ? null
-    : `engines.orca: must be at least >=${PLUGIN_PANEL_PATH_ICON_SINCE}, because contributes.panels[${index}].icon needs Orca ${PLUGIN_PANEL_PATH_ICON_SINCE}`
+  return unmet
+    ? `engines.orca: must be at least >=${unmet.since}, because contributes.panels[${unmet.index}].icon needs Orca ${unmet.since}`
+    : null
 }

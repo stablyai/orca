@@ -4,6 +4,7 @@ import {
   resolvePluginPanelPathIcon,
   type ResolvedPluginPanelPathIcon
 } from '../../../../../shared/plugins/contributions/plugin-panel-path-icon'
+import { parsePluginImageUrl } from '../../../../../shared/plugins/images/plugin-image-url'
 import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { ActivityBarItem } from '../activity-bar/activity-bar-buttons'
 import {
@@ -13,65 +14,93 @@ import {
   type ActivityItemStatus
 } from '../activity-bar/activity-bar-item-names'
 import { resolvePluginIconGlyph } from '../../plugins/plugin-icon-glyphs'
+import { PluginContributionIcon } from '../../plugins/PluginContributionIcon'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 
-const PATH_ICON_CACHE_LIMIT = 256
+const ICON_CACHE_LIMIT = 256
 // Why cache: the activity bar rebuilds its items on every plugin-list refresh; a stable
-// component per icon keeps React from remounting each glyph.
-const pathIconComponents = new Map<string, PluginPanelIcon>()
+// component per icon keeps React from remounting each glyph or image.
+const iconComponents = new Map<string, PluginPanelIcon>()
 
-function pathIconComponent(icon: ResolvedPluginPanelPathIcon): PluginPanelIcon {
-  const key = `${icon.mode}|${icon.viewBox}|${icon.path}`
-  const cached = pathIconComponents.get(key)
+function cachedIconComponent(key: string, create: () => PluginPanelIcon): PluginPanelIcon {
+  const cached = iconComponents.get(key)
   if (cached) {
     // Why re-insert: Map keeps insertion order, so this makes the icon the most recently used.
-    pathIconComponents.delete(key)
-    pathIconComponents.set(key, cached)
+    iconComponents.delete(key)
+    iconComponents.set(key, cached)
     return cached
   }
-  const stroke = icon.mode === 'stroke'
-  // Why attributes, never markup: React sets `d` as a plain attribute, so path data cannot
-  // inject elements even from a host older or newer than this client.
-  const Icon: PluginPanelIcon = ({ size = 16, className }) =>
-    createElement(
-      'svg',
-      {
-        xmlns: 'http://www.w3.org/2000/svg',
-        width: size,
-        height: size,
-        viewBox: icon.viewBox,
-        fill: stroke ? 'none' : 'currentColor',
-        stroke: stroke ? 'currentColor' : 'none',
-        strokeWidth: stroke ? 2 : undefined,
-        strokeLinecap: stroke ? 'round' : undefined,
-        strokeLinejoin: stroke ? 'round' : undefined,
-        className: className ? `plugin-panel-icon ${className}` : 'plugin-panel-icon',
-        style: { forcedColorAdjust: 'none' },
-        'aria-hidden': true,
-        focusable: false
-      },
-      createElement('path', { d: icon.path })
-    )
   // Why LRU, not clear-all: icons still on screen keep their component when old ones go.
-  if (pathIconComponents.size >= PATH_ICON_CACHE_LIMIT) {
-    const oldest = pathIconComponents.keys().next()
+  if (iconComponents.size >= ICON_CACHE_LIMIT) {
+    const oldest = iconComponents.keys().next()
     if (!oldest.done) {
-      pathIconComponents.delete(oldest.value)
+      iconComponents.delete(oldest.value)
     }
   }
-  pathIconComponents.set(key, Icon)
+  const Icon = create()
+  iconComponents.set(key, Icon)
   return Icon
 }
 
-/** A panel's glyph: its path icon, else its built-in name, else `puzzle`. */
+function pathIconComponent(icon: ResolvedPluginPanelPathIcon): PluginPanelIcon {
+  const stroke = icon.mode === 'stroke'
+  // Why attributes, never markup: React sets `d` as a plain attribute, so path data cannot
+  // inject elements even from a host older or newer than this client.
+  return cachedIconComponent(
+    `path|${icon.mode}|${icon.viewBox}|${icon.path}`,
+    () =>
+      ({ size = 16, className }) =>
+        createElement(
+          'svg',
+          {
+            xmlns: 'http://www.w3.org/2000/svg',
+            width: size,
+            height: size,
+            viewBox: icon.viewBox,
+            fill: stroke ? 'none' : 'currentColor',
+            stroke: stroke ? 'currentColor' : 'none',
+            strokeWidth: stroke ? 2 : undefined,
+            strokeLinecap: stroke ? 'round' : undefined,
+            strokeLinejoin: stroke ? 'round' : undefined,
+            className: className ? `plugin-panel-icon ${className}` : 'plugin-panel-icon',
+            style: { forcedColorAdjust: 'none' },
+            'aria-hidden': true,
+            focusable: false
+          },
+          createElement('path', { d: icon.path })
+        )
+  )
+}
+
+/** The panel's image in the glyph's box, in its own colors; `puzzle` if it does not load. */
+function imageIconComponent(url: string): PluginPanelIcon {
+  return cachedIconComponent(
+    `image|${url}`,
+    () =>
+      ({ size = 16, className }) =>
+        createElement(PluginContributionIcon, {
+          url,
+          size,
+          className: className ?? '',
+          fallback: createElement(Puzzle, { size, className, 'aria-hidden': true })
+        })
+  )
+}
+
+/** A panel's icon: its image, else its path icon, else its built-in name, else `puzzle`. */
 export function resolvePluginPanelIcon(
   iconName: string | undefined,
-  iconPath?: unknown
+  iconPath?: unknown,
+  iconImage?: unknown
 ): PluginPanelIcon {
-  // Why re-validate: a paired host of another version may send any shape.
+  // Why re-validate: a paired host of another version may send any shape, and only an image
+  // main serves may load, so a web URL cannot hotlink.
+  if (typeof iconImage === 'string' && parsePluginImageUrl(iconImage)) {
+    return imageIconComponent(iconImage)
+  }
   const path = iconPath === undefined ? null : resolvePluginPanelPathIcon(iconPath)
   return path ? pathIconComponent(path) : resolvePluginIconGlyph(iconName, Puzzle)
 }
@@ -205,7 +234,7 @@ export function getPluginPanelActivityItems(
   return panels.map((panel) => ({
     id: panel.tabKey,
     pluginKey: panel.pluginKey,
-    icon: resolvePluginPanelIcon(panel.icon, panel.iconPath),
+    icon: resolvePluginPanelIcon(panel.icon, panel.iconPath, panel.iconImage),
     // Manifest titles are plugin-owned and render without app-catalog translation.
     title: panel.title,
     // Why the id when the name is blank: a whitespace-only display name would drop the plugin's

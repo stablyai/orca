@@ -144,6 +144,22 @@ it('keeps recently used path icons when the cache evicts', () => {
   expect(resolvePluginPanelIcon(undefined, keep)).toBe(Kept)
 })
 
+it('draws an image icon at the glyph size only when main serves it', () => {
+  const url = 'orca-plugin-image://installed/acme.lamp/dev/panel-0?v=1'
+  const Icon = resolvePluginPanelIcon('database', undefined, url)
+  expect(resolvePluginPanelIcon('database', undefined, url)).toBe(Icon)
+  const img = render(createElement(Icon, { size: 18 })).container.querySelector('img')
+  expect(img?.getAttribute('src')).toBe(url)
+  expect(img?.getAttribute('width')).toBe('18')
+  expect(img?.getAttribute('alt')).toBe('')
+  cleanup()
+  // Why: a paired host of another version could send a web URL; that must never load.
+  const Hotlink = resolvePluginPanelIcon(undefined, undefined, 'https://example.com/x.png')
+  expect(render(createElement(Hotlink, { size: 18 })).container.innerHTML).toBe(
+    renderIcon(undefined).innerHTML
+  )
+})
+
 it('names the plugin in the accessible title unless the title already does', () => {
   expect(pluginPanelAccessibleTitle('Acme', 'Dashboard')).toBe('Acme: Dashboard')
   expect(pluginPanelAccessibleTitle('Acme', 'acme')).toBe('acme')

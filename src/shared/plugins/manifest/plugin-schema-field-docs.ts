@@ -25,6 +25,8 @@ export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
 export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
 /** First release that draws a panel `icon` given as inline SVG path data. */
 export const PLUGIN_PANEL_PATH_ICON_SINCE = '1.4.274'
+/** First release that draws a panel `icon` given as a PNG or WebP image. */
+export const PLUGIN_PANEL_IMAGE_ICON_SINCE = '1.4.279'
 
 type PluginFieldDoc = {
   description: string
