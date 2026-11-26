@@ -2,6 +2,7 @@ import { legacyDestinationFileIdentity } from './journal-legacy-retirement-files
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
 import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
+import { ensureJournalRetainedProviderHandles } from './database/journal-retained-provider-handles'
 import { runJournalTransaction } from './database/journal-database'
 import { mkdirSync, lstatSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -83,6 +84,7 @@ async function open(): Promise<void> {
     }
     readOnly = opened.readOnly
     if (!readOnly) {
+      ensureJournalRetainedProviderHandles(db, (run) => runJournalTransaction(opened.db, run))
       db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
       runJournalTransaction(db, (writer) => writer.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA))
     }

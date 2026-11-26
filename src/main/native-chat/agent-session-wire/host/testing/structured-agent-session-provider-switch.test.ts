@@ -180,7 +180,10 @@ it('sends new work after a switch while keeping a held card under its earlier pe
     holdReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED
   })
   expect(await chat.host.selectProvider(piSelection)).toEqual({ status: 'selected' })
-  chat.dispatch.mockResolvedValueOnce({ state: 'accepted', providerIdentity: null })
+  chat.dispatch.mockResolvedValueOnce({
+    state: 'accepted',
+    providerIdentity: { provider: 'legacy', agent: 'pi', sessionId: THREAD, recordId: 'answer' }
+  })
   const { id, result } = chat.send('Write the test')
   await result
   await eventually(async () => {

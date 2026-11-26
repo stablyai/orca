@@ -30,13 +30,17 @@ export function ensureJournalRetainedProviderHandles(
   db: Database.Database,
   inTransaction: (run: () => void) => void
 ): void {
-  if (
-    db.prepare("SELECT 1 FROM sqlite_master WHERE name='journal_retained_provider_handles'").get()
-  ) {
+  const exists = db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE name='journal_retained_provider_handles'"
+  )
+  if (exists.get()) {
     return
   }
   const next = inactiveLinks('NEW.record_json')
   inTransaction(() => {
+    if (exists.get()) {
+      return
+    }
     db.exec(`CREATE TABLE journal_retained_provider_handles (
         session_id TEXT NOT NULL,
         native_id TEXT NOT NULL,

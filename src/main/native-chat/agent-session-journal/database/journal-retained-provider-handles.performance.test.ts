@@ -2,7 +2,11 @@ import { expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
 import { migrateJournalDomainSchema } from './journal-domain-migrations'
-import { journalProviderHandleOwners } from './journal-retained-provider-handles'
+import { runJournalTransaction } from './journal-database'
+import {
+  ensureJournalRetainedProviderHandles,
+  journalProviderHandleOwners
+} from './journal-retained-provider-handles'
 
 it('looks up an earlier native handle by index regardless of saved chat count', () => {
   const record = (id: string, inactive?: string) =>
@@ -25,6 +29,7 @@ it('looks up an earlier native handle by index regardless of saved chat count', 
       put.run('first', record('newer', 'original'))
       db.exec('COMMIT')
       migrateJournalDomainSchema(db)
+      ensureJournalRetainedProviderHandles(db, (run) => runJournalTransaction(db, run))
       expect(journalProviderHandleOwners(db, 'original')).toEqual(['first'])
       expect(journalProviderHandleOwners(db, 'newer')).toEqual(['first'])
 
@@ -64,5 +69,5 @@ it('looks up an earlier native handle by index regardless of saved chat count', 
     }
   }
 
-  expect([measure(100), measure(1000)]).toEqual([2, 2])
+  expect([measure(10_000), measure(100_000)]).toEqual([2, 2])
 })
