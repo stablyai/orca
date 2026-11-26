@@ -161,6 +161,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     ...(startFailure ? { failure: startFailure } : {}),
     duringStartup: exitedDuringStartup,
     rootGone: true,
+    observedAt,
     ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {}),
     ...(expected && close ? { endedAt: close.requestedAt } : {})
   })

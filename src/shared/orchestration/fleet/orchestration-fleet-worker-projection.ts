@@ -162,7 +162,8 @@ function projectResource(worker: FleetDurableWorker): FleetResourceProjection {
 /** Recompute after host verdicts; stale local inspect must not outrank recover for proven remote exit. */
 export function projectFleetNextAction(
   worker: FleetDurableWorker,
-  liveness: FleetLiveness
+  liveness: FleetLiveness,
+  canResume = false
 ): FleetNextAction {
   if (worker.workerStage === 'released') {
     return { kind: 'none', argv: [] }
@@ -204,7 +205,9 @@ export function projectFleetNextAction(
   ) {
     return {
       kind: 'recover',
-      argv: ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
+      argv: canResume
+        ? ['orchestration', 'send', '--to', `dispatch:${worker.dispatchId}`]
+        : ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
     }
   }
   // Live workers with no pending input owe no action; inspect would repeat this projection.
@@ -265,6 +268,14 @@ export function projectOrchestrationFleetWorker(
     workerState: worker.workerState,
     dispatchStatus: worker.dispatchStatus
   })
+  const canResume =
+    session?.status === 'exited' &&
+    session.addressable === true &&
+    worker.workerState === 'ready' &&
+    worker.dispatchStatus === 'dispatched' &&
+    worker.terminalState !== 'released' &&
+    worker.resource?.releaseState !== 'released' &&
+    !hasCertifiedExit(worker)
   return {
     id: worker.dispatchId,
     dispatchId: worker.dispatchId,
@@ -304,13 +315,14 @@ export function projectOrchestrationFleetWorker(
     },
     resource: projectResource(worker),
     ...(worker.resource?.autoReleaseAt ? { autoReleaseAt: worker.resource.autoReleaseAt } : {}),
-    nextAction: projectFleetNextAction(worker, liveness),
+    nextAction: projectFleetNextAction(worker, liveness, canResume),
     attention: projectOrchestrationFleetAttention({
       isRoot: worker.parentTaskId === null,
       outcome,
       pendingInput: worker.pendingInput,
       pendingApproval: worker.pendingApproval,
       interrupted:
+        canResume ||
         worker.workerState === 'abandoned' ||
         worker.terminationReason === 'operator_close' ||
         worker.terminationReason === 'signaled',

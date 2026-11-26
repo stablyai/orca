@@ -118,10 +118,12 @@ export class StructuredAgentSessionRequestFailures {
       return
     }
     const stopSettle = session.journal.stopMarks.fact()
+    const exit =
+      ended.observedAt === undefined ? undefined : { fence: ended.fence, observedAt: ended.observedAt }
     const running = session.journal
-      .readInOrder((reads) => reads.runningRequest(stopSettle))
+      .readInOrder((reads) => reads.runningRequest(stopSettle, exit))
       .then((request) => {
-        if (this.current(sessionId, source) && request?.turnState === 'running') {
+        if (request && this.current(sessionId, source)) {
           this.forward(
             sessionId,
             source,

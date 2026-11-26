@@ -20,12 +20,24 @@ export function readJournalSqlRequestFailure(
 ): JournalRequestFailureResult {
   if (operation.kind === 'running-request') {
     const running = new JournalSqlStatusContext(scope).runningTurn()
+    // The adapter may have committed its interruption while the host was still receiving exit proof.
+    const ended =
+      !running && operation.exit
+        ? scope.db
+            .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_interrupted_root
+          WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND kind IN ('turn','status')
+          AND lifecycle_state='interrupted' AND turn_completed_at IS NOT NULL AND turn_completed_at=?
+          AND turn_id IS NOT NULL AND COALESCE(execution_owner,owner_fence)=?
+          ORDER BY sequence DESC,sequence_index DESC,ordinal DESC,item_id DESC LIMIT 1`)
+            .get(...scope.prefix, operation.exit.observedAt, operation.exit.fence)
+        : undefined
+    const itemId = running?.item.itemId ?? (typeof ended?.item_id === 'string' ? ended.item_id : null)
     return {
       kind: operation.kind,
-      request: running
+      request: itemId
         ? new JournalDomainRequestFailure(scope.db, scope, operation.stopSettle).request(
             'turn',
-            running.item.itemId
+            itemId
           )
         : null
     }

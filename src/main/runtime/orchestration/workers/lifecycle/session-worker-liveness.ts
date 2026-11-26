@@ -18,6 +18,7 @@ import {
   resolveStructuredWorkerIdentity
 } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import { structuredWorkerOwned } from '../../terminal-authority/structured-sessions/structured-worker-custody'
 import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
 
 export type SessionWorkerSubject = {
@@ -82,9 +83,10 @@ export function createSessionWorkerLivenessReader(
     | readonly FleetAgentStatusEvidence[]
     | ((paneKey: string) => FleetAgentStatusEvidence | undefined),
   records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
-  // A chat assignee's party, from the database unless a caller read its rows already.
-  parties: SessionPartyReader | null | undefined = db
+  options: { parties?: SessionPartyReader | null; includeAddressability?: true } = {}
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
+  // A chat assignee's party, from the database unless a caller read its rows already.
+  const { parties = db } = options
   const resolveSession = createLineageRunningSessionResolver(records)
   let statusByPane: Map<string, FleetAgentStatusEvidence> | undefined
   // A session's status row lives at its derived pane key, not the worker's minted one.
@@ -120,11 +122,15 @@ export function createSessionWorkerLivenessReader(
     }
     const observed = observeStructuredWorker({ sessionId }, { resolveSession })
     const running = resolveSession(sessionId)
+    if (observed.status === 'exited') {
+      // The fleet owns the Dispatch and resource state; the host proves that the chat still routes.
+      const addressable =
+        options.includeAddressability && running.kind === 'here' && structuredWorkerOwned(running)
+      return addressable ? { status: 'exited', addressable: true } : { status: 'exited' }
+    }
     return observed.status === 'live'
       ? live(running.kind === 'here' ? running.sessionId : sessionId)
-      : observed.status === 'exited'
-        ? { status: 'exited' }
-        : { status: 'unverifiable', detail: observed.reason ?? 'The session cannot be verified.' }
+      : { status: 'unverifiable', detail: observed.reason ?? 'The session cannot be verified.' }
   }
 }
 

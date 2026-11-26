@@ -142,6 +142,7 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     failure?: SubmissionRejectionFact
     duringStartup: boolean
     startedFor?: string
+    observedAt?: number
     /** Order exit against acceptance; requested closes retain their original Stop boundary. */
     endedAt: AgentJournalCursor
   }

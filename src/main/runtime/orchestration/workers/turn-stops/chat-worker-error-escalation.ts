@@ -7,7 +7,7 @@ import type { StructuredAgentSessionRequestFailure } from '../../../../native-ch
 import { resolveStructuredWorkerIdentityForSession } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { isSenderOwnRejection } from './chat-worker-error-words'
-import { readChatRequestError } from './chat-request-error-read'
+import { readChatRequestError, unrecordedChatRequestError } from './chat-request-error-read'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { observeWorker } from './worker-presence-report'
@@ -68,7 +68,13 @@ export async function escalateChatWorkerError(
     const seen = new Map(
       targets.map(({ dispatch }) => [dispatch.id, readWorkerPresence(db, dispatch.id)?.generation])
     )
-    const error = await readChatRequestError(request)
+    const error = await readChatRequestError(request).catch((error: unknown) => {
+      if (!request.death?.rootGone) {
+        throw error
+      }
+      // Committed journal details can be unavailable even though the host proved this exit.
+      return unrecordedChatRequestError(request)
+    })
     if (!error || isSenderOwnRejection(error)) {
       return
     }
