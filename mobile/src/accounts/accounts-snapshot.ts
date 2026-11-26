@@ -155,8 +155,27 @@ const CodexAccountSummarySchema = z
     }
   })
 
+const ManagedDataAccountsStateSchema = z
+  .object({
+    accounts: z.array(
+      z
+        .object({
+          id: AccountIdSchema,
+          label: z.string().min(1),
+          integrations: z.array(z.string()),
+          createdAt: TimestampSchema
+        })
+        .passthrough()
+    ),
+    activeAccountId: AccountIdSchema.nullable()
+  })
+  .passthrough()
+
 export const AccountsSnapshotSchema = z
   .object({
+    // Older hosts omit managed OpenCode and Devin profiles.
+    opencode: ManagedDataAccountsStateSchema.optional(),
+    devin: ManagedDataAccountsStateSchema.optional(),
     claude: z
       .object({
         accounts: z.array(ClaudeAccountSummarySchema),
@@ -226,6 +245,7 @@ export type InactiveAccountUsage = z.infer<typeof InactiveAccountUsageSchema>
 export type RateLimitRuntimeTarget = z.infer<typeof RateLimitRuntimeTargetSchema>
 export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>
 export type CodexAccountSummary = z.infer<typeof CodexAccountSummarySchema>
+export type ManagedDataAccountsState = z.infer<typeof ManagedDataAccountsStateSchema>
 export type AccountsSnapshot = z.infer<typeof AccountsSnapshotSchema>
 
 export class AccountsSnapshotError extends Error {
