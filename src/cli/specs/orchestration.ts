@@ -73,7 +73,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.',
       'For a long or multi-line body, write it to a file and pass --body-file <path> (or - for stdin); the CLI reads it on this computer, so no shell quoting applies.',
       '--on <server> mails a terminal or chat agent on a paired server (--to term_… or orca_session_id:…). Your own Orca carries it, and replies come back to your own check. From an agent, --environment runs the command on that server and delivers no mail.',
-      '--on-client <computer> mails an agent on a computer paired to this Orca (--to bot:<id>), as its mention in your chat names it. A person on that computer approves it once, and its reply comes back to your own check; it fails at once when that computer is not connected, or comes back declined.'
+      '--on-client <computer> mails an agent on a computer paired to this Orca (--to bot:<id>), as its mention in your chat or `orca bot list` names it. That computer takes it only for a bot its owner @-mentioned in your chat (a person there approves it once) or always lets this Orca ask; any other comes back declined. Its reply comes back to your own check; the send fails at once when that computer is not connected.'
     ]
   },
   {

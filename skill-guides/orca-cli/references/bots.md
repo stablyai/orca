@@ -79,6 +79,13 @@ A workspace under your home is yours, however it got there; moving it out only m
 - Your mail and workers stay on your own Orca. `send` and `worker-start` with `--environment` (or an inherited `ORCA_ENVIRONMENT`) are refused with the `--on` command to run instead. `check` takes no `--on` and no server: replies from other servers already arrive in it. With `--environment` (or `ORCA_ENVIRONMENT`) it is refused with `mailbox_is_local`; drop the server. Read-only `inbox`, `worker-list` and `run-list` with `--environment` show that server's records.
 - If an Orca is too old to carry mail between servers, the send fails with `server_mail_unsupported` and nothing is sent.
 
+### Bots on a computer paired to this one
+
+When this Orca is a paired server, the computers paired to it are not servers: `--on` can't reach them, and their bots never list as this computer's.
+
+- `ORCA bot list` names each one connected now, with its `--on-client <computer>` address and the bots it always lets this Orca's agents ask. Ask one with `ORCA orchestration send --on-client <computer> --to bot:<id> --type question|handoff --subject <text> --body-file <file>`; its reply comes back to your own `check`.
+- Its other bots are private to it. An ask to one comes back declined unless its owner @-mentions that bot in your chat from that computer (then a person there approves your ask once) or always allows this Orca in that bot's Who can ask. When you need one, tell your owner which bot and why, and ask them to do that; don't look for it in Slack.
+
 What to ask is yours to decide. A suggested starting point, to adapt or skip:
 
 ```text

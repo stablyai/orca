@@ -4,6 +4,8 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../orchestration-error'
+import type { BotRosterClient } from '../../../../../shared/bot-roster'
+import { toSafeDisplayLine } from '../../../../../shared/text/display-text-safety'
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type ClientAskListener = {
@@ -13,6 +15,8 @@ export type ClientAskListener = {
   /** The pairing fingerprint this Orca keys the computer's conversations by. */
   fingerprint: string
   session: string
+  /** Its agents it said a person always lets this Orca's agents ask, as of its latest pull. */
+  bots: { id: string; name: string }[]
 }
 
 export type ClientAskPull = { key: string; session: string }
@@ -82,7 +86,8 @@ export function clientAskPullStarted(
     installationId: pull.installationId,
     name: pull.name,
     fingerprint: caller.fingerprint,
-    session: pull.session
+    session: pull.session,
+    bots: pull.bots ?? []
   })
   return { key, session: pull.session }
 }
@@ -110,6 +115,17 @@ export function listeningClients(
     (listener) =>
       listener.installationId === selector.trim() || listener.name.trim().toLowerCase() === wanted
   )
+}
+
+/** Every computer listening now, as this Orca's own `orca bot list` names it: by its installation id,
+ *  which `--on-client` takes and two copies sharing a name never confuse, with the agents there it
+ *  said this Orca's agents may ask without a card. Names came from that computer, so stay one line. */
+export function connectedClientRosters(owner: ClientAskListenerOwner): BotRosterClient[] {
+  return [...listenersOf(owner).values()].map((listener) => ({
+    name: toSafeDisplayLine(listener.name) || listener.installationId,
+    onClient: listener.installationId,
+    bots: listener.bots.map((bot) => ({ id: bot.id, name: toSafeDisplayLine(bot.name) || bot.id }))
+  }))
 }
 
 /** The name a computer last pulled with since this Orca started; null for one it hasn't seen. */

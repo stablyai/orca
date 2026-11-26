@@ -9,7 +9,11 @@ import type {
   OrchestrationWorkerServer
 } from '../environment-transport'
 import { peerMailPairing } from '../peer-mail/peer-mail-delivery'
-import { pairedServerAsksWanted } from '../../db/federation/paired-server-asks-store'
+import {
+  listAllowedBotsOfServer,
+  pairedServerAsksWanted
+} from '../../db/federation/paired-server-asks-store'
+import { PAIRED_CLIENT_BOTS_MAX } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { onPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import {
   followServerRoute,
@@ -146,10 +150,28 @@ export function endPairedServerAsks(
   }
 }
 
-export function pairedServerPullParams(asks: PairedServerAsks | null | undefined): {
+/** What a pull names this computer with; on each pull, read afresh, the agents here a person always
+ *  lets this server ask (none paused or removed), so a change reaches the server by the next pull. */
+export function pairedServerPullParams(
+  runtime: Pick<OrcaRuntimeService, 'bots'>,
+  db: OrchestrationDb,
+  asks: PairedServerAsks | null | undefined
+): {
   clientAsks?: PairedServerAsks['wire']
 } {
-  return asks ? { clientAsks: asks.wire } : {}
+  if (!asks) {
+    return {}
+  }
+  const allowed = new Set(listAllowedBotsOfServer(db, asks.serverKey))
+  const bots =
+    allowed.size === 0
+      ? []
+      : runtime.bots
+          .list()
+          .filter((bot) => allowed.has(bot.id) && !bot.paused)
+          .slice(0, PAIRED_CLIENT_BOTS_MAX)
+          .map((bot) => ({ id: bot.id, name: bot.name }))
+  return { clientAsks: { ...asks.wire, bots } }
 }
 
 /** The server answered: a pairing not announced yet is announced now. */
