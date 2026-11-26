@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import {
+  pairedRuntimeConnectionFromOffer,
+  pairedRuntimeConnectionToken
+} from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   BinaryChannelOpcode,
   decodeBinaryChannelFrame,
@@ -23,7 +26,6 @@ import { defineStreamingMethod } from '../core'
 import { STATUS_METHODS } from '../methods/host-management/status'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { pairedRuntimeConnectionToken } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 // Echoes each binary frame back with its own tag, until its connection goes away.
 const echo = defineStreamingMethod({

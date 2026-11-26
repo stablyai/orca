@@ -28,7 +28,8 @@ import {
 import { shouldUseSharedControlEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
 import { resumeAfterIdleStop } from './runtime-environment-idle-stop-resume'
-import { answerSharedHostHere } from './runtime-environment-shared-hosts'
+import { answerSharedHostFirst } from './runtime-environment-shared-hosts'
+import { openRelayHostLink } from '../connections/runtime-environment-relay-host-link'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -50,17 +51,13 @@ export async function callRuntimeEnvironment(
   ...args: Parameters<typeof callPairedRuntimeEnvironment>
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   const [userDataPath, selector, method, params, ...rest] = args
-  // A shared agent's share may answer first; anything it sends on goes as this same call.
-  const send = (sent: string, sentParams: unknown) =>
+  return answerSharedHostFirst(selector, method, params, (sent, sentParams) =>
     callPairedRuntimeEnvironment(userDataPath, selector, sent, sentParams, ...rest)
-  const sendOn = async (sent: string, sentParams: unknown) => {
-    const response = await send(sent, sentParams)
-    return response.ok ? response : { id: response.id, ok: false as const, error: response.error }
-  }
-  return (await answerSharedHostHere(selector, method, params, sendOn)) ?? send(method, params)
+  )
 }
 
-async function callPairedRuntimeEnvironment(
+/** callRuntimeEnvironment past the share's own answers; for a caller that asked them already. */
+export async function callPairedRuntimeEnvironment(
   userDataPath: string,
   selector: string,
   method: string,
@@ -125,6 +122,7 @@ async function callPairedRuntimeEnvironment(
           }
           const { environment: currentEnvironment, expected } = prepared
           const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
+          openRelayHostLink(currentEnvironment.id, pairedConnection)
           endpoint = pairedConnection.endpoint
           const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
           const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)

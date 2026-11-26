@@ -7,7 +7,7 @@ import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/r
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { SharedHostLink } from '../../../shared/remote-runtime/relay/client/shared-host-relay-link'
 import {
-  closeRemoteRuntimeSharedControlConnection,
+  closeRemoteRuntimeRequestConnection,
   ensureRemoteRuntimeSharedControlConnection,
   getRemoteRuntimeSharedControlDiagnostics,
   reconnectRemoteRuntimeSharedControlConnection,
@@ -17,8 +17,8 @@ import { onRuntimeEnvironmentDiagnostics } from '../../ipc/runtime-environments/
 
 type Settled = Exclude<SharedHostLink, 'connecting'>
 
-// A dial still unsettled after this reads as away; the connection keeps retrying behind it.
-const CONNECT_SETTLE_MS = 30_000
+// A dial still unsettled after this reads as away (the share link's old redial pace).
+const CONNECT_SETTLE_MS = 15_000
 const REQUEST_TIMEOUT_MS = 15_000
 
 export type SharedBotHostLink = {
@@ -39,17 +39,22 @@ export function sharedBotHostLink(deps: {
 }): SharedBotHostLink {
   const { environmentId } = deps
   let waiters: ((settled: Settled) => void)[] = []
-  const linkOf = (diagnostics: RemoteRuntimeSharedConnectionDiagnostics): SharedHostLink =>
-    diagnostics.state === 'ready'
-      ? 'live'
-      : diagnostics.state === 'closed' || diagnostics.state === 'reconnecting'
-        ? deps.hasCredential()
-          ? 'offline'
-          : 'unpaired'
-        : 'connecting'
-  // The host's connection may already be open (the window's calls open it too).
-  const opened = getRemoteRuntimeSharedControlDiagnostics(environmentId)
-  let link: SharedHostLink = opened ? linkOf(opened) : 'unpaired'
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
+  // Ready is live, and a closed connection away (unpaired once its credential is gone). A dial reads
+  // as connecting only until the host first answers or is found away: a redial behind a drop, or
+  // inside Relay's host-offline hold (one open channel the whole outage), stays away until it answers.
+  const linkOf = (
+    diagnostics: RemoteRuntimeSharedConnectionDiagnostics,
+    current: SharedHostLink
+  ): SharedHostLink => {
+    if (diagnostics.state === 'ready') {
+      return 'live'
+    }
+    if (diagnostics.state === 'closed' || diagnostics.state === 'reconnecting') {
+      return deps.hasCredential() ? 'offline' : 'unpaired'
+    }
+    return current === 'live' || current === 'offline' ? 'offline' : 'connecting'
+  }
   const settleAs = (settled: Settled): void => {
     const settling = waiters
     waiters = []
@@ -57,19 +62,41 @@ export function sharedBotHostLink(deps: {
       resolve(settled)
     }
   }
+  // A dial that never answers reads as away; the connection keeps retrying behind it.
+  const armSettleTimer = (): void => {
+    settleTimer ??= setTimeout(() => {
+      settleTimer = null
+      if (link === 'connecting') {
+        setLink('offline')
+      }
+    }, CONNECT_SETTLE_MS)
+    settleTimer.unref?.()
+  }
   const setLink = (next: SharedHostLink): void => {
     if (next !== link) {
       const previous = link
       link = next
       deps.onLinkChanged(next, previous)
     }
-    if (next !== 'connecting') {
-      settleAs(next)
+    if (next === 'connecting') {
+      armSettleTimer()
+      return
     }
+    if (settleTimer) {
+      clearTimeout(settleTimer)
+      settleTimer = null
+    }
+    settleAs(next)
+  }
+  // The host's connection may already be open (the window's calls open it too).
+  const opened = getRemoteRuntimeSharedControlDiagnostics(environmentId)
+  let link: SharedHostLink = opened ? linkOf(opened, 'unpaired') : 'unpaired'
+  if (link === 'connecting') {
+    armSettleTimer()
   }
   const stopListening = onRuntimeEnvironmentDiagnostics((event) => {
     if (event.environmentId === environmentId) {
-      setLink(linkOf(event.diagnostics))
+      setLink(linkOf(event.diagnostics, link))
     }
   })
   const connection = () => {
@@ -78,10 +105,7 @@ export function sharedBotHostLink(deps: {
   }
   const settled = (): Promise<Settled> =>
     link === 'connecting'
-      ? new Promise((resolve) => {
-          waiters.push(resolve)
-          setTimeout(() => resolve(link === 'live' ? 'live' : 'offline'), CONNECT_SETTLE_MS)
-        })
+      ? new Promise((resolve) => void waiters.push(resolve))
       : Promise.resolve(link)
   return {
     current: () => link,
@@ -96,11 +120,12 @@ export function sharedBotHostLink(deps: {
       }
       ensureRemoteRuntimeSharedControlConnection(environmentId, paired)
       reconnectRemoteRuntimeSharedControlConnection(environmentId)
-      setLink(
-        getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state === 'ready'
-          ? 'live'
-          : 'connecting'
-      )
+      if (getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state === 'ready') {
+        setLink('live')
+      } else if (link === 'unpaired') {
+        setLink('connecting')
+      }
+      // Found away before: it redials now, and reads as away until it answers.
       return settled()
     },
     settled,
@@ -118,8 +143,13 @@ export function sharedBotHostLink(deps: {
     },
     close: () => {
       stopListening()
-      closeRemoteRuntimeSharedControlConnection(environmentId)
+      endSharedBotHostConnections(environmentId)
       setLink('unpaired')
     }
   }
+}
+
+/** An ended share's host: its status owner and every connection to it go, so nothing redials it. */
+export function endSharedBotHostConnections(environmentId: string): void {
+  closeRemoteRuntimeRequestConnection(environmentId)
 }

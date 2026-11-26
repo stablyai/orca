@@ -36,6 +36,7 @@ import {
   RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
 } from '../../../../shared/remote-runtime/recipe-vm-wake'
 import { pairedRuntimeConnectionToken } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { sharedHostEnvironment } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 
 const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
 
@@ -166,6 +167,7 @@ export function createRuntimeEnvironmentStatusOwner(
   return new RuntimeHostStatusOwner({
     environmentId: environment.id,
     pairingRevision: environment.pairingRevision ?? environment.createdAt,
+    ...(sharedHostEnvironment(environment.id) ? { sharedHost: true } : {}),
     // Each probe's outcome is evidence for whether the server's host is still there (#34089).
     request: async (signal) => {
       try {

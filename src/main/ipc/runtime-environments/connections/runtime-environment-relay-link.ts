@@ -48,10 +48,15 @@ export function relayControlChannelOpener(
     return null
   }
   const key = pairedRuntimeConnectionIdentity(connection)
-  const store = sharedHostRelay ?? {
-    entry: () => entries.get(key) ?? runtimeRelayLinkEntry(connection) ?? undefined,
-    save: (entry: SharedHostLinkEntry) => void entries.set(key, entry)
-  }
+  // A host signed in to by key is a share's: once the share is gone, nothing is left to dial.
+  const store: RuntimeRelayCredentialStore =
+    sharedHostRelay ??
+    (connection.credential.kind === 'device-key'
+      ? { entry: () => undefined, save: () => {} }
+      : {
+          entry: () => entries.get(key) ?? runtimeRelayLinkEntry(connection) ?? undefined,
+          save: (entry) => void entries.set(key, entry)
+        })
   return (clientCapabilities) => {
     const relay = relayRuntimeChannelOpener(connection, {
       platform,

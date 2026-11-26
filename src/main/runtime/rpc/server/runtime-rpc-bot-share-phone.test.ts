@@ -304,6 +304,7 @@ describe('a phone asking its own computer for a key', () => {
       ready: async () => {},
       settled: async () => {},
       answerHere: async () => null,
+      endedAnswer: async () => null,
       phones
     })
     const { seal, params } = phoneAsk()

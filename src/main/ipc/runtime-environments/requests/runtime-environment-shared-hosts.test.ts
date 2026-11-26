@@ -7,7 +7,10 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as NodeRelayPlatform from '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
-import { setSharedHosts } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
+import {
+  setSharedHosts,
+  sharedHostEnvironment
+} from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 import { parseRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { SharedBotHosts } from '../../../bots/shared-with-me/shared-bot-hosts'
 import { memorySharedBotHomes } from '../../../bots/shared-with-me/shared-bot-home.test-fixture'
@@ -15,13 +18,23 @@ import {
   RELAY_TEST_INVITE,
   startHostOverRelay
 } from '../../../runtime/rpc/testing/relay-runtime-host.test-fixtures'
-import { closeRemoteRuntimeSharedControlConnection } from '../connections/runtime-environment-request-connections'
+import {
+  closeRemoteRuntimeRequestConnection,
+  getRemoteRuntimeSharedControlDiagnostics,
+  getRuntimeEnvironmentStatusSnapshot
+} from '../connections/runtime-environment-request-connections'
+import { controlLinkOptions } from '../connections/runtime-environment-relay-link'
+import { setSharedHostsOwner } from './runtime-environment-shared-hosts'
+import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { runtimeHostStatusBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { SHARED_BOT_HOST_ERRORS } from '../../../../shared/bots/shared-bot-hosts'
+import type { MineShare } from '../../../bots/shared-with-me/shared-bot-pairing'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
 
 // The network edge: main's Relay dials reach the stand-in cell, as the fixture's own client does.
-const cell = vi.hoisted(() => ({ url: '', dialed: [] as string[] }))
+const cell = vi.hoisted((): { url: string; dialed: string[] } => ({ url: '', dialed: [] }))
 vi.mock(
   '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform',
   async (actual) => {
@@ -48,6 +61,21 @@ afterEach(async () => {
 })
 
 const ENVIRONMENT_ID = 'env-shared-1'
+
+const CHANNEL_EVENTS = {
+  onTransportOpen: () => {},
+  onAuthenticating: () => {},
+  onAuthenticated: () => {},
+  onAnswer: () => {},
+  onText: () => {},
+  onBinary: () => {},
+  onClosed: () => {}
+}
+const failure = (code: string) => ({
+  id: 'status.get',
+  ok: false as const,
+  error: { code, message: code }
+})
 
 it(
   'answers a call by the share’s id, signed in with its device key, and keeps the host’s Relay credential with the share',
@@ -80,10 +108,27 @@ it(
     shareDeviceId = shareDevice.deviceId
     const userDataPath = mkdtempSync(join(tmpdir(), 'shared-host-paired-'))
     cleanups.push(() => rmSync(userDataPath, { recursive: true, force: true }))
+    // The account's share list: this share, until the owner stops sharing it.
+    let mine: MineShare[] = [
+      {
+        shareId: 'share-1',
+        botId: 'bot-1',
+        botName: 'Ivy',
+        ownerName: 'Jinwoo Hong',
+        hostOnline: true,
+        state: 'ready',
+        held: []
+      }
+    ]
     const hosts = new SharedBotHosts({
       userDataPath,
       account: () => 'ada',
-      cloud: () => null,
+      cloud: () => ({
+        mine: async () => ({ ok: true, value: { v: 1, shares: mine } }),
+        accept: async () => ({ ok: true, value: { status: 'queued' } }),
+        decline: async () => ({ ok: true, value: { status: 'declined' } }),
+        hold: async () => ({ ok: true, value: { status: 'held' } })
+      }),
       publish: () => {},
       homes: memorySharedBotHomes(userDataPath).homes
     })
@@ -120,10 +165,18 @@ it(
       phones: []
     })
     setSharedHosts((environmentId) => hosts.sharedHost(environmentId))
-    cleanups.push(() => closeRemoteRuntimeSharedControlConnection(ENVIRONMENT_ID))
+    setSharedHostsOwner(hosts)
+    cleanups.push(() => setSharedHostsOwner(null))
+    cleanups.push(() => closeRemoteRuntimeRequestConnection(ENVIRONMENT_ID))
 
+    // Its first call opens the host's link (nothing else has yet), and the host answers it.
+    await expect(
+      callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'terminal.send', {})
+    ).resolves.toMatchObject({ id: expect.any(String) })
     const status = await callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'status.get', {})
     expect(status).toMatchObject({ ok: true })
+    // Listed with no paired server's, its status is marked as a shared host's, so the window keeps it.
+    expect(getRuntimeEnvironmentStatusSnapshot(ENVIRONMENT_ID)?.sharedHost).toBe(true)
     // The share, not the endpoint's first invite, holds the credential the host installed.
     const kept = hosts.store.get('share-1')!
     expect(kept.resume?.token).toBeTruthy()
@@ -146,6 +199,22 @@ it(
       { timeout: 10_000, interval: 5 }
     )
     expect(new Set(seen)).toEqual(new Set(['offline']))
+
+    // The owner stops sharing it: nothing of it stays open or redials, and a call answers as ended.
+    const paired = getPreferredPairedRuntimeConnection(sharedHostEnvironment(ENVIRONMENT_ID)!)
+    mine = []
+    await hosts.refresh()
+    expect(getRuntimeEnvironmentStatusSnapshot(ENVIRONMENT_ID)).toBeNull()
+    expect(getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)).toBeNull()
+    expect(
+      await callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'status.get', {})
+    ).toMatchObject({ ok: false, error: { code: SHARED_BOT_HOST_ERRORS.unshared } })
+    // A connection opened with its old key finds no Relay credential to dial, and stops there.
+    const opened = controlLinkOptions(ENVIRONMENT_ID, paired).openChannel!([])(CHANNEL_EVENTS)
+    expect(opened).toMatchObject({ ok: false, error: { code: 'relay_credential_unavailable' } })
+    expect(runtimeHostStatusBlockedReason(failure('relay_credential_unavailable'))).toBe(
+      'access-revoked'
+    )
     // Nothing of it was written to the paired-server store.
     await expect(
       callRuntimeEnvironment(userDataPath, 'env-never-shared', 'status.get', {})

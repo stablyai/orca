@@ -8,15 +8,20 @@ import {
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
-import { sharedBotHostLink, type SharedBotHostLink } from './shared-bot-host-link'
+import {
+  endSharedBotHostConnections,
+  sharedBotHostLink,
+  type SharedBotHostLink
+} from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
   SharedBotHostStore,
   type SharedBotHostEntry
 } from './shared-bot-host-store'
 import { applySharedBotMine, sharedBotRequests, usableHere } from './shared-bot-mine-apply'
-import { namesSharedBotNewChat, SharedBotHeldSends } from './shared-bot-held-sends'
-import { sharedBotAnswer, sharedBotOffline, sharedBotUnshared } from './shared-bot-host-answers'
+import { SharedBotHeldSends } from './shared-bot-held-sends'
+import { sharedBotUnshared } from './shared-bot-host-answers'
+import { callHoldingHost } from './shared-bot-held-call'
 import { nextPairingStep, type MineShare } from './shared-bot-pairing'
 import { SerialRerun } from '../../../shared/concurrency/serial-rerun'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
@@ -198,12 +203,23 @@ export class SharedBotHosts {
     params: unknown,
     send: (method: string, params: unknown) => Promise<RpcResponse>
   ): Promise<RuntimeRpcResponse<unknown> | null> {
-    await this.ready()
-    if (!this.entryFor(environmentId)) {
-      return this.store.wasRemoved(environmentId) ? sharedBotUnshared(method) : null
+    const ended = await this.endedAnswer(environmentId, method)
+    if (ended || !this.entryFor(environmentId)) {
+      return ended
     }
     return SHARED_HOSTS_HOLD_WHILE_AWAY
       ? this.callHolding(environmentId, method, params, send)
+      : null
+  }
+
+  /** A call to a share the owner ended: never an unknown host, and never sent. */
+  async endedAnswer(
+    environmentId: string,
+    method: string
+  ): Promise<RuntimeRpcResponse<unknown> | null> {
+    await this.ready()
+    return !this.entryFor(environmentId) && this.store.wasRemoved(environmentId)
+      ? sharedBotUnshared(method)
       : null
   }
 
@@ -217,32 +233,7 @@ export class SharedBotHosts {
     if (!reached) {
       return sharedBotUnshared(method)
     }
-    const { entry, link } = reached
-    if (method === 'agentSession.send') {
-      const handedOff = await this.held.send(entry, link, params)
-      if (handedOff) {
-        return handedOff
-      }
-    }
-    const local = this.held.answerHere(entry, link, method, params)
-    if (local) {
-      return local
-    }
-    // The host doesn't know a placeholder chat yet; nothing of it can be read there.
-    if (link !== 'live' || namesSharedBotNewChat(params)) {
-      return sharedBotOffline(entry, method)
-    }
-    try {
-      const response =
-        method === 'agentSession.send'
-          ? await this.held.sendWithKept(params, send)
-          : await send(method, params)
-      this.held.noteAnswer(entry, method, params, response)
-      return sharedBotAnswer(entry, response)
-    } catch {
-      // The link closed or timed out under the request: an answer the window can read.
-      return sharedBotOffline(entry, method)
-    }
+    return callHoldingHost(this.held, reached.entry, reached.link, method, params, send)
   }
 
   /** Sends a held message the host refused again; false when it isn't one, or wasn't held. */
@@ -255,9 +246,14 @@ export class SharedBotHosts {
   /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */
   private applyMine(shares: readonly MineShare[], read: number): SharedBotHostEntry[] {
     this.shares = new Map(shares.map((share) => [share.shareId, share]))
+    // Its host's connections go even where no link was made here (the window's calls open them too).
     const closeLink = (shareId: string) => {
       this.links.get(shareId)?.close()
       this.links.delete(shareId)
+      const environmentId = this.store.get(shareId)?.environmentId
+      if (environmentId) {
+        endSharedBotHostConnections(environmentId)
+      }
     }
     return applySharedBotMine({ store: this.store, held: this.held, closeLink }, shares, read)
   }

@@ -75,6 +75,7 @@ export function sharedHostConnection(
     credential: sharedHostKey(environmentId)?.credential ?? {
       kind: 'device-key',
       deviceId: environmentId,
+      // Never reached over Relay: without its share there is no Relay credential to dial either.
       sign: () => Promise.reject(new Error('This agent is no longer shared with you.'))
     },
     ...(pairedDeviceId ? { pairedDeviceId } : {})

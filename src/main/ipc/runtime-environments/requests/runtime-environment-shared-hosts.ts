@@ -5,7 +5,10 @@ import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/r
 import type { RpcResponse } from '../../../../shared/remote-runtime/rpc/rpc-response-shape'
 import type { SharedBotHosts } from '../../../bots/shared-with-me/shared-bot-hosts'
 
-type SharedHosts = Pick<SharedBotHosts, 'ready' | 'settled' | 'phones' | 'answerHere'>
+type SharedHosts = Pick<
+  SharedBotHosts,
+  'ready' | 'settled' | 'phones' | 'answerHere' | 'endedAnswer'
+>
 
 let sharedHosts: SharedHosts | null = null
 
@@ -14,14 +17,32 @@ export function setSharedHostsOwner(hosts: SharedHosts | null): void {
   sharedHosts = hosts
 }
 
-/** The share's own answer to a call (SharedBotHosts.answerHere), or null to send it on. */
-export async function answerSharedHostHere(
+/**
+ * Every call to a host, from the window or from main, asks here first: the share answers a call to
+ * an ended share, or (held sends on) one its host can't take now. Anything else goes out by `send`.
+ */
+export async function answerSharedHostFirst(
   selector: string,
   method: string,
   params: unknown,
-  send: (method: string, params: unknown) => Promise<RpcResponse>
+  send: (method: string, params: unknown) => Promise<RuntimeRpcResponse<unknown>>
+): Promise<RuntimeRpcResponse<unknown>> {
+  const sendOn = async (sent: string, sentParams: unknown): Promise<RpcResponse> => {
+    const response = await send(sent, sentParams)
+    return response.ok ? response : { id: response.id, ok: false, error: response.error }
+  }
+  const answered = sharedHosts
+    ? await sharedHosts.answerHere(selector, method, params, sendOn)
+    : null
+  return answered ?? send(method, params)
+}
+
+/** A call to a share the owner ended, answered as one; null for every other host. */
+export async function sharedHostEndedAnswer(
+  selector: string,
+  method: string
 ): Promise<RuntimeRpcResponse<unknown> | null> {
-  return sharedHosts ? sharedHosts.answerHere(selector, method, params, send) : null
+  return sharedHosts ? sharedHosts.endedAnswer(selector, method) : null
 }
 
 /** This computer's phones' keys to the shared hosts, once the kept shares are loaded; null where no
