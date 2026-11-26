@@ -47,7 +47,7 @@ const REPLY_REFUSALS: Readonly<Record<string, string>> = {
   not_a_cloud_conversation:
     "Nothing was posted: this chat isn't attached to a Slack, GitHub, Linear or Discord thread on this host. A reply works only in a conversation someone started by messaging the bot there, or an event's run that answers in its thread. Your Home chat has none, and an automation run has one only when its results go to the event's thread (--results-to thread); put it in your final message, which goes wherever this chat's results go.",
   bot_chat_reply:
-    'Nothing was posted: this is your Chat, which has no one conversation to post into. Your final message is posted when you finish.',
+    'Nothing was posted: this is your Chat, which has no one conversation to post into. Your final message is posted when you finish a turn a message started; a turn that started on its own stays in Orca.',
   not_this_bots_conversation:
     "Nothing was posted: this chat's conversation doesn't belong to this bot."
 }

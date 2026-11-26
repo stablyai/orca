@@ -26,6 +26,7 @@ import { explainOlderRuntimeRunRequired } from '../recovery/older-runtime-run-bi
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { refuseAgentServerRoute } from '../identity/agent-server-route'
+import { readWorkerStartWakeNote } from './worker-start-wake-note'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async (ctx) => {
@@ -81,6 +82,13 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
     }
+    // Read in the starting turn, so a later turn this start wakes is told where it came from.
+    const wakeNote = await readWorkerStartWakeNote(client)
+    const tellWake = () => {
+      if (wakeNote) {
+        process.stderr.write(`${wakeNote}\n`)
+      }
+    }
     const result = await callOrchestrationMutation<WorkerStartAgentReceipt>(
       client,
       flags,
@@ -93,8 +101,10 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
           return recovered
         }
       }
+      tellWake()
       throw await explainOlderRuntimeRunRequired(client, error)
     })
+    tellWake()
     if (result.result.state !== 'ready') {
       process.exitCode = 1
     }
