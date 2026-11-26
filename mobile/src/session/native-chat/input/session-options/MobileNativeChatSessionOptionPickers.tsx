@@ -24,6 +24,7 @@ import {
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import {
   mobileDeferredPermissionSummary,
+  mobileModelChoiceParts,
   mobileSessionOptionSummaryValue
 } from './mobile-native-chat-session-option-labels'
 import {
@@ -144,13 +145,15 @@ export function MobileNativeChatSessionOptionPickers({
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
   const segmentOptions = options.filter(showsSessionOptionAsSegments)
   const rowOptions = options.filter((descriptor) => !segmentOptions.includes(descriptor))
-  const primary = model
+  const fullLabel = model
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue(home)
+  const selectedModel = model?.valueSource === 'unknown' ? undefined : selectedChoice(model)
+  const primary = mobileModelChoiceParts(selectedModel)?.model ?? fullLabel
   const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission)?.full : null
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
   // The model pill shows permission only as a warning tint, so its name carries a deferred pick.
-  const modelValue = [primary, secondary, model && permissionDeferred].filter(Boolean).join(' ')
+  const modelValue = [fullLabel, secondary, model && permissionDeferred].filter(Boolean).join(' ')
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
