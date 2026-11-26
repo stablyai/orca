@@ -12,7 +12,9 @@ import {
 } from '../../shared/bots/bot-items'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
-import type { BotItemLinkedRow } from './bot-items-reads'
+import { botItemsChangeScope, type BotChangeScope } from '../../shared/bots/bot-change-scope'
+import type { BotItemsRemote } from './bot-items-ops'
+import type { BotItemLinkedRow, BotItemLinkTargets } from './bot-items-reads'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
@@ -266,4 +268,21 @@ export function linkedItemView(
         status: row.status
       }
     : null
+}
+
+/** Tells the bots whose items link `target` to re-read them; a failed read only warns. */
+export function notifyItemsLinking(
+  store: BotItemsRemote | null,
+  target: BotItemLinkTargets,
+  notify: (scope: BotChangeScope) => void
+): void {
+  void store
+    ?.itemsLinkingItems(target)
+    .then((linking) => {
+      const scope = botItemsChangeScope(linking)
+      if (scope) {
+        notify(scope)
+      }
+    })
+    .catch((error: unknown) => console.warn('[bots] items: could not find linking items', error))
 }

@@ -30580,7 +30580,8 @@
         "automation": "Automation",
         "automationOn": "Will wake the agent for this item",
         "automationEnded": "Ended",
-        "itemMissing": "Item not found"
+        "itemMissing": "Item not found",
+        "itemOpenFailed": "Couldn't open {{item}} yet."
       },
       "menu": {
         "cancel": "Cancel",

@@ -21,6 +21,9 @@ import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 import { BotItemsTables } from './bot-items-tables'
 
+/** Items an `item:` link may point at: these, or every item of a bot. */
+export type BotItemLinkTargets = { uids: readonly string[] } | { botId: string }
+
 /** An item an `item:` link points at, as the link shows it. */
 export type BotItemLinkedRow = {
   number: number
@@ -76,14 +79,22 @@ export class BotItemsReads extends BotItemsTables {
       .map((row) => String(row.item_uid))
   }
 
-  /** Up to a list page of items linking any of these items (`item:`), with their bots. */
-  itemsLinkingItems(uids: readonly string[]): { uid: string; ownerBotId: string }[] {
+  /** Items linking any of these items (`item:`), or any of a bot's, with their bots. Up to a list page:
+   *  past it, a linking item reads its target afresh the next time it is opened or listed. */
+  itemsLinkingItems(target: BotItemLinkTargets): { uid: string; ownerBotId: string }[] {
+    const refs =
+      'uids' in target
+        ? 'SELECT value FROM json_each(?)'
+        : 'SELECT uid FROM items WHERE owner_bot_id = ?'
     return this.db
       .prepare(
         `SELECT DISTINCT items.uid, items.owner_bot_id FROM item_links JOIN items ON items.uid = item_links.item_uid
-          WHERE item_links.kind = 'item' AND item_links.ref IN (SELECT value FROM json_each(?)) LIMIT ?`
+          WHERE item_links.kind = 'item' AND item_links.ref IN (${refs}) LIMIT ?`
       )
-      .all(JSON.stringify(uids), BOT_ITEM_LIMITS.listPageMax)
+      .all(
+        'uids' in target ? JSON.stringify(target.uids) : target.botId,
+        BOT_ITEM_LIMITS.listPageMax
+      )
       .map((row) => ({ uid: text(row, 'uid'), ownerBotId: text(row, 'owner_bot_id') }))
   }
 

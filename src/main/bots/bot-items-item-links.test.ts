@@ -78,7 +78,8 @@ describe('item links', () => {
     const backlink = { kind: 'item' as const, ref: backend }
     const listed = store.list({ botId: 'qa', statuses: ['working'], link: backlink, limit: 10 })
     expect(listed.items.map((item) => item.uid)).toEqual([qa])
-    expect(store.itemsLinkingItems([backend])).toEqual([{ uid: qa, ownerBotId: 'qa' }])
+    expect(store.itemsLinkingItems({ uids: [backend] })).toEqual([{ uid: qa, ownerBotId: 'qa' }])
+    expect(store.itemsLinkingItems({ botId: 'backend' })).toEqual([{ uid: qa, ownerBotId: 'qa' }])
   })
 
   it('reaches a client: its parse keeps the link, and an unreadable target as not found', () => {

@@ -107,6 +107,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         .catch(() => undefined)
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
+      this.botItems.notifyLinking({ botId })
       this.bots.memory.removed(botId)
       void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }

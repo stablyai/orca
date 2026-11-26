@@ -23,6 +23,7 @@ import { callerChat } from '../automations/automation-caller-chat'
 import { callBots, findBot } from './bot'
 import { botItemAskAdviceWithout } from '../../shared/bots/bot-item-ask-advice'
 import { botItemAskFromFlags, botItemAskParams } from './bot-item-ask-flags'
+import { assertItemLinkRefsSupported } from './bot-item-link-refs'
 import { BOT_ITEM_ASK_BOOLEAN_FLAGS } from '../specs/bot-items'
 import {
   formatBotItemList,
@@ -88,6 +89,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     const { flags, cwd } = ctx
     const status = getOptionalStringFlag(flags, 'status')
     const links = getRepeatedStringFlag(flags, 'link')
+    await assertItemLinkRefsSupported(ctx.client, links)
     await write(ctx, 'bots.items.add', {
       title: getRequiredStringFlag(flags, 'title'),
       ...optional('description', await readTextOrFileFlag(flags, cwd, 'description', false)),
@@ -140,16 +142,17 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     })
   },
   'bot item link': async (ctx) => {
-    await write(ctx, 'bots.items.link', {
-      item: itemId(ctx.flags),
-      refs: getRepeatedStringFlag(ctx.flags, 'ref')
-    })
+    const refs = getRepeatedStringFlag(ctx.flags, 'ref')
+    await assertItemLinkRefsSupported(ctx.client, refs)
+    await write(ctx, 'bots.items.link', { item: itemId(ctx.flags), refs })
   },
   'bot item list': async ({ flags, client, json }) => {
     const selector = getOptionalStringFlag(flags, 'bot')
     const botId = selector ? (await findBot(client, selector)).id : undefined
     const status = getOptionalStringFlag(flags, 'status')
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
+    const link = getOptionalStringFlag(flags, 'link')
+    await assertItemLinkRefsSupported(client, link === undefined ? [] : [link])
     const result = await callBots<BotItemListView>(client, 'bots.items.list', {
       ...callerChat(),
       ...(botId ? { botId } : {}),
@@ -157,7 +160,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('all') ? { all: true } : {}),
       ...(flags.has('here') ? { here: true } : {}),
       ...optional('chat', getOptionalStringFlag(flags, 'chat')),
-      ...optional('link', getOptionalStringFlag(flags, 'link')),
+      ...optional('link', link),
       ...(limit !== undefined ? { limit } : {}),
       ...optional('cursor', getOptionalStringFlag(flags, 'cursor'))
     })

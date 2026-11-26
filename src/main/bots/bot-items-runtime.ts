@@ -20,10 +20,12 @@ import { botItemsStoreFile } from './bot-items-input'
 import {
   BotItemLinkJoin,
   linkedItemView,
+  notifyItemsLinking,
   type BotItemAutomations,
   type BotItemGitHubCache
 } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
+import type { BotItemLinkTargets } from './bot-items-reads'
 import { eventViewOf } from './bot-items-rows'
 import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
@@ -189,17 +191,13 @@ export class BotItemsHost {
     const scope = botItemsChangeScope(items)
     if (scope) {
       this.deps.notify(scope)
-      // Items linking these (`item:`) show their title and status, so they re-read too.
-      void this.openedStore()
-        ?.itemsLinkingItems(items.map((item) => item.uid))
-        .then((linking) => {
-          const linkers = botItemsChangeScope(linking)
-          if (linkers) {
-            this.deps.notify(linkers)
-          }
-        })
-        .catch(warn)
+      this.notifyLinking({ uids: items.map((item) => item.uid) })
     }
+  }
+
+  /** Items linking these (`item:`) or a deleted bot's show their target, so they re-read too. */
+  notifyLinking(target: BotItemLinkTargets): void {
+    notifyItemsLinking(this.openedStore(), target, this.deps.notify)
   }
 
   /** The scheduler's minute: a usage-limit stop whose time passed unannounced ends. */
