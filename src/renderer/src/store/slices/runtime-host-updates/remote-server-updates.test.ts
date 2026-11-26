@@ -19,10 +19,11 @@ const SUPPORT: RemoteServerUpdateSupport = {
 function setup() {
   const response = createCompatibleRuntimeStatusResponse()
   const call = vi.fn().mockRejectedValue(new Error('Fixture download unavailable'))
+  const list = vi.fn().mockResolvedValue([publicRuntimeEnvironment({ id: HOST })])
   vi.stubGlobal('window', {
     api: {
       runtimeEnvironments: {
-        list: async () => [publicRuntimeEnvironment({ id: HOST })],
+        list,
         getStatus: async () => ({
           ...response,
           result: {
@@ -44,7 +45,7 @@ function setup() {
         setRuntimeEnvironments: () => {}
       }) as unknown as AppState
   )
-  return { state: store.getState, call }
+  return { state: store.getState, call, list }
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -103,6 +104,34 @@ it('uses the displayed stable target when recovery re-checks after a failed one-
 
   state().setRemoteServerUpdateDialogOpen(true)
   await state().refreshRemoteServerUpdates()
+  expect(state().remoteServerUpdates.get(HOST)?.targetVersion).toBe('1.4.276')
+
+  call.mockClear()
+  await state().startRemoteServerUpdates([HOST])
+  expect(call).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      method: 'updater.check',
+      params: { includePrerelease: false, includePerfPrerelease: false }
+    })
+  )
+})
+
+it('keeps a stable recovery target on its original track after both re-checks fail', async () => {
+  const { state, call, list } = setup()
+  const stable = await state().refreshRemoteServerUpdates()
+  await state().startRemoteServerUpdates([HOST], stable)
+  expect(state().remoteServerUpdates.get(HOST)).toMatchObject({
+    phase: 'failed',
+    targetVersion: '1.4.276'
+  })
+
+  const unavailable = new Error('Fixture catalog unavailable')
+  list.mockRejectedValueOnce(unavailable).mockRejectedValueOnce(unavailable)
+  await expect(state().refreshRemoteServerUpdates({ includePrerelease: true })).rejects.toBe(
+    unavailable
+  )
+  state().setRemoteServerUpdateDialogOpen(true)
+  await expect(state().refreshRemoteServerUpdates()).rejects.toBe(unavailable)
   expect(state().remoteServerUpdates.get(HOST)?.targetVersion).toBe('1.4.276')
 
   call.mockClear()

@@ -105,6 +105,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
         }
       : undefined
     // Even a failed re-check invalidates the last successful check's targets.
+    const previousCheckOptions = get().remoteServerUpdateCheckOptions
     const revision = get().remoteServerUpdatesCheckRevision + 1
     set({
       remoteServerUpdatesChecking: true,
@@ -159,6 +160,12 @@ export const createRemoteServerUpdatesSlice: StateCreator<
         ...(checkOptions ? {} : { remoteServerUpdateCheckOptions: null })
       })
       return { revision, options: checkOptions }
+    } catch (error) {
+      // A failed check kept the old targets. Restore their track unless the dialog cleared it.
+      if (checkOptions && get().remoteServerUpdateCheckOptions === checkOptions) {
+        set({ remoteServerUpdateCheckOptions: previousCheckOptions })
+      }
+      throw error
     } finally {
       set({ remoteServerUpdatesChecking: false })
     }
