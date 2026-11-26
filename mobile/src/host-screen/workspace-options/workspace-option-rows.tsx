@@ -12,6 +12,7 @@ export function CheckRow(props: {
   leading?: ReactNode
   radio?: boolean
   disabled?: boolean
+  keepsDisabledSubtitleReadable?: boolean
 }) {
   return (
     <ListRow
@@ -20,6 +21,7 @@ export function CheckRow(props: {
       leading={props.leading}
       selected={props.checked}
       disabled={props.disabled}
+      keepsDisabledSubtitleReadable={props.keepsDisabledSubtitleReadable}
       onPress={props.onPress}
       accessibilityLabel={props.detail ? `${props.label}, ${props.detail}` : undefined}
       accessibilityRole={props.radio ? 'radio' : 'checkbox'}

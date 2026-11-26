@@ -204,6 +204,7 @@ export function MobileBotAgentPage(props: {
               radio
               checked={agent === bot.agent}
               disabled={props.disabled || setupRequired}
+              keepsDisabledSubtitleReadable={setupRequired}
               onPress={() => {
                 if (agent !== bot.agent) {
                   void props.previewSwitch(agent).then((preview) => {

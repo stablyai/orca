@@ -170,6 +170,8 @@ type ListRowProps = {
   onPress?: () => void
   onLongPress?: () => void
   disabled?: boolean
+  /** Keep an explanation legible when it tells the person why this row is disabled. */
+  keepsDisabledSubtitleReadable?: boolean
   /** Working on a press: stops taking taps without the disabled dimming. */
   busy?: boolean
   accessibilityLabel?: string
@@ -203,6 +205,7 @@ export function ListRow({
   onPress,
   onLongPress,
   disabled = false,
+  keepsDisabledSubtitleReadable = false,
   busy = false,
   accessibilityLabel,
   accessibilityRole,
@@ -213,13 +216,14 @@ export function ListRow({
   const rowStyle = [
     listRowStyles.row,
     subtitle !== undefined && listRowStyles.rowTwoLine,
-    disabled && listRowStyles.disabled
+    disabled && !keepsDisabledSubtitleReadable && listRowStyles.disabled
   ]
   const main = (
     <View style={listRowStyles.main}>
       <Text
         style={[
           listRowStyles.title,
+          disabled && keepsDisabledSubtitleReadable && listRowStyles.disabled,
           subtitle !== undefined && listRowStyles.titleEmphasis,
           strong && listRowStyles.titleStrong,
           destructive && listRowStyles.titleDestructive,
