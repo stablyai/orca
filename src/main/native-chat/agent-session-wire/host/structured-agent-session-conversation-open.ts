@@ -165,15 +165,20 @@ export async function resettleOpenStructuredAgentSessionConversation(
   }
 }
 
-/** A kept agent ended before it could be reattached; its turn settles as any gone one does. */
+/**
+ * A kept agent ended before it could be reattached; its turn settles as any gone one does. `fence`
+ * names the gone run when a send has since reserved the next one.
+ */
 export async function settleGoneStructuredAgentSessionGeneration(
   deps: StructuredAgentSessionConversationOpenDeps,
   sessionId: string,
-  session: StructuredAgentSessionHostSession
+  session: StructuredAgentSessionHostSession,
+  fence?: number
 ): Promise<void> {
   const record = deps.store.getConversation(sessionId)
   if (record) {
-    await settleGoneGeneration(deps, record, session.journal)
+    const gone = fence === undefined ? record : { ...record, currentFence: fence }
+    await settleGoneGeneration(deps, gone, session.journal)
   }
 }
 

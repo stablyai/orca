@@ -44,7 +44,7 @@ export function wireStructuredAgentSessionQueuedMessages(
     keptAgentPending: async (sessionId) => {
       const record = context().deps.store.getRecord(sessionId)
       const local = record?.location.executionHostId === LOCAL_EXECUTION_HOST_ID
-      if (!record?.lease.ownerProcess || !providerRelayMayKeepChat(record.provider, local)) {
+      if (!record || !providerRelayMayKeepChat(record.provider, local)) {
         return false
       }
       await listProviderRelaysAtLaunch()

@@ -86,9 +86,7 @@ export class AcpTimelineTranslator {
       throw new Error('ACP prompt overlaps a prompt or load')
     }
     const prompt = this.prompts.open(clientMessageId, at, open[0], open[1])
-    if (open[2]) {
-      this.ownership.messages.carry(prompt.promptId, open[2])
-    }
+    this.ownership.messages.opened(prompt.promptId, this.options.numbersMessages === true, open[2])
     this.agentTurns.resume()
     if (this.prompts.current?.opened) {
       this.ownership.operation().open(prompt.promptId)
@@ -256,8 +254,8 @@ export class AcpTimelineTranslator {
     }
     if (standard) {
       const messageKey =
-        turn && (this.dialect.injectedPromptIdentity || this.options.numbersMessages)
-          ? this.ownership.messages.key(turn, standard.update)
+        this.dialect.injectedPromptIdentity || this.options.numbersMessages
+          ? this.ownership.messages.key(turn, standard.update, this.prompts.current?.turn)
           : undefined
       // A relayed chat's finished message leaves the text streams, as an unnumbered one would.
       const ended = this.ownership.messages.takeEnded()
