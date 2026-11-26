@@ -98,7 +98,9 @@ function about(
     store: {
       settings: getDefaultSettings('/home/fixture'),
       updateStatus,
-      remoteServerUpdates: SERVERS
+      remoteServerUpdates: SERVERS,
+      // Opening the list re-checks; fixtures have no paired runtimes, so keep the seeded rows.
+      refreshRemoteServerUpdates: async () => {}
     },
     render: () => (
       <div className="settings-view-shell bg-background p-8 text-foreground">
