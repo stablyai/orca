@@ -20996,6 +20996,7 @@
         "webhook": "Webhook",
         "gmail": "Gmail",
         "calendar": "カレンダー",
+        "teams": "Teams",
         "instructions": "指示",
         "event": "イベント",
         "startError": "エラー",
@@ -21077,6 +21078,9 @@
           },
           "calendar": {
             "starting_soon": "まもなく会議開始"
+          },
+          "teams": {
+            "mentioned": "メンション"
           },
           "other": "イベント"
         },

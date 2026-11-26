@@ -419,6 +419,59 @@ orca linear create --title "Flaky login test" --team ENG --priority high --json
 
 Run `orca linear --help` or `orca skills get orca-linear` for the version-matched list. Pass an explicit issue id (e.g. `ENG-123`) when a script may run outside an Orca-linked worktree.
 
+## Microsoft Teams
+
+`orca teams` reads and posts in Microsoft Teams through Microsoft Graph, as the person who connected it. It is off until someone connects it, and each bot stays off until its owner turns Teams on for it.
+
+### Set up an Entra app
+
+Teams sign-in goes through an app registration in your own Microsoft Entra tenant. Orca doesn't ship one.
+
+1. In the Entra admin center, open **App registrations › New registration**. Choose **Accounts in this organizational directory only**. No redirect URI is needed.
+2. Under **Authentication**, set **Allow public client flows** to **Yes**. The sign-in uses the device code flow, so it works on a server with no browser.
+3. Under **API permissions**, add these **delegated** Microsoft Graph permissions:
+   - Chats: `offline_access`, `User.Read`, `Chat.Read`, `ChatMessage.Send`
+   - Channels: `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `ChannelMessage.Read.All`, `ChannelMessage.Send`
+
+   `ChannelMessage.Read.All` always needs admin consent. Without it, connect with `--chats-only`.
+
+4. Copy the **Directory (tenant) ID** and the **Application (client) ID**.
+
+### Connect
+
+```bash
+orca teams connect --tenant contoso.onmicrosoft.com --client <application-id>
+orca teams connect --tenant <tenant-id> --client <application-id> --chats-only
+orca teams status --json
+orca teams bot Scout --on
+```
+
+`connect` prints a Microsoft page and a code. Open the page on any device, enter the code and sign in. The token stays on the Orca host that ran the sign-in. `disconnect` deletes it there. Your consent to the app stays at Microsoft until you remove it at https://myapps.microsoft.com.
+
+### Find, read and post
+
+```bash
+orca teams find "@Ada Lovelace" --json
+orca teams find "#releases" --json
+orca teams read teams:channel/<team-id>/<channel-id> --limit 20 --json
+orca teams post teams:chat/<chat-id> "On it." --json
+orca teams post teams:channel/<team-id>/<channel-id>/<message-id> --text-file reply.md --json
+orca teams react teams:chat/<chat-id>/<message-id> 👍 --json
+```
+
+Every command prints refs (`teams:chat/…`, `teams:channel/…`) to pass to the next one. A link from Teams' **Copy link** works anywhere a ref does. Reading a channel lists the threads with the latest activity, as Teams orders them. Posting to a channel message replies in its thread. Text is posted exactly as typed, with no formatting and no @mentions.
+
+### Wake a bot on an @mention
+
+```bash
+orca automations create --bot Scout --name "Answer Teams" --on "teams.mentioned" --prompt "Answer the question."
+orca automations create --bot Scout --name "Release pings" --on "teams.mentioned in=teams:chat/<chat-id> contains=release" --prompt "..."
+```
+
+`teams.mentioned` starts the bot when someone else @mentions you in one of your Teams chats (1:1, group or meeting chat). The Orca host that holds the Teams sign-in checks for new messages about once a minute while a bot with Teams on has such a rule, and only then. It never sends the rule to Orca Cloud. After the host was off for a while, only the last hour's mentions count. Channel mentions don't wake a bot yet. The run answers with `orca teams post`.
+
+In a bot's chat, `orca bot connectors` shows whether Teams is connected for it, and `orca bot connectors --offer teams` shows its owner the commands to run when it isn't.
+
 ## Skills (local, no runtime required)
 
 List bundled guides, print a version-matched guide, or install/update hybrid skill packages without the desktop Settings UI:

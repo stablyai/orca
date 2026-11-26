@@ -36,6 +36,7 @@ import { ACCOUNT_METHODS } from './accounts/accounts'
 import { ANTIGRAVITY_ACCOUNT_METHODS } from './accounts/antigravity-accounts'
 import { ORCA_ACCOUNT_METHODS } from './orca-account'
 import { GOOGLE_METHODS } from './google'
+import { TEAMS_METHODS } from './teams'
 import { GOOGLE_READ_METHODS } from './google-read'
 import { GOOGLE_FILES_METHODS } from './google-files'
 import { GOOGLE_WRITE_METHODS } from './google-write'
@@ -228,6 +229,7 @@ const SERVICE_RPC_METHODS = [
   ...GOOGLE_READ_METHODS,
   ...GOOGLE_FILES_METHODS,
   ...GOOGLE_WRITE_METHODS,
+  ...TEAMS_METHODS,
   ...USAGE_CREDENTIAL_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,

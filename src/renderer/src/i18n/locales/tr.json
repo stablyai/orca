@@ -22475,6 +22475,7 @@
         "webhook": "Webhook",
         "gmail": "Gmail",
         "calendar": "Takvim",
+        "teams": "Teams",
         "instructions": "Talimatlar",
         "event": "Olay",
         "startError": "Hata",
@@ -22556,6 +22557,9 @@
           },
           "calendar": {
             "starting_soon": "Toplantı yakında başlıyor"
+          },
+          "teams": {
+            "mentioned": "Bahsetme"
           },
           "other": "Olay"
         },
@@ -28617,7 +28621,8 @@
         "linearIssueMoved": "Bir Linear sorunu taşındığında",
         "webhookCall": "Botun webhook’u çağrıldığında",
         "gmailNewEmail": "Yeni bir e-posta geldiğinde",
-        "calendarStartingSoon": "Toplantı başlamadan önce"
+        "calendarStartingSoon": "Toplantı başlamadan önce",
+        "teamsMentioned": "Teams'te @bahsedildiğinizde"
       },
       "google": {
         "minutesBefore": "{{count}} dakika önce",

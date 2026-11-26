@@ -84,6 +84,7 @@ export const CLI_COMMAND_NAMES = [
   'status',
   'storage',
   'tab',
+  'teams',
   'terminal',
   'terminal-daemon',
   'type',

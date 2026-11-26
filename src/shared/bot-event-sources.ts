@@ -8,6 +8,7 @@ import {
   type ConnectorEventSource
 } from './automation-event-triggers'
 import { isGoogleTrigger } from './automation-google-triggers'
+import { isTeamsTrigger } from './automation-teams-triggers'
 import type { Automation } from './automations/automation-definition'
 import type { Bot } from './bot-types'
 import { CONNECTOR_SOURCE_NAMES } from './connectors/external-conversation-link'
@@ -22,7 +23,7 @@ import {
 // cloudSignedOut: the bot's host isn't signed in to Orca Cloud (orcaCloudNeedsSignIn), so nothing
 // reaches it through Orca Cloud.
 export type BotConnectors = Pick<Bot, 'name'> &
-  Partial<Pick<Bot, 'slack' | 'github' | 'linear' | 'google'>> & {
+  Partial<Pick<Bot, 'slack' | 'github' | 'linear' | 'google' | 'teams'>> & {
     webhooks?: boolean
     cloudSignedOut?: boolean
     /** Its host is a headless Orca server by this name, whose signed-out copy names it; null on a
@@ -49,7 +50,9 @@ export function botEventSources(bot: BotConnectors): AutomationEventSource[] {
     webhook: bot.webhooks === true,
     // Google events come from this host's own sign-in, once the owner turns Google on for the bot.
     gmail: bot.google === true,
-    calendar: bot.google === true
+    calendar: bot.google === true,
+    // Likewise Teams, once the owner turns it on for the bot (`orca teams bot --on`).
+    teams: bot.teams === true
   }
   return Object.keys(connected)
     .filter(isEventSource)
@@ -71,6 +74,8 @@ export function unheardEventTriggers<Rule extends EventRule>(
 
 const googleOff = (bot: BotConnectors) =>
   `Google is off for ${bot.name}; its owner can turn it on with \`orca google bot "${bot.name}" --on\``
+const teamsOff = (bot: BotConnectors) =>
+  `Teams is off for ${bot.name}; its owner can turn it on with \`orca teams bot "${bot.name}" --on\``
 
 // "Slack", "Slack or GitHub", "Slack, GitHub or Linear".
 function connectorNames(
@@ -148,9 +153,14 @@ export function botEventTriggerRefusal(
     return null
   }
   const google = unheard.filter(({ source }) => isGoogleTrigger({ source }))
-  if (google.length === unheard.length) {
-    const events = [...new Set(google.map(({ source, event }) => `${source}.${event}`))]
-    return `${googleOff(bot)}. Until then ${events.join(', ')} would never start it.`
+  const teams = unheard.filter(({ source }) => isTeamsTrigger({ source }))
+  if (google.length + teams.length === unheard.length) {
+    const events = [...new Set(unheard.map(({ source, event }) => `${source}.${event}`))]
+    const off = [
+      ...(google.length > 0 ? [googleOff(bot)] : []),
+      ...(teams.length > 0 ? [teamsOff(bot)] : [])
+    ]
+    return `${off.join('. ')}. Until then ${events.join(', ')} would never start it.`
   }
   const events = [
     ...new Set(
@@ -182,6 +192,7 @@ export function wontFireNote(bot: BotConnectors, triggers: readonly EventRule[])
   const unheard = unheardEventTriggers({ ...bot, webhooks: bot.webhooks ?? true }, triggers)
   const connectors = unheard.filter(({ source }) => isConnectorSource(source))
   const google = unheard.filter(({ source }) => isGoogleTrigger({ source }))
+  const teams = unheard.filter(({ source }) => isTeamsTrigger({ source }))
   const reasons = [
     ...(connectors.length > 0
       ? [
@@ -196,6 +207,7 @@ export function wontFireNote(bot: BotConnectors, triggers: readonly EventRule[])
           `Google is off for ${bot.name} (${google.map(({ source, event }) => `${source}.${event}`).join(', ')})`
         ]
       : []),
+    ...(teams.length > 0 ? [`Teams is off for ${bot.name} (teams.mentioned)`] : []),
     ...(unheard.some(({ source }) => source === 'webhook')
       ? [`${WEBHOOKS_OFF} (webhook.call)`]
       : [])

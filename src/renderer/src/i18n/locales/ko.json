@@ -21756,6 +21756,7 @@
         "webhook": "웹훅",
         "gmail": "Gmail",
         "calendar": "캘린더",
+        "teams": "Teams",
         "instructions": "지침",
         "event": "이벤트",
         "startError": "오류",
@@ -21837,6 +21838,9 @@
           },
           "calendar": {
             "starting_soon": "회의 곧 시작"
+          },
+          "teams": {
+            "mentioned": "멘션"
           },
           "other": "이벤트"
         },

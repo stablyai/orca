@@ -21490,6 +21490,7 @@
         "webhook": "Вебхук",
         "gmail": "Gmail",
         "calendar": "Календарь",
+        "teams": "Teams",
         "instructions": "Инструкции",
         "event": "Событие",
         "startError": "Ошибка",
@@ -21571,6 +21572,9 @@
           },
           "calendar": {
             "starting_soon": "Скоро начнётся встреча"
+          },
+          "teams": {
+            "mentioned": "Упоминание"
           },
           "other": "Событие"
         },

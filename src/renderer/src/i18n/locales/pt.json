@@ -22274,6 +22274,7 @@
         "webhook": "Webhook",
         "gmail": "Gmail",
         "calendar": "Agenda",
+        "teams": "Teams",
         "instructions": "Instruções",
         "event": "Evento",
         "startError": "Erro",
@@ -22355,6 +22356,9 @@
           },
           "calendar": {
             "starting_soon": "Reunião começando em breve"
+          },
+          "teams": {
+            "mentioned": "Menção"
           },
           "other": "Evento"
         },

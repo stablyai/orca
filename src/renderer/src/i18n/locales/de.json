@@ -20801,6 +20801,7 @@
         "webhook": "Webhook",
         "gmail": "Gmail",
         "calendar": "Kalender",
+        "teams": "Teams",
         "instructions": "Anweisungen",
         "event": "Ereignis",
         "startError": "Fehler",
@@ -20882,6 +20883,9 @@
           },
           "calendar": {
             "starting_soon": "Meeting beginnt bald"
+          },
+          "teams": {
+            "mentioned": "Erwähnung"
           },
           "other": "Ereignis"
         },

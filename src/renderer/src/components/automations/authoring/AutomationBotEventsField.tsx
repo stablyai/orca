@@ -8,6 +8,7 @@ import {
   type AutomationEventTrigger
 } from '../../../../../shared/automation-event-triggers'
 import { isGoogleTrigger } from '../../../../../shared/automation-google-triggers'
+import { isTeamsTrigger } from '../../../../../shared/automation-teams-triggers'
 import { eventLabel } from '../../bots/bot-automation-when'
 import {
   googleTriggerPhrases,
@@ -21,7 +22,8 @@ import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from '../automation-page
 export function eventTriggerLine(trigger: AutomationEventTrigger): string {
   const rule = isConnectorTrigger(trigger) ? trigger : null
   const webhook = isWebhookTrigger(trigger) ? trigger : null
-  const contains = rule?.textContains ?? webhook?.textContains
+  const teams = isTeamsTrigger(trigger) ? trigger : null
+  const contains = rule?.textContains ?? webhook?.textContains ?? teams?.textContains
   return [
     eventLabel(trigger),
     ...(rule

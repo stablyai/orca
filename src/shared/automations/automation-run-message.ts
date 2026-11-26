@@ -59,7 +59,8 @@ const EVENT_SOURCES: Record<AutomationRunEvent['source'], true> = {
   linear: true,
   webhook: true,
   gmail: true,
-  calendar: true
+  calendar: true,
+  teams: true
 }
 
 const EventSourceSchema = z.custom<AutomationRunEvent['source']>(

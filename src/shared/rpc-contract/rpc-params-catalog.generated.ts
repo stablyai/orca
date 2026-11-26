@@ -989,6 +989,18 @@ import {
   SubscribeParams
 } from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
+import {
+  TeamsBotSetParams,
+  TeamsDisconnectParams,
+  TeamsFindParams,
+  TeamsPostParams,
+  TeamsReactParams,
+  TeamsReadParams,
+  TeamsSignInFlowParams,
+  TeamsSignInStartParams,
+  TeamsSignInWaitParams,
+  TeamsStatusParams
+} from './teams-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
@@ -2216,6 +2228,16 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
   'status.get': StatusGetParams,
+  'teams.bot.set': TeamsBotSetParams,
+  'teams.disconnect': TeamsDisconnectParams,
+  'teams.find': TeamsFindParams,
+  'teams.post': TeamsPostParams,
+  'teams.react': TeamsReactParams,
+  'teams.read': TeamsReadParams,
+  'teams.signIn.cancel': TeamsSignInFlowParams,
+  'teams.signIn.start': TeamsSignInStartParams,
+  'teams.signIn.wait': TeamsSignInWaitParams,
+  'teams.status': TeamsStatusParams,
   'terminal.ackOutput': TerminalAckOutput,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentId': TerminalAgentId,

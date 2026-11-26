@@ -158,5 +158,19 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
       'slack attach'
     ],
     load: async () => (await import('../slack/slack.js')).SLACK_HANDLERS
+  },
+  {
+    name: 'teams',
+    keys: [
+      'teams status',
+      'teams connect',
+      'teams disconnect',
+      'teams bot',
+      'teams find',
+      'teams read',
+      'teams post',
+      'teams react'
+    ],
+    load: async () => (await import('../teams/teams.js')).TEAMS_HANDLERS
   }
 ]

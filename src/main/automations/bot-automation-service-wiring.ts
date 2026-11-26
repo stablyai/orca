@@ -5,6 +5,7 @@ import { createBotAutomationDispatcher } from './bot-automation-launch'
 import { runtimeBotAutomationSessions } from '../bots/bot-automation-sessions'
 import { bindLookAroundToAutomations } from '../bots/bot-look-around-runtime'
 import { bindGoogleTriggersToAutomations } from '../google/google-trigger-runtime'
+import { bindTeamsTriggersToAutomations } from '../teams/teams-trigger-runtime'
 import { runtimeBotRunRefusals, runtimeBotRunResults } from '../bots/bot-run-results'
 import { runtimeBotWaits } from '../bots/bot-waits'
 import { runtimeChatHost } from '../external-conversations/external-conversation-chat'
@@ -40,7 +41,7 @@ export function botAutomationServiceOptions(runtime: OrcaRuntimeService) {
   }
 }
 
-/** Bots' waits, Look around and Google triggers, on the runtime's scheduler. */
+/** Bots' waits, Look around, and Google and Teams triggers, on the runtime's scheduler. */
 export function bindBotAutomations(
   service: AutomationService,
   store: Store,
@@ -51,4 +52,5 @@ export function bindBotAutomations(
     service.runInAutomationLane(automationId, operation)
   bindLookAroundToAutomations(service, runtime)
   bindGoogleTriggersToAutomations(service, store, runtime)
+  bindTeamsTriggersToAutomations(service, store, runtime)
 }

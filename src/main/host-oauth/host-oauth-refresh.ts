@@ -18,6 +18,8 @@ export type HostOAuthGrant = {
   expiresAt: number
   clientId: string
   clientSecret?: string
+  /** Space-separated scopes, for providers that ask for them on each refresh (Microsoft). */
+  scope?: string
 }
 
 export type HostOAuthRefreshed = {
@@ -115,7 +117,8 @@ export function createHostOAuthRefresher<TLogin>(
           grant_type: 'refresh_token',
           refresh_token: grant.refreshToken,
           client_id: grant.clientId,
-          ...(grant.clientSecret ? { client_secret: grant.clientSecret } : {})
+          ...(grant.clientSecret ? { client_secret: grant.clientSecret } : {}),
+          ...(grant.scope ? { scope: grant.scope } : {})
         }).toString(),
         signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS)
       })
@@ -160,15 +163,22 @@ export function createHostOAuthRefresher<TLogin>(
     return 'offline'
   }
 
-  return {
-    isDue,
-    refresh: (id, deps = defaultHostOAuthRefreshDeps, force = false) => {
-      let refresh = running.get(id)
-      if (!refresh) {
-        refresh = refreshOnce(id, deps, force).finally(() => running.delete(id))
-        running.set(id, refresh)
-      }
-      return refresh
+  const refresh = (
+    id: string,
+    deps: HostOAuthRefreshDeps = defaultHostOAuthRefreshDeps,
+    force = false
+  ): Promise<HostOAuthRefreshOutcome> => {
+    const joined = running.get(id)
+    if (joined) {
+      // A refused token needs a new one; a run that found the old one fresh didn't get it.
+      return force
+        ? joined.then((outcome) => (outcome === 'fresh' ? refresh(id, deps, true) : outcome))
+        : joined
     }
+    const started = refreshOnce(id, deps, force).finally(() => running.delete(id))
+    running.set(id, started)
+    return started
   }
+
+  return { isDue, refresh }
 }

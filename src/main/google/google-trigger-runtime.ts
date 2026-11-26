@@ -1,5 +1,6 @@
-// Google rules ride the host's automation tick beside Look around, on desktop and `orca serve` alike.
+// Google rules on the host's automation tick.
 import type { AutomationService } from '../automations/automation-service'
+import { rideAutomationTick } from '../automations/automation-tick-rider'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { googleApi } from './google-api-client'
@@ -29,14 +30,5 @@ export function bindGoogleTriggersToAutomations(
     now: () => Date.now(),
     tickMs: TICK_MS
   })
-  const lookAround = service.onTick
-  service.onTick = () => {
-    lookAround?.()
-    void checker.tick()
-  }
-  const stop = service.stop.bind(service)
-  service.stop = () => {
-    checker.stop()
-    stop()
-  }
+  rideAutomationTick(service, checker)
 }

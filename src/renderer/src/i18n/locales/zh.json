@@ -21719,6 +21719,7 @@
         "webhook": "Webhook",
         "gmail": "Gmail",
         "calendar": "日历",
+        "teams": "Teams",
         "instructions": "指令",
         "event": "事件",
         "startError": "错误",
@@ -21800,6 +21801,9 @@
           },
           "calendar": {
             "starting_soon": "会议即将开始"
+          },
+          "teams": {
+            "mentioned": "提及"
           },
           "other": "事件"
         },
@@ -29179,7 +29183,8 @@
         "linearIssueMoved": "Linear 议题状态变更时",
         "webhookCall": "其 Webhook 被调用时",
         "gmailNewEmail": "收到新邮件时",
-        "calendarStartingSoon": "会议开始前"
+        "calendarStartingSoon": "会议开始前",
+        "teamsMentioned": "在 Teams 中被 @提及时"
       },
       "google": {
         "minutesBefore": "提前 {{count}} 分钟",

@@ -1,6 +1,7 @@
 // `--on "<source>.<event> in=... contains=... subject=..."`: one event trigger, written by a bot or a person.
 import { createHash } from 'node:crypto'
 import { GITHUB2_EVENT_KINDS } from '../../shared/automation-github-triggers'
+import { triggerRunNote } from './automation-trigger-run-note'
 import {
   AUTOMATION_EVENT_KINDS,
   isWebhookTrigger,
@@ -35,12 +36,16 @@ import {
   WEBHOOK_TRIGGER_OPTIONS
 } from '../webhooks/webhook-trigger-spec'
 import {
-  describeGoogleTrigger,
-  formatGoogleTrigger,
-  GOOGLE_TRIGGER_OPTIONS,
-  parseGoogleTrigger
-} from '../google/google-event-trigger-spec'
-import { GOOGLE_EVENT_SOURCES, isGoogleTrigger } from '../../shared/automation-google-triggers'
+  HOST_CHECKED_SOURCES,
+  isHostCheckedSource,
+  isHostCheckedTrigger
+} from '../../shared/automation-host-checked-triggers'
+import {
+  describeHostCheckedTrigger,
+  formatHostCheckedTrigger,
+  hostCheckedTriggerOptions,
+  parseHostCheckedTrigger
+} from './host-checked-trigger-spec'
 
 type ConnectorEventSource = AutomationConnectorEventTrigger['source']
 
@@ -58,7 +63,7 @@ const CONNECTOR_SOURCES: readonly ConnectorEventSource[] = ['slack', 'github', '
 // Offered only for a bot whose host's Orca Cloud takes webhooks.
 const ALL_SOURCES: readonly AutomationEventSource[] = [
   ...CONNECTOR_SOURCES,
-  ...GOOGLE_EVENT_SOURCES,
+  ...HOST_CHECKED_SOURCES,
   'webhook'
 ]
 
@@ -124,8 +129,8 @@ export function formatAutomationEventTrigger(trigger: AutomationEventTrigger): s
   if (isWebhookTrigger(trigger)) {
     return formatWebhookTrigger(trigger)
   }
-  if (isGoogleTrigger(trigger)) {
-    return formatGoogleTrigger(trigger)
+  if (isHostCheckedTrigger(trigger)) {
+    return formatHostCheckedTrigger(trigger)
   }
   return [
     `${trigger.source}.${trigger.event}`,
@@ -147,8 +152,9 @@ export function parseAutomationEventTrigger(spec: string): AutomationEventTrigge
   if (head[3] === 'webhook.call') {
     return parseWebhookTrigger(spec, entriesOf(spec, rest))
   }
-  if (head[3] === 'gmail.new_email' || head[3] === 'calendar.starting_soon') {
-    return parseGoogleTrigger(spec, head[3], entriesOf(spec, rest))
+  const hostChecked = parseHostCheckedTrigger(spec, head[3], () => entriesOf(spec, rest))
+  if (hostChecked) {
+    return hostChecked
   }
   const filters = filtersOf(spec, rest)
   const sourceEvent = eventOf(head[3])
@@ -228,8 +234,8 @@ export function describeAutomationEventTrigger(trigger: AutomationEventTrigger):
   if (isWebhookTrigger(trigger)) {
     return describeWebhookTrigger(trigger)
   }
-  if (isGoogleTrigger(trigger)) {
-    return describeGoogleTrigger(trigger)
+  if (isHostCheckedTrigger(trigger)) {
+    return describeHostCheckedTrigger(trigger)
   }
   const words: Record<string, string> = EVENT_WORDS[trigger.source]
   return [
@@ -262,10 +268,8 @@ export function formatAutomationTriggerOptions(
     if (source === 'webhook') {
       return WEBHOOK_TRIGGER_OPTIONS
     }
-    if (isGoogleTrigger({ source })) {
-      return bot && !heard?.includes(source)
-        ? `${source}: none of these start ${bot.name}: Google is off for it. Its owner can turn it on with \`orca google bot "${bot.name}" --on\`.`
-        : GOOGLE_TRIGGER_OPTIONS[source]
+    if (isHostCheckedSource(source)) {
+      return hostCheckedTriggerOptions(source, bot, heard)
     }
     const words: Record<string, string> = EVENT_WORDS[source]
     if (bot && !heard?.includes(source)) {
@@ -313,7 +317,7 @@ export function formatAutomationTriggerOptions(
     ...(bot?.cloudSignedOut ? [signedOutTriggerOptionsNote(bot)] : []),
     ...sources,
     'Besides these, only a time starts one: `--trigger` for a schedule, or `--once --by <ISO time>` alone for a one-time reminder ("in 10 minutes"). For an event that isn\'t listed, tell your owner instead of polling for it on a schedule. This list grows as connectors and Orca update: run this again before saying an event can\'t start one.',
-    "A run gets your prompt, then the event: its source, kind and time; for Slack, the channel id and message ts (and thread ts in a thread); then, quoted, who did it, where, a link and the text. With --results-to thread (the default when only these events start it), the run answers in the event's thread: `orca bot reply` posts there, and so does its final message. `orca skills get orca-cli --reference automations` has each source's fields."
+    triggerRunNote(offeredEventSources(only, bot))
   ].join('\n\n')
 }
 
