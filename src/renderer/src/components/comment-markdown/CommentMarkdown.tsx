@@ -20,6 +20,7 @@ import { copyChatMathSelection } from './chat-markdown-math-selection'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
+import { protectCodexFileCitations } from '../../../../shared/native-chat/file-access/codex-file-citation'
 import { cn } from '@/lib/class-names'
 import {
   selectCommentMarkdownComponents,
@@ -261,10 +262,12 @@ const CommentMarkdown = React.memo(
                       }
                     >
                       {growing && index === blocks.length - 1 && !block.literalMath
-                        ? remend(markdownBlockContent(block), {
-                            linkMode: 'text-only',
-                            ...(math ? { katex: false, inlineKatex: false } : {})
-                          })
+                        ? protectCodexFileCitations(markdownBlockContent(block), (source) =>
+                            remend(source, {
+                              linkMode: 'text-only',
+                              ...(math ? { katex: false, inlineKatex: false } : {})
+                            })
+                          )
                         : markdownBlockContent(block)}
                     </MemoizedMarkdown>
                   </CommentMarkdownBlockLineContext.Provider>

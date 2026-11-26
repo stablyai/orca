@@ -3,6 +3,7 @@ import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
 import type { AlignType, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
 import remend from 'remend'
+import { protectCodexFileCitations } from '../../../../../src/shared/native-chat/file-access/codex-file-citation'
 import { forEachGitHubCallout } from '../../../../../src/shared/github/markdown/github-callouts'
 import { codeNode, type Token } from '../blocks/mobile-markdown-code-nodes'
 import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
@@ -289,7 +290,9 @@ function withLastBlockClosed(source: string, tokens: readonly Token[], chatMath:
   if (tailTokens.some((token) => !mathClosed(token)) || (chatMath && /\\[[(]/.test(tail))) {
     return source
   }
-  const closed = remend(tail, { linkMode: 'text-only', katex: false })
+  const closed = protectCodexFileCitations(tail, (source) =>
+    remend(source, { linkMode: 'text-only', katex: false })
+  )
   return closed === tail ? source : [...lines.slice(0, lastBlock), closed].join('\n')
 }
 

@@ -38,3 +38,37 @@ export function parseCodexFileCitation(
   const label = (windows ? path.split(/[\\/]/) : path.split('/')).at(-1)
   return label ? { path, label, end: startOfAttributes + offset + close[0].length } : null
 }
+
+export function protectCodexFileCitations(
+  source: string,
+  repair: (markdown: string) => string
+): string {
+  const startMarker = '\uE000'
+  const endMarker = '\uE001'
+  const citations: string[] = []
+  let masked = ''
+  let end = 0
+  for (let start = source.indexOf(CODEX_FILE_CITATION_START); start !== -1;) {
+    const citation = parseCodexFileCitation(source, start)
+    if (citation) {
+      masked += source.slice(end, start) + startMarker + String(citations.length) + endMarker
+      citations.push(source.slice(start, citation.end))
+      end = citation.end
+    }
+    start = source.indexOf(
+      CODEX_FILE_CITATION_START,
+      citation?.end ?? start + CODEX_FILE_CITATION_START.length
+    )
+  }
+  if (citations.length === 0) {
+    return repair(source)
+  }
+  // Leave the block alone if it uses the same marker as the replacement text.
+  if (source.includes(startMarker)) {
+    return source
+  }
+  return repair(masked + source.slice(end)).replace(
+    /\uE000(\d+)\uE001/g,
+    (match, index: string) => citations[Number(index)] ?? match
+  )
+}

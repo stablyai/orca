@@ -17,19 +17,20 @@ afterEach(() => {
   opened.mockClear()
 })
 
-it('opens a Codex output citation using the literal file name and leaves code examples alone', () => {
-  const path = '/tmp/Задачи/Отчёт [Q4] #1%.docx'
+it('preserves a literal Codex path and repairs surrounding Markdown during streaming', () => {
+  const path = '/tmp/Задачи/Отчёт [Q4 #1%.docx'
   const citation = `:codex-file-citation{path="${path}" purpose="output"}`
   render(
     <NativeChatLinkClickContext.Provider value={onLinkClick}>
       <NativeChatMarkdown
-        content={`Готово.\n\n${citation}\n\n\`${citation}\``}
+        content={`Готово.\n\n\`${citation}\`\n\n${citation} **Ready`}
+        streaming
         variant="document"
       />
     </NativeChatLinkClickContext.Provider>
   )
 
-  fireEvent.click(screen.getByRole('link', { name: 'Отчёт [Q4] #1%.docx' }))
+  fireEvent.click(screen.getByRole('link', { name: 'Отчёт [Q4 #1%.docx' }))
   expect(opened).toHaveBeenCalledWith({
     kind: 'file',
     pathText: path,
@@ -37,4 +38,5 @@ it('opens a Codex output citation using the literal file name and leaves code ex
     pathKind: 'literal'
   })
   expect(screen.getByText(citation).tagName).toBe('CODE')
+  expect(screen.getByText('Ready').tagName).toBe('STRONG')
 })
