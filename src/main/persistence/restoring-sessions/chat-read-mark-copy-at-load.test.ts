@@ -67,6 +67,20 @@ it('copies a reopened chat tab’s saved acknowledgement to its conversation key
   expect(ui._chatReadMarksCopiedToConversationKeys).toBe(true)
 })
 
+it('takes the newer acknowledgement and preserves the existing cutoff and manual-unread mark', () => {
+  const ui = load({
+    acknowledgedAgentsByPaneKey: { [TAB_KEY]: 200, [CONVERSATION_KEY]: 100 },
+    activityClearedAtByPaneKey: { [TAB_KEY]: 400, [CONVERSATION_KEY]: 300 },
+    manuallyUnreadTurnsByPaneKey: { [TAB_KEY]: 600, [CONVERSATION_KEY]: 500 }
+  })
+
+  expect(ui).toMatchObject({
+    acknowledgedAgentsByPaneKey: { [TAB_KEY]: 200, [CONVERSATION_KEY]: 200 },
+    activityClearedAtByPaneKey: { [TAB_KEY]: 400, [CONVERSATION_KEY]: 300 },
+    manuallyUnreadTurnsByPaneKey: { [TAB_KEY]: 600, [CONVERSATION_KEY]: 500 }
+  })
+})
+
 it('does not copy again once a profile was copied, so a later Mark unread stays', () => {
   const ui = load({
     acknowledgedAgentsByPaneKey: { [TAB_KEY]: 100 },
