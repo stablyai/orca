@@ -104,10 +104,19 @@ function openTerminal(db: OrchestrationDb, dispatchId: string, bound: boolean): 
   }
 }
 
+/** Where the worker's terminal runs, relative to the Orca that starts it. */
+type Host = 'this-computer' | 'ssh'
+
 /** The real report each failure's edge sends, on whichever Orca runs the worker: a start that fails
  *  outright has no terminal; a never-ready one in a terminal binds it before reporting; a blocked one
  *  reports from its still-unbound terminal. */
-function fail(db: OrchestrationDb, dispatchId: string, failure: Failure): void {
+function fail(db: OrchestrationDb, dispatchId: string, failure: Failure, host: Host): void {
+  if (host === 'ssh') {
+    // Its workspace is one this computer reaches over SSH, so its terminal runs there.
+    db.db
+      .prepare('UPDATE dispatch_contexts SET host_scope = ? WHERE id = ?')
+      .run(JSON.stringify({ kind: 'ssh', targetId: 'ssh-target' }), dispatchId)
+  }
   if (failure === 'start-failed') {
     const failed = db.failWorkerStart(dispatchId, 'worktree_create', 'worktree create timed out')
     reportFailedWorkerStart(db, failed, () => {})
@@ -141,7 +150,7 @@ function fail(db: OrchestrationDb, dispatchId: string, failure: Failure): void {
   )
 }
 
-function failLocally(creator: DispatchCreator, failure: Failure) {
+function failLocally(creator: DispatchCreator, failure: Failure, host: Host = 'this-computer') {
   const db = newDb()
   const run = db.createRun({
     objective: 'o',
@@ -155,7 +164,7 @@ function failLocally(creator: DispatchCreator, failure: Failure) {
     taskId: task.id,
     startOptions: {}
   })
-  fail(db, dispatch.id, failure)
+  fail(db, dispatch.id, failure, host)
   return answersThread(db, run.id)
 }
 
@@ -208,8 +217,8 @@ function pairedRun() {
         peerRunId
       })
     },
-    fail(dispatchId: string, failure: Failure) {
-      fail(server, dispatchId, failure)
+    fail(dispatchId: string, failure: Failure, host: Host = 'this-computer') {
+      fail(server, dispatchId, failure, host)
     },
     /** Orca's never-ready report as a server without the start-outcome id writes it. */
     olderServerNeverReady(dispatchId: string) {
@@ -269,24 +278,32 @@ function pairedRun() {
 }
 
 /** worker-start --on as `creator` asks it; its start fails there and its report comes home. */
-function failOnServer(creator: DispatchCreator, failure: Failure) {
+function failOnServer(creator: DispatchCreator, failure: Failure, host: Host = 'this-computer') {
   const run = pairedRun()
   run.reserve(creator)
   const dispatchId = run.start()
   run.receive(dispatchId)
-  run.fail(dispatchId, failure)
+  run.fail(dispatchId, failure, host)
   run.pull()
   return run.judge()
 }
 
 describe("a paired server's start outcome reaches its asker as a local one does", () => {
   const cases = FAILURES.flatMap((failure) =>
-    (['thread', 'orca'] as const).map((asked) => [failure, asked] as const)
+    (['this-computer', 'ssh'] as const).flatMap((host) =>
+      (['thread', 'orca'] as const).map((asked) => [failure, host, asked] as const)
+    )
   )
 
-  it.each(cases)('%s, asked in %s: remote equals local', (failure, asked) => {
+  it.each(cases)('%s on %s, asked in %s: remote equals local', (failure, host, asked) => {
     const creator = asked === 'thread' ? THREAD_TURN : ORCA_TURN
-    expect(failOnServer(creator, failure)).toEqual(failLocally(creator, failure))
+    expect(failOnServer(creator, failure, host)).toEqual(failLocally(creator, failure, host))
+  })
+
+  it("keeps an SSH worker's start outcome in Orca, as local does", () => {
+    for (const failure of ['start-failed', 'never-ready-in-terminal'] as const) {
+      expect(failLocally(THREAD_TURN, failure, 'ssh').toThread).toBe(false)
+    }
   })
 
   it('answers in the thread for failed and never-ready starts, and keeps an unbound one in Orca', () => {

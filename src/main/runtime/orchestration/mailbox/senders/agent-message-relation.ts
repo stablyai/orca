@@ -33,6 +33,30 @@ const UNKNOWN: Lineage = { relation: undefined }
 // loss, mail it never got. Its questions and setup status are not (they stay where they were asked).
 const LOCAL_DISPATCH_RESULTS: ReadonlySet<string> = new Set(['escalation', 'worker_done'])
 
+/** Whether `sender` speaks as this Dispatch's own worker, as a local coordinator decides it: a
+ *  federated worker as its Dispatch, Orca writing a local Dispatch's result as it, or the bound
+ *  assignee of a Dispatch on this machine. Who started the Dispatch is the caller's question. */
+export function sendsAsDispatchWorker(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  sender: Party & { address?: string },
+  messageType: string | undefined
+): boolean {
+  if (sender.address === `dispatch:${dispatch.id}`) {
+    return (
+      Boolean(db.getFederatedDispatch(dispatch.id)) ||
+      (localDispatch(dispatch) && LOCAL_DISPATCH_RESULTS.has(messageType ?? ''))
+    )
+  }
+  return (
+    localDispatch(dispatch) &&
+    sameParty(sender, {
+      terminalHandle: dispatch.assignee_handle,
+      orcaSessionId: dispatch.assignee_orca_session_id
+    })
+  )
+}
+
 /** A federated worker mails as its dispatch, and so does Orca for a local one: 'worker' only when
  *  that dispatch, in the Run, was created by the recipient, and for a local one only its results;
  *  anything else is unknown. */
@@ -46,8 +70,12 @@ function dispatchWorkerLineage(
   const dispatch = db.getDispatchContextById(dispatchId)
   const known =
     dispatch &&
-    (db.getFederatedDispatch(dispatchId) ||
-      (localDispatch(dispatch) && LOCAL_DISPATCH_RESULTS.has(args.messageType ?? '')))
+    sendsAsDispatchWorker(
+      db,
+      dispatch,
+      { address: `dispatch:${dispatchId}`, terminalHandle: null, orcaSessionId: null },
+      args.messageType
+    )
   const creator = known && dispatch.run_id === runId ? dispatch : null
   return creator &&
     sameParty(
@@ -135,11 +163,12 @@ export function agentMessageLineage(args: RelationArgs): Lineage {
         Boolean(
           row &&
           row.run_id === runId &&
-          localDispatch(row) &&
-          sameParty(party, {
-            terminalHandle: row.assignee_handle,
-            orcaSessionId: row.assignee_orca_session_id
-          })
+          sendsAsDispatchWorker(
+            db,
+            row,
+            { terminalHandle: party.terminalHandle, orcaSessionId: party.orcaSessionId },
+            args.messageType
+          )
         )
       )
       return matches.length === 1 ? matches[0] : undefined
