@@ -151,8 +151,8 @@ describe('createManagedOrcadEnvironment', () => {
     ])
   })
 
-  it('refuses another machine under the name of a saved server', async () => {
-    const { deploy, saved } = setup()
+  it('refuses another machine under the name of a saved server and leaves its SSH host unclaimed', async () => {
+    const { store, deploy, saved, fence } = setup()
     await deploy({ sshTargetId: 'ssh-lan', localPort: 41000 })
 
     await expect(
@@ -164,5 +164,7 @@ describe('createManagedOrcadEnvironment', () => {
       })
     ).rejects.toThrow('A server named "dell" already exists.')
     expect((await saved()).map((entry) => entry.sshTargetId)).toEqual(['ssh-lan'])
+    expect(fence('ssh-other')).toBeNull()
+    expect(store.getSshTarget('ssh-other')?.orcadProvisioning).toBeUndefined()
   })
 })
