@@ -170,9 +170,6 @@ export const servers = about(
 export const serversNarrow = narrow(servers)
 
 async function confirmUpdateAll(frame: HTMLElement): Promise<void> {
-  expand(frame, 'Servers')
-  await nextFrame()
-  // Unfolded, the header offers Check, so the only Update all is the list's confirm trigger.
   Array.from(frame.querySelectorAll<HTMLButtonElement>('button'))
     .find((button) => button.textContent?.trim() === 'Update all')
     ?.click()

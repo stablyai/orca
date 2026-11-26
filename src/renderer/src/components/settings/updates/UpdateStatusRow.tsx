@@ -1,7 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import { Copy, Loader2, RefreshCw } from 'lucide-react'
-import { toast } from 'sonner'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
@@ -19,6 +18,7 @@ import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/rele
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import type { UpdateStatusLine, UpdateStatusRowModel } from './update-status-row-model'
+import { UpdateStatusDetails } from './UpdateStatusDetails'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
@@ -51,7 +51,10 @@ function lineCopy(line: UpdateStatusLine, t: Translate, intlLocale: string): Lin
           version: line.version,
           date: formatUpdateDelayDate(line.availableAt, intlLocale)
         }),
-        narrow: t('settings.about.status.held', '{{version}} on hold', { version: line.version })
+        narrow: [
+          t('settings.about.status.held', '{{version}} on hold', { version: line.version }),
+          formatUpdateDelayDate(line.availableAt, intlLocale, true)
+        ].join(' · ')
       }
     case 'held-ready':
     case 'available':
@@ -168,18 +171,37 @@ export function UpdateStatusRow({
   const showDetails = detailsOpen && details !== null
   const percent = model.line.kind === 'downloading' ? Math.round(model.line.percent) : null
   const version = splitVersion(appVersion)
+  const hasAction =
+    model.secondaryCheck || (model.action.kind !== 'none' && model.action.kind !== 'progress')
+  const hasNotes = Boolean(model.notesVersion)
 
   return (
     <div className="@container/about-status">
-      <div className="flex items-center gap-3">
-        <img src={iconUrl} alt="" aria-hidden className="size-7 shrink-0 rounded-md" />
-        <div className="relative min-w-0 flex-1">
-          <div className="flex min-w-0 text-sm font-medium">
-            <span className="shrink-0">
-              {t('settings.general.about.version', 'Orca {{version}}', { version: version.semver })}
-            </span>
-            {version.suffix ? <span className="min-w-0 truncate">{version.suffix}</span> : null}
-          </div>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3">
+        <img
+          src={iconUrl}
+          alt=""
+          aria-hidden
+          className="col-start-1 row-start-1 row-end-3 size-7 rounded-md"
+        />
+        <div
+          className={cn(
+            'col-start-2 row-start-1 flex min-w-0 text-sm font-medium',
+            !hasAction && 'col-end-4'
+          )}
+        >
+          <span className="shrink-0">
+            {t('settings.general.about.version', 'Orca {{version}}', { version: version.semver })}
+          </span>
+          {version.suffix ? <span className="min-w-0 truncate">{version.suffix}</span> : null}
+        </div>
+        <div
+          className={cn(
+            'relative col-start-2 row-start-2 min-w-0 self-start',
+            !hasAction && 'col-end-4',
+            hasNotes && '@max-xs/about-status:col-end-4'
+          )}
+        >
           {/* The live region stays mounted, empty when idle, so state changes are announced. */}
           <div className="flex min-w-0 items-center whitespace-nowrap text-settings-detail text-muted-foreground">
             <span
@@ -200,8 +222,7 @@ export function UpdateStatusRow({
             {copy || details ? (
               <>
                 {model.notesVersion ? (
-                  // Narrow rows drop Notes so the version in the line is never cut off.
-                  <span className="shrink-0 @max-xs/about-status:hidden">
+                  <span className="shrink-0">
                     <span aria-hidden className="px-1.5">
                       ·
                     </span>
@@ -257,61 +278,43 @@ export function UpdateStatusRow({
             </div>
           ) : null}
         </div>
-        {model.secondaryCheck ? (
-          <span className="@max-xs/about-status:hidden">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost-muted"
-                  size="icon-sm"
-                  aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
-                  disabled={model.secondaryCheck.disabled}
-                  // Modifier clicks pick a one-off release track, not a saved setting.
-                  onClick={(event) =>
-                    void window.api.updater.check(getUpdateCheckClickOptions(event))
-                  }
-                >
-                  <RefreshCw />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4} className="max-w-xs">
-                {t('settings.about.action.checkForUpdates', 'Check for updates')}
-                <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
-              </TooltipContent>
-            </Tooltip>
-          </span>
+        {hasAction ? (
+          <div
+            className={cn(
+              'col-start-3 row-start-1 row-end-3 flex items-center gap-3',
+              hasNotes && '@max-xs/about-status:row-end-2'
+            )}
+          >
+            {model.secondaryCheck ? (
+              <span className="@max-xs/about-status:hidden">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost-muted"
+                      size="icon-sm"
+                      aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
+                      disabled={model.secondaryCheck.disabled}
+                      // Modifier clicks pick a one-off release track, not a saved setting.
+                      onClick={(event) =>
+                        void window.api.updater.check(getUpdateCheckClickOptions(event))
+                      }
+                    >
+                      <RefreshCw />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+                    {t('settings.about.action.checkForUpdates', 'Check for updates')}
+                    <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+            ) : null}
+            <UpdateStatusAction model={model} onDownload={onDownload} onRestart={onRestart} />
+          </div>
         ) : null}
-        <UpdateStatusAction model={model} onDownload={onDownload} onRestart={onRestart} />
       </div>
       {showDetails ? <UpdateStatusDetails text={details} /> : null}
-    </div>
-  )
-}
-
-function UpdateStatusDetails({ text }: { text: string }): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <div className="relative mt-2 ms-10 rounded-md bg-muted/50 py-1.5 ps-2.5 pe-8">
-      <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all py-0.5 font-mono text-xs text-muted-foreground scrollbar-sleek">
-        {text}
-      </pre>
-      <div className="absolute end-1 top-1">
-        <Button
-          type="button"
-          variant="ghost-muted"
-          size="icon-xs"
-          aria-label={t('settings.about.status.copyDetails', 'Copy details')}
-          onClick={() => {
-            void window.api.ui.writeClipboardText(text).then(
-              () => toast.message(t('settings.about.status.copied', 'Copied')),
-              () => toast.error(t('settings.about.status.copyFailed', 'Could not copy details.'))
-            )
-          }}
-        >
-          <Copy />
-        </Button>
-      </div>
     </div>
   )
 }

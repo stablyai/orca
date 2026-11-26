@@ -1,7 +1,8 @@
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -186,18 +187,15 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const authorizedCheck =
     snapshot.phase === 'ready' && snapshot.check.revision === revision ? snapshot.check : null
   const updatesBlocked = busy || !authorizedCheck
+  const focusServers = (): void => toggleRef.current?.focus()
   const startConfirmed = (ids: string[]): void => {
     if (busy || !authorizedCheck) {
       return
     }
     // The confirmed action's trigger can disappear as soon as its servers become queued.
-    toggleRef.current?.focus()
+    focusServers()
     void start(ids, authorizedCheck)
   }
-  const updateLabel =
-    eligible.length === 1
-      ? t('settings.about.action.update', 'Update')
-      : t('settings.about.servers.updateAll', 'Update all')
   // Opening re-checks on the default track, as the dialog did, so targets and live-session
   // counts are never a stale snapshot from an earlier (possibly modifier) check.
   const setOpenAndRefresh = (next: boolean): void => {
@@ -208,34 +206,64 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     }
   }
 
-  // Folded, an update only unfolds the list: updating restarts servers, so the targets and the
-  // live-session warning show before the confirm, as the dialog did.
-  const action = running ? (
-    <Button type="button" variant="outline" size="sm" disabled>
-      <Loader2 className="animate-spin" />
-      {t('settings.about.servers.updating', 'Updating')}
-    </Button>
-  ) : eligible.length > 0 && !open && !checking ? (
-    <Button type="button" variant="outline" size="sm" onClick={() => setOpenAndRefresh(true)}>
-      {updateLabel}
-    </Button>
-  ) : (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      title={getUpdateCheckHint()}
-      disabled={busy}
-      onClick={(event) => {
-        setOpen(true)
-        // An explicit Check is its own snapshot, including a modifier one the user asked for.
-        refreshSnapshot(getUpdateCheckClickOptions(event))
-      }}
-    >
-      {checking ? <Loader2 className="animate-spin" /> : null}
-      {t('settings.about.action.check', 'Check')}
-    </Button>
-  )
+  const check = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    setOpen(true)
+    refreshSnapshot(getUpdateCheckClickOptions(event))
+  }
+  const checkLabel = t('settings.about.action.checkForUpdates', 'Check for updates')
+  const action =
+    eligible.length > 0 ? (
+      <div className="flex items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost-muted"
+              size="icon-sm"
+              aria-label={checkLabel}
+              disabled={busy}
+              onClick={check}
+            >
+              {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+            {checkLabel}
+            <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
+          </TooltipContent>
+        </Tooltip>
+        <ServerRestartConfirm
+          servers={eligible}
+          label={t('settings.about.servers.updateAll', 'Update all')}
+          variant="outline"
+          disabled={open ? updatesBlocked : busy}
+          expansion={{
+            expanded: open,
+            failed: snapshot.phase === 'failed',
+            expand: () => setOpenAndRefresh(true)
+          }}
+          onConfirm={startConfirmed}
+          focusAfterConfirm={focusServers}
+        />
+      </div>
+    ) : running ? (
+      <Button type="button" variant="outline" size="sm" disabled>
+        <Loader2 className="animate-spin" />
+        {t('settings.about.servers.updating', 'Updating')}
+      </Button>
+    ) : (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        title={getUpdateCheckHint()}
+        disabled={busy}
+        onClick={check}
+      >
+        {checking ? <Loader2 className="animate-spin" /> : null}
+        {t('settings.about.action.check', 'Check')}
+      </Button>
+    )
 
   return (
     <SearchableSetting
@@ -248,6 +276,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         'Check and update paired Orca servers from this client.'
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
+      // SettingsGroup's 20px content inset and 1px card border.
+      className="@container [--about-card-inset:calc(1.25rem_+_1px)]"
     >
       <AboutDisclosureRow
         label={t('settings.about.servers.title', 'Servers')}
@@ -257,29 +287,17 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         onOpenChange={setOpenAndRefresh}
         control={action}
       >
-        {open ? (
-          <>
-            {entries.map((entry) => (
+        {open
+          ? entries.map((entry) => (
               <RemoteServerAboutRow
                 key={entry.environmentId}
                 entry={entry}
                 disabled={updatesBlocked}
                 onUpdate={startConfirmed}
+                focusAfterConfirm={focusServers}
               />
-            ))}
-            {eligible.length > 0 ? (
-              <div data-settings-row="" className="flex items-center justify-end">
-                <ServerRestartConfirm
-                  servers={eligible}
-                  label={updateLabel}
-                  variant="default"
-                  disabled={updatesBlocked}
-                  onConfirm={startConfirmed}
-                />
-              </div>
-            ) : null}
-          </>
-        ) : null}
+            ))
+          : null}
       </AboutDisclosureRow>
     </SearchableSetting>
   )
@@ -319,11 +337,13 @@ const BUSY_PHASES = new Set<RemoteServerUpdateEntry['phase']>([
 function RemoteServerAboutRow({
   entry,
   disabled,
-  onUpdate
+  onUpdate,
+  focusAfterConfirm
 }: {
   entry: RemoteServerUpdateEntry
   disabled: boolean
   onUpdate: (environmentIds: string[]) => void
+  focusAfterConfirm: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   // "Manual update" already says what to do; its long help would only be cut off here.
@@ -371,6 +391,7 @@ function RemoteServerAboutRow({
           variant="outline"
           disabled={disabled}
           onConfirm={onUpdate}
+          focusAfterConfirm={focusAfterConfirm}
         />
       ) : (
         <span className="shrink-0 text-settings-detail text-muted-foreground tabular-nums">

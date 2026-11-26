@@ -8,6 +8,10 @@ const UPDATE_DELAY_DATE_FORMAT: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric'
 }
+const COMPACT_UPDATE_DELAY_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric'
+}
 
 export function getUpdateDelayTitle(t: Translate = translate): string {
   return t('settings.updateDelay.1b4d825e0e', 'Update delay')
@@ -20,6 +24,11 @@ export function getUpdateDelayDescription(t: Translate = translate): string {
   )
 }
 
-export function formatUpdateDelayDate(timestamp: number, intlLocale?: string): string {
-  return uiDateTimeFormat(UPDATE_DELAY_DATE_FORMAT, intlLocale).format(timestamp)
+export function formatUpdateDelayDate(
+  timestamp: number,
+  intlLocale?: string,
+  compact = false
+): string {
+  const options = compact ? COMPACT_UPDATE_DELAY_DATE_FORMAT : UPDATE_DELAY_DATE_FORMAT
+  return uiDateTimeFormat(options, intlLocale).format(timestamp)
 }
