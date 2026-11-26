@@ -107,7 +107,12 @@ export async function readWslTerminalAgentProgram(
 export async function selectTerminalAgentProgram(
   programs: readonly [string, ...string[]],
   shell: AgentStartupShell,
-  options: { wsl?: WslPreflightTarget; refresh?: boolean; signal?: AbortSignal }
+  options: {
+    wsl?: WslPreflightTarget
+    refresh?: boolean
+    revalidateUnavailable?: boolean
+    signal?: AbortSignal
+  }
 ): Promise<TerminalAgentProgramSelection> {
   const { wsl, refresh, signal } = options
   const preferred = programs[0]
@@ -117,7 +122,8 @@ export async function selectTerminalAgentProgram(
     const inventory = slot
       ? await waitForPromiseWithSignal(
           readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
-            acceptAnyMatch: true
+            acceptAnyMatch: true,
+            revalidateUnavailable: options.revalidateUnavailable
           }),
           waitSignal
         )

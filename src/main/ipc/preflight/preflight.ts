@@ -101,7 +101,12 @@ export function registerPreflightHandlers(
       runPreflightAct(args, async () => {
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
-        return refreshAgentsOnHost(host, detectionOptions(args), args?.userInitiated)
+        return refreshAgentsOnHost(
+          host,
+          detectionOptions(args),
+          args?.userInitiated,
+          args?.withManagedAgentCommands
+        )
       })
   )
 

@@ -142,11 +142,12 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         capturedAt: Date.now()
       })
     },
-    persist: async (worktreeId, capture, stoppedPtyIds) => {
+    persist: async (worktreeId, capture, stoppedPtyIds, blockedReplacement) => {
       const commit = (): Promise<void> =>
         this.commitWorkspaceSessionEdit(
           this.getWorkspaceSessionHostIdForWorktree(worktreeId),
-          (session) => applyWorktreeSleepResumeRecords(session, capture, stoppedPtyIds)
+          (session) =>
+            applyWorktreeSleepResumeRecords(session, capture, stoppedPtyIds, blockedReplacement)
         )
       try {
         // Switch point: a status accepted before the sleep is saved is written before it, as in the window.

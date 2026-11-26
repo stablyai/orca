@@ -146,11 +146,8 @@ async function scanInventory(
       }
     )
   }
-  return scanLocalInventory(
-    scan.commands,
-    !scan.targeted && (scan.mode === 'read' || scan.mode === 'revalidate'),
-    slot.localEnv?.()
-  )
+  const readLoginPath = !scan.targeted && (scan.mode === 'read' || scan.mode === 'revalidate')
+  return scanLocalInventory(scan.commands, readLoginPath, slot.localEnv?.())
 }
 
 function publishInventory(
@@ -253,19 +250,23 @@ export function readInventory(
   mode: InventoryMode,
   {
     targeted = false,
-    acceptAnyMatch = false
-  }: { targeted?: boolean; acceptAnyMatch?: boolean } = {}
+    acceptAnyMatch = false,
+    revalidateUnavailable = false
+  }: { targeted?: boolean; acceptAnyMatch?: boolean; revalidateUnavailable?: boolean } = {}
 ): Promise<CommandInventory | null> {
   const generation = inventoryGeneration(slot)
-  const current = slot.published?.generation === generation ? slot.published?.inventory : undefined
+  const current = currentInventoryPublication(slot)?.inventory
+  const hasMatch =
+    current && requested.some((cmd) => current.probed.has(cmd) && current.found.has(cmd))
+  // A launch bypasses a published miss and joins the normal shared scan.
   if (
     mode === 'read' &&
     current &&
-    (requested.every(
-      (cmd) => current.probed.has(cmd) && (!current.incomplete || current.found.has(cmd))
-    ) ||
-      (acceptAnyMatch &&
-        requested.some((cmd) => current.probed.has(cmd) && current.found.has(cmd))))
+    (!revalidateUnavailable || hasMatch) &&
+    ((acceptAnyMatch && hasMatch) ||
+      requested.every(
+        (cmd) => current.probed.has(cmd) && (!current.incomplete || current.found.has(cmd))
+      ))
   ) {
     return Promise.resolve(current)
   }

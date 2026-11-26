@@ -1,10 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type {
-  AgentDetectionArgs,
-  AgentInventoryReply,
-  PreflightRuntimeContext,
-  RefreshAgentsResult
-} from './preflight-api'
+import type { AgentDetectionArgs, AgentInventoryReply, RefreshAgentsResult } from './preflight-api'
 import type { PreloadApi } from '../../api-types'
 import type {
   PreparedAgentLaunch,
@@ -59,11 +54,7 @@ export const preflightApi = {
   zcodeInteractiveCapability: (): Promise<ZCodeInteractiveCapability> =>
     ipcRenderer.invoke('preflight:zcodeInteractiveCapability'),
   refreshAgents: (
-    args?: PreflightRuntimeContext & {
-      enabledOnly?: boolean
-      wakeWslDistro?: boolean
-      userInitiated?: boolean
-    }
+    args?: AgentDetectionArgs & { withManagedAgentCommands?: boolean }
   ): Promise<RefreshAgentsResult> => ipcRenderer.invoke('preflight:refreshAgents', args),
   detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectRemoteAgents', args),

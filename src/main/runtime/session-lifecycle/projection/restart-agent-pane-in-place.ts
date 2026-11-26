@@ -61,7 +61,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     let held: AgentSessionResumeClaim | null = null
     let dispatched = false
     try {
-      // Resolved before the stop, so nothing after it can leave the pane without its agent.
+      // Resolve the resume recipe before stopping the current terminal.
       const resume = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
         .then((workspace) =>
           this.resolveMobileSessionResumeCommand(workspace, {
@@ -128,21 +128,31 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         return refuse('viewer_cannot_follow')
       }
       let stopped = false
-      // Left as a slept pane is: its next view starts it afresh and resumes the conversation.
+      let blockedReplacement: string | undefined
       const failedStart = async (): Promise<AgentPaneRestartResult> => {
-        // A closed tab or a successor terminal owns the pane now: its saved state stays theirs.
+        // Save recovery only while the pane is vacant or still holds this restart's terminal.
         const bound = this.storedPaneBinding({
           worktreeId: pty.worktreeId,
           tabId,
           leafId: pane.leafId
         })
-        if (bound === null || (bound !== undefined && bound !== ptyId)) {
+        if (
+          bound === null ||
+          (bound !== undefined && bound !== ptyId && bound !== blockedReplacement)
+        ) {
           return { ok: false, reason: 'create_failed' }
         }
         if (resumeRecord) {
-          await this.sleepResumeRecords.persist(pty.worktreeId, resumeRecord, [ptyId])
+          await this.sleepResumeRecords.persist(
+            pty.worktreeId,
+            resumeRecord,
+            [ptyId],
+            blockedReplacement
+          )
         }
-        this.forgetStoppedPaneTerminal(pty.worktreeId, tabId, pane.leafId, ptyId)
+        if (!blockedReplacement) {
+          this.forgetStoppedPaneTerminal(pty.worktreeId, tabId, pane.leafId, ptyId)
+        }
         return { ok: false, reason: 'create_failed' }
       }
       try {
@@ -189,9 +199,19 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             onPtySpawnDispatched: () => {
               dispatched = true
             },
-            onPtyCreated: claim.bind
+            onPtyCreated: (replacementPtyId, result) => {
+              if (result.agentProgramBlocked) {
+                blockedReplacement = replacementPtyId
+                claim.settleFailure(false)
+              } else {
+                claim.bind(replacementPtyId)
+              }
+            }
           }
         )
+        if (blockedReplacement) {
+          return await failedStart()
+        }
         if (created.tab.status === 'ready' && created.tab.ptyId) {
           return { ok: true, ptyId: created.tab.ptyId }
         }
@@ -203,7 +223,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         const refusedBeforeSpawn =
           error instanceof Error &&
           (error.message === 'tab_not_found' || error.message === 'terminal_split_source_not_found')
-        claim.settleFailure(dispatched && !refusedBeforeSpawn, error)
+        claim.settleFailure(dispatched && !refusedBeforeSpawn && !blockedReplacement, error)
         console.warn('[runtime] could not restart an agent pane in place', { ptyId, error })
         return stopped ? await failedStart() : { ok: false, reason: 'stop_failed' }
       }

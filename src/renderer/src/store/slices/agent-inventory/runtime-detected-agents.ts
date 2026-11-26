@@ -262,7 +262,7 @@ export const createRuntimeDetectedAgentsSlice: (
             callRuntimeRpc<AgentDetectionReply>(
               target,
               'preflight.refreshAgents',
-              options.userInitiated ? { ...params, userInitiated: true } : params,
+              { ...params, userInitiated: options.userInitiated, withManagedAgentCommands: true },
               fence
             ).catch((error) => {
               if (!isRuntimeMethodNotFoundError(error)) {

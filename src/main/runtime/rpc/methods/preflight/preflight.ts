@@ -114,7 +114,12 @@ export const PREFLIGHT_METHODS = [
     handler: async (params, { runtime }) => {
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       await assertAgentDetectionHostRunning(host)
-      return refreshAgentsOnHost(host, hostDetectionOptions(runtime), params.userInitiated)
+      return refreshAgentsOnHost(
+        host,
+        hostDetectionOptions(runtime),
+        params.userInitiated,
+        params.withManagedAgentCommands
+      )
     }
   })
 ]

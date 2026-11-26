@@ -64,7 +64,8 @@ export const PreflightAgentDetection = z
   })
 
 export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
-  userInitiated: z.boolean().optional()
+  userInitiated: z.boolean().optional(),
+  withManagedAgentCommands: z.boolean().optional()
 })
 
 export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend({

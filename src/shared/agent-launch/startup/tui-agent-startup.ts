@@ -149,7 +149,8 @@ export function buildAgentStartupPlan(args: {
       agentEnv,
       platform,
       shell,
-      isRemote: args.isRemote
+      isRemote: args.isRemote,
+      generated: baseCommand.resumeLaunch.commandProvenance === 'generated'
     })
     if (!queryPlan) {
       return null

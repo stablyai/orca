@@ -46,7 +46,7 @@ import {
 } from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
-import { withAgentInventoryDeadline } from './agent-command-detection'
+import { AgentInventoryDeadlineError, withAgentInventoryDeadline } from './agent-command-detection'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
@@ -199,7 +199,8 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
   options?: InstalledAgentDetectionOptions,
-  userInitiated = false
+  userInitiated = false,
+  withManagedAgentCommands = false
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
@@ -227,6 +228,9 @@ export async function refreshAgentsOnHost(
     )
     if (!signal.aborted) {
       notifyAgentsRefreshedOnHost(userInitiated && !wsl)
+    }
+    if (inventory.incomplete && !withManagedAgentCommands) {
+      throw new AgentInventoryDeadlineError(inventory.afterPublication)
     }
     return {
       ...inventory,

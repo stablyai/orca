@@ -77,11 +77,7 @@ export type PreflightApi = {
   zcodeInteractiveCapability: () => Promise<ZCodeInteractiveCapability>
   /** `wakeWslDistro`: a user act that may start a stopped WSL distro; background refreshes omit it. */
   refreshAgents: (
-    args?: PreflightRuntimeContext & {
-      enabledOnly?: boolean
-      wakeWslDistro?: boolean
-      userInitiated?: boolean
-    }
+    args?: AgentDetectionArgs & { withManagedAgentCommands?: boolean }
   ) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{

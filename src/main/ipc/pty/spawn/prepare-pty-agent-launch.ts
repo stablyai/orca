@@ -13,6 +13,10 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
 import {
+  ORCA_HERMES_STARTUP_QUERY_ARGV_ENV,
+  ORCA_HERMES_STARTUP_QUERY_ENV
+} from '../../../../shared/agent-launch/startup/hermes-startup-query'
+import {
   readCodexDirectLaunch,
   withCodexDirectLaunchCommand
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
@@ -79,6 +83,15 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   })
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
+  if (
+    launchConfig?.commandProvenance === 'generated' &&
+    input.env?.[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
+  ) {
+    delete env[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
+    if (blocked) {
+      delete env[ORCA_HERMES_STARTUP_QUERY_ENV]
+    }
+  }
   const local = !connectionId && input.codexRuntime !== 'wsl'
   const root = local && process.getuid?.() === 0
   const authored = launchConfig?.commandProvenance === 'authored'

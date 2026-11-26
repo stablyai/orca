@@ -184,9 +184,11 @@ async function probeHostAgents(
   { refresh, includeInventoryStatus, afterPublication }: HostProbeOptions
 ): Promise<Omit<DetectedAgentsReply, 'repo'>> {
   if (refresh) {
-    const reply = await preflightRefreshAgentsRead.request(client, params, {
-      beforeSend: refresh.onSent
-    })
+    const reply = await preflightRefreshAgentsRead.request(
+      client,
+      includeInventoryStatus ? { ...params, withManagedAgentCommands: true } : params,
+      { beforeSend: refresh.onSent }
+    )
     // Do not repeat work after disconnects or host failures.
     if (reply.ok || !isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
       return { reply, interpret: preflightRefreshAgentsRead.interpret }

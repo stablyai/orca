@@ -113,7 +113,7 @@ export function refreshLocalAgentInventory(
   const refreshArgs = includeDisabled ? context : { ...context, enabledOnly: true }
   const read = beginAgentDetection(LOCAL_MANAGED_AGENT_HOST)
   const pending = window.api.preflight
-    .refreshAgents({ ...refreshArgs, ...options })
+    .refreshAgents({ ...refreshArgs, ...options, withManagedAgentCommands: true })
     .then((result) => {
       const detection = read(result)
       const state = get()
