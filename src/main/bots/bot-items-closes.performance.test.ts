@@ -1,4 +1,4 @@
-// #49900: the journal looks up each close it writes by its item and close time. Guards that lookup:
+// #49868: the journal looks up each close it writes by its item and close time. Guards that lookup:
 // it seeks the close by index, so the events SQLite tests stay the same however many came after it.
 // The tally is a SQL function SQLite calls for each event it tests as the close.
 import { afterEach, expect, it } from 'vitest'
