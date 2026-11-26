@@ -7,7 +7,7 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { LEAVE_THREAD_UNCONFIRMED } from '../../shared/connectors/connector-leave-thread-copy'
 
 const LEAVE_TIMEOUT_MS = 60_000
-const REPLY_FLAGS = ['text', 'text-file', 'note', 'file', 'choice', 'react']
+const REPLY_FLAGS = ['text', 'text-file', 'note', 'file', 'choice', 'react', 'to']
 
 export async function leaveThread({
   client,

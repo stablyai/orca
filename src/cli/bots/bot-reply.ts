@@ -6,15 +6,14 @@ import {
   CONNECTOR_REPLY_MAX_FILES,
   type ConnectorActionArgs
 } from '../../shared/connector-action-contract'
-import {
-  CONNECTOR_REPLY_HTML_PAGE_AS_FILE,
-  CONNECTOR_REPLY_UNAVAILABLE
-} from '../../shared/rpc-contract/connectors/connector-params'
+import { CONNECTOR_REPLY_HTML_PAGE_AS_FILE } from '../../shared/rpc-contract/connectors/connector-params'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag, getRepeatedStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readReplyNotes } from './bot-reply-notes'
+import { REPLY_TIMEOUT_MS, refusalOf } from './bot-reply-refusals'
+import { replySavedDm } from './bot-reply-saved-dm'
 import { readReplyChoices } from './bot-reply-choices'
 import { leaveThread } from './bot-reply-leave-thread'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
@@ -36,22 +35,6 @@ import {
   type ConnectorReply
 } from './bot-reply-format'
 
-// The host retries an unavailable cloud itself, waiting out Retry-After, so the call can take a while.
-const REPLY_TIMEOUT_MS = 180_000
-
-// A host that can't post for anyone: connectors off or signed out.
-const REPLY_UNAVAILABLE_CODES = new Set(['connector_not_connected', 'connectors_disabled'])
-
-// Each says what was true and what to do instead; a Home chat or automation run is the common case.
-const REPLY_REFUSALS: Readonly<Record<string, string>> = {
-  not_a_cloud_conversation:
-    "Nothing was posted: this chat isn't attached to a Slack, GitHub, Linear or Discord thread on this host. A reply works only in a conversation someone started by messaging the bot there, or an event's run that answers in its thread. Your Home chat has none, and an automation run has one only when its results go to the event's thread (--results-to thread); put it in your final message, which goes wherever this chat's results go.",
-  bot_chat_reply:
-    'Nothing was posted: this is your Chat, which has no one conversation to post into. Your final message is posted when you finish.',
-  not_this_bots_conversation:
-    "Nothing was posted: this chat's conversation doesn't belong to this bot."
-}
-
 type ReplyCaller = { paneKey: string } | { sessionId: string }
 
 function replyCaller(): ReplyCaller {
@@ -69,17 +52,6 @@ function replyCaller(): ReplyCaller {
     'invalid_argument',
     'Run this from an agent a Slack, GitHub or Linear message woke; this is not an Orca agent pane or chat.'
   )
-}
-
-function refusalOf(error: unknown): never {
-  if (error instanceof RuntimeClientError && REPLY_UNAVAILABLE_CODES.has(error.code)) {
-    throw new RuntimeClientError('not_a_cloud_conversation', CONNECTOR_REPLY_UNAVAILABLE)
-  }
-  const refusal = error instanceof RuntimeClientError && REPLY_REFUSALS[error.code]
-  if (refusal) {
-    throw new RuntimeClientError(error.code, refusal)
-  }
-  throw error
 }
 
 type ActResponse =
@@ -218,6 +190,12 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
     }
     const notes = readReplyNotes(flags)
     const sessionId = readInjectedAgentSessionId()
+    if (flags.has('to')) {
+      return replySavedDm(
+        { flags, client, json },
+        { sessionId, text, rest: Boolean(emoji || paths.length > 0 || choices || notes) }
+      )
+    }
     if ((emoji || paths.length > 0 || choices) && !sessionId) {
       throw new RuntimeClientError(
         'invalid_argument',

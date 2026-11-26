@@ -4,7 +4,7 @@ import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecy
 import type { RuntimeClient } from '../../runtime/client'
 import { orchestrationCliName } from '../agent-view'
 
-type WakeReplyPlace = { place: string | null }
+type WakeReplyPlace = { place: string | null; to?: string }
 
 const WAKE_NOTE_TIMEOUT_MS = 5_000
 
@@ -23,9 +23,16 @@ export async function readWorkerStartWakeNote(client: RuntimeClient): Promise<st
     )
     .catch(() => null)
   const found = answer?.result
-  return found?.place ? formatWorkerStartWakeNote(found.place) : null
+  return found?.place ? formatWorkerStartWakeNote(found.place, found.to) : null
 }
 
-export function formatWorkerStartWakeNote(place: string, cli = orchestrationCliName()): string {
-  return `[Orca: this start came from ${place}. A turn that starts on its own when this command finishes in the background stays in Orca; ${cli} bot reply --text "..." posts there.]`
+export function formatWorkerStartWakeNote(
+  place: string,
+  to?: string,
+  cli = orchestrationCliName()
+): string {
+  const post = to
+    ? `${cli} bot reply --to ${to} --text "..." posts in that direct message, until anyone else's message reaches this chat`
+    : `${cli} bot reply --text "..." posts there`
+  return `[Orca: this start came from ${place}. A turn that starts on its own when this command finishes in the background stays in Orca; ${post}.]`
 }

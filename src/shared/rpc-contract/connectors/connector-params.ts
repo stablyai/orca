@@ -14,6 +14,8 @@ export const CONNECTOR_REPLY_ERROR_CODES = [
   'bot_chat_reply',
   // The chat's conversation names a bot that is gone, off, or lives in another home.
   'not_this_bots_conversation',
+  // --to names no DM this bot's own worker start saved in its Chat, or one another message voided.
+  'not_a_saved_dm',
   // Asked with pagesAsFiles: the text holds a whole HTML page, which Slack gets as an .html file.
   'html_document_as_file'
 ] as const
@@ -51,6 +53,15 @@ export const ConnectorAct = lazyZodSchema(() =>
     args: ConnectorActionArgs.default({})
   })
 )
+
+/** `orca bot reply --to`: a bot's Chat posts in a DM its worker start saved (connector.wakeReplyPlace's
+ *  `to`). Its own method, so an older host refuses it rather than post it as an ordinary reply. */
+export const ConnectorReplySavedDm = z.object({
+  sessionId: z.string().min(1, 'Missing session id'),
+  replyId: ReplyText.replyId,
+  text: ReplyText.text,
+  to: z.string().min(1).max(2048)
+})
 
 /** Where the calling bot chat's running turn started, for a worker start to name. */
 export const ConnectorWakeReplyPlace = z.object({

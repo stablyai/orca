@@ -12,7 +12,8 @@ export const CONNECTOR_POST_METHOD_NAMES = [
   'connector.reply',
   'connector.react',
   'connector.leaveThread',
-  'connector.wakeReplyPlace'
+  'connector.wakeReplyPlace',
+  'connector.replySavedDm'
 ] as const
 
 // A cloud without edit, delete or attach refuses them itself, as unsupported; set goes only to a cloud listing `set`.

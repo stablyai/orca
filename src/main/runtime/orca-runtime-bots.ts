@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
@@ -108,6 +109,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      this.getExternalConversationSeam()?.chatDeliveries.savedDms.forgetBot(botId)
       void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }
   })
@@ -280,6 +282,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   }
 
   abstract onChatMessageAdmitted(message: AdmittedMessage): void
+
+  abstract getExternalConversationSeam(): ExternalConversationSeam | null
 
   abstract isWorkspaceNotificationMuted(workspaceId: string): boolean
 

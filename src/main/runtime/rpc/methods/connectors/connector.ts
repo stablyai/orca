@@ -7,6 +7,7 @@ import {
 import { botReplyRefusal } from '../../../../external-conversations/external-conversation-bots'
 import {
   ConnectorReply,
+  ConnectorReplySavedDm,
   ConnectorWakeReplyPlace,
   CONNECTOR_REPLY_HTML_PAGE_AS_FILE
 } from '../../../../../shared/rpc-contract/connectors/connector-params'
@@ -25,6 +26,41 @@ import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
 import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
 import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
+import { conversationId } from '../../../../external-conversations/external-conversation-types'
+
+type CloudReply = Parameters<
+  NonNullable<ReturnType<OrcaRuntimeService['getConnectorCloud']>>['reply']
+>[0]
+
+/** Posts through Orca Cloud; a reply refused outright reached no one, so its attempt isn't counted. */
+async function sendReply(
+  runtime: Pick<OrcaRuntimeService, 'getConnectorCloud'>,
+  paneKey: string,
+  reply: CloudReply
+) {
+  const refused = connectorPostAttempts.attempted(
+    paneKey,
+    reply.replyId,
+    reply.conversation.externalId
+  )
+  const sent = await runtime.getConnectorCloud()?.reply(reply)
+  // Never sent, or refused outright: nothing reached the thread. A lost answer may have posted.
+  if (
+    !sent ||
+    (!sent.ok && sent.status !== null && sent.status < 500 && sent.error !== 'post_uncertain')
+  ) {
+    refused()
+  }
+  if (!sent) {
+    throw new Error('connector_not_connected')
+  }
+  if (!sent.ok) {
+    throw new Error(
+      sent.error === 'not_this_hosts_thread' ? 'not_this_hosts_thread' : 'connector_unavailable'
+    )
+  }
+  return sent.value
+}
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -93,8 +129,7 @@ export const CONNECTOR_METHODS = [
         cloud?.cloudFeatures()?.has(CONNECTOR_REPLIES_OUTBOX_FEATURE) === true
           ? { answerDeliveryId: target.answerDeliveryId }
           : {}
-      const refused = connectorPostAttempts.attempted(paneKey, replyId, target.key.externalId)
-      const sent = await cloud?.reply({
+      const sent = await sendReply(context.runtime, paneKey, {
         replyId,
         conversation,
         turnId: target.turnId,
@@ -103,25 +138,49 @@ export const CONNECTOR_METHODS = [
         ...(review ? { review } : {}),
         ...keyed
       })
-      // Never sent, or refused outright: nothing reached the thread. A lost answer may have posted.
-      if (
-        !sent ||
-        (!sent.ok && sent.status !== null && sent.status < 500 && sent.error !== 'post_uncertain')
-      ) {
-        refused()
-      }
-      if (!sent) {
-        throw new Error('connector_not_connected')
-      }
-      if (!sent.ok) {
-        throw new Error(
-          sent.error === 'not_this_hosts_thread' ? 'not_this_hosts_thread' : 'connector_unavailable'
-        )
-      }
-      return { ...sent.value, place: target.place }
+      return { ...sent, place: target.place }
     }
   }),
-  // `orca orchestration worker-start`: the thread a later turn of its own may tell, if it wants to.
+  // `orca bot reply --to`: a bot's Chat answers the DM its worker start saved, from a later turn,
+  // only while nothing from another conversation has reached that Chat since.
+  defineMethod({
+    name: 'connector.replySavedDm',
+    permission: 'workspace',
+    params: ConnectorReplySavedDm,
+    handler: async ({ sessionId, replyId, text, to }, context) => {
+      const { runtime } = context
+      const bot = runtime.bots.enabled() ? botOfSession(runtime.bots, sessionId) : null
+      const verifiedSessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId
+      const paneKey = chatPaneKey(sessionId)
+      const seam = requireSeam(runtime)
+      const target = seam.replyTarget(paneKey)
+      const saved =
+        bot &&
+        verifiedSessionId === sessionId &&
+        seam.chatDeliveries.savedDms.savedDm(sessionId, bot.id, to)
+      // The Chat is still linked to that DM: a link moves only when another conversation writes.
+      const conversation =
+        saved && target && conversationId(target.key) === conversationId(saved)
+          ? cloudConversation(saved)
+          : null
+      if (!target || !conversation) {
+        throw new Error('not_a_saved_dm')
+      }
+      if (target.turnId === null) {
+        throw new Error('no_current_turn')
+      }
+      const turnFor = await botTurnFor(runtime, sessionId, { verifiedSessionId })
+      const sent = await sendReply(runtime, paneKey, {
+        replyId,
+        conversation,
+        turnId: target.turnId,
+        text,
+        turnFor
+      })
+      return { ...sent, place: target.place }
+    }
+  }),
+  // `orca orchestration worker-start`: the thread or DM a later turn of its own may tell, if it wants to.
   defineMethod({
     name: 'connector.wakeReplyPlace',
     permission: 'workspace',
@@ -135,9 +194,13 @@ export const CONNECTOR_METHODS = [
       }
       const seam = runtime.getExternalConversationSeam()
       const target = seam?.replyTarget(chatPaneKey(sessionId)) ?? null
-      const delivered = seam?.deliveredTurn(sessionId) ?? false
-      const placed = await wakeReplyPlace(bot.id, target, delivered, () =>
-        readBotTurnOrigin(runtime, runtime.getOrchestrationDb(), sessionId).catch(() => null)
+      const delivered = seam?.chatDeliveries.pending(sessionId) ?? false
+      const placed = await wakeReplyPlace(
+        bot.id,
+        target,
+        delivered,
+        () => readBotTurnOrigin(runtime, runtime.getOrchestrationDb(), sessionId).catch(() => null),
+        (dm) => seam?.chatDeliveries.savedDms.save(sessionId, bot.id, dm) ?? false
       )
       return placed ?? { place: null }
     }

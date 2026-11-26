@@ -11,6 +11,7 @@ import type {
 import { chatPaneKey, watchChatNews, type ConversationChatHost } from './external-conversation-chat'
 import { deliverToChat } from './external-conversation-chat-send'
 import { HOST_CLOCK } from './external-conversation-host'
+import { BotChatSavedDms } from './bot-chat-saved-dms'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 
 /** A native chat a conversation links to; chats run only on this host. */
@@ -49,6 +50,8 @@ export class ChatDeliveries {
   // Each chat's told turn starts (by their start) that no turn end has followed yet, oldest first.
   private readonly openTurns = new Map<string, number[]>()
   private releaseUnwatched: (() => void) | null = null
+  /** Cleared with the rest: nothing then proves who has written to a chat since a DM was saved. */
+  readonly savedDms = new BotChatSavedDms()
 
   constructor(
     private readonly link: (
@@ -66,6 +69,7 @@ export class ChatDeliveries {
     this.delivered.clear()
     this.unstarted.clear()
     this.openTurns.clear()
+    this.savedDms.clear()
   }
 
   /** Unwatched, a delivered turn keeps its thread until it ends; an end or close no watch hears still ends it. */
@@ -165,6 +169,7 @@ export class ChatDeliveries {
 
   /** A chat that already took its message elsewhere (an automation run): its turn is the conversation's. */
   adopt(key: ConversationKey, chat: LinkableChat, text: string): void {
+    this.savedDms.arrived(chat.sessionId, key)
     // Marked first, so the running turn the link joins is the conversation's.
     this.delivered.add(chat.sessionId)
     try {
@@ -187,6 +192,8 @@ export class ChatDeliveries {
       images?: readonly string[]
     }
   ): Promise<Delivery> {
+    // Before anything is sent: the chat may take it, or queue it behind a running turn, at once.
+    this.savedDms.arrived(chat.sessionId, key, delivery.deliveryId)
     // A send starts the chat's agent, so the host is installed for it as any send would.
     const generation = this.generations.get(chat.sessionId) ?? {}
     this.generations.set(chat.sessionId, generation)

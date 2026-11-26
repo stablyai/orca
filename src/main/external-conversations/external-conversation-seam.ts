@@ -61,7 +61,8 @@ export class ExternalConversationSeam {
   readonly queued = (key: ConversationKey, work?: QueuedWork): Promise<Delivery> =>
     this.chain.after(conversationId(key), work)
   private readonly linked = new Map<string, { key: ConversationKey; worktreeId: string }>()
-  private readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))
+  /** Read for a bot's Chat: whether its turn is a delivery's, and the DMs it may still answer. */
+  readonly chatDeliveries = new ChatDeliveries((...link) => this.linkChat(...link))
   /** Built by the first watcher, so an unwatched seam subscribes to nothing. */
   private events: ConversationEvents | null = null
   private readonly releaseRemovals: () => void
@@ -125,11 +126,6 @@ export class ExternalConversationSeam {
         ? cancelConversation(host, seam, key, this.abort.signal, turnIsCurrent)
         : refused('turn_not_running')
     )
-  }
-
-  /** Whether a chat's current or next turn is a connector's delivery, not its owner's. */
-  deliveredTurn(sessionId: string): boolean {
-    return this.chatDeliveries.pending(sessionId)
   }
 
   /** Whether the chat's running turn is its conversation's, so workers it starts report there too: a

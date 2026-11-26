@@ -1,11 +1,24 @@
 // Where a bot's background work started, for a turn that later starts on its own (that work finished)
-// and so posts nothing by itself: the Slack thread whose delivery opened the starting turn, as that
-// turn's origin record (#486) also names it. Thread chats only; the bot's Chat answers many DMs.
-import type { ReplyTarget } from '../external-conversations/external-conversation-types'
+// and so posts nothing by itself: the Slack thread or DM whose delivery opened the starting turn, as
+// that turn's origin record (#486) also names it. The bot's Chat answers many DMs, so a DM is saved
+// for `bot reply --to` only while nothing from another conversation has reached that Chat.
+import type {
+  ConversationKey,
+  ReplyTarget
+} from '../external-conversations/external-conversation-types'
 import type { BotWakingPlace } from './bot-request-asker'
-import { slackPlaceOf } from '../../shared/connectors/slack-mirror-state'
+import { slackPlaceOf, slackThreadUrl } from '../../shared/connectors/slack-mirror-state'
 
-/** The thread, when the running turn was opened by its conversation's delivery and its origin record
+export type WakeReplyPlace = {
+  /** The thread or DM, as a bot reads it. */
+  place: string
+  /** The DM the bot's Chat answers with `bot reply --to <this>`; absent for a thread chat. */
+  to?: string
+}
+
+type SaveDm = (dm: { key: ConversationKey; openerDeliveryId: string; to: string }) => boolean
+
+/** The place, when the running turn was opened by its conversation's delivery and its origin record
  *  names that same Slack channel; null for anything else. */
 export async function wakeReplyPlace(
   botId: string,
@@ -13,24 +26,34 @@ export async function wakeReplyPlace(
   // The host's mark that a connector message opened or joined the running turn: the journal's opener
   // alone can't say, as a turn that started on its own reads as the last message's.
   delivered: boolean,
-  readOrigin: () => Promise<BotWakingPlace | null>
-): Promise<{ place: string } | null> {
+  readOrigin: () => Promise<BotWakingPlace | null>,
+  saveDm: SaveDm
+): Promise<WakeReplyPlace | null> {
   if (
     !delivered ||
     !target?.answerDeliveryId ||
-    target.bot?.kind !== 'bot' ||
-    target.bot.botId !== botId ||
+    target.bot?.botId !== botId ||
     target.key.source !== 'slack'
   ) {
     return null
   }
   const slack = slackPlaceOf(target.key.externalId)
-  // A thread inside a DM is DM territory, a later stage.
-  if (!slack?.threadTs || slack.channelId.startsWith('D')) {
+  // A DM's id repeats its channel where a thread's holds its timestamp; a thread inside a DM is neither.
+  const [, channel, again] = target.key.externalId.split(':')
+  const dm = Boolean(slack?.channelId.startsWith('D'))
+  const bare = dm && !slack?.threadTs && again === channel
+  if (!slack || (target.bot.kind === 'bot' ? dm || !slack.threadTs : !bare)) {
     return null
   }
   const origin = await readOrigin()
-  return origin?.source === 'slack' && origin.placeId === slack.channelId
-    ? { place: target.place }
+  if (origin?.source !== 'slack' || origin.placeId !== slack.channelId) {
+    return null
+  }
+  if (target.bot.kind === 'bot') {
+    return { place: target.place }
+  }
+  const to = slackThreadUrl(target.key.externalId)
+  return to && saveDm({ key: target.key, openerDeliveryId: target.answerDeliveryId, to })
+    ? { place: target.place, to }
     : null
 }
