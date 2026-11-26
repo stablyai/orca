@@ -3,6 +3,12 @@ import { EmulatorError } from '../emulator-errors'
 import { planEmulatorTextInput } from '../emulator-text-input-plan'
 import { sendScrcpyButton } from './scrcpy-control-input'
 import {
+  claimScrcpyUhidKeyboard,
+  createScrcpyUhidKeyboard,
+  pressScrcpyUhidKey,
+  SCRCPY_UHID_KEYBOARD_READY_MS
+} from './scrcpy-uhid-keyboard'
+import {
   encodeInjectText,
   encodeSetClipboard,
   SCRCPY_CLIPBOARD_TEXT_MAX_BYTES,
@@ -15,9 +21,13 @@ import type { ScrcpyControlTarget } from './scrcpy-stream-session'
 // Cyrillic still came out as repeated letters on an Android 15 emulator.
 export const SCRCPY_PASTE_SETTLE_MS = 200
 
+// A burst of pastes must not push taps and keys behind seconds of settle waits.
+const MAX_QUEUED_PASTES = 4
+
 type Queued = { done: (ok: boolean) => void } & (
   | { kind: 'text'; text: string; paste: boolean }
   | { kind: 'action'; send: () => boolean }
+  | { kind: 'wait'; ms: number }
 )
 
 /**
@@ -31,11 +41,21 @@ class ScrcpyInputQueue {
 
   constructor(private readonly control: ScrcpyControlTarget) {}
 
-  enqueue(item: Queued): void {
+  enqueue(item: Queued): boolean {
+    // Typed characters batch into one paste while they wait, so only explicit pastes are capped.
+    if (
+      item.kind === 'text' &&
+      item.paste &&
+      this.queued.filter((queued) => queued.kind === 'text' && queued.paste).length >=
+        MAX_QUEUED_PASTES
+    ) {
+      return false
+    }
     this.queued.push(item)
     if (!this.draining) {
       void this.drain()
     }
+    return true
   }
 
   private async drain(): Promise<void> {
@@ -46,8 +66,13 @@ class ScrcpyInputQueue {
           item.done(runSafely(item.send))
           continue
         }
+        if (item.kind === 'wait') {
+          await sleep(item.ms)
+          item.done(true)
+          continue
+        }
         // A pasted newline is text; INJECT_TEXT would press Enter and could submit the field.
-        if (isUSKeyboardText(item.text) && !(item.paste && /[\r\n]/.test(item.text))) {
+        if (!needsClipboard(item.text, item.paste)) {
           item.done(runSafely(() => this.inject(item.text)))
           continue
         }
@@ -100,6 +125,11 @@ class ScrcpyInputQueue {
   }
 }
 
+/** US text is INJECT_TEXT; a pasted newline is text (INJECT_TEXT would press Enter), so it and non-US text use the clipboard. */
+function needsClipboard(text: string, paste: boolean): boolean {
+  return !isUSKeyboardText(text) || (paste && /[\r\n]/.test(text))
+}
+
 function isTypedText(item: Queued | undefined): item is Queued & { kind: 'text' } {
   return item?.kind === 'text' && !item.paste
 }
@@ -134,17 +164,42 @@ export function sendScrcpyText(
   text: string,
   options: { paste?: boolean } = {}
 ): Promise<boolean> {
+  const paste = options.paste === true
   if (
-    !isUSKeyboardText(text) &&
-    Buffer.byteLength(text, 'utf8') > SCRCPY_CLIPBOARD_TEXT_MAX_BYTES
+    needsClipboard(text, paste) &&
+    Buffer.byteLength(text.replaceAll('\r', ''), 'utf8') > SCRCPY_CLIPBOARD_TEXT_MAX_BYTES
   ) {
     return Promise.reject(
       new EmulatorError('emulator_unsupported', 'Text is too long for one Android clipboard paste.')
     )
   }
-  return new Promise((done) =>
-    queueFor(control).enqueue({ kind: 'text', text, paste: options.paste === true, done })
-  )
+  return new Promise((done, reject) => {
+    const queued = queueFor(control).enqueue({ kind: 'text', text, paste, done })
+    if (!queued) {
+      reject(new EmulatorError('emulator_error', 'Too many pastes are waiting for this device.'))
+    }
+  })
+}
+
+/**
+ * Presses a key on the device's UHID keyboard, in order with other input; devices without one get
+ * `fallback`, which types the same key the older way.
+ */
+export function sendScrcpyHidKey(
+  control: ScrcpyControlTarget,
+  key: { usage: number; shift: boolean },
+  fallback: () => Promise<boolean>
+): Promise<boolean> {
+  if (!control.uhidKeyboard) {
+    return fallback()
+  }
+  if (claimScrcpyUhidKeyboard(control)) {
+    // Created in queue order, so earlier input lands first; input after it waits until Android has it.
+    const queue = queueFor(control)
+    queue.enqueue({ kind: 'action', send: () => createScrcpyUhidKeyboard(control), done: () => {} })
+    queue.enqueue({ kind: 'wait', ms: SCRCPY_UHID_KEYBOARD_READY_MS, done: () => {} })
+  }
+  return sendScrcpyInOrder(control, () => pressScrcpyUhidKey(control, key.usage, key.shift))
 }
 
 export function sendScrcpyKey(

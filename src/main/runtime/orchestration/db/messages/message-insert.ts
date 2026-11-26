@@ -11,6 +11,7 @@ import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-run
 import { notifyPeerMailQueued } from '../../federation/peer-mail/peer-mail-waiters'
 import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
+import { callerMailProvenance, type OrcaAuthoredMail } from './message-orca-provenance'
 import { recordMessageSenderDispatch } from './message-sender-dispatch'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
@@ -32,6 +33,8 @@ export type MessageInsert = {
   deliveryContract?: MessageDeliveryContract
   /** The Dispatch whose worker sent this, as the sender's own check found it; names it on every card. */
   senderDispatchId?: string
+  /** Orca wrote this mail itself, so its payload (and for item mail its sender) stands. */
+  orcaAuthored?: OrcaAuthoredMail
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
@@ -45,6 +48,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
       )
       .run(UNBOUND_RUN_ID)
   }
+  const payload = callerMailProvenance(msg)
   const deliveryContract = msg.deliveryContract ?? 'current_delivery'
   this.requireRun(runId)
   const id = msg.id ?? generateId('msg')
@@ -73,7 +77,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     type,
     msg.priority ?? 'normal',
     msg.threadId ?? null,
-    msg.payload ?? null,
+    payload ?? null,
     msg.senderPaneKey ?? null,
     msg.answerSenderSnapshot ?? null,
     handled,

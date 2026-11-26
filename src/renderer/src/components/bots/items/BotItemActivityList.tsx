@@ -13,7 +13,6 @@ import {
   Plus
 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_ITEM_STATUSES,
@@ -22,18 +21,28 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import {
   botItemActivity,
+  botItemLiveAskKey,
+  botItemWaitEntryKey,
+  botItemWorkerStopReason,
   type BotItemActivityEntry
 } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemStatusName } from './bot-item-status-name'
-import { BOT_ITEM_COMMENT_ATTRIBUTE, BotItemCommentCard } from './BotItemCommentCard'
-import type { BotItemQuickReplyActions } from './BotItemQuestionLines'
+import { BotItemCommentCard } from './BotItemCommentCard'
+import { BotItemWaitCard } from './BotItemWaitCard'
+import { revealBotItemComment } from './bot-item-comment-reveal'
+import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { NativeChatMessageTimestamp } from '../../native-chat/messages/rows/NativeChatMessageTimestamp'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
-import type { BotItemPendingComments } from './use-bot-item-pending-comments'
+import type { BotItemPendingComments } from '../../../../../shared/bots/bot-item-pending-comments'
+import {
+  botItemPendingAnswersOnly,
+  botItemPendingWordsBesideAnswers
+} from '../../../../../shared/bots/bot-item-sent-answers'
+import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
-const TIME = { hour: 'numeric', minute: '2-digit' } as const
 const ACTOR = 'font-medium text-foreground/80'
 // Where a linked event's refs go in its translated sentence.
 const LINKS_SLOT = '\u0000'
@@ -196,12 +205,14 @@ function WorkerBody({
     )
   }
   const failed = entry.link.state === 'failed' || entry.link.state === 'stopped'
+  const reason = botItemWorkerStopReason(entry.link)
   return (
     <>
       {failed
         ? t('bots.items.activity.workerFailed', 'Worker stopped:')
         : t('bots.items.activity.workerFinished', 'Worker finished:')}{' '}
       {title}
+      {reason ? ` - ${reason}` : null}
       {entry.link.report ? <span className="block">{entry.link.report.subject}</span> : null}
     </>
   )
@@ -260,49 +271,55 @@ export function BotItemActivityList({
 }): React.JSX.Element {
   const t = useTranslate()
   const entries = botItemActivity(item, events)
+  const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAskId = botItemLiveAskKey(entries)
   const list = useRef<HTMLDivElement | null>(null)
-  // A reply's quote leads to its question: centred, so the sticky header never covers it, and
-  // focused, so Tab goes on from there.
-  const jump = useCallback((eventId: string) => {
-    const target = list.current?.querySelector<HTMLElement>(
-      `[${BOT_ITEM_COMMENT_ATTRIBUTE}="${CSS.escape(eventId)}"]`
-    )
-    if (!target) {
-      return
-    }
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
-    target.focus({ preventScroll: true })
-  }, [])
+  // A reply's quote leads to its question, focused so Tab goes on from there.
+  const jump = useCallback(
+    (eventId: string) => revealBotItemComment(list.current, eventId, 'focus'),
+    []
+  )
   // The rail runs through the event glyphs; each glyph and card sits on the panel fill over it.
   return (
     <>
       <div
         ref={list}
+        // Comments and events quote into the item's comment box, as replies do into chat's composer.
+        {...NATIVE_CHAT_QUOTE_SOURCE_PROPS}
         className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12"
       >
         {entries.map((entry) => {
+          // An answer reads on its question's lines.
+          if (entry.kind === 'comment' && entry.onAsk) {
+            return null
+          }
           if (entry.kind === 'comment') {
             return (
               <BotItemCommentCard
                 key={entry.key}
                 bot={bot}
                 item={item}
-                // A reply already sent answers the question, before the host's read says so.
+                // A several-question card stays live until the host read confirms the send.
                 entry={
-                  pending?.shown.some(({ failed }) => !failed)
+                  quickReplies?.sent?.has(entry.event.id) &&
+                  quickReplies.steps?.askId !== entry.event.id
                     ? { ...entry, waiting: false }
                     : entry
                 }
                 onJump={jump}
+                liveAskId={liveAskId}
                 quickReplies={quickReplies}
               />
             )
           }
+          // Shown last, as its card, while the item waits.
+          if (entry.key === waitKey) {
+            return null
+          }
           return (
             <div
               key={entry.key}
-              className="relative flex min-w-0 items-start gap-2 py-[3px] text-xs leading-[18px] text-muted-foreground"
+              className="relative flex min-w-0 flex-wrap items-start gap-x-2 py-[3px] text-xs leading-[18px] text-muted-foreground"
             >
               <span className="flex h-[18px] w-5 shrink-0 items-center justify-center bg-sidebar">
                 <EntryIcon entry={entry} />
@@ -315,26 +332,60 @@ export function BotItemActivityList({
                   <EventBody event={entry.event} item={item} />
                 )}
               </div>
-              <span className="shrink-0 text-2xs tabular-nums @max-[284px]:hidden">
-                {uiDateTimeFormat(TIME).format(entry.at)}
-              </span>
+              <NativeChatMessageTimestamp
+                timestamp={entry.at}
+                // A narrow pane puts the time under the line, so dates don't squeeze it.
+                className="shrink-0 text-2xs text-muted-foreground @max-[340px]:basis-full @max-[340px]:pl-7"
+              />
             </div>
           )
         })}
+        {item.status === 'waiting' && item.wait ? (
+          <BotItemWaitCard text={item.wait.text} at={item.wait.at} />
+        ) : null}
         {/* Last, as sent: never placed by this machine's clock among the host's events. */}
-        {pending?.shown.map(({ event, failed }) => (
-          <BotItemCommentCard
-            key={event.id}
-            bot={bot}
-            item={item}
-            entry={{ event }}
-            failed={
-              failed
-                ? { retry: () => pending.retry(event.id), discard: () => pending.discard(event.id) }
-                : undefined
-            }
-          />
-        ))}
+        {pending?.shown.map((sending) => {
+          const { event, failed, intent } = sending
+          // Answers on their way show on their question's lines already; words or files beyond them
+          // show here.
+          const shown = intent && quickReplies?.sent?.get(intent.askId)
+          const ask = intent
+            ? entries.find((entry) => entry.kind === 'comment' && entry.event.id === intent.askId)
+            : undefined
+          const onLines =
+            intent &&
+            shown &&
+            ask?.kind === 'comment' &&
+            !ask.onAsk &&
+            ask.answers &&
+            intent.answers.every(
+              (words, index) =>
+                !words ||
+                (shown[index] === words &&
+                  (!ask.answers?.[index] ||
+                    (intent.shape.decisions.length > 1 && ask.byOrder?.[index])))
+            )
+          if (onLines && botItemPendingAnswersOnly(sending)) {
+            return null
+          }
+          const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
+          return (
+            <BotItemCommentCard
+              key={event.id}
+              bot={bot}
+              item={item}
+              entry={beside === null ? { event } : { event, beside }}
+              failed={
+                failed
+                  ? {
+                      retry: () => pending.retry(event.id),
+                      discard: () => pending.discard(event.id)
+                    }
+                  : undefined
+              }
+            />
+          )
+        })}
       </div>
       {entries.some((entry) => entry.kind !== 'worker' && entry.kind !== 'event') ||
       pending?.shown.length ? null : (

@@ -22,6 +22,8 @@ const FETCH_TIMEOUT_MS = 8000
 const MAX_LISTED_BUILDS = 100
 // Each release carries full notes and ~30 assets (~65 KB), so delay lookups page small and stop early.
 const DELAY_LOOKUP_PAGE_SIZE = 20
+// Atom, these pages and manifest probes share the 45 s update-check stall budget.
+const DELAY_LOOKUP_BUDGET_MS = 15_000
 const RETRY_AFTER_MAX_MS = 60 * 60_000
 
 type ReleasePage = { perPage: number; page: number }
@@ -30,14 +32,21 @@ function getReleasesApiUrl(repo: string, { perPage, page }: ReleasePage): string
   return `https://api.github.com/repos/${repo}/releases?per_page=${perPage}&page=${page}`
 }
 
-function fetchReleases(repo: string, token: string | null, page: ReleasePage): Promise<Response> {
+function fetchReleases(
+  repo: string,
+  token: string | null,
+  page: ReleasePage,
+  budget?: AbortSignal
+): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
   return net.fetch(getReleasesApiUrl(repo, page), {
     headers,
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+    signal: budget
+      ? AbortSignal.any([AbortSignal.timeout(FETCH_TIMEOUT_MS), budget])
+      : AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
 }
 
@@ -161,7 +170,8 @@ function parseReleaseEntry(
 async function fetchReleaseBuildsPage(
   channel: ReleaseChannel,
   platform: NodeJS.Platform,
-  page: ReleasePage
+  page: ReleasePage,
+  budget?: AbortSignal
 ): Promise<{ builds: ReleaseBuild[]; isLastPage: boolean }> {
   const repo = getReleaseRepoForChannel(channel)
   // Skip a known-exhausted token bucket and try the separate per-IP quota.
@@ -171,19 +181,19 @@ async function fetchReleaseBuildsPage(
     getGhRateLimitBlockedUntilMs('core', Date.now(), credential.rateLimitScope) !== null
   const token = tokenBucketBlocked ? null : (credential?.token ?? null)
   let signedIn = credential !== null
-  let res = await fetchReleases(repo, token, page)
+  let res = await fetchReleases(repo, token, page, budget)
   if (token && res.status === 401) {
     // A rejected token must not prevent listing a public repo unauthenticated.
     rejectReleaseApiToken()
     signedIn = false
-    res = await fetchReleases(repo, null, page)
+    res = await fetchReleases(repo, null, page, budget)
   } else if (token && isRateLimited(res) && isPrimaryRateLimited(res)) {
     // The per-IP quota may still be available; mark the token bucket spent before retrying.
     const resetAtMs = rateLimitResetAtMs(res.headers, Date.now())
     if (resetAtMs !== null && credential) {
       recordGhPrimaryRateLimit('core', resetAtMs, credential.rateLimitScope)
     }
-    res = await fetchReleases(repo, null, page)
+    res = await fetchReleases(repo, null, page, budget)
   }
   if (!res.ok) {
     throw releaseListError(res, repo, channel, signedIn)
@@ -215,11 +225,14 @@ export async function listMainRepoReleaseBuildsUntil(
   platform: NodeJS.Platform = process.platform
 ): Promise<ReleaseBuild[]> {
   const builds: ReleaseBuild[] = []
+  const budget = AbortSignal.timeout(DELAY_LOOKUP_BUDGET_MS)
   for (let page = 1; page * DELAY_LOOKUP_PAGE_SIZE <= MAX_LISTED_BUILDS; page++) {
-    const result = await fetchReleaseBuildsPage('stable', platform, {
-      perPage: DELAY_LOOKUP_PAGE_SIZE,
-      page
-    })
+    const result = await fetchReleaseBuildsPage(
+      'stable',
+      platform,
+      { perPage: DELAY_LOOKUP_PAGE_SIZE, page },
+      budget
+    )
     builds.push(...result.builds)
     if (result.isLastPage || hasEnough(builds)) {
       break

@@ -178,13 +178,6 @@ function hostRuntimeKey(executionHostId: string, runtimeId: string | null): stri
   return `${executionHostId}\u0000${runtimeId ?? ''}`
 }
 
-export function resetHostStructuredAgentsForTests(): void {
-  entries.clear()
-  inflight.clear()
-  failed.clear()
-  publish()
-}
-
 export function hostStructuredAgentsCatalogUnlearned(
   host: string,
   runtimeId: string | null | undefined,

@@ -36,6 +36,13 @@ export function buildMobileBrowserTab(
     certificateFailure: activePage
       ? (inputs.certificateFailureByBrowserPageId.get(activePage.id) ?? null)
       : null,
+    // Like the local tab strip: any of the tab's pages playing makes the tab audible.
+    ...(pages.some((page) => inputs.audibleBrowserPageIds.has(page.id))
+      ? { audible: true as const }
+      : {}),
+    ...(inputs.audioMutedBrowserWorkspaceIds.has(workspace.id)
+      ? { audioMuted: true as const }
+      : {}),
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId

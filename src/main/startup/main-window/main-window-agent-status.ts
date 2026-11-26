@@ -50,7 +50,10 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     if (structuredHost) {
       return
     }
-    const launchConfig = state.runtime?.getLaunchStatementForPaneKey(paneKey, payload.agentType)
+    const launchConfig = state.core.runtime?.getLaunchStatementForPaneKey(
+      paneKey,
+      payload.agentType
+    )
     // A tmux host's conversation reaches the window as shared so it leaves no resume checkpoint.
     const shared = cliWriterTopology(row) === 'shared' ? { executionHost: 'shared' as const } : {}
     if (providerSessionOnly) {
@@ -77,7 +80,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       })
       return
     }
-    const runtime = state.runtime
+    const runtime = state.core.runtime
     const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
     const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
     const statusEvent = {

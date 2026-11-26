@@ -19,6 +19,7 @@ import { isMainWindowVisible } from '../../window/visibility/main-window-visibil
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
+import { sessionRepliesInSlack } from '../../external-conversations/external-conversation-links'
 import { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
 import {
   createAnnouncedNotificationRegistry,
@@ -238,6 +239,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     platform: process.platform,
     now: () => Date.now(),
     wasRead: announced.wasRead,
+    repliesInSlack: (sessionId) => sessionRepliesInSlack(store, sessionId),
     reserveNative: (request) => {
       if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
         return undefined

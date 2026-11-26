@@ -7,7 +7,7 @@ import type {
 } from '../worktree/workspace-list/workspace-list-types'
 import { MobileBotsListEnd, MobileBotsSectionHeader } from './MobileBotsSectionHeader'
 import { MobileBotGroupRow } from './MobileBotHomeRow'
-import { MobileBotChatLoading, MobileBotChatPaging, MobileBotChatRow } from './MobileBotChatRows'
+import { MobileBotChatPaging, MobileBotChatRow } from './MobileBotChatRows'
 import { useMobileBotGroupEditor } from './use-mobile-bot-group-editor'
 
 /** A row of the Bots list, which draws its own dividers: above each bot or group after the first,
@@ -15,12 +15,7 @@ import { useMobileBotGroupEditor } from './use-mobile-bot-group-editor'
 export function isBotsListRow(view: WorktreeRowView | undefined): boolean {
   return Boolean(
     view &&
-    (view.botFacts ||
-      view.botGroupFacts ||
-      view.botWorkspace ||
-      view.botChat ||
-      view.botChatPaging ||
-      view.botChatLoading)
+    (view.botFacts || view.botGroupFacts || view.botWorkspace || view.botChat || view.botChatPaging)
   )
 }
 
@@ -53,9 +48,11 @@ export function useMobileBotsListParts(controller: HostScreenController) {
       />
     )
   }
-  /** The Bots list's end lines, unless it is folded; null for every other section. */
+  /** The Bots list's end lines, unless it is folded (a list with no bot can't fold); null for
+   *  every other section. */
   const footer = (section: Section, collapsedKeys: ReadonlySet<string>): ReactElement | null =>
-    section.endLines && !collapsedKeys.has(section.collapseKey ?? section.key) ? (
+    section.endLines &&
+    !((section.count ?? 0) > 0 && collapsedKeys.has(section.collapseKey ?? section.key)) ? (
       <MobileBotsListEnd lines={section.endLines} underRows={section.data.length > 0} />
     ) : null
   /** A bot group's row, or a bot's chat or paging row; null for every other row. */
@@ -77,9 +74,6 @@ export function useMobileBotsListParts(controller: HostScreenController) {
     }
     if (view.botChatPaging) {
       return <MobileBotChatPaging facts={view.botChatPaging} dimmed={view.dimmed === true} />
-    }
-    if (view.botChatLoading) {
-      return <MobileBotChatLoading dimmed={view.dimmed === true} />
     }
     const groupFacts = view.botGroupFacts
     return groupFacts ? (

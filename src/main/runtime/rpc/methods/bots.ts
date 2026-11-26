@@ -11,14 +11,13 @@ import {
   type BotChatResetParams,
   type BotUpdateParams
 } from '../../../../shared/rpc-contract/bots-params'
+import {
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
-import {
-  requireStructuredHost,
-  runtimeBotChats,
-  startBotSession,
-  botOnAgent
-} from '../../../bots/bot-chat-session'
+import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
@@ -37,8 +36,13 @@ import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-out
 import { releaseHeldBotMail } from '../../../bots/bot-paused-mail'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
+import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills'
+import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
+import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
+import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -50,7 +54,11 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
-    relinkBotSkills(bot, context.runtime.listRepos())
+    // Replies after the links and caches change, so a `/` menu opened next lists them.
+    await relinkBotSkills(bot, context.runtime.listRepos())
+  }
+  if (params.updates.agent !== undefined) {
+    void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
   }
   if (params.updates.paused === true) {
     await dropUnreadBotRequests(context.runtime, bot.id, 'paused')
@@ -78,33 +86,18 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   return { bot }
 }
 
-/** New Home Chat, for the owner only: from Orca, a script, or the bot's Home Chat on a turn they typed. */
+/** New Home Chat: from Orca, a script, or the bot's own Home Chat, whatever started its turn. */
 async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   const { runtime } = context
   runtime.bots.assertEnabled()
   const { bot, caller, callerBot } = namedOrCallerBot(params, context)
-  // A bot's threads, runs and connector messages answer other people, who can't start one.
-  if (
-    caller &&
-    callerBot &&
-    (callerBot.id !== bot.id ||
-      caller !== bot.chatSessionId ||
-      runtime.getExternalConversationSeam()?.deliveredTurn(caller) ||
-      !(await ownerTypedLatest(runtime, caller)))
-  ) {
-    throw new InvalidArgumentError('Only the bot’s owner can start a new Home Chat.')
+  // Another chat ending this one's Home Chat would cut off a conversation it isn't part of.
+  if (caller && callerBot && (callerBot.id !== bot.id || caller !== bot.chatSessionId)) {
+    throw new InvalidArgumentError('Only the bot’s own Home Chat can start a new Home Chat.')
   }
+  // Its old Chat's queued messages move over; bot requests it never read are dropped.
   const sessionId = await runtimeBotChats(runtime).reset(bot.id)
-  // Mail its old Chat never read is not carried over.
-  await dropUnreadBotRequests(runtime, bot.id, 'new-chat', bot.chatSessionId ?? undefined)
   return { sessionId }
-}
-
-/** Whether the chat's latest message is its owner's own, not an automation run's, a connector's or Orca's. */
-async function ownerTypedLatest(runtime: RpcContext['runtime'], sessionId: string) {
-  const reads = await (await requireStructuredHost(runtime)).journalReads(sessionId)
-  const body = (await reads.promptItem('last'))?.body
-  return body?.kind === 'message' && !body.from && !body.origin && !body.memorySource
 }
 
 // Off, nothing creates a bot or opens its Chat; listing, editing and deleting stay.
@@ -117,13 +110,17 @@ export const BOT_METHODS = [
     // threadReplies: whether it binds an event's run to its thread, for --results-to thread.
     // githubEvents2: whether it sends GitHub's newer events and label=, for trigger-options.
     // githubWorkflows: whether it sends github.workflow_finished, for trigger-options.
+    // githubCiFinished: whether it sends github.ci_finished, for trigger-options and watch-pr.
     // waits: each bot's waits still waiting, for its row; needsYou: its unstale Needs you items, for phones.
     // connectorNeedsSignIn: Orca Cloud refused this host's sign-in, so nothing reaches its bots.
     // connectorStatus: signed out, needs sign-in (the app is signed in but the connector refuses it),
     // can't reach Orca Cloud, refused (connectorMessage says why), or ok; absent without Orca Cloud.
+    // signInServer: this host's name when it is a headless server, whose signed-out copy names it;
+    // null with a window (an older host omits it, so the CLI can't tell which).
     handler: async (_params, { runtime }) => {
       const webhooks = runtime.getWebhooks()
       const listing = runtime.bots.listing()
+      const signInServer = orcaSignInServer(runtime)
       return {
         ...listing,
         // The host's Bot options, so a phone lists its bots as this sidebar does.
@@ -133,8 +130,10 @@ export const BOT_METHODS = [
         ...(runtime.getConnectorCloud()?.botListFacts() ?? {
           threadReplies: false,
           githubEvents2: false,
-          githubWorkflows: false
-        })
+          githubWorkflows: false,
+          githubCiFinished: false
+        }),
+        signInServer
       }
     }
   }),
@@ -154,7 +153,10 @@ export const BOT_METHODS = [
       // A paired client reads each server itself, so only a host's own callers fan out.
       const paired =
         params.allComputers && context.pairedDeviceId === undefined
-          ? readPairedBotRosters(runtime)
+          ? readPairedBotRosters(runtime).then((rosters) => {
+              runtime.pairedBotRosters.remember(rosters, { complete: true })
+              return rosters
+            })
           : null
       const own = await Promise.all(
         (await runtime.bots.roster()).map(async (rosterEntry) => {
@@ -189,24 +191,55 @@ export const BOT_METHODS = [
     name: 'bots.skillProjects.scan',
     permission: 'workspace',
     params: BotSkillProjectsScan,
-    handler: async (params, { runtime }) => ({
-      projects: await botSkillProjectViews(params.repoIds, runtime.listRepos())
-    })
+    handler: async (params, { runtime }) => {
+      const bot = params.botId
+        ? runtime.bots.list().find((entry) => entry.id === params.botId)
+        : undefined
+      const [projects, own] = await Promise.all([
+        botSkillProjectViews(params.repoIds, runtime.listRepos()),
+        bot ? botOwnSkillsView(botHomeFolder(bot)) : undefined
+      ])
+      return own ? { projects, own } : { projects }
+    }
   }),
   defineMethod({
     name: 'bots.avatar.upload',
     permission: 'workspace',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
+      bot: await runtime.bots.setAvatarImage(
+        params.botId,
+        Buffer.from(params.png, 'base64'),
+        params.expectedAvatarRevision,
+        params.expectedAvatarEpoch
+      )
     })
   }),
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
     params: BotAvatarRead,
+    handler: async (params, { runtime }) =>
+      params.catalogRevision === undefined
+        ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
+        : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.wanted',
+    permission: 'workspace',
+    params: BotSlackIconWanted,
+    handler: (params, { runtime }) => runtime.bots.slackIcons.wanted(params.botId, params.look)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.upload',
+    permission: 'workspace',
+    params: BotSlackIconUpload,
     handler: async (params, { runtime }) => ({
-      png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null
+      stored: await runtime.bots.slackIcons.store(
+        params.botId,
+        params.look,
+        Buffer.from(params.png, 'base64')
+      )
     })
   }),
   defineMethod({
@@ -224,6 +257,8 @@ export const BOT_METHODS = [
     handler: async (params, { runtime }) => {
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       if (bot) {
+        // Before anything goes: its home's purge would drop unsaved editor text, as on the desktop.
+        refuseUnsavedFolderDrafts(runtime.requireStore(), bot.folderWorkspaceId)
         // Listed first so a crash mid-delete still cleans up; nothing goes while the bot is here.
         await composioBotsOf(runtime).willDelete(bot.id)
         await forgetDeletedBotTools(runtime, bot)
@@ -264,7 +299,9 @@ export const BOT_METHODS = [
           return null
         }
       )
-      return { sessionId: empty ?? (await startBotSession(runtime, onAgent)) }
+      // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
+      const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
+      return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }
     }
   })
 ]

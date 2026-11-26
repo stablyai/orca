@@ -43,7 +43,7 @@ import {
   storageReadParamsSchema,
   type BridgeNativeVerb
 } from './bridge/native-capabilities/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
+import { ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
   useReportedShellOverlayLoad,
@@ -263,12 +263,12 @@ export function MobileWebShellScreen({
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,
-    // Treat a page that never renders as document-load-failed: remount the same bytes once, then fail visibly; Try again downloads fresh.
+    // Remount the same bytes once, then fail visibly.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
       console.warn('[web-shell] the page faulted', error)
       recordShellLifecycleLine(hostId, pageFaultLine(error))
-      reportShellFailure('document-load-failed')
+      reportShellFailure('page-fault')
     },
     // init already sees app writes in the map; refresh from persisted storage afterward on every ready, including document reloads.
     onPageReady: () => {
@@ -426,9 +426,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
-      )}
+      {overlay ? null : <ShellPageCover visible={pageFrame === 'unpainted'} />}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

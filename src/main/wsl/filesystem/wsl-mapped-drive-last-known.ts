@@ -78,8 +78,3 @@ export function isWslMappedDriveLastKnownInWsl(letter: string, now: number = Dat
     wslMappedDriveLastKnownShare(letter, Number.POSITIVE_INFINITY, now)?.share ?? null
   )
 }
-
-export function clearWslMappedDriveLastKnownForTests(): void {
-  lastKnown.clear()
-  answerSink = null
-}

@@ -1,8 +1,6 @@
 import type Database from '../../../sqlite/sync-database'
-import { runJournalTransaction } from './journal-database'
 import {
   journalLegacyCopySourceKey,
-  journalLegacyFailureKey,
   journalLegacyPendingCopyKey,
   recordJournalLegacyChatRevision,
   settleJournalLegacyCopy
@@ -10,10 +8,10 @@ import {
 import {
   continuedCopyId,
   deleteMeta,
-  holdsPendingCopy,
   JOURNAL_LEGACY_COPY_DUE,
   revisionHoldsHistory,
-  writeMeta
+  writeMeta,
+  recordJournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
 
 /**
@@ -27,26 +25,15 @@ type Adopt = (as: string) => void
 
 /**
  * The original's version of a converted chat it moved past becomes a second chat beside it. Only
- * its record is made here; its history converts from the original chat when opened or idle. With
- * no revision to compare (files copied before revisions were kept), a background compare decides.
+ * its record is made here in the caller's transaction; history converts when opened or idle.
  */
 export function keepContinuedChat(
   db: Database.Database,
   id: string,
   revision: string,
-  shown: string | undefined,
-  adopt: Adopt,
-  pass: { baselines: [string, string][]; compares: [string, string][] }
+  adopt: Adopt
 ): void {
-  if (shown === undefined && revisionHoldsHistory(revision)) {
-    pass.compares.push([id, revision])
-    return
-  }
-  if (holdsPendingCopy(db, id)) {
-    pass.baselines.push([id, revision])
-    return
-  }
-  runJournalTransaction(db, () => keepCopy(db, id, revision, adopt))
+  keepCopy(db, id, revision, adopt)
 }
 
 /** Background conversion skips a copy whose history failed to convert; opening it still retries. */
@@ -60,7 +47,7 @@ export function recordJournalLegacyCopyFailure(
       .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
       .get(journalLegacyCopySourceKey(copyId))
   ) {
-    writeMeta(db, journalLegacyFailureKey(copyId), JSON.stringify({ revision: null, error }))
+    recordJournalLegacyFailure(db, { sessionId: copyId, revision: undefined, error })
   }
 }
 

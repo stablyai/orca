@@ -1,5 +1,7 @@
 // Whether a bot's Orca Cloud features wait on this window's Orca sign-in.
 import { useAppStore } from '@/store'
+import { useBotHostConnectorStatus } from '@/lib/bot-catalog'
+import { orcaCloudNeedsSignIn } from '../../../../shared/bots/host-orca-sign-in'
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -25,4 +27,14 @@ export function useOrcaCloudSignedOut(hostId: ExecutionHostId = LOCAL_EXECUTION_
   return useAppStore(
     (state) => hostId === LOCAL_EXECUTION_HOST_ID && signedOut(state.orcaProfileAuthStatus)
   )
+}
+
+/**
+ * Whether this computer's bots wait on its Orca sign-in: signed out, or signed in with a sign-in Orca
+ * Cloud refuses (its bots.list connector status), which only signing in again fixes.
+ */
+export function useOrcaCloudNeedsSignIn(): boolean {
+  const signedOut = useOrcaCloudSignedOut(LOCAL_EXECUTION_HOST_ID)
+  const connector = useBotHostConnectorStatus(LOCAL_EXECUTION_HOST_ID)
+  return signedOut || orcaCloudNeedsSignIn(connector)
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { AiVaultScope } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 
 /** A query belongs to the workspace or project it searched: moving to another clears it, picking a scope keeps it. */
@@ -17,7 +17,8 @@ export function useAiVaultPanelQuery(
   const subject = { workspace: activeWorktreeId, project: activeProjectKey, all: null }[
     preferredScope
   ]
-  const [query, setQuery] = useState(initialQuery)
+  const [input, setInput] = useState({ text: initialQuery, submitted: initialQuery !== '' })
+  const setQuery = useCallback((text: string) => setInput({ text, submitted: false }), [])
   const [typedFor, setTypedFor] = useState({ scope: preferredScope, subject })
   // Adjusted during render so the new workspace never paints, or searches, the old query.
   if (typedFor.scope !== preferredScope || typedFor.subject !== subject) {
@@ -26,5 +27,5 @@ export function useAiVaultPanelQuery(
       setQuery('')
     }
   }
-  return [query, setQuery] as const
+  return [input.text, setQuery, input.submitted] as const
 }

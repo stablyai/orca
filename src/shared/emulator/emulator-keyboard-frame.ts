@@ -168,6 +168,23 @@ export function buildServeSimKeyboardFramesForKey(
     : buildKeyUsageFrames({ shift: false, usage: namedUsage }, modifiers)
 }
 
+/**
+ * The HID usage of `code` when pressing it with `shift` types `key` on a US layout, else null. A
+ * device whose layout is US then types exactly what the host keyboard produced.
+ */
+export function usKeyboardUsageForKey(code: string, key: string, shift: boolean): number | null {
+  const usage = PHYSICAL_KEY_USAGES.get(code)
+  if (usage === undefined) {
+    return null
+  }
+  const textKey = key === 'Enter' ? '\n' : key === 'Tab' ? '\t' : key
+  if (Object.hasOwn(ASCII_KEY_USAGES, textKey)) {
+    const us = ASCII_KEY_USAGES[textKey]
+    return us.usage === usage && us.shift === shift ? usage : null
+  }
+  return Object.hasOwn(NAMED_KEY_USAGES, key) && NAMED_KEY_USAGES[key] === usage ? usage : null
+}
+
 /** Whether every character has a US keyboard key, so typing it as key events loses nothing. */
 export function isUSKeyboardText(text: string): boolean {
   for (const char of text) {

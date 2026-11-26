@@ -19,7 +19,3 @@ export function wasStagedBrowserTabHandedToFrames(
 export function forgetStagedBrowserTabHandover(stagedWorkspaceId: string): void {
   handedOver.delete(stagedWorkspaceId)
 }
-
-export function _resetStagedBrowserFrameHandoversForTests(): void {
-  handedOver.clear()
-}

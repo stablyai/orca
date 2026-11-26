@@ -1,13 +1,13 @@
-import {
-  isMobileRelayCloseCode,
-  mobileRelayRecoveryFor
-} from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
-import { RelayCredentialEligibility } from './relay-credential-eligibility'
+import {
+  isExplicitCredentialRejection,
+  RelayCredentialEligibility
+} from './relay-credential-eligibility'
 import type { RelayHostReachability } from './relay-host-reachability'
 import { RelayRecoveryEvidence, type RelayRecoveryReporter } from './relay-recovery-evidence'
 import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
@@ -238,13 +238,12 @@ export class RelayReconnectController {
     if (!this.activeSession) {
       this.evidence.record(error)
     }
-    const recovery =
-      error instanceof RelayOuterError && isMobileRelayCloseCode(error.code)
-        ? mobileRelayRecoveryFor(error.code, 'phone-resume')
-        : null
+    const hostOffline =
+      error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
+    const credentialRejected = isExplicitCredentialRejection(error)
     if (
       this.recoveryGate === 'fresh-credential' ||
-      (this.recoveryGate === 'external-signal' && recovery?.kind !== 'disable-relay-credential')
+      (this.recoveryGate === 'external-signal' && !credentialRejected)
     ) {
       // Keep slow gated reprobes running only while active; foreground restores cadence.
       this.holdGate(scheduleRetry)
@@ -255,22 +254,21 @@ export class RelayReconnectController {
     // Why: only a stable authenticated Relay resets the failure streak.
     this.activeRelayConnectedAt = null
     // Director Retry-After paces overload; HTTP failures carry no relay close code.
-    const delay =
-      recovery?.kind === 'retry-after-host-offline'
-        ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
-        : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
+    const delay = hostOffline
+      ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
+      : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
       // E2EE rejection can be transient during credential commit; gate slow reprobes instead of waiting forever for a nudge.
       this.holdGate(scheduleRetry, 'external-signal')
       return
     }
-    if (recovery?.kind === 'disable-relay-credential') {
+    if (credentialRejected) {
       // Never retry rejected credentials fast; each slow attempt re-reads durable state.
       this.holdGate(scheduleRetry, 'fresh-credential')
       return
     }
-    if (recovery?.kind === 'retry-after-host-offline') {
+    if (hostOffline) {
       // A prior transport timer must not bypass the slower known-offline retry.
       this.clearTimer()
     }

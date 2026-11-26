@@ -1,10 +1,7 @@
 import type { DiscoveredSkill } from '../../../skills/discovery/skills'
 import type { NativeChatSessionSkill } from '../commands/native-chat-slash-commands'
 import type { NativeChatPickerItem } from './native-chat-picker-items'
-import {
-  isSafeDisplayCharacter,
-  stripUnsafeDisplayCharacters
-} from '../../../text/display-text-safety'
+import { isSafeDisplayText, stripUnsafeDisplayCharacters } from '../../../text/display-text-safety'
 
 export function locatedPickerSkill(
   skill: NativeChatSessionSkill,
@@ -68,6 +65,6 @@ export function isTokenSafe(value: string): boolean {
     value.length > 0 &&
     value.length <= MAX_TOKEN_SAFE_NAME_LENGTH &&
     !/\s/u.test(value) &&
-    [...value].every(isSafeDisplayCharacter)
+    isSafeDisplayText(value)
   )
 }

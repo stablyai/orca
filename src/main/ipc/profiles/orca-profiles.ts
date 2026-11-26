@@ -40,10 +40,15 @@ import {
 import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { OrcaAccountService } from '../../orca-profiles/orca-account-service'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
+import {
+  isOrcaCloudConsoleSection,
+  type OrcaCloudConsoleOpenResult
+} from '../../../shared/orca-cloud-console'
 import { onOrcaCloudSessionInvalidated } from '../../orca-profiles/cloud-session/profile-cloud-session-invalidation'
 import {
   broadcastOrcaProfileAuthStatusChanged,
-  broadcastOrcaProfileSignInProgressChanged
+  broadcastOrcaProfileSignInProgressChanged,
+  broadcastTeamPolicyChanges
 } from './orca-profile-auth-status-broadcast'
 import {
   cancelOrcaCloudSignIn,
@@ -154,6 +159,7 @@ export function registerOrcaProfileHandlers(
 
   // Push background invalidation; re-entering onAuthMutation would loop into the relay coordinator that just failed.
   onOrcaCloudSessionInvalidated(broadcastOrcaProfileAuthStatusChanged)
+  broadcastTeamPolicyChanges()
   onOrcaCloudSignInProgressChanged(broadcastOrcaProfileSignInProgressChanged)
 
   ipcMain.handle(
@@ -274,6 +280,20 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:selectOrg',
     async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> =>
       orcaAccount.selectOrg(orgIdFromUnknown(rawArgs))
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:openCloudConsole',
+    async (_event, rawArgs: unknown): Promise<OrcaCloudConsoleOpenResult> => {
+      const section =
+        typeof rawArgs === 'object' && rawArgs !== null && 'section' in rawArgs
+          ? rawArgs.section
+          : undefined
+      if (!isOrcaCloudConsoleSection(section)) {
+        return { status: 'failed', error: 'invalid_orca_cloud_console_section' }
+      }
+      return orcaAccount.openConsole(section)
+    }
   )
 
   registerOrcaProfileOrgMemberHandlers()

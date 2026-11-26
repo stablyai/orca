@@ -10,8 +10,17 @@ import {
   type Page
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
+import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
 
-type Attach = { pageId: string; page: Page; url: string; token: string; admitted: boolean }
+type Attach = {
+  pageId: string
+  page: Page
+  url: string
+  token: string
+  admitted: boolean
+  /** Asked for after the first prepare (an address entered while the page waited to exist). */
+  requested?: boolean
+}
 const attachments = new Map<string, Attach>()
 export const guestLoads = new WeakMap<Electron.WebContents, Promise<void>>()
 let generation = 0
@@ -58,12 +67,14 @@ export function prepareBrowserPageAttach(
     noteBrowserPageOpened(partition)
   }
   delete page.claim.pendingRendererId
+  const previous = page.token ? attachments.get(page.token) : undefined
   if (page.token) {
     attachments.delete(page.token)
   }
   const token = randomUUID()
   page.token = token
-  attachments.set(token, { pageId, page, url, token, admitted: false })
+  const requested = previous !== undefined && !previous.admitted && previous.url !== url
+  attachments.set(token, { pageId, page, url, token, admitted: false, requested })
   return MARKER + token
 }
 
@@ -139,6 +150,8 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   return true
 }
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
+// A guest's fresh first load, kept settled so tab create waits for it instead of sending it again.
+const freshLoads = new WeakMap<Electron.WebContents, { url: string; load: Promise<void> }>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
 export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
@@ -207,11 +220,20 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     guest.on('did-stop-loading', stopped)
     guest.once('destroyed', dispose)
   }
-  const promise = waitForBrowserGuestLoad(guest, () =>
-    snapshot
-      ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
-      : guest.loadURL(url ?? attach.url)
-  ).then(() => {
+  const restore = (): Promise<void> =>
+    guest.navigationHistory.restore({ entries: snapshot!.entries, index: snapshot!.index })
+  const firstLoad = (): Promise<void> => {
+    if (!snapshot) {
+      return guest.loadURL(url ?? attach.url)
+    }
+    if (!attach.requested) {
+      return restore()
+    }
+    // The back list comes back, then the entered address loads after it, as a new navigation would.
+    void restore().catch(() => {})
+    return guest.loadURL(attach.url)
+  }
+  const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')
     }
@@ -224,6 +246,10 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
   })
   page.restoring = promise
   guestLoads.set(guest, promise)
+  // A page attaches only after its profile's extensions had their wait, so a second load adds nothing.
+  if (!snapshot) {
+    freshLoads.set(guest, { url: url ?? attach.url, load: promise })
+  }
   void promise
     .catch(() => {})
     .finally(() => {
@@ -246,4 +272,22 @@ export function forgetBrowserPageAttach(page: Page): void {
 
 export function hasPendingBrowserPageAttach(guest: Electron.WebContents): boolean {
   return pendingLoads.has(guest)
+}
+
+/** The attach's own first load of `url` into this page, claimed once; null when there is none. */
+export function claimBrowserPageFirstLoad(
+  pageId: string,
+  url: string
+): { guest: Electron.WebContents; load: Promise<void> } | null {
+  const guest = pages.get(pageId)?.guest
+  const fresh = guest ? freshLoads.get(guest) : undefined
+  if (!guest || !fresh || !sameNavigationUrl(fresh.url, url)) {
+    return null
+  }
+  freshLoads.delete(guest)
+  return { guest, load: fresh.load }
+}
+
+function sameNavigationUrl(a: string, b: string): boolean {
+  return (normalizeBrowserNavigationUrl(a) ?? a) === (normalizeBrowserNavigationUrl(b) ?? b)
 }

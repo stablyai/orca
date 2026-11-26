@@ -4,7 +4,20 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export const APP_RAIL_ITEM_ATTRIBUTE = 'data-app-rail-item'
 
-const APP_RAIL_ITEM_IDS = ['workspaces', 'more', 'help', 'settings'] as const
+export const APP_RAIL_ICON_SIZE = 16
+export const APP_RAIL_ICON_STROKE_WIDTH = 1.75
+
+const APP_RAIL_ITEM_IDS = [
+  'workspaces',
+  'tasks',
+  'automations',
+  'artifacts',
+  'skills',
+  'mobile',
+  'customize',
+  'more',
+  'account'
+] as const
 export type AppRailItemId = (typeof APP_RAIL_ITEM_IDS)[number]
 
 export function isAppRailItemId(value: unknown): value is AppRailItemId {
@@ -37,20 +50,14 @@ export function AppRailButton({
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'relative flex size-8 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-muted-foreground focus-visible:ring-offset-1 focus-visible:ring-offset-worktree-sidebar',
+        'flex size-7 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-muted-foreground focus-visible:ring-offset-1 focus-visible:ring-offset-worktree-sidebar [&>svg]:transition-opacity',
+        // Why svg opacity, not an alpha color: per-stroke alpha brightens where strokes overlap.
         active
           ? 'bg-worktree-sidebar-foreground/10 text-foreground'
-          : 'text-muted-foreground/70 hover:bg-worktree-sidebar-foreground/6 hover:text-muted-foreground data-[state=open]:bg-worktree-sidebar-foreground/10 data-[state=open]:text-foreground',
+          : 'text-muted-foreground hover:bg-worktree-sidebar-foreground/6 data-[state=open]:bg-worktree-sidebar-foreground/10 data-[state=open]:text-foreground [&>svg]:opacity-70 hover:[&>svg]:opacity-100 data-[state=open]:[&>svg]:opacity-100 forced-colors:[&>svg]:opacity-100',
         className
       )}
     >
-      {/* Leading bar at the rail's outer edge, mirroring the right activity bar's indicator. */}
-      {active ? (
-        <span
-          aria-hidden
-          className="absolute top-2 bottom-2 -left-1 w-0.5 rounded-r-sm bg-activity-bar-indicator"
-        />
-      ) : null}
       {icon}
     </button>
   )

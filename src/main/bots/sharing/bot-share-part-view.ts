@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BotShareCandidateSummary, BotSharePartFile } from '../../../shared/bots/bot-package'
 import { scanBotText } from '../../../shared/bots/bot-text-scan'
-import { observeSkillPackage } from '../../skills/package-archive/skill-package-identity'
+import { ownSkillFiles } from './bot-share-skills'
 import type { BotPackageContent } from './bot-package-content'
 import type { BotShareable } from './bot-share-sources'
 
@@ -23,15 +23,21 @@ type Picked = {
   summary: Pick<BotShareCandidateSummary, 'automationIds' | 'rewritten'>
 }
 
-/** The value's files under `prefix`; a file whose text was rewritten has no home line to open. */
-function sharedFiles(picked: Picked, prefix: string, homePrefix: string): BotSharePartFile[] {
+/** The value's files under `prefix`; a file whose text was rewritten, or that is outside the home
+ *  (null `homePrefix`), has no home line to open. */
+function sharedFiles(
+  picked: Picked,
+  prefix: string,
+  homePrefix: string | null
+): BotSharePartFile[] {
   return picked.content.files
     .filter((file) => file.path.startsWith(prefix))
     .map((file) => {
       const relative = file.path.slice(prefix.length)
-      const homePath = picked.summary.rewritten.includes(file.path)
-        ? null
-        : `${homePrefix}${relative}`
+      const homePath =
+        homePrefix === null || picked.summary.rewritten.includes(file.path)
+          ? null
+          : `${homePrefix}${relative}`
       return textFile(relative || file.path, homePath, file.text)
     })
 }
@@ -65,12 +71,15 @@ export async function botSharePartFiles(
         break
       }
       if (bot.skills.some((entry) => entry.name === skill.name)) {
-        return sharedFiles(picked, `skills/${skill.name}/`, `${skill.homePath}/`)
+        return sharedFiles(
+          picked,
+          `skills/${skill.name}/`,
+          skill.homePath === null ? null : `${skill.homePath}/`
+        )
       }
-      const observed = await observeSkillPackage(skill.directory)
       return Promise.all(
-        observed.files.map(async (file) => {
-          const homePath = `${skill.homePath}/${file.path}`
+        (await ownSkillFiles(skill.directory)).map(async (file) => {
+          const homePath = skill.homePath === null ? null : `${skill.homePath}/${file.path}`
           return file.classification === 'text'
             ? textFile(
                 file.path,

@@ -116,11 +116,19 @@ export class ProjectCollectionOperations {
     return getProjectHostOperations(this).getRepoForHost(id, hostId)
   }
 
+  getRepoRegistrations(id: string): readonly RepoHostTarget[] {
+    return getProjectHostOperations(this).getRepoRegistrations(id)
+  }
+
   setResolvedRepoGitUsername(
     target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
     username: string
   ): boolean {
     return getProjectHostOperations(this).setResolvedRepoGitUsername(target, username)
+  }
+
+  getProjectGroup(id: string): ProjectGroup | undefined {
+    return getProjectGroupOperations(this).getProjectGroup(id)
   }
 
   getProjectGroups(): ProjectGroup[] {
@@ -138,6 +146,12 @@ export class ProjectCollectionOperations {
     updates: Parameters<ProjectGroupPersistenceOperations['updateProjectGroup']>[1]
   ): ProjectGroup | null {
     return getProjectGroupOperations(this).updateProjectGroup(groupId, updates)
+  }
+
+  setProjectGroupParents(
+    moves: Parameters<ProjectGroupPersistenceOperations['setProjectGroupParents']>[0]
+  ): ProjectGroup[] {
+    return getProjectGroupOperations(this).setProjectGroupParents(moves)
   }
 
   deleteProjectGroup(groupId: string): boolean {
@@ -271,8 +285,14 @@ export function getFolderWorkspaceOperations(
   owner[projectCollectionOperationsContext].runtime.folderWorkspaceOperations ??=
     new FolderWorkspacePersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
-      scheduleSave: (domains) =>
-        scheduleSave(owner[projectCollectionOperationsContext].scheduling, domains),
+      scheduleSave: (domains, options) =>
+        scheduleSave(
+          owner[projectCollectionOperationsContext].scheduling,
+          domains,
+          undefined,
+          undefined,
+          options
+        ),
       removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
         removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,

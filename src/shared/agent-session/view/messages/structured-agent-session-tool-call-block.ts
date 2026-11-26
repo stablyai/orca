@@ -29,7 +29,12 @@ export function structuredAgentSessionToolCallBlock(
   itemId: string
 ): NativeChatToolCallBlock {
   if (action.kind === 'diff') {
-    return { type: 'tool-call', name: 'Diff', input: { path: action.path }, callId: itemId }
+    return {
+      type: 'tool-call',
+      name: 'Diff',
+      input: { path: action.path, ...(action.paths ? { paths: action.paths } : {}) },
+      callId: itemId
+    }
   }
   return {
     type: 'tool-call',
@@ -41,6 +46,7 @@ export function structuredAgentSessionToolCallBlock(
     ...(action.mcpIdentity !== undefined ? { mcpIdentity: action.mcpIdentity } : {}),
     ...(action.exitCode !== undefined ? { exitCode: action.exitCode } : {}),
     ...(action.durationMs !== undefined ? { durationMs: action.durationMs } : {}),
-    ...(action.webSearchResults !== undefined ? { webSearchResults: action.webSearchResults } : {})
+    ...(action.webSearchResults !== undefined ? { webSearchResults: action.webSearchResults } : {}),
+    ...(action.outputImagePaths !== undefined ? { outputImagePaths: action.outputImagePaths } : {})
   }
 }

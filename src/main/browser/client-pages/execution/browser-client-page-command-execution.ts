@@ -1,15 +1,20 @@
 import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import { requiresBrowserClientFileChannel } from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
+import {
+  BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR,
+  requiresBrowserClientFileChannel
+} from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
+import { AGENT_DOWNLOAD_START_TIMEOUT_MS } from '../../../../shared/browser/downloads/agent-download-timing'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import { executeBrowserClientUploadCommand } from '../../client-hosts/file-transfers/browser-client-upload-command'
-import type { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
-import type { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'
+import type { BrowserClientPageCommandExecutorDependencies } from './browser-client-page-command-executor-dependencies'
 import {
   assertBrowserClientPageCommandNotAborted,
   assertCurrentBrowserClientPageRenderer
 } from './browser-client-page-command-admission'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
+import { browserClientPageDesktopDataRefusal } from './browser-client-page-desktop-data-refusal'
 import { sameBrowserClientPageAuthority } from '../../client-hosts/commands/browser-client-host-command-authority'
 import type {
   BrowserClientPageLifecycleRegistry,
@@ -56,10 +61,10 @@ export async function executeBrowserClientPageAutomationCommand(
   ) => Promise<unknown>,
   event: BrowserClientHostCommandEvent,
   signal: AbortSignal,
-  fileChannel?: {
-    transport: BrowserClientFileChannelTransport | undefined
-    staging: BrowserClientUploadStaging | undefined
-  }
+  files: Pick<
+    BrowserClientPageCommandExecutorDependencies,
+    'fileChannel' | 'uploadStaging' | 'claimRelayedDownload'
+  > = {}
 ): Promise<unknown> {
   if (event.command.type !== 'automation') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
@@ -69,14 +74,22 @@ export async function executeBrowserClientPageAutomationCommand(
   assertCurrentBrowserClientPageRenderer(page.renderer)
   const method = event.command.method
   refuseDesktopFileAccess(method, event.command.params)
+  // An older server still forwards these; refuse with the sentence a newer one gives up front.
+  const dataRefusal = browserClientPageDesktopDataRefusal(method, event.command.params)
+  if (dataRefusal) {
+    throw new BrowserClientPageCommandError(dataRefusal.code, { detail: dataRefusal.message })
+  }
   const agent = event.command.agent !== false
-  const run = (params: Record<string, unknown>): Promise<unknown> =>
+  const run = (
+    params: Record<string, unknown>,
+    runMethod: BrowserClientAutomationMethod = method
+  ): Promise<unknown> =>
     execute(
       {
         browserPageId: event.browserPageId,
         pageHostGeneration: event.pageHostGeneration,
         browserProfileId: page.inventory.browserProfileId,
-        method,
+        method: runMethod,
         params,
         agent,
         registration: page.registration
@@ -86,18 +99,37 @@ export async function executeBrowserClientPageAutomationCommand(
   if (!requiresBrowserClientFileChannel(method)) {
     return run(event.command.params)
   }
-  if (method !== 'browser.upload') {
-    // Protocol v1 cannot honor remote download paths; never resolve them on the desktop.
-    throw new BrowserClientPageCommandError('browser_client_download_path_unsupported', {
-      detail:
-        'download is not available for this page because it is shown on the paired desktop: the file would be saved there, not on this host.'
-    })
+  if (method === 'browser.download') {
+    const { selector, path, ...target } = event.command.params
+    // An older host names a path on its own disk; never resolve it on the desktop.
+    if (path !== undefined) {
+      throw new BrowserClientPageCommandError('browser_client_download_path_unsupported', {
+        detail:
+          'download is not available for this page because it is shown on the paired desktop: the file would be saved there, not on this host.'
+      })
+    }
+    if (!files.fileChannel?.available || !files.claimRelayedDownload) {
+      throw new BrowserClientPageCommandError(BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR)
+    }
+    // Only the click runs here: the download relay hands the file to the host, which saves it.
+    const intent = files.claimRelayedDownload(page.registration.webContentsId)
+    try {
+      await run({ ...target, element: selector }, 'browser.click')
+      const downloadStarted = await withTimeout(
+        intent.started.then(() => true),
+        AGENT_DOWNLOAD_START_TIMEOUT_MS,
+        false
+      )
+      return { downloadStarted }
+    } finally {
+      intent.release()
+    }
   }
   return executeBrowserClientUploadCommand({
     event,
     params: event.command.params,
-    fileChannel: fileChannel?.transport,
-    staging: fileChannel?.staging,
+    fileChannel: files.fileChannel,
+    staging: files.uploadStaging,
     run
   })
 }

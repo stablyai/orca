@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <style>
       body {
-        margin: 0;
+        margin: 32px;
+      }
+      @keyframes spinner-benchmark-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .spinner-benchmark-baseline {
+        animation: spinner-benchmark-spin 1s steps(12, end) infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner-benchmark-baseline {
+          animation: none;
+          border-top-color: var(--color-yellow-500);
+        }
       }
     </style>
   </head>

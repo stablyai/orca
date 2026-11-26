@@ -18,6 +18,8 @@ import { WorkspaceRenameSheet } from './workspace-actions/workspace-rename-sheet
 import { WorkspaceStatusSheet } from './workspace-actions/workspace-status-sheet'
 import { WorkspaceDeleteConfirmSheet } from './workspace-actions/workspace-delete-confirm-sheet'
 import { useWorkspaceRowMenuActions } from './workspace-actions/use-workspace-row-menu-actions'
+import { useWorkspaceHandToBot } from './workspace-actions/use-workspace-hand-to-bot'
+import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -39,12 +41,18 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
   // Tied to the menu's row, so a menu closed elsewhere never reopens on the rename sheet.
   const [renameTarget, setRenameTarget] = useState<Worktree | null>(null)
   const [statusTarget, setStatusTarget] = useState<Worktree | null>(null)
+  const handToBot = useWorkspaceHandToBot({
+    controller,
+    closeMenuThen: (then) => menuFollowUp.closeThen(then)
+  })
   const closeActionSheet = () => {
     setRenameTarget(null)
     setStatusTarget(null)
+    handToBot.reset()
     state.setConfirmDelete(null)
     state.setActionTarget(null)
   }
+  const menuFollowUp = useBottomDrawerFollowUp(closeActionSheet)
   // A server row's screens are offered by what that server supports, not the desktop.
   const actionServer = useWorkspaceServer({
     client,
@@ -57,17 +65,23 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     row: actionTarget,
     server: actionServer,
     onRename: setRenameTarget,
-    onMoveToStatus: setStatusTarget
+    onMoveToStatus: setStatusTarget,
+    onHandToBot: handToBot.open
   })
 
   return (
     <>
       <WorkspaceOptionsSheet controller={controller} />
       <HostNewBotSheet controller={controller} />
+      {handToBot.newBotSheet}
 
       {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
       <BottomDrawerModalHost>
-        <BottomDrawer visible={actionTarget != null} onClose={closeActionSheet}>
+        <BottomDrawer
+          visible={actionTarget != null}
+          dismissible={!handToBot.busy}
+          {...menuFollowUp.drawerProps}
+        >
           {state.confirmDelete ? (
             <WorkspaceDeleteConfirmSheet
               row={state.confirmDelete}
@@ -103,6 +117,8 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               onPick={actions.setWorktreeStatus}
               onClose={closeActionSheet}
             />
+          ) : actionTarget && handToBot.target === actionTarget ? (
+            handToBot.sheet(actionTarget, closeActionSheet)
           ) : (
             <ActionSheetContent actions={rowMenuActions}>
               {actionTarget ? (

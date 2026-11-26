@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
@@ -6,6 +7,13 @@ import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-se
 import { getAppRailSearchEntry } from '../../app-rail/app-rail-search-entry'
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
 import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-experimental-search'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+
+/** Only a desktop's own chats read the switch: a web client's chats run on a host the switch
+ *  never reaches. */
+export function sharedCodexServersSettingAvailable(): boolean {
+  return !isWebClientLocation()
+}
 
 export const getExperimentalSearchEntry = createLocalizedCatalog(
   () =>
@@ -147,6 +155,30 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
           )
         ]
       },
+      sharedCodexServers: {
+        title: translate(
+          'auto.components.settings.experimental.search.sharedCodexServers.title',
+          'Shared Codex servers'
+        ),
+        description: translate(
+          'auto.components.settings.experimental.search.sharedCodexServers.description',
+          'Codex chats with the same setup share one background process instead of starting one per chat.'
+        ),
+        keywords: [
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.0d24759f14',
+            'experimental'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.sharedCodexServers.codex',
+            'codex'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.sharedCodexServers.memory',
+            'memory'
+          )
+        ]
+      },
       agentHibernation: {
         title: translate(
           'auto.components.settings.experimental.search.agentHibernation.title',
@@ -189,12 +221,47 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
     }) satisfies Record<string, SettingsSearchEntry>
 )
 
-export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
-  (): SettingsSearchEntry[] => [
-    ...Object.values(getExperimentalSearchEntry()),
+/** Experiments new users no longer see. Their rows and search entries stay only for people who
+ *  already turned them on, so nobody loses a feature they use. */
+export type OptInOnlyExperimentKey = 'agentDashboard' | 'terminalAttention'
+
+export type OptInOnlyExperimentVisibility = Record<OptInOnlyExperimentKey, boolean>
+
+export function getOptInOnlyExperimentVisibility(
+  settings:
+    | Partial<
+        Pick<GlobalSettings, 'experimentalAgentDashboardPopout' | 'experimentalTerminalAttention'>
+      >
+    | null
+    | undefined
+): OptInOnlyExperimentVisibility {
+  return {
+    agentDashboard: settings?.experimentalAgentDashboardPopout === true,
+    terminalAttention: settings?.experimentalTerminalAttention === true
+  }
+}
+
+function isOptInOnlyExperimentKey(key: string): key is OptInOnlyExperimentKey {
+  return key === 'agentDashboard' || key === 'terminalAttention'
+}
+
+const getAvailableExperimentalSearchEntries = createLocalizedCatalog(
+  (): [string, SettingsSearchEntry][] =>
+    Object.entries(getExperimentalSearchEntry()).filter(
+      ([key]) => key !== 'sharedCodexServers' || sharedCodexServersSettingAvailable()
+    )
+)
+
+export function getExperimentalPaneSearchEntries(
+  optInOnlyVisibility: OptInOnlyExperimentVisibility
+): SettingsSearchEntry[] {
+  return [
+    ...getAvailableExperimentalSearchEntries().flatMap(([key, entry]) =>
+      isOptInOnlyExperimentKey(key) && !optInOnlyVisibility[key] ? [] : [entry]
+    ),
     // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]
       : [])
   ]
-)
+}

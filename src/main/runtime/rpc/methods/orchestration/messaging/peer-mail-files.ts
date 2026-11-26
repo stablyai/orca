@@ -4,7 +4,14 @@
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { z } from 'zod'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../../../../shared/agent-session/agent-session-attachments'
+import {
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  sanitizeAgentSessionAttachmentName,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
+} from '../../../../../../shared/agent-session/agent-session-attachments'
+import { BOT_ITEM_COMMENT_FILE_MAX_COUNT } from '../../../../../../shared/bots/bot-items'
+import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
 import { uploadBufferWith } from '../../../../../ipc/agent-attachments/agent-session-attachment-upload'
 import type { OrchestrationWorkerServer } from '../../../../orchestration/federation/environment-transport'
@@ -34,6 +41,18 @@ export async function uploadPeerMailFiles(
   if (params.item === undefined || !params.to || parseBotAddress(params.to) === null) {
     throw refused("--file goes with --to bot:<name> --item <n>: the files go to that item's chat.")
   }
+  // The limits a local `send --item --file` has, checked before anything is uploaded.
+  // The paired Orca classifies by the name it stores, so classify by that name too.
+  const isImage = files.map((path) =>
+    isAgentInlineImagePath(sanitizeAgentSessionAttachmentName(basename(path)))
+  )
+  const imageCount = isImage.filter(Boolean).length
+  if (imageCount > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
+    throw refused(`A message takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images.`)
+  }
+  if (files.length - imageCount > BOT_ITEM_COMMENT_FILE_MAX_COUNT) {
+    throw refused(`A message takes up to ${BOT_ITEM_COMMENT_FILE_MAX_COUNT} files besides images.`)
+  }
   const sizes = await Promise.all(
     files.map(async (path) => {
       const info = await stat(path).catch(() => null)
@@ -46,6 +65,12 @@ export async function uploadPeerMailFiles(
       return info.size
     })
   )
+  const imageBytes = sizes.reduce((sum, size, index) => (isImage[index] ? sum + size : sum), 0)
+  if (imageBytes > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
+    throw refused(
+      `These images add up to ${Math.ceil(imageBytes / MB)} MB. A message takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / MB} MB.`
+    )
+  }
   const call = (method: string, params: unknown) =>
     runtime.callOrchestrationWorkerServer(
       server.environmentId,

@@ -41,6 +41,7 @@ export const CURSOR_LAUNCH_SPEC: AcpLaunchSpec = {
     listingNamesConfiguredModel: false
   },
   instructions: deliverCursorInstructions,
+  instructionsInWorkspace: true,
   transcriptImport: null,
   sessionHistory: CURSOR_SESSION_HISTORY,
   // No session/close or delete: a naming task's session would stay in the user's Cursor history.

@@ -141,18 +141,19 @@ export async function recordUnevaluableAutomation(input: {
   }
 }
 
-/** Allow tick jitter beyond downtime grace; elapsed time still catches system sleep.
- * Short outages inside the tolerance are accepted; long inline dispatches may still exceed it. */
+/** How late past grace a run may start: one 60 s tick to reach it and one for jitter. */
+const LATE_START_TOLERANCE_MS = 2 * 60 * 1000
+
+/** Whether a run starting now is past grace plus tolerance; the wake gate's own wait never counts. */
 export function missedBeyondGrace(input: {
   automation: Automation
   scheduledFor: number
   now: number
-  tickMs: number
+  wakeGateDelayMs: number
 }): boolean {
   const graceMs = input.automation.missedRunGraceMinutes * 60 * 1000
-  // Allow one interval for the next tick and another for jitter.
-  const jitterMs = input.tickMs * 2
-  return input.now - input.scheduledFor > graceMs + jitterMs
+  const lateMs = input.now - input.wakeGateDelayMs - input.scheduledFor
+  return lateMs > graceMs + LATE_START_TOLERANCE_MS
 }
 
 /** A missed event folds into the previous missed row, so events missed while Orca was off read as one. */

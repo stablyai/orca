@@ -9,6 +9,7 @@ import { assertCrossStoreLineageSupported } from '../../../../../../shared/remot
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentDisplayName } from '../../../repos/owner-routing'
 import { selectLineageStoreInstallationId } from './cross-store-lineage-parents'
+import type { RuntimeStatuses } from '../../runtime-status/views/runtime-status-owner'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { isHome } from '../../../../../../shared/bots/bot-homes'
@@ -45,6 +46,7 @@ export function isBotHomeParent(state: AppState, parent: Worktree): boolean {
  */
 export async function buildCrossStoreParentRef(
   state: AppState,
+  statuses: RuntimeStatuses,
   childTarget: RuntimeClientTarget,
   parent: Worktree
 ): Promise<CrossStoreParentRef> {
@@ -59,7 +61,10 @@ export async function buildCrossStoreParentRef(
   if (parentStore === undefined || parentStore === lineageStoreKeyOfTarget(childTarget)) {
     throw new Error('That parent is on the same machine. Choose it as a parent there instead.')
   }
-  const ref = crossStoreParentRefOfRow(selectLineageStoreInstallationId(state, parentStore), parent)
+  const ref = crossStoreParentRefOfRow(
+    selectLineageStoreInstallationId(state, statuses, parentStore),
+    parent
+  )
   if (!ref) {
     throw new Error(
       "Couldn't confirm the parent's machine. Refresh the workspace list and try again."

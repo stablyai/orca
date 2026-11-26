@@ -18,6 +18,7 @@ import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
+import type { ScopedWorktreeReads } from './catalog/scoped-worktree-row-resolution'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
 import { resolvedWorktreeForHost, resolvedWorktreeRow } from './catalog/resolved-worktree-row'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
@@ -27,6 +28,7 @@ import {
 } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
 import { folderIdOfSelector } from '../../../shared/workspace/identity/workspace-scope'
+import { storedNameMatcher } from '../../../shared/text/typed-name-normalization'
 import {
   folderCandidate,
   folderCatalogOf,
@@ -53,14 +55,18 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
   /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
   protected async resolveGitWorktreeSelector(
     selector: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    /** One batch's owner-repo reads, shared by its lookups. */
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     // Only id selectors name a repo; scoping other selectors would hide fleet-wide ambiguity.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
-      const scoped = await (requiredHostId === undefined
-        ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
-        : this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId))
+      const scoped = await (reads
+        ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId, reads)
+        : requiredHostId === undefined
+          ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+          : this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId))
       if (scoped) {
         return scoped
       }
@@ -162,8 +168,9 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
         branchSelectorMatches(worktree.branch, branchSelector)
       )
     } else if (selector.startsWith('name:')) {
-      // Keep display-name matching exact so duplicate names hit the same ambiguity path as other selectors.
-      candidates = worktrees.filter((worktree) => worktree.displayName === selector.slice(5))
+      // Case-sensitive (Unicode form aside) so duplicate names hit the same ambiguity path as other selectors.
+      const matchesName = storedNameMatcher(selector.slice(5))
+      candidates = worktrees.filter((worktree) => matchesName(worktree.displayName))
     } else if (selector.startsWith('issue:')) {
       candidates = worktrees.filter(
         (worktree) =>
@@ -185,13 +192,19 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     selector: string,
     options: WorkspaceSelectorOptions = {}
   ): Promise<WorkspaceSelectorCandidate> {
-    const catalog = folderCatalogOf(this.store)
     const folderId = folderIdOfSelector(selector)
+    const { requiredHostId } = options
+    if (folderId === undefined && !options.matchFolders) {
+      return {
+        kind: 'worktree',
+        worktree: await this.resolveGitWorktreeSelector(selector, requiredHostId)
+      }
+    }
+    const catalog = folderCatalogOf(this.store)
     if (folderId !== undefined && options.anyFolderHost) {
       const row = catalog.folderWorkspaces.find((folder) => folder.id === folderId)
       return selectWorkspaceCandidate(selector, row ? [folderCandidate(catalog, row)] : [], catalog)
     }
-    const { requiredHostId } = options
     const keyed = resolveKeyedFolderWorkspace(catalog, selector, requiredHostId)
     if (keyed) {
       return { kind: 'folder', folder: keyed, hostId: keyed.executionHostId ?? null }
@@ -237,13 +250,15 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
       return repos.filter((repo) => runtimePathsEqual(repo.path, selector.slice(5)))
     }
     if (selector.startsWith('name:')) {
-      return repos.filter((repo) => repo.displayName === selector.slice(5))
+      const matchesName = storedNameMatcher(selector.slice(5))
+      return repos.filter((repo) => matchesName(repo.displayName))
     }
+    const matchesName = storedNameMatcher(selector)
     return repos.filter(
       (repo) =>
         repo.id === selector ||
         runtimePathsEqual(repo.path, selector) ||
-        repo.displayName === selector
+        matchesName(repo.displayName)
     )
   }
 

@@ -28,6 +28,8 @@ export type RemoteRuntimeTransportSubscriptionCallbacks<TResult = unknown> = {
 export type RemoteRuntimeSubscriptionOptions = RemoteRuntimeSocketLivenessOptions & {
   signal?: AbortSignal
   clientCapabilities?: readonly RuntimeCapability[]
+  /** Background traffic (a poll): a host whose socket is passive doesn't count it as use. */
+  idlePassive?: boolean
   perMessageDeflate?: boolean
   outboundQueue?: RemoteRuntimeOutboundQueueOptions
   outboundMemoryBudget?: RemoteRuntimeOutboundMemoryBudget

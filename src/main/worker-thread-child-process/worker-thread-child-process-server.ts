@@ -1,4 +1,8 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import {
+  nativeExecutableResolver,
+  type NativeExecutableSelection
+} from '@orca/process-host/native-executable-resolution'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { spawnProcess } from '@orca/process-host'
 import type {
@@ -6,6 +10,7 @@ import type {
   WorkerThreadChildEvent,
   WorkerThreadChildRequest
 } from './worker-thread-child-process-protocol'
+import { spawnWorkerThreadProviderOwner } from './worker-thread-provider-owner-server'
 
 // Worker-thread half; must stay electron-free (plain-Node entry guard).
 const OUTPUT_HIGH_WATER_BYTES = 256 * 1024
@@ -39,14 +44,18 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       stopping: boolean
       closed: boolean
       groupTerminated: boolean
+      stopUnverified: boolean
       discarding?: { stdout?: boolean; stderr?: boolean }
     }
   >()
 
-  const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
+  const spawnChild = (
+    { id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>,
+    selection: NativeExecutableSelection | undefined
+  ): void => {
     let child: ChildProcessWithoutNullStreams
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] })
+      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
@@ -60,7 +69,8 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       pendingOutputBytes: 0,
       stopping: false,
       closed: false,
-      groupTerminated: false
+      groupTerminated: false,
+      stopUnverified: false
     }
     if (spec.terminationBarrier && process.platform !== 'win32') {
       state.group = createPosixGroupTermination(child, () => {
@@ -103,54 +113,93 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     child.on('exit', (code, signal) => port.postMessage({ type: 'exit', id, code, signal }))
     child.on('close', (code, signal) => {
       state.closed = true
-      const retained = Boolean(state.group) && !state.groupTerminated
+      if (state.stopping) {
+        state.group?.close()
+      }
+      const retained = Boolean(state.group) && !state.groupTerminated && !state.stopUnverified
       if (!retained) {
         children.delete(id)
       }
       port.postMessage({ type: 'close', id, code, signal, ...(retained ? { retained: true } : {}) })
-      if (state.stopping) {
-        state.group?.close()
-      }
     })
   }
 
   // Each launch waits a turn so cancels queued behind a slow CreateProcess can withdraw it first.
-  const queued = new Map<
-    number,
-    {
-      request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
-      early: WorkerThreadChildRequest[]
-    }
-  >()
+  type QueuedLaunch = {
+    request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
+    early: WorkerThreadChildRequest[]
+    selection?: NativeExecutableSelection
+  }
+  const queued = new Map<number, QueuedLaunch>()
+  // Launches whose PATH lookup settled, in that order; a withdrawn one is skipped when reached.
+  const startable: QueuedLaunch[] = []
   let launching = false
   const launchNext = (): void => {
-    const next = queued.values().next()
-    if (next.done) {
+    let entry = startable.shift()
+    while (entry && queued.get(entry.request.id) !== entry) {
+      entry = startable.shift()
+    }
+    if (!entry) {
       launching = false
       return
     }
-    queued.delete(next.value.request.id)
-    spawnChild(next.value.request)
-    for (const request of next.value.early) {
+    queued.delete(entry.request.id)
+    spawnChild(entry.request, entry.selection)
+    for (const request of entry.early) {
       handle(request)
     }
     setImmediate(launchNext)
   }
+  const makeStartable = (entry: QueuedLaunch): void => {
+    startable.push(entry)
+    if (!launching) {
+      launching = true
+      setImmediate(launchNext)
+    }
+  }
 
   const handle = (request: WorkerThreadChildRequest): void => {
+    if (request.type === 'spawn-provider-owner') {
+      void spawnWorkerThreadProviderOwner(port, request.id, request.spec)
+      return
+    }
     if (request.type === 'spawn') {
-      queued.set(request.id, { request, early: [] })
-      if (!launching) {
-        launching = true
-        setImmediate(launchNext)
+      const entry: QueuedLaunch = { request, early: [] }
+      queued.set(request.id, entry)
+      if (process.platform !== 'darwin') {
+        makeStartable(entry)
+        return
       }
+      // macOS resolves PATH itself; each launch looks up async so a slow PATH directory blocks no other child.
+      void nativeExecutableResolver
+        .resolveAsync(request.spec.program, request.spec.env)
+        .then(
+          (selection) => {
+            entry.selection = selection
+          },
+          () => {}
+        )
+        .then(() => {
+          if (queued.get(request.id) === entry) {
+            makeStartable(entry)
+          }
+        })
       return
     }
     const waiting = queued.get(request.id)
     // Any stop of a launch that has not started withdraws it; nothing is created only to be killed.
-    if (waiting && (request.type === 'cancel-spawn' || request.type === 'kill')) {
+    if (
+      waiting &&
+      (request.type === 'cancel-spawn' ||
+        request.type === 'kill' ||
+        request.type === 'stop-owned-group')
+    ) {
       queued.delete(request.id)
       const signal = (request.type === 'kill' && request.signal) || 'SIGTERM'
+      // A group that was never created has ended, which an owned-group stop waits to hear.
+      if (waiting.request.spec.terminationBarrier) {
+        port.postMessage({ type: 'group-terminated', id: request.id })
+      }
       port.postMessage({ type: 'exit', id: request.id, code: null, signal })
       port.postMessage({ type: 'close', id: request.id, code: null, signal })
       return
@@ -168,7 +217,15 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       if (request.type === 'stop-owned-group') {
         if (state.group) {
           state.stopping = true
-          void state.group.stop()
+          void state.group.stop().then((verified) => {
+            if (!verified) {
+              state.stopUnverified = true
+              if (state.closed) {
+                children.delete(request.id)
+              }
+              port.postMessage({ type: 'group-stop-unverified', id: request.id })
+            }
+          })
           if (state.closed) {
             state.group.close()
           }

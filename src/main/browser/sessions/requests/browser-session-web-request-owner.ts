@@ -77,3 +77,10 @@ export function holdBrowserSessionWebRequest<E extends BrowserSessionWebRequestE
     install(session.webRequest, undefined, null)
   }
 }
+
+export function isBrowserSessionWebRequestHeld(
+  session: Session,
+  event: BrowserSessionWebRequestEvent
+): boolean {
+  return holdersBySession.get(session)?.has(event) ?? false
+}

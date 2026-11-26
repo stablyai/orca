@@ -58,16 +58,6 @@ function settleVerdictWaiters(): void {
   verdictWaiters.clear()
 }
 
-export function resetWindowsInstallDirAclRecoveryForTest(): void {
-  poison = null
-  probePendingSince = null
-  installDirReadClean = false
-  installDirReadPoisonedMidRepair = false
-  gpuMarkerClearedByRepairClaim = null
-  blockingRepairInFlight = false
-  settleVerdictWaiters()
-}
-
 /** Call when the install-DACL probe is dispatched: its verdict is not in yet. */
 export function noteWindowsInstallDirAclProbePending(): void {
   probePendingSince = Date.now()

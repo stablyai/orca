@@ -20,6 +20,8 @@ import { scaledType, styles as chat } from './messages/mobile-native-chat-messag
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
 import { styles } from './mobile-automation-run-row-styles'
 import { MobileAutomationRowFrame } from './MobileAutomationRowFrame'
+import { MobileWebhookSetupCard } from './bot-cards/MobileWebhookSetupCard'
+import { automationHookId } from '../../../../../src/shared/automation-event-triggers'
 import {
   MobileAutomationRunMessage,
   useMobileAutomationRowWording
@@ -78,6 +80,16 @@ export function MobileAutomationSavedMessage({
       : say('paused')
   const at = waitState ? waitRowTime(waitState, message.timestamp) : message.timestamp
   const meta = scaledType(typography.metaSize, fontScale, 4)
+  // A wait keeps its row: its state and deadline matter more than a URL it can also start on.
+  const hookId = message.automationSaved && !waitState ? automationHookId(automation) : null
+  if (hookId) {
+    // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
+    return (
+      <View style={chat.row} testID={mobileNativeChatRowId(rowKey ?? message.id)}>
+        <MobileWebhookSetupCard hookId={hookId} name={automation.name} fontScale={fontScale} />
+      </View>
+    )
+  }
   return (
     <View style={chat.row} testID={mobileNativeChatRowId(rowKey ?? message.id)}>
       <MobileAutomationRowFrame
@@ -99,7 +111,9 @@ export function MobileAutomationSavedMessage({
         {waitState?.kind === 'waiting' ? (
           <>
             <Text style={[styles.heading, meta]}>{say('thenLine')}</Text>
-            <Text style={[styles.meta, meta]}>{waitRowThen(waitState.once, wording)}</Text>
+            <Text style={[styles.meta, meta]}>
+              {waitRowThen(automation, waitState.once, wording)}
+            </Text>
           </>
         ) : null}
       </MobileAutomationRowFrame>

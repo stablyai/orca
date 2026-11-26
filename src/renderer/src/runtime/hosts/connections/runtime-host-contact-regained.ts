@@ -1,6 +1,9 @@
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import {
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import { runtimeEnvironmentContinuityStamp } from '../../rpc/environment-revisions/runtime-environment-revision'
 
 type ContactWatch = {
@@ -11,8 +14,8 @@ type ContactWatch = {
   active: boolean
 }
 
-function contactMarks(state: AppState, environmentId: string): string {
-  const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
+function contactMarks(statuses: RuntimeStatuses, environmentId: string): string {
+  const entry = statuses.get(environmentId)
   return entry
     ? JSON.stringify([
         entry.hostContactEpoch ?? 0,
@@ -30,11 +33,11 @@ function wslHostReady(state: AppState, environmentId: string): boolean {
 const watchesByEnvironment = new Map<string, Set<ContactWatch>>()
 let stopSources: (() => void) | null = null
 
-function regained(watch: ContactWatch, state: AppState): boolean {
+function regained(watch: ContactWatch, state: AppState, statuses: RuntimeStatuses): boolean {
   const wslReady = wslHostReady(state, watch.environmentId)
   const becameReady = wslReady && !watch.lastWslReady
   watch.lastWslReady = wslReady
-  const marks = contactMarks(state, watch.environmentId)
+  const marks = contactMarks(statuses, watch.environmentId)
   if (marks === watch.lastMarks && !becameReady) {
     return false
   }
@@ -44,10 +47,11 @@ function regained(watch: ContactWatch, state: AppState): boolean {
 
 function evaluate(environmentIds: Iterable<string>): void {
   const state = useAppStore.getState()
+  const statuses = runtimeStatusSubscriptionsFor(useAppStore).readStatuses()
   const due: ContactWatch[] = []
   for (const environmentId of environmentIds) {
     for (const watch of watchesByEnvironment.get(environmentId) ?? []) {
-      if (regained(watch, state)) {
+      if (regained(watch, state, statuses)) {
         due.push(watch)
       }
     }
@@ -102,7 +106,10 @@ export function subscribeRuntimeHostContactRegained(
   const watch: ContactWatch = {
     environmentId,
     listener,
-    lastMarks: contactMarks(state, environmentId),
+    lastMarks: contactMarks(
+      runtimeStatusSubscriptionsFor(useAppStore).readStatuses(),
+      environmentId
+    ),
     lastWslReady: wslHostReady(state, environmentId),
     active: true
   }

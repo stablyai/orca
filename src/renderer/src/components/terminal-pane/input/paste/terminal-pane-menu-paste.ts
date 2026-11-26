@@ -16,10 +16,12 @@ import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { recordRecentTerminalImage } from '../recent-terminal-images'
+import { requestNativePasteForUnreadWindowsClipboard } from './terminal-unread-clipboard-native-paste'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>
@@ -126,6 +128,7 @@ export const pasteTerminalPaneMenuClipboard = async (
       hostPlatform: resolveTerminalInputHostPlatform({
         clientPlatform: getShortcutPlatform(),
         state,
+        statuses: readRuntimeStatuses(),
         worktreeId,
         transport
       }),
@@ -144,6 +147,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     }
   })
   if (result.status !== 'pasted') {
+    requestNativePasteForUnreadWindowsClipboard(result, pane)
     return
   }
   // Refocus after completed paste only; a rejected async target must not steal focus from a newer control.

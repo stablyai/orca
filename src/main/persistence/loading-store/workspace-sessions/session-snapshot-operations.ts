@@ -35,6 +35,7 @@ import {
   type WrittenWorkspaceScope
 } from './workspace-session-write-listeners'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
+import { rowShareRef } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-slice'
 
 export class SessionSnapshotOperations {
   readonly [sessionSnapshotOperationsContext]: SessionSnapshotOperationsContext
@@ -121,6 +122,26 @@ export class SessionSnapshotOperations {
       next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
     }
     this.publishSession(next, resolved, written, rewrites)
+  }
+
+  /** Relay ids and their ownership only: no rows change, so topology is untouched, and listeners hear
+   *  only about the tabs whose relay ids changed. */
+  patchWorkspaceSessionRelays(
+    patch: Pick<
+      WorkspaceSessionPatch,
+      'remoteSessionIdsByTabId' | 'desktopRelayOwnerByTabId' | 'desktopRelayAdoptionVersion'
+    >,
+    hostId: string | null | undefined,
+    changedTabIds: readonly string[]
+  ): void {
+    const resolved = resolveHostId(hostId)
+    const session = this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved)
+    let next: WorkspaceSessionState = { ...session, ...patch }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      next = keepWslMoveFrozenSessionsForStore(next, session)
+    }
+    const written = { workspaces: new Set<string>(), refs: new Set(changedTabIds.map(rowShareRef)) }
+    this.publishSession(next, resolved, written, undefined, false)
   }
 
   /** Drops one pane's saved resume when `retire` accepts it. Topology is untouched, so rows keep

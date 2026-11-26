@@ -39,15 +39,26 @@ import {
   getWslHostService
 } from '../../../wsl/host-lifecycle/wsl-host-service-instance'
 import { assertWslHostReachable } from '../../../wsl/host-lifecycle/wsl-host-gate'
-import { wslHostPhoneRefusal } from '../../../wsl/host-lifecycle/wsl-host-phone-reach'
+import { isWslHostIdleStopped } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
+import {
+  type PhoneWake,
+  wslHostPhoneRefusal
+} from '../../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { broadcastSshState } from '../../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../../ssh/ssh-managed-port-forward-restore'
 import { recipeVmWakeIntentFor } from '../../../../shared/remote-runtime/recipe-vm-wake'
 import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 
 /** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro.
- *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held. */
-export type ManagedRuntimeCallPreparation = { wslStart?: 'never'; recipeVmHoldMs?: number }
+ *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held.
+ *  `background`: a poll, no use of an idle host. `wake`: the user's call, which may boot a WSL
+ *  host Orca stopped idle (nothing else does). */
+export type ManagedRuntimeCallPreparation = {
+  wslStart?: 'never'
+  recipeVmHoldMs?: number
+  background?: boolean
+  wake?: boolean
+}
 
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
@@ -82,7 +93,12 @@ export async function prepareManagedRuntimeRequest(
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'wsl':
-      await prepareWslHostForCall(environment, preparation)
+      await prepareWslHostForCall(
+        environment,
+        preparation,
+        // No method (a grant resync) is nobody asking, so it never wakes.
+        method === undefined ? 'never' : method === 'status.get' ? 'status' : 'call'
+      )
       break
     case 'network':
     case 'ssh':
@@ -118,9 +134,18 @@ export async function requireWslHostWithoutStart(
   }
 }
 
+/** A user's status read (the compatibility probe ahead of their call) wakes an idle-stopped host. */
+export async function wakeIdleStoppedWslHost(environmentId: string): Promise<void> {
+  if (isWslHostIdleStopped(environmentId)) {
+    await getWslHostService()?.ensureForRuntimeCall(environmentId, () => true, true)
+  }
+}
+
 async function prepareWslHostForCall(
   environment: KnownRuntimeEnvironment,
-  preparation: ManagedRuntimeCallPreparation | undefined
+  preparation: ManagedRuntimeCallPreparation | undefined,
+  /** What a phone's request may do to an idle-stopped host; a status read wakes only rarely. */
+  phoneWake: PhoneWake = 'never'
 ): Promise<void> {
   if (preparation?.wslStart === 'never') {
     const gate = getWslHostPhoneGate()
@@ -129,11 +154,16 @@ async function prepareWslHostForCall(
         environment.orcadDeployment?.kind === 'wsl' ? environment.orcadDeployment.distro : null
       throw wslHostPhoneRefusal('unavailable', distro ?? environment.id)
     }
-    await gate.requireRunningWithoutStart(environment.id)
+    await gate.requireRunningWithoutStart(environment.id, phoneWake)
     return
   }
   // Reached over the wsl.exe bridge; connects only when an open project or terminal needs it.
-  await getWslHostService()?.ensureForRuntimeCall(environment.id)
+  await getWslHostService()?.ensureForRuntimeCall(
+    environment.id,
+    undefined,
+    preparation?.wake === true,
+    preparation?.background === true
+  )
 }
 
 async function prepareNetworkServerForCall(

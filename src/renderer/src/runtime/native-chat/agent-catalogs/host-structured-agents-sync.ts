@@ -5,7 +5,11 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store/index'
-import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import {
+  subscribeStoreWithStatuses,
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import type { AppState } from '@/store/types'
 import {
   forgetHostStructuredAgents,
@@ -39,10 +43,7 @@ async function syncLocalHost(settings: AppState['settings']): Promise<void> {
   )
 }
 
-function loadPairedHost(
-  environmentId: string,
-  statuses: AppState['runtimeStatusByEnvironmentId']
-): void {
+function loadPairedHost(environmentId: string, statuses: RuntimeStatuses): void {
   const status = lastVerifiedRuntimeStatus(statuses.get(environmentId))
   if (status) {
     void loadHostStructuredAgents(
@@ -53,7 +54,7 @@ function loadPairedHost(
   }
 }
 
-function syncPairedHosts(statuses: AppState['runtimeStatusByEnvironmentId']): void {
+function syncPairedHosts(statuses: RuntimeStatuses): void {
   const hostIds = new Set<string>([LOCAL_EXECUTION_HOST_ID])
   for (const environmentId of statuses.keys()) {
     hostIds.add(toRuntimeExecutionHostId(environmentId))
@@ -65,40 +66,39 @@ function syncPairedHosts(statuses: AppState['runtimeStatusByEnvironmentId']): vo
 /** Read registered agents when structured chat is in use and host capabilities arrive; paired runtime changes re-read. Local Chat | CLI choice and capability changes retry early unknown reads. Returns unsubscribe. */
 export function installHostStructuredAgentsSync(): () => void {
   const initial = useAppStore.getState()
+  const hostStatuses = runtimeStatusSubscriptionsFor(useAppStore)
   void syncLocalHost(initial.settings)
   if (launchesMayOpenChats(initial)) {
-    syncPairedHosts(initial.runtimeStatusByEnvironmentId)
+    syncPairedHosts(hostStatuses.readStatuses())
   }
   const stopLocal = subscribeLocalRuntimeCapabilitiesKnown(() => {
     if (!readHostStructuredAgentsForRuntime(LOCAL_EXECUTION_HOST_ID, null)) {
       void syncLocalHost(useAppStore.getState().settings)
     }
   })
-  const stopStore = useAppStore.subscribe((state, previousState) => {
+  const stopStore = subscribeStoreWithStatuses(useAppStore, (state, previousState, statuses) => {
     if (state.settings === previousState.settings) {
       return
     }
     if (launchesMayOpenChats(state) && !launchesMayOpenChats(previousState)) {
       void syncLocalHost(state.settings)
-      syncPairedHosts(state.runtimeStatusByEnvironmentId)
+      syncPairedHosts(statuses)
     }
   })
   // A status write re-reads only the hosts it touched; an unpaired host is forgotten without loading the rest.
-  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges(
-    (change) => {
-      if (change.deleted.size > 0) {
-        forgetHostStructuredAgents([...change.deleted].map(toRuntimeExecutionHostId))
-      }
-      const state = useAppStore.getState()
-      if (!launchesMayOpenChats(state)) {
-        return
-      }
-      // Deleted ids have no status left, so loading them is a no-op.
-      for (const environmentId of change.ids) {
-        loadPairedHost(environmentId, state.runtimeStatusByEnvironmentId)
-      }
+  const stopStatuses = hostStatuses.subscribeStatusChanges((change) => {
+    if (change.deleted.size > 0) {
+      forgetHostStructuredAgents([...change.deleted].map(toRuntimeExecutionHostId))
     }
-  )
+    const state = useAppStore.getState()
+    if (!launchesMayOpenChats(state)) {
+      return
+    }
+    // Deleted ids have no status left, so loading them is a no-op.
+    for (const environmentId of change.ids) {
+      loadPairedHost(environmentId, hostStatuses.readStatuses())
+    }
+  })
   return () => {
     stopLocal()
     stopStatuses()

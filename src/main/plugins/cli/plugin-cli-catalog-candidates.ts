@@ -26,13 +26,20 @@ import {
   gitFailure,
   installFailed,
   type PluginCliCandidateHost,
-  type PluginCliInstallCandidate
+  type PluginCliInstallCandidate,
+  type PluginCliSettledCandidate
 } from './plugin-cli-install-candidates'
 
 export type PluginCliCatalogs = {
   marketplace: Pick<
     PluginMarketplaceService,
-    'listSources' | 'listPlugins' | 'refreshSource' | 'refreshAll' | 'addSource' | 'removeSource'
+    | 'listSources'
+    | 'listPlugins'
+    | 'findPlugin'
+    | 'refreshSource'
+    | 'refreshAll'
+    | 'addSource'
+    | 'removeSource'
   >
   installer: Pick<
     PluginMarketplaceInstaller,
@@ -137,7 +144,9 @@ function candidateFromPreview(
   if (preview.blockedByKillList) {
     throw new PluginCliError(
       PLUGIN_BLOCKED_CODE,
-      `${preview.pluginKey} is blocked by Orca's safety list: ${preview.blockedByKillList.reason}`,
+      preview.blockedByKillList.team
+        ? preview.blockedByKillList.reason
+        : `${preview.pluginKey} is blocked by Orca's safety list: ${preview.blockedByKillList.reason}`,
       {
         pluginKey: preview.pluginKey,
         nextSteps: ['Do not try to install this plugin another way.']
@@ -198,17 +207,26 @@ export async function catalogInstallCandidate(
   return candidateFromPreview(host, catalogs, preview, state, {})
 }
 
-/** The release the plugin's own catalog offers now, after refreshing that catalog. */
+/** The release the plugin's own catalog offers now, after refreshing that catalog. Once that
+ *  catalog is removed or stops listing the plugin, it stays installed but no longer updates:
+ *  `settleDropped` reports that as pinned so `--all` does not fail on it every run. */
 export async function catalogUpdateCandidate(
   host: PluginCliCandidateHost,
   catalogs: PluginCliCatalogs,
-  entry: PluginLockEntry
-): Promise<PluginCliInstallCandidate> {
+  entry: PluginLockEntry,
+  settleDropped: boolean
+): Promise<PluginCliInstallCandidate | PluginCliSettledCandidate> {
   const installed = marketplaceInstallOf(entry)
   const state = installed
     ? (await catalogs.marketplace.listSources()).find((source) => source.id === installed.sourceId)
     : undefined
   if (!installed || !state) {
+    if (settleDropped) {
+      return {
+        status: 'pinned',
+        reason: 'Its catalog was removed from this Orca host, so it no longer updates.'
+      }
+    }
     throw installFailed(
       `${entry.pluginKey} was installed from a catalog that is no longer on this Orca host.`,
       { pluginKey: entry.pluginKey }
@@ -217,6 +235,12 @@ export async function catalogUpdateCandidate(
   await catalogs.marketplace.refreshSource(state.id).catch((error: unknown) => {
     throw gitFailure(host, state.source.url, error)
   })
+  if (settleDropped && !(await catalogs.marketplace.findPlugin(state.id, entry.pluginKey))) {
+    return {
+      status: 'pinned',
+      reason: `Its catalog ${state.marketplace?.name ?? state.source.url} no longer lists it, so it no longer updates.`
+    }
+  }
   const preview = await catalogs.installer
     .previewInstalledUpdate(entry.pluginKey)
     .catch((error: unknown) => {

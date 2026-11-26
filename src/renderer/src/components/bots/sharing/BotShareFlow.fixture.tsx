@@ -373,3 +373,61 @@ export const skillsPage = defineFixture({
   render: flow(builder, null),
   interact: () => click('Skills')
 })
+/** Skills left out: a same-named copy, and ones the packager can't read. */
+export const skillsLeftOut = defineFixture({
+  ...base,
+  setup: () =>
+    stub({
+      prepare: async () =>
+        ok({
+          candidate: candidate({
+            leftOut: [
+              { kind: 'skill', name: 'orca', why: 'duplicate', from: 'team-skills' },
+              { kind: 'skill', name: 'deploy', why: 'link' },
+              { kind: 'skill', name: 'datasets', why: 'size' }
+            ]
+          })
+        })
+    }),
+  render: flow(builder, null),
+  interact: () => click('Skills')
+})
+/** Only skills that can't be shared: the Skills row reads None but still opens. */
+export const skillsAllLeftOut = defineFixture({
+  ...base,
+  setup: () =>
+    stub({
+      prepare: async () => {
+        const base = candidate()
+        return ok({
+          candidate: candidate({
+            bot: { ...base.bot, skills: [] },
+            available: { ...base.available, skills: [] },
+            leftOut: [{ kind: 'skill', name: 'deploy', why: 'link' }]
+          })
+        })
+      }
+    }),
+  render: flow(builder, null)
+})
+/** A skill a linked project links in from outside itself: listed with the project, unticked. */
+const linkedIn = {
+  name: 'electron',
+  description: 'Drive the desktop app: open windows, click through flows and capture screenshots',
+  homePath: null,
+  optInFrom: 'team-skills',
+  optInKey: 'team-skills-electron'
+}
+export const skillsLinkedIn = defineFixture({
+  ...base,
+  setup: () =>
+    stub({
+      prepare: async () => {
+        const { available } = candidate()
+        const skills = [{ ...available.skills[0], homePath: null }, linkedIn]
+        return ok({ candidate: candidate({ available: { ...available, skills } }) })
+      }
+    }),
+  render: flow(builder, null),
+  interact: () => click('Skills')
+})

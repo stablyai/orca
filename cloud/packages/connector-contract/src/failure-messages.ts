@@ -8,7 +8,9 @@ export const CONNECTOR_FAILURE_CATEGORIES = [
   'usage_limit',
   'not_set_up',
   'folder_missing',
-  'agent_error'
+  'agent_error',
+  // The machine lost track of the request (a restart it can't account for): it may have finished.
+  'unconfirmed'
 ] as const
 export type ConnectorFailureCategory = (typeof CONNECTOR_FAILURE_CATEGORIES)[number]
 

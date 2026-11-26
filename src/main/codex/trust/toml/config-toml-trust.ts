@@ -3,8 +3,9 @@ import {
   observedExistsSync as existsSync
 } from '../../../filesystem/file-content-observation'
 
-import { parse as parseToml } from 'smol-toml'
-import { writeTomlConfigAtomically as writeConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
+import { isLoadableToml } from '../../../agent-hooks/installation/configuration/loadable-toml'
+import { writeTomlConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
+import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'
 import {
   getTrustKeyWriteVariants,
@@ -29,6 +30,7 @@ export type CodexEventLabel =
   | 'pre_compact'
   | 'post_compact'
   | 'session_start'
+  | 'session_end'
   | 'user_prompt_submit'
   | 'subagent_start'
   | 'subagent_stop'
@@ -70,11 +72,9 @@ export function upsertHookTrustEntries(
   configPath: string,
   entries: readonly CodexTrustEntry[]
 ): void {
-  const existing = readTomlForMutation(configPath)
-  const updated = upsertHookTrustEntriesInContent(existing, entries)
-  if (updated !== existing) {
-    writeLoadableHookTrustConfig(configPath, existing, updated)
-  }
+  editLoadableHookTrustConfig(configPath, 'seed', (existing) =>
+    upsertHookTrustEntriesInContent(existing, entries)
+  )
 }
 
 export class CodexConfigTomlRefusedError extends Error {
@@ -90,14 +90,49 @@ export function isCodexConfigTomlRefusedError(
   return error instanceof Error && error.name === 'CodexConfigTomlRefusedError'
 }
 
-/** Inline or dotted approvals can conflict with appended tables; reject newly invalid TOML. */
-export function writeLoadableHookTrustConfig(
+const PUBLISH_ATTEMPTS = 3
+
+/**
+ * Applies `edit` to the config's BOM-free content and publishes it only while the file still holds
+ * the bytes it was made from; a save that lands in between is kept and the edit is redone on it.
+ * `missing: 'skip'` leaves an absent config absent; `'seed'` edits it as empty.
+ */
+function editTomlConfig(
   configPath: string,
-  previous: string,
-  contents: string
+  missing: 'skip' | 'seed',
+  edit: (existing: string) => string
 ): void {
-  assertLoadableHookTrustConfig(configPath, previous, contents)
-  writeConfigAtomically(configPath, contents)
+  if (missing === 'skip' && !existsSync(configPath)) {
+    return
+  }
+  for (let attempt = 0; attempt < PUBLISH_ATTEMPTS; attempt++) {
+    // Only confirmed absence permits seeding an empty config.
+    const raw = observeRawTomlForMutation(configPath)
+    if (raw === null && missing === 'skip') {
+      return
+    }
+    const existing = stripLeadingBom(raw ?? '')
+    const updated = edit(existing)
+    if (updated === existing || writeTomlConfigAtomically(configPath, updated, raw)) {
+      return
+    }
+  }
+  throw new ConcurrentFileEditError(configPath)
+}
+
+/** Inline or dotted approvals can conflict with appended tables; reject newly invalid TOML. */
+export function editLoadableHookTrustConfig(
+  configPath: string,
+  missing: 'skip' | 'seed',
+  edit: (existing: string) => string
+): void {
+  editTomlConfig(configPath, missing, (existing) => {
+    const updated = edit(existing)
+    if (updated !== existing) {
+      assertLoadableHookTrustConfig(configPath, existing, updated)
+    }
+    return updated
+  })
 }
 
 export function assertLoadableHookTrustConfig(
@@ -124,37 +159,24 @@ export function restoreHookTrustBlocks(
   configPath: string,
   restores: readonly { key: string; blocks: readonly string[] }[]
 ): void {
-  if (restores.length === 0 || !existsSync(configPath)) {
+  if (restores.length === 0) {
     return
   }
-  const existing = readTomlFile(configPath)
-  const updated = restoreHookTrustBlockContent(existing, restores)
-  if (updated !== existing) {
-    writeLoadableHookTrustConfig(configPath, existing, updated)
-  }
-}
-
-function isLoadableToml(content: string): boolean {
-  try {
-    parseToml(stripLeadingBom(content))
-    return true
-  } catch {
-    return false
-  }
+  editLoadableHookTrustConfig(configPath, 'skip', (existing) =>
+    restoreHookTrustBlockContent(existing, restores)
+  )
 }
 
 export function moveHookTrustEntries(
   configPath: string,
   moves: readonly { oldKey: string; newKey: string }[]
 ): void {
-  if (moves.length === 0 || !existsSync(configPath)) {
+  if (moves.length === 0) {
     return
   }
-  const existing = readTomlForMutation(configPath)
-  const updated = moveHookTrustContent(existing, moves)
-  if (updated !== existing) {
-    writeLoadableHookTrustConfig(configPath, existing, updated)
-  }
+  editLoadableHookTrustConfig(configPath, 'skip', (existing) =>
+    moveHookTrustContent(existing, moves)
+  )
 }
 
 export function upsertProjectTrustLevel(
@@ -162,22 +184,15 @@ export function upsertProjectTrustLevel(
   projectPath: string,
   trustLevel: CodexProjectTrustLevel
 ): void {
-  const existing = readTomlForMutation(configPath)
-  const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
-  if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
-  }
+  editTomlConfig(configPath, 'seed', (existing) =>
+    upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+  )
 }
 
 export function removeHookTrustEntries(configPath: string, keys: readonly string[]): void {
-  if (!existsSync(configPath)) {
-    return
-  }
-  const existing = readTomlFile(configPath)
-  const updated = removeHookTrustEntriesFromContent(existing, keys)
-  if (updated !== existing) {
-    writeLoadableHookTrustConfig(configPath, existing, updated)
-  }
+  editLoadableHookTrustConfig(configPath, 'skip', (existing) =>
+    removeHookTrustEntriesFromContent(existing, keys)
+  )
 }
 
 export function readHookTrustEntries(configPath: string): Map<string, CodexHookTrustState> {
@@ -196,13 +211,12 @@ export function readHookTrustKeySpellings(configPath: string): (key: string) => 
   return (key) => getTrustKeyWriteVariants(key).every((spelling) => written.has(spelling))
 }
 
-function readTomlForMutation(configPath: string): string {
-  // Only confirmed absence permits seeding an empty config.
-  const observation = observe(() => readTomlFile(configPath))
+function observeRawTomlForMutation(configPath: string): string | null {
+  const observation = observe(() => readFileSync(configPath, 'utf-8'))
   if (observation.kind === 'indeterminate') {
     throw observation.error
   }
-  return observation.kind === 'present' ? observation.value : ''
+  return observation.kind === 'present' ? observation.value : null
 }
 
 function readTomlFile(configPath: string): string {

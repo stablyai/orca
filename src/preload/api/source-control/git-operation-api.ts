@@ -7,6 +7,12 @@ import type {
   GitForkSyncResult
 } from '../../../shared/git/remotes/git-fork-sync'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type {
+  ContinueRebaseAction,
+  ContinueRebaseRequest,
+  ContinueRebaseResult,
+  RebaseFromBaseResult
+} from '../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../../shared/git/paths/git-stage-worktree-scope'
 import type { ConflictResolution } from '../../../shared/source-control/listing/source-control-entry-actions'
@@ -19,6 +25,14 @@ export type GitOperationApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
   abortMerge: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
   abortRebase: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+  continueRebase: (
+    args: {
+      worktreePath: string
+      connectionId?: string
+      action?: ContinueRebaseAction
+    } & ContinueRebaseRequest
+  ) => Promise<ContinueRebaseResult>
+  rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }) => Promise<boolean>
   fetch: (args: {
     worktreePath: string
     connectionId?: string
@@ -50,7 +64,7 @@ export type GitOperationApi = {
     worktreePath: string
     baseRef: string
     connectionId?: string
-  }) => Promise<void>
+  }) => Promise<RebaseFromBaseResult>
   commit: (args: {
     worktreePath: string
     message: string

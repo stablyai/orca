@@ -10,7 +10,7 @@ import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { Toaster } from '../ui/sonner'
 import { useState } from 'react'
 
-// Bots on two computers: two here, two on a paired workstation. A group can hold only one computer's.
+// Bots on two computers: two here, two on a paired workstation. A group here can hold both.
 const WORKSTATION: ExecutionHostId = 'runtime:workstation'
 
 function bot(id: string, name: string, mascot: BotMascotId): Bot {
@@ -184,8 +184,14 @@ function scene(pick?: string, opts: { createWithoutHome?: boolean } = {}) {
 /** 1 · Bots on two computers: each row says which. */
 export const twoComputers = scene()
 
-/** 2 · A workstation bot picked: this computer's bots stay listed, dimmed, and the line says why. */
+/** 2 · A workstation bot picked: this computer's bots stay pickable, so a group can span both. */
 export const pickedOnWorkstation = scene('Workstation 管家')
 
 /** 3 · The workstation made the group but can't find its home: the dialog closes, and the toast names both. */
 export const homeUnavailable = scene('Workstation 管家|Nightly builds', { createWithoutHome: true })
+
+/** 4 · A bot here and a workstation bot: one group across computers. */
+export const acrossComputers = scene('Star 管家王|Workstation 管家')
+
+/** 5 · Two workstation bots: the group lives on the workstation, as before. */
+export const onlyWorkstation = scene('Workstation 管家|Nightly builds')

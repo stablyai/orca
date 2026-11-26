@@ -4,7 +4,12 @@ import type {
   NormalizeKeybindingOptions
 } from './types'
 import { DEFINITIONS_BY_ID, DIGIT_INDEX_KEY_PATTERN, isDigitIndexActionId } from './definitions'
-import { canonicalizeParsedKeybinding, isSafeBareKey, parseKeybinding } from './parser'
+import {
+  canonicalizeParsedKeybinding,
+  endsWithPlusKey,
+  isSafeBareKey,
+  parseKeybinding
+} from './parser'
 import { keybindingValidationFailure } from './keybinding-diagnostic-copy'
 
 export function normalizeKeybindingWithOptions(
@@ -52,6 +57,25 @@ export function isDoubleTapBinding(binding: string): boolean {
   return Boolean(parseKeybinding(binding)?.doubleTapModifier)
 }
 
+// `,` is both the list separator and the Comma key: `Mod+,` splits into `Mod+` and a blank piece, so rejoin them.
+function splitKeybindingList(input: string): string[] {
+  const pieces: string[] = []
+  for (const piece of input.split(',')) {
+    const previous = pieces.at(-1)
+    if (
+      previous !== undefined &&
+      piece.trim() === '' &&
+      previous.trimEnd().endsWith('+') &&
+      !endsWithPlusKey(previous)
+    ) {
+      pieces[pieces.length - 1] = `${previous},`
+      continue
+    }
+    pieces.push(piece)
+  }
+  return pieces
+}
+
 export function normalizeKeybindingListWithOptions(
   input: string,
   options: NormalizeKeybindingOptions = {}
@@ -61,7 +85,7 @@ export function normalizeKeybindingListWithOptions(
     return []
   }
   const normalized: string[] = []
-  for (const piece of trimmed.split(',')) {
+  for (const piece of splitKeybindingList(trimmed)) {
     const result = normalizeKeybindingWithOptions(piece, options)
     if (!result.ok) {
       return result

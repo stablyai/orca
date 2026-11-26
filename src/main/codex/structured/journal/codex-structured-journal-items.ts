@@ -238,7 +238,8 @@ export class CodexJournalItems {
       ? JSON.stringify([threadId, turnId, item.id])
       : codexStructuredItemKey(threadId, item.id)
     const existing = this.identities.get(key)
-    if (existing) {
+    // Providers can reuse a message id in a later turn; that message is a new row.
+    if (existing && !(turnId && existing.provider === 'codex' && existing.turnId !== turnId)) {
       return existing
     }
     const identity = codexItemIdentity({

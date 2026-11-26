@@ -2,20 +2,19 @@ import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/d
 import { openBotChatTab } from './bot-chat-tab-open'
 import { setMobileNativeChatDraftText } from './native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'
-import { useContext, useMemo } from 'react'
-import { MobileBotSheet } from '../bots/MobileBotSheet'
+import { useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useSessionRouteRequest } from './use-session-route-request'
+import { loadMobileNativeChatDrafts } from './native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 import { MobileBotPanel } from '../bots/MobileBotPanel'
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { BotItemCommentMicContext } from '../bots/items/bot-item-comment-mic'
-import { navigateToMobileFilePreview } from '../files/preview/mobile-file-preview-navigation'
-import {
-  isChatAttachmentStorePath,
-  isCommittedChatAttachmentCandidate
-} from '../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
+import { openBotItemFile } from '../bots/items/bot-item-file-open'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useRouteHandoff } from '../navigation/route-handoff'
+import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
 import { useBotAccessRequests } from '../bots/use-bot-access-requests'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -29,15 +28,27 @@ import {
 import type { BotChatTreeActions } from '../bots/MobileBotChatTree'
 import { openBotItemWorker } from '../bots/items/bot-item-worker-open'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
+import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
+import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
+import {
+  PhoneConnectTripContext,
+  usePhoneConnectTrips
+} from '../bots/connectors/use-phone-connect-trip'
+import type { ConnectSignInPage } from '../bots/connectors/connect-host-trip'
+import { MobileConnectSignInSheet } from '../bots/connectors/MobileConnectSignInSheet'
+import type { MobileBrowserTab, MobileSessionTab } from './tabs/mobile-session-tabs'
 
-// The desktop's "New automation" drafts this into the bot's chat, where automations are made.
-const NEW_AUTOMATION_DRAFT = 'Set up an automation that '
+const browserTabOf = (tabs: readonly MobileSessionTab[], browserPageId: string | null) =>
+  browserPageId
+    ? tabs.find(
+        (tab): tab is MobileBrowserTab =>
+          tab.type === 'browser' && tab.browserPageId === browserPageId
+      )
+    : undefined
 
 export function MobileSessionBotSheet({ controller }: { controller: MobileSessionController }) {
   const {
     routeBot,
-    showBotSheet,
-    setShowBotSheet,
     client,
     showToast,
     nativeChatController,
@@ -55,9 +66,11 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   } = controller
   const server = useContext(WorkspaceServerContext)
   const router = useWorkspaceRouteHandoff()
+  const hostRouter = useRouteHandoff()
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const openMobileSession = useOpenMobileSession()
+  const openMobileAutomations = useOpenMobileAutomations()
   // An item's comment box dictates with this screen's one dictation, as its chat composers do.
   const dictationLive = useMobileDictationLive(dictation, controller.cancelDictation, hostId ?? '')
   const { dictationEnabled, dictationMode, handleDictationToggle } = controller
@@ -87,16 +100,83 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   const accessRequests = useBotAccessRequests({
     client,
     routeBot,
-    visible: showBotSheet || botPanel !== null,
+    visible: botPanel !== null,
     showToast
   })
-  if (!routeBot) {
-    return null
-  }
-  const homeChatId = routeBot.bot.chatSessionId
+  const homeChatId = routeBot?.bot.chatSessionId
   const homeTab = homeChatId
     ? sessionTabs.find((tab) => tab.type === 'agent-session' && tab.sessionId === homeChatId)
     : undefined
+  const closePanel = () => setBotPanel(null)
+  const startSuggestion =
+    homeTab && hostId
+      ? (ask: string) => {
+          closePanel()
+          // The Home Chat's own draft, as the desktop does, whichever chat is showing.
+          const scope = mobileNativeChatScopeKey(hostId, worktreeId, homeTab.id)
+          if (scope) {
+            setMobileNativeChatDraftText(scope, (current) => appendReturnedDraftText(current, ask))
+          }
+          if (activeSessionTabId !== homeTab.id) {
+            switchSessionTab(homeTab)
+          }
+        }
+      : null
+  // An opener's draft (Update from Import) waits for the Home Chat's tab and its saved draft, then is spent.
+  const homeDraft = useSessionRouteRequest('homeDraft')
+  const appliedHomeDraft = useRef<typeof homeDraft>(null)
+  const askHomeDraft = useEffectEvent((request: NonNullable<typeof homeDraft>) => {
+    if (appliedHomeDraft.current !== request) {
+      appliedHomeDraft.current = request
+      startSuggestion?.(request.value)
+    }
+  })
+  const homeTabId = homeTab?.id
+  useEffect(() => {
+    if (!homeDraft?.value || !homeTabId || !hostId || appliedHomeDraft.current === homeDraft) {
+      return
+    }
+    let live = true
+    // A write before the saved draft is in outranks it, losing what the owner typed; theirs wins.
+    void loadMobileNativeChatDrafts(hostId, worktreeId).then((loaded) => {
+      if (live && loaded) {
+        askHomeDraft(homeDraft)
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [homeDraft, homeTabId, hostId, worktreeId])
+  const openInOrca = useOpenUrlInOrca(controller)
+  const { sessionTabsRef, fetchSessionTabs, openBotPanel } = controller
+  // A Connect's sign-in shows in a sheet of its own, or as a new tab when the computer closed the trip's.
+  const [signInPageId, setSignInPageId] = useState<string | null>(null)
+  const showSignIn = async (page: ConnectSignInPage) => {
+    closePanel()
+    if (page.browserPageId && !browserTabOf(sessionTabsRef.current, page.browserPageId)) {
+      await fetchSessionTabs()
+    }
+    if (browserTabOf(sessionTabsRef.current, page.browserPageId)) {
+      setSignInPageId(page.browserPageId)
+    } else {
+      openInOrca?.(page.url)
+    }
+  }
+  const connectTrips = usePhoneConnectTrips(client, worktreeId, {
+    show: openInOrca ? (page) => void showSignIn(page) : null,
+    reopen: (back) => {
+      setSignInPageId(null)
+      openBotPanel({ settings: back })
+    }
+  })
+  const trip = connectTrips.current
+  // Only the waiting trip's own page: one that ended or was replaced meanwhile never shows.
+  const signInTrip =
+    trip?.trip.status === 'waiting' && trip.trip.page?.browserPageId === signInPageId ? trip : null
+  const signInTab = (signInTrip && browserTabOf(sessionTabs, signInPageId)) || null
+  if (!routeBot || !itemsOnPhone || !hostId) {
+    return null
+  }
   const chatTabScope = {
     homeChatId,
     sessionTabs,
@@ -106,7 +186,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     worktreeId
   }
   const openWorkerAt = (worker: BotChatTreeWorker) => {
-    if (!hostId || !worker.worktreeId) {
+    if (!worker.worktreeId) {
       return
     }
     // A worker on another paired server is reachable only when the bot runs on the paired desktop.
@@ -125,14 +205,11 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   }
   const treeActions: BotChatTreeActions = {
     openChat: (chat) => {
-      setShowBotSheet(false)
+      closePanel()
       openBotChatTab({ chatId: chat.chatId ?? null, home: chat.origin === 'home' }, chatTabScope)
     },
     openWorker: (worker) => {
-      if (!hostId) {
-        return
-      }
-      setShowBotSheet(false)
+      closePanel()
       openBotItemWorker(worker, {
         client,
         loaded: [],
@@ -142,49 +219,37 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       })
     }
   }
-  const closeSheets = () => {
-    setShowBotSheet(false)
-    setBotPanel(null)
+  // Its home workspace went with it, so the host's list is next, as after any removed workspace.
+  const leaveDeletedBot = () => {
+    closePanel()
+    hostRouter.replace(hostStackHostRoute(hostId))
   }
-  const startSuggestion = homeTab
-    ? (ask: string) => {
-        closeSheets()
-        // The Home Chat's own draft, as the desktop does, whichever chat is showing.
-        const scope = mobileNativeChatScopeKey(hostId, worktreeId, homeTab.id)
-        if (scope) {
-          setMobileNativeChatDraftText(scope, (current) => appendReturnedDraftText(current, ask))
-        }
-        if (activeSessionTabId !== homeTab.id) {
-          switchSessionTab(homeTab)
-        }
-      }
-    : null
+  const home = { folderPath: controller.worktreePath, onDeleted: leaveDeletedBot }
   const newAutomation = nativeChatController.showNativeChat
     ? () => {
-        closeSheets()
+        closePanel()
+        // The desktop's "New automation" draft, into the bot's chat where automations are made.
         nativeChatController.setChatComposerText((current) =>
-          current.trim() ? current : NEW_AUTOMATION_DRAFT
+          current.trim() ? current : t('bots.automations.newDraft', 'Set up an automation that ')
         )
       }
     : null
+  const viewRuns = (automationId: string) => {
+    closePanel()
+    openMobileAutomations(hostId, {
+      automation: automationId,
+      ...(executionHost && executionHost !== LOCAL_EXECUTION_HOST_ID
+        ? { server: executionHost }
+        : {})
+    })
+  }
   const hostName =
     (server ? server.name : controller.hostName) || t('bots.items.thisComputer', 'The computer')
-  if (itemsOnPhone && hostId) {
-    const closePanel = () => setBotPanel(null)
-    const panelTreeActions: BotChatTreeActions = {
-      openChat: (chat) => {
-        closePanel()
-        treeActions.openChat(chat)
-      },
-      openWorker: (worker) => {
-        closePanel()
-        treeActions.openWorker(worker)
-      }
-    }
-    return (
-      <MobileDictationLiveContext.Provider value={dictationLive}>
-        <MobileNativeChatDictationPreviewContext.Provider value={controller.chatDictationPreview}>
-          <BotItemCommentMicContext.Provider value={mic}>
+  return (
+    <MobileDictationLiveContext.Provider value={dictationLive}>
+      <MobileNativeChatDictationPreviewContext.Provider value={controller.chatDictationPreview}>
+        <BotItemCommentMicContext.Provider value={mic}>
+          <PhoneConnectTripContext.Provider value={connectTrips}>
             <MobileBotPanel
               open={botPanel}
               onClose={closePanel}
@@ -196,7 +261,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
               worktreeId={worktreeId}
               hostKey={hostBotsKey(hostId, executionHost)}
               listNeedsYou={routeBot.needsYou}
-              treeActions={panelTreeActions}
+              treeActions={treeActions}
               accessRequests={accessRequests}
               onOpenItemChat={(item) => {
                 closePanel()
@@ -205,73 +270,37 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
                   chatTabScope
                 )
               }}
-              onOpenFile={(path, toast) => {
-                // A comment's text file opens from the bot host's attachment store, as in chat.
-                if (isCommittedChatAttachmentCandidate(path)) {
-                  navigateToMobileFilePreview(
-                    router,
-                    { hostId, worktreeId, source: 'chatAttachment', absolutePath: path },
-                    { embedded: true, onRequestClose: closePanel }
-                  )
-                  return
-                }
-                // Other attachment files (a PDF, say) have no phone preview.
-                if (isChatAttachmentStorePath(path)) {
-                  const name = path.split(/[\\/]/).at(-1) ?? path
-                  toast(
-                    t('bots.items.comment.fileOnComputer', 'Open {{name}} on your computer.', {
-                      name
-                    })
-                  )
-                  return
-                }
-                // Only a file in the bot's folder opens, as on the desktop.
-                if (!isBotFolderPath(path)) {
-                  toast(
-                    t('bots.items.link.fileOutside', "{{path}} isn't in this bot's folder", {
-                      path
-                    })
-                  )
-                  return
-                }
-                navigateToMobileFilePreview(
+              onOpenFile={(path, toast) =>
+                openBotItemFile({
+                  path,
                   router,
-                  {
-                    hostId,
-                    worktreeId,
-                    relativePath: path.replace(/^\.\//, ''),
-                    name: path.split('/').at(-1) ?? path
-                  },
-                  { embedded: true, onRequestClose: closePanel }
-                )
-              }}
+                  hostId,
+                  worktreeId,
+                  t,
+                  toast,
+                  onRequestClose: closePanel
+                })
+              }
               onStartSuggestion={startSuggestion}
               onNewAutomation={newAutomation}
+              home={home}
+              onAskInChat={startSuggestion}
+              onViewRuns={viewRuns}
+              signIn={
+                <MobileConnectSignInSheet
+                  tab={signInTab}
+                  source={signInTrip?.source ?? 'linear'}
+                  client={client}
+                  worktreeId={worktreeId}
+                  screencastSupported={controller.browserScreencastSupported}
+                  hostSupport={controller.browserHostSupport}
+                  onCancel={connectTrips.cancelSignIn}
+                />
+              }
             />
-          </BotItemCommentMicContext.Provider>
-        </MobileNativeChatDictationPreviewContext.Provider>
-      </MobileDictationLiveContext.Provider>
-    )
-  }
-  return (
-    <MobileBotSheet
-      hostKey={hostBotsKey(hostId ?? '', executionHost)}
-      treeActions={treeActions}
-      online={connState === 'connected'}
-      hostName={hostName}
-      visible={showBotSheet}
-      onClose={() => setShowBotSheet(false)}
-      routeBot={routeBot}
-      client={client}
-      showToast={showToast}
-      accessRequests={accessRequests}
-      onStartSuggestion={startSuggestion}
-      onNewAutomation={newAutomation}
-    />
+          </PhoneConnectTripContext.Provider>
+        </BotItemCommentMicContext.Provider>
+      </MobileNativeChatDictationPreviewContext.Provider>
+    </MobileDictationLiveContext.Provider>
   )
-}
-
-/** A link to a file in the bot's folder: relative, never climbing out of it. */
-function isBotFolderPath(path: string): boolean {
-  return !path.startsWith('/') && !path.startsWith('~') && !path.split(/[\\/]/).includes('..')
 }

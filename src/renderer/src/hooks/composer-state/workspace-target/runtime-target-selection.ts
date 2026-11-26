@@ -162,7 +162,8 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       return { kind: 'withheld', reason: selectProjectFirstReason(), recovery: 'refreshProjects' }
     }
     return resolveRepoExecutionHostPlatform(
-      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      { sshConnectionStates, sshStateByEnvironment },
+      runtimeStatusByEnvironmentId,
       selectedRepo,
       () =>
         getLocalRepoProjectExecutionRuntimeContext(
@@ -274,7 +275,8 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   // Why the shared gate: a paired server's own SSH target is read from that server (#25887).
   const selectedRepoSshGateInput = selectedRepo
     ? selectRepoSshGateInput(
-        { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+        { sshConnectionStates, sshStateByEnvironment },
+        runtimeStatusByEnvironmentId,
         selectedRepo
       )
     : null

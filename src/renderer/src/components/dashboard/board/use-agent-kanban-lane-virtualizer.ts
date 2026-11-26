@@ -1,6 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
-import type { DashboardCard } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { extractPinnedVirtualRange } from '@/lib/list-interaction/pinned-virtual-range'
 
 // Estimates follow the card's fixed rows; measurement replaces them for message/question variants.
@@ -15,7 +14,7 @@ const AGENT_CARD_OVERSCAN = 6
  * Returns fresh window values each render; the virtualizer instance itself never changes identity.
  */
 export function useAgentKanbanLaneVirtualizer({
-  cards,
+  subagentCounts,
   paneKeys,
   indexByPaneKey,
   scrollElement,
@@ -24,7 +23,7 @@ export function useAgentKanbanLaneVirtualizer({
   dialogIndex,
   pendingIndex
 }: {
-  cards: DashboardCard[]
+  subagentCounts: readonly number[]
   paneKeys: readonly string[]
   indexByPaneKey: ReadonlyMap<string, number>
   scrollElement: HTMLDivElement | null
@@ -33,20 +32,6 @@ export function useAgentKanbanLaneVirtualizer({
   dialogIndex: number | undefined
   pendingIndex: number | undefined
 }) {
-  const [previousSubagentCounts, setPreviousSubagentCounts] = useState(() =>
-    cards.map((card) => card.subagents?.length ?? 0)
-  )
-  const subagentCounts = useMemo(
-    () =>
-      cards.length === previousSubagentCounts.length &&
-      cards.every((card, index) => (card.subagents?.length ?? 0) === previousSubagentCounts[index])
-        ? previousSubagentCounts
-        : cards.map((card) => card.subagents?.length ?? 0),
-    [cards, previousSubagentCounts]
-  )
-  if (subagentCounts !== previousSubagentCounts) {
-    setPreviousSubagentCounts(subagentCounts)
-  }
   // This core version keys layout invalidation to getItemKey, including changes to height estimates.
   const layout = useMemo(
     () => ({ paneKeys, subagentCounts, expandedPaneKeys }),

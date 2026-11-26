@@ -10,7 +10,7 @@ import { claudeConfigDirEnvPatch } from '../launch/claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../launch/claude-structured-spawn-options'
-import { observeClaudeExecutionModel } from '../turns/claude-structured-execution-observations'
+import { observeClaudeFrameModels } from '../turns/claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
@@ -29,6 +29,7 @@ import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import * as outcome from '../startup/claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../../sdk-transport/claude-stream-json-exit-error'
 import * as ui from './claude-structured-plugin-ui-recovery'
+import { observeClaudeRootInit } from '../permissions/claude-permission-mode-ladder'
 
 export async function acquireClaudeSession({
   input,
@@ -49,7 +50,7 @@ export async function acquireClaudeSession({
   let liveSession: sessionState.ClaudeSession | null = null
   let firstRootInit: sessionState.ClaudeSession['firstRootInit']
   let observedLeafUuid: string | null = null,
-    expectedProviderSessionId: string | null = null
+    launched: { providerSessionId: string; resumesTranscript: boolean } | null = null
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
   const initProof = proof.createClaudeInitProof()
@@ -84,9 +85,8 @@ export async function acquireClaudeSession({
       return
     }
     const init = proof.readClaudeInit(message)
-    if (proof.readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
-      // Foreign init frames refuse startup; ordinary foreign frames are ignored.
-      if (init || (message.type === 'system' && message.subtype === 'init')) {
+    if (proof.readClaudeFrameString(message, 'session_id') !== launched?.providerSessionId) {
+      if (launched && proof.claudeForeignFrameRefusesStartup(message, launched)) {
         initProof.refuse()
       }
       return
@@ -98,12 +98,10 @@ export async function acquireClaudeSession({
       firstRootInit ??= {
         permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
       }
-      if (liveSession) {
-        liveSession.firstRootInit = firstRootInit
-      }
+      observeClaudeRootInit(liveSession, firstRootInit)
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
-    const modelReport = observeClaudeExecutionModel(liveSession, init?.model)
+    const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
     if (init) {
       initProof.resolve(init)
       if (liveSession) {
@@ -185,7 +183,7 @@ export async function acquireClaudeSession({
       previous,
       attempt
     })
-    expectedProviderSessionId = launch.providerSessionId
+    launched = launch
     // Granted from this final launch before the connection can deliver a request.
     const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
     naming?.launch(launch)

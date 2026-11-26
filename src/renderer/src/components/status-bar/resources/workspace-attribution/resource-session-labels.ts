@@ -2,7 +2,26 @@ import type { SessionMemory } from '../../../../../../shared/diagnostics/process
 import { parsePaneKey as parseStablePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getWorktreePathBasenameFromId } from '../../../../../../shared/worktree/id'
 import { translate } from '@/i18n/i18n'
-import type { MergeContext } from './resource-usage-merge-types'
+type RuntimePaneTitlesByTabId = Record<string, Record<number, string>>
+
+export function firstRuntimePaneTitle(
+  titlesByPane: Record<number, string> | undefined
+): string | undefined {
+  return titlesByPane ? Object.values(titlesByPane).find((t) => t?.trim()) : undefined
+}
+
+/** The tab whose live pane title names this terminal, when no custom title outranks it. */
+export function daemonSessionLiveTitleTabId(
+  resolvedWorktreeId: string | null,
+  tabId: string | null,
+  index: ResourceSessionBindingIndex
+): string | undefined {
+  if (!tabId || !resolvedWorktreeId) {
+    return undefined
+  }
+  const tab = index.tabsByIdByWorktree.get(resolvedWorktreeId)?.get(tabId)?.tab
+  return tab && !tab.customTitle?.trim() ? tabId : undefined
+}
 import type { PtyListedSession as DaemonSession } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type { ResourceSessionBindingIndex } from './resource-session-bindings'
 
@@ -30,11 +49,15 @@ function parsePaneKey(paneKey: string | null): { tabId: string; leafId: string }
 export function resolveSnapshotSessionLabel(
   session: SessionMemory,
   worktreeId: string,
-  index: ResourceSessionBindingIndex
+  index: ResourceSessionBindingIndex,
+  boundTabId: string | null = null
 ): string {
-  const parsed = parsePaneKey(session.paneKey)
-  if (parsed) {
-    const match = index.tabsByIdByWorktree.get(worktreeId)?.get(parsed.tabId)
+  // The binding follows a pane moved since spawn; a restored PTY's spawn-time key may name its old tab.
+  const tabId = boundTabId ?? parsePaneKey(session.paneKey)?.tabId
+  if (tabId) {
+    // The row stays in the sampled workspace, but a pane moved since spawn has its tab elsewhere.
+    const tabWorktreeId = index.tabIdToWorktreeId.get(tabId) ?? worktreeId
+    const match = index.tabsByIdByWorktree.get(tabWorktreeId)?.get(tabId)
     const tab = match?.tab
     const tabIndex = match?.index ?? -1
     if (tab) {
@@ -75,7 +98,7 @@ export function resolveDaemonSessionLabel(
   session: DaemonSession,
   resolvedWorktreeId: string | null,
   tabId: string | null,
-  ctx: Pick<MergeContext, 'runtimePaneTitlesByTabId'>,
+  ctx: { runtimePaneTitlesByTabId: RuntimePaneTitlesByTabId },
   index: ResourceSessionBindingIndex
 ): string {
   if (tabId && resolvedWorktreeId) {
@@ -85,12 +108,9 @@ export function resolveDaemonSessionLabel(
       if (custom) {
         return custom
       }
-      const runtimeMap = ctx.runtimePaneTitlesByTabId[tabId]
-      if (runtimeMap) {
-        const live = Object.values(runtimeMap).find((t) => t?.trim())
-        if (live) {
-          return live
-        }
+      const live = firstRuntimePaneTitle(ctx.runtimePaneTitlesByTabId[tabId])
+      if (live) {
+        return live
       }
       const fallback = tab.defaultTitle?.trim() || tab.title?.trim()
       if (fallback) {

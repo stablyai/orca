@@ -305,9 +305,3 @@ export function subscribeTerminalSessionNames(listener: () => void): () => void 
     }
   }
 }
-
-export function resetTerminalSessionNamesForTest(): void {
-  entries = null
-  unsaved = []
-  listeners.clear()
-}

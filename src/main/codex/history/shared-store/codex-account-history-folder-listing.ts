@@ -16,19 +16,18 @@ export async function readEntries(path: string) {
   }
 }
 
-/** Regular files under `folder`, at any depth; stops descending once `shouldStop` says so. */
+/** Regular files under `folder`, at any depth. */
 export async function* regularFiles(
-  folder: string,
-  shouldStop: () => boolean = () => false
+  folder: string
 ): AsyncGenerator<{ path: string; stats: BigIntStats }> {
   // A folder swapped for a link since it was listed would lead the walk outside `folder`.
-  if (shouldStop() || !(await lstatIfPresent(folder))?.isDirectory()) {
+  if (!(await lstatIfPresent(folder))?.isDirectory()) {
     return
   }
   for (const entry of await readEntries(folder)) {
     const path = join(folder, entry.name)
     if (entry.isDirectory()) {
-      yield* regularFiles(path, shouldStop)
+      yield* regularFiles(path)
     } else if (entry.isFile()) {
       const stats = await lstatIfPresent(path)
       if (stats?.isFile()) {

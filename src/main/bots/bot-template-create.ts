@@ -1,8 +1,8 @@
 // Create from a built-in template: the bot is made from the owner's reviewed seed (SOUL.md), then gets the
 // template's package from this host's own catalog: the skills the owner kept, schedules turned off, and
 // a setup note offering its event automations and connectors in its first chat.
-import type { Bot, BotAgent } from '../../shared/bot-types'
-import { skillsFolderFor } from '../../shared/bots/bot-package'
+import type { Bot } from '../../shared/bot-types'
+import { BOT_OWN_SKILLS_FOLDER } from '../../shared/bots/bot-package'
 import { botTemplate, type BotTemplate } from '../../shared/bots/bot-templates'
 import type { BotCreateParams } from '../../shared/rpc-contract/bots-params'
 import type { BotController, BotOrigin } from './bot-controller'
@@ -23,7 +23,6 @@ export type BotTemplateCreateDeps = BotPackageApplyDeps & {
 
 export function templatePackage(
   template: BotTemplate,
-  agent: BotAgent,
   keptSkills: readonly string[]
 ): BotPackageApply {
   const kept = new Set(keptSkills)
@@ -31,7 +30,7 @@ export function templatePackage(
     files: template.skills
       .filter((skill) => kept.has(skill))
       .map((skill) => ({
-        to: `${skillsFolderFor(agent)}/${skill}/SKILL.md`,
+        to: `${BOT_OWN_SKILLS_FOLDER}/${skill}/SKILL.md`,
         text: BOT_TEMPLATE_SKILL_TEXT[skill]
       })),
     tools: [],
@@ -72,8 +71,7 @@ export function botTemplateCreation(
   return {
     params: { ...params, agent },
     origin: { templateId: template.id },
-    finish: (bot) =>
-      applyBotPackage(deps, bot, templatePackage(template, agent, fromTemplate.skills))
+    finish: (bot) => applyBotPackage(deps, bot, templatePackage(template, fromTemplate.skills))
   }
 }
 

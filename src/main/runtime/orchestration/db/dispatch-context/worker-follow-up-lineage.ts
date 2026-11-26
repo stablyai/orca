@@ -18,6 +18,7 @@ import { isLocalHookConnectionId } from '../../../../../shared/agent-hook-listen
 import type { DispatchContextRow } from '../orchestration-records'
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 
@@ -34,9 +35,12 @@ export function getFollowUpDispatch(
   db: Pick<OrchestrationDb, 'db'>,
   dispatchId: string
 ): DispatchContextRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  // Explicit projection so SyncDatabase caches this per-lineage-step statement; `SELECT *` never is.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return db.db
-    .prepare('SELECT * FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?')
+    .prepare(
+      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?`
+    )
     .get(dispatchId) as DispatchContextRow | undefined
 }
 

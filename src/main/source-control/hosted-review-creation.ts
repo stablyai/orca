@@ -146,6 +146,7 @@ export async function getHostedReviewCreationEligibility(
       executionHostId: args.executionHostId,
       // The acted-on worktree earns active pacing so external review creation promptly blocks duplicates (#11532).
       active: true,
+      requireFreshAbsence: true,
       ...hostedReviewExecutionContext(args)
     })
   } catch (error) {

@@ -7,11 +7,13 @@ export const THREAD_LOCK_NAME =
 // `<thread id>.lock` is opened read-write and tried without waiting; a free one is released and
 // deleted. Codex takes coordination before opening a thread lock, so nothing can start between the
 // listing and the try, and a Codex that needs coordination meanwhile waits for it instead of failing.
-// Every folder's coordination is taken first; only the first folder's held locks count. In `hold`
-// mode an idle answer is `ready`, and coordination stays held until stdin closes.
+// Every folder's coordination is taken first; only the first folder's held locks count, and with
+// ORCA_CODEX_THREAD_IDS (comma-separated) only those threads'. In `hold` mode an idle answer is
+// `ready`, and coordination stays held until stdin closes.
 export const PERL_PROBE = `
 use Fcntl qw(:flock);
 my ($mode, @dirs) = @ARGV;
+my %only = map { lc($_) => 1 } grep { length } split /,/, ($ENV{ORCA_CODEX_THREAD_IDS} // '');
 $| = 1;
 sub answer { print "$_[0]\\n"; exit 0 }
 my @coordination;
@@ -30,7 +32,7 @@ for my $i (0 .. $#dirs) {
     my $l;
     unless (open($l, '+<', $path)) { next if $!{ENOENT}; answer('unknown') }
     if (flock($l, LOCK_EX | LOCK_NB)) { flock($l, LOCK_UN); close $l; unlink $path; next }
-    $!{EWOULDBLOCK} ? ($held ||= $i == 0) : answer('unknown');
+    $!{EWOULDBLOCK} ? ($held ||= $i == 0 && (!%only || $only{lc((split /\\./, $name)[0])})) : answer('unknown');
   }
 }
 answer('held') if $held;
@@ -70,7 +72,19 @@ for dir in "$@"; do
     { if flock -n 9; then flock -u 9; lock=free; else lock=held; fi; } 9<"$path"
     case $lock in
       free) rm -f -- "$path" ;;
-      held) [ "$i" -eq 0 ] && held=1 ;;
+      held)
+        # Expansions only: no process per held lock while coordination is locked.
+        if [ "$i" -eq 0 ]; then
+          case \${ORCA_CODEX_THREAD_IDS:-} in
+            '') held=1 ;;
+            -) ;;
+            *)
+              stem=\${path##*/}
+              stem=\${stem%%.*}
+              case $stem in *[A-F]*) stem=$(printf '%s' "$stem" | tr 'A-F' 'a-f') ;; esac
+              case ",$ORCA_CODEX_THREAD_IDS," in *",$stem,"*) held=1 ;; esac ;;
+          esac
+        fi ;;
       *) [ -e "$path" ] && answer unknown ;;
     esac
   done
@@ -94,6 +108,7 @@ export const POWERSHELL_PROBE = [
   `foreach ($dir in $dirs) { try { $c = [IO.File]::Open((Join-Path $dir '${COORDINATION_LOCK}'), 'OpenOrCreate', 'ReadWrite', 'ReadWrite, Delete'); $c.Lock(0, 1); $coordination += $c } catch { Answer 'unknown' } }`,
   `$pattern = '${THREAD_LOCK_NAME.source}'`,
   '$held = $false',
+  "$ids = @($env:ORCA_CODEX_THREAD_IDS -split ',' | Where-Object { $_ })",
   'for ($i = 0; $i -lt $dirs.Count; $i++) {',
   "  try { $paths = [IO.Directory]::GetFiles($dirs[$i]) } catch { Answer 'unknown' }",
   '  foreach ($path in $paths) {',
@@ -101,7 +116,7 @@ export const POWERSHELL_PROBE = [
   "    try { $l = [IO.File]::Open($path, 'Open', 'ReadWrite', 'ReadWrite, Delete') }",
   "    catch [IO.FileNotFoundException] { continue } catch { Answer 'unknown' }",
   '    $free = $false',
-  "    try { $l.Lock(0, 1); $l.Unlock(0, 1); $free = $true } catch { if (($_.Exception.GetBaseException().HResult -band 0xFFFF) -eq 33) { if ($i -eq 0) { $held = $true } } else { $l.Dispose(); Answer 'unknown' } } finally { $l.Dispose() }",
+  "    try { $l.Lock(0, 1); $l.Unlock(0, 1); $free = $true } catch { if (($_.Exception.GetBaseException().HResult -band 0xFFFF) -eq 33) { if ($i -eq 0 -and ($ids.Count -eq 0 -or $ids -contains [IO.Path]::GetFileNameWithoutExtension($path))) { $held = $true } } else { $l.Dispose(); Answer 'unknown' } } finally { $l.Dispose() }",
   '    if ($free) { try { [IO.File]::Delete($path) } catch {} }',
   '  }',
   '}',

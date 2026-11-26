@@ -33,6 +33,7 @@ export type AgentCapabilityInstallStatus = {
 export type AgentCapabilityReadiness = {
   browserUseSkillInstalled: boolean
   browserUseSkillLoading: boolean
+  computerUseBlocked?: boolean
   computerUseSkillInstalled: boolean
   computerUseSkillLoading: boolean
   computerUseReady: boolean
@@ -47,7 +48,9 @@ export type AgentCapabilitySetupStatus = {
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }
 
-export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
+export function useAgentCapabilitySetupStatus(
+  computerUseBlocked: boolean
+): AgentCapabilitySetupStatus {
   const activeSkillRuntime = useOnboardingSkillRuntime()
   const skillOptions = {
     enabled: activeSkillRuntime.enabled,
@@ -57,13 +60,19 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   }
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, skillOptions)
-  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, skillOptions)
+  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    ...skillOptions,
+    enabled: skillOptions.enabled && !computerUseBlocked
+  })
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, skillOptions)
-  const computerUsePermissionStatus = useComputerUsePermissionStatus(computerUseSkill.installed)
+  const computerUsePermissionStatus = useComputerUsePermissionStatus(
+    !computerUseBlocked && computerUseSkill.installed
+  )
   const readiness: AgentCapabilityReadiness = useMemo(
     () => ({
       browserUseSkillInstalled: browserUseSkill.installed,
       browserUseSkillLoading: browserUseSkill.loading,
+      computerUseBlocked,
       computerUseSkillInstalled: computerUseSkill.installed,
       computerUseSkillLoading: computerUseSkill.loading,
       computerUseReady: computerUsePermissionStatus.ready,
@@ -75,6 +84,7 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
     [
       browserUseSkill.installed,
       browserUseSkill.loading,
+      computerUseBlocked,
       computerUsePermissionStatus.checking,
       computerUsePermissionStatus.ready,
       computerUsePermissionStatus.unavailableReason,
@@ -106,8 +116,9 @@ export function getDefaultAgentCapabilitySetupSelection(
     browserUse: !readiness.browserUseSkillInstalled,
     // Keep Computer Use selected when OS permission still needs action, even if its skill is installed.
     computerUse:
-      !readiness.computerUseSkillInstalled ||
-      (!readiness.computerUseReady && !readiness.computerUseUnavailable),
+      !readiness.computerUseBlocked &&
+      (!readiness.computerUseSkillInstalled ||
+        (!readiness.computerUseReady && !readiness.computerUseUnavailable)),
     orchestration: !readiness.orchestrationSkillInstalled,
     linearTickets: false
   }
@@ -116,8 +127,9 @@ export function getDefaultAgentCapabilitySetupSelection(
 export function isAgentCapabilityReadinessChecking(readiness: AgentCapabilityReadiness): boolean {
   return (
     readiness.browserUseSkillLoading ||
-    readiness.computerUseSkillLoading ||
-    (readiness.computerUseSkillInstalled && readiness.computerUseChecking) ||
+    (!readiness.computerUseBlocked &&
+      (readiness.computerUseSkillLoading ||
+        (readiness.computerUseSkillInstalled && readiness.computerUseChecking))) ||
     readiness.orchestrationSkillLoading
   )
 }

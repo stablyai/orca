@@ -16,6 +16,7 @@ import {
   readCachedPluginAppTheme
 } from './app-shell/appearance/document-theme'
 import { installTypingLatencyDiagnostic } from './diagnostics/typing-latency/diagnostic'
+import { installFocusedHostGestureWake } from './runtime/rpc/calls/focused-host-gesture-wake'
 import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
 import { shouldEnableReactGrab } from './diagnostics/react-commits/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
@@ -29,7 +30,6 @@ import { registerBrowserClientPageGuestMessageHandler } from './components/brows
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { installLoopingAnimationClock } from './lib/window-activity/looping-animation-clock'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 import {
   trackPageFocusLossForTerminalIme,
@@ -40,11 +40,10 @@ const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
-const disposeLoopingAnimationClock = installLoopingAnimationClock()
-import.meta.hot?.dispose(disposeLoopingAnimationClock)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+installFocusedHostGestureWake()
 installAppKeyboardRouter()
 installAutomationHostDiagnostic()
 // Track from startup: a browser page can take focus before the lazy terminal chunk mounts.

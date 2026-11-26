@@ -38,6 +38,8 @@ export function dropOrcadMigrationTerminalBindings(fragment: WorkspaceSessionSta
     delete layout.ptyIdsByLeafId
   }
   delete fragment.remoteSessionIdsByTabId
+  delete fragment.desktopRelayOwnerByTabId
+  delete fragment.desktopRelayAdoptionVersion
   delete fragment.terminalPtyIncarnationsByPaneKey
   delete fragment.activeWorktreeIdsOnShutdown
   // Folder fences guarded relay PTYs; only repo fences migrate.

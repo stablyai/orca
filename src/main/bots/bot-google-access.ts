@@ -4,7 +4,7 @@
 // the automation's creator; what the event says is content, marked so on any request it sends on.
 import type { Bot } from '../../shared/bot-types'
 import {
-  googleBotConnectState,
+  botGoogleConnectState,
   type GoogleBotConnectState
 } from '../../shared/google/google-bot-connect-state'
 import { getGoogleConnect } from '../google/google-connect'
@@ -34,12 +34,14 @@ export function readGoogleRefusal(
 export const GOOGLE_OWNER_ONLY =
   'Only your owner can change Google on this computer; ask them in Orca.'
 
-/** This host's Google, read for one bot; a host without Google has no app. */
-export async function hostGoogleBotState(bot: Pick<Bot, 'google'>): Promise<GoogleBotConnectState> {
+/** This host's Google, read for one bot: only the accounts it may use. A host without Google has no app. */
+export async function hostGoogleBotState(
+  bot: Pick<Bot, 'google' | 'googleAccounts'>
+): Promise<GoogleBotConnectState> {
   const connect = getGoogleConnect()
-  return googleBotConnectState({
-    allowed: bot.google === true,
+  const { allowed, host } = botGoogleConnectState(bot, {
     client: (await connect?.client()) ?? null,
     accounts: (await connect?.accounts()) ?? []
   })
+  return { allowed, host }
 }

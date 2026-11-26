@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile, chmod, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import { planBotFromPackage } from '../../../shared/bots/bot-package'
@@ -16,6 +16,7 @@ import {
 } from './bot-package-transport'
 import { BotShareCandidates } from './bot-package-export'
 import { readBotShareable } from './bot-share-sources'
+import { within } from './bot-share-own-path'
 
 let root: string
 
@@ -241,7 +242,7 @@ describe('bot package export and archive', () => {
         { from: 'memory/area-owners.md', to: 'memory/area-owners.md', executable: false },
         {
           from: 'skills/changelog-style/SKILL.md',
-          to: '.agents/skills/changelog-style/SKILL.md',
+          to: 'skills/changelog-style/SKILL.md',
           executable: false
         }
       ],
@@ -269,18 +270,73 @@ describe('bot package export and archive', () => {
 })
 
 describe('what a bot export may read', () => {
-  it('never follows a link out of the bot home', async () => {
+  it("carries the mascot's tile color and outfit", async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const dressed = { ...bot, avatarColor: '#f4c4cf', avatarOutfit: 'tie' }
+    const shareable = await readBotShareable({ bot: dressed, home, automations: [] })
+    expect(shareable.avatar).toEqual({ mascot: 'H1', color: '#f4c4cf', outfit: 'tie' })
+  })
+
+  it("shares the copy of a same-named skill that the bot's own agent loads", async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    await mkdir(join(home, '.agents/skills/changelog-style'), { recursive: true })
+    await writeFile(
+      join(home, '.agents/skills/changelog-style/SKILL.md'),
+      '---\nname: changelog-style\ndescription: Codex copy\n---\n'
+    )
+    const codexBot = { ...bot, agent: 'codex' as const }
+    const shareable = await readBotShareable({ bot: codexBot, home, automations: [] })
+    expect(shareable.skills).toEqual([
+      expect.objectContaining({ name: 'changelog-style', description: 'Codex copy' })
+    ])
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'skill',
+      name: 'changelog-style',
+      why: 'duplicate',
+      from: '.claude/skills/changelog-style'
+    })
+  })
+
+  it('shares a skill Claude reaches only through a link to the other agent folder', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    await rm(join(home, '.claude/skills/changelog-style'), { recursive: true })
+    await mkdir(join(home, '.agents/skills/triage'), { recursive: true })
+    await writeFile(
+      join(home, '.agents/skills/triage/SKILL.md'),
+      '---\nname: triage\ndescription: Sort issues\n---\n'
+    )
+    await symlink(
+      join(home, '.agents/skills/triage'),
+      join(home, '.claude/skills/triage'),
+      'junction'
+    )
+    for (const agent of ['claude', 'codex'] as const) {
+      const shareable = await readBotShareable({ bot: { ...bot, agent }, home, automations: [] })
+      expect(shareable.skills.map((skill) => skill.homePath)).toEqual(['.agents/skills/triage'])
+      expect(shareable.leftOut.filter((entry) => entry.kind === 'skill')).toEqual([])
+    }
+  })
+
+  it('treats a folder on another Windows drive as outside', () => {
+    expect(within('C:\\orca\\bots\\a\\skills', 'D:\\elsewhere\\skill', win32)).toBe(false)
+    expect(within('C:\\orca\\bots\\a\\skills', 'C:\\orca\\bots\\a\\skills\\x', win32)).toBe(true)
+  })
+
+  it('never follows a directory link out of the bot home', async () => {
     const home = join(root, 'home')
     await writeHome(home)
     const outside = join(root, 'outside')
     await mkdir(join(outside, 'secret-skill'), { recursive: true })
-    await writeFile(join(outside, 'roster.md'), 'Private client roster: Ada, Bo.\n')
     await writeFile(
       join(outside, 'secret-skill', 'SKILL.md'),
       "---\nname: secret-skill\ndescription: Not the bot's\n---\n"
     )
     await rm(join(home, '.claude', 'skills'), { recursive: true })
-    await symlink(outside, join(home, '.claude', 'skills'))
+    // A junction needs no Windows symlink privilege; POSIX ignores the type.
+    await symlink(outside, join(home, '.claude', 'skills'), 'junction')
     const shareable = await readBotShareable({ bot, home, automations: [] })
     expect(shareable.skills).toEqual([])
     expect(shareable.leftOut).toContainEqual({
@@ -288,7 +344,15 @@ describe('what a bot export may read', () => {
       name: '.claude/skills',
       why: 'linked'
     })
+  })
 
+  // File links need the Windows symlink privilege, which stock hosts lack.
+  it.skipIf(process.platform === 'win32')('refuses a SOUL.md that is a link', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const outside = join(root, 'outside')
+    await mkdir(outside, { recursive: true })
+    await writeFile(join(outside, 'roster.md'), 'Private client roster: Ada, Bo.\n')
     await rm(join(home, 'SOUL.md'))
     await symlink(join(outside, 'roster.md'), join(home, 'SOUL.md'))
     await expect(readBotShareable({ bot, home, automations: [] })).rejects.toThrow(
@@ -296,23 +360,22 @@ describe('what a bot export may read', () => {
     )
   })
 
-  it('never reads a tools file through a link', async () => {
-    const outside = join(root, 'outside-tools')
-    await mkdir(outside, { recursive: true })
-    await writeFile(
-      join(outside, 'bot-tools.json'),
-      JSON.stringify({ servers: [{ name: 'outside-tool', url: 'https://tools.example.com/mcp' }] })
-    )
-    const linkedFile = join(root, 'home-a')
-    await writeHome(linkedFile)
-    await rm(join(linkedFile, '.orca', 'bot-tools.json'))
-    await symlink(join(outside, 'bot-tools.json'), join(linkedFile, '.orca', 'bot-tools.json'))
-    const linkedFolder = join(root, 'home-b')
-    await writeHome(linkedFolder)
-    await rm(join(linkedFolder, '.orca'), { recursive: true })
-    await symlink(outside, join(linkedFolder, '.orca'))
-    for (const home of [linkedFile, linkedFolder]) {
-      const shareable = await readBotShareable({ bot, home, automations: [] })
+  it.skipIf(process.platform === 'win32')(
+    'never reads a tools file through a file link',
+    async () => {
+      const outside = join(root, 'outside-tools')
+      await mkdir(outside, { recursive: true })
+      await writeFile(
+        join(outside, 'bot-tools.json'),
+        JSON.stringify({
+          servers: [{ name: 'outside-tool', url: 'https://tools.example.com/mcp' }]
+        })
+      )
+      const linkedFile = join(root, 'home-a')
+      await writeHome(linkedFile)
+      await rm(join(linkedFile, '.orca', 'bot-tools.json'))
+      await symlink(join(outside, 'bot-tools.json'), join(linkedFile, '.orca', 'bot-tools.json'))
+      const shareable = await readBotShareable({ bot, home: linkedFile, automations: [] })
       expect(shareable.tools).toEqual([])
       expect(shareable.leftOut).toContainEqual({
         kind: 'tool',
@@ -320,6 +383,93 @@ describe('what a bot export may read', () => {
         why: 'linked'
       })
     }
+  )
+
+  it('never reads a tools file through a directory link', async () => {
+    const outside = join(root, 'outside-tools')
+    await mkdir(outside, { recursive: true })
+    await writeFile(
+      join(outside, 'bot-tools.json'),
+      JSON.stringify({ servers: [{ name: 'outside-tool', url: 'https://tools.example.com/mcp' }] })
+    )
+    const linkedFolder = join(root, 'home-b')
+    await writeHome(linkedFolder)
+    await rm(join(linkedFolder, '.orca'), { recursive: true })
+    await symlink(outside, join(linkedFolder, '.orca'), 'junction')
+    const shareable = await readBotShareable({ bot, home: linkedFolder, automations: [] })
+    expect(shareable.tools).toEqual([])
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'tool',
+      name: '.orca/bot-tools.json',
+      why: 'linked'
+    })
+  })
+
+  it('never packs a skill nested inside another one, which is its own part', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const nested = join(home, '.claude/skills/changelog-style/archive/triage')
+    await mkdir(nested, { recursive: true })
+    await writeFile(join(nested, 'SKILL.md'), '---\nname: triage\ndescription: Old copy\n---\n')
+    await writeFile(join(nested, 'notes.md'), 'Old triage notes\n')
+    await mkdir(join(home, 'skills/triage'), { recursive: true })
+    await writeFile(
+      join(home, 'skills/triage/SKILL.md'),
+      '---\nname: triage\ndescription: Sort issues\n---\n'
+    )
+    const shareable = await readBotShareable({ bot, home, automations: [] })
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'skill',
+      name: 'triage',
+      why: 'duplicate',
+      from: '.claude/skills/changelog-style/archive/triage'
+    })
+    const candidate = await new BotShareCandidates(join(root, 'candidates')).prepare({
+      bot,
+      shareable,
+      selection: {},
+      packageId: 'pkg-1'
+    })
+    const paths = candidate.files.map((file) => file.path)
+    expect(paths).toContain('skills/changelog-style/SKILL.md')
+    expect(paths).toContain('skills/triage/SKILL.md')
+    expect(paths.filter((path) => path.includes('/archive/'))).toEqual([])
+  })
+
+  it("keeps a SKILL.md that declares no skill as one of its parent skill's documents", async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const references = join(home, '.claude/skills/changelog-style/references')
+    await mkdir(references, { recursive: true })
+    await writeFile(join(references, 'SKILL.md'), 'Plain notes on writing skills.\n')
+    await writeFile(join(references, 'checklist.md'), 'Check the dates.\n')
+    const candidate = await new BotShareCandidates(join(root, 'candidates')).prepare({
+      bot,
+      shareable: await readBotShareable({ bot, home, automations: [] }),
+      selection: {},
+      packageId: 'pkg-1'
+    })
+    const paths = candidate.files.map((file) => file.path)
+    expect(paths).toContain('skills/changelog-style/references/SKILL.md')
+    expect(paths).toContain('skills/changelog-style/references/checklist.md')
+  })
+
+  it('shares a skill whose nested skill holds a file over the size limit', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const nested = join(home, '.claude/skills/changelog-style/archive/bulky')
+    await mkdir(nested, { recursive: true })
+    await writeFile(join(nested, 'SKILL.md'), '---\nname: bulky\ndescription: Big\n---\n')
+    await writeFile(join(nested, 'data.bin'), Buffer.alloc(5 * 1024 * 1024))
+    const candidate = await new BotShareCandidates(join(root, 'candidates')).prepare({
+      bot,
+      shareable: await readBotShareable({ bot, home, automations: [] }),
+      selection: { skills: ['changelog-style'] },
+      packageId: 'pkg-1'
+    })
+    const paths = candidate.files.map((file) => file.path)
+    expect(paths).toContain('skills/changelog-style/SKILL.md')
+    expect(paths.filter((path) => path.includes('/archive/'))).toEqual([])
   })
 
   it('leaves a binary skill file out, so a key in it never goes out', async () => {

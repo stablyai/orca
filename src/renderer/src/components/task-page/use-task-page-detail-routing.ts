@@ -11,7 +11,10 @@ import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { findTaskPageJiraIssue } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
+import {
+  findTaskPageJiraIssue,
+  pickNewerJiraIssue
+} from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
 export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
   const {
     pageData,
@@ -217,7 +220,9 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     ]
   )
   const selectedJiraIssue = selectedJiraIssueKey
-    ? (cachedSelectedJiraIssue ?? selectedJiraIssueFallback)
+    ? cachedSelectedJiraIssue && selectedJiraIssueFallback
+      ? pickNewerJiraIssue(selectedJiraIssueFallback, cachedSelectedJiraIssue)
+      : (cachedSelectedJiraIssue ?? selectedJiraIssueFallback)
     : null
   const jiraDetailSourceContext = useMemo(() => {
     if (

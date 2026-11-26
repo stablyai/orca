@@ -40,6 +40,10 @@ export type PluginApproveConsent = (pluginKey: string, reviewedFingerprint: stri
 
 const sourceIdSchema = z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN)
 const removeMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema })
+/** The catalog browser waits (bounded) for fresh listings; other readers take the cached ones. */
+const listMarketplaceSchema = z
+  .strictObject({ waitForRefresh: z.literal(true).optional() })
+  .default({})
 const refreshMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema.optional() })
 const marketplacePluginSchema = z.strictObject({
   marketplaceSourceId: sourceIdSchema,
@@ -86,7 +90,7 @@ export function registerPluginMarketplaceHandlers(
   )
   const refreshStaleCatalogs = createStaleMarketplaceRefresh(services.marketplace)
   // Startup defers the official seed; a marketplace view must not wait for that timer.
-  const ensureOfficialSeed = async (): Promise<void> => {
+  const ensureOfficialSeed = async (waitForRefresh: boolean): Promise<void> => {
     if (getSettings().pluginSystemEnabled !== true) {
       return
     }
@@ -94,7 +98,14 @@ export function registerPluginMarketplaceHandlers(
     void services.marketplace.seedCommunitySource().catch(() => undefined)
     // Why: browsing a catalog is what keeps it current when nothing is installed from one.
     const refresh = refreshStaleCatalogs(PLUGIN_AUTO_UPDATE_INTERVAL_MS).catch(() => undefined)
-    // Why bounded: show fresh listings on this visit when the fetch is quick, cached ones otherwise.
+    // Why: theme and language reads must not wait on a refresh of some other stale source.
+    if (
+      !waitForRefresh &&
+      (await services.marketplace.listSources()).every(({ marketplace }) => marketplace)
+    ) {
+      return
+    }
+    // Why bounded: a source with nothing cached shows its fresh listing when the fetch is quick.
     let timer: ReturnType<typeof setTimeout> | undefined
     await Promise.race([
       refresh,
@@ -104,8 +115,8 @@ export function registerPluginMarketplaceHandlers(
     ])
     clearTimeout(timer)
   }
-  ipcMain.handle('plugins:listMarketplaces', async () => {
-    await ensureOfficialSeed()
+  ipcMain.handle('plugins:listMarketplaces', async (_event, args: unknown) => {
+    await ensureOfficialSeed(listMarketplaceSchema.parse(args).waitForRefresh === true)
     return services.marketplace.listSources()
   })
   ipcMain.handle('plugins:addMarketplace', async (_event, args: unknown) => {
@@ -123,8 +134,8 @@ export function registerPluginMarketplaceHandlers(
       ? [await services.marketplace.refreshSource(sourceId)]
       : services.marketplace.refreshAll()
   })
-  ipcMain.handle('plugins:listMarketplacePlugins', async () => {
-    await ensureOfficialSeed()
+  ipcMain.handle('plugins:listMarketplacePlugins', async (_event, args: unknown) => {
+    await ensureOfficialSeed(listMarketplaceSchema.parse(args).waitForRefresh === true)
     return services.marketplace.listPlugins()
   })
   ipcMain.handle('plugins:previewMarketplacePlugin', async (_event, args: unknown) => {

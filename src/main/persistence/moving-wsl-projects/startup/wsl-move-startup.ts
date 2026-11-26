@@ -8,6 +8,7 @@ import { isWslDistroRegistered } from '../../../wsl/discovery/wsl-distro-registr
 import { runWslMoveStartupRewrite } from './wsl-move-startup-rewrite'
 import { installWslMoveRetention } from '../cutover-recovery/wsl-move-retention'
 import { registerWslMoveDesktopRewriteRegistry } from '../desktop-state/wsl-move-desktop-rewrite-registry'
+import { disableLocalAutomationsOfEarlierWslMoves } from '../desktop-state/wsl-move-local-automations-rewrite'
 import { sweepOrphanedWslMoveSleptSpools } from '../terminal-state/wsl-move-slept-spool-sweep'
 import { settleInterruptedWslMoveUndos } from '../cutover-recovery/wsl-move-undo-host-automations'
 import { enableWslHostAutomations } from '../../../wsl/host-lifecycle/wsl-host-automation-enable'
@@ -25,14 +26,18 @@ import { productionWslMoveBrowserCookieCopyDependencies } from '../desktop-state
 /** Resolves once interrupted moves are reset or finished; main-process-ready waits on it, bounded. */
 export function startWslMoveStartup(userDataPath: string, store: Store): Promise<void> {
   setWslMoveHostAutomationRestorer({
-    restore: (environmentId, ids) => restoreWslHostAutomations(userDataPath, environmentId, ids),
-    disable: (environmentId, ids) => disableWslHostAutomations(userDataPath, environmentId, ids)
+    restore: (environmentId, ids, signal) =>
+      restoreWslHostAutomations(userDataPath, environmentId, ids, signal),
+    disable: (environmentId, ids, signal) =>
+      disableWslHostAutomations(userDataPath, environmentId, ids, signal)
   })
   registerWslMoveDesktopRewriteRegistry({
+    userDataPath,
     profile: store,
     orchestrationDatabasePath: orchestrationDbFile(userDataPath),
     hostAutomations: {
-      enable: (environmentId, ids) => enableWslHostAutomations(userDataPath, environmentId, ids)
+      enable: (environmentId, ids, signal, onSettled) =>
+        enableWslHostAutomations(userDataPath, environmentId, ids, signal, onSettled)
     },
     browserCookies: productionWslMoveBrowserCookieCopyDependencies(userDataPath)
   })
@@ -47,6 +52,10 @@ export function startWslMoveStartup(userDataPath: string, store: Store): Promise
         )
         sweepOrphanedWslMoveSleptSpools(userDataPath)
         settleInterruptedWslMoveUndos(userDataPath)
+        // Best-effort: a copy left on here only skips its runs, as before this catch-up existed.
+        await disableLocalAutomationsOfEarlierWslMoves(userDataPath, store).catch((error) => {
+          console.warn('[wsl-move] Could not turn off moved automations here:', error)
+        })
       }
     }
   )

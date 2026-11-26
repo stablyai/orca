@@ -8,6 +8,7 @@ import {
   refusePeerAddressClaim,
   refuseServerCallFromPeerRun
 } from './peer-run-access'
+import { restartResumedCallerHandle } from './restart-resumed-caller'
 
 type ParsedParams<TSchema extends ZodType | null> = TSchema extends ZodType
   ? TSchema['_output']
@@ -87,7 +88,7 @@ export function checkOrchestrationAccess<P, G>(
   const scoped =
     caller?.kind === 'peer'
       ? checkPeerAccess(access, params, ctx.runtime.getOrchestrationDb(), caller)
-      : params
+      : withRestartResumedCaller(access.caller, params, ctx)
   if (access.server && fieldValue(access.server, scoped) !== undefined) {
     refuseServerCallFromPeerRun(ctx, declaredCaller(access.caller, scoped))
   }
@@ -109,6 +110,20 @@ export function checkDeclaredOrchestrationAccess(
 ): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a registered declaration was built for its method's params, which the dispatcher parsed with that method's schema.
   checkOrchestrationAccess(access as OrchestrationMethodAccess<unknown, unknown>, params, ctx)
+}
+
+/** A worker resumed after a restart reports as the terminal it runs in now, whatever its brief named. */
+function withRestartResumedCaller<P>(
+  field: Extract<FieldOf<P>, OrchestrationCallerField> | undefined,
+  params: P,
+  ctx: RpcContext
+): P {
+  const from = declaredCaller(field, params)
+  const resumed =
+    field && from
+      ? restartResumedCallerHandle(ctx.runtime, from, ctx.orchestrationCompatibilityEvidence)
+      : null
+  return resumed && field ? { ...params, [field]: resumed } : params
 }
 
 function declaredCaller<P>(

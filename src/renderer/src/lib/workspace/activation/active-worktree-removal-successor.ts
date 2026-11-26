@@ -12,8 +12,10 @@ import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalo
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
-import { createSleepingSweepHiddenCheck } from '@/components/sidebar/worktree-list/listing/sleeping-sweep-visibility'
+import { createWorkspaceAsleepCheck } from '@/components/sidebar/worktree-list/listing/sleeping-sweep-visibility'
 import { getSidebarSleepingSweepRetainedIds } from '@/components/sidebar/worktree-list/listing/use-sleeping-sweep-retention'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
+import { isSleepingSweepExempt } from '../../../../../shared/workspace-view/workspace-row-filters'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -74,17 +76,21 @@ export function pickActiveWorktreeSuccessor(
   sleepingSweepRetainedIds: ReadonlySet<string>
 ): Worktree | null {
   const repoById = getIndexedRepoMap(state.repos)
-  // Activating seeds a terminal, so a row "Hide sleeping" keeps out of the sidebar would be woken.
-  const isHiddenAsleep =
+  // Activating clears sleep intent and seeds a terminal, so a slept row or one "Hide sleeping" hides would be woken.
+  const isAsleep = createWorkspaceAsleepCheck(state, sleepingSweepRetainedIds)
+  const hidesSleeping =
     state.persistedUIReady && state.workspaceSessionReady && !state.showSleepingWorkspaces
-      ? createSleepingSweepHiddenCheck(state, sleepingSweepRetainedIds)
-      : null
+  const wouldWake = (worktree: Worktree): boolean =>
+    isAsleep(worktree) &&
+    (hasWorktreeSleepIntent(worktree.id) ||
+      (hidesSleeping &&
+        !isSleepingSweepExempt(worktree.isMainWorktree, state.alwaysShowDefaultBranchWorkspace)))
   const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
     (worktree) =>
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
       !isWorktreeRetiredByRemoval(worktree) &&
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
-      !isHiddenAsleep?.(worktree)
+      !wouldWake(worktree)
   )
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
   if (others.length > 0) {

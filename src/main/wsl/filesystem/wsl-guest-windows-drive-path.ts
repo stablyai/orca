@@ -85,11 +85,6 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
-/** Stand in for /proc/mounts so call-site tests can model a Windows drive; null re-reads. */
-export function _setGuestWindowsDriveMountsForTests(mounts: readonly string[] | null): void {
-  cachedGuestMounts = mounts
-}
-
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */
 export function guestNativePathEnv(
   pathEnv: string | null | undefined,
@@ -166,8 +161,4 @@ function hasWindowsDriveCopy(
   }
   verdicts.set(key, { windowsOnly, checkedAt: now })
   return windowsOnly
-}
-
-export function _resetWindowsCopyVerdictsForTests(): void {
-  windowsCopyVerdicts = new WeakMap()
 }

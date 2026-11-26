@@ -37,6 +37,7 @@ function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
   return result
 }
 
+const lastReadSucceededByPath = new Map<string, boolean>()
 /** Enabled extensions per metadata file as last read; every write goes through persistBrowserSessionMeta. */
 const enabledExtensionIdsByPath = new Map<
   string,
@@ -52,8 +53,9 @@ export function loadBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string
 ): BrowserSessionMeta {
+  let path: string | null = null
   try {
-    const path = resolveMetadataPath()
+    path = resolveMetadataPath()
     const raw = readFileSync(path, 'utf-8')
     const data = JSON.parse(raw)
     const legacyPendingCookieDbPath =
@@ -87,8 +89,19 @@ export function loadBrowserSessionMeta(
     }
     // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
     enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
+    // A malformed profile list is not proof that its profiles were deleted.
+    lastReadSucceededByPath.set(
+      path,
+      typeof data === 'object' &&
+        data !== null &&
+        !Array.isArray(data) &&
+        (data.profiles === undefined || Array.isArray(data.profiles))
+    )
     return meta
   } catch {
+    if (path !== null) {
+      lastReadSucceededByPath.set(path, false)
+    }
     return {
       defaultSource: null,
       pendingCookieDbPath: null,
@@ -98,6 +111,11 @@ export function loadBrowserSessionMeta(
       pinnedExtensionIdsByProfileId: {}
     }
   }
+}
+
+/** Whether the latest read of this metadata file succeeded; a failed read looks like "no profiles". */
+export function didReadBrowserSessionMeta(metadataPath: string): boolean {
+  return lastReadSucceededByPath.get(metadataPath) === true
 }
 
 /**

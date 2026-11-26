@@ -101,7 +101,7 @@ export function getDeleteWorktreeDialogCopy(
           )
         : t(
             'auto.components.sidebar.DeleteWorktreeDialog.deleteSingleWorktreeAndBranch',
-            'Deletes the worktree and its branch (kept if unmerged).'
+            'Deletes the worktree, local changes, and its branch if merged.'
           ),
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
       ? t(

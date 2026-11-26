@@ -25,6 +25,11 @@ import { AutomationBotTargetFields } from './AutomationBotTargetFields'
 import { AutomationBotAgentField } from './AutomationBotAgentField'
 import { AutomationBotEventsField } from './AutomationBotEventsField'
 import { openBotHomeTab, useBotThreadReplies } from '@/lib/bot-catalog'
+import { isSameBot, type BotRef } from '@/lib/bot-hosts'
+import { botEventsHaveThreads } from '../../../../../shared/automations/bot-automation-target-edit'
+
+const SETTINGS_SIDEBAR_CLASS =
+  'flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek @max-[35rem]:w-full @max-[35rem]:overflow-visible @max-[35rem]:border-t @max-[35rem]:border-l-0'
 
 type AutomationEditorSettingsSidebarProps = {
   /** The host picker: where a create lands, or the host an edit can move the record to. */
@@ -81,17 +86,25 @@ export function AutomationEditorSettingsSidebar({
 }: AutomationEditorSettingsSidebarProps): React.JSX.Element {
   const t = useTranslate()
   const botTarget = draft.bot
-  const targetBot = botTarget ? bots.find((entry) => entry.id === botTarget.botId) : undefined
+  // Edit drafts carry no botHostId, so they match by id alone.
+  const targetBot = botTarget
+    ? (bots.find(
+        (entry) =>
+          entry.id === botTarget.botId &&
+          (draft.botHostId === undefined || entry.hostId === draft.botHostId)
+      ) ?? null)
+    : null
   const threadReplies = useBotThreadReplies(targetBot?.hostId ?? null)
-  const selectBot = (botId: string): void => {
-    const bot = bots.find((entry) => entry.id === botId)
-    if (!bot) {
+  const selectBot = (ref: BotRef): void => {
+    const bot = bots.find((entry) => isSameBot(entry, ref))
+    if (!bot || (targetBot && isSameBot(bot, targetBot))) {
       return
     }
     onDraftChange((current) => ({
       ...current,
+      botHostId: bot.hostId,
       bot: {
-        botId,
+        botId: bot.id,
         runsIn: current.bot?.runsIn ?? 'new',
         resultsTo: current.bot?.resultsTo ?? 'chat',
         ...(current.bot?.letBotReact ? { letBotReact: true } : {})
@@ -122,7 +135,7 @@ export function AutomationEditorSettingsSidebar({
         recordedProject={destination?.recordedProject}
         value={draft.projectId}
         onValueChange={(projectId) => {
-          onDraftChange((current) => ({ ...current, bot: null }))
+          onDraftChange((current) => ({ ...current, bot: null, botHostId: undefined }))
           onProjectChange(projectId)
         }}
         placeholder={
@@ -134,7 +147,7 @@ export function AutomationEditorSettingsSidebar({
         getRepoHostLabel={getRepoHostLabel}
         allowAddProject={isEditing && botTarget ? false : allowAddProject}
         bots={offeredBots}
-        selectedBotId={botTarget?.botId ?? null}
+        selectedBot={targetBot}
         onBotChange={selectBot}
       />
     </Field>
@@ -152,8 +165,7 @@ export function AutomationEditorSettingsSidebar({
   if (botTarget) {
     const saved = draft.savedBotAutomation
     // Events are set up by chatting with the bot that owns the saved automation, or for a new one, the picked bot.
-    const chatBot = bots.find((entry) => entry.id === (saved?.botId ?? botTarget.botId)) ?? null
-    const targetBot = bots.find((entry) => entry.id === botTarget.botId) ?? null
+    const chatBot = saved ? (bots.find((entry) => entry.id === saved.botId) ?? null) : targetBot
     const askInChat = chatBot
       ? (sentence: string): void => {
           onClose()
@@ -161,7 +173,7 @@ export function AutomationEditorSettingsSidebar({
         }
       : null
     return (
-      <aside className="flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek">
+      <aside className={SETTINGS_SIDEBAR_CLASS}>
         {targetPicker}
         {schedulePicker(
           t('automations.botTarget.when', 'When'),
@@ -206,18 +218,14 @@ export function AutomationEditorSettingsSidebar({
             ) : null
           }
           threadReplies={threadReplies}
-          hasEventThread={
-            draft.eventsOnly === true &&
-            Boolean(saved?.on.length) &&
-            !saved?.on.some((trigger) => trigger.source === 'webhook')
-          }
+          hasEventThread={botEventsHaveThreads(draft.eventsOnly === true, saved?.on ?? [])}
           onChange={(bot) => onDraftChange((current) => ({ ...current, bot }))}
         />
       </aside>
     )
   }
   return (
-    <aside className="flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek">
+    <aside className={SETTINGS_SIDEBAR_CLASS}>
       <div className="flex flex-col">
         <div className="mb-4 flex flex-col gap-5">
           <Field

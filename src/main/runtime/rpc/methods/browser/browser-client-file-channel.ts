@@ -1,5 +1,6 @@
 import {
   BrowserClientFileChannelAbortParams,
+  BrowserClientFileChannelBeginParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
 } from '../../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
@@ -8,6 +9,13 @@ import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/br
 import { getBrowserClientDownloadTransferStore } from '../../../browser/downloads/browser-client-download-transfer-store'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
+import {
+  abortClaimedClientDownload,
+  beginClientDownload,
+  writeClaimedClientDownload
+} from '../../../browser/downloads/client-download-claims'
+import { isClientPageUploadReadGranted } from '../../../browser/client-pages/client-page-upload-reads'
+import { recordClientDownloadCommit } from '../../../browser/downloads/client-download-provenance'
 import { defineMethod, type RpcContext } from '../../core'
 
 type FileChannelAuthorityParams = {
@@ -73,13 +81,12 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelReadParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
-      const chunk = await context.runtime.readFileExplorerChunk(
-        page.workspaceId,
-        params.workspaceRelativePath,
-        params.offset,
-        params.length
-      )
-      const totalBytes = params.offset + chunk.bytesRead
+      const { workspaceRelativePath: path, offset, length } = params
+      // An agent's upload on this host may name any file it can read, as on this host's own pages.
+      const chunk = isClientPageUploadReadGranted(page.browserPageId, path)
+        ? await context.runtime.readHostFileChunk(page.workspaceId, path, offset, length)
+        : await context.runtime.readFileExplorerChunk(page.workspaceId, path, offset, length)
+      const totalBytes = offset + chunk.bytesRead
       return {
         contentBase64: chunk.contentBase64,
         bytesRead: chunk.bytesRead,
@@ -89,11 +96,52 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     }
   }),
   defineMethod({
+    name: 'browser.clientHost.fileChannel.begin',
+    permission: 'workspace',
+    params: BrowserClientFileChannelBeginParams,
+    handler: (params, context) => {
+      const page = requireFileChannelPage(params, context)
+      const { runtime, connectionId } = context
+      // File transfers belong to one desktop connection (they don't survive a reconnect), and a
+      // dropped connection sends no abort: its close fails the claim, so the agent hears why.
+      const watch = `client-download-claim:${page.browserPageId}:${params.transferId}`
+      const claimed = beginClientDownload(
+        params.transferId,
+        {
+          browserPageId: page.browserPageId,
+          workspaceId: page.workspaceId,
+          pageHostGeneration: params.pageHostGeneration,
+          filename: params.filename,
+          documentUrl: params.documentUrl,
+          agentDownload: params.agentDownload === true
+        },
+        () => runtime.cleanupSubscription(watch)
+      )
+      if (claimed) {
+        runtime.registerSubscriptionCleanup(
+          watch,
+          () =>
+            void abortClaimedClientDownload(
+              page.browserPageId,
+              params.transferId,
+              'the desktop disconnected before the download finished.'
+            ),
+          connectionId
+        )
+      }
+      return { accepted: true as const, claimed }
+    }
+  }),
+  defineMethod({
     name: 'browser.clientHost.fileChannel.write',
     permission: 'workspace',
     params: BrowserClientFileChannelWriteParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
+      const claimed = await writeClaimedClientDownload(params)
+      if (claimed) {
+        return { accepted: true as const, ...claimed }
+      }
       const commit = await getBrowserClientDownloadTransferStore(context.runtime).accept({
         transferId: params.transferId,
         browserPageId: params.browserPageId,
@@ -105,9 +153,16 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
         final: params.final,
         platform: process.platform
       })
-      return commit
-        ? { accepted: true as const, workspaceRelativePath: commit.workspaceRelativePath }
-        : { accepted: true as const }
+      if (!commit) {
+        return { accepted: true as const }
+      }
+      recordClientDownloadCommit({
+        workspaceId: page.workspaceId,
+        browserPageId: page.browserPageId,
+        workspaceRelativePath: commit.workspaceRelativePath,
+        committedAt: Date.now()
+      })
+      return { accepted: true as const, workspaceRelativePath: commit.workspaceRelativePath }
     }
   }),
   defineMethod({
@@ -116,6 +171,9 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelAbortParams,
     handler: async (params, context) => {
       requireFileChannelPage(params, context)
+      if (abortClaimedClientDownload(params.browserPageId, params.transferId)) {
+        return { released: true }
+      }
       const released = await getBrowserClientDownloadTransferStore(context.runtime).abort({
         transferId: params.transferId,
         browserPageId: params.browserPageId

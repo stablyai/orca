@@ -52,8 +52,11 @@ export function integer(row: SqliteRow, column: string): number | null {
   return typeof value === 'number' ? value : typeof value === 'bigint' ? Number(value) : null
 }
 
+// Builds before 'chat' skip its rows here, as any build skips a source it doesn't know.
+const BOT_WORK_SOURCES = [...CONNECTOR_SOURCES, 'chat'] as const
+
 export function rowOf(row: SqliteRow): BotWorkRow | null {
-  const source = CONNECTOR_SOURCES.find((entry) => entry === row.source)
+  const source = BOT_WORK_SOURCES.find((entry) => entry === row.source)
   const reason = BOT_WORK_CLOSE_REASONS.find((entry) => entry === row.close_reason) ?? null
   if (!source) {
     return null

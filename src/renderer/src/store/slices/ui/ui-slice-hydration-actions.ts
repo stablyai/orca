@@ -12,7 +12,7 @@ import {
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
 } from '../../../../../shared/execution-host/execution-host'
-import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { hydrateFeatureInteractions } from './ui-slice-feature-interactions-hydration'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
@@ -62,7 +62,7 @@ import {
   sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
-  sanitizeActivityBarPosition,
+  sanitizeActivityBarArrangement,
   keepUnchangedHydratedFields,
   hydratedFieldsAreState,
   clampPetSize
@@ -129,8 +129,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ),
           sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-          ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
-          activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
+          ...normalizeRightSidebarRoute(ui.rightSidebarTab),
+          ...sanitizeActivityBarArrangement(ui, s),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
@@ -235,7 +235,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ...hydrateBrowserPaneLayout(ui),
           taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
           featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
-          featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
+          ...hydrateFeatureInteractions(s.workspaceBoardUsedBeforeLaunch, ui),
           contextualToursSeenIds: normalizeContextualTourIds(ui.contextualToursSeenIds),
           contextualToursAutoEligible:
             typeof ui.contextualToursAutoEligible === 'boolean'

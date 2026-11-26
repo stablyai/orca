@@ -690,3 +690,86 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 })
+
+describe('Slack-bound words from the client', () => {
+  const review = {
+    comments: [{ path: 'src/a.ts', line: 3, body: 'Screenshot at /Users/ada/shots/a.png' }]
+  }
+
+  it('sends a Slack reply and its notes with no path on this machine, folded or not', async () => {
+    const { client, machine } = startClient()
+    await settle()
+    const text = 'Report: ![side by side](~/.orca/reports/r/side.png)'
+    await client.reply({ replyId: 'r1', conversation, turnId: 7, text, review })
+    expect(h.fake.replies.get('r1')).toEqual({
+      v: 1,
+      replyId: 'r1',
+      conversation,
+      turnId: 7,
+      text: 'Report: side by side\n\nsrc/a.ts:3: Screenshot at a.png'
+    })
+
+    h.fake.features = ['review']
+    machine.botList = [FAKE_BOT]
+    client.sayChanged()
+    await settle()
+    await client.reply({ replyId: 'r2', conversation, turnId: 7, text, review })
+    expect(h.fake.replies.get('r2')).toEqual({
+      v: 1,
+      replyId: 'r2',
+      conversation,
+      turnId: 7,
+      text: 'Report: side by side',
+      review: { comments: [{ path: 'src/a.ts', line: 3, body: 'Screenshot at a.png' }] }
+    })
+    client.stop()
+  })
+
+  it("keeps a Slack note's line when its path is the home folder, folded or not", async () => {
+    const { client, machine } = startClient()
+    await settle()
+    const home = { comments: [{ path: '/Users/ada', line: 3, body: 'note' }] }
+    await client.reply({ replyId: 'r1', conversation, turnId: 7, text: 'One.', review: home })
+    expect(h.fake.replies.get('r1')).toMatchObject({ text: 'One.\n\n~:3: note' })
+    h.fake.features = ['review']
+    machine.botList = [FAKE_BOT]
+    client.sayChanged()
+    await settle()
+    await client.reply({ replyId: 'r2', conversation, turnId: 7, text: 'One.', review: home })
+    expect(h.fake.replies.get('r2')).toMatchObject({
+      review: { comments: [{ path: '~', line: 3, body: 'note' }] }
+    })
+    client.stop()
+  })
+
+  it('leaves a GitHub reply as written', async () => {
+    const { client } = startClient()
+    await settle()
+    const github = { source: 'github', externalId: 'o/r#1' } as const
+    const text = 'Logs in /tmp/run/out.log'
+    await client.reply({ replyId: 'r1', conversation: github, turnId: 7, text })
+    expect(h.fake.replies.get('r1')).toEqual({
+      v: 1,
+      replyId: 'r1',
+      conversation: github,
+      turnId: 7,
+      text
+    })
+    client.stop()
+  })
+
+  it("scrubs a bot's own Slack post but not its Linear comment", async () => {
+    const { client } = startClient()
+    await settle()
+    const text = 'Weekly report: /Users/ada/r/weekly.html'
+    await client.postAsBot('b1', { postId: 'p1', channelId: 'C9', text })
+    await client.postAsBot('b1', { postId: 'p2', issue: 'ENG-1', text })
+    expect(h.fake.requestsTo(`${CONNECTOR_PATHS.bots}/b1/posts`).map((r) => r.body)).toEqual([
+      { v: 1, postId: 'p1', channelId: 'C9', text: 'Weekly report: weekly.html' }
+    ])
+    expect(
+      h.fake.requestsTo(`${CONNECTOR_PATHS.bots}/b1/linear/comments`).map((r) => r.body)
+    ).toEqual([{ v: 1, postId: 'p2', issue: 'ENG-1', text }])
+    client.stop()
+  })
+})

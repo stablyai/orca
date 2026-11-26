@@ -29,7 +29,11 @@ import {
 import { localStructuredChatsInUse } from '../local-sessions/local-structured-chats'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
-import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import {
+  type RuntimeStatuses,
+  subscribeStoreWithStatuses,
+  runtimeStatusSubscriptionsFor
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
 const LOCAL = { kind: 'local' } as const
 
@@ -72,10 +76,10 @@ async function preloadLocal(again: boolean): Promise<void> {
   }
 }
 
+const readStatuses = () => runtimeStatusSubscriptionsFor(useAppStore).readStatuses()
+
 function pairedHostStatus(environmentId: string): RuntimeStatus | null {
-  return lastVerifiedRuntimeStatus(
-    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-  )
+  return lastVerifiedRuntimeStatus(readStatuses().get(environmentId))
 }
 
 /** A paired host's lists again after contact returns: every registered agent from a host that reads
@@ -98,7 +102,7 @@ function preloadHostsWithNewAgents(): void {
   if (hostReadsSavedModelCatalogsOnly(readLocalRuntimeCapabilitiesOrUnknown())) {
     void preloadRegisteredAgents(LOCAL, LOCAL_EXECUTION_HOST_ID, null, false)
   }
-  for (const environmentId of useAppStore.getState().runtimeStatusByEnvironmentId.keys()) {
+  for (const environmentId of readStatuses().keys()) {
     const executionHostId = toRuntimeExecutionHostId(environmentId)
     const status = pairedHostStatus(environmentId)
     if (!status || !hostReadsSavedModelCatalogsOnly(status.capabilities)) {
@@ -124,10 +128,14 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
   const stopLocal = subscribeLocalRuntimeCapabilitiesKnown(() => void preloadLocal(false))
   const stopAgents = subscribeHostStructuredAgents(preloadHostsWithNewAgents)
   const contactStops = new Map<string, () => void>()
-  const watchHosts = (state: AppState, environmentIds: Iterable<string>): void => {
+  const watchHosts = (
+    state: AppState,
+    statuses: RuntimeStatuses,
+    environmentIds: Iterable<string>
+  ): void => {
     for (const environmentId of environmentIds) {
       if (
-        state.runtimeStatusByEnvironmentId.has(environmentId) &&
+        statuses.has(environmentId) &&
         !state.removedRuntimeEnvironmentIds.has(environmentId) &&
         !contactStops.has(environmentId)
       ) {
@@ -138,7 +146,7 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
       }
     }
   }
-  const watchPairedHosts = (state: AppState): void => {
+  const watchPairedHosts = (state: AppState, statuses: RuntimeStatuses): void => {
     for (const [environmentId, stop] of contactStops) {
       if (state.removedRuntimeEnvironmentIds.has(environmentId)) {
         stop()
@@ -148,16 +156,16 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
         preloadedFrom.delete(toRuntimeExecutionHostId(environmentId))
       }
     }
-    watchHosts(state, state.runtimeStatusByEnvironmentId.keys())
+    watchHosts(state, statuses, statuses.keys())
   }
-  watchPairedHosts(useAppStore.getState())
+  watchPairedHosts(useAppStore.getState(), readStatuses())
   // A status write can only add hosts to watch, so it visits just the hosts it touched.
   const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges((change) =>
-    watchHosts(useAppStore.getState(), change.ids)
+    watchHosts(useAppStore.getState(), readStatuses(), change.ids)
   )
-  const stopStore = useAppStore.subscribe((state, previous) => {
+  const stopStore = subscribeStoreWithStatuses(useAppStore, (state, previous, statuses) => {
     if (state.removedRuntimeEnvironmentIds !== previous.removedRuntimeEnvironmentIds) {
-      watchPairedHosts(state)
+      watchPairedHosts(state, statuses)
     }
     if (accountSettingsChanged(state, previous)) {
       forgetHostModelCatalogSnapshots(LOCAL)

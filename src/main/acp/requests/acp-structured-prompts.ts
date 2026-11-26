@@ -8,6 +8,8 @@ import {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AcpRequestPresentation } from '../acp-dialects/acp-dialect'
 import { AcpRpcError } from '../transport/acp-errors'
+import { ACP_FORM_ELICITATION_METHOD } from './acp-form-elicitation'
+import { acpUrlElicitationPresentation, isAcpUrlElicitation } from './acp-url-elicitation'
 import type { AcpRequestContext } from '../transport/acp-json-rpc-peer'
 import type { AcpStructuredLane } from '../journal/acp-structured-lane'
 
@@ -38,6 +40,15 @@ export class AcpStructuredPrompts {
 
   handle(method: string, params: unknown, context: AcpRequestContext): Promise<unknown> {
     const lane = this.lane()
+    // No session can show a sign-in page yet; cancelling lets the agent report that sign-in is needed.
+    if (
+      !lane &&
+      context.id !== null &&
+      method === ACP_FORM_ELICITATION_METHOD &&
+      isAcpUrlElicitation(params)
+    ) {
+      return Promise.resolve(acpUrlElicitationPresentation(params).reply(null))
+    }
     if (!lane || context.id === null) {
       throw new AcpRpcError(-32603, 'ACP request arrived with no session to show it')
     }

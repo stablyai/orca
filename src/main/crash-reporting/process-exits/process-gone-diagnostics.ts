@@ -9,7 +9,6 @@ import {
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,
-  resetPreGoneSystemMemorySamplingForTest,
   startPreGoneSystemMemorySampling
 } from '../memory/pre-gone-host-memory'
 import { preGonePtyTreeMemoryDetails } from '../memory/pre-gone-pty-tree-memory'
@@ -149,6 +148,10 @@ function processMetricIdentity(metric: ProcessMetricLike): ProcessMetricIdentity
   }
 }
 
+export function readLiveProcessMetricDetails(): CrashReportDetails {
+  return getLiveProcessGoneMetrics().details
+}
+
 function getLiveProcessGoneMetrics(): LiveProcessGoneMetrics {
   try {
     const metrics = app.getAppMetrics()
@@ -199,11 +202,8 @@ function sampledProcessIdentities(metrics: ProcessMetricLike[]): PreGoneSampledP
 export function samplePreGoneProcessMetrics(nowMs: number = Date.now()): void {
   try {
     const metrics = app.getAppMetrics()
-    preGoneSample = {
-      details: collectProcessGoneMetricDetails(metrics),
-      processes: sampledProcessIdentities(metrics),
-      sampledAtMs: nowMs
-    }
+    const details = collectProcessGoneMetricDetails(metrics)
+    preGoneSample = { details, processes: sampledProcessIdentities(metrics), sampledAtMs: nowMs }
   } catch {
     // Preserve the last good sample when enumeration fails.
   }
@@ -220,15 +220,6 @@ export function startPreGoneCrashSampling(
   preGoneSampleTimer = setInterval(() => samplePreGoneProcessMetrics(), intervalMs)
   preGoneSampleTimer.unref?.()
   startPreGoneSystemMemorySampling(systemMemoryIntervalMs)
-}
-
-export function resetPreGoneCrashSamplingForTest(): void {
-  if (preGoneSampleTimer) {
-    clearInterval(preGoneSampleTimer)
-  }
-  preGoneSampleTimer = null
-  preGoneSample = null
-  resetPreGoneSystemMemorySamplingForTest()
 }
 
 const PROCESS_METRICS_KEY_PREFIX = 'processMetrics'

@@ -58,8 +58,10 @@ const BotLookSchema = z.object({
       runs: z.array(RunSchema),
       pastSessionIds: z.array(z.string()).optional(),
       through: z.number().optional(),
+      firstFrom: z.number().optional(),
       checkedAt: z.number().optional(),
-      last: BotTidyUpSummarySchema.optional().catch(undefined)
+      last: BotTidyUpSummarySchema.optional().catch(undefined),
+      offeredAt: z.number().optional()
     })
     .optional()
 })

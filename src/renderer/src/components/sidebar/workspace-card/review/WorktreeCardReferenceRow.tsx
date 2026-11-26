@@ -14,7 +14,8 @@ import {
   ReviewChecksIndicator,
   reviewStateLabel
 } from '../metadata/WorktreeCardMetadataStatusBadges'
-import { getReviewLabel, ReviewIcon } from './worktree-review-presentation'
+import { getReviewLabel, ReviewIcon, STALE_REVIEW_SHIMMER } from './worktree-review-presentation'
+import { handleShimmerAnimationStart } from '@/components/ui/shared-animation-clock'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { WorktreeTaskState } from './worktree-task-state'
 
@@ -25,8 +26,6 @@ const PROVIDER_MARKS: Partial<
   Linear: LinearIcon,
   Jira: JiraIcon
 }
-
-const STALE_SHIMMER = 'shimmer shimmer-duration-2400 shimmer-held'
 
 function StateGlyph({
   label,
@@ -146,6 +145,7 @@ export function WorktreeCardReferenceRow({
         )}
         <div
           ref={stale ? observeOffscreenAnimation : undefined}
+          onAnimationStart={stale ? handleShimmerAnimationStart : undefined}
           className="@container mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground"
         >
           {ProviderMark ? (
@@ -153,7 +153,7 @@ export function WorktreeCardReferenceRow({
               <ProviderMark className="size-3" />
             </span>
           ) : null}
-          <span className={cn('shrink-0', stale && STALE_SHIMMER)}>{label}</span>
+          <span className={cn('shrink-0', stale && STALE_REVIEW_SHIMMER)}>{label}</span>
           {review?.status ? (
             <ReviewChecksIndicator status={review.status} checksSummary={review.checksSummary} />
           ) : null}
@@ -162,7 +162,7 @@ export function WorktreeCardReferenceRow({
               <span aria-hidden className="shrink-0">
                 ·
               </span>
-              <span className={cn('min-w-0 shrink-[2] truncate', stale && STALE_SHIMMER)}>
+              <span className={cn('min-w-0 shrink-[2] truncate', stale && STALE_REVIEW_SHIMMER)}>
                 {sourceText}
               </span>
             </>

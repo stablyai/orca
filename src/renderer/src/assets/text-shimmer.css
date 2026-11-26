@@ -92,12 +92,7 @@
   --shimmer-duration: calc(--value(integer) * 1ms);
 }
 
-/* Orca: long-lived shimmers must not free-run; looping-animation-clock.ts steps a held one. */
-@utility shimmer-held {
-  animation-play-state: paused;
-}
-
-/* Orca: steps cap repaints for shimmers that do run; background-position animates on the main thread. */
+/* Orca: steps cap repaints for long-lived shimmers; background-position animates on the main thread. */
 @utility shimmer-steps-* {
   --shimmer-timing: steps(--value(integer));
 }

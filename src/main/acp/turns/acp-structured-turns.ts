@@ -247,7 +247,7 @@ export class AcpStructuredTurns {
           lane.translator.promptResult(clientMessageId, result, this.deps.now(), cancelled)
         )
         this.accept(send.clientMessageId)
-        this.finish(send)
+        this.finishAndRetireIfLost(send, lane.translator.failures.takeSessionLoss())
       },
       (error: unknown) => {
         if (this.active !== send || error instanceof AcpConnectionClosedError) {
@@ -283,12 +283,15 @@ export class AcpStructuredTurns {
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
     }
-    const lost = lane.translator.sessionLost(error)
+    this.finishAndRetireIfLost(send, lane.translator.sessionLost(error) ? error : undefined)
+  }
+
+  private finishAndRetireIfLost(send: Send, sessionLoss: Error | undefined): void {
     // Held steers must not reach the dead session.
-    this.ended ||= lost
+    this.ended ||= sessionLoss !== undefined
     this.finish(send)
-    if (lost) {
-      this.deps.sessionLost(error)
+    if (sessionLoss) {
+      this.deps.sessionLost(sessionLoss)
     }
   }
 

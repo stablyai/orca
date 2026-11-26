@@ -1,3 +1,4 @@
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import {
@@ -10,23 +11,24 @@ import {
 } from '../../shared/bots/bot-group'
 import type { Bot } from '../../shared/bot-types'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
-import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { requireStructuredHost, startBotSession } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import * as remote from './bot-group-remote'
+import { closeMemberChat } from './bot-mail-chat'
 
 /** The bots behind these ids, refusing duplicates and bots this host cannot run in a room. */
 export function requireGroupBots(groups: BotGroupRuntime, ids: readonly string[]): Bot[] {
   groups.runtime.bots.assertEnabled()
   if (new Set(ids).size !== ids.length) {
-    throw new Error('Choose each bot once.')
+    throw new BotFailureError('groupBotTwice')
   }
   return ids.map((id) => {
     const bot = groups.runtime.bots.list().find((bot) => bot.id === id)
     if (!bot) {
-      throw new Error('A selected bot is no longer available.')
+      throw new BotFailureError('groupBotGone')
     }
     if (bot.hostId !== 'local') {
-      throw new Error('Groups currently support bots on this local execution host only.')
+      throw new BotFailureError('groupLocalOnly')
     }
     return bot
   })
@@ -37,6 +39,7 @@ export async function createBotGroup(
   input: z.infer<typeof BotGroupCreate>
 ): Promise<BotGroup> {
   const bots = requireGroupBots(groups, input.botIds)
+  const remoteMembers = await remote.resolveNewGroupRemoteMembers(groups, bots, input)
   const id = randomUUID()
   const members = await startMembers(groups, bots)
   let home: Awaited<ReturnType<typeof groups.runtime.bots.createGroupHome>> | null = null
@@ -49,6 +52,7 @@ export async function createBotGroup(
       revision: 1,
       ...home,
       members,
+      ...(remoteMembers.length > 0 ? { remoteMembers } : {}),
       replyMode: { kind: 'bot', botId: bots[0].id },
       createdAt: Date.now()
     }
@@ -64,19 +68,19 @@ export async function createBotGroup(
   }
 }
 
-export function updateBotGroup(
+export async function updateBotGroup(
   groups: BotGroupRuntime,
   input: z.infer<typeof BotGroupUpdate>
 ): Promise<BotGroup> {
+  const computers = await remote.checkRemoteComputers(groups, input)
   return runKeyedSerializedOperation(groups.queues, input.groupId, async () => {
     const previous = groups.store.get(input.groupId)
     if (previous.revision !== input.revision) {
-      throw new Error('The group changed. Reopen this dialog and try again.')
+      throw new BotFailureError('groupChanged')
     }
-    const bots = requireGroupBots(
-      groups,
-      input.botIds ?? previous.members.map((member) => member.botId)
-    )
+    const botIds = input.botIds ?? previous.members.map(({ botId }) => botId)
+    const bots = requireGroupBots(groups, botIds)
+    const remoteMembers = remote.resolveRemoteMembers(groups, bots, input, previous, computers)
     const joiningBots = bots.filter(
       (bot) => !previous.members.some((member) => member.botId === bot.id)
     )
@@ -101,12 +105,14 @@ export function updateBotGroup(
         input.replyMode &&
         !bots.some((bot) => bot.id === replyMode.botId)
       ) {
-        throw new Error('Choose a current member in Room replies.')
+        // A remote member answers when mentioned or in "all"; the default stays on this computer.
+        throw new BotFailureError('groupReplierGone')
       }
       return await retireMembers(groups, {
         ...previous,
         name: input.name ?? previous.name,
         members: roster(previous.members, joining[0] ?? []),
+        remoteMembers: remoteMembers.length > 0 ? remoteMembers : undefined,
         ...(previous.threads && {
           threads: previous.threads.map((thread, index) => ({
             ...thread,
@@ -152,7 +158,7 @@ export function createBotGroupThread(
   return runKeyedSerializedOperation(groups.queues, groupId, async () => {
     const previous = groups.store.get(groupId)
     if (previous.members.length === 0) {
-      throw new Error('Every bot has left this group. Add a bot before starting a thread.')
+      throw new BotFailureError('groupEmptyBeforeThread')
     }
     const members = await startMembers(
       groups,
@@ -305,12 +311,8 @@ async function startMembers(
 
 async function closeSessions(
   groups: BotGroupRuntime,
-  sessions: readonly Pick<BotGroupMember, 'sessionId'>[]
+  sessions: readonly BotGroupMember[]
 ): Promise<void> {
   // Settled, so one session that will not close never leaves the others open.
-  await Promise.allSettled(
-    sessions.map(({ sessionId }) =>
-      closeStructuredAgentSessionChild(sessionId, { runtime: groups.runtime })
-    )
-  )
+  await Promise.allSettled(sessions.map((member) => closeMemberChat(groups.runtime, member)))
 }

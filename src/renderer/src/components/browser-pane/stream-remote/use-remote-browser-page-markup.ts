@@ -6,7 +6,7 @@ import {
 } from '../annotate/capture/useMarkupMode'
 import { deliverMarkupToClipboard } from '../annotate/capture/markup-clipboard-delivery'
 
-/** Markup snapshots the displayed screencast <img> (no injection), so it works on remote panes even though element-grab doesn't. */
+/** Markup snapshots the displayed screencast <img> (no injection), so it works on remote panes without contacting the host. */
 export function useRemoteBrowserPageMarkup(
   imageRef: RefObject<HTMLImageElement | null>,
   remoteViewportRef: RefObject<HTMLDivElement | null>

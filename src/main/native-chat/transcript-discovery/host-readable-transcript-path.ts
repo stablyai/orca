@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { isAbsolute, posix } from 'node:path'
 import {
   isWslUncPath,
@@ -81,7 +81,10 @@ export type HostReadableTranscriptPathDeps = {
 async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<boolean> {
   signal?.throwIfAborted()
   if (!isWslUncPath(path)) {
-    return existsSync(path)
+    return stat(path).then(
+      () => true,
+      () => false
+    )
   }
   try {
     return await wslGatedAccess(path, 'exact', signal)
@@ -154,14 +157,6 @@ async function wslHomeDirs(load: () => Promise<string[]>): Promise<string[]> {
       return dirs
     })
   return inflightWslHomeDirs
-}
-
-export function resetHostReadableTranscriptPathCacheForTests(): void {
-  cachedWslHomeDirs = null
-  cachedWslHomeDirsExpiresAt = 0
-  inflightWslHomeDirs = null
-  getAdditionalCodexHomePaths = undefined
-  guestRealDirs.clear()
 }
 
 /** UNC twin of a guest path whose directory is a symlink (e.g. a Claude profile's `projects`). */

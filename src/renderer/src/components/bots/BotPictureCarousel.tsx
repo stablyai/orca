@@ -1,10 +1,14 @@
 // The picture carousel: the current face large, its wrapped neighbours dimmed beside it.
-import React from 'react'
+import React, { useLayoutEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import type { BotMascotId } from '../../../../shared/bot-avatar'
 import { BotAvatarTile } from './BotAvatar'
+import type { BotOutfitArt } from './bot-mascot-look'
+import { BotMascotBitmapTile } from './BotMascotBitmapTile'
 import { BotPictureVeil } from './BotPictureIntakeLine'
 
 const FACE_CLASS =
@@ -12,12 +16,21 @@ const FACE_CLASS =
 
 /** A picture, or a face that draws itself (Generate): interactive when current, a thumbnail beside it. */
 export type BotPictureFace =
-  | { key: string; src: string | null; fallback: string; render?: undefined }
+  | {
+      key: string
+      src: string | null
+      outfit?: BotOutfitArt | null
+      fallback: string
+      /** A mascot, drawn from its bitmap instead of `src`. */
+      mascot?: { id: BotMascotId; color: string | null; face?: string | null }
+      render?: undefined
+    }
   | { key: string; render: (current: boolean) => React.ReactNode; label: string }
 
-// Neighbours sit this far from the center tile (112 px), drawn at 72 px.
-const NEIGHBOUR_OFFSET_PX = 110
-const NEIGHBOUR_SCALE = 72 / 112
+// Keep the size unitless so the transform also works without CSS typed division.
+const NEIGHBOUR_SIZE = 'var(--picture-neighbour-size, 48)'
+const NEIGHBOUR_OFFSET = `calc((112 + ${NEIGHBOUR_SIZE}) * 0.5px + 8px)`
+const NEIGHBOUR_SCALE = `calc(${NEIGHBOUR_SIZE} / 112)`
 
 /** Signed distance from the current face, the short way round the wrapped list. */
 function faceOffset(index: number, current: number, count: number): number {
@@ -37,15 +50,7 @@ function ArrowButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          data-side={side}
-          onClick={onClick}
-          className="absolute top-1/2 z-30 -translate-y-1/2 data-[side=left]:left-2 data-[side=right]:right-2"
-        >
+        <Button type="button" variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
           {side === 'left' ? <ChevronLeft /> : <ChevronRight />}
         </Button>
       </TooltipTrigger>
@@ -74,14 +79,57 @@ export function BotPictureCarousel({
 }): React.JSX.Element {
   const t = useTranslate()
   const count = faces.length
-  const go = (next: number): void => onIndexChange(((next % count) + count) % count)
+  // Faces slide only for a move the user made, over the list it was made on; a list that changes
+  // under them (Generate arriving once its agents are known, a picture taking a slot) lands in place.
+  const order = faces.map((face) => face.key).join(' ')
+  const [slideOver, setSlideOver] = useState<string | null>(null)
+  // A slide ends with its list, so a list put back (a refused upload) never revives it.
+  if (slideOver !== null && slideOver !== order) {
+    setSlideOver(null)
+  }
+  const sliding = slideOver === order
+  // Every face in view since the slide began, so faces leaving view keep their outfit until it ends,
+  // whatever moved the current face (an arrow, or a pasted picture taking Generate).
+  const [dressed, setDressed] = useState<ReadonlySet<string>>(() => new Set())
+  const [seenIndex, setSeenIndex] = useState(index)
+  if (index !== seenIndex) {
+    setSeenIndex(index)
+    const left = faces.filter((_, i) => Math.abs(faceOffset(i, seenIndex, count)) <= 1)
+    setDressed((was) => (sliding ? new Set([...was, ...left.map((face) => face.key)]) : new Set()))
+  }
+  // The slide lasts a little past the 300 ms move from the latest change of face, however it moved;
+  // a layout effect, so the previous timer is cleared in the same commit and can't end the new slide.
+  useLayoutEffect(() => {
+    if (!sliding) {
+      return
+    }
+    const timer = setTimeout(() => setSlideOver(null), 400)
+    return () => clearTimeout(timer)
+  }, [sliding, index])
+  const go = (next: number): void => {
+    const target = ((next % count) + count) % count
+    // The face already current: nothing moves, so nothing slides.
+    if (target === index) {
+      return
+    }
+    setSlideOver(order)
+    if (!sliding) {
+      setDressed(new Set())
+    }
+    onIndexChange(target)
+  }
+  const faceClass = cn(
+    FACE_CLASS,
+    '@min-[240px]:[--picture-neighbour-size:56]',
+    sliding ? 'will-change-[transform,opacity]' : 'transition-none'
+  )
   return (
     <div
       role="group"
       aria-roledescription="carousel"
       aria-label={t('bots.new.picture', 'Picture')}
       tabIndex={0}
-      className="group relative h-30 outline-none"
+      className="group relative grid h-30 grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-1 outline-none"
       onKeyDown={(event) => {
         if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
           event.preventDefault()
@@ -94,48 +142,68 @@ export function BotPictureCarousel({
         side="left"
         onClick={() => go(index - 1)}
       />
-      {faces.map((face, i) => {
-        const offset = faceOffset(i, index, count)
-        const distance = Math.abs(offset)
-        // Faces past the neighbours wait further out, so they slide in rather than appear.
-        const x = Math.sign(offset) * NEIGHBOUR_OFFSET_PX * (distance > 1 ? 1.4 : 1)
-        const position = distance === 0 ? 'current' : distance === 1 ? 'neighbour' : 'hidden'
-        const style = {
-          transform: `translate(calc(-50% + ${x}px), -50%) scale(${distance === 0 ? 1 : NEIGHBOUR_SCALE})`
-        }
-        // A face that draws itself holds its own controls when current, so it isn't a button then.
-        if (face.render && distance === 0) {
+      <div className="@container relative h-full min-w-0 overflow-hidden">
+        {faces.map((face, i) => {
+          const offset = faceOffset(i, index, count)
+          const distance = Math.abs(offset)
+          // Faces past the neighbours wait further out, so they slide in rather than appear.
+          const x = `calc(${Math.sign(offset) * (distance > 1 ? 1.4 : 1)} * ${NEIGHBOUR_OFFSET})`
+          const position = distance === 0 ? 'current' : distance === 1 ? 'neighbour' : 'hidden'
+          // Hidden faces wear nothing, so only the faces in view read and decode outfit art.
+          const shown = position !== 'hidden' || (sliding && dressed.has(face.key))
+          const style = {
+            transform: `translate(calc(-50% + ${x}), -50%) scale(${distance === 0 ? 1 : NEIGHBOUR_SCALE})`
+          }
+          // A face that draws itself holds its own controls when current, so it isn't a button then.
+          if (face.render && distance === 0) {
+            return (
+              <div
+                key={face.key}
+                data-face={face.key}
+                data-position={position}
+                style={style}
+                className={faceClass}
+              >
+                {face.render(true)}
+              </div>
+            )
+          }
           return (
-            <div key={face.key} data-position={position} style={style} className={FACE_CLASS}>
-              {face.render(true)}
-            </div>
+            <button
+              key={face.key}
+              data-face={face.key}
+              type="button"
+              tabIndex={-1}
+              aria-hidden
+              data-position={position}
+              data-dropping={dropping || undefined}
+              onClick={() => go(i)}
+              style={style}
+              className={faceClass}
+            >
+              {face.render ? (
+                face.render(false)
+              ) : face.mascot ? (
+                <BotMascotBitmapTile
+                  id={face.mascot.id}
+                  color={face.mascot.color}
+                  face={shown ? face.mascot.face : null}
+                  outfit={shown ? face.outfit : null}
+                  className="size-28 rounded-xl"
+                />
+              ) : (
+                <BotAvatarTile
+                  src={face.src}
+                  outfit={shown ? face.outfit : null}
+                  fallback={face.fallback}
+                  className="size-28 rounded-xl text-4xl"
+                />
+              )}
+              {distance === 0 && dropping ? <BotPictureVeil /> : null}
+            </button>
           )
-        }
-        return (
-          <button
-            key={face.key}
-            type="button"
-            tabIndex={-1}
-            aria-hidden
-            data-position={position}
-            data-dropping={dropping || undefined}
-            onClick={() => go(i)}
-            style={style}
-            className={FACE_CLASS}
-          >
-            {face.render ? (
-              face.render(false)
-            ) : (
-              <BotAvatarTile
-                src={face.src}
-                fallback={face.fallback}
-                className="size-28 rounded-xl text-4xl"
-              />
-            )}
-            {distance === 0 && dropping ? <BotPictureVeil /> : null}
-          </button>
-        )
-      })}
+        })}
+      </div>
       <ArrowButton
         label={t('bots.new.nextPicture', 'Next picture')}
         side="right"

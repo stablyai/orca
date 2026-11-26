@@ -3,6 +3,7 @@
 // Each provider child gets a fresh assembler and generation.
 
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionCommandRun } from '../agent-session-wire/providers/structured-agent-session-adapter'
@@ -41,6 +42,8 @@ export type ProviderTimelineAssembler = {
   /** Observe only this event’s transition, excluding preliminary settlement and drops. */
   apply(event: ProviderTimelineEvent, onPublished?: () => void): ProviderTimelineApplyResult
   readonly openTurnId: string | null
+  /** The open turn's row identity, which a send taken while it runs joins. */
+  readonly openTurnIdentity: AgentJournalItemIdentity | null
   flush(): void
   /** Drops buffered text; apply session.ended first to flush it. */
   dispose(): void
@@ -225,6 +228,9 @@ export function createProviderTimelineAssembler(
     apply,
     get openTurnId() {
       return state.open?.turnId ?? null
+    },
+    get openTurnIdentity() {
+      return state.open?.identity ?? null
     },
     flush: () => {
       endSettledTurn()

@@ -1,5 +1,6 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import type { RunningAgentTargetState } from '@/lib/agent-session/messaging/running-agent-targets'
 
@@ -12,7 +13,6 @@ export type SendTargetInputsState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
-  | 'runtimeStatusByEnvironmentId'
 >
 
 export type SendTargetControlInputsState = Pick<
@@ -45,6 +45,7 @@ export const EMPTY_SEND_TARGET_CONTROL_INPUTS: SendTargetControlInputs = Object.
 /** Select live send-target maps only for the targeted card; all others reuse the empty sentinel. */
 export function selectSendTargetInputs(
   s: SendTargetInputsState,
+  statuses: RuntimeStatuses,
   worktreeId: string
 ): RunningAgentTargetState {
   if (s.agentSendPopoverTargetMode?.worktreeId !== worktreeId) {
@@ -57,9 +58,7 @@ export function selectSendTargetInputs(
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-    sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(
-      s.runtimeStatusByEnvironmentId
-    )
+    sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(statuses)
   }
 }
 

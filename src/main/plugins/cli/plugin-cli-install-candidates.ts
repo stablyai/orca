@@ -1,3 +1,4 @@
+import { findTeamPluginBlock } from '../installation/plugin-team-install-policy'
 import {
   PLUGIN_BLOCKED_CODE,
   PLUGIN_INSTALL_FAILED_CODE,
@@ -44,6 +45,9 @@ export type PluginCliInstallCandidate = {
   install: () => Promise<PluginMarketplaceInstallResult>
   dispose: () => Promise<void>
 }
+
+/** An update that stays on the installed version, and why. */
+export type PluginCliSettledCandidate = { status: 'up-to-date' | 'pinned'; reason: string }
 
 export type PluginCliCandidateHost = {
   userDataPath: string
@@ -94,7 +98,7 @@ export function assertInstallAllowed(
   const blocked = host.blockedPluginReason(pluginKey)
   const reason = blocked
     ? `${pluginKey} is blocked by Orca's safety list: ${blocked}`
-    : pluginInstallTrustError(pluginKey, lockSource)
+    : (findTeamPluginBlock(pluginKey)?.reason ?? pluginInstallTrustError(pluginKey, lockSource))
   if (reason) {
     throw new PluginCliError(PLUGIN_BLOCKED_CODE, reason, {
       pluginKey,

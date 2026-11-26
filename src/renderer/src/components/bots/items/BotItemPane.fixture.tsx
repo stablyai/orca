@@ -4,6 +4,7 @@ import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixtur
 import type { BotItem, BotItemEvent, BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import { BotItemPaneFrame } from './BotItemPane'
 import { BotItemBody, BotItemDeletedNotice } from './BotItemView'
+import { BotItemLoading } from './BotItemLoading'
 import type { BotItemWalkState } from './use-bot-item-walk'
 import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
@@ -192,6 +193,16 @@ export const noLinksScrolled = defineFixture({
   ...frozenScrolled,
   render: () => <Pane state={walk(3, 14)} activity={longActivity} />
 })
+export const loading = defineFixture({
+  width: 340,
+  render: () => (
+    <div className="flex h-[420px] flex-col">
+      <BotItemPaneFrame walk={walk(3, 14, { pending: true })} offline={false} onBack={() => {}}>
+        {() => <BotItemLoading />}
+      </BotItemPaneFrame>
+    </div>
+  )
+})
 export const keyboard = defineFixture({
   ...longTitleScrolled,
   render: () => (
@@ -200,6 +211,23 @@ export const keyboard = defineFixture({
       shown={{ ...linked, title: longTitle }}
       activity={longActivity}
       hasEarlier
+    />
+  )
+})
+const HASH = 'sha256:9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7'
+// A hash in Done means and the close note wraps in place: the page never scrolls sideways.
+export const longTokens = defineFixture({
+  width: 260,
+  render: () => (
+    <Pane
+      state={walk(3, 14)}
+      shown={{
+        ...item,
+        status: 'done',
+        doneMeans: `Checksum equals ${HASH}`,
+        closeNote: `Verified ${HASH}`
+      }}
+      tall
     />
   )
 })
@@ -261,7 +289,7 @@ const answered: BotItemEvent[] = [
   }
 ]
 
-/** The open question, outlined, under two long messages folded at 8 lines. */
+/** The open question, tagged Needs you, under two long messages folded at 8 lines. */
 export const asking = defineFixture({
   width: 400,
   render: () => (

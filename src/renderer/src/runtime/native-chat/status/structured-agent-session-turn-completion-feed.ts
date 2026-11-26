@@ -225,10 +225,6 @@ export function getStructuredAgentSessionTurnCompletionFeed(
   }
 }
 
-export function structuredAgentSessionTurnCompletionFeedCountForTests(): number {
-  return owners.size
-}
-
 export function resetStructuredAgentSessionTurnCompletionFeedsForTests(): void {
   // Stop subscription/reconnect before dropping map or unheld streams leak into the next test.
   for (const owner of owners.values()) {

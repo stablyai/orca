@@ -1,5 +1,5 @@
 import { classifyFilesystemDirectoryEntries } from '../../../filesystem/local-file-io/filesystem-symlink-directory-entries'
-import { hasSymlinkBelowRoot } from '../../../filesystem/local-file-io/filesystem-symlink-ancestor'
+import { findSymlinkBelowRoot } from '../../../filesystem/local-file-io/filesystem-symlink-ancestor'
 import { markdownDocumentsFromRelativePaths } from '../../../../shared/file-listing/markdown-document-paths'
 import {
   capturePathExistence,
@@ -34,6 +34,7 @@ import {
   guardWslUncPathAccess
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { parseRemoteFilePreviewAddress } from '../../../../shared/file-preview/remote-file-preview-address'
+import { getAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import {
   readLocalFileContent,
   readLocalLogSnapshot,
@@ -116,6 +117,10 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       return guardWslUncPathAccess(
         args.filePath,
         async () => {
+          if (args.access?.kind === 'chat-image') {
+            // A tool image's bytes may still be landing in the store; resolving would miss them.
+            await getAgentSessionAttachmentStore()?.whenWritten(args.filePath)
+          }
           const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
           const media = await readLocalFilePreview(event, args, store, {
             documents: args.rangePreview === true
@@ -204,12 +209,19 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
   )
 
   ipcMain.handle(
-    'fs:hasSymlinkBelowRoot',
-    (_event, args: { rootPath: string; path: string }): Promise<boolean> =>
+    'fs:findSymlinkBelowRoot',
+    (
+      _event,
+      args: { rootPath: string; path: string; which: 'first' | 'deepest' }
+    ): Promise<string | null> =>
       guardWslUncPathAccess(args.rootPath, async () => {
-        // Why the root: the walk stops at the first link, so it never touches anything outside it.
+        // Why the root: the walk only lstats the segments of a path lexically below it, never lists or reads.
         await resolveDesktopAuthorizedPath(args.rootPath, store)
-        return hasSymlinkBelowRoot(args.rootPath, args.path)
+        return findSymlinkBelowRoot(
+          args.rootPath,
+          args.path,
+          args.which === 'first' ? 'first' : 'deepest'
+        )
       })
   )
 

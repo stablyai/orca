@@ -1,5 +1,14 @@
 import { processEnvWithoutAgentSession } from '../../agent-launch/startup/parent-agent-session-env'
 
+/** env options that take the next word as their value. */
+export const ENV_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  '-u',
+  '--unset',
+  '-C',
+  '--chdir',
+  '-P'
+])
+
 /** Leading assignments are data, never shell expressions. */
 export function extractLeadingEnvAssignments(tokens: string[]): {
   env?: Record<string, string>

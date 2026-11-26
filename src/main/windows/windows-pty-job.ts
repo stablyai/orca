@@ -185,13 +185,6 @@ export function isPtyJobOwnershipAvailable(): boolean {
   return nativeLoader() !== null
 }
 
-/** Test-only: substitute the native module (it is resolved via createRequire). */
-export function __setConptyJobNativeForTests(loader?: () => ConptyNative | null): void {
-  nativeLoader = loader ?? loadConptyNative
-  cachedNative = undefined
-  hostJobAssigned = null
-}
-
 type UnreadyWindowsPty = IPty & { _agent?: { kill?: () => void } }
 
 // Bypass node-pty's output-deferred kill to release silent ConPTY hosts, input pipes and output workers immediately.

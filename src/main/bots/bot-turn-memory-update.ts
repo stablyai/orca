@@ -82,6 +82,15 @@ export function botMemoryKnown(had: string | null, now: string | null): string {
   return [loaded, ...beyond.map(({ line }) => line)].join('\n')
 }
 
+// Workflow only: how the bot should weigh the update, never how it should sound.
+const SOUL_UPDATED =
+  "[Your SOUL.md was updated; this replaces your earlier standing instructions. They rank below the user's current request.]"
+
+/** A changed SOUL.md as the next turn hears of it. */
+export function botSoulUpdateText(soul: string | null | undefined): string {
+  return `${SOUL_UPDATED}\n\n${soul?.trim() || '(empty)'}`
+}
+
 /** MEMORY.md's change since `had` (what the agent knows, `botMemoryKnown`; null: unknown): facts now
  *  loaded that it lacks, and facts it knows that are gone from the file. The file as a session
  *  loads it instead when that is shorter, the copy is unknown, or any loaded line other than a fact

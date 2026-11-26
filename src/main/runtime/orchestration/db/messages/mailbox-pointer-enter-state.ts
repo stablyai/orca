@@ -1,6 +1,7 @@
 import type { MessageRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
+import { stampQuestionTakes, type MailTaker } from './mail-taker'
 
 export const MAILBOX_POINTER_RESERVED = 1
 export const MAILBOX_POINTER_WRITE_ATTEMPTED = 2
@@ -68,6 +69,7 @@ export function stageMailboxPointerEnter(
   ids: string[],
   target: MailboxPointerReservationTarget
 ): boolean {
+  this.releasedPointerPtyIds.delete(target.ptyId)
   return (
     mutatePointerMessages(
       this,
@@ -143,10 +145,15 @@ export function settleMailboxPointerEnter(
   this: OrchestrationDb,
   ids: string[],
   target: MailboxPointerReservationTarget,
-  expectedPhases: readonly number[]
+  expectedPhases: readonly number[],
+  /** The terminal the pointer was submitted to, which takes its questions; null when unknown. */
+  taker: MailTaker | null = null
 ): void {
   if (expectedPhases.length === 0) {
     return
+  }
+  if (taker) {
+    stampQuestionTakes(this, pointersHeldBy(this, ids, target, expectedPhases), taker)
   }
   mutatePointerMessages(this, ids, (placeholders) => ({
     sql: `UPDATE messages
@@ -182,7 +189,13 @@ export function releaseMailboxPointerEnter(
   }))
 }
 
+const RELEASED_POINTER_PTY_CAP = 4096
+
 export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
+  // Only staging writes a PTY's pointer and staging evicts it, so a released PTY has none left.
+  if (this.releasedPointerPtyIds.has(ptyId)) {
+    return
+  }
   this.db
     .prepare(
       `UPDATE messages
@@ -196,6 +209,44 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
        WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
     )
     .run(MAILBOX_POINTER_RESERVED, ptyId)
+  // An enclosing transaction can still roll the release back, so only a committed one is remembered.
+  if (!this.db.isTransaction) {
+    // Forgetting is always safe (one more release per PTY), so a full set resets instead of growing.
+    if (this.releasedPointerPtyIds.size >= RELEASED_POINTER_PTY_CAP) {
+      this.releasedPointerPtyIds.clear()
+    }
+    this.releasedPointerPtyIds.add(ptyId)
+  }
+}
+
+/** An exited PTY leaves the released set; a reused id then runs one release on its first working edge. */
+export function forgetReleasedPointerPty(this: OrchestrationDb, ptyId: string): void {
+  this.releasedPointerPtyIds.delete(ptyId)
+}
+
+function pointersHeldBy(
+  db: OrchestrationDb,
+  ids: string[],
+  target: MailboxPointerReservationTarget,
+  expectedPhases: readonly number[]
+): string[] {
+  const held: string[] = []
+  for (let offset = 0; offset < ids.length; offset += ORCHESTRATION_DELIVERY_BATCH_LIMIT) {
+    const batch = ids.slice(offset, offset + ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+    for (const row of db.db
+      .prepare(
+        `SELECT id FROM messages
+         WHERE pointer_pty_id = ? AND pointer_process_incarnation = ?
+           AND pointer_enter_pending IN (${expectedPhases.map(() => '?').join(',')})
+           AND id IN (${batch.map(() => '?').join(',')})`
+      )
+      .all(target.ptyId, target.processIncarnation, ...expectedPhases, ...batch)) {
+      if (typeof row.id === 'string') {
+        held.push(row.id)
+      }
+    }
+  }
+  return held
 }
 
 function mutatePointerMessages(
@@ -241,6 +292,7 @@ export type MailboxPointerEnterStateMethods = {
   settleMailboxPointerEnter: typeof settleMailboxPointerEnter
   releaseMailboxPointerEnter: typeof releaseMailboxPointerEnter
   releasePendingMailboxPointerForPty: typeof releasePendingMailboxPointerForPty
+  forgetReleasedPointerPty: typeof forgetReleasedPointerPty
 }
 
 export function attachMailboxPointerEnterState(ctor: { prototype: object }): void {
@@ -253,6 +305,7 @@ export function attachMailboxPointerEnterState(ctor: { prototype: object }): voi
     markMailboxPointerEnterAttempted,
     settleMailboxPointerEnter,
     releaseMailboxPointerEnter,
-    releasePendingMailboxPointerForPty
+    releasePendingMailboxPointerForPty,
+    forgetReleasedPointerPty
   })
 }

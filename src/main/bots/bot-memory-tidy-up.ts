@@ -1,5 +1,6 @@
 // Tidy-up: once a night, a bot tidies its own memory from its new chats. Its run has no tools and
 // replies with a draft (see bot-memory-tidy-up-draft.ts), which Orca checks and writes itself.
+import { botFailure, botFailureEnglishTable } from '../../shared/bots/bot-failure-copy'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { BOT_MEMORY_INDEX_LINE_CAP } from '../../shared/bot-memory-lines'
@@ -12,10 +13,11 @@ import {
   tidyUpChangeCount
 } from '../../shared/bots/bot-tidy-up'
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
+import { tidyUpSupported, type Bot } from '../../shared/bot-types'
 import { lookAroundSupported } from '../../shared/bots/bot-look-around'
-import type { Bot } from '../../shared/bot-types'
 import { nativeChatProseToMarkdown } from '../../shared/native-chat/transcript/row-content/native-chat-prose'
 import { fenceQuotedText } from '../../shared/quoted-text-fence'
+import { BOT_MEMORY_ARCHIVE_TOPIC } from '../../shared/bots/bot-memory-archive'
 import {
   slotTaken,
   withBackgroundRun,
@@ -37,29 +39,32 @@ export const TIDY_UP_CHATS = { max: 20, chars: 4_000, total: 40_000 } as const
 export const TIDY_UP_MEMORY_FILES = { topic: 3_000, topics: 12_000, archive: 6_000 } as const
 /** Its chats are read back this far the first time. */
 export const TIDY_UP_FIRST_LOOKBACK_MS = 24 * 60 * 60 * 1000
-export const TIDY_UP_ARCHIVE = 'archive'
+export const TIDY_UP_ARCHIVE = BOT_MEMORY_ARCHIVE_TOPIC
 const MAX_RUNS = 30
 const DAY_MS = 24 * 60 * 60 * 1000
 export const TIDY_UP_INDEX_BLOCK = 'MEMORY.md'
 export const TIDY_UP_REPLACED_BLOCK = 'REPLACED'
 
-export const TIDY_UP_FAILURES = {
-  unfinished: "The last tidy-up didn't finish.",
-  timedOut: `The last tidy-up was stopped after ${TIDY_UP_RUN_LIMIT_MS / 60_000} min.`,
-  couldNotStart: "The last tidy-up couldn't start.",
-  asleep: 'The last tidy-up was missed because this computer was asleep.',
-  unreadChats: "The last tidy-up couldn't read its chats, so it didn't run.",
-  noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
-  badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
-  tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines, so nothing changed.`,
-  tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',
-  tooManyAdded: 'The last tidy-up added too many new lines at once, so nothing changed.',
-  notCopied:
-    "The last tidy-up filed a line MEMORY.md doesn't have; new facts go in MEMORY.md, so nothing changed.",
-  tooManyFiled: `The last tidy-up filed more than ${TIDY_UP_MAX_FILED} lines at once, so nothing changed.`,
-  changed: 'MEMORY.md changed during the last tidy-up, so nothing changed.',
-  notApplied: "The last tidy-up's changes couldn't be saved, so nothing changed."
-} as const
+export const TIDY_UP_FAILURE_CODES = {
+  unfinished: botFailure('tidyUpUnfinished'),
+  timedOut: botFailure('tidyUpTimedOut', { minutes: TIDY_UP_RUN_LIMIT_MS / 60_000 }),
+  couldNotStart: botFailure('tidyUpCouldNotStart'),
+  asleep: botFailure('tidyUpAsleep'),
+  unreadChats: botFailure('tidyUpUnreadChats'),
+  noDraft: botFailure('tidyUpNoDraft'),
+  noOps: botFailure('tidyUpNoOps'),
+  notListLines: botFailure('tidyUpNotListLines'),
+  badTopic: botFailure('tidyUpBadTopic'),
+  tooLong: botFailure('tidyUpTooLong', { max: BOT_MEMORY_INDEX_LINE_CAP }),
+  tooManyRemoved: botFailure('tidyUpTooManyRemoved'),
+  tooManyAdded: botFailure('tidyUpTooManyAdded'),
+  notCopied: botFailure('tidyUpNotCopied'),
+  tooManyFiled: botFailure('tidyUpTooManyFiled', { max: TIDY_UP_MAX_FILED }),
+  changed: botFailure('tidyUpChanged'),
+  notApplied: botFailure('tidyUpNotApplied')
+}
+
+export const TIDY_UP_FAILURES = botFailureEnglishTable(TIDY_UP_FAILURE_CODES)
 
 /** One chat since the last tidy-up: the owner's lines and the bot's replies to them, oldest first. */
 export type TidyUpChat = { title: string | null; lines: { by: 'owner' | 'bot'; text: string }[] }
@@ -71,10 +76,15 @@ export type TidyUpMemoryFile = { name: string; text: string }
 export type BotTidyUpState = BackgroundRuns & {
   /** Its chats are read from here on: when the last tidy-up that applied started. */
   through?: number
+  /** Before any tidy-up applied: where the first one that failed read its chats from. */
+  firstFrom?: number
   /** When it last found nothing new to tidy, so it waits for the next night. */
   checkedAt?: number
   /** The last tidy-up that changed something, for its summary. */
   last?: BotTidyUpSummary
+  /** When this host first offered it to a bot made before its agent could tidy (see
+   *  `tidyUpOfferedNow`); no night before it is caught up. */
+  offeredAt?: number
 }
 
 const EMPTY: BotTidyUpState = { runs: [] }
@@ -130,12 +140,30 @@ export function tidyUpOwed(
   now: number
 ): boolean {
   const setting = botTidyUp(bot)
-  return setting.on && tidyUpDue(state, now, setting.every, setting.since ?? bot.createdAt)
+  // Offered during tonight's window: its first run is the next night's, even while this one is open.
+  if ((state.offeredAt ?? 0) > tidyUpSlot(now)) {
+    return false
+  }
+  const onSince = Math.max(setting.since ?? bot.createdAt, state.offeredAt ?? 0)
+  return setting.on && tidyUpDue(state, now, setting.every, onSince)
+}
+
+/** Until every agent could tidy, only Look around's agents could; a bot on another agent that never
+ *  set Tidy-up is offered it now, so its first run waits for the next night instead of catching up
+ *  at once. Null when it needs no stamp. */
+export function tidyUpOfferedNow(
+  bot: Pick<Bot, 'agent' | 'tidyUp'>,
+  state: BotTidyUpState,
+  now: number
+): BotTidyUpState | null {
+  const offered =
+    lookAroundSupported(bot.agent) || bot.tidyUp !== undefined || state.offeredAt !== undefined
+  return offered || state.runs.length > 0 ? null : { ...state, offeredAt: now }
 }
 
 export type TidyUpApplied = Pick<
   BotTidyUpSummary,
-  'learned' | 'replaced' | 'filed' | 'moved' | 'merged'
+  'learned' | 'replaced' | 'filed' | 'moved' | 'merged' | 'skipped'
 >
 
 /** A run that changed something, as its summary shows it, with the History row it wrote; null
@@ -159,7 +187,7 @@ export function tidyNowRefusal(
   if (!bot) {
     return 'not_found'
   }
-  if (!lookAroundSupported(bot.agent)) {
+  if (!tidyUpSupported(bot.agent)) {
     return 'unsupported'
   }
   if (bot.paused) {
@@ -273,7 +301,10 @@ function chatsText(chats: readonly TidyUpChat[]): string {
 }
 
 /** Each topic file's start, then the archive's latest lines. */
-function memoryFilesText(files: readonly TidyUpMemoryFile[]): { topics: string; archive: string } {
+export function memoryFilesText(files: readonly TidyUpMemoryFile[]): {
+  topics: string
+  archive: string
+} {
   let left: number = TIDY_UP_MEMORY_FILES.topics
   const topics: string[] = []
   for (const { name, text } of files) {
@@ -309,6 +340,7 @@ export function tidyUpPrompt(input: {
     '- Merge lines that say the same thing into one: the clearer wording and the earliest date.',
     '- When a newer line replaces an older one, leave the older one out of MEMORY.md and list it as replaced.',
     `- Leave out at most a fifth of the lines; when MEMORY.md is over ${TIDY_UP_TARGET_FACTS} lines, move the oldest details to topic files first. Orca keeps every line you leave out in memory/archive.md.`,
+    `- When MEMORY.md is over ${BOT_MEMORY_INDEX_LINE_CAP} lines, make it shorter within these limits; it may stay over ${BOT_MEMORY_INDEX_LINE_CAP} tonight, and the next tidy-up carries on.`,
     `- Add only facts your owner stated, decisions they made, and lessons from their corrections in the chats below, each as "- ${input.today} <fact>". Never add a question, a task, a hypothetical, anything from someone other than your owner, anything the archive already retired, or a password, key or token.`,
     '',
     'Reply with only these blocks, each marker on its own line: the whole new MEMORY.md, then one block for each topic file with only the lines to add to it, then the replaced lines. Leave out blocks you have nothing for. If nothing should change, reply with MEMORY.md unchanged.',

@@ -98,7 +98,9 @@ const agentSessionResumeMarkerSchema = z.object({
     .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
     .optional()
     .catch(undefined),
-  activity: agentSessionRestartActivitySchema.optional().catch(undefined)
+  activity: agentSessionRestartActivitySchema.optional().catch(undefined),
+  /** State the guard replaced; null when the offer had no activity. */
+  unguardedState: z.enum(AGENT_STATUS_STATES).nullable().optional().catch(undefined)
 })
 
 /** Malformed advisory markers drop as null, never throw and make sessions unreadable. */
@@ -107,14 +109,48 @@ export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResum
   if (!parsed.success) {
     return null
   }
-  const { activity, journalCursor, cause, exitUnproven, ...marker } = parsed.data
+  const { activity, journalCursor, cause, exitUnproven, unguardedState, ...marker } = parsed.data
+  const readActivity = exitUnproven ? withoutManualOnlyGuard(activity, unguardedState) : activity
   return {
     ...marker,
     ...(exitUnproven ? { exitUnproven } : {}),
     ...(cause === 'crash' ? { trigger: 'crash' as const } : {}),
     ...(journalCursor === undefined ? {} : { journalCursor }),
-    ...(activity === undefined ? {} : { activity })
+    ...(readActivity === undefined ? {} : { activity: readActivity })
   }
+}
+
+/** Builds that predate `exitUnproven` drop it, then continue a quit offer on their own unless it is
+ *  blocked on a person. The stored copy carries one such prompt, so a rollback keeps it manual. */
+const MANUAL_ONLY_GUARD_LABEL = 'Orca could not confirm this chat stopped. Continue it yourself.'
+
+function withManualOnlyGuard(
+  activity: AgentSessionRestartActivity | undefined
+): AgentSessionRestartActivity | undefined {
+  // An offer already asking about a prompt is blocked on a person in every build.
+  if (activity && activity.prompts.length > 0) {
+    return activity
+  }
+  return {
+    state: 'blocked',
+    tasks: activity?.tasks ?? [],
+    prompts: [{ kind: 'question', label: MANUAL_ONLY_GUARD_LABEL }]
+  }
+}
+
+function withoutManualOnlyGuard(
+  activity: AgentSessionRestartActivity | undefined,
+  unguardedState: AgentSessionRestartActivity['state'] | null | undefined
+): AgentSessionRestartActivity | undefined {
+  if (!activity?.prompts.some((prompt) => prompt.label === MANUAL_ONLY_GUARD_LABEL)) {
+    return activity
+  }
+  const prompts = activity.prompts.filter((prompt) => prompt.label !== MANUAL_ONLY_GUARD_LABEL)
+  if (prompts.length === 0 && activity.tasks.length === 0 && unguardedState === null) {
+    return undefined
+  }
+  const state = prompts.length > 0 ? 'blocked' : (unguardedState ?? 'working')
+  return { ...activity, prompts, state }
 }
 
 /** The marker as the capsule file stores it; see `cause`. */
@@ -124,8 +160,17 @@ export function storedAgentSessionResumeMarker(marker: AgentSessionResumeMarker)
 > & {
   trigger: AgentSessionResumeTrigger
   cause?: 'crash'
+  unguardedState?: AgentSessionRestartActivity['state'] | null
 } {
-  return marker.trigger === 'crash'
-    ? { ...marker, trigger: 'quit', cause: 'crash' }
-    : { ...marker, trigger: marker.trigger }
+  const guarded = marker.exitUnproven && !(marker.activity && marker.activity.prompts.length > 0)
+  const stored = marker.exitUnproven
+    ? {
+        ...marker,
+        activity: withManualOnlyGuard(marker.activity),
+        ...(guarded ? { unguardedState: marker.activity?.state ?? null } : {})
+      }
+    : marker
+  return stored.trigger === 'crash'
+    ? { ...stored, trigger: 'quit', cause: 'crash' }
+    : { ...stored, trigger: stored.trigger }
 }

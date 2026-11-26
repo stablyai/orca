@@ -1,190 +1,62 @@
-import { app, nativeTheme } from 'electron'
-import { randomUUID } from 'node:crypto'
+import { app, nativeTheme, shell } from 'electron'
 import { performance } from 'node:perf_hooks'
-import { StarNagService } from '../star-nag/service'
 import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
-import { EmulatorBridge } from '../emulator/emulator-bridge'
-import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import {
-  DESKTOP_RPC_CALLER,
-  LOCAL_CLI_RPC_CALLER
-} from '../runtime/rpc/callers/rpc-caller-identity'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
-import { BrowserExpectedUrlMismatch } from '../../shared/browser/client-hosting/browser-expected-url'
-import { BrowserClientPageCommandError } from '../browser/client-pages/execution/browser-client-page-command-failure'
-import { startPreGoneCrashSampling } from '../crash-reporting/process-exits/process-gone-diagnostics'
+import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
+import {
+  readLiveProcessMetricDetails,
+  startPreGoneCrashSampling
+} from '../crash-reporting/process-exits/process-gone-diagnostics'
+import {
+  setMainMemorySpikeCounts,
+  setMainMemorySpikeProcessMetrics
+} from '../memory/main-memory-spike-capture'
+import { registeredPtyCount } from '../memory/pty-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
-import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
-import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/history/index/codex-state-db-backfill-recovery'
-import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
-import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
-import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
-import { initializeMainProcessObservers } from './main-process-observers'
-import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
-import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
-import { initializeMainProcessAccountServices } from './agent-accounts/main-process-account-services'
-import {
-  initializeMainProcessRuntime,
-  configureRuntimeServices
-} from './runtime-startup/main-process-runtime-service'
-import { initializeMainProcessAutomations } from './runtime-startup/main-process-automations'
-import { initializeMainProcessPlugins } from './plugin-startup/main-process-plugins'
-import {
-  collectWorktreeTrashSweepRoots,
-  sweepStaleWorktreeTrash
-} from '../workspaces/removal/worktree-trash'
-import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
-import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
+import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
+import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
-import { logStartupMilestone } from './diagnostics/startup-diagnostics'
-import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
-import { pruneDesktopOrcadArtifactCache } from '../orcad/artifact-slots/orcad-artifact-cache-retention'
-import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
-import { reapLeftoverMacOSPermissionStatusHelpers } from '../computer/macos-permissions/macos-permission-status-leftover-reap'
-import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
-import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
-import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
+import {
+  composeDesktopCore,
+  type DesktopCoreNative
+} from '../core-desktop/desktop-core-composition'
+import type { Store } from '../persistence/loading-store/store'
+import type { RuntimeDesktopWindowStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
-// Headless serve has no first window; timer fallback must still sweep trash.
-const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
+function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
+  const activation = state.desktopActivationGate
+  if (!activation) {
+    return 'available'
+  }
+  const value = activation.getState()
+  return value === 'ready' ? 'openable' : value
+}
 
-export async function initializeReadyRuntimeServices(): Promise<void> {
-  const store = state.store
-  if (!store) {
-    throw new Error('Store must be initialized before ready services')
-  }
-  // Renderers fork from zygotes that exist already, so this must land before the first window.
-  await refuseRealtimeSchedulingUnderZeroRtTime()
-  // Load interrupted deletion records before listings so first paint shows Deleting.
-  await prepareWorktreeRemovalsForStore(store)
-  initializeMainProcessObservers()
-  await initializeMainProcessAccountServices()
-  const runtime = initializeMainProcessRuntime()
-  initializeMainProcessAutomations()
-  startWorkspaceCleanupRunner(runtime, store)
-  configureRuntimeServices(runtime)
-  installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
-  await initializeMainProcessPlugins(runtime)
-  state.starNag = new StarNagService(store, state.stats!)
-  state.starNag.start()
-  state.starNag.registerIpcHandlers()
-  state.agentBrowserBridge = new AgentBrowserBridge(browserManager, {
-    onTabsChanged: (worktreeId) => runtime.notifyMobileSessionTabsChanged(worktreeId)
-  })
-  runtime.setAgentBrowserBridge(state.agentBrowserBridge)
-  // Reclaim browser daemons orphaned by prior crashes/SIGKILL.
-  void state.agentBrowserBridge.sweepOrphanedSessions()
-  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
-  configureBrowserClientPageAutomationRuntime({
-    browserManager,
-    getAgentBrowserBridge: () => state.agentBrowserBridge,
-    executeRpc: async (method, params, agent, signal) => {
-      const response = await browserClientAutomationDispatcher.dispatch(
-        { id: randomUUID(), authToken: 'local-browser-client-automation', method, params },
-        // Why: the cursor, glow and tab badge key off an agent caller; relayed people are not one.
-        { signal, caller: agent ? LOCAL_CLI_RPC_CALLER : DESKTOP_RPC_CALLER }
-      )
-      if (!response.ok) {
-        const mismatch = BrowserExpectedUrlMismatch.safeParse(response.error.data)
-        throw new BrowserClientPageCommandError(response.error.code, {
-          expectedUrlMismatch: mismatch.success ? mismatch.data : undefined,
-          detail: response.error.message
-        })
-      }
-      return response.result
-    }
-  })
-  // Only Orca-managed emulator helpers belong to workspaces; external serve-sim stays independent. macOS capability gates live in CLI/runtime.
-  state.emulatorBridge = new EmulatorBridge()
-  runtime.setEmulatorBridge(state.emulatorBridge)
-  let releaseProviderMaintenance: () => void
-  const providerMaintenanceReady = new Promise<void>((resolve) => {
-    releaseProviderMaintenance = resolve
-  })
-  // Finish recorded deletes and old trash left across crashes; defer disk sweeps so they do not compete with first paint/catalog hydration.
-  runAfterFirstWindowShown(() => {
-    releaseProviderMaintenance()
-    void sweepStaleWorktreeTrash(
-      collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
-    ).catch((error) => {
-      console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
-    })
-    worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  // Defer noncritical plugin-file refresh past first paint.
-  runAfterFirstWindowShown(() => {
-    refreshInstalledOpenCodeStatusPlugins(store.getSettings())
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  runAfterFirstWindowShown(() => {
-    new WslUsageReporter(store, app.getPath('userData')).start()
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  // Suspended permission probes left by older builds hold LaunchServices slots until every app launch hangs.
-  runAfterFirstWindowShown(() => {
-    void reapLeftoverMacOSPermissionStatusHelpers()
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  runAfterFirstWindowShown(() => {
-    void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {
-      console.warn('[orcad-artifacts] Failed to bound the slot cache:', error)
-    })
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  // The startup pass ran before browser sessions and any window existed, so `browser-cookies` paused.
-  runAfterFirstWindowShown(() => {
-    void runGatedWslMoveDesktopRewritePass({ userDataPath: app.getPath('userData') })
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
-  runAfterFirstWindowShown(() => {
-    app.on('browser-window-focus', startSpeechModelWarmup(store))
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  runAfterFirstWindowShown(() => {
-    startClaudeCodeThemeSync({
-      getSettings: () => store.getSettings(),
-      onSettingsChanged: (listener) => store.onSettingsChanged(listener),
-      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
-      onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
-      onAppFocused: (listener) => app.on('browser-window-focus', listener),
-      userDataPath: app.getPath('userData')
-    })
-  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
-  nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  void providerMaintenanceReady.then(() =>
-    startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
-  )
-  // Register launch reconciliation now; defer background probes and scratch cleanup until first paint.
-  startCodexHooks({
-    startAfter: providerMaintenanceReady,
-    pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve(),
-    isEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex'),
-    resolveLaunchHome: () => {
-      if (!state.codexRuntimeHome) {
-        throw new Error('Codex runtime home service is not initialized')
-      }
-      return state.codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly()
-    }
-  })
-  if (shouldInstallManagedHooks(!app.isPackaged)) {
-    reconcileStartupManagedAgentHooks({
-      getSettings: () => store.getSettings(),
-      isQuitting: () => state.isQuitting,
-      shouldHydrateShellPath: app.isPackaged
-    })
-  }
+function startProcessCrashObservers(): void {
+  setMainMemorySpikeCounts(() => ({
+    openChats: getStructuredAgentSessionHost()?.reads.openConversationCount() ?? 0,
+    workspaces: Object.keys(state.store?.getAllWorktreeMeta() ?? {}).length,
+    projects: state.store?.getRepos().length ?? 0,
+    bots: state.store?.getBots().length ?? 0,
+    terminals: registeredPtyCount()
+  }))
+  setMainMemorySpikeProcessMetrics(readLiveProcessMetricDetails)
   // Sample live processes: gone-time metrics omit dead children and already-released memory.
   startPreGoneCrashSampling()
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
       name: details.name,
       serviceName: details.serviceName,
+      systemErrorCode: details.systemErrorCode,
       type: details.type
     })
     if (
@@ -199,9 +71,90 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       void handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
     }
   })
-  // Await duplicate-pane repair behind queued writes; all later phases must read the repaired tree.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    await repairDuplicatePtyPanesOnStart(store, runtime)
+}
+
+function startThemeAndSpeech(store: Store, fallbackMs: number): void {
+  // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
+  runAfterFirstWindowShown(() => {
+    app.on('browser-window-focus', startSpeechModelWarmup(store))
+  }, fallbackMs)
+  runAfterFirstWindowShown(() => {
+    startClaudeCodeThemeSync({
+      getSettings: () => store.getSettings(),
+      onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+      onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
+      onAppFocused: (listener) => app.on('browser-window-focus', listener),
+      userDataPath: app.getPath('userData')
+    })
+  }, fallbackMs)
+  nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+}
+
+function desktopCoreNative(store: Store): DesktopCoreNative {
+  return {
+    isQuitting: () => state.isQuitting,
+    isNativeUpdateInstallUnderWay,
+    isServeMode: () => state.isServeMode,
+    servedOrcaProfileId: () => state.activeOrcaProfile?.profile.id,
+    openExternal: (url) => shell.openExternal(url),
+    startObservers: () => initializeMainProcessObservers(store),
+    getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0,
+    startUsageBackend,
+    getDesktopWindowStatus,
+    sendTerminalSideEffects: (batch) => {
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('pty:sideEffect', batch)
+      }
+    },
+    attachBrowserHost: (runtime) => {
+      browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
+        runtime.notifyMobileSessionTabsChanged(worktreeId)
+      })
+      browserManager.setOffscreenTabOpener((request) =>
+        openOffscreenBrowserPageLink(
+          (params, caller) => runtime.browserTabCreate(params, caller),
+          request
+        )
+      )
+      browserManager.setServerPagePopupPresenter((popup) => {
+        void runtime.showServerPagePopupToClient(popup).catch((error: unknown) => {
+          console.warn('[browser] could not show a page popup to its client:', error)
+        })
+      })
+      browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
+    },
+    createAgentBrowserBridge: (onTabsChanged) => {
+      state.agentBrowserBridge = new AgentBrowserBridge(browserManager, { onTabsChanged })
+      return state.agentBrowserBridge
+    },
+    configureBrowserAutomation: (executeRpc) =>
+      configureBrowserClientPageAutomationRuntime({
+        browserManager,
+        getAgentBrowserBridge: () => state.agentBrowserBridge,
+        executeRpc
+      }),
+    afterFirstWindowShown: runAfterFirstWindowShown,
+    startThemeAndSpeech: (fallbackMs) => startThemeAndSpeech(store, fallbackMs),
+    startCrashObservers: startProcessCrashObservers
   }
-  logStartupMilestone('services-initialized')
+}
+
+export async function initializeReadyRuntimeServices(): Promise<void> {
+  const store = state.store
+  if (!store) {
+    throw new Error('Store must be initialized before ready services')
+  }
+  // Renderers fork from zygotes that exist already, so this must land before the first window.
+  await refuseRealtimeSchedulingUnderZeroRtTime()
+  await composeDesktopCore(state.core, {
+    store,
+    paths: {
+      userData: app.getPath('userData'),
+      home: app.getPath('home'),
+      isPackaged: app.isPackaged
+    },
+    native: desktopCoreNative(store),
+    registerCleanup: (cleanup) => app.once('will-quit', cleanup)
+  })
 }

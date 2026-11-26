@@ -35,6 +35,10 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
   'linear.updateIssue'
 ] as const
 
+/** Untagged calls (older phones) that store the tracker account: they must not move hosts when the relay flips.
+ *  Newer phones tag these with the host they bound when setup started. */
+const ACCOUNT_SETUP_METHODS: readonly string[] = ['linear.connect', 'linear.selectWorkspace']
+
 // Structural, not RpcRequest: the CLI typecheck reaches this file, and core.ts would pull in all of main.
 type TrackerCall = { method: string; executionHost?: unknown }
 
@@ -48,6 +52,8 @@ export function isUntaggedTrackerCall(request: TrackerCall): boolean {
 /**
  * Sends the call to the desktop's default server when a phone can reach it there now. Otherwise this
  * desktop answers, as before: an old, offline or sleeping server must not stall or wake for Tasks.
+ * Account setup always follows the default server, so a typed API key is never stored on another host
+ * when the relay is not ready; it fails instead.
  */
 export async function withDefaultScopeServer<Request extends TrackerCall>(
   request: Request,
@@ -55,7 +61,10 @@ export async function withDefaultScopeServer<Request extends TrackerCall>(
   relayHosts: { relayReady: (hostId: ExecutionHostId) => Promise<boolean> } | null
 ): Promise<Request> {
   const host = runtime.getClientDefaultScopeHost()
-  if (!host.startsWith('runtime:') || !(await relayHosts?.relayReady(host))) {
+  if (!host.startsWith('runtime:')) {
+    return request
+  }
+  if (!ACCOUNT_SETUP_METHODS.includes(request.method) && !(await relayHosts?.relayReady(host))) {
     return request
   }
   return { ...request, executionHost: host }

@@ -8,6 +8,7 @@ import { normalizeCodexHookTimeoutSec } from '../../trust/identity/codex-trust-i
 // Codex trust keys use snake_case event labels; hooks.json uses PascalCase.
 export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   SessionStart: 'session_start',
+  SessionEnd: 'session_end',
   UserPromptSubmit: 'user_prompt_submit',
   SubagentStart: 'subagent_start',
   SubagentStop: 'subagent_stop',
@@ -22,6 +23,7 @@ export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
 
 export const CODEX_EVENT_NAME_BY_LABEL: Record<CodexEventLabel, string> = {
   session_start: 'SessionStart',
+  session_end: 'SessionEnd',
   user_prompt_submit: 'UserPromptSubmit',
   subagent_start: 'SubagentStart',
   subagent_stop: 'SubagentStop',
@@ -74,4 +76,9 @@ export function getCodexHookTrustSignature(entry: CodexTrustEntry): string {
     matcher: entry.matcher ?? null,
     statusMessage: entry.statusMessage ?? null
   })
+}
+
+// Mirroring only: the runtime copy keeps raw timeouts, and clamped-equal hooks can carry different trust.
+export function getCodexUserHookMirrorSignature(entry: CodexTrustEntry): string {
+  return JSON.stringify([getCodexHookTrustSignature(entry), entry.timeoutSec ?? null])
 }

@@ -48,7 +48,6 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,
-    commitMetricCopy,
     ownerSplit,
     commitToneClass,
     commitBadgeLabel,
@@ -60,6 +59,9 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
     toggleWorktree,
     navigateToWorktree,
     navigateToTab,
+    openChat,
+    takeChatOpenedClose,
+    sharedAgentUsage,
     deleteWorktree,
     handleOpenWorkspaceCleanup,
     handleKillSession,
@@ -73,6 +75,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
+          takeChatOpenedClose()
           recordFeatureInteraction('resource-manager')
         }
         setOpen(nextOpen)
@@ -98,6 +101,11 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         className="flex h-[min(40rem,var(--radix-popover-content-available-height))] w-[26rem] max-w-[calc(100vw-2rem)] flex-col"
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => {
+          if (takeChatOpenedClose()) {
+            event.preventDefault()
+          }
+        }}
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => {
@@ -154,9 +162,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
                 {renderResourceUsageSummary(
                   {
                     ownerSplit,
-                    memoryMetricCopy,
                     commitBadgeLabel,
-                    commitMetricCopy,
                     commitToneClass,
                     orphanCount
                   },
@@ -179,6 +185,8 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
                 toggleWorktree,
                 navigateToWorktree,
                 navigateToTab,
+                openChat,
+                sharedAgentUsage,
                 deleteWorktree,
                 handleKillSession,
                 appCollapsed,

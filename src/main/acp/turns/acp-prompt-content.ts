@@ -194,8 +194,8 @@ export async function acpPromptBlocks(
 function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly string[]): boolean {
   const [block, ...rest] = body.blocks
   const text = block?.type === 'text' && rest.length === 0 ? block.text.trim() : ''
-  // Arguments do not make a withheld command safe, e.g. `/allow-all on`.
-  return text.startsWith('/') && withheld.includes(text.slice(1).split(/\s/, 1)[0])
+  // Neither arguments nor case make a withheld command safe, e.g. `/allow-all on`, `/CLEAR`.
+  return text.startsWith('/') && withheld.includes(text.slice(1).split(/\s/, 1)[0].toLowerCase())
 }
 
 export async function acpDispatchPrompt(

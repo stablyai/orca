@@ -39,14 +39,25 @@ export function useDeleteBot(bot: Bot): () => Promise<boolean> {
         return true
       }
       // The folder-workspace path guards unsaved files and clears the home's tabs; the bot owns the removal.
+      // It reports a failed removal only as false, so the host's refusal is kept for the toast.
+      let removeError: unknown
       const deleted = await deleteFolderWorkspaceUnlessUnsaved(
         useAppStore.getState,
         home.id,
         bot.hostId,
-        { remove: () => deleteBot(bot).then(() => true) }
+        {
+          remove: () =>
+            deleteBot(bot).then(
+              () => true,
+              (error: unknown) => {
+                removeError = error
+                throw error
+              }
+            )
+        }
       )
       if (deleted === false) {
-        toast.error(botErrorMessage(undefined))
+        toast.error(botErrorMessage(removeError))
       }
       return deleted === true
     } catch (error) {

@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
+import {
+  readRuntimeStatuses,
+  appRuntimeStatusSubscriptions
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
@@ -33,9 +36,7 @@ export function useAiVaultResumeCatalogs(scope: ExecutionHostScope): void {
       void ensureLocalRuntimeCapabilities().then(loadLocal)
     }
     const loadRuntime = (environmentId: string): void => {
-      const status = lastVerifiedRuntimeStatus(
-        useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-      )
+      const status = lastVerifiedRuntimeStatus(readRuntimeStatuses().get(environmentId))
       if (!disposed && status) {
         void loadHostStructuredAgents(
           toRuntimeExecutionHostId(environmentId),
@@ -44,46 +45,54 @@ export function useAiVaultResumeCatalogs(scope: ExecutionHostScope): void {
         )
       }
     }
-    const loadRuntimes = (previous?: AppState): void => {
+    let seenEnvironments = useAppStore.getState().runtimeEnvironments
+    let seenStatuses = readRuntimeStatuses()
+    const loadChangedRuntimes = (): void => {
+      const environments = useAppStore.getState().runtimeEnvironments
+      const statuses = readRuntimeStatuses()
+      const previousEnvironments = seenEnvironments
+      const previousStatuses = seenStatuses
+      seenEnvironments = environments
+      seenStatuses = statuses
       if (all) {
-        const state = useAppStore.getState()
+        if (environments === previousEnvironments && statuses === previousStatuses) {
+          return
+        }
         const previousIds =
-          previous && state.runtimeEnvironments !== previous.runtimeEnvironments
-            ? new Set(previous.runtimeEnvironments.map((environment) => environment.id))
+          environments !== previousEnvironments
+            ? new Set(previousEnvironments.map((environment) => environment.id))
             : undefined
-        for (const environment of state.runtimeEnvironments) {
+        for (const environment of environments) {
           if (
-            !previous ||
             (previousIds && !previousIds.has(environment.id)) ||
-            state.runtimeStatusByEnvironmentId.get(environment.id) !==
-              previous.runtimeStatusByEnvironmentId.get(environment.id)
+            statuses.get(environment.id) !== previousStatuses.get(environment.id)
           ) {
             loadRuntime(environment.id)
           }
         }
-      } else if (host?.kind === 'runtime') {
+      } else if (
+        host?.kind === 'runtime' &&
+        statuses.get(host.environmentId) !== previousStatuses.get(host.environmentId)
+      ) {
         loadRuntime(host.environmentId)
       }
     }
-    const stopStore =
+    // One store wake per publication; the reference gate inside skips unchanged inputs.
+    const stopChanges =
       all || host?.kind === 'runtime'
-        ? useAppStore.subscribe((state, previous) => {
-            const changed = all
-              ? state.runtimeEnvironments !== previous.runtimeEnvironments ||
-                state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId
-              : host?.kind === 'runtime' &&
-                state.runtimeStatusByEnvironmentId.get(host.environmentId) !==
-                  previous.runtimeStatusByEnvironmentId.get(host.environmentId)
-            if (changed) {
-              loadRuntimes(previous)
-            }
-          })
+        ? appRuntimeStatusSubscriptions().subscribeStore(loadChangedRuntimes)
         : undefined
-    loadRuntimes()
+    if (all) {
+      for (const environment of seenEnvironments) {
+        loadRuntime(environment.id)
+      }
+    } else if (host?.kind === 'runtime') {
+      loadRuntime(host.environmentId)
+    }
     return () => {
       disposed = true
       stopLocal?.()
-      stopStore?.()
+      stopChanges?.()
     }
   }, [scope])
 }

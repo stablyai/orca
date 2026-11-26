@@ -205,6 +205,11 @@ function observeClaudeSettingsReadback(
 /** Effort and Fast change through a control this CLI never answers. */
 const CLAUDE_CLI_UPDATE_REQUIRED = { supported: false, reason: 'cli-update-required' }
 
+/** A picked model replaces the fallback in every report, before the turn that applies it. */
+export function claudeShownFallbackModel(session: ClaudeSession): string | undefined {
+  return session.modelFallback?.picked ? undefined : session.modelFallback?.model
+}
+
 /** Reuse the initialize catalog and held options without another CLI request. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
@@ -244,6 +249,7 @@ export function claudeStructuredSessionOptionsFrom(
     current: {
       model,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
+      fallbackModel: claudeShownFallbackModel(session),
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),

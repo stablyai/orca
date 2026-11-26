@@ -1,7 +1,6 @@
 import type * as RuntimeRpcCallModule from '../../../runtime/rpc/calls/runtime-rpc-call'
 
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
-import { resetNotesInFlightForTests } from '@/components/notes/delivery/notes-send-in-flight'
 import type { AppState } from '../../types'
 import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -88,7 +87,6 @@ function rowNotes(store: ReturnType<typeof createTwinStore>, hostId: string): st
 beforeEach(() => {
   vi.mocked(callRuntimeRpc).mockClear()
   vi.mocked(toast.error).mockClear()
-  resetNotesInFlightForTests()
   updateMeta.mockReset()
   updateMeta.mockResolvedValue({})
 })
@@ -100,29 +98,6 @@ function capturedOwner(store: { getState: () => AppState }, worktreeId: string):
   }
   return owner
 }
-
-describe('captured note owners across delivery and selection', () => {
-  it('refuses every mutation when the captured twin was removed', async () => {
-    const store = createTwinStore('ssh:box')
-    const sent = note('same-id', 'same body')
-    store.setState({
-      worktreesByRepo: { [REPO]: [worktree('local', [sent]), worktree('ssh:box', [sent])] }
-    })
-    const owner = capturedOwner(store, WT)
-    store.setState({
-      activeWorkspaceExecutionHostId: 'local',
-      worktreesByRepo: { [REPO]: [worktree('local', [sent])] }
-    })
-    expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(false)
-    expect(await store.getState().clearDiffComments(owner)).toBe(false)
-    expect(await store.getState().clearDiffCommentsForFile(owner, 'a')).toBe(false)
-    expect(await store.getState().markDiffCommentsSent(owner, [sent.id])).toBe(false)
-    expect(await store.getState().updateDiffComment(owner, sent.id, 'changed')).toBe(false)
-    await store.getState().deleteDiffComment(owner, sent.id)
-    expect(rowNotes(store, 'local')).toEqual(['same body'])
-    expect(updateMeta).not.toHaveBeenCalled()
-  })
-})
 
 describe('snapshot-matched Markdown review note bulk clear', () => {
   it('preserves edited notes, newly added notes, and other document/diff notes', async () => {

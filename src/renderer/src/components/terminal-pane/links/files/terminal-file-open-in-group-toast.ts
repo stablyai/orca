@@ -12,6 +12,16 @@ export function showOpenInGroupRefusedToast(filePath: string): void {
   )
 }
 
+/** A web link the group can't take; its URL can carry a query, so the toast leaves it out. */
+export function showLinkOpenInGroupRefusedToast(): void {
+  toast.error(
+    translate(
+      'auto.components.terminal.pane.TerminalLinkActionPopover.openLinkInThisGroupRefused',
+      "Couldn't open the link in this group"
+    )
+  )
+}
+
 export function refuseOpenInGroupRequest(
   filePath: string,
   explicit: boolean,

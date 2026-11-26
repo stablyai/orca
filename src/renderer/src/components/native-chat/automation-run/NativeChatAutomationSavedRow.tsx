@@ -7,10 +7,9 @@ import { botAutomationWhen } from '@/components/bots/bot-automation-when'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
 import { launchModelLabel } from '@/components/agent/AgentLaunchPicker'
-import { WebhookCopyUrlButton } from '@/components/bots/webhooks/WebhookCopyUrlButton'
 import { webhookResultsTo, webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
-import { hookIdOfRule } from '../../../../../shared/connector-webhook-contract'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { automationHookId } from '../../../../../shared/automation-event-triggers'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { automationRowMark } from '../../../../../shared/automations/automation-chat-row'
 import { useAutomationRunWording } from './automation-run-wording'
@@ -24,6 +23,7 @@ import { structuredAgentSessionTabId } from '../../../../../shared/agent-session
 import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-composer-focus-intent'
 import { NativeChatAutomationRowFrame, ROW_NOTE } from './NativeChatAutomationRowFrame'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
+import { NativeChatWebhookSetupCard } from './NativeChatWebhookSetupCard'
 
 // Every automation card in a chat shares this prefix, so opening one closes the rest.
 const AUTOMATION_CARD_DISCLOSURE = 'automation-card:'
@@ -46,25 +46,6 @@ function ownAgent(saved: AutomationSaved): string | null {
     .filter(Boolean)
     .join(' · ')
   return translate('components.native-chat.automationSaved.onAgent', 'on {{name}}', { name })
-}
-
-/** The saved automation's hook, if it has one; the URL itself is never in the transcript. */
-function savedHookId(saved: AutomationSaved): string | null {
-  const rule = saved.automation.on?.find((trigger) => trigger.source === 'webhook')
-  return rule ? hookIdOfRule(rule.id) : null
-}
-
-function CopyWebhookUrl({
-  target,
-  hookId,
-  worktreeId
-}: {
-  target: RuntimeClientTarget
-  hookId: string
-  worktreeId: string
-}): React.JSX.Element {
-  const botName = useBotForWorkspace(worktreeId)?.name ?? webhookUnknownBotName()
-  return <WebhookCopyUrlButton target={target} hookId={hookId} botName={botName} />
 }
 
 /** Adds "Change “<name>” so that " to this chat's unsent message, with the caret after it. */
@@ -103,7 +84,8 @@ export function NativeChatAutomationSavedRow({
   )
   const toggle = useRef<HTMLButtonElement>(null)
   const wording = useAutomationRunWording(automation)
-  const hookId = savedHookId(saved)
+  const hookId = automationHookId(automation)
+  const botName = useBotForWorkspace(owner?.worktreeId ?? null)?.name ?? webhookUnknownBotName()
   const when = botAutomationWhen(automation)
   const facts = [
     when,
@@ -113,6 +95,17 @@ export function NativeChatAutomationSavedRow({
   ].filter(Boolean)
   const label = wording.say(saved.change === 'updated' ? 'updatedAutomation' : 'createdAutomation')
   const status = automation.enabled ? when : wording.say('paused')
+  if (hookId && owner) {
+    // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
+    return (
+      <NativeChatWebhookSetupCard
+        target={owner.target}
+        hookId={hookId}
+        botName={botName}
+        name={automation.name}
+      />
+    )
+  }
   return (
     <div
       onKeyDown={(event) => {
@@ -138,17 +131,6 @@ export function NativeChatAutomationSavedRow({
       >
         <>
           <p className={ROW_NOTE}>{facts.join(' · ')}</p>
-          {hookId && owner ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <p className={ROW_NOTE}>
-                {t(
-                  'components.native-chat.automationSaved.webhookHint',
-                  'Point your service at this URL'
-                )}
-              </p>
-              <CopyWebhookUrl target={owner.target} hookId={hookId} worktreeId={owner.worktreeId} />
-            </div>
-          ) : null}
           {open ? (
             <NativeChatAutomationCardDetails
               automationId={automation.id}
@@ -162,7 +144,13 @@ export function NativeChatAutomationSavedRow({
             <button
               type="button"
               className={RUN_LINK_BUTTON}
-              onClick={() => openBotAutomation(automation.id, null)}
+              onClick={() =>
+                openBotAutomation(
+                  getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
+                  automation.id,
+                  null
+                )
+              }
             >
               {wording.say('openAutomation')}
             </button>

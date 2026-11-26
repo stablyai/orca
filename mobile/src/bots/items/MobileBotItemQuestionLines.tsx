@@ -1,146 +1,117 @@
-// A Needs you comment's question footer on the phone, as on desktop: under the body, each question line
-// (an orange dot while the item waits on it) with its quick replies, and Type your answer. A quick reply
-// posts its words as the owner's comment; a long press puts them in the comment box to add to first.
-// Answered, the lines go muted and keep only the reply picked.
+// A Needs you comment's question lines on the phone. An open line reads as the question, except while the
+// answer card docked at the bottom (MobileBotItemAskCard) asks it. Answered, a line reads
+// "Question → answer", muted, and the answer's own comment is not drawn again.
 import { Pressable, Text, View } from 'react-native'
-import { Check, Pencil } from 'lucide-react-native'
 import {
-  botItemPickedReplies,
-  botItemQuickReplyText,
-  type BotItemQuestionShape,
-  type BotItemQuickReply
+  botItemQuestionLine,
+  type BotItemQuestionShape
 } from '../../../../src/shared/bots/bot-item-ask'
+import { botItemAnswerWords } from '../../../../src/shared/bots/bot-item-answer-lines'
+import {
+  botItemShownAskEnd,
+  type BotItemAskEnd
+} from '../../../../src/shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../src/shared/bots/bot-items'
+import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
+import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
-
-export type MobileBotItemQuickReplyActions = {
-  send: (text: string) => void
-  edit: (text: string) => void
-  type: () => void
-}
-
-function ChipWords({ reply, muted = false }: { reply: BotItemQuickReply; muted?: boolean }) {
-  const t = useMobileTranslation()
-  return (
-    <Text style={[styles.chipText, muted && styles.muted]}>
-      {reply.label}
-      {reply.recommended ? (
-        <Text style={styles.recommended}>
-          {'  '}
-          {t('bots.items.ask.recommended', 'Recommended')}
-        </Text>
-      ) : null}
-    </Text>
-  )
-}
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
 
 export function MobileBotItemQuestionLines({
   shape,
+  askId,
   waiting,
   answers = NO_ANSWERS,
-  busy = false,
-  actions
+  byOrder,
+  ended = null,
+  onShowLive,
+  sent = null,
+  asking = false
 }: {
   shape: BotItemQuestionShape
+  /** The ask's event id. */
+  askId: string
+  /** The item waits on this question now. */
   waiting: boolean
+  /** Per line, the owner comment that answered it. */
   answers?: readonly (BotItemEvent | null)[]
-  /** A reply is on its way or just landed: the quick replies wait for its outcome. */
-  busy?: boolean
-  actions?: MobileBotItemQuickReplyActions
+  /** Per line, answered only by a comment naming no line: that comment shows as itself. */
+  byOrder?: readonly boolean[]
+  /** Why its open lines take no answer: a later ask replaced them, or the owner skipped them. */
+  ended?: BotItemAskEnd | null
+  /** Replaced: shows the ask that waits now. */
+  onShowLive?: () => void
+  /** Answers just posted as one comment, shown on their lines until the host's read has it. */
+  sent?: BotItemSentAnswers | null
+  /** The docked answer card asks its open lines now: they aren't repeated here. */
+  asking?: boolean
 }) {
   const t = useMobileTranslation()
+  const several = shape.decisions.length > 1
+  const posted = sent?.askId === askId ? sent.answers : null
+  const answered = shape.decisions.map((_, index) => {
+    // With several questions, a comment that named no line shows as itself, not as the line's answer.
+    const answer = several && byOrder?.[index] ? null : answers[index]
+    return answer ? botItemAnswerWords(shape, index, answer.data) : (posted?.[index] ?? null)
+  })
+  const shown = shape.decisions.flatMap((decision, index) =>
+    answered[index] || !(asking && waiting && !answers[index]) ? [{ decision, index }] : []
+  )
+  const shownEnd = botItemShownAskEnd(ended, answered)
+  if (shown.length === 0) {
+    return null
+  }
   return (
-    <View style={[styles.footer, shape.body.trim() ? styles.spaced : null]}>
-      {shape.decisions.map((decision, index) => {
-        const answer = answers[index] ?? null
-        const open = waiting && !answer
-        const picks = answer ? (botItemPickedReplies(shape, answer.data)[index] ?? []) : []
-        return (
-          <View key={decision.question} style={styles.decision}>
-            <View>
-              {/* Hangs in the gutter, so the question and its chips share the body's left edge. */}
-              {open ? <View style={styles.dot} /> : null}
-              <Text style={[styles.question, !open && styles.muted]}>{decision.question}</Text>
-            </View>
-            {open && actions && decision.replies.length > 0 ? (
-              <View style={styles.chips}>
-                {decision.replies.map((reply) => {
-                  const text = botItemQuickReplyText(shape, decision, reply)
-                  return (
-                    <Pressable
-                      key={reply.label}
-                      accessibilityRole="button"
-                      accessibilityHint={reply.detail}
-                      disabled={busy}
-                      onPress={() => actions.send(text)}
-                      onLongPress={() => actions.edit(text)}
-                      style={({ pressed }) => [styles.chip, (pressed || busy) && styles.pressed]}
-                    >
-                      <ChipWords reply={reply} />
-                    </Pressable>
-                  )
-                })}
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={actions.type}
-                  style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-                >
-                  <Pencil size={12} color={colors.textMuted} />
-                  <Text style={[styles.chipText, styles.muted]}>
-                    {t('bots.items.ask.typeAnswer', 'Type your answer')}
-                  </Text>
-                </Pressable>
-              </View>
-            ) : picks.length > 0 ? (
-              <View style={styles.chips}>
-                {picks.map((pick) => (
-                  <View key={pick.label} style={[styles.chip, styles.picked]}>
-                    <Check size={12} color={colors.textMuted} />
-                    <ChipWords reply={pick} muted />
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
+    <View style={[several ? styles.several : styles.one, shape.body.trim() && styles.spaced]}>
+      {shown.map(({ decision, index }) => {
+        const words = answered[index]
+        return words ? (
+          <Text key={decision.question} style={styles.answerLine}>
+            {botItemQuestionLine(decision.question)} →{' '}
+            <Text style={styles.answerWords}>{words}</Text>
+          </Text>
+        ) : (
+          // A decision's question is unique within its ask.
+          <MobileNativeChatMarkdown
+            key={decision.question}
+            content={decision.question}
+            tone={waiting && !answers[index] ? 'strong' : 'muted'}
+            rangeSelectable={INLINE_TEXT_SELECTION}
+          />
         )
       })}
+      {shownEnd === 'replaced' && onShowLive ? (
+        <Pressable
+          style={({ pressed }) => [styles.endedRow, pressed && pressedStyle]}
+          onPress={onShowLive}
+          accessibilityRole="button"
+          hitSlop={6}
+        >
+          <Text style={styles.ended}>
+            {t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+          </Text>
+        </Pressable>
+      ) : shownEnd ? (
+        <Text style={styles.ended}>
+          {shownEnd === 'skipped'
+            ? t('bots.items.ask.skipped', 'Skipped')
+            : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+        </Text>
+      ) : null}
     </View>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  footer: { gap: spacing.md },
-  spaced: { marginTop: spacing.lg },
-  dot: {
-    position: 'absolute',
-    left: -12,
-    top: 7.5,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.agentQuestion
-  },
-  decision: { gap: spacing.md },
-  question: { fontSize: 15, lineHeight: 21, fontWeight: '500', color: colors.textPrimary },
-  muted: { color: colors.textMuted },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 40,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.choiceBorder
-  },
-  picked: { backgroundColor: colors.translucentFill },
-  pressed: { opacity: 0.6 },
-  chipText: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textPrimary },
-  recommended: { fontSize: typography.metaSize, color: colors.textMuted }
+  spaced: { marginTop: spacing.sm },
+  one: { gap: spacing.sm },
+  several: { gap: spacing.xs },
+  ended: { fontSize: 12, lineHeight: 16, color: colors.textMuted },
+  endedRow: { alignSelf: 'flex-start' },
+  answerLine: { fontSize: 13, lineHeight: 19, color: colors.textMuted },
+  answerWords: { color: colors.textSecondary }
 }))

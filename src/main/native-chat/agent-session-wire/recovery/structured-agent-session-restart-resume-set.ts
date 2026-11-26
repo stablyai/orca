@@ -32,6 +32,8 @@ export type StructuredAgentSessionResumeCandidate = {
   model?: string
   /** Stop-time snapshot; absent on older hosts/markers. */
   activity?: AgentSessionRestartActivity
+  /** A terminal worker offered beside the chats: its id names a Dispatch, not a chat to open. */
+  surface?: 'terminal'
 }
 
 export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCandidate & {

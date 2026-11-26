@@ -24,6 +24,8 @@ import type {
 export class EmulatorBridge {
   private readonly sessionRegistry = new EmulatorSessionRegistry()
   private readonly startLeases = new EmulatorStartLeaseRegistry()
+  // Sync after teardown would rewrite a layout restore already put back.
+  private tearingDown = false
   private readonly backends: EmulatorBackend[]
   private readonly iosBackend: IosEmulatorBackend
   private readonly androidBackend: AndroidEmulatorBackend
@@ -176,7 +178,7 @@ export class EmulatorBridge {
 
   async syncKeyboardLayout(opts?: EmulatorTargetOpts): Promise<boolean> {
     const { backend, device } = await this.resolveTarget(opts)
-    return (await backend.syncHardwareKeyboardLayout?.(device)) ?? false
+    return (!this.tearingDown && (await backend.syncHardwareKeyboardLayout?.(device))) || false
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {
@@ -270,23 +272,20 @@ export class EmulatorBridge {
   }
 
   async destroyAllSessions(): Promise<void> {
-    const promises: Promise<unknown>[] = []
-    for (const session of this.sessionRegistry.listSessions()) {
-      if (!session.managed) {
-        continue
-      }
-      const backend = this.backendForKind(session.backend)
-      if (!backend) {
-        continue
-      }
-      promises.push(
-        backend
-          .stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
+    this.tearingDown = true
+    await Promise.allSettled(
+      this.sessionRegistry.listSessions().map(async (session) => {
+        const backend = this.backendForKind(session.backend)
+        if (!session.managed) {
+          await backend?.restoreHardwareKeyboardLayout?.(session.deviceUdid)
+          return
+        }
+        await backend
+          ?.stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
           .catch(() => {})
-          .then(() => backend.shutdownDevice(session.deviceUdid).catch(() => {}))
-      )
-    }
-    await Promise.allSettled(promises)
+        await backend?.shutdownDevice(session.deviceUdid).catch(() => {})
+      })
+    )
     this.sessionRegistry.clear()
   }
 

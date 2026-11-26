@@ -15,7 +15,8 @@ import {
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
-import type { AgentSessionAwaitedQuestion } from '../agent-session-wire'
+import type { AgentSessionAwaitedQuestion, AgentSessionStatusSummary } from '../agent-session-wire'
+import { structuredAgentSessionAwaitedPrompt } from './structured-agent-session-awaited-prompt'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
 import { itemBlocks } from './structured-agent-session-item-blocks'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
@@ -114,7 +115,8 @@ export function projectStructuredItemToNativeChat(
         ...(projected.drawnMarkdown !== undefined
           ? { drawnMarkdown: projected.drawnMarkdown }
           : {}),
-        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
+        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {}),
+        journalRevision: item.revision
       }
     : null
   projectedItems.set(item, message)
@@ -155,7 +157,10 @@ export function projectStructuredAgentSessionStatus(
 }
 
 /** Name sidebar activity fields like agent-status entries for direct row consumption. */
-export type StructuredAgentSessionStatusProjection = {
+export type StructuredAgentSessionStatusProjection = Pick<
+  AgentSessionStatusSummary,
+  'awaitsApproval' | 'awaitsBlockingQuestion' | 'attentionAsksOnlyQuestions'
+> & {
   status: StructuredAgentSessionProjectedStatus | null
   latestPrompt: string
   /** Present only while a turn is running — see showsAgentToolPreview, which reads
@@ -236,14 +241,13 @@ export function projectStructuredAgentSessionStatusState(
     currentFence,
     request
   )
+  const pending =
+    status === 'attention' ? items.filter(pendingStructuredAgentSessionPrompt(scope)) : []
   return {
     latestRequest,
     owesWork:
       status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
-    pendingPromptIds:
-      status === 'attention'
-        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
-        : [],
+    pendingPromptIds: pending.map((item) => item.itemId),
     summary: {
       status,
       latestPrompt: normalizePromptField(latestPrompt),
@@ -251,16 +255,19 @@ export function projectStructuredAgentSessionStatusState(
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
       ...(turnOutcome ? { turnOutcome } : {}),
-      ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+      ...(statusStartedAt !== undefined ? { statusStartedAt } : {}),
+      ...structuredAgentSessionAwaitedPrompt(pending)
     }
   }
 }
 
+// Why: callers walk every live chat, and a FIFO smaller than that set misses on every pass.
+const MAX_MEMOIZED_PANE_LEAVES = 32_768
 const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): string => {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
-}, 2048)
+}, MAX_MEMOIZED_PANE_LEAVES)
 
 /** The tab id a chat's pane key names: status, attention and orchestration rows still address a
  *  minted slot's chat by its session's legacy id. */

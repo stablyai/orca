@@ -11,12 +11,14 @@ import { writeRecoveryFileDurable } from './agent-session-recovery-capsule-file'
 import type { RecoveryEntry } from './agent-session-recovery-capsule-entries'
 
 const LEDGER_FILE = 'agent-session-recovery-automatic.json'
-const MAX_LEDGER_BYTES = 256 * 1024
+const MAX_LEDGER_BYTES = 1024 * 1024
 export const AUTOMATIC_CONTINUATION_LIMIT = 3
 export const AUTOMATIC_CONTINUATION_WINDOW_MS = 5 * 60_000
 /** Long enough to remember a cut across a crash loop; a day-old cut is no longer automatic anyway. */
 const TAKEN_RETENTION_MS = 24 * 60 * 60_000
 const DISMISSED_LIMIT = 500
+/** Bounds the file below its read limit; an unreadable ledger would stop every automatic continuation. */
+const PASSED_LIMIT = 1000
 
 const ledgerSchema = z.object({
   taken: z.record(z.string(), z.array(z.object({ at: z.number(), work: z.string() }))),
@@ -57,11 +59,66 @@ async function readLedger(capsulePath: string): Promise<AutomaticRestartLedger |
   }
 }
 
+function takenEntries(taken: AutomaticRestartLedger['taken']) {
+  return Object.entries(taken).flatMap(([sessionId, list]) =>
+    list.map((entry) => ({ sessionId, entry }))
+  )
+}
+
+/** Drops the oldest tenth; with `outsideWindowOnly`, never an entry that still counts toward the rate limit. */
+function dropOldestTaken(
+  taken: AutomaticRestartLedger['taken'],
+  outsideWindowOnly: boolean
+): AutomaticRestartLedger['taken'] {
+  const entries = takenEntries(taken).sort((a, b) => a.entry.at - b.entry.at)
+  const newest = entries.at(-1)?.entry.at ?? 0
+  const droppable = outsideWindowOnly
+    ? entries.filter(({ entry }) => newest - entry.at > AUTOMATIC_CONTINUATION_WINDOW_MS)
+    : entries
+  const dropped = new Set(droppable.slice(0, Math.ceil(droppable.length / 10)))
+  const kept: AutomaticRestartLedger['taken'] = {}
+  for (const item of entries) {
+    if (!dropped.has(item)) {
+      kept[item.sessionId] = [...(kept[item.sessionId] ?? []), item.entry]
+    }
+  }
+  return kept
+}
+
+/** Offer ids can be 512 characters; shed the least harmful records first until the file fits well inside its read limit. Entries still inside the rate-limit window go last, so a crash loop stays bounded. */
+function fitLedgerToReadLimit(ledger: AutomaticRestartLedger): AutomaticRestartLedger {
+  const fitted = { ...ledger }
+  const exceeds = (limit: number): boolean => Buffer.byteLength(JSON.stringify(fitted)) > limit
+  const tooLarge = (): boolean => exceeds(MAX_LEDGER_BYTES / 2)
+  const oldTaken = (): boolean => {
+    const entries = takenEntries(fitted.taken)
+    const newest = Math.max(0, ...entries.map((item) => item.entry.at))
+    return entries.some(({ entry }) => newest - entry.at > AUTOMATIC_CONTINUATION_WINDOW_MS)
+  }
+  while (tooLarge()) {
+    if (oldTaken()) {
+      fitted.taken = dropOldestTaken(fitted.taken, true)
+    } else if (fitted.dismissed.length > 0) {
+      fitted.dismissed = fitted.dismissed.slice(Math.ceil(fitted.dismissed.length / 10))
+    } else if (fitted.passed.length > 0) {
+      fitted.passed = fitted.passed.slice(Math.ceil(fitted.passed.length / 10))
+    } else if (exceeds(MAX_LEDGER_BYTES) && Object.keys(fitted.taken).length > 0) {
+      fitted.taken = dropOldestTaken(fitted.taken, false)
+    } else {
+      break
+    }
+  }
+  return fitted
+}
+
 export function writeAutomaticRestartLedger(
   capsulePath: string,
   ledger: AutomaticRestartLedger
 ): Promise<void> {
-  return writeRecoveryFileDurable(ledgerPath(capsulePath), JSON.stringify(ledger))
+  return writeRecoveryFileDurable(
+    ledgerPath(capsulePath),
+    JSON.stringify(fitLedgerToReadLimit(ledger))
+  )
 }
 
 /** Orca continues on its own only a cut from the run that just ended, whose agent was proven to
@@ -144,5 +201,6 @@ export function passOverAutomaticOffers(
       : []
   )
   const stillPassed = reserved.map(offerKey).filter((key) => ledger.passed.includes(key))
-  return { ...ledger, passed: [...new Set([...waiting.map(offerKey), ...stillPassed])] }
+  const passed = [...new Set([...stillPassed, ...waiting.map(offerKey)])].slice(-PASSED_LIMIT)
+  return { ...ledger, passed }
 }
