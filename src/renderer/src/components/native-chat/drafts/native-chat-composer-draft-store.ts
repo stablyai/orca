@@ -52,8 +52,6 @@ import {
   withNativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
-import { isLoneStructuredAgentSessionConversationCommand } from '../../../../../shared/agent-session/view/structured-agent-session-composer'
-
 /** Edit scopes share input machinery but never enter draft persistence. */
 export function openNativeChatEditDraft(scopeKey: string, draft: NativeChatComposerDraft): void {
   ephemeralDrafts.set(scopeKey, { scopeKey, active: true })
@@ -198,8 +196,8 @@ function carriedNativeChatDraftPosition(
   if (
     !previous?.pending ||
     text === before?.text ||
+    // A replace (of nothing, or of a lone command) never keeps the old text as a `kept\n\n` prefix.
     kept === '' ||
-    isLoneStructuredAgentSessionConversationCommand(kept) ||
     !text.startsWith(`${kept}\n\n`)
   ) {
     return undefined

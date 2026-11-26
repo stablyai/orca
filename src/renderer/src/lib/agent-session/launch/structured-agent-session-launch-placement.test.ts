@@ -103,4 +103,14 @@ it('carries nothing for a settled placement or a replacing append', () => {
   appendToNativeChatComposerDraft(replaced.scope, { text: 'refused' })
   expect(readNativeChatComposerDraft(replaced.scope).text).toBe('refused')
   expect(positionOf(replaced.scope)).toBeUndefined()
+
+  // A blank draft is replaced too, even by returned text that starts with blank lines.
+  const blank = structuredAgentSessionDraftScopeKey('placement-blank-replaced')
+  updateNativeChatComposerDraft(blank, { text: '  ' }, 'immediate', undefined, {
+    at: 'end',
+    pending: true
+  })
+  appendToNativeChatComposerDraft(blank, { text: '\n\nrefused' })
+  expect(readNativeChatComposerDraft(blank).text).toBe('\n\nrefused')
+  expect(positionOf(blank)).toBeUndefined()
 })
