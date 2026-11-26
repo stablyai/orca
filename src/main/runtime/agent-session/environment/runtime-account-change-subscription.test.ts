@@ -1,5 +1,5 @@
 import { setImmediate } from 'node:timers/promises'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { createEmptyRateLimitState } from '../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import type { PluginUsageReading } from '../../../../shared/plugins/contributions/plugin-usage-provider-contribution'
 import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
@@ -15,7 +15,7 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     label: 'Sample quota',
     status: 'ok',
     accounts: [{ label: 'Sample account', windows: [{ label: '5h', usedPercent: 25 }] }],
-    observedAt: Date.now()
+    observedAt: 1_000
   }
   const delayedRoster = Promise.withResolvers<AccountsSnapshot['codex']>()
   const snapshots: AccountsSnapshot[] = []
@@ -73,6 +73,8 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     (snapshot) => snapshots.push(snapshot)
   )
 
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000)
   try {
     await initialize((snapshot) => snapshots.push(snapshot))
     pluginUsageProviders = [reading]
@@ -155,5 +157,6 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     })
   } finally {
     unsubscribe()
+    vi.useRealTimers()
   }
 })
