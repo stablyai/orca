@@ -52,6 +52,7 @@ import { useRightSidebarActivityItems } from './activity-bar/use-right-sidebar-a
 import { useRightSidebarTabRouting } from './activity-bar/use-right-sidebar-tab-routing'
 import { useWindowWidth } from './layout/use-window-width'
 import { useBotPanelMemory } from '../bots/use-bot-panel-memory'
+import { BotGroupNeedsYouPublishers } from '../bots/BotGroupNeedsYouPublishers'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
@@ -92,7 +93,8 @@ function RightSidebarInner(): React.JSX.Element {
     pluginSystemEnabled,
     pluginFetchStatus,
     installedPluginTabKeys,
-    isBotPage
+    isBotPage,
+    groupMembers
   } = useRightSidebarActivityItems({ rightSidebarOpen })
   const { effectiveTab, selectActivityTab } = useRightSidebarTabRouting({
     visibleItems: availableItems,
@@ -213,6 +215,7 @@ function RightSidebarInner(): React.JSX.Element {
       ) : (
         // Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes.
         <RightSidebarGutterResizeProvider value={gutterResize}>
+          <BotGroupNeedsYouPublishers members={groupMembers} />
           <RightSidebarPanelContent
             effectiveTab={effectiveTab}
             rightSidebarOpen={rightSidebarOpen}

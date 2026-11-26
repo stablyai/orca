@@ -6,23 +6,64 @@ import { useEffect } from 'react'
 export const PAIRED_AGENTS_FIRST_REFRESH_MS = 15_000
 export const PAIRED_AGENTS_MAX_REFRESH_MS = 120_000
 
-export function usePairedActivityRefresh(active: boolean, refresh: () => void): void {
+type SharedPairedRefresh = {
+  callbacks: Set<() => void>
+  delay: number
+  timer: number
+}
+
+// One timer per (host read store, bot) so concurrent surfaces never schedule offset duplicate polls.
+const sharedRefreshes = new WeakMap<object, Map<string, SharedPairedRefresh>>()
+
+export function usePairedActivityRefresh(
+  active: boolean,
+  scope: object,
+  key: string | null,
+  refresh: () => void
+): void {
   useEffect(() => {
-    if (!active) {
+    if (!active || !key) {
       return
     }
-    let delay = PAIRED_AGENTS_FIRST_REFRESH_MS
-    let timer = 0
-    const next = (): void => {
-      timer = window.setTimeout(() => {
-        if (document.visibilityState === 'visible') {
-          refresh()
-        }
-        delay = Math.min(delay * 2, PAIRED_AGENTS_MAX_REFRESH_MS)
-        next()
-      }, delay)
+    let byKey = sharedRefreshes.get(scope)
+    if (!byKey) {
+      byKey = new Map()
+      sharedRefreshes.set(scope, byKey)
     }
-    next()
-    return () => window.clearTimeout(timer)
-  }, [active, refresh])
+    let entry = byKey.get(key)
+    if (!entry) {
+      const created: SharedPairedRefresh = {
+        callbacks: new Set(),
+        delay: PAIRED_AGENTS_FIRST_REFRESH_MS,
+        timer: 0
+      }
+      const next = (): void => {
+        created.timer = window.setTimeout(() => {
+          if (document.visibilityState === 'visible') {
+            const [run] = created.callbacks
+            run?.()
+          }
+          if (created.callbacks.size === 0) {
+            return
+          }
+          created.delay = Math.min(created.delay * 2, PAIRED_AGENTS_MAX_REFRESH_MS)
+          next()
+        }, created.delay)
+      }
+      byKey.set(key, created)
+      next()
+      entry = created
+    }
+    entry.callbacks.add(refresh)
+    return () => {
+      entry.callbacks.delete(refresh)
+      if (entry.callbacks.size === 0) {
+        window.clearTimeout(entry.timer)
+        byKey.delete(key)
+        if (byKey.size === 0) {
+          sharedRefreshes.delete(scope)
+        }
+      }
+    }
+  }, [active, scope, key, refresh])
 }
