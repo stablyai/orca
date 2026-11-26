@@ -1,4 +1,8 @@
 import { deferredRemovals } from './native-chat-composer-draft-memory'
+import {
+  forgetMovedNativeChatDraftSource,
+  recordMovedNativeChatDraftSource
+} from './native-chat-moved-draft-direction'
 
 // A moved draft's source is retired in steps, so a restart at any point recovers a draft with its
 // notes: the source's draft stays saved until the destination's write holding the moved draft is
@@ -71,6 +75,7 @@ export function releaseMovedNativeChatDraftSource(sourceScope: string): boolean 
 
 /** The source's removal is confirmed: its copies of the notes go too. */
 export function movedNativeChatDraftSourceRemoved(sourceScope: string): void {
+  forgetMovedNativeChatDraftSource(sourceScope)
   if (retiring.delete(sourceScope)) {
     releaseCopies(sourceScope)
   }
@@ -80,6 +85,7 @@ export function movedNativeChatDraftSourceRemoved(sourceScope: string): void {
  *  moved notes go once the copies at the destination are saved; while those are refused, the
  *  source's copies are the only saved words, so they stay. The new draft's own notes never go. */
 export function movedNativeChatDraftSourceReused(sourceScope: string): void {
+  forgetMovedNativeChatDraftSource(sourceScope)
   const wasKept = deferredRemovals.delete(sourceScope)
   if (retiring.delete(sourceScope) || wasKept) {
     const release = copies.get(sourceScope)
@@ -109,10 +115,11 @@ export function redirectMovedNativeChatDraftSources(
   to: string,
   savedAt: number
 ): void {
-  for (const pending of deferredRemovals.values()) {
+  for (const [source, pending] of deferredRemovals) {
     if (pending.destinationScope === from) {
       pending.destinationScope = to
       pending.savedAt = savedAt
+      recordMovedNativeChatDraftSource(source, to)
     }
   }
 }

@@ -4,6 +4,7 @@ import {
 } from './native-chat-composer-draft-store'
 import { deleteNativeChatComposerDraft } from './native-chat-composer-draft-removal'
 import { sweepLeftoverMovedNativeChatDrafts } from './native-chat-moved-draft-adoption'
+import { recordMovedNativeChatDraftSource } from './native-chat-moved-draft-direction'
 import {
   deferredRemovals,
   records,
@@ -66,6 +67,8 @@ export function moveNativeChatComposerDraft(
   if (sourceScope === destinationScope) {
     return
   }
+  // Saved first, so a restart at any later point knows which of the two drafts was left behind.
+  recordMovedNativeChatDraftSource(sourceScope, destinationScope)
   const source = readNativeChatComposerDraft(sourceScope)
   moveNativeChatStagedFiles(sourceScope, destinationScope)
   moveNativeChatPendingAttachments(sourceScope, destinationScope)

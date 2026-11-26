@@ -2,6 +2,10 @@ import { isNativeChatEditDraft, load, records } from './native-chat-composer-dra
 import { deleteNativeChatComposerDraft } from './native-chat-composer-draft-removal'
 import { keepsMovedNativeChatDraftNotes } from './native-chat-moved-draft-release'
 import {
+  movedNativeChatDraftDestination,
+  pruneMovedNativeChatDraftSources
+} from './native-chat-moved-draft-direction'
+import {
   clearNativeChatAttachmentNotes,
   hasOwnNativeChatAttachmentNotes,
   setNativeChatAttachmentNotesAdoption
@@ -13,7 +17,8 @@ import { moveNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
 // source lets go: of that entry alone while its draft no longer holds the image, or of its whole
 // draft once that draft is plainly the moved one (see `retireMovedSource`).
 
-/** Retires `from` when it is plainly an older copy of `to`: written before `to` was, its words are
+/** Retires `from` when it is plainly an older copy of `to`: a move from `from` into `to` left it
+ *  behind (so `to`, the draft its chat shows, is never the one retired), written before `to` was, its words are
  *  in `to` (or it has none), every image of it is in `to` with its notes saved there, and the notes
  *  held for its chat are saved in `to` too (copied now, joining any `to` holds; refused, the source
  *  stays). A source with words `to` doesn't have, or written since, is never retired: keeping it
@@ -25,6 +30,7 @@ function retireMovedSource(from: string, to: string): boolean {
   if (
     !source ||
     !destination ||
+    movedNativeChatDraftDestination(from) !== to ||
     source.images.length === 0 ||
     source.savedAt >= destination.savedAt ||
     (source.text.trim() !== '' && !destination.text.includes(source.text)) ||
@@ -57,27 +63,24 @@ setNativeChatAttachmentNotesAdoption((from, to, attachmentId) => {
 
 let swept = false
 
-/** Once per run, after saved drafts load: a draft that is plainly an older copy of a newer one (a
- *  move that a restart cut short after the destination was saved) retires. */
+/** Once per run, after saved drafts load: a draft a move left behind (a restart cut the move short
+ *  after its destination was saved) retires if it is plainly an older copy of where it went. */
 export function sweepLeftoverMovedNativeChatDrafts(): void {
   if (swept || !load.hydrated) {
     return
   }
   swept = true
-  const pairs: [string, string][] = []
-  for (const [scope, draft] of records) {
-    const newer = [...records].find(
-      ([other, target]) =>
-        other !== scope &&
-        target.savedAt > draft.savedAt &&
-        draft.images.length > 0 &&
-        draft.images.every(({ id }) => target.images.some((image) => image.id === id))
-    )
-    if (newer) {
-      pairs.push([scope, newer[0]])
+  pruneMovedNativeChatDraftSources((scope) => records.has(scope))
+  // A copy: retiring a draft deletes it from `records` mid-loop.
+  for (const from of Array.from(records.keys())) {
+    const to = movedNativeChatDraftDestination(from)
+    if (to !== null) {
+      retireMovedSource(from, to)
     }
   }
-  for (const [from, to] of pairs) {
-    retireMovedSource(from, to)
-  }
+}
+
+/** Test-only: the next load sweeps again. */
+export function resetMovedNativeChatDraftSweepForTests(): void {
+  swept = false
 }

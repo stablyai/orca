@@ -24,6 +24,8 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import { installNativeChatDraftRecord } from '../../drafts/native-chat-composer-draft-memory'
 import { createNativeChatNotesStorage } from './native-chat-notes-storage'
+import { recordMovedNativeChatDraftSource } from '../../drafts/native-chat-moved-draft-direction'
+import { resetMovedNativeChatDraftSweepForTests } from '../../drafts/native-chat-moved-draft-adoption'
 
 const SOURCE = 'agent-session:pending-launch'
 const SESSION = 'agent-session:session-1'
@@ -61,7 +63,10 @@ beforeEach(async () => {
     `${HELD_KEY}:${encodeURIComponent(`${SOURCE}\u0000/tmp/plain.png`)}`,
     JSON.stringify({ t: 1, v: { scopeKey: SOURCE, notes: NOTES.notes, hold: 'hold-1' } })
   )
+  // The move saved which draft it left behind before it began.
+  recordMovedNativeChatDraftSource(SOURCE, SESSION)
   setNativeChatComposerDraftStorageForTests(drafts)
+  resetMovedNativeChatDraftSweepForTests()
   await hydrateNativeChatComposerDrafts()
 })
 afterEach(() => vi.restoreAllMocks())
@@ -153,4 +158,24 @@ it('a launch draft given newer words after the move is never retired', async () 
   await nativeChatComposerDraftSaved(SESSION)
   await Promise.resolve()
   expect(drafts.drafts.get(SOURCE)?.text).toBe('look here, and these new words')
+})
+
+it('a leftover saved after the session’s draft (a clock stepped back) never retires the session’s draft', async () => {
+  // What the restart finds when the clock stepped back between the move's two writes: the launch
+  // draft the move left behind looks newer than the session's draft it moved into.
+  clearNativeChatComposerDraftsForTests()
+  const image = { id: 'marked', path: '/tmp/marked.png' }
+  drafts.drafts.set(SESSION, { text: 'look here', images: [image], savedAt: 1 })
+  drafts.drafts.set(SOURCE, { text: 'look here', images: [image], savedAt: 2 })
+  setNativeChatComposerDraftStorageForTests(drafts)
+  resetMovedNativeChatDraftSweepForTests()
+  await hydrateNativeChatComposerDrafts()
+  // Any saved edit runs the once-per-run sweep of leftovers.
+  updateNativeChatComposerDraft('agent-session:elsewhere', { text: 'x' }, 'immediate')
+  await nativeChatComposerDraftSaved('agent-session:elsewhere')
+  await Promise.resolve()
+  expect(readNativeChatComposerDraft(SOURCE).images).toHaveLength(1)
+  // The session's draft, the one its chat shows, is never taken for the leftover.
+  expect(drafts.drafts.get(SESSION)?.text).toBe('look here')
+  expect(readNativeChatComposerDraft(SESSION).images.map(({ id }) => id)).toEqual(['marked'])
 })
