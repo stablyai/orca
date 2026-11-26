@@ -1505,12 +1505,14 @@
 8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
+1 src/main/wsl/host-lifecycle/wsl-host-account-migration.ts # per user Connect of an unpinned host after a mismatch: one root wsl.exe transport; its only sync step is the cached wsl.exe existsSync
 4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
 6 src/main/wsl/host-lifecycle/wsl-host-kept-for-peers.ts
 2 src/main/wsl/host-lifecycle/wsl-host-removal.ts
 1 src/main/wsl/host-lifecycle/wsl-host-uninstall-server-stop.ts
 1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
 1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
+1 src/main/wsl/orcad/wsl-orcad-account-facts.ts # per connect of a pinned host: one default-user wsl.exe transport; its only sync step is the cached wsl.exe existsSync
 1 src/main/wsl/orcad/wsl-orcad-active-probe.ts
 2 src/main/wsl/orcad/wsl-orcad-connection.ts
 7 src/main/wsl/orcad/wsl-orcad-deploy.ts
