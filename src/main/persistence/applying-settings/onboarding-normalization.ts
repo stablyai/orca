@@ -69,6 +69,11 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     notifyHiddenWorkspaces: booleanOr(
       candidate.notifyHiddenWorkspaces,
       defaults.notifyHiddenWorkspaces
+    ),
+    muteBotSpawnedAgents: booleanOr(candidate.muteBotSpawnedAgents, defaults.muteBotSpawnedAgents),
+    muteBotSpawnedPermissionPrompts: booleanOr(
+      candidate.muteBotSpawnedPermissionPrompts,
+      defaults.muteBotSpawnedPermissionPrompts
     )
   }
 }

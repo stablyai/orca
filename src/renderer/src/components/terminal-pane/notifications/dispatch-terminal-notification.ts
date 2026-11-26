@@ -20,8 +20,14 @@ import type {
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   isCoordinatorOnlyNews,
+  reportsToCoordinator,
   withApprovalTitle
 } from '../../../../../shared/orchestration/workers/dispatched-worker-attention'
+import {
+  isBotSpawnedAgent,
+  isBotSpawnedAgentNewsMuted
+} from '../../../../../shared/bots/bot-spawned-agent-mute'
+import { readBotWorkspacePlace } from '@/attention/bot-spawned-agent'
 import { canonicalOrchestrationForRow } from '../../../runtime/agent-orchestration/visible-agent-orchestration'
 import { isSupersededAgentCompletionSnapshot } from '../agent-completion/agent-completion-snapshot-staleness'
 import { isAutoApprovedAntigravityPermission } from './antigravity-auto-approved-permission'
@@ -161,6 +167,9 @@ export function dispatchTerminalNotification(
   }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
+  const turnState = completionTurnState(event, agentStatus)
+  const readOrchestration = () =>
+    event.paneKey === undefined ? undefined : canonicalOrchestrationForRow(state, event.paneKey)
   const attentionDecision = resolveAgentAttention(
     {
       subject: { workspaceId: worktreeId, surfaceKey: event.paneKey },
@@ -170,11 +179,15 @@ export function dispatchTerminalNotification(
       hasFreshActivityEvidence: Boolean(agentStatus),
       coordinatorOnlyNews:
         event.source === 'agent-task-complete' &&
-        isCoordinatorOnlyNews(completionTurnState(event, agentStatus), () =>
-          event.paneKey === undefined
-            ? undefined
-            : canonicalOrchestrationForRow(state, event.paneKey)
-        )
+        (isCoordinatorOnlyNews(turnState, readOrchestration) ||
+          isBotSpawnedAgentNewsMuted(
+            state.settings?.notifications,
+            { agentState: turnState, toolName: agentStatus?.toolName },
+            () =>
+              isBotSpawnedAgent(readBotWorkspacePlace(state, worktreeId), () =>
+                reportsToCoordinator(readOrchestration())
+              )
+          ))
     },
     createTerminalAttentionSurface(state)
   )

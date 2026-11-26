@@ -210,7 +210,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
           sessionId,
           promptId: raised,
           journalCursor: cursor,
-          raisedAt: this.deps.now()
+          raisedAt: this.deps.now(),
+          ...(state.summary.attentionAsksOnlyQuestions ? { asksOnlyQuestions: true as const } : {})
         }
       },
       'prompt-aware'
