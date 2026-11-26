@@ -114,6 +114,22 @@ describe('the local copies of moved automations', () => {
     expect(local.disableAutomations).toHaveBeenCalledTimes(2)
   })
 
+  it('skips earlier moves with no moved automations without touching profile or journal', async () => {
+    seedWslMoveCutover(
+      userDataPath,
+      wslMoveCutoverFixture('move-empty', 'client-rewritten', {
+        automationsToReenable: []
+      })
+    )
+    const local = {
+      disableAutomations: vi.fn(() => 0),
+      flushPendingOrThrowAsync: vi.fn(async () => {})
+    }
+    await disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)
+    expect(local.disableAutomations).not.toHaveBeenCalled()
+    expect(local.flushPendingOrThrowAsync).not.toHaveBeenCalled()
+  })
+
   it('come back on at undo when the host no longer has them, with a fresh next run', async () => {
     seed('client-rewritten')
     // The host read leaves out one deleted there; the user paused auto-2 on the host.
