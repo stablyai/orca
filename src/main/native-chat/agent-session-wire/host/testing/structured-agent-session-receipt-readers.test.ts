@@ -160,8 +160,10 @@ it('suppresses a pre-handoff reply on reload and retains an already handed-off r
       const interest = renderer.attach('first')!
       interest.reachedHead()
       const reply = await renderer.read()
+      expect(rig.readers.hasPostedReply(renderer.transport.signal)).toBe(false)
       if (delivered) {
         rig.readers.handoff(renderer.endpoint)
+        expect(rig.readers.hasPostedReply(renderer.transport.signal)).toBe(true)
       }
       renderer.document.abort()
       interest.close()

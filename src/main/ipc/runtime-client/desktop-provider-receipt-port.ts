@@ -151,7 +151,7 @@ export class DesktopProviderReceiptPort {
   private collectExitedRenderer(window: ReceiptWindow): void {
     if (
       window.postedToPid !== undefined &&
-      this.readers.hasUnread(window.transport.signal) &&
+      this.readers.hasPostedReply(window.transport.signal) &&
       inspectProcessSignal(window.postedToPid) === 'missing'
     ) {
       window.document?.retire()

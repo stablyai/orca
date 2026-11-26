@@ -34,8 +34,8 @@ export class ProviderReceiptReaders {
 
   constructor(private readonly runtimeId: () => string) {}
 
-  hasUnread(transport: AbortSignal): boolean {
-    return this.credits.get(transport)?.unread !== undefined
+  hasPostedReply(transport: AbortSignal): boolean {
+    return this.credits.get(transport)?.unread?.handedOff === true
   }
 
   canBind(endpoint: ProviderReceiptDestination, identity?: ProviderReceiptReader): boolean {
