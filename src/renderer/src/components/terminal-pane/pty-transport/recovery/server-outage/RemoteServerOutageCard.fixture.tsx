@@ -247,9 +247,17 @@ export const onePaneRetrying = staticFixture({ groups: ONE_PANE, servers: [DEVBO
 export const splitRetrying = staticFixture({ groups: SPLIT, servers: [DEVBOX] })
 export const splitStopped = staticFixture({ groups: SPLIT, servers: [DEVBOX], stopped: true })
 export const detailsOpen = staticFixture({ groups: SPLIT, servers: [DEVBOX], openDetails: true })
+const NARROW: GroupSpec[] = [
+  { tabs: [{ title: 'build', down: true }], panes: [{ environmentId: BUILDBOX, id: 'a' }] }
+]
+export const narrowRetrying = staticFixture({
+  groups: NARROW,
+  servers: [BUILDBOX],
+  width: 320
+})
 export const narrowWindow = staticFixture({
-  groups: ONE_PANE,
-  servers: [DEVBOX],
+  groups: NARROW,
+  servers: [BUILDBOX],
   stopped: true,
   width: 320
 })

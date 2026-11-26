@@ -1,4 +1,5 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 import type { Translate } from '@/i18n/use-translate'
 import type { VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
 
@@ -157,10 +158,18 @@ export function remoteRuntimeDownForCompactLabel(
   intlLocale: string = getIntlLocale()
 ): string {
   const seconds = Math.max(0, Math.floor(downForMs / 1000))
-  const [value, unit] = seconds < 60 ? [seconds, 'second'] : [Math.floor(seconds / 60), 'minute']
-  return new Intl.NumberFormat(intlLocale, { style: 'unit', unit, unitDisplay: 'narrow' }).format(
-    value
-  )
+  if (seconds < 60) {
+    return formatUiNarrowDuration(seconds, 'second', intlLocale)
+  }
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) {
+    return formatUiNarrowDuration(minutes, 'minute', intlLocale)
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return formatUiNarrowDuration(hours, 'hour', intlLocale)
+  }
+  return formatUiNarrowDuration(Math.floor(hours / 24), 'day', intlLocale)
 }
 
 export function remoteServerCantReachTitle(serverName: string, t: Translate = translate): string {

@@ -127,7 +127,9 @@ function ServerTitle({
     <span className={cn('flex min-w-0 overflow-hidden', className)}>
       {before ? <span className="shrink-0 whitespace-pre">{before}</span> : null}
       {/* Why only the name shrinks: any shrink on the words around it ellipsizes them first. */}
-      <span className="min-w-[3ch] truncate">{serverName}</span>
+      <span className="min-w-[3ch] truncate" title={serverName}>
+        {serverName}
+      </span>
       {after ? <span className="shrink-0 whitespace-pre">{after}</span> : null}
     </span>
   )
@@ -153,6 +155,9 @@ export function RemoteServerOutageCardLine({
   )
   const nudging = useNudging(environmentId)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  if (detailsOpen && (stopped || leaving)) {
+    setDetailsOpen(false)
+  }
   const detailsRef = useRef<HTMLDivElement>(null)
   const now = useRecoveryClock(downSince !== null && !leaving)
   const copy = remoteRuntimeRecoveryCopy(cause, serverName, t)
@@ -176,7 +181,7 @@ export function RemoteServerOutageCardLine({
   }
   const showTailscale = cause === 'connection-lost' && tailscaleHost !== null
   return (
-    <Popover open={!stopped && detailsOpen} onOpenChange={setDetailsOpen}>
+    <Popover open={detailsOpen} onOpenChange={setDetailsOpen}>
       <PopoverAnchor asChild>
         <div
           data-remote-server-outage-notice={environmentId}
@@ -189,13 +194,18 @@ export function RemoteServerOutageCardLine({
           )}
           role="status"
           aria-live="polite"
+          inert={leaving}
         >
           {stopped ? (
             <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-status-warning" />
           ) : (
             <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
           )}
-          <ServerTitle template={titleTemplate} serverName={serverName} className="font-semibold" />
+          <ServerTitle
+            template={titleTemplate}
+            serverName={serverName}
+            className="mr-auto font-semibold"
+          />
           {timer !== null ? (
             // Why hidden: a per-second tick inside the live region would re-announce the card.
             <span aria-hidden="true" className="shrink-0 tabular-nums text-muted-foreground">
@@ -214,7 +224,7 @@ export function RemoteServerOutageCardLine({
               <Button
                 size="xs"
                 variant="ghost"
-                className="shrink-0 text-muted-foreground"
+                className="shrink-0 text-muted-foreground aria-expanded:bg-accent aria-expanded:text-accent-foreground"
                 data-remote-server-outage-details=""
               >
                 {t(
@@ -231,7 +241,7 @@ export function RemoteServerOutageCardLine({
         side="bottom"
         align="start"
         sideOffset={8}
-        className="w-[300px] max-w-[calc(100vw-16px)] p-2 text-xs outline-none"
+        className="w-[var(--radix-popover-trigger-width)] p-2 text-xs outline-none"
         data-remote-server-outage-details-popover={environmentId}
         // Why the panel itself: focusing its first control would ring the copy button on every open.
         onOpenAutoFocus={(event) => {
@@ -239,21 +249,6 @@ export function RemoteServerOutageCardLine({
           detailsRef.current?.focus()
         }}
       >
-        <div className="flex items-center gap-2 px-1 py-1">
-          <ServerTitle
-            template={titleTemplate}
-            serverName={serverName}
-            className="text-[13px] font-semibold"
-          />
-          {timer !== null ? (
-            <span
-              aria-hidden="true"
-              className="ml-auto shrink-0 tabular-nums text-muted-foreground"
-            >
-              {timer}
-            </span>
-          ) : null}
-        </div>
         {showTailscale ? (
           <>
             <div className="px-1 py-1 text-muted-foreground">
@@ -263,7 +258,7 @@ export function RemoteServerOutageCardLine({
               )}
             </div>
             <div className="mx-1 mt-1 mb-1.5 flex min-w-0 items-center gap-1 rounded-md bg-muted py-1 pr-1 pl-2">
-              <code className="min-w-0 flex-1 truncate font-mono text-[11px] select-text">
+              <code className="min-w-0 flex-1 truncate font-mono text-2xs select-text">
                 {tailscalePingCommand(tailscaleHost)}
               </code>
               <CopyTextButton

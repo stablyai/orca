@@ -9,10 +9,10 @@ export function RemoteServerOutageCardStack({
 }): React.JSX.Element {
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 px-3"
+      className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center px-3"
       data-remote-server-outage-cards=""
     >
-      {children}
+      <div className="grid w-max max-w-full grid-cols-1 gap-2">{children}</div>
     </div>
   )
 }
