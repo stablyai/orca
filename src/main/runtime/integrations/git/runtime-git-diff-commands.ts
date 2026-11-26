@@ -1,3 +1,4 @@
+import type { RpcParams } from '../../../../shared/rpc-contract/rpc-params-catalog.generated'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -21,23 +22,20 @@ export class RuntimeGitDiffCommands {
 
   // Why: cap the payload after execution-host dispatch.
   async getRuntimeGitDiff(
-    worktreeSelector: string,
-    filePath: string,
-    staged: boolean,
-    compareAgainstHead?: boolean,
-    maxContentBytes?: number,
-    oldPath?: string
+    args: RpcParams<'git.diff'>,
+    maxContentBytes?: number
   ): Promise<GitDiffResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
-    const oldRelativePath = oldPath ? normalizeRuntimeGitRelativePath(oldPath) : undefined
+    const target = await this.host.resolveRuntimeGitTarget(args.worktree)
+    const relativePath = normalizeRuntimeGitRelativePath(args.filePath)
+    const oldRelativePath = args.oldPath ? normalizeRuntimeGitRelativePath(args.oldPath) : undefined
     return assertGitDiffWithinTransportBudget(
       await requireRuntimeGitProvider(target).getDiff(
         target.worktree.path,
         relativePath,
-        staged,
-        compareAgainstHead,
-        oldRelativePath
+        args.staged,
+        args.compareAgainstHead,
+        oldRelativePath,
+        args.encoding
       ),
       maxContentBytes
     )
@@ -63,28 +61,26 @@ export class RuntimeGitDiffCommands {
   }
 
   async getRuntimeGitBranchDiff(
-    worktreeSelector: string,
-    compare: { mergeBase: string; headOid: string },
-    filePath: string,
-    oldPath?: string,
+    args: RpcParams<'git.branchDiff'>,
     maxContentBytes?: number
   ): Promise<GitDiffResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeGitRelativePath(filePath)
-    const oldRelativePath = oldPath ? normalizeRuntimeGitRelativePath(oldPath) : undefined
+    const target = await this.host.resolveRuntimeGitTarget(args.worktree)
+    const relativePath = normalizeRuntimeGitRelativePath(args.filePath)
+    const oldRelativePath = args.oldPath ? normalizeRuntimeGitRelativePath(args.oldPath) : undefined
     requireLocalRuntimeGitRoute(target)
     return assertGitDiffWithinTransportBudget(
       await getBranchDiff(
         target.worktree.path,
         {
-          mergeBase: compare.mergeBase,
-          headOid: compare.headOid,
+          mergeBase: args.compare.mergeBase,
+          headOid: args.compare.headOid,
           filePath: relativePath,
           oldPath: oldRelativePath
         },
         {
           ...localGitOptionsForTarget(target),
-          admissionTier: 'interactive'
+          admissionTier: 'interactive',
+          encoding: args.encoding
         }
       ),
       maxContentBytes
@@ -92,20 +88,23 @@ export class RuntimeGitDiffCommands {
   }
 
   async getRuntimeGitCommitDiff(
-    worktreeSelector: string,
-    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string },
+    args: RpcParams<'git.commitDiff'>,
     maxContentBytes?: number
   ): Promise<GitDiffResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await this.host.resolveRuntimeGitTarget(args.worktree)
     const relativePath = normalizeRuntimeRelativePath(args.filePath)
     const oldRelativePath = args.oldPath ? normalizeRuntimeRelativePath(args.oldPath) : undefined
     return assertGitDiffWithinTransportBudget(
-      await requireRuntimeGitProvider(target).getCommitDiff(target.worktree.path, {
-        commitOid: args.commitOid,
-        parentOid: args.parentOid,
-        filePath: relativePath,
-        oldPath: oldRelativePath
-      }),
+      await requireRuntimeGitProvider(target).getCommitDiff(
+        target.worktree.path,
+        {
+          commitOid: args.commitOid,
+          parentOid: args.parentOid,
+          filePath: relativePath,
+          oldPath: oldRelativePath
+        },
+        args.encoding
+      ),
       maxContentBytes
     )
   }

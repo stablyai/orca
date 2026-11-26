@@ -1,6 +1,11 @@
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
-import { InFlightPromiseDedupe } from '../../../shared/concurrency/in-flight-promise-dedupe'
+import type { GitDiffReadOptions } from '../command-runner/git-runtime-options'
+import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
+import {
+  InFlightPromiseDedupe,
+  stableInFlightKey
+} from '../../../shared/concurrency/in-flight-promise-dedupe'
 import {
   clearGitStatusLineStatsCache,
   clearGitStatusLineStatsCacheKey,
@@ -21,7 +26,20 @@ import {
   SettledDiffCache
 } from './settled-diff-cache'
 
-export const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
+const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
+
+export function dedupeGitDiffRead(
+  inputs: readonly unknown[],
+  options: GitDiffReadOptions,
+  read: (key: string) => Promise<GitDiffResult>
+): Promise<GitDiffResult> {
+  const encoding = options.encoding ?? 'utf-8'
+  const key = stableInFlightKey([...inputs, ...gitRuntimeOptionsKey(options), encoding])
+  return gitDiffReadDedupe.run(key, async () => {
+    const result = await read(key)
+    return encoding === 'gb18030' && result.kind === 'text' ? { ...result, encoding } : result
+  })
+}
 
 /** Settled diff results, valid only while their stamped git state holds. */
 export const settledDiffCache = new SettledDiffCache(FILE_DIFF_CACHE_LIMITS)

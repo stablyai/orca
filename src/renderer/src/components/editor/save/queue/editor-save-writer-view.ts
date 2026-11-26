@@ -1,6 +1,6 @@
 import { editorSaveResourceKey } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import type { AppState } from '@/store/types'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { isReadOnlyEditorView, type OpenFile } from '@/store/slices/editor/types/open-file'
 import { acquireEditorFileOperation } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { captureEditorFileOperationForOwner } from '@/lib/editor/file-operations/editor-file-child-owner'
 import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
@@ -32,7 +32,7 @@ function hasCurrentProvenance(state: AppState, file: OpenFile): boolean {
 }
 
 export function isEditorWritableView(view: OpenFile): boolean {
-  return view.readOnly !== true && view.csvPreviewOnly !== true
+  return !isReadOnlyEditorView(view)
 }
 
 export function firstEditorSaveWriter(
@@ -99,6 +99,9 @@ export function captureEditorSave(
   trigger: EditorSaveTrigger
 ): EditorSaveAcquisition {
   try {
+    if (file.diffEncoding === 'gb18030') {
+      throw new Error('GB18030 diff previews are read-only.')
+    }
     if (file.csvPreviewOnly === true) {
       throw new Error('Large CSV previews are read-only.')
     }

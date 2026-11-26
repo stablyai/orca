@@ -1,4 +1,7 @@
+import type { GitDiffEncoding } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
+
+export type GitDiffReadOptions = GitRuntimeOptions & { encoding?: GitDiffEncoding }
 
 export type GitRuntimeOptions = {
   wslDistro?: string

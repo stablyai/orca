@@ -24,43 +24,21 @@ export const GIT_DIFF_METHODS = [
     permission: 'workspace',
     params: GitDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
-      runtime.getRuntimeGitDiff(
-        params.worktree,
-        params.filePath,
-        params.staged,
-        params.compareAgainstHead,
-        remoteDiffContentBudget(clientKind, requestId),
-        ...(params.oldPath ? ([params.oldPath] as const) : [])
-      )
+      runtime.getRuntimeGitDiff(params, remoteDiffContentBudget(clientKind, requestId))
   }),
   defineMethod({
     name: 'git.branchDiff',
     permission: 'workspace',
     params: GitBranchDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
-      runtime.getRuntimeGitBranchDiff(
-        params.worktree,
-        params.compare,
-        params.filePath,
-        params.oldPath,
-        remoteDiffContentBudget(clientKind, requestId)
-      )
+      runtime.getRuntimeGitBranchDiff(params, remoteDiffContentBudget(clientKind, requestId))
   }),
   defineMethod({
     name: 'git.commitDiff',
     permission: 'workspace',
     params: GitCommitDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
-      runtime.getRuntimeGitCommitDiff(
-        params.worktree,
-        {
-          commitOid: params.commitOid,
-          parentOid: params.parentOid,
-          filePath: params.filePath,
-          oldPath: params.oldPath
-        },
-        remoteDiffContentBudget(clientKind, requestId)
-      )
+      runtime.getRuntimeGitCommitDiff(params, remoteDiffContentBudget(clientKind, requestId))
   }),
   defineMethod({
     name: 'git.blame',

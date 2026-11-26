@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron'
-import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type {
+  GitDiffEncoding,
+  GitDiffResult
+} from '../../../../shared/git/diff/git-diff-compare-types'
 import { getBranchDiff } from '../../../git/source-control/comparisons/branch-diff'
 import { getCommitDiff } from '../../../git/source-control/comparisons/commit-diff'
 import {
@@ -27,6 +30,7 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
         }
         filePath: string
         oldPath?: string
+        encoding?: GitDiffEncoding
         connectionId?: string
         /** Showing the diff tab or its Retry: a user act that may start a stopped WSL distro. */
         wakeWslDistro?: boolean
@@ -48,7 +52,7 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
                 ? validateGitRelativeFilePath(worktreePath, args.oldPath)
                 : undefined
             },
-            { ...gitOptions, admissionTier: 'interactive' }
+            { ...gitOptions, admissionTier: 'interactive', encoding: args.encoding }
           )
       )
     }
@@ -64,6 +68,7 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
         parentOid?: string | null
         filePath: string
         oldPath?: string
+        encoding?: GitDiffEncoding
         connectionId?: string
         /** Showing the diff tab or its Retry: a user act that may start a stopped WSL distro. */
         wakeWslDistro?: boolean
@@ -87,7 +92,7 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
                 ? validateGitRelativeFilePath(worktreePath, args.oldPath)
                 : undefined
             },
-            { ...gitOptions, admissionTier: 'interactive' }
+            { ...gitOptions, admissionTier: 'interactive', encoding: args.encoding }
           )
       )
     }

@@ -1,17 +1,20 @@
+import { isUtf8 } from 'node:buffer'
 import { readFile, stat } from 'node:fs/promises'
+import type { GitDiffEncoding } from '../../../../shared/git/diff/git-diff-compare-types'
 import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
 import { isMissingGitBlobPath } from '../../../../shared/git/diff/git-blob-absence'
 import { readGitCommandFailureStderr } from '../../../../shared/git/commands/git-command-failure-text'
 
 import {
   type GitRuntimeOptions,
+  type GitDiffReadOptions,
   gitReadOptionsForWorktree
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsyncBuffer } from '../../command-runner/git-exec-file'
 import { isMaxBufferOverflowError } from '../../command-runner/process-capture/max-buffer-overflow'
 import { MAX_GIT_SHOW_BYTES } from '../git-show-max-bytes'
 import { literalPathspec } from '../git-pathspec'
-import { hasTextconvDriver, isImageOrPdfPreviewPath } from './textconv-driver'
+import { type DiffAttributes, readDiffAttributes, isImageOrPdfPreviewPath } from './textconv-driver'
 
 export type GitBlobReadResult = {
   content: string
@@ -34,22 +37,22 @@ const TOO_LARGE_BLOB: GitBlobReadResult = {
  * How a path with a textconv driver is shown: `textconv` is the text `git diff` shows (read-only
  * sides); `checkout` is what checkout writes, so reverts into an editable side restore real bytes.
  */
-export type BlobConversion = { mode: 'textconv' | 'checkout'; hasDriver: Promise<boolean> }
+export type BlobConversion = { mode: 'textconv' | 'checkout'; attributes: Promise<DiffAttributes> }
 
-/** Start one driver lookup to share between both sides of a diff. */
+/** Share one attribute lookup between both sides of a diff. */
 export function blobConversion(
   worktreePath: string,
   filePath: string,
-  options: GitRuntimeOptions,
+  options: GitDiffReadOptions,
   mode: BlobConversion['mode'] = 'textconv'
 ): BlobConversion {
-  return { mode, hasDriver: hasTextconvDriver(worktreePath, filePath, options) }
+  return { mode, attributes: readDiffAttributes(worktreePath, filePath, options) }
 }
 
 export async function readUnstagedLeftBlob(
   worktreePath: string,
   filePath: string,
-  options: GitRuntimeOptions = {},
+  options: GitDiffReadOptions = {},
   conversion?: BlobConversion
 ): Promise<GitBlobReadResult> {
   const indexBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options, conversion)
@@ -64,7 +67,7 @@ export async function readUnstagedLeftBlob(
 export function readGitBlobAtIndexPath(
   worktreePath: string,
   filePath: string,
-  options: GitRuntimeOptions = {},
+  options: GitDiffReadOptions = {},
   conversion?: BlobConversion
 ): Promise<GitBlobReadResult> {
   return readGitBlob(worktreePath, undefined, filePath, options, conversion)
@@ -74,7 +77,7 @@ export function readGitBlobAtOidPath(
   worktreePath: string,
   oid: string,
   filePath: string,
-  options: GitRuntimeOptions = {},
+  options: GitDiffReadOptions = {},
   conversion?: BlobConversion
 ): Promise<GitBlobReadResult> {
   return readGitBlob(worktreePath, oid, filePath, options, conversion)
@@ -84,7 +87,7 @@ async function readGitBlob(
   worktreePath: string,
   oid: string | undefined,
   filePath: string,
-  options: GitRuntimeOptions,
+  options: GitDiffReadOptions,
   conversion: BlobConversion | undefined
 ): Promise<GitBlobReadResult> {
   // Git blob syntax requires forward slashes, including on Windows.
@@ -94,7 +97,7 @@ async function readGitBlob(
     ...gitReadOptionsForWorktree(worktreePath, options),
     maxBuffer: MAX_GIT_SHOW_BYTES
   }
-  const { mode, hasDriver } = conversion ?? blobConversion(worktreePath, filePath, options)
+  const { mode, attributes } = conversion ?? blobConversion(worktreePath, filePath, options)
   let raw: Buffer
   try {
     // The raw read proves a blob is there: `cat-file --textconv` would print a tree listing.
@@ -110,21 +113,30 @@ async function readGitBlob(
       failed: !(await verifyMissingBlobPath(error, worktreePath, gitPath, options, oid))
     }
   }
-  if (!(await hasDriver)) {
-    return { ...bufferToBlob(raw, filePath), exists: true }
+  const { hasTextconv, storesUtf8 } = await attributes
+  // With working-tree-encoding Git stores UTF-8; older commits may predate the attribute.
+  const rawEncoding = storesUtf8 && isUtf8(raw) ? 'utf-8' : options.encoding
+  if (!hasTextconv) {
+    return bufferToBlob(raw, filePath, rawEncoding)
   }
   try {
     const { stdout } = await gitExecFileAsyncBuffer(
       ['cat-file', mode === 'checkout' ? '--filters' : '--textconv', '--', spec],
       readOptions
     )
-    return { ...bufferToBlob(stdout, filePath), exists: true }
+    // Keep the UTF-8 output of a textconv driver that already converted the raw bytes.
+    const convertedToUtf8 =
+      mode === 'textconv' &&
+      options.encoding === 'gb18030' &&
+      isUtf8(stdout) &&
+      (storesUtf8 || !stdout.equals(raw))
+    return bufferToBlob(stdout, filePath, convertedToUtf8 ? 'utf-8' : options.encoding)
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return TOO_LARGE_BLOB
     }
     // A driver or filter missing from this host's PATH, or failing, must not hide the stored blob.
-    return { ...bufferToBlob(raw, filePath), exists: true }
+    return bufferToBlob(raw, filePath, rawEncoding)
   }
 }
 
@@ -164,7 +176,10 @@ async function verifyMissingBlobPath(
   }
 }
 
-export async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
+export async function readWorkingTreeFile(
+  filePath: string,
+  encoding?: GitDiffEncoding
+): Promise<GitBlobReadResult> {
   let fileStat
   try {
     fileStat = await stat(filePath)
@@ -182,23 +197,22 @@ export async function readWorkingTreeFile(filePath: string): Promise<GitBlobRead
   }
   try {
     const buffer = await readFile(filePath)
-    return bufferToBlob(buffer, filePath)
+    return bufferToBlob(buffer, filePath, encoding)
   } catch {
     return { content: '', isBinary: false, exists: true, failed: true }
   }
 }
 
-function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {
-  const isBinary = isBinaryBuffer(buffer)
-  // Encode previewable binaries for the renderer.
-  const isPreviewableBinary = filePath ? isImageOrPdfPreviewPath(filePath) : false
-  return {
-    content: isBinary
-      ? isPreviewableBinary
-        ? buffer.toString('base64')
-        : ''
-      : buffer.toString('utf-8'),
-    isBinary,
-    exists: true
+function bufferToBlob(
+  buffer: Buffer,
+  filePath: string,
+  encoding?: GitDiffEncoding
+): GitBlobReadResult {
+  if (isBinaryBuffer(buffer)) {
+    const content = isImageOrPdfPreviewPath(filePath) ? buffer.toString('base64') : ''
+    return { content, isBinary: true, exists: true }
   }
+  const content =
+    encoding === 'gb18030' ? new TextDecoder(encoding).decode(buffer) : buffer.toString('utf8')
+  return { content, isBinary: false, exists: true }
 }

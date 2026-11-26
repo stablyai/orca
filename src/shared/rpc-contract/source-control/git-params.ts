@@ -53,10 +53,14 @@ export const GitResolveConflict = GitFilePath.extend({
   resolution: z.enum(CONFLICT_RESOLUTIONS)
 })
 
-export const GitDiff = GitFilePath.extend({
+const GitDiffFilePath = GitFilePath.extend({
+  oldPath: z.string().optional(),
+  encoding: z.enum(['utf-8', 'gb18030']).optional()
+})
+
+export const GitDiff = GitDiffFilePath.extend({
   staged: z.boolean(),
-  compareAgainstHead: z.boolean().optional(),
-  oldPath: z.string().optional()
+  compareAgainstHead: z.boolean().optional()
 })
 
 // Hosts that predate knownHeadOid ignore it and resend the full blame.
@@ -116,20 +120,18 @@ export const GitHistory = WorktreeSelector.extend({
   skip: z.number().int().min(0).optional()
 })
 
-export const GitBranchDiff = GitFilePath.extend({
+export const GitBranchDiff = GitDiffFilePath.extend({
   compare: z.object({
     baseRef: z.string().optional(),
     baseOid: FullGitObjectId.optional(),
     headOid: FullGitObjectId,
     mergeBase: FullGitObjectId
-  }),
-  oldPath: z.string().optional()
+  })
 })
 
-export const GitCommitDiff = GitFilePath.extend({
+export const GitCommitDiff = GitDiffFilePath.extend({
   commitOid: FullGitObjectId,
-  parentOid: FullGitObjectId.nullable().optional(),
-  oldPath: z.string().optional()
+  parentOid: FullGitObjectId.nullable().optional()
 })
 
 export const GitCommit = WorktreeSelector.extend({

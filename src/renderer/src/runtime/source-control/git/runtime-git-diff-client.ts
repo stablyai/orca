@@ -1,6 +1,7 @@
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffEncoding,
   GitDiffResult
 } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
@@ -43,7 +44,13 @@ async function orTooLargeForConnection(read: Promise<GitDiffResult>): Promise<Gi
 
 export async function getRuntimeGitDiff(
   context: RuntimeGitContext,
-  args: { filePath: string; staged: boolean; compareAgainstHead?: boolean; oldPath?: string },
+  args: {
+    filePath: string
+    staged: boolean
+    compareAgainstHead?: boolean
+    oldPath?: string
+    encoding?: GitDiffEncoding
+  },
   options?: GitDiffWakeOptions
 ): Promise<GitDiffResult> {
   const target = context.target
@@ -56,6 +63,7 @@ export async function getRuntimeGitDiff(
         compareAgainstHead: args.compareAgainstHead,
         ...(args.oldPath ? { oldPath: args.oldPath } : {}),
         connectionId: context.connectionId,
+        ...(args.encoding ? { encoding: args.encoding } : {}),
         ...localWakeArgs(context, options)
       })
     )
@@ -122,6 +130,7 @@ export async function getRuntimeGitBranchDiff(
     compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
     filePath: string
     oldPath?: string
+    encoding?: GitDiffEncoding
   },
   options?: GitDiffWakeOptions
 ): Promise<GitDiffResult> {
@@ -134,6 +143,7 @@ export async function getRuntimeGitBranchDiff(
         filePath: args.filePath,
         oldPath: args.oldPath,
         connectionId: context.connectionId,
+        ...(args.encoding ? { encoding: args.encoding } : {}),
         ...localWakeArgs(context, options)
       })
     )
@@ -155,6 +165,7 @@ export async function getRuntimeGitCommitDiff(
     parentOid?: string | null
     filePath: string
     oldPath?: string
+    encoding?: GitDiffEncoding
   },
   options?: GitDiffWakeOptions
 ): Promise<GitDiffResult> {
@@ -168,6 +179,7 @@ export async function getRuntimeGitCommitDiff(
         filePath: args.filePath,
         oldPath: args.oldPath,
         connectionId: context.connectionId,
+        ...(args.encoding ? { encoding: args.encoding } : {}),
         ...localWakeArgs(context, options)
       })
     )

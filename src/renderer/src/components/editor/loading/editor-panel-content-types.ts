@@ -1,7 +1,10 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { EditorPanelContentLoadOptions } from '../external-changes/useEditorPanelExternalContentEvents'
-import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
+import type {
+  GitDiffEncoding,
+  GitDiffResult
+} from '../../../../../shared/git/diff/git-diff-compare-types'
 import type { CsvFilePreview } from '../csv/preview/csv-file-content'
 import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 
@@ -57,6 +60,8 @@ export type FileContent = {
 }
 
 export type DiffContent = GitDiffResult & {
+  requestedEncoding?: GitDiffEncoding
+  loadError?: string
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
 }

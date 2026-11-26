@@ -121,6 +121,19 @@ describe('editor save queue: one running and one queued save per record', () => 
     expect(disk.files.get(PATH)).toBe('from edit')
   })
 
+  it('refuses decoded GB18030 text even when the same file has a writable edit tab', async () => {
+    store.setState({
+      openFiles: [
+        file('a'),
+        tab('diff', { mode: 'diff', diffSource: 'unstaged', diffEncoding: 'gb18030' })
+      ]
+    })
+    withLoadedBaselines(store, disk)
+
+    await expect(queue.queueSave(file('diff'), '// 测试中文修改')).rejects.toThrow('read-only')
+    expect(disk.files.get(PATH)).toBe('')
+  })
+
   it('settle (rename, delete, hot exit) drains the running and queued saves, cancelling neither', async () => {
     edit('a', 'a')
     const release = holdNextWrite(disk)

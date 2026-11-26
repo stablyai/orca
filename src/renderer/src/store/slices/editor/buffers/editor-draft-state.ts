@@ -1,10 +1,14 @@
 import type { AppState } from '../../../types'
+import { isReadOnlyEditorView } from '../types/open-file'
+import type { GitDiffEncoding } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import { withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
 import type { EditorSet } from '../types/editor-set-get'
 import { editorBufferSiblingViewIds, type EditorBufferViewIndex } from './editor-buffer-views'
 
 export type EditorDraftState = {
   editorDrafts: Record<string, string>
   setEditorDraft: (fileId: string, content: string) => void
+  setDiffEncoding: (fileId: string, encoding: GitDiffEncoding) => void
   setCsvPreviewOnly: (fileId: string, enabled: boolean) => void
   clearEditorDraft: (fileId: string) => void
   clearEditorDrafts: (fileIds: string[]) => void
@@ -30,6 +34,25 @@ function clearEditorDraftsOf<TState extends Pick<AppState, 'editorDrafts'> & Edi
 export function createEditorDraftState(set: EditorSet): EditorDraftState {
   return {
     editorDrafts: {},
+    setDiffEncoding: (fileId, encoding) =>
+      set((state) => {
+        const file = state.openFiles.find((candidate) => candidate.id === fileId)
+        if (
+          !file ||
+          file.mode !== 'diff' ||
+          file.isDirty ||
+          (file.diffEncoding ?? 'utf-8') === encoding
+        ) {
+          return state
+        }
+        const updated = withDiffContentReloadRequest({
+          ...file,
+          diffEncoding: encoding === 'utf-8' ? undefined : encoding
+        })
+        return {
+          openFiles: state.openFiles.map((candidate) => (candidate === file ? updated : candidate))
+        }
+      }),
     setCsvPreviewOnly: (fileId, enabled) =>
       set((state) => {
         const file = state.openFiles.find((candidate) => candidate.id === fileId)
@@ -52,7 +75,7 @@ export function createEditorDraftState(set: EditorSet): EditorDraftState {
         }
         // Read-only drafts could trigger dirty/autosave/hot-exit overwrite of agent transcripts; refuse them.
         const file = s.openFiles.find((f) => f.id === fileId)
-        if (file?.readOnly === true || file?.csvPreviewOnly === true) {
+        if (file && isReadOnlyEditorView(file)) {
           return s
         }
         const next = { ...s.editorDrafts }

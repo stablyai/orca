@@ -90,11 +90,11 @@ export function useEditorPanelActiveTabContentLoad({
       !hasLiveRead(fileReadGenerationRef.current, outstandingFileReadsRef.current, fileId)
     )
   }
-  const needsDiffRead = (fileId: string): boolean => {
-    const cached = diffContents[fileId]
+  const needsDiffRead = (file: OpenFile): boolean => {
+    const cached = diffContents[file.id]
     return (
-      (!cached || cached.isStale === true) &&
-      !hasLiveRead(diffReadGenerationRef.current, outstandingDiffReadsRef.current, fileId)
+      (!cached || cached.isStale === true || cached.requestedEncoding !== file.diffEncoding) &&
+      !hasLiveRead(diffReadGenerationRef.current, outstandingDiffReadsRef.current, file.id)
     )
   }
 
@@ -157,10 +157,10 @@ export function useEditorPanelActiveTabContentLoad({
           load
         )
       }
-      if (isChangesMode && needsDiffRead(fileToLoad.id)) {
+      if (isChangesMode && needsDiffRead(fileToLoad)) {
         void loadDiffContent(fileToLoad, load)
       }
-    } else if (isReloadableSingleFileDiffTab(fileToLoad) && needsDiffRead(fileToLoad.id)) {
+    } else if (isReloadableSingleFileDiffTab(fileToLoad) && needsDiffRead(fileToLoad)) {
       void loadDiffContent(fileToLoad, load)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps

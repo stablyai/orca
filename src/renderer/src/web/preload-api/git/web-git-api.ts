@@ -117,13 +117,14 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     },
     ...createWebGitRebaseApi(),
-    diff: async ({ worktreePath, filePath, staged, compareAgainstHead, oldPath }) => {
+    diff: async ({ worktreePath, filePath, staged, compareAgainstHead, oldPath, encoding }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         staged,
         compareAgainstHead,
+        ...(encoding ? { encoding } : {}),
         ...(oldPath ? { oldPath } : {})
       })
     },
@@ -197,23 +198,25 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         baseRef
       })
     },
-    branchDiff: async ({ worktreePath, filePath, compare, oldPath }) => {
+    branchDiff: async ({ worktreePath, filePath, compare, oldPath, encoding }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.branchDiff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         compare,
-        oldPath
+        oldPath,
+        ...(encoding ? { encoding } : {})
       })
     },
-    commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath }) => {
+    commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath, encoding }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.commitDiff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         commitOid,
         parentOid,
-        oldPath
+        oldPath,
+        ...(encoding ? { encoding } : {})
       })
     },
     commit: async ({ worktreePath, message }) => {

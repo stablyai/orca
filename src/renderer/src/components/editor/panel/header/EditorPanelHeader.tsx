@@ -33,6 +33,7 @@ type EditorPanelHeaderProps = {
   /** The tab showing this file; a floating split closes it from here. */
   viewStateId: string
   copiedPathVisible: boolean
+  showDiffEncoding?: boolean
   isSingleDiff: boolean
   isDiffSurface: boolean
   isMarkdown: boolean
@@ -72,6 +73,7 @@ export function EditorPanelHeader({
   viewStateId,
   copiedPathVisible,
   isSingleDiff,
+  showDiffEncoding,
   isDiffSurface,
   isMarkdown,
   isCsv,
@@ -344,6 +346,7 @@ export function EditorPanelHeader({
             <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
           ) : undefined
         }
+        encodingFile={showDiffEncoding ? activeFile : undefined}
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}

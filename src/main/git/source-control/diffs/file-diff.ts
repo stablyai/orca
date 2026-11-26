@@ -1,10 +1,8 @@
 import * as path from 'node:path'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
-import { stableInFlightKey } from '../../../../shared/concurrency/in-flight-promise-dedupe'
-import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
-import { gitRuntimeOptionsKey } from '../git-runtime-options-cache-key'
-import { gitDiffReadDedupe, settledDiffCache } from '../git-read-cache-invalidation'
+import type { GitDiffReadOptions } from '../../command-runner/git-runtime-options'
+import { dedupeGitDiffRead, settledDiffCache } from '../git-read-cache-invalidation'
 import { readWorktreeDiffStamp } from '../input-stamps/worktree-diff-stamp'
 import { buildDiffResult } from './diff-result'
 import {
@@ -30,7 +28,7 @@ import {
   buildSubmodulePointerDiff
 } from '../submodules/submodule-diff'
 
-type FileDiffOptions = GitRuntimeOptions & { oldPath?: string }
+type FileDiffOptions = GitDiffReadOptions & { oldPath?: string }
 
 export async function getDiff(
   worktreePath: string,
@@ -39,25 +37,25 @@ export async function getDiff(
   compareAgainstHead = false,
   options: FileDiffOptions = {}
 ): Promise<GitDiffResult> {
-  const readKey = stableInFlightKey([
-    'diff',
-    worktreePath,
-    filePath,
-    staged,
-    compareAgainstHead,
-    staged ? (options.oldPath ?? null) : null,
-    ...gitRuntimeOptionsKey(options)
-  ])
-  // Register before any await so concurrent reads also coalesce settled-cache lookup I/O.
-  return gitDiffReadDedupe.run(readKey, () =>
-    loadDiffThroughSettledCache(
-      readKey,
+  return dedupeGitDiffRead(
+    [
+      'diff',
       worktreePath,
       filePath,
       staged,
       compareAgainstHead,
-      options
-    )
+      staged ? (options.oldPath ?? null) : null
+    ],
+    options,
+    (readKey) =>
+      loadDiffThroughSettledCache(
+        readKey,
+        worktreePath,
+        filePath,
+        staged,
+        compareAgainstHead,
+        options
+      )
   )
 }
 
@@ -70,6 +68,10 @@ async function loadDiffThroughSettledCache(
   compareAgainstHead: boolean,
   options: FileDiffOptions
 ): Promise<GitDiffResult> {
+  // The stamp doesn't cover working-tree-encoding or textconv configuration.
+  if (options.encoding === 'gb18030') {
+    return (await loadDiff(worktreePath, filePath, staged, compareAgainstHead, options)).result
+  }
   // Start the mutation fence before awaited stats so writes during stamp collection also invalidate the read.
   const readGeneration = settledDiffCache.beginRead()
   // A staged diff compares HEAD to the index, so the working tree is not one of its inputs.
@@ -195,7 +197,7 @@ async function loadDiff(
           ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, conversion)
           : readUnstagedLeftBlob(worktreePath, filePath, options, conversion),
         hostWorktreePath
-          ? readWorkingTreeFile(path.join(hostWorktreePath, filePath))
+          ? readWorkingTreeFile(path.join(hostWorktreePath, filePath), options.encoding)
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
       ])
       originalContent = leftBlob.content
@@ -219,7 +221,10 @@ async function loadDiff(
     tooLarge
   )
   // Converted output depends on config, keys and tools the stamp doesn't cover.
-  const reusable = !readFailed && !(await conversion.hasDriver) && !(await leftConversion.hasDriver)
+  const reusable =
+    !readFailed &&
+    !(await conversion.attributes).hasTextconv &&
+    !(await leftConversion.attributes).hasTextconv
   // Mark proven deletions so previewers can distinguish them from failed empty reads.
   if (result.kind === 'binary' && modifiedDeleted) {
     return { result: { ...result, modifiedDeleted: true }, reusable }

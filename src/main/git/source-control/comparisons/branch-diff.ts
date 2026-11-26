@@ -1,8 +1,6 @@
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
-import { stableInFlightKey } from '../../../../shared/concurrency/in-flight-promise-dedupe'
-import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
-import { gitRuntimeOptionsKey } from '../git-runtime-options-cache-key'
-import { gitDiffReadDedupe } from '../git-read-cache-invalidation'
+import type { GitDiffReadOptions } from '../../command-runner/git-runtime-options'
+import { dedupeGitDiffRead } from '../git-read-cache-invalidation'
 import { buildDiffResult } from '../diffs/diff-result'
 import { blobConversion, readGitBlobAtOidPath } from '../diffs/git-blob-read'
 
@@ -14,18 +12,11 @@ export async function getBranchDiff(
     filePath: string
     oldPath?: string
   },
-  options: GitRuntimeOptions = {}
+  options: GitDiffReadOptions = {}
 ): Promise<GitDiffResult> {
-  return gitDiffReadDedupe.run(
-    stableInFlightKey([
-      'branchDiff',
-      worktreePath,
-      args.headOid,
-      args.mergeBase,
-      args.filePath,
-      args.oldPath ?? null,
-      ...gitRuntimeOptionsKey(options)
-    ]),
+  return dedupeGitDiffRead(
+    ['branchDiff', worktreePath, args.headOid, args.mergeBase, args.filePath, args.oldPath ?? null],
+    options,
     () => loadBranchDiff(worktreePath, args, options)
   )
 }
@@ -38,7 +29,7 @@ async function loadBranchDiff(
     filePath: string
     oldPath?: string
   },
-  options: GitRuntimeOptions
+  options: GitDiffReadOptions
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
