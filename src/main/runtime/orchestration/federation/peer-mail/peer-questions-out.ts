@@ -65,8 +65,8 @@ export function forgetPeerQuestionOut(db: OrchestrationDb, messageId: string): v
 }
 
 /** A reply came back on this conversation: the question it answers, or is a notice for, is settled.
- *  An older paired Orca names no request, so its reply settles the questions of its thread. Runs
- *  before the reply is stored: a crash between leaves it unacknowledged, so it is pulled again. */
+ *  A reply naming no request (an ordinary chat's, an older paired Orca's) settles its thread's
+ *  oldest. Runs with the reply's store, so a crash between leaves neither. */
 export function settlePeerQuestionsOut(
   db: OrchestrationDb,
   conversationId: string,
@@ -84,7 +84,8 @@ export function settlePeerQuestionsOut(
       )
       .run(conversationId, requestId)
   } else if (reply.threadId) {
-    // A reply naming no request settles one handoff of its thread, the oldest; the others still wait.
+    // A reply naming no request settles one handoff and one question of its thread, the oldest;
+    // the others still wait.
     db.db
       .prepare(
         `DELETE FROM peer_handoffs_out WHERE rowid = (
@@ -95,8 +96,10 @@ export function settlePeerQuestionsOut(
       .run(conversationId, reply.threadId)
     db.db
       .prepare(
-        `UPDATE peer_questions_out SET awaiting = NULL
-         WHERE conversation_id = ?1 AND awaiting = 1 AND (message_id = ?2 OR thread_id = ?2)`
+        `UPDATE peer_questions_out SET awaiting = NULL WHERE rowid = (
+           SELECT rowid FROM peer_questions_out
+           WHERE conversation_id = ?1 AND awaiting = 1 AND (message_id = ?2 OR thread_id = ?2)
+           ORDER BY rowid LIMIT 1)`
       )
       .run(conversationId, reply.threadId)
   }

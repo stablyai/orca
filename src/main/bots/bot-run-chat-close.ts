@@ -231,10 +231,10 @@ export class BotRunChatCloser {
     const automationChats = this.deps.automationChats()
     const changes: Line[] = []
     for (const { entry, bot } of due) {
-      // One chat whose reads keep failing waits for a wake, and never holds up the others.
+      // One chat whose reads fail is checked again after its window, and never holds up the others.
       const next = await this.settle(entry, bot, now, automationChats).catch((error: unknown) => {
         console.warn('[bots] could not check a finished run chat', error)
-        return this.parked(entry, true)
+        return restarted(entry, this.deps.now())
       })
       if (!next?.parked) {
         this.checkedThisLaunch.delete(entry.sessionId)

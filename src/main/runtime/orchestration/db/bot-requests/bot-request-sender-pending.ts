@@ -8,27 +8,32 @@ import type { OrchestrationDb } from '../orchestration-db'
 /** Each part is an indexed lookup: idx_messages_bot_request_sender (then idx_thread for a reply),
  *  idx_peer_questions_out_asker_awaiting, idx_peer_handoffs_out_asker, idx_messages_native_direct_work,
  *  idx_dispatch_creator_orca_session_id, and idx_runs_coordinator_orca_session_id with
- *  idx_messages_native_account_work or idx_remote_placements_run. Five lists of `count` addresses,
+ *  idx_messages_native_account_work or idx_remote_placements_run. Seven lists of `count` addresses,
  *  then three of `count` ids. */
 export function sessionAwaitsMailSql(count: number): string {
   const list = Array.from({ length: count }, () => '?').join(',')
-  // A bot request is owed until its outcome; one to any other chat until its recipient replies to
-  // this chat in it (mail it sends on in the thread to anyone else is no answer), one reply for each:
-  // owed while, from it on, this chat's asks of that recipient outnumber the replies.
-  return `SELECT 1 FROM messages m
+  // A bot request is owed until its outcome. An ask of any other chat is owed until that chat replies
+  // to this one in its thread, one reply for each, oldest first (mail it sends on to anyone else is no
+  // answer): from the newest back, any ask that outnumbers the replies after it. One ordered pass.
+  return `SELECT 1 FROM messages m JOIN bot_requests b ON b.message_id = m.id
     WHERE m.from_handle IN (${list}) AND m.type IN ('question', 'handoff')
-      AND CASE WHEN EXISTS (SELECT 1 FROM bot_requests b WHERE b.message_id = m.id)
-        THEN NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = m.id)
-        ELSE (
-          SELECT COUNT(*) FROM messages q
-          WHERE (q.thread_id = COALESCE(m.thread_id, m.id) OR q.id = COALESCE(m.thread_id, m.id))
-            AND q.from_handle = m.from_handle AND q.to_handle = m.to_handle
-            AND q.type IN ('question', 'handoff') AND q.sequence >= m.sequence
-        ) > (
-          SELECT COUNT(*) FROM messages r WHERE r.thread_id = COALESCE(m.thread_id, m.id)
-            AND r.from_handle = m.to_handle AND r.to_handle IN (${list})
-            AND r.sequence > m.sequence)
-      END
+      AND NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = m.id)
+    UNION ALL
+    SELECT 1 FROM (
+      SELECT ask, SUM(CASE WHEN ask = 1 THEN 1 ELSE -1 END) OVER (
+        PARTITION BY thread, peer ORDER BY sequence DESC ROWS UNBOUNDED PRECEDING) AS owed
+      FROM (
+        SELECT COALESCE(a.thread_id, a.id) AS thread, a.to_handle AS peer, a.sequence, 1 AS ask
+        FROM messages a
+        WHERE a.from_handle IN (${list}) AND a.type IN ('question', 'handoff')
+          AND NOT EXISTS (SELECT 1 FROM bot_requests b WHERE b.message_id = a.id)
+        UNION ALL
+        SELECT r.thread_id, r.from_handle, r.sequence, 0 FROM messages r
+        WHERE r.to_handle IN (${list}) AND r.thread_id IN (
+          SELECT COALESCE(t.thread_id, t.id) FROM messages t
+          WHERE t.from_handle IN (${list}) AND t.type IN ('question', 'handoff'))
+      )
+    ) WHERE ask = 1 AND owed > 0
     UNION ALL
     SELECT 1 FROM peer_questions_out WHERE awaiting = 1 AND asker IN (${list})
     UNION ALL
@@ -59,7 +64,7 @@ export function sessionAwaitsMail(db: OrchestrationDb, sessionIds: readonly stri
   return (
     db.db
       .prepare(sessionAwaitsMailSql(ids.length))
-      .get(...[1, 2, 3, 4, 5].flatMap(() => addresses), ...ids, ...ids, ...ids) !== undefined
+      .get(...[1, 2, 3, 4, 5, 6, 7].flatMap(() => addresses), ...ids, ...ids, ...ids) !== undefined
   )
 }
 

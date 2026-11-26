@@ -72,6 +72,22 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   db.db.prepare('UPDATE peer_questions_out SET awaiting = NULL').run()
   expect(sessionAwaitsMail(db, ['live', 'paired'])).toBe(false)
 
+  // Two questions in one thread to a paired computer: a reply naming only the thread answers one.
+  for (const messageId of ['msg_pq_1', 'msg_pq_2']) {
+    recordPeerQuestionOut(db, {
+      messageId,
+      conversationId: 'conversation',
+      environmentId: 'server',
+      peerFingerprint: 'fingerprint',
+      asker: 'orca_session_id:questioning',
+      threadId: 'msg_pq_1'
+    })
+  }
+  for (const expected of [true, false]) {
+    settlePeerQuestionsOut(db, 'conversation', { threadId: 'msg_pq_1' })
+    expect(sessionAwaitsMail(db, ['questioning'])).toBe(expected)
+  }
+
   // A handoff to a paired computer holds its chat until the answer comes back, the send fails, or
   // the pairing ends.
   const handOff = (messageId: string, threadId?: string) =>
@@ -248,9 +264,12 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   // Looked up by sender and recipient, never by scanning the mail.
   const plan = db.db
     .prepare(`EXPLAIN QUERY PLAN ${sessionAwaitsMailSql(2)}`)
-    .all(...Array.from({ length: 8 }, () => ['x', 'y']).flat())
+    .all(...Array.from({ length: 10 }, () => ['x', 'y']).flat())
     .map((row) => String(row.detail))
-  expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
+  // Only the asks and replies already found by index are read in order, never a table.
+  expect(
+    plan.filter((detail) => detail.startsWith('SCAN') && !detail.includes('subquery'))
+  ).toEqual([])
 })
 
 it('a replayed reply naming only its thread settles one paired handoff, not the next', () => {
