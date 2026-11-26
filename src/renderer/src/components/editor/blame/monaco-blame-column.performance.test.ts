@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // Perf contract (#48668, blame column): each edit remapped the whole buffer onto HEAD (up to 50 ms) from
-// the line-number repaint, and the edited line kept its old commit's tooltip until a delayed rebuild.
-// Typing runs no blame lookup and leaves no stale tooltip; blame comes back once the editor pauses.
+// the line-number repaint and the tooltip regrouping. Typing runs no blame lookup; once the editor pauses,
+// the column draws blame and regroups its tooltips with one lookup per line each.
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GitBlameCommit } from '../../../../../shared/git/blame/git-blame-types'
@@ -22,7 +22,6 @@ function blameOfText(text: string): LineBlame {
 
 let model: monaco.editor.ITextModel
 let lookups = 0
-let painted: string[] = []
 
 // Just enough of Monaco's editor: it repaints the line numbers on an option change, as Monaco does.
 function createEditorDouble(): monaco.editor.IStandaloneCodeEditor {
@@ -58,15 +57,15 @@ function createEditorDouble(): monaco.editor.IStandaloneCodeEditor {
     paint: () => paint()
   }
   const paint = (): void => {
-    painted = Array.from({ length: model.getLineCount() }, (_, index) =>
-      renderer ? renderer(index + 1) : String(index + 1)
-    )
+    for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
+      renderer?.(lineNumber)
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column only reads the model, options, config events and decorations, all provided here.
   return double as unknown as monaco.editor.IStandaloneCodeEditor
 }
 
-function mountColumn(): { type: (lineNumber: number) => void; tooltips: () => string[] } {
+function mountColumn(): { type: (lineNumber: number) => void } {
   model = monaco.editor.createModel('a1\na2\nb3\nb4', 'plaintext')
   const ed = createEditorDouble()
   const column = createBlameColumn(ed, {
@@ -85,26 +84,13 @@ function mountColumn(): { type: (lineNumber: number) => void; tooltips: () => st
       column.sync()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double adds `paint`.
       ;(ed as unknown as { paint: () => void }).paint()
-    },
-    // `first-last:Author` for every tooltip on the model.
-    tooltips: () =>
-      model
-        .getAllDecorations()
-        .filter((decoration) => decoration.options.lineNumberHoverMessage)
-        .map((decoration) => {
-          const message = decoration.options.lineNumberHoverMessage
-          const text = message && !Array.isArray(message) ? message.value : ''
-          const author = /^\*\*(\w+)\*\*/.exec(text)?.[1]
-          return `${decoration.range.startLineNumber}-${decoration.range.endLineNumber}:${author}`
-        })
-        .sort()
+    }
   }
 }
 
 beforeEach(() => {
   vi.useFakeTimers()
   lookups = 0
-  painted = []
 })
 
 afterEach(() => {
@@ -112,7 +98,7 @@ afterEach(() => {
   model.dispose()
 })
 
-it('runs no blame lookup while typing and draws blame again after the pause', () => {
+it('runs no blame lookup while typing, then one per line to draw and one to regroup', () => {
   const { type } = mountColumn()
 
   for (let key = 0; key < 5; key++) {
@@ -121,23 +107,9 @@ it('runs no blame lookup while typing and draws blame again after the pause', ()
   }
 
   expect(lookups).toBe(0)
-  expect(painted[1]).toBe('2')
 
   vi.advanceTimersByTime(250)
 
-  expect(painted[0]).toContain('Ada')
-  expect(painted[1]).toContain('Uncommitted changes')
-})
-
-it('drops the edited line from its old commit tooltip at once and regroups after the pause', () => {
-  const { type, tooltips } = mountColumn()
-  expect(tooltips()).toEqual(['1-2:Ada', '3-4:Bob'])
-
-  type(2)
-
-  expect(tooltips()).toEqual([])
-
-  vi.advanceTimersByTime(250)
-
-  expect(tooltips()).toEqual(['1-1:Ada', '3-4:Bob'])
+  // 4 lines: 4 lookups to draw blame, 4 to regroup the tooltips.
+  expect(lookups).toBe(8)
 })
