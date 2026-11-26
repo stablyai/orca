@@ -27933,7 +27933,7 @@
       "computerHint": "봇이 실행되는 위치입니다.",
       "computerAccountHint": "Orca에 {{account}}(으)로 로그인한 상태에서 봇이 실행되는 위치입니다.",
       "useChatDefaults": "채팅 기본값 사용",
-      "useChatDefaultsHint": "에이전트의 모델, 옵션, 권한을 채팅 기본값으로 되돌립니다",
+      "chatDefault": "채팅 기본값",
       "agent": "에이전트",
       "folder": "폴더: {{path}}",
       "name": "이름",

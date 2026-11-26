@@ -27899,6 +27899,7 @@
       "pictureColor": "Arka plan rengi",
       "pictureColorCustom": "Özel renk",
       "useChatDefaults": "Sohbet varsayılanlarını kullan",
+      "chatDefault": "Sohbet gibi",
       "name": "Ad",
       "validation": {
         "addName": "Bir ad ekleyin",
