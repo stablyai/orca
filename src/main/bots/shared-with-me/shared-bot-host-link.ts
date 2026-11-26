@@ -157,15 +157,14 @@ export function sharedBotHostLink(deps: {
       if (link === 'live') {
         return Promise.resolve('live')
       }
-      // Asked for now (the host is back, or a phone needs it): no stale host-offline hold delays it,
-      // whether this dial joins one parked behind that hold or starts its own.
-      clearRelayDialHolds(environmentId)
       // A dial already under way is awaited, never reopened: that would cut its handshake short.
       const joined = joinDial()
       if (joined) {
         return joined
       }
       const settledDial = awaitDial()
+      // Asked for now (the host is back, or a phone needs it): no stale host-offline hold delays it.
+      clearRelayDialHolds(environmentId)
       ensureRemoteRuntimeSharedControlConnection(environmentId, paired)
       reconnectRemoteRuntimeSharedControlConnection(environmentId)
       if (getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state === 'ready') {

@@ -1,28 +1,26 @@
-// The share link's dial outside the real connection: what settles it, what it wakes, and that a link
-// closed from inside its own change callback keeps nothing running.
+// The share link's dial outside the real connection: what settles it, and that a link closed
+// from inside its own change callback keeps nothing running.
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 
 type Edge = {
-  state: string | null
   listener: ((event: { environmentId: string; diagnostics: { state: string } }) => void) | null
-  holdsCleared: number
 }
 
-const edge = vi.hoisted((): Edge => ({ state: null, listener: null, holdsCleared: 0 }))
+const edge = vi.hoisted((): Edge => ({ listener: null }))
 
 vi.mock(
   '../../ipc/runtime-environments/connections/runtime-environment-request-connections',
   () => ({
     closeRemoteRuntimeRequestConnection: () => {},
     ensureRemoteRuntimeSharedControlConnection: () => {},
-    getRemoteRuntimeSharedControlDiagnostics: () => (edge.state ? { state: edge.state } : null),
+    getRemoteRuntimeSharedControlDiagnostics: () => null,
     reconnectRemoteRuntimeSharedControlConnection: () => {},
     sendRemoteRuntimeSharedControlRequest: () => Promise.reject(new Error('unused'))
   })
 )
 vi.mock('../../ipc/runtime-environments/connections/runtime-environment-relay-link', () => ({
-  clearRelayDialHolds: () => void (edge.holdsCleared += 1)
+  clearRelayDialHolds: () => {}
 }))
 vi.mock('../../ipc/runtime-environments/status/runtime-environment-diagnostics-broadcast', () => ({
   onRuntimeEnvironmentDiagnostics: (listener: NonNullable<typeof edge.listener>) => {
@@ -41,9 +39,7 @@ const { sharedBotHostLink } = await import('./shared-bot-host-link')
 
 afterEach(() => {
   vi.useRealTimers()
-  edge.state = null
   edge.listener = null
-  edge.holdsCleared = 0
 })
 
 const publish = (state: RemoteRuntimeSharedConnectionDiagnostics['state']) =>
@@ -77,17 +73,4 @@ it('settles at once as unpaired when the opener refuses with no credential left'
   publish('closed')
   expect(await dialed).toBe('unpaired')
   expect(vi.getTimerCount()).toBe(0)
-})
-
-it('wakes a dial parked behind a host-offline hold when it joins it', async () => {
-  edge.state = 'awaiting_ready'
-  const link = sharedBotHostLink({
-    environmentId: 'env-1',
-    hasCredential: () => true,
-    onLinkChanged: () => {}
-  })
-  const joined = link.connect()
-  expect(edge.holdsCleared).toBe(1)
-  publish('ready')
-  expect(await joined).toBe('live')
 })

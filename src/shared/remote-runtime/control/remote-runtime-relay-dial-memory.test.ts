@@ -94,18 +94,3 @@ it("holds a redial within an offline episode for the director's Retry-After", as
   await dialWith(memory, () => new RelayDirectorHttpError(429, 20_000), 1)
   expect(heldFor(memory)).toBe(20_000)
 })
-
-it('redials once at once when a Connect wakes it mid-dial, and not otherwise', async () => {
-  vi.useFakeTimers({ now: START })
-  const memory = new RelayRuntimeDialMemory(Date.now, () => 1)
-  expect(await dialWith(memory, () => new RelayOuterError(1006))).toBe(1)
-  let woke = false
-  const dials = await dialWith(memory, () => {
-    if (!woke) {
-      woke = true
-      memory.clearHold()
-    }
-    return new RelayOuterError(1006)
-  })
-  expect(dials).toBe(2)
-})

@@ -31,7 +31,6 @@ export class RelayRuntimeDialMemory {
   readonly hostOfflineStreak = new RelayHostOfflineStreak(() => this.lastConnectedAt)
   private hostOfflineDials = 0
   private heldUntil = 0
-  private wakes = 0
   private readonly holdWaiters = new Set<() => void>()
 
   constructor(
@@ -79,13 +78,10 @@ export class RelayRuntimeDialMemory {
       this.hostOfflineDials > 1 &&
       // Only while a hold paces it: any other failure (a dropped network) ends the channel.
       this.heldUntil > this.now() &&
-      redialable(error)
+      !(error instanceof RelayDialAbortedError) &&
+      !relayCredentialRefused(error) &&
+      !(error instanceof PairedE2EEAuthenticationError)
     )
-  }
-
-  /** Counts clearHold() calls, so a dial can tell it was woken while it was out. */
-  get wakeGeneration(): number {
-    return this.wakes
   }
 
   noteConnected(): void {
@@ -102,7 +98,6 @@ export class RelayRuntimeDialMemory {
   clearHold(): void {
     this.hostOfflineDials = 0
     this.heldUntil = 0
-    this.wakes += 1
     for (const release of this.holdWaiters) {
       release()
     }
@@ -135,15 +130,6 @@ export class RelayRuntimeDialMemory {
   private extendHold(holdMs: number): void {
     this.heldUntil = Math.max(this.heldUntil, this.now() + Math.floor(holdMs))
   }
-}
-
-/** A failure that isn't a verdict on the credential or an abort: the channel may dial again. */
-function redialable(error: Error): boolean {
-  return (
-    !(error instanceof RelayDialAbortedError) &&
-    !relayCredentialRefused(error) &&
-    !(error instanceof PairedE2EEAuthenticationError)
-  )
 }
 
 const HOST_OFFLINE_HOLD_MIN_MS = 1_500
@@ -183,20 +169,13 @@ export async function dialRelayRuntimeLink(args: {
   beforeRedial: () => void
 }): Promise<{ ok: true } | { ok: false; error: Error }> {
   for (;;) {
-    const wake = args.memory.wakeGeneration
     const result = await dialThroughDirector(args)
-    if (result.ok) {
-      return result
-    }
-    // A wake (Connect, network back) during the dial outdates its failure: dial once more now,
-    // as the phone's foreground reset dials at once (mobile-relay-reconnect-controller.ts:64-77).
-    const woken = args.memory.wakeGeneration !== wake && redialable(result.error)
-    if (!woken) {
+    if (!result.ok) {
       // Before deciding to redial: a director's pause holds the redial too.
       args.memory.noteRetryAfter(relayDirectorRetryAfterMs(result.error))
-      if (!args.memory.redialsWithinOfflineEpisode(result.error)) {
-        return result
-      }
+    }
+    if (result.ok || !args.memory.redialsWithinOfflineEpisode(result.error)) {
+      return result
     }
     args.beforeRedial()
   }
