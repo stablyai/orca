@@ -1,28 +1,61 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { PreflightStatus } from '../../../../preload/api/preflight/preflight-api'
 import type { TaskProvider } from '../../../../shared/work-items/task-providers'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { RuntimeProviderPreflightStatus } from './source-selection/task-source-provider-availability'
 
-/** A repo-backed provider that is installed but signed out is equally stale. */
-export function needsTargetedPreflightRefresh(args: {
+export type ProviderPreflightRefreshTargets = {
+  desktop: boolean
+  runtimeHostIds: readonly TaskSourceContext['hostId'][]
+}
+
+function toolIsUnavailable(taskSource: TaskProvider, status: PreflightStatus | null): boolean {
+  if (!status) {
+    return false
+  }
+  const tool =
+    taskSource === 'github' ? status.gh : taskSource === 'gitlab' ? status.glab : undefined
+  return tool !== undefined && (!tool.installed || !tool.authenticated)
+}
+
+export function selectProviderPreflightRefreshTargets(args: {
   taskSource: TaskProvider
-  hasRepoContexts: boolean
+  contexts: readonly TaskSourceContext[]
   preflightStatus: PreflightStatus | null
   preflightStatusChecked: boolean
   preflightStatusCurrent: boolean
   preflightDescribesDesktop: boolean
-}): boolean {
-  if (
-    !args.hasRepoContexts ||
-    !args.preflightStatusCurrent ||
-    !args.preflightStatusChecked ||
-    !args.preflightDescribesDesktop
-  ) {
-    return false
+  runtimePreflightStatusByHostId: ReadonlyMap<
+    TaskSourceContext['hostId'],
+    RuntimeProviderPreflightStatus
+  >
+}): ProviderPreflightRefreshTargets {
+  if (args.taskSource !== 'github' && args.taskSource !== 'gitlab') {
+    return { desktop: false, runtimeHostIds: [] }
   }
-  const tool =
-    args.taskSource === 'github'
-      ? args.preflightStatus?.gh
-      : args.taskSource === 'gitlab'
-        ? args.preflightStatus?.glab
-        : undefined
-  return tool !== undefined && (!tool.installed || !tool.authenticated)
+
+  let desktop = false
+  const runtimeHostIds = new Set<TaskSourceContext['hostId']>()
+
+  for (const context of args.contexts) {
+    const parsed = parseExecutionHostId(context.hostId)
+    if (parsed?.kind !== 'runtime') {
+      if (
+        args.preflightStatusCurrent &&
+        args.preflightStatusChecked &&
+        args.preflightDescribesDesktop &&
+        toolIsUnavailable(args.taskSource, args.preflightStatus)
+      ) {
+        desktop = true
+      }
+      continue
+    }
+
+    const hostStatus = args.runtimePreflightStatusByHostId.get(context.hostId)
+    if (hostStatus?.checked && toolIsUnavailable(args.taskSource, hostStatus.status)) {
+      runtimeHostIds.add(context.hostId)
+    }
+  }
+
+  return { desktop, runtimeHostIds: [...runtimeHostIds] }
 }

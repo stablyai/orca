@@ -1,64 +1,135 @@
 import { expect, it } from 'vitest'
 import type { PreflightStatus } from '../../../../preload/api/preflight/preflight-api'
-import { needsTargetedPreflightRefresh } from './task-page-preflight-recheck'
+import {
+  normalizeTaskSourceContext,
+  type TaskSourceContext
+} from '../../../../shared/work-items/task-source-context'
+import type { RuntimeProviderPreflightStatus } from './source-selection/task-source-provider-availability'
+import { selectProviderPreflightRefreshTargets } from './task-page-preflight-recheck'
 
-type Args = Parameters<typeof needsTargetedPreflightRefresh>[0]
+type Args = Parameters<typeof selectProviderPreflightRefreshTargets>[0]
 
 const ready: PreflightStatus = {
   git: { installed: true },
   gh: { installed: true, authenticated: true },
   glab: { installed: true, authenticated: true }
 }
+const signedOut: PreflightStatus = { ...ready, gh: { installed: true, authenticated: false } }
+const localContext = context('local')
+const runtimeHostId = 'runtime:env-1'
+const runtimeContext = context(runtimeHostId)
+
+function context(hostId: string): TaskSourceContext {
+  const value = normalizeTaskSourceContext({ provider: 'github', projectId: 'p', hostId })
+  if (!value) {
+    throw new Error('invalid task source context')
+  }
+  return value
+}
 
 function args(overrides: Partial<Args> = {}): Args {
   return {
     taskSource: 'github',
-    hasRepoContexts: true,
+    contexts: [localContext],
     preflightStatus: ready,
     preflightStatusChecked: true,
     preflightStatusCurrent: true,
     preflightDescribesDesktop: true,
+    runtimePreflightStatusByHostId: new Map(),
     ...overrides
   }
 }
 
-it('refreshes once when GitHub is signed out for selected repos', () => {
-  expect(
-    needsTargetedPreflightRefresh(
-      args({ preflightStatus: { ...ready, gh: { installed: true, authenticated: false } } })
-    )
-  ).toBe(true)
-})
+function runtimeMap(
+  status: PreflightStatus,
+  checked = true
+): ReadonlyMap<TaskSourceContext['hostId'], RuntimeProviderPreflightStatus> {
+  return new Map([[runtimeHostId, { checked, status }]])
+}
 
-it('refreshes when the needed tool is not installed or is missing on the server', () => {
+it('targets the desktop when gh is signed out for a desktop repo', () => {
+  expect(selectProviderPreflightRefreshTargets(args({ preflightStatus: signedOut }))).toEqual({
+    desktop: true,
+    runtimeHostIds: []
+  })
   expect(
-    needsTargetedPreflightRefresh(
+    selectProviderPreflightRefreshTargets(
       args({ preflightStatus: { ...ready, gh: { installed: false, authenticated: false } } })
     )
-  ).toBe(true)
-  expect(
-    needsTargetedPreflightRefresh(
-      args({ preflightStatus: { git: { installed: true }, gh: ready.gh } })
-    )
-  ).toBe(false)
+  ).toEqual({ desktop: true, runtimeHostIds: [] })
 })
 
 it('uses glab for GitLab repos', () => {
   expect(
-    needsTargetedPreflightRefresh(
+    selectProviderPreflightRefreshTargets(
       args({
         taskSource: 'gitlab',
-        preflightStatus: { ...ready, glab: { installed: true, authenticated: false } }
+        preflightStatus: {
+          ...ready,
+          glab: { installed: true, authenticated: false }
+        }
       })
     )
-  ).toBe(true)
+  ).toEqual({ desktop: true, runtimeHostIds: [] })
 })
 
-it('does not refresh a ready or irrelevant status', () => {
-  expect(needsTargetedPreflightRefresh(args())).toBe(false)
-  expect(needsTargetedPreflightRefresh(args({ preflightStatusCurrent: false }))).toBe(false)
-  expect(needsTargetedPreflightRefresh(args({ preflightStatusChecked: false }))).toBe(false)
-  expect(needsTargetedPreflightRefresh(args({ preflightDescribesDesktop: false }))).toBe(false)
-  expect(needsTargetedPreflightRefresh(args({ hasRepoContexts: false }))).toBe(false)
-  expect(needsTargetedPreflightRefresh(args({ taskSource: 'linear' }))).toBe(false)
+it('targets a runtime host whose provider is stale', () => {
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({
+        contexts: [runtimeContext],
+        runtimePreflightStatusByHostId: runtimeMap(signedOut)
+      })
+    )
+  ).toEqual({ desktop: false, runtimeHostIds: [runtimeHostId] })
+})
+
+it('targets both desktop and runtime when both are stale', () => {
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({
+        contexts: [localContext, runtimeContext],
+        preflightStatus: signedOut,
+        runtimePreflightStatusByHostId: runtimeMap(signedOut)
+      })
+    )
+  ).toEqual({ desktop: true, runtimeHostIds: [runtimeHostId] })
+})
+
+it('does not force an unchecked runtime status', () => {
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({
+        contexts: [runtimeContext],
+        runtimePreflightStatusByHostId: runtimeMap(signedOut, false)
+      })
+    )
+  ).toEqual({ desktop: false, runtimeHostIds: [] })
+})
+
+it('does not force a ready or irrelevant status', () => {
+  expect(selectProviderPreflightRefreshTargets(args())).toEqual({
+    desktop: false,
+    runtimeHostIds: []
+  })
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({ preflightStatusCurrent: false, preflightStatus: signedOut })
+    )
+  ).toEqual({ desktop: false, runtimeHostIds: [] })
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({ preflightStatusChecked: false, preflightStatus: signedOut })
+    )
+  ).toEqual({ desktop: false, runtimeHostIds: [] })
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({ preflightDescribesDesktop: false, preflightStatus: signedOut })
+    )
+  ).toEqual({ desktop: false, runtimeHostIds: [] })
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({ taskSource: 'linear', preflightStatus: signedOut })
+    )
+  ).toEqual({ desktop: false, runtimeHostIds: [] })
 })

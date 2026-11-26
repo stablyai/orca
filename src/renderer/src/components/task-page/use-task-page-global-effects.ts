@@ -2,7 +2,7 @@ import type { TaskPageJiraSummaryGenerationModel } from './jira/creation/use-tas
 import { useEffect, useRef } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
-import { needsTargetedPreflightRefresh } from './task-page-preflight-recheck'
+import { selectProviderPreflightRefreshTargets } from './task-page-preflight-recheck'
 
 function isTextEntryTarget(target: HTMLElement): boolean {
   return (
@@ -23,7 +23,10 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     preflightStatus,
     preflightStatusChecked,
     preflightStatusContextKey,
+    preflightStatusError,
     preflightDescribesDesktop,
+    runtimePreflightStatusByHostId,
+    refreshRuntimePreflightHosts,
     checkLinearConnection,
     refreshPreflightStatus,
     expectedPreflightContextKey,
@@ -112,22 +115,38 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
-    const needsRefresh = needsTargetedPreflightRefresh({
+    const targets = selectProviderPreflightRefreshTargets({
       taskSource,
-      hasRepoContexts: taskSourceRepoContexts.length > 0,
+      contexts: taskSourceRepoContexts,
       preflightStatus,
       preflightStatusChecked,
       preflightStatusCurrent,
-      preflightDescribesDesktop
+      preflightDescribesDesktop,
+      runtimePreflightStatusByHostId
     })
-    const refreshKey = needsRefresh
-      ? `${expectedPreflightContextKey}|${selectedReposKey}|${taskSource}`
-      : null
-    if (!refreshKey) {
+    const refreshKey =
+      targets.desktop || targets.runtimeHostIds.length > 0
+        ? [
+            expectedPreflightContextKey,
+            selectedReposKey,
+            taskSource,
+            targets.desktop ? 'desktop' : '',
+            targets.runtimeHostIds.join(',')
+          ].join('|')
+        : null
+    if (preflightStatusError) {
+      // Retry on a later open/focus; forcing again in this effect would loop.
+      forcedPreflightKeyRef.current = null
+    } else if (!refreshKey) {
       forcedPreflightKeyRef.current = null
     } else if (forcedPreflightKeyRef.current !== refreshKey) {
       forcedPreflightKeyRef.current = refreshKey
-      void refreshPreflightStatus({ force: true })
+      if (targets.desktop) {
+        void refreshPreflightStatus({ force: true })
+      }
+      if (targets.runtimeHostIds.length > 0) {
+        void refreshRuntimePreflightHosts(targets.runtimeHostIds)
+      }
     }
     if (!linearStatusReady) {
       void checkLinearConnection()
@@ -149,7 +168,10 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     preflightStatusContextKey,
     preflightStatusChecked,
     preflightStatusCurrent,
+    preflightStatusError,
     refreshPreflightStatus,
+    refreshRuntimePreflightHosts,
+    runtimePreflightStatusByHostId,
     selectedReposKey,
     taskSource,
     taskSourceRepoContexts
