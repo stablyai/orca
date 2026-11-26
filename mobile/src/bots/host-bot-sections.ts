@@ -114,6 +114,9 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       }
     ])
   )
+  // The paired computer's Bot options order and filter every computer's bots: Manual keeps this
+  // computer's, then each server's, in their saved orders. Show paused lifts its filter for a search.
+  const saved = local?.kind === 'listed' ? local.view : DEFAULT_BOT_SIDEBAR_VIEW
   const drawn: DrawnBotEntry[] = []
   let total = 0
   let shownTotal = 0
@@ -147,7 +150,7 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       continue
     }
     const hostRows = inputs.rows.filter((row) => hostOf(row) === listing.hostId)
-    const drawnHost = drawHostBotEntries(listing, hostRows, inputs, lineageOf, hosts)
+    const drawnHost = drawHostBotEntries(listing, hostRows, inputs, lineageOf, hosts, saved)
     drawn.push(...drawnHost.drawn)
     drawnHost.listed.forEach((identity) => listedIdentities.add(identity))
     total += drawnHost.total
@@ -158,18 +161,16 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
   if (total === 0 && !newBotHostId && endLines.length === 0) {
     return { sections: [], listedIdentities }
   }
-  // The paired computer's Bot options order and filter every computer's bots: Manual keeps this
-  // computer's, then each server's, in their saved orders. Show paused lifts its filter for a search.
-  const saved = local?.kind === 'listed' ? local.view : DEFAULT_BOT_SIDEBAR_VIEW
   const view = searching && inputs.showPaused ? { ...saved, hidePausedBots: false } : saved
   const arranged = arrangeBotSidebarEntries(
     drawn.map((entry) => ({ ...entry.entry, drawn: entry })),
     view,
     ({ drawn: entry }) => entry.activity
   ).map(({ drawn: entry }) => entry)
-  // Matching paused bots the options hide are counted, as the desktop's search does.
+  // Matching paused bots the options hide are counted, as the desktop's search does; Show paused
+  // can't list them under Groups only.
   const pausedMatches =
-    searching && view.hidePausedBots
+    searching && view.hidePausedBots && !view.showGroupsOnly
       ? drawn.filter(({ entry }) => entry.kind === 'bot' && entry.bot.paused).length
       : 0
   // Nothing shown matches: the section goes, so the list's no-match view shows (with Show paused
@@ -185,18 +186,33 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
         ...(total === 0 && newBotHostId
           ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
           : []),
+        // Groups always list, so an empty Groups only list means there are none, as on the desktop.
+        ...(total > 0 && shownTotal === 0 && view.showGroupsOnly
+          ? [
+              {
+                key: 'no-groups',
+                text: translate('bots.list.noGroups', 'No groups yet. Groups only hides your bots.')
+              }
+            ]
+          : []),
         ...endLines
       ]
   return {
     sections: [
       botsSection({
-        // Paused bots the options hide leave the count too, as on the desktop; a search counts its matches.
-        count: searching ? arranged.length : view.hidePausedBots ? shownTotal : total,
+        // Bots the options hide leave the count too, as on the desktop; a search counts its matches.
+        count: searching ? arranged.length : shownTotal,
         lines,
         ...(newBotHostId ? { newBotHostId } : {}),
         // Groups are this computer's: New group counts its bots alone, whatever the search hides.
         botCount: local?.kind === 'listed' ? local.bots.length : 0,
-        botPreview: arranged.flatMap(({ preview }) => preview ?? []),
+        // The folded header keeps the bots Groups only hides, so one that needs you still shows there.
+        botPreview: (view.showGroupsOnly && !searching
+          ? drawn.filter(
+              ({ entry }) => entry.kind === 'bot' && !(view.hidePausedBots && entry.bot.paused)
+            )
+          : arranged
+        ).flatMap(({ preview }) => preview ?? []),
         data: inputs.collapsedGroups.has(BOTS_GROUP_KEY)
           ? []
           : arranged.flatMap(({ items }, index) =>

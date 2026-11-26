@@ -20,12 +20,15 @@ export type BotSidebarView = {
   hidePausedBots: boolean
   /** A bot's worker lines with nothing running drop off, as the projects' Hide sleeping. */
   hideSleepingWorkers: boolean
+  /** Only group rows list; standalone bots drop off. */
+  showGroupsOnly: boolean
 }
 
 export const DEFAULT_BOT_SIDEBAR_VIEW: BotSidebarView = {
   sortBy: 'manual',
   hidePausedBots: false,
-  hideSleepingWorkers: false
+  hideSleepingWorkers: false,
+  showGroupsOnly: false
 }
 
 /** Saved or relayed options, any missing or unknown field at its default. */
@@ -36,13 +39,24 @@ export function normalizeBotSidebarView(value: unknown): BotSidebarView {
   return {
     sortBy: sortBy ?? DEFAULT_BOT_SIDEBAR_VIEW.sortBy,
     hidePausedBots: saved.hidePausedBots === true,
-    hideSleepingWorkers: saved.hideSleepingWorkers === true
+    hideSleepingWorkers: saved.hideSleepingWorkers === true,
+    showGroupsOnly: saved.showGroupsOnly === true
   }
 }
 
 /** How many options differ from the default, for the button's badge. */
 export function countActiveBotSidebarFilters(view: BotSidebarView): number {
-  return Number(view.hidePausedBots) + Number(view.hideSleepingWorkers)
+  return (
+    Number(view.hidePausedBots) + Number(view.hideSleepingWorkers) + Number(view.showGroupsOnly)
+  )
+}
+
+/** Whether the options list a row. Groups are rooms the owner made on purpose; only bots pause. */
+export function isBotSidebarEntryListed(
+  view: Pick<BotSidebarView, 'hidePausedBots' | 'showGroupsOnly'>,
+  entry: { kind: 'bot' | 'group'; paused: boolean }
+): boolean {
+  return entry.kind === 'group' || (!view.showGroupsOnly && !(view.hidePausedBots && entry.paused))
 }
 
 type ArrangedEntry =
@@ -68,10 +82,12 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
   view: BotSidebarView,
   activityOf: (entry: E) => BotSidebarEntryActivity
 ): E[] {
-  // Groups are rooms the owner made on purpose; only bots pause.
-  const shown = view.hidePausedBots
-    ? entries.filter((entry) => entry.kind !== 'bot' || !entry.bot.paused)
-    : [...entries]
+  const shown = entries.filter((entry) =>
+    isBotSidebarEntryListed(view, {
+      kind: entry.kind,
+      paused: entry.kind === 'bot' && entry.bot.paused
+    })
+  )
   if (view.sortBy === 'manual') {
     return shown
   }

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Moon, Pause } from 'lucide-react'
+import { Moon, Pause, Users } from 'lucide-react'
 import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { FilterToggleRow } from '@/components/sidebar/worktree-list/controls/FilterToggleRow'
 import { OptionChoiceSubmenu } from '@/components/sidebar/worktree-list/controls/OptionChoiceSubmenu'
@@ -80,6 +80,16 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
         )}
         checked={view.hideSleepingWorkers}
         onChange={(hideSleepingWorkers) => setView({ hideSleepingWorkers })}
+      />
+      <FilterToggleRow
+        icon={<Users className="size-3.5" />}
+        label={t('bots.options.groupsOnly', 'Groups only')}
+        ariaLabel={t(
+          'bots.options.groupsOnlyAria',
+          'Show only bot groups and hide standalone bots'
+        )}
+        checked={view.showGroupsOnly}
+        onChange={(showGroupsOnly) => setView({ showGroupsOnly })}
       />
     </SidebarOptionsPopover>
   )

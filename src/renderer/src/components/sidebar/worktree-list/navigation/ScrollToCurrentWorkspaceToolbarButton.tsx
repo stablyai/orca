@@ -5,11 +5,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import { requestScrollToCurrentWorkspaceReveal } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import { useSidebarRevealUnavailableReason } from '../../sidebar-reveal-target-state'
 import type { SidebarRevealNoneReason } from '../../../../../../shared/sidebar-list/sidebar-reveal-target'
 
 function useReasonText(reason: SidebarRevealNoneReason | null): string | null {
   const t = useTranslate()
+  const groupsOnly = useAppStore((s) => s.botSidebarView.showGroupsOnly)
   switch (reason) {
     case null:
       return null
@@ -22,7 +24,12 @@ function useReasonText(reason: SidebarRevealNoneReason | null): string | null {
     case 'bots-off':
       return t('sidebar.revealCurrent.botsOff', 'Bots are turned off, so this bot isn’t listed')
     case 'bot-hidden':
-      return t('sidebar.revealCurrent.botHidden', 'This bot is paused and hidden by Bot options')
+      return groupsOnly
+        ? t(
+            'sidebar.revealCurrent.botHiddenGroupsOnly',
+            'Groups only in Bot options hides this bot'
+          )
+        : t('sidebar.revealCurrent.botHidden', 'This bot is paused and hidden by Bot options')
   }
 }
 

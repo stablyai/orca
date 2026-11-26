@@ -29,6 +29,10 @@ import { getHostKeyedBotSidebarEntries } from '@/components/bots/bot-sidebar-ent
 import { getKnownSidebarWorktreeById } from '@/components/sidebar/worktree-list/navigation/folder-reveal'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
+import {
+  DEFAULT_BOT_SIDEBAR_VIEW,
+  isBotSidebarEntryListed
+} from '../../../../shared/bots/bot-sidebar-view'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
@@ -126,12 +130,12 @@ function ownerInputs(
   const entries = ownerEntries(bots, groups, selectFolderWorkspaces(state) ?? [], readBotHostIds())
   const botsEnabled = state.settings?.botsEnabled !== false
   const hideBotCreatedWorkspaces = state.hideBotCreatedWorkspaces !== false
-  const hidePausedBots = state.botSidebarView?.hidePausedBots === true
+  const view = state.botSidebarView ?? DEFAULT_BOT_SIDEBAR_VIEW
   const owners: SidebarRevealOwner[] = entries.map((entry) => ({
     kind: entry.kind,
     entryKey: entry.entryKey,
     home: entry.home,
-    hidden: hidePausedBots && entry.paused,
+    hidden: !isBotSidebarEntryListed(view, entry),
     hostDown: readBotHostState(entry.hostId) === 'offline'
   }))
   return {

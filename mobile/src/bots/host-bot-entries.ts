@@ -5,7 +5,11 @@ import {
 import { translate } from '../i18n/mobile-i18n'
 import { accessRequestPerson } from '../../../src/shared/bots/bot-access-request'
 import { getBotSidebarEntries } from '../../../src/shared/bots/bot-sidebar-entries'
-import type { BotSidebarEntryActivity } from '../../../src/shared/bots/bot-sidebar-view'
+import {
+  isBotSidebarEntryListed,
+  type BotSidebarEntryActivity,
+  type BotSidebarView
+} from '../../../src/shared/bots/bot-sidebar-view'
 import { foldBotStatus, type BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import {
   botFoldLiveStatus,
@@ -126,7 +130,8 @@ export function drawHostBotEntries(
   hostRows: readonly Worktree[],
   inputs: HostBotSectionInputs,
   lineageOf: ReturnType<typeof lazyHostBotLineage>,
-  hosts: BotHostNames
+  hosts: BotHostNames,
+  view: BotSidebarView
 ): { drawn: DrawnBotEntry[]; listed: Set<string>; total: number; shownTotal: number } {
   const shown = inputs.drawRow
   const { hostId } = listing
@@ -318,6 +323,11 @@ export function drawHostBotEntries(
       }
     })
   }
-  const shownTotal = entries.filter((entry) => entry.kind !== 'bot' || !entry.bot.paused).length
+  const shownTotal = entries.filter((entry) =>
+    isBotSidebarEntryListed(view, {
+      kind: entry.kind,
+      paused: entry.kind === 'bot' && entry.bot.paused
+    })
+  ).length
   return { drawn, listed, total: entries.length, shownTotal }
 }

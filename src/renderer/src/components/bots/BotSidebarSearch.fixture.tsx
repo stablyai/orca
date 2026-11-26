@@ -2,6 +2,7 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import type { Bot } from '../../../../shared/bot-types'
+import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../../shared/bots/bot-sidebar-view'
 import { mascotAvatar, type BotMascotId } from '../../../../shared/bot-avatar'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSplit, SidebarProjectsListSlot } from '../sidebar/SidebarBotsSplit'
@@ -76,7 +77,7 @@ function store(hidePausedBots: boolean, bots: Bot[] = BOTS) {
   return {
     sidebarBotsHeight: 4000,
     collapsedGroups: new Set<string>(),
-    botSidebarView: { sortBy: 'manual' as const, hidePausedBots, hideSleepingWorkers: false },
+    botSidebarView: { ...DEFAULT_BOT_SIDEBAR_VIEW, hidePausedBots },
     folderWorkspaces: bots.map((owner) =>
       makeFolderWorkspace({
         id: owner.folderWorkspaceId,
@@ -140,8 +141,7 @@ async function openSearch(frame: HTMLElement): Promise<HTMLInputElement> {
 }
 
 function typeInto(field: HTMLInputElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-  setter.call(field, value)
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, value)
   field.dispatchEvent(new Event('input', { bubbles: true }))
 }
 

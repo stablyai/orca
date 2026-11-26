@@ -161,7 +161,10 @@ function BotSidebarSearchPanel({
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const requestedPurposes = useRef(false)
-  const hidePaused = useAppStore((s) => s.botSidebarView.hidePausedBots)
+  // Under Groups only, Show can't bring a paused bot back, so its matches aren't offered.
+  const hidePaused = useAppStore(
+    (s) => s.botSidebarView.hidePausedBots && !s.botSidebarView.showGroupsOnly
+  )
   const setView = useAppStore((s) => s.setBotSidebarView)
   const readRowPurpose = useBotPurposeReader()
   const hasQuery = query.trim() !== ''

@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { readBotsEnabled } from '@/lib/bot-catalog'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
+import { isBotSidebarEntryListed } from '../../../../shared/bots/bot-sidebar-view'
 
 const READY_DEADLINE_MS = 500
 
@@ -120,7 +121,7 @@ export function canRevealBotSidebarEntry(entry: {
     !state.collapsedGroups.has(BOTS_GROUP_KEY) &&
     (state.sidebarBody ?? 'workspaces') !== 'agents' &&
     readBotsEnabled() &&
-    !(entry.kind === 'bot' && entry.paused && state.botSidebarView.hidePausedBots) &&
+    isBotSidebarEntryListed(state.botSidebarView, entry) &&
     !sidebarSearchHasQuery
   )
 }
