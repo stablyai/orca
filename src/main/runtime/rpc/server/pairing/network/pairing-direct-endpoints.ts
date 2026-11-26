@@ -32,7 +32,8 @@ function shareDefaultRouteLookup(
   lookup: DefaultRouteInterfaceLookup,
   now: () => number
 ): DefaultRouteInterfaceLookup {
-  let cached: { names: Promise<ReadonlySet<string> | null>; settledAt: number | null } | null = null
+  type CachedLookup = { names: Promise<ReadonlySet<string> | null>; settledAt: number | null }
+  let cached: CachedLookup | null = null
   return () => {
     if (
       cached &&
@@ -40,7 +41,7 @@ function shareDefaultRouteLookup(
     ) {
       return cached.names
     }
-    const entry = { names: lookup().catch(() => null), settledAt: null as number | null }
+    const entry: CachedLookup = { names: lookup().catch(() => null), settledAt: null }
     void entry.names.then(() => {
       entry.settledAt = now()
     })
