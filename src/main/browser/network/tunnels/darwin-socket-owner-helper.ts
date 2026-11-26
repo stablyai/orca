@@ -23,8 +23,9 @@ type Lookup = {
 }
 type RunningHelper = {
   child: ChildProcessWithoutNullStreams
-  /** Written one at a time, so a lookup whose connection closed while queued is never scanned. */
-  queued: Lookup[]
+  /** Written one at a time, so a lookup whose connection closed while queued is never scanned.
+   *  Insertion-ordered, so a cancel removes its own entry without searching. */
+  queued: Set<Lookup>
   inFlight: Lookup | null
   buffered: string
   /** Armed while a lookup is in flight; no answer by then means the helper is stuck. */
@@ -82,7 +83,7 @@ export function isOwnDarwinConnection(
     return Promise.reject(new Error('connection has no IP address'))
   }
   const helper = running ?? start()
-  if (helper.queued.length + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
+  if (helper.queued.size + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
     return Promise.reject(new Error('too many connections are waiting for an owner check'))
   }
   return new Promise((resolve, reject) => {
@@ -92,16 +93,14 @@ export function isOwnDarwinConnection(
       resolve,
       reject
     }
-    helper.queued.push(lookup)
+    helper.queued.add(lookup)
     signal?.addEventListener('abort', () => dropQueued(helper, lookup), { once: true })
     sendNext(helper)
   })
 }
 
 function dropQueued(helper: RunningHelper, lookup: Lookup): void {
-  const index = helper.queued.indexOf(lookup)
-  if (index !== -1) {
-    helper.queued.splice(index, 1)
+  if (helper.queued.delete(lookup)) {
     lookup.reject(new Error('the connection closed before its owner check'))
   }
 }
@@ -110,10 +109,11 @@ function sendNext(helper: RunningHelper): void {
   if (helper.inFlight || running !== helper) {
     return
   }
-  const next = helper.queued.shift()
+  const next = helper.queued.values().next().value
   if (!next) {
     return
   }
+  helper.queued.delete(next)
   helper.inFlight = next
   helper.stall = setTimeout(
     () => fail(helper, 'the macOS socket owner helper stopped answering'),
@@ -124,7 +124,13 @@ function sendNext(helper: RunningHelper): void {
 
 function start(): RunningHelper {
   const child = spawnProcess({ program: helperPath(), args: [] })
-  const helper: RunningHelper = { child, queued: [], inFlight: null, buffered: '', stall: null }
+  const helper: RunningHelper = {
+    child,
+    queued: new Set(),
+    inFlight: null,
+    buffered: '',
+    stall: null
+  }
   running = helper
   broken = null
   child.stdout.setEncoding('utf8')
@@ -177,7 +183,8 @@ function stop(helper: RunningHelper | null, reason: string): void {
   if (helper.stall) {
     clearTimeout(helper.stall)
   }
-  const lookups = helper.queued.splice(0)
+  const lookups = [...helper.queued]
+  helper.queued.clear()
   if (helper.inFlight) {
     lookups.push(helper.inFlight)
     helper.inFlight = null
