@@ -6787,7 +6787,8 @@
           "moreLoadedPaths_other": "und {{count}} weitere geladene Pfade",
           "changesLost_one": "{{count}} nicht committete Änderung geht verloren",
           "changesLost_other": "{{count}} nicht committete Änderungen gehen verloren",
-          "uncountedChangesLost": "Nicht committete Änderungen gehen verloren"
+          "uncountedChangesLost": "Nicht committete Änderungen gehen verloren",
+          "moreLoadedPaths": "und {{value0}} weitere geladene Pfade"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Worktree anzeigen",
@@ -7867,7 +7868,12 @@
                 "1e1a5f6763": "Lokale Branches gelöscht: {{value0}}",
                 "43d9395605": "{{value0}} gelöscht, {{value1}} nicht gelöscht",
                 "d42f1f14e0_one": "Für {{count}} Branch erneut versuchen",
-                "d42f1f14e0_other": "Für {{count}} Branches erneut versuchen"
+                "d42f1f14e0_other": "Für {{count}} Branches erneut versuchen",
+                "0e0379f24a": "{{count}} Branches beibehalten",
+                "6310412304": "{{count}} Branches prüfen",
+                "a3cdd9d9e6": "Git hat {{count}} lokale Branches beibehalten, da sie möglicherweise nicht gemergte Commits enthalten. Beibehaltene Branches behalten keine Arbeitsbereichsordner; ihre Commits bleiben im Repository. Orca gibt möglicherweise weiterhin im Hintergrund Speicherplatz von Arbeitsbereichen frei.",
+                "cea24c2b7d": "{{count}} Arbeitsbereiche entfernt",
+                "d42f1f14e0": "Für {{count}} Branches erneut versuchen"
               }
             }
           }
@@ -22390,6 +22396,16 @@
           "selectionWithheldCount_one": "{{count}} ausgewählter Arbeitsbereich wird durch die aktuellen Filter ausgeblendet und wurde abgewählt.",
           "selectionWithheldCount_other": "{{count}} ausgewählte Arbeitsbereiche werden durch die aktuellen Filter ausgeblendet und wurden abgewählt.",
           "lastActive": "Zuletzt aktiv: {{value0}}",
+          "projectNamed": "Projekt: {{value0}}",
+          "pathLabel": "Pfad",
+          "copyPath": "Pfad kopieren",
+          "gitNotChecked": "Nicht geprüft",
+          "workspaceCount_one": "{{count}} Arbeitsbereich",
+          "workspaceCount_other": "{{count}} Arbeitsbereiche",
+          "restoreFailed": "Ignorieren von {{value0}} konnte nicht aufgehoben werden",
+          "ignoreTooltip": "Ignorieren: beim Massenlöschen überspringen",
+          "stopIgnoring": "Nicht mehr ignorieren",
+          "stopIgnoringNamed": "{{value0}} nicht mehr ignorieren",
           "sortAscending": "aufsteigend",
           "sortDescending": "absteigend"
         },
@@ -22516,7 +22532,8 @@
           "checking": "Änderungen werden geprüft…",
           "checkingDetails": "Wird geprüft…",
           "unavailableDetails": "Details nicht verfügbar",
-          "none": "Keine nicht committeten Änderungen"
+          "none": "Keine nicht committeten Änderungen",
+          "noUnsaved": "Keine ungespeicherten Dateien"
         },
         "unsavedEdits": {
           "discarded_one": "Nicht gespeicherte Änderungen in {{count}} Datei werden verworfen:",
@@ -22531,9 +22548,23 @@
           "line_one": "Nicht gespeicherte Änderungen in {{count}} Datei werden verworfen: {{files}}",
           "line_other": "Nicht gespeicherte Änderungen in {{count}} Dateien werden verworfen: {{files}}"
         },
-        "ignoredFilesUnchecked": "Ignorierte Dateien konnten nicht vollständig geprüft werden"
+        "ignoredFilesUnchecked": "Ignorierte Dateien konnten nicht vollständig geprüft werden",
+        "ignoredFiles": {
+          "none": "Keine ignorierten lokalen Dateien",
+          "unavailable": "Ignorierte Dateien nicht geprüft",
+          "checking": "Ignorierte Dateien werden geprüft…",
+          "lost_one": "{{count}} ignorierte Datei geht verloren",
+          "lost_other": "{{count}} ignorierte Dateien gehen verloren",
+          "lostIncomplete": "{{count}}+ ignorierte Dateien gehen verloren",
+          "showPaths": "Ignorierte Pfade anzeigen",
+          "morePaths_one": "und {{count}} weiterer ignorierter Pfad",
+          "morePaths_other": "und {{count}} weitere ignorierte Pfade",
+          "listLabel": "Ignorierte lokale Dateien, die verloren gehen",
+          "incompleteNotice": "Die Prüfung wurde vorzeitig beendet; möglicherweise werden noch weitere ignorierte Dateien in diesem Worktree gelöscht."
+        }
       },
       "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
         "namesAndMore": "{{names}} und weitere"
       }
     },
@@ -22891,6 +22922,234 @@
       "repositoryHooks": {
         "availableEnvVars": "Verfügbare Umgebungsvariablen"
       },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "Standardverhalten beim Erstellen eines neuen Arbeitsbereichs.",
+        "folderTitle": "Arbeitsbereich-Hooks",
+        "folderDescription": "Skripte, die in diesem Ordner ausgeführt werden, wenn ein Arbeitsbereich erstellt oder entfernt wird. Alle Arbeitsbereiche teilen sich den Ordner. Lokale Skripte werden auf diesem Computer gespeichert; `orca.yaml`-Skripte werden mit deinem Team geteilt.",
+        "folderSetupDescription": "Lokale und geteilte Skripte, die nach dem Erstellen eines neuen Arbeitsbereichs ausgeführt werden.",
+        "folderArchiveDescription": "Lokale und geteilte Skripte, die vor dem Entfernen eines Arbeitsbereichs ausgeführt werden.",
+        "folderSetupFieldDescription": "Wird nach dem Erstellen eines neuen Arbeitsbereichs ausgeführt; untergeordnete Worktrees erstellen, Abhängigkeiten installieren, env-Dateien kopieren.",
+        "folderArchiveFieldDescription": "Wird vor dem Entfernen eines Arbeitsbereichs ausgeführt."
+      },
+      "workspaceCleanup": {
+        "title": "Bereinigung von Arbeitsbereichen",
+        "description": "Entferne Arbeitsbereiche, mit denen du fertig bist. Bevor etwas entfernt wird, prüft Orca erneut auf ungespeicherte Arbeit.",
+        "unsupportedHost": "Auf diesem Host läuft eine Orca-Version ohne automatische Bereinigung. Aktualisiere Orca dort, um diese Einstellungen zu verwenden.",
+        "previewFailed": "Es konnte nicht geprüft werden, auf welche Arbeitsbereiche diese Änderung zutrifft.",
+        "pinFailed": "{{name}} konnte nicht behalten werden.",
+        "rules": {
+          "branchNote": "Gemergte Branches werden mit ihrem Arbeitsbereich gelöscht. Nicht gemergte Branches bleiben erhalten.",
+          "recommended": "Empfohlen",
+          "inactiveDescription": "Seit {{count}} Tagen keine Aktivität.",
+          "advancedDescription": "Arbeitsbereiche von Automatisierungen und Orchestrierungs-Workern",
+          "inactiveFor": "Inaktiv seit",
+          "days": "Tag(en)",
+          "then": "Dann",
+          "archiveDescription": "„Archivieren“ gibt Speicherplatz frei und behält den Arbeitsbereich in der Seitenleiste.",
+          "deleteDescription": "„Löschen“ entfernt den Arbeitsbereich und seinen Ordner.",
+          "archive": "Archivieren",
+          "delete": "Löschen",
+          "matchesCount": "Trifft derzeit auf {{count}} Arbeitsbereiche zu",
+          "hideMatches": "Ausblenden",
+          "showMatches": "Anzeigen",
+          "merged": "Gemergte Arbeitsbereiche löschen",
+          "mergedDescription": "Der Pull Request ist gemergt und alles im Arbeitsbereich ist darin enthalten.",
+          "unchanged": "Unveränderte Arbeitsbereiche löschen",
+          "unchangedDescription": "Keine Commits über den Standard-Branch hinaus und keine Bearbeitungen.",
+          "inactiveCleanUp": "Inaktive Arbeitsbereiche bereinigen",
+          "inactive": "Inaktive Arbeitsbereiche löschen",
+          "automationRuns": "Abgeschlossene Automatisierungs-Arbeitsbereiche löschen",
+          "automationRunsDescription": "Löscht nach Abschluss eines Automatisierungslaufs die von ihm erstellten Arbeitsbereiche.",
+          "orchestrationWorkers": "Arbeitsbereiche freigegebener Orchestrierungs-Worker löschen",
+          "orchestrationWorkersDescription": "Arbeitsbereiche, die ein Orchestrierungs-Worker verwendet hat, sobald der Koordinator ihn freigegeben hat.",
+          "inactiveDescription_one": "Seit 1 Tag keine Aktivität.",
+          "inactiveDescription_other": "Seit {{count}} Tagen keine Aktivität.",
+          "matchesCount_one": "Trifft derzeit auf 1 Arbeitsbereich zu",
+          "matchesCount_other": "Trifft derzeit auf {{count}} Arbeitsbereiche zu",
+          "checking": "Es wird geprüft, welche Arbeitsbereiche die Regel erfüllen…",
+          "checkFailed": "Es konnte nicht geprüft werden, welche Arbeitsbereiche die Regel erfüllen."
+        },
+        "protection": {
+          "title": "Schutz",
+          "keepIgnoredFiles": "Arbeitsbereiche mit ignorierten Dateien behalten",
+          "keepIgnoredFilesDescription": "Dateien wie .env und lokale Konfiguration lassen sich nicht wiederherstellen. node_modules und Build-Ausgaben zählen nicht.",
+          "alwaysKeptLabel": "Immer behalten",
+          "alwaysKeptList": "Angeheftete Arbeitsbereiche, laufende Agenten oder Terminals, ungespeicherte Editor-Änderungen, nicht committete Änderungen, nicht gepushte Commits."
+        },
+        "activity": {
+          "loadFailed": "Aktivität konnte nicht geladen werden: {{error}}",
+          "empty": "Die Bereinigung wurde noch nicht ausgeführt.",
+          "unfinished": "Nicht abgeschlossen",
+          "nothingRemoved": "Nichts zu bereinigen",
+          "removedCount": "{{count}} entfernt",
+          "keptCount": "{{count}} behalten",
+          "failedCount": "{{count}} fehlgeschlagen",
+          "removed": "Entfernt · {{count}}",
+          "failed": "Fehlgeschlagen · {{count}}",
+          "archived": "Archiviert",
+          "deleted": "Gelöscht",
+          "kept": "Behalten · {{count}}",
+          "showMore": "{{count}} weitere anzeigen",
+          "waiting": "Inaktiv: {{elapsed}} von {{after}} Tagen",
+          "title": "Aktivität",
+          "notListed_one": "1 weiterer behaltener Arbeitsbereich wird nicht aufgeführt.",
+          "notListed_other": "{{count}} weitere behaltene Arbeitsbereiche werden nicht aufgeführt.",
+          "chatsDeletedCount_one": "1 Chat gelöscht",
+          "chatsDeletedCount_other": "{{count}} Chats gelöscht",
+          "chatsDeleted_one": "1 Chat aus einem gelöschten Arbeitsbereich gelöscht",
+          "chatsDeleted_other": "{{count}} Chats aus gelöschten Arbeitsbereichen gelöscht",
+          "chatsFailed_one": "1 Chat konnte nicht gelöscht werden",
+          "chatsFailed_other": "{{count}} Chats konnten nicht gelöscht werden"
+        },
+        "runFailed": "Die Bereinigung konnte nicht ausgeführt werden.",
+        "updateFailed": "Die Bereinigungsregeln konnten nicht gespeichert werden.",
+        "enable": {
+          "title": "„{{rule}}“ aktivieren?",
+          "description_one": "1 Arbeitsbereich erfüllt derzeit die Regel. Er wird wenige Sekunden nach dem Aktivieren gelöscht.",
+          "description_other": "{{count}} Arbeitsbereiche erfüllen derzeit die Regel. Sie werden wenige Sekunden nach dem Aktivieren gelöscht.",
+          "summary": "Zu löschen: {{count}}",
+          "cancel": "Abbrechen",
+          "turnOn": "Aktivieren"
+        },
+        "reason": {
+          "merged": "Gemergt",
+          "unchanged": "Unverändert",
+          "inactive": "Inaktiv",
+          "automationRun": "Automatisierungslauf",
+          "orchestrationWorker": "Orchestrierungs-Worker",
+          "mergedNumber": "{{label}} · #{{number}}"
+        },
+        "keep": {
+          "pinned": "Angeheftet",
+          "noRuleMatched": "Keine Regel trifft zu",
+          "recentlyActive": "In der letzten Stunde verwendet",
+          "activeWorkspace": "Gerade geöffnet",
+          "agentRunning": "Agent läuft",
+          "terminalRunning": "Terminal führt einen Prozess aus",
+          "terminalUnknown": "Terminalstatus unbekannt",
+          "unsavedEditorChanges": "Ungespeicherte Editor-Änderungen",
+          "uncommittedChanges": "Nicht committete Änderungen",
+          "unpushedCommits": "Nicht gepushte Commits",
+          "ignoredFiles": "Ignorierte Dateien",
+          "gitUnknown": "Git-Status konnte nicht gelesen werden",
+          "archiveUnavailable": "Archivieren nicht verfügbar",
+          "archiveScript": "Hat ein Archivierungsskript",
+          "removing": "Wird bereits entfernt",
+          "folderWorkspaceSibling": "Ein anderes Repository in diesem Arbeitsbereich wird noch verwendet",
+          "waiting": "Wartet",
+          "notRemovable": "Hauptarbeitsbereich oder Ordnerprojekt",
+          "projectOff": "Bereinigung für dieses Projekt deaktiviert",
+          "rulesOff": "Keine Regel aktiv",
+          "withDetail": "{{cause}} · {{detail}}"
+        },
+        "trigger": {
+          "startup": "Beim Start",
+          "hourly": "Stündlich",
+          "settings": "Nach einer Regeländerung",
+          "runNow": "Regeln jetzt ausführen",
+          "cli": "Über die CLI"
+        },
+        "search": {
+          "cleanup": "Bereinigung",
+          "cleanUp": "bereinigen",
+          "delete": "löschen",
+          "automatic": "automatisch",
+          "pullRequest": "PR",
+          "inactiveDescription": "Seit einer Anzahl von Tagen keine Aktivität.",
+          "stale": "veraltet",
+          "days": "Tage",
+          "automations": "Automatisierungen",
+          "orchestration": "Orchestrierung",
+          "protection": "Schutz",
+          "activityDescription": "Was jede Bereinigung entfernt und behalten hat.",
+          "history": "Verlauf",
+          "runs": "Ausführungen",
+          "envFile": ".env",
+          "manual": "manuell",
+          "automaticDescription": "Ob die automatische Bereinigung aktiv ist, wann sie als Nächstes läuft, und die Regeln jetzt ausführen.",
+          "runRulesNow": "Regeln jetzt ausführen",
+          "cleanUpNow": "jetzt bereinigen",
+          "schedule": "Zeitplan"
+        },
+        "status": {
+          "lastRunFailed": "Die letzte Ausführung {{when}} konnte nicht abgeschlossen werden: {{error}}",
+          "lastRunNothing": "Die letzte Ausführung {{when}} hat nichts entfernt.",
+          "lastRunFreed_one": "Die letzte Ausführung {{when}} hat 1 Arbeitsbereich entfernt und {{size}} freigegeben.",
+          "lastRunFreed_other": "Die letzte Ausführung {{when}} hat {{count}} Arbeitsbereiche entfernt und {{size}} freigegeben.",
+          "lastRunRemoved_one": "Die letzte Ausführung {{when}} hat 1 Arbeitsbereich entfernt.",
+          "lastRunRemoved_other": "Die letzte Ausführung {{when}} hat {{count}} Arbeitsbereiche entfernt.",
+          "nextRun": "Nächste Ausführung {{when}}.",
+          "justNow": "gerade eben",
+          "inUnderAMinute": "in unter einer Minute",
+          "lastRunChats_one": "Die letzte Ausführung {{when}} hat 1 Chat aus einem gelöschten Arbeitsbereich gelöscht.",
+          "lastRunChats_other": "Die letzte Ausführung {{when}} hat {{count}} Chats aus gelöschten Arbeitsbereichen gelöscht."
+        },
+        "change": {
+          "title": "„{{rule}}“ ändern?",
+          "description_one": "Durch diese Änderung erfüllt derzeit 1 weiterer Arbeitsbereich die Regel. Er wird wenige Sekunden nach dem Übernehmen gelöscht.",
+          "description_other": "Durch diese Änderung erfüllen derzeit {{count}} weitere Arbeitsbereiche die Regel. Sie werden wenige Sekunden nach dem Übernehmen gelöscht.",
+          "apply": "Übernehmen"
+        },
+        "rulesLoadFailed": "Die Bereinigungsregeln dieses Hosts konnten nicht geladen werden: {{error}}",
+        "retry": "Erneut versuchen",
+        "listSeparator": ", ",
+        "summary": {
+          "merged": "Gemergte löschen",
+          "unchanged": "Unveränderte löschen",
+          "inactiveCleanUp": "Inaktive bereinigen",
+          "inactive": "Inaktive löschen",
+          "automationRuns": "Automatisierungs-Arbeitsbereiche",
+          "orchestrationWorkers": "Orchestrierungs-Worker",
+          "off": "Aus"
+        },
+        "disableIgnoredFiles": {
+          "title": "Schutz für ignorierte Dateien deaktivieren?",
+          "description": "Bei Projekten mit diesen Bereinigungsregeln verhindern ignorierte Dateien die automatische Bereinigung nicht mehr. Dateien wie .env und lokale Konfiguration können gelöscht werden und lassen sich nicht wiederherstellen.",
+          "matches_one": "Ohne Anheften wird {{count}} weiterer Arbeitsbereich wenige Sekunden nach dem Deaktivieren des Schutzes gelöscht.",
+          "matches_other": "Ohne Anheften werden {{count}} weitere Arbeitsbereiche wenige Sekunden nach dem Deaktivieren des Schutzes gelöscht.",
+          "noMatches": "Ohne diesen Schutz würden derzeit keine weiteren Arbeitsbereiche bereinigt. Diese Einstellung wirkt sich auf künftige Bereinigungen in Projekten mit diesen Regeln aus.",
+          "turnOff": "Schutz deaktivieren"
+        },
+        "pinAndKeep": {
+          "description": "Ausgewählte Arbeitsbereiche werden angeheftet, wenn du bestätigst. Angeheftete Arbeitsbereiche sind von der automatischen Bereinigung ausgenommen, bis du die Anheftung aufhebst.",
+          "named": "{{name}} anheften und behalten",
+          "label": "Anheften und behalten"
+        },
+        "chatHistory": {
+          "title": "Chatverlauf"
+        },
+        "manual": {
+          "title": "Manuelle Bereinigung",
+          "label": "Ausgewählte Arbeitsbereiche löschen",
+          "review": "Arbeitsbereiche prüfen",
+          "description": "Sieh dir alle Arbeitsbereiche an und wähle, welche gelöscht werden sollen."
+        },
+        "automatic": {
+          "offDetail": "Aktiviere eine Regel, um Arbeitsbereiche nach Zeitplan zu entfernen.",
+          "running": "Was deine Regeln erfassen, wird entfernt…",
+          "title": "Automatische Bereinigung",
+          "on": "An",
+          "off": "Aus",
+          "runningButton": "Läuft…",
+          "runNow": "Regeln jetzt ausführen"
+        }
+      },
+      "repository": {
+        "workspaceCleanup": {
+          "title": "Bereinigung von Arbeitsbereichen",
+          "description": "Regeln nur für {{name}}. „Globale Einstellung verwenden“ folgt Einstellungen / Bereinigung von Arbeitsbereichen.",
+          "usingGlobal": "Globale Einstellung: {{rules}}",
+          "globalDefault": "Globaler Standard: {{rules}}",
+          "useGlobal": "Globale Einstellung verwenden",
+          "off": "Aus",
+          "custom": "Benutzerdefiniert",
+          "rules": "Bereinigungsregeln",
+          "rulesDescription": "Welche Regeln zur Bereinigung von Arbeitsbereichen für dieses Projekt gelten.",
+          "keywordCleanup": "Bereinigung",
+          "keywordDelete": "löschen",
+          "keywordMerged": "gemergt"
+        }
+      },
       "bitbucket": {
         "credentials": {
           "dialog": {
@@ -22913,6 +23172,51 @@
         "confirmCheckHomeFolder": "Kein anderer Rechner, der diesen Home-Ordner teilt, führt Orca aus",
         "details": "Details",
         "clearing": "Wird aufgehoben…"
+      },
+      "agents": {
+        "deleteHistoryWithWorkspace": {
+          "updateFailed": "Die Einstellung konnte auf {{host}} nicht aktualisiert werden.",
+          "recommended": "Empfohlen",
+          "unsupported": "Aktualisiere Orca auf {{host}}, um diese Einstellung dort zu verwenden.",
+          "confirmTitle": "Agentenverlauf aus gelöschten Arbeitsbereichen löschen?",
+          "confirmDescription": "Orca löscht Orca-, Claude-Code- und Codex-Chats aus Arbeitsbereichen, die nicht mehr existieren, auch aus solchen, die vor heute gelöscht wurden. Chats aus Arbeitsbereichen, die du noch hast, bleiben erhalten. Gelöschte Chats lassen sich nicht wiederherstellen.",
+          "cancel": "Abbrechen",
+          "turnOn": "Aktivieren",
+          "title": "Agentenverlauf beim Löschen eines Arbeitsbereichs löschen",
+          "description": "Orca-, Claude-Code- und Codex-Chats aus gelöschten Arbeitsbereichen werden automatisch entfernt, um Speicherplatz freizugeben. Sie lassen sich nicht wiederherstellen.",
+          "codexHistoryBadge": "Codex-Verlauf: {{size}}",
+          "codexHistoryBadgeAtLeast": "Codex-Verlauf: {{size}}+",
+          "codexHistoryTooltip": "Speicherplatz, den Codex auf {{host}} für seinen eigenen Chatverlauf verwendet, einschließlich Chats aus Arbeitsbereichen, die du noch hast.",
+          "codexHistoryTooltipAtLeast": "Codex verwendet auf {{host}} mindestens so viel Speicherplatz für seinen eigenen Chatverlauf, einschließlich Chats aus Arbeitsbereichen, die du noch hast.",
+          "chat": "Chat",
+          "transcripts": "Transkripte",
+          "diskSpace": "Speicherplatz",
+          "cleanup": "Bereinigung",
+          "chatHistory": "Chatverlauf löschen"
+        }
+      },
+      "notifications": {
+        "server": {
+          "fallbackHost": "dieser Server",
+          "updateFailed": "Die Benachrichtigungen auf {{host}} konnten nicht aktualisiert werden.",
+          "unsupported": "Aktualisiere Orca auf {{host}}, um dessen Benachrichtigungen hier zu ändern.",
+          "enabledDescription": "Hinweise, die {{host}} für seine Agenten und Terminals sendet, einschließlich Push-Nachrichten an deine Smartphones.",
+          "sectionDescription": "Hinweise, die {{host}} für seine Agenten und Terminals sendet."
+        }
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "Das Orca-Konto, unter dem {{host}} läuft, für Slack, GitHub, Linear und Webhooks seiner Bots.",
+          "unread": "Das Orca-Konto von {{host}} kann nicht gelesen werden. Aktualisiere {{host}} oder verbinde dich erneut.",
+          "signInThere": "Führe `orca auth login` auf {{host}} aus, um es anzumelden."
+        }
+      },
+      "hostScope": {
+        "updateHostToChange": "Aktualisiere Orca auf {{host}}, um diese Einstellung dort zu ändern.",
+        "updateFailed": "Die Einstellung konnte auf {{host}} nicht aktualisiert werden."
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "Git-Benutzername auf {{host}}"
       }
     },
     "agentChildRow": {
@@ -24497,6 +24801,13 @@
       "alwaysTrustScope": "Mit „Immer vertrauen“ führt Orca künftige Befehle aus <code>orca.yaml</code> in <repo/> auch nach Änderungen ohne Nachfrage aus."
     },
     "delete": {
+      "detachingChildren": "Untergeordnete Arbeitsbereiche werden gelöst…",
+      "childrenPreservedDescription": "Direkt untergeordnete Arbeitsbereiche werden zu Arbeitsbereichen der obersten Ebene. Ihre Dateien, Terminals und tiefer verschachtelten Arbeitsbereiche bleiben erhalten.",
+      "detachChildren": "Untergeordnete Arbeitsbereiche lösen und behalten",
+      "nestedChildrenCannotBeKept": "Ordner untergeordneter Arbeitsbereiche innerhalb dieses Arbeitsbereichs müssen nach außen verschoben werden, bevor sie behalten werden können.",
+      "childrenChanged": "Untergeordnete Arbeitsbereiche haben sich geändert. Prüfe die Liste der Arbeitsbereiche und versuche es erneut.",
+      "childrenChangedClearPreserve": "Untergeordnete Arbeitsbereiche haben sich geändert. Entferne diese Option, um das Löschen zu prüfen.",
+      "detachFailed": "Nicht alle untergeordneten Arbeitsbereiche konnten gelöst werden. Der übergeordnete wurde nicht gelöscht. {{error}}",
       "loss": {
         "changes_one": "{{count}} nicht committete Änderung",
         "changes_other": "{{count}} nicht committete Änderungen",
@@ -24522,7 +24833,11 @@
       "singleTitle": "{{name}} löschen?",
       "forceExplanation": "Git konnte ihn wegen vorhandener Änderungen nicht löschen. Erzwungenes Löschen entfernt diese Änderungen trotzdem.",
       "errorDetails": "Details",
-      "changesIncomplete": "Einige Änderungen konnten nicht vollständig geprüft werden."
+      "changesIncomplete": "Einige Änderungen konnten nicht vollständig geprüft werden.",
+      "parentWorkspace": "Übergeordneter Arbeitsbereich",
+      "workspacesToReview": "Zu prüfende Arbeitsbereiche",
+      "workspaceDetails": "Details zum ausgewählten Arbeitsbereich",
+      "workspaceKept": "Wird behalten"
     }
   },
   "projectBoard": {
@@ -27181,6 +27496,35 @@
     "pageRegion": "Seite",
     "account": "Konto",
     "signIn": "Anmelden"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "title": "Arbeitsspeicher von inaktiven Tabs sparen",
+      "description_one": "Du hast {{count}} Tab, den du seit über {{hours}} Stunden nicht angesehen hast. Aktiviere den Speichersparmodus, um seinen Arbeitsspeicher freizugeben.",
+      "description_other": "Du hast {{count}} Tabs, die du seit über {{hours}} Stunden nicht angesehen hast. Aktiviere den Speichersparmodus, um ihren Arbeitsspeicher freizugeben.",
+      "descriptionOneHour_one": "Du hast {{count}} Tab, den du seit über einer Stunde nicht angesehen hast. Aktiviere den Speichersparmodus, um seinen Arbeitsspeicher freizugeben.",
+      "descriptionOneHour_other": "Du hast {{count}} Tabs, die du seit über einer Stunde nicht angesehen hast. Aktiviere den Speichersparmodus, um ihren Arbeitsspeicher freizugeben.",
+      "turnOnMemorySaver": "Speichersparmodus aktivieren"
+    },
+    "disk": {
+      "title": "Deine Festplatte ist fast voll",
+      "description": "Finde nicht mehr benötigte Arbeitsbereiche unter Einstellungen > Bereinigung von Arbeitsbereichen.",
+      "reviewOld": "Alte Arbeitsbereiche prüfen"
+    },
+    "dontShowAgain": "Nicht mehr anzeigen"
+  },
+  "chats": {
+    "delete": {
+      "updateHost": "Aktualisiere {{host}}, um Chats zu löschen",
+      "failed": "Der Chat konnte nicht gelöscht werden",
+      "undone": "Dies kann nicht rückgängig gemacht werden.",
+      "title": "Diesen Chat löschen?",
+      "descriptionHost": "Er wird dauerhaft von {{host}} gelöscht. Dies kann nicht rückgängig gemacht werden.",
+      "action": "Löschen",
+      "groupRoom": "Der Chat eines Gruppenraums kann nicht gelöscht werden",
+      "workerOwed": "Eine Orchestrierung wartet noch auf diesen Chat",
+      "home": "Der Home-Chat eines verwalteten Agenten kann nicht gelöscht werden"
+    }
   },
   "activityBar": {
     "moveUp": "Nach oben verschieben",
