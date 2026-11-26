@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Activity, Files, Plug } from 'lucide-react'
+import { Activity, Files, GitBranch, ListChecks, Lock, Plug, SquareStack } from 'lucide-react'
 import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome/ui-chrome-types'
+import type { CheckStatus } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { ActivityBarItem } from './activity-bar/activity-bar-buttons'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
 import { getPluginPanelActivityItems } from './plugin-panels/plugin-panel-activity-items'
@@ -35,11 +36,13 @@ const BOT_PAGE_ITEMS: ActivityBarItem[] = [
 function BotPageBar({
   width,
   activeTab: initialTab,
-  items = BOT_PAGE_ITEMS
+  items = BOT_PAGE_ITEMS,
+  checksStatus = null
 }: {
   width: number
   activeTab: ActiveRightSidebarTab
   items?: ActivityBarItem[]
+  checksStatus?: CheckStatus | null
 }): React.JSX.Element {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [stripWidth, setStripWidth] = useState<number | null>(null)
@@ -57,7 +60,7 @@ function BotPageBar({
         )}
         effectiveTab={activeTab}
         onSelectTab={setActiveTab}
-        checksStatus={null}
+        checksStatus={checksStatus}
         closeButton={
           <button type="button" className="sidebar-toggle mr-1" aria-label="Toggle right sidebar">
             <SidebarToggleIcon side="right" size={16} />
@@ -213,18 +216,18 @@ const botPageItemsWithSevenPlugins = (lastTitle: string) =>
     item.id === 'plugin:samples.notes/panel6' ? { ...item, title: lastTitle } : item
   )
 
-async function openLastFromMore(frame: HTMLElement): Promise<void> {
+async function openMore(frame: HTMLElement): Promise<void> {
   frame
     .querySelector('[data-slot="dropdown-menu-trigger"]')
     ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-  for (let tries = 0; tries < 60; tries++) {
-    const last = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].at(-1)
-    if (last) {
-      last.click()
-      return
-    }
+  for (let tries = 0; tries < 60 && !document.querySelector('[role="menuitem"]'); tries++) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+}
+
+async function openLastFromMore(frame: HTMLElement): Promise<void> {
+  await openMore(frame)
+  ;[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].at(-1)?.click()
 }
 
 export const oneCharacterTitleOpenFromMore = defineFixture({
@@ -241,4 +244,40 @@ export const oneCharacterTitleOpenFromMoreNarrowest = defineFixture({
     <BotPageBar width={220} activeTab="bot-activity" items={botPageItemsWithSevenPlugins('中')} />
   ),
   interact: openLastFromMore
+})
+
+// A repo's tabs in a bar too narrow for all of them: Checks moves under More, with its status.
+const REPO_OVERFLOW_ITEMS: ActivityBarItem[] = [
+  { id: 'explorer', icon: Files, title: 'Explorer', shortcut: '' },
+  { id: 'source-control', icon: GitBranch, title: 'Source Control', shortcut: '' },
+  { id: 'workspaces', icon: SquareStack, title: 'Workspaces', shortcut: '' },
+  { id: 'vault', icon: Lock, title: 'Vault', shortcut: '' },
+  { id: 'plugin:test:panel', pluginKey: 'test', title: 'Plugin', icon: Plug, shortcut: '' },
+  { id: 'checks', icon: ListChecks, title: 'Checks', shortcut: '' }
+]
+
+export const checksOverflowPassingMenuOpen = defineFixture({
+  width: 260,
+  render: () => (
+    <BotPageBar
+      width={220}
+      activeTab="explorer"
+      items={REPO_OVERFLOW_ITEMS}
+      checksStatus="success"
+    />
+  ),
+  interact: openMore
+})
+
+export const checksOverflowFailingMenuOpen = defineFixture({
+  width: 260,
+  render: () => (
+    <BotPageBar
+      width={220}
+      activeTab="explorer"
+      items={REPO_OVERFLOW_ITEMS}
+      checksStatus="failure"
+    />
+  ),
+  interact: openMore
 })
