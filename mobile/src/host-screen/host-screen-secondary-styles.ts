@@ -7,10 +7,6 @@ const SECTION_HEADER_TEXT_GAP = 7
 const SECTION_HEADER_HEIGHT = 20 + SECTION_HEADER_TEXT_GAP * 2
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
   list: {
     paddingBottom: spacing.lg
   },
@@ -67,17 +63,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     alignSelf: 'stretch',
     justifyContent: 'center',
     paddingLeft: spacing.xs
-  },
-  filterModalSubtitle: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  optionPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm
   },
   optionSectionGap: {
     height: spacing.xs

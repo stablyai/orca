@@ -65,16 +65,6 @@ export const hostViewSettingsWrite = bindDeferredRpcOperation(
   })
 )
 
-export const hostCardLayoutWrite = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'settings.update-card-layout-or-skip',
-    method: 'settings.update',
-    acceptance: 'success-result-or-skip',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('card-layout-written', hostScreenUnreadReplySchema)
-  })
-)
-
 // Optimistic row writes skip refusals; source-control’s review-link write uses the same method but throws so the composer can report failure.
 export const worktreePinWrite = bindDeferredRpcOperation(
   defineRpcOperation({

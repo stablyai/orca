@@ -1331,12 +1331,8 @@
       "monitoring": "Arka plan görevleri izleniyor",
       "unverifiable": "Yakın zamanda güncelleme yok"
     },
-    "authFailedBanner": {
-      "message": "Kimlik doğrulanamadı — önce yeniden bağlanmayı deneyin; sorun sürerse masaüstü uygulamasından yeniden eşleştirin."
-    },
     "authFailedBannerActions": {
-      "repair": "Yeniden eşleştir",
-      "webNote": "Orca uygulamasından bu sunucuya yeniden bağlanın veya sunucuyu kaldırın."
+      "repair": "Yeniden eşleştir"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Sıfırlama zaten uygulandı",
@@ -1511,9 +1507,6 @@
       "sameNetworkOnlyHint": "Yalnızca aynı Wi-Fi ağında veya Tailscale üzerinden bağlanır. Her yerden bağlanmak için masaüstünde oturum açıp yeniden eşleştirin",
       "unlockHint": "Telefonunuzun kilidini açın, ardından yeniden denemek için dokunun",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} etkin"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Ağ tanılamasını görüntüle"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Sunucu uyumluluğu kontrol ediliyor"
@@ -2393,7 +2386,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Hesaplar",
-      "backToHosts": "Sunuculara dön",
       "floatingWorkspace": "Yüzen Çalışma Alanı",
       "hideSidebar": "Kenar çubuğunu gizle",
       "reconnect": "Yeniden bağlan",
@@ -2433,36 +2425,16 @@
       "prOpen": "Açık"
     },
     "workspaceOptionControls": {
-      "agentActivity": "Ajan etkinliği",
-      "agentActivityLayout": "Ajan etkinliği düzeni",
       "agentActivitySort": "Ajan Etkinliği",
       "agentActivitySortDescription": "Önce ilgilenilmesi gereken ajanlar, ardından en son etkinlik.",
-      "agentStatuses": "Ajan durumları",
       "allHosts": "Tüm sunucular",
       "allProjects": "Tüm projeler",
-      "automation": "Otomasyon",
-      "branchFolderPath": "Branch / klasör yolu",
-      "branchName": "Branch adı",
-      "compact": "Kompakt",
-      "detailed": "Ayrıntılı",
-      "fullList": "Tam liste",
-      "githubIssues": "GitHub sorunları",
-      "githubTicket": "GitHub sorunu",
-      "host": "Sunucu",
-      "hover": "Üzerine gelme",
-      "jiraIssue": "Jira sorunu",
-      "jiraIssues": "Jira sorunları",
-      "linearIssue": "Linear sorunu",
-      "linearIssues": "Linear sorunları",
       "manual": "Manuel",
       "manualProjectOrderDescription": "Projeleri düzenlemek için sürükleyin",
       "manualWorkspaceOrderDescription": "Çalışma alanlarını her grup içinde düzenlemek için sürükleyin.",
       "name": "Ad",
       "none": "Yok",
-      "notes": "Notlar",
-      "ports": "Portlar",
       "pr": "PR",
-      "prMrLink": "PR/MR bağlantısı",
       "project": "Proje",
       "recent": "Son",
       "recentProjectOrderDescription": "En son çalışma alanı etkinliği",
@@ -2473,30 +2445,19 @@
     },
     "workspaceOptionsSheet": {
       "backToOptions": "Çalışma alanı seçenekleri bölümüne dön",
-      "cardDisplay": "Kart görünümü",
-      "cardLayout": "Kart düzeni",
       "exceptDefaultBranch": "Varsayılan branch hariç",
       "filters": "Filtreler",
       "groupBy": "Gruplama ölçütü",
-      "hideAutomationCreated": "Otomasyonla oluşturulanları gizle",
-      "hideCliCreated": "CLI ile oluşturulanları gizle",
       "hideDefaultBranch": "Varsayılan branch'i gizle",
-      "hideDetachedHead": "Detached HEAD durumundakileri gizle",
-      "hideOtherClientWorkspaces": "Diğer istemcilerin çalışma alanlarını gizle",
       "hideSleeping": "Uyuyanları gizle",
-      "hosts": "Sunucular",
       "localLinux": "Yerel Linux",
       "localMac": "Yerel Mac",
       "localWindows": "Yerel Windows",
       "projectOrder": "Proje sırası",
       "projects": "Projeler",
-      "savingToDesktop": "Sunucuya kaydediliyor",
       "show": "Göster",
-      "showProperties": "Özellikleri göster",
       "sortBy": "Sıralama ölçütü",
-      "syncedAcrossDevices": "Cihazlarınız arasında eşitlenir",
       "thisComputer": "Bu bilgisayar",
-      "waitingForDesktop": "Sunucudan hâlâ yanıt bekleniyor",
       "workspaceOptions": "Çalışma alanı seçenekleri",
       "done": "Tamam",
       "reset": "Sıfırla"
@@ -5356,8 +5317,7 @@
       "noFilterMatches": "Filtrelerle eşleşen çalışma alanı yok",
       "reopen": "Güncellemek için yeniden açın",
       "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor.",
-      "loading": "Çalışma alanları bulunuyor…",
-      "retryingAutomatically": "Otomatik olarak yeniden deneniyor."
+      "loading": "Çalışma alanları bulunuyor…"
     },
     "workspaceListSections": {
       "all": "Tümü",

@@ -13,18 +13,9 @@ import {
   changedWorkspaceRowFilters,
   NO_WORKSPACE_ROW_FILTERS
 } from '../../../../src/shared/workspace-view/workspace-row-filters'
-import {
-  hostCardLayoutWrite,
-  hostViewSettingsRead,
-  hostViewSettingsWrite
-} from '../host-screen-operations'
+import { hostViewSettingsRead, hostViewSettingsWrite } from '../host-screen-operations'
 import { hostListSettingsRead } from './host-list-settings-operations'
-import type {
-  AgentActivityDisplayMode,
-  ProjectOrderBy,
-  WorktreeCardProperty
-} from '../../../../src/shared/ui-chrome/ui-chrome-types'
-import { getWorktreeCardModeUpdates } from '../../../../src/shared/worktree/row-display/card-properties'
+import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import type { HostScreenState } from '../use-host-screen-state'
 import { applyCollapse, withPendingViewChanges } from './host-view-pending-changes'
 import {
@@ -122,7 +113,7 @@ export function useHostViewSettings(args: {
   }, [setActionError, syncViewSettingsFromDesktop])
 
   const persistViewSettings = useCallback(
-    (patch: MobileViewPatch, options: { cardLayoutPreset?: boolean } = {}) => {
+    (patch: MobileViewPatch) => {
       localEditsRef.current += 1
       const previous = viewRef.current
       const next: MobileViewState = {
@@ -135,7 +126,7 @@ export function useHostViewSettings(args: {
         return
       }
       // Patch only touched fields so a stale mirror cannot revert another client’s sibling edits (STA-5781).
-      const payload: WorkspaceViewSettings = buildWorkspaceViewSettingsUpdate(patch, next, options)
+      const payload: WorkspaceViewSettings = buildWorkspaceViewSettingsUpdate(patch, next)
       if (Object.keys(payload).length === 0) {
         return
       }
@@ -195,51 +186,6 @@ export function useHostViewSettings(args: {
     [persistViewSettings]
   )
 
-  const setAgentActivityDisplayMode = useCallback(
-    (value: AgentActivityDisplayMode) => persistViewSettings({ agentActivityDisplayMode: value }),
-    [persistViewSettings]
-  )
-
-  const toggleCardProperty = useCallback(
-    (property: WorktreeCardProperty) => {
-      const current = viewRef.current.worktreeCardProperties
-      persistViewSettings({
-        worktreeCardProperties: current.includes(property)
-          ? current.filter((candidate) => candidate !== property)
-          : [...current, property]
-      })
-    },
-    [persistViewSettings]
-  )
-
-  // Layout presets also reset shown properties; write settings first so refusal cannot leave the other layout’s preset.
-  const setCardLayout = useCallback(
-    (layout: 'detailed' | 'compact') => {
-      if (!client) {
-        return
-      }
-      const updates = getWorktreeCardModeUpdates(layout === 'compact' ? 'Compact' : 'Default')
-      void (async () => {
-        try {
-          const reply = await hostCardLayoutWrite.request(client, updates.settings)
-          if (!hostCardLayoutWrite.interpret(reply).accepted || clientRef.current !== client) {
-            return
-          }
-        } catch {
-          return
-        }
-        persistViewSettings(
-          {
-            worktreeCardProperties: updates.ui.worktreeCardProperties,
-            compactWorktreeCards: updates.settings.compactWorktreeCards
-          },
-          { cardLayoutPreset: true }
-        )
-      })()
-    },
-    [client, persistViewSettings]
-  )
-
   const toggleCollapsed = useCallback(
     (key: string) => {
       // One section's change, so another device's edit to a sibling section is kept.
@@ -273,10 +219,7 @@ export function useHostViewSettings(args: {
   return {
     clearFilters,
     pendingViewChanges: pendingViewChanges?.status ?? NOTHING_PENDING,
-    setAgentActivityDisplayMode,
-    setCardLayout,
     setProjectOrderBy,
-    toggleCardProperty,
     handleGroupChange,
     handleSortChange,
     syncViewSettingsFromDesktop,

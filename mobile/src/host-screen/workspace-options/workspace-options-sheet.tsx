@@ -1,6 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { ActivityIndicator, Text, View } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
+import { View } from 'react-native'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import {
@@ -31,20 +30,19 @@ import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
 import { DrillRow } from './workspace-option-rows'
 import {
   WORKSPACE_OPTION_CONTROLS,
+  isPhoneWorkspaceOption,
+  type PhoneWorkspaceOptionKey,
   type WorkspaceOptionHost,
   type WorkspaceOptionProps
 } from './workspace-option-controls'
 
-function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, string> {
+function workspaceOptionLabels(t: Translate): Record<PhoneWorkspaceOptionKey, string> {
   return {
-    hosts: t('hostScreen.workspaceOptionsSheet.hosts', 'Hosts'),
+    hosts: t('hostScreen.workspaceOptionsSheet.computers', 'Computers'),
     projects: t('hostScreen.workspaceOptionsSheet.projects', 'Projects'),
     groupBy: t('hostScreen.workspaceOptionsSheet.groupBy', 'Group by'),
     sortBy: t('hostScreen.workspaceOptionsSheet.sortBy', 'Sort by'),
     projectOrderBy: t('hostScreen.workspaceOptionsSheet.projectOrder', 'Project order'),
-    cardLayout: t('hostScreen.workspaceOptionsSheet.cardLayout', 'Card layout'),
-    cardProperties: t('hostScreen.workspaceOptionsSheet.showProperties', 'Show properties'),
-    cardDisplay: t('hostScreen.workspaceOptionsSheet.cardDisplay', 'Card display'),
     hideSleepingWorkspaces: t('hostScreen.workspaceOptionsSheet.hideSleeping', 'Hide sleeping'),
     alwaysShowDefaultBranchWorkspace: t(
       'hostScreen.workspaceOptionsSheet.exceptDefaultBranch',
@@ -55,20 +53,20 @@ function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, str
       'Hide default branch'
     ),
     hideAutomationGeneratedWorkspaces: t(
-      'hostScreen.workspaceOptionsSheet.hideAutomationCreated',
-      'Hide automation-created'
+      'hostScreen.workspaceOptionsSheet.hideAutomationWorkspaces',
+      'Hide automation workspaces'
     ),
     hideCliCreatedWorkspaces: t(
-      'hostScreen.workspaceOptionsSheet.hideCliCreated',
-      'Hide CLI-created'
+      'hostScreen.workspaceOptionsSheet.hideCliWorkspaces',
+      'Hide CLI workspaces'
     ),
     hideWorkspacesFromOtherDevices: t(
-      'hostScreen.workspaceOptionsSheet.hideOtherClientWorkspaces',
-      'Hide other-client workspaces'
+      'hostScreen.workspaceOptionsSheet.hideOtherDevicesWorkspaces',
+      'Hide other devices’ workspaces'
     ),
     hideDetachedHeadWorkspaces: t(
-      'hostScreen.workspaceOptionsSheet.hideDetachedHead',
-      'Hide detached HEAD'
+      'hostScreen.workspaceOptionsSheet.hideNoBranch',
+      'Hide workspaces with no branch'
     )
   }
 }
@@ -138,23 +136,15 @@ export function WorkspaceOptionsSheet({ controller }: { controller: HostScreenCo
   )
 }
 
-function WorkspaceOptionsPending({ settings }: Pick<HostScreenController, 'settings'>) {
-  const t = useMobileTranslation()
-  useMobileColorScheme()
+// While the computer hasn't taken a change, the header says so in one word.
+function pendingViewLine(settings: HostScreenController['settings'], t: Translate): string | null {
   const { pending, stale } = settings.pendingViewChanges
   if (!pending.some((change) => change.kind === 'view')) {
     return null
   }
-  return (
-    <View style={styles.optionPending} accessibilityLiveRegion="polite">
-      <ActivityIndicator size="small" color={colors.textMuted} />
-      <Text style={styles.filterModalSubtitle}>
-        {stale
-          ? t('hostScreen.workspaceOptionsSheet.waitingForDesktop', 'Still waiting for the host')
-          : t('hostScreen.workspaceOptionsSheet.savingToDesktop', 'Saving to the host')}
-      </Text>
-    </View>
-  )
+  return stale
+    ? t('hostScreen.workspaceOptionsSheet.stillSaving', 'Still saving…')
+    : t('hostScreen.workspaceOptionsSheet.saving', 'Saving…')
 }
 
 // Its own component so the host list is built only while the sheet is open.
@@ -173,6 +163,7 @@ function WorkspaceOptionsContent({
   const hosts = useWorkspaceOptionHosts(controller)
   const optionLabels = workspaceOptionLabels(t)
   const sectionLabels = workspaceSectionLabels(t)
+  const pendingLine = pendingViewLine(settings, t)
   const sections = getShownWorkspaceViewSections({
     groupBy: state.view.groupBy,
     hideSleepingWorkspaces: state.view.filters.hideSleepingWorkspaces,
@@ -183,10 +174,16 @@ function WorkspaceOptionsContent({
     // Why the host's say-so: a host that keeps the filter to itself cannot apply the phone's value.
     mayHaveServerHosts:
       state.view.sharesOtherClientFilter === true && state.serverWorkspaces.hosts.length > 0
-  }).map(({ section, options }) => ({
-    section,
-    options: options.map((option) => ({ ...option, label: optionLabels[option.key] }))
-  }))
+  })
+    .map(({ section, options }) => ({
+      section,
+      options: options.flatMap((option) =>
+        isPhoneWorkspaceOption(option.key)
+          ? [{ ...option, key: option.key, label: optionLabels[option.key] }]
+          : []
+      )
+    }))
+    .filter(({ options }) => options.length > 0)
 
   const pageOption = sections
     .flatMap(({ options }) => options)
@@ -222,10 +219,7 @@ function WorkspaceOptionsContent({
     <>
       <SheetHeader
         title={title}
-        subtitle={t(
-          'hostScreen.workspaceOptionsSheet.syncedAcrossDevices',
-          'Synced across your devices'
-        )}
+        subtitle={pendingLine ?? undefined}
         leading={{
           label: t('hostScreen.workspaceOptionsSheet.reset', 'Reset'),
           onPress: settings.clearFilters,
@@ -233,7 +227,6 @@ function WorkspaceOptionsContent({
         }}
         trailing={done}
       />
-      <WorkspaceOptionsPending settings={settings} />
 
       {sections.map(({ section, options }, index) => {
         const sectionLabel = sectionLabels[section]

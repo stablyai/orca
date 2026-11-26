@@ -1419,12 +1419,8 @@
       "monitoring": "Наблюдает за фоновыми задачами",
       "unverifiable": "Давно не было обновлений"
     },
-    "authFailedBanner": {
-      "message": "Ошибка аутентификации — попробуйте подключиться заново. Если ошибка повторяется, повторите сопряжение с компьютера."
-    },
     "authFailedBannerActions": {
-      "repair": "Повторить сопряжение",
-      "webNote": "Подключитесь заново или удалите этот сервер из приложения Orca."
+      "repair": "Повторить сопряжение"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Сброс уже выполнен",
@@ -1613,9 +1609,6 @@
       "sameNetworkOnlyHint": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Открыть диагностику сети"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Проверка совместимости сервера"
@@ -2515,7 +2508,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Учётные записи",
-      "backToHosts": "Назад к серверам",
       "floatingWorkspace": "Плавающее рабочее пространство",
       "hideSidebar": "Скрыть боковую панель",
       "reconnect": "Подключиться снова",
@@ -2555,36 +2547,16 @@
       "prOpen": "Открыт"
     },
     "workspaceOptionControls": {
-      "agentActivity": "Активность агентов",
-      "agentActivityLayout": "Вид активности агентов",
       "agentActivitySort": "Активность агентов",
       "agentActivitySortDescription": "Сначала агенты, требующие внимания, затем по недавней активности.",
-      "agentStatuses": "Статусы агентов",
       "allHosts": "Все серверы",
       "allProjects": "Все проекты",
-      "automation": "Автоматизация",
-      "branchFolderPath": "Ветка / путь папки",
-      "branchName": "Название ветки",
-      "compact": "Компактно",
-      "detailed": "Подробно",
-      "fullList": "Полный список",
-      "githubIssues": "Задачи GitHub",
-      "githubTicket": "Задача GitHub",
-      "host": "Сервер",
-      "hover": "При наведении",
-      "jiraIssue": "Задача Jira",
-      "jiraIssues": "Задачи Jira",
-      "linearIssue": "Задача Linear",
-      "linearIssues": "Задачи Linear",
       "manual": "Вручную",
       "manualProjectOrderDescription": "Перетаскивайте проекты, чтобы менять их порядок",
       "manualWorkspaceOrderDescription": "Перетаскивайте рабочие пространства, чтобы менять их порядок в каждой группе.",
       "name": "Название",
       "none": "Нет",
-      "notes": "Заметки",
-      "ports": "Порты",
       "pr": "PR",
-      "prMrLink": "Ссылка на PR/MR",
       "project": "Проект",
       "recent": "Недавние",
       "recentProjectOrderDescription": "Недавняя активность рабочих пространств",
@@ -2595,30 +2567,19 @@
     },
     "workspaceOptionsSheet": {
       "backToOptions": "Вернуться к параметрам рабочих пространств",
-      "cardDisplay": "Отображение карточек",
-      "cardLayout": "Вид карточек",
       "exceptDefaultBranch": "Кроме ветки по умолчанию",
       "filters": "Фильтры",
       "groupBy": "Группировать по",
-      "hideAutomationCreated": "Скрыть созданные автоматизацией",
-      "hideCliCreated": "Скрыть созданные через CLI",
       "hideDefaultBranch": "Скрыть ветку по умолчанию",
-      "hideDetachedHead": "Скрыть с отсоединённым HEAD",
-      "hideOtherClientWorkspaces": "Скрыть рабочие пространства других клиентов",
       "hideSleeping": "Скрыть спящие рабочие пространства",
-      "hosts": "Серверы",
       "localLinux": "Локальный ПК с Linux",
       "localMac": "Локальный Mac",
       "localWindows": "Локальный ПК с Windows",
       "projectOrder": "Порядок проектов",
       "projects": "Проекты",
-      "savingToDesktop": "Сохранение на сервере",
       "show": "Показать",
-      "showProperties": "Показывать свойства",
       "sortBy": "Сортировать по",
-      "syncedAcrossDevices": "Синхронизация между вашими устройствами",
       "thisComputer": "Этот компьютер",
-      "waitingForDesktop": "Всё ещё ждём ответа сервера",
       "workspaceOptions": "Параметры рабочих пространств",
       "done": "Готово",
       "reset": "Сбросить"
@@ -5648,8 +5609,7 @@
       "noFilterMatches": "Нет рабочих пространств, соответствующих фильтрам",
       "reopen": "Откройте заново для обновления",
       "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает.",
-      "loading": "Загрузка рабочих пространств…",
-      "retryingAutomatically": "Повторяем автоматически."
+      "loading": "Загрузка рабочих пространств…"
     },
     "workspaceListSections": {
       "all": "Все",

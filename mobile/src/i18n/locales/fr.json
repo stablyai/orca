@@ -902,12 +902,8 @@
       "monitoring": "Surveillance des tâches en arrière-plan",
       "unverifiable": "Aucune mise à jour récente"
     },
-    "authFailedBanner": {
-      "message": "Échec de l'authentification — essayez d'abord de vous reconnecter ; si l'échec persiste, recommencez l'appairage depuis votre ordinateur."
-    },
     "authFailedBannerActions": {
-      "repair": "Appairer à nouveau",
-      "webNote": "Reconnectez cet hôte ou supprimez-le depuis l'application Orca."
+      "repair": "Appairer à nouveau"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Réinitialisation déjà appliquée",
@@ -1089,9 +1085,6 @@
       "sameNetworkOnlyHint": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Voir les diagnostics réseau"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Vérification de la compatibilité de l'hôte"
@@ -1944,7 +1937,6 @@
     },
     "hostScreenHeader": {
       "accounts": "Comptes",
-      "backToHosts": "Retour aux hôtes",
       "floatingWorkspace": "Espace de travail flottant",
       "hideSidebar": "Masquer la barre latérale",
       "reconnect": "Reconnecter",
@@ -2000,36 +1992,16 @@
       "prOpen": "Ouverte"
     },
     "workspaceOptionControls": {
-      "agentActivity": "Activité des agents",
-      "agentActivityLayout": "Disposition de l'activité des agents",
       "agentActivitySort": "Activité des agents",
       "agentActivitySortDescription": "Agents nécessitant une attention, puis activité la plus récente.",
-      "agentStatuses": "Statuts des agents",
       "allHosts": "Tous les hôtes",
       "allProjects": "Tous les projets",
-      "automation": "Automatisation",
-      "branchFolderPath": "Branche / chemin de dossier",
-      "branchName": "Nom de branche",
-      "compact": "Compact",
-      "detailed": "Détaillé",
-      "fullList": "Liste complète",
-      "githubIssues": "Issues GitHub",
-      "githubTicket": "Ticket GitHub",
-      "host": "Hôte",
-      "hover": "Survol",
-      "jiraIssue": "Ticket Jira",
-      "jiraIssues": "Tickets Jira",
-      "linearIssue": "Ticket Linear",
-      "linearIssues": "Issues Linear",
       "manual": "Manuel",
       "manualProjectOrderDescription": "Glissez les projets pour les ranger",
       "manualWorkspaceOrderDescription": "Glissez les espaces de travail pour les ranger au sein de chaque groupe.",
       "name": "Nom",
       "none": "Aucun",
-      "notes": "Notes",
-      "ports": "Ports",
       "pr": "PR",
-      "prMrLink": "Lien PR/MR",
       "project": "Projet",
       "recent": "Récents",
       "recentProjectOrderDescription": "Activité d'espace de travail la plus récente",
@@ -2040,32 +2012,21 @@
     },
     "workspaceOptionsSheet": {
       "backToOptions": "Retour aux options des espaces de travail",
-      "cardDisplay": "Affichage des cartes",
-      "cardLayout": "Disposition en cartes",
       "exceptDefaultBranch": "Sauf la branche par défaut",
       "filters": "Filtres",
       "groupBy": "Grouper par",
-      "hideAutomationCreated": "Masquer ceux créés par l'automatisation",
-      "hideCliCreated": "Masquer ceux créés par le CLI",
       "hideDefaultBranch": "Masquer la branche par défaut",
-      "hideDetachedHead": "Masquer les HEAD détachés",
-      "hideOtherClientWorkspaces": "Masquer les espaces de travail d'autres clients",
       "hideSleeping": "Masquer les espaces en veille",
-      "hosts": "Hôtes",
       "localLinux": "Linux local",
       "localMac": "Mac local",
       "localWindows": "Windows local",
       "projectOrder": "Ordre des projets",
       "projects": "Projets",
-      "savingToDesktop": "Enregistrement sur l'hôte",
       "show": "Afficher",
-      "showProperties": "Afficher les propriétés",
       "sortBy": "Trier par",
-      "syncedAcrossDevices": "Synchronisées sur vos appareils",
       "done": "Terminé",
       "reset": "Réinitialiser",
       "thisComputer": "Cet ordinateur",
-      "waitingForDesktop": "Toujours en attente de l'hôte",
       "workspaceOptions": "Options des espaces de travail"
     },
     "hostBottomBar": {
