@@ -31373,11 +31373,8 @@
       "cancelFile": "Cancel {{name}}",
       "cancelAll": "Cancel all"
     },
-    "download": {
-      "progress": {
-        "title": "Downloading {{name}}…",
-        "cancel": "Cancel"
-      }
+    "downloadProgress": {
+      "title": "Downloading {{name}}…"
     }
   }
 }

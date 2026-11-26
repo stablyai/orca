@@ -158,6 +158,8 @@ export async function streamDownloadedFile(
     }
     // Why: a cancel during the last append would otherwise still commit the file.
     progress.signal.throwIfAborted()
+    // Saving can't stop halfway, so Cancel goes away before it starts.
+    progress.close()
     const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
     finished = true
     return result
