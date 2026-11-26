@@ -156,6 +156,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(status ? { statuses: status.split(',').map(statusFlag) } : {}),
       ...(flags.has('all') ? { all: true } : {}),
       ...(flags.has('here') ? { here: true } : {}),
+      ...(flags.has('everyone') ? { everyone: true } : {}),
       ...optional('chat', getOptionalStringFlag(flags, 'chat')),
       ...optional('link', getOptionalStringFlag(flags, 'link')),
       ...(limit !== undefined ? { limit } : {}),

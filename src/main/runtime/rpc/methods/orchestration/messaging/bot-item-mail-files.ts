@@ -13,7 +13,6 @@ import {
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveItem } from '../../bots-items-write-support'
-import type { BotItemAccess } from '../../../../../bots/bot-item-access'
 import { botChatTakingMail } from '../../bots-chats'
 
 type ItemMail = {
@@ -25,9 +24,7 @@ type ItemMail = {
 
 export async function withItemMailFiles<T extends ItemMail>(
   runtime: OrcaRuntimeService,
-  mail: T,
-  /** The items the sender reaches. */
-  access: BotItemAccess
+  mail: T
 ): Promise<T> {
   const local = mail.params.files ?? []
   const uploaded = mail.attachments ?? []
@@ -42,7 +39,7 @@ export async function withItemMailFiles<T extends ItemMail>(
       "--file goes with --to bot:<name> --item <n>: the files go to that item's chat. Nothing was sent."
     )
   }
-  const item = await resolveItem(runtime.botItems.store(), mail.params.item, access)
+  const item = await resolveItem(runtime.botItems.store(), mail.params.item)
   await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   const others = uploaded.filter((path) => !isAgentInlineImagePath(path))
   const body = [mail.params.body?.trimEnd(), others.map(formatNativeChatFileReference).join('\n')]

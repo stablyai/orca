@@ -9,8 +9,7 @@ const OWNER = { kind: 'bot', botId: 'owner', chatId: 'owner-chat' } as const
 
 vi.mock('./bots-items-write-support', async (actual) => ({
   ...(await actual<typeof WriteSupport>()),
-  // The helper's own chat, which acts for the owner: it reaches every item.
-  writerOf: () => ({ bot: { id: HELPER.botId }, actor: HELPER, access: { kind: 'everyone' } }),
+  writerOf: () => ({ bot: { id: HELPER.botId }, actor: HELPER }),
   writeResult: async (_runtime: unknown, outcome: unknown) => outcome
 }))
 vi.mock('../../../bots/bot-item-dispatch-facts', async (actual) => ({

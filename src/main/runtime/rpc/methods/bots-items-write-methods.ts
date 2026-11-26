@@ -47,7 +47,7 @@ const SET = defineMethod({
   handler: async (params, context) => {
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
-    const item = await resolveItem(store, params.item, writer.access)
+    const item = await resolveItem(store, params.item)
     const { title, description, doneMeans, status, note, reason } = params
     let { comment, ask } = params
     if (params.files?.length && !comment?.trim() && !ask) {
@@ -113,7 +113,7 @@ const COMMENT = defineMethod({
   handler: async (params, context) => {
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
-    const item = await resolveItem(store, params.item, writer.access)
+    const item = await resolveItem(store, params.item)
     if (params.files?.length && ![item.ownerBotId, item.madeBy?.botId].includes(writer.bot.id)) {
       assertBotItemOwnerWrite(item, writer.actor)
     }
@@ -134,7 +134,7 @@ const DONE = defineMethod({
   handler: async (params, context) => {
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
-    const item = await resolveItem(store, params.item, writer.access)
+    const item = await resolveItem(store, params.item)
     const actsFor = await closingChatActsFor(context, writer)
     const outcome = await store.close(item.uid, 'done', params.note, writer.actor, actsFor)
     return writeResult(context, outcome, writer)
@@ -149,7 +149,7 @@ const CANCEL = defineMethod({
   handler: async (params, context) => {
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
-    const item = await resolveItem(store, params.item, writer.access)
+    const item = await resolveItem(store, params.item)
     const actsFor = await closingChatActsFor(context, writer)
     const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor, actsFor)
     return writeResult(context, outcome, writer)
@@ -164,7 +164,7 @@ const LINK = defineMethod({
   handler: async (params, context) => {
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
-    const item = await resolveItem(store, params.item, writer.access)
+    const item = await resolveItem(store, params.item)
     const db = context.runtime.getOrchestrationDb()
     const requested = params.refs.map(parseItemLink)
     const startedBy: Record<string, string | null> =

@@ -3,8 +3,7 @@ import { BotItemsStore } from '../../../bots/bot-items-store'
 import { checkedWorkerOrigin } from './bots-items-worker-origin'
 
 vi.mock('./bots-items-caller', () => ({
-  // An owner's chat: it reaches every item.
-  itemsWriter: (sessionId: string) => ({ bot: { id: sessionId }, access: { kind: 'everyone' } })
+  itemsWriter: (sessionId: string) => ({ bot: { id: sessionId } })
 }))
 
 describe('worker-start --item', () => {

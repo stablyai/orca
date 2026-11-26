@@ -46,7 +46,7 @@ const LIST = defineMethod({
     const page = await runtime.botItems.store().list({
       botId: bot.id,
       statuses,
-      ...botItemListScope(itemsAccess(context)),
+      ...botItemListScope(itemsAccess(context), params.everyone === true),
       ...(chatId !== undefined ? { chatIds: [chatId] } : {}),
       ...(link ? { link } : {}),
       limit: limit + 1,
@@ -74,7 +74,7 @@ const SHOW = defineMethod({
     const { runtime } = context
     runtime.bots.assertEnabled()
     const store = runtime.botItems.store()
-    const record = await resolveItem(store, params.item, itemsAccess(context))
+    const record = await resolveItem(store, params.item)
     const after = params.after !== undefined ? parseBotItemEventId(params.after) : 0
     if (after === null) {
       throw new BotItemError('invalid_argument', '--after takes an event id such as e41.')

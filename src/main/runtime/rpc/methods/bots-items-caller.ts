@@ -15,7 +15,6 @@ import { InvalidArgumentError, type RpcContext } from '../core'
 import { isBotOwnChat } from '../../../bots/bot-own-chat'
 import {
   botItemAccessOfCaller,
-  botItemAccessOfChat,
   botItemPeopleOfChat,
   type BotItemAccess
 } from '../../../bots/bot-item-access'
@@ -28,8 +27,6 @@ export type BotItemWriter = {
   /** The calling session itself (a /clear moves it on; the chat id is its lineage's root). */
   sessionId: string
   source: BotItemSource
-  /** The items this chat may read and change (`bot-item-access`). */
-  access: BotItemAccess
   /** Whom an item this chat adds acts for: its teammates' accounts, or null for the owner. */
   actsForAccounts: readonly string[] | null
 }
@@ -129,7 +126,6 @@ export function itemsWriter(
     bot,
     actor: { kind: 'bot', botId: bot.id, chatId },
     sessionId,
-    access: botItemAccessOfChat(runtime, chatId),
     actsForAccounts: botItemPeopleOfChat(runtime, chatId),
     // Read only by writes that make an item or ask on one: it lists the bot's thread chats and runs.
     get source() {

@@ -11,7 +11,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import {
   botItemAccessOfCaller,
   botItemAccessOfChat,
-  botItemAddedFor,
+  botItemPeopleOfChat,
   botItemListScope,
   type BotItemAccess
 } from './bot-item-access'
@@ -94,7 +94,7 @@ const listed = (access: BotItemAccess) =>
     .items.map((item) => item.title)
     .toSorted()
 
-it("reads an item from before teammates as the owner's: his chats reach it, a teammate's never", async () => {
+it("reads an item from before teammates as the owner's: listed for him, still reachable by a teammate by number", async () => {
   // An items file as the build before this one left it, with one item.
   const path = join(directory, 'bot-items.sqlite')
   const old = new SyncDatabase(path)
@@ -114,14 +114,21 @@ it("reads an item from before teammates as the owner's: his chats reach it, a te
       byNumber: async (number: number) => upgraded.byNumber(number),
       get: async (uid: string) => upgraded.get(uid)
     } as never
-    const owner = botItemAccessOfCaller(sources, chat(OWNER_CHAT))
+    const list = (access: BotItemAccess, everyone = false) =>
+      upgraded
+        .list({
+          botId: 'bot-1',
+          statuses: ['working'],
+          limit: 10,
+          ...botItemListScope(access, everyone)
+        })
+        .items.map((item) => item.uid)
     const theirs = botItemAccessOfCaller(sources, chat(TEAMMATE_CHAT))
-    const share = botItemAccessOfCaller(sources, {
-      share: { kind: 'bot-share', botId: 'bot-1', accountId: 'acct-2', name: 'Kim' }
-    })
-    expect((await resolveItem(remote, '7', owner)).uid).toBe('u1')
-    await expect(resolveItem(remote, '7', theirs)).rejects.toThrow('No item 7')
-    await expect(resolveItem(remote, 'u1', share)).rejects.toThrow('was never made')
+    expect(list(botItemAccessOfCaller(sources, chat(OWNER_CHAT)))).toEqual(['u1'])
+    // A teammate's chat doesn't list it by default, yet lists it with --everyone and names it freely.
+    expect(list(theirs)).toEqual([])
+    expect(list(theirs, true)).toEqual(['u1'])
+    expect((await resolveItem(remote, '7')).uid).toBe('u1')
   } finally {
     upgraded.dispose()
   }
@@ -203,13 +210,11 @@ it("decides a chat's people the same for every channel, and a shared chat never 
   expect(listed(botItemAccessOfChat(sources, OWNER_CHAT))).toHaveLength(4)
 })
 
-it('makes an item added for another chat act for that chat, and only from a chat that reaches it', () => {
-  const owner = botItemAccessOfChat(sources, OWNER_CHAT)
-  const theirs = botItemAccessOfChat(sources, TEAMMATE_CHAT)
-  expect(botItemAddedFor(sources, owner, TEAMMATE_CHAT)).toEqual(['acct-2'])
-  expect(botItemAddedFor(sources, theirs, SLACK_CHAT)).toEqual(['acct-2'])
-  expect(() => botItemAddedFor(sources, theirs, OWNER_CHAT)).toThrow('for someone else')
-  expect(() => botItemAddedFor(sources, theirs, SHARED_CHAT)).not.toThrow()
+it('makes an item added for another chat act for that chat, whoever adds it', () => {
+  expect(botItemPeopleOfChat(sources, TEAMMATE_CHAT)).toEqual(['acct-2'])
+  expect(botItemPeopleOfChat(sources, SLACK_CHAT)).toEqual(['acct-2'])
+  expect(botItemPeopleOfChat(sources, SHARED_CHAT)).toEqual(['acct-2', 'acct-3'])
+  expect(botItemPeopleOfChat(sources, OWNER_CHAT)).toBeNull()
 })
 
 it("trusts the owner's paired computer as the owner, and only a share device as a teammate", () => {
