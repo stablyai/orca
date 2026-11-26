@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { exposeUtcTimestamp } from '../utc-timestamp'
 
 /** One row per Dispatch whose worker was observed: what it is doing now, and which of its rests the
  *  coordinator was told about. Created with the tables on open, so no version step is needed. */
@@ -140,4 +141,20 @@ export function hasRelayedWorkerReport(
       )
       .get(dispatchId, messageId) !== undefined
   )
+}
+
+/** Epoch ms when the worker entered its current `working` turn, if recorded. */
+export function readWorkingTurnStartedAt(
+  db: OrchestrationDb,
+  dispatchId: string
+): number | undefined {
+  const row = db.db
+    .prepare(
+      `SELECT updated_at FROM worker_presence
+        WHERE dispatch_id = ? AND presence = 'working'`
+    )
+    .get(dispatchId)
+  const updatedAt = typeof row?.updated_at === 'string' ? exposeUtcTimestamp(row.updated_at) : null
+  const parsed = updatedAt ? Date.parse(updatedAt) : Number.NaN
+  return Number.isNaN(parsed) ? undefined : parsed
 }

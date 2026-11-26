@@ -3,6 +3,7 @@ import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agen
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { readCoordinatorMailSnapshot } from '../../db/messages/dispatch-read-mail'
+import { readWorkingTurnStartedAt } from '../../db/worker-presence/worker-presence-store'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
 import {
@@ -111,7 +112,7 @@ export function chatWorkerTurnStopReporter(
       // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
       const generation = (generations.get(sessionId) ?? 0) + 1
       generations.set(sessionId, generation)
-      const turnStartedAt = previousCompletionAt.get(sessionId)
+      const previousTurnEndedAt = previousCompletionAt.get(sessionId)
       if (event.type === 'completion') {
         previousCompletionAt.set(sessionId, now())
       }
@@ -123,10 +124,16 @@ export function chatWorkerTurnStopReporter(
       // The Dispatch a stop belongs to is one open when it was seen.
       // Mail taken after the turn ended belongs to the next turn, though it lands before this report.
       const seen = new Map(
-        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => [
-          dispatch.id,
-          readCoordinatorMailSnapshot(db, dispatch.id)
-        ])
+        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => {
+          const turnStartedAt = previousTurnEndedAt ?? readWorkingTurnStartedAt(db, dispatch.id)
+          return [
+            dispatch.id,
+            {
+              ...readCoordinatorMailSnapshot(db, dispatch.id),
+              ...(turnStartedAt !== undefined ? { turnStartedAt } : {})
+            }
+          ]
+        })
       )
       let approval: AgentJournalApprovalItem | null = null
       const deliver = (): void => {
@@ -182,11 +189,10 @@ export function chatWorkerTurnStopReporter(
                 rest: {
                   from,
                   reason: stop.reason,
+                  // Unknown when no prior turn or working edge bounded this turn: a duplicate alert beats hiding a stall.
                   ...seen.get(dispatch.id),
                   // The payload names the prompt; the agent's prose before it adds nothing.
                   lastOutput: payload ? undefined : status?.lastAssistantMessage,
-                  // Unknown for a session's first turn seen here: a duplicate alert beats hiding a stall.
-                  turnStartedAt,
                   ...(stop.awaitsReply ? { awaitsReply: true } : {}),
                   ...(payload ? { approval: payload } : {})
                 }

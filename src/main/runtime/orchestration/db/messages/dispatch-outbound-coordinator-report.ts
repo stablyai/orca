@@ -54,14 +54,12 @@ export function hasOutboundCoordinatorReport(
   target: OutboundReportTarget,
   stop: OutboundReportStop
 ): boolean {
-  const row = db.db.prepare("SELECT unixepoch('now') AS now").get()
-  const sqliteNowSec = typeof row?.now === 'number' ? row.now : Math.floor(Date.now() / 1000)
   if (target.kind === 'remote') {
-    return hasRemoteOutboundReport(db, target.attachment.dispatch_id, stop, sqliteNowSec)
+    return hasRemoteOutboundReport(db, target.attachment.dispatch_id, stop)
   }
   const { dispatch } = target
   const latest = latestConsumedCoordinatorMessage(db, dispatch.id, stop)
-  if (latest && hasPeerMailReplyTo(db, latest, stop, sqliteNowSec)) {
+  if (latest && hasPeerMailReplyTo(db, latest, stop)) {
     return true
   }
   const recipients = coordinatorRecipients(db, dispatch, latest?.from)
@@ -94,13 +92,10 @@ export function hasOutboundCoordinatorReport(
       return (
         answersCoordinatorMessage(candidate, latest) ||
         (candidate.sequence > latest.sequence &&
-          sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt, sqliteNowSec))
+          sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt))
       )
     }
-    return (
-      sentAt >= dispatchCreatedAt &&
-      sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt, sqliteNowSec)
-    )
+    return sentAt >= dispatchCreatedAt && sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt)
   })
 }
 
@@ -210,8 +205,7 @@ function answersCoordinatorMessage(
 function hasPeerMailReplyTo(
   db: OrchestrationDb,
   latest: ConsumedCoordinatorMessage,
-  stop: OutboundReportStop,
-  sqliteNowSec: number
+  stop: OutboundReportStop
 ): boolean {
   const route = db.getPeerMailMessage(latest.id)
   if (!route) {
@@ -228,7 +222,7 @@ function hasPeerMailReplyTo(
       const createdAt = text(row.created_at) ?? ''
       if (
         Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec ||
-        !sentInOrAfterTurn(createdAt, stop.turnStartedAt, sqliteNowSec)
+        !sentInOrAfterTurn(createdAt, stop.turnStartedAt)
       ) {
         return false
       }
@@ -240,8 +234,7 @@ function hasPeerMailReplyTo(
 function hasRemoteOutboundReport(
   db: OrchestrationDb,
   dispatchId: string,
-  stop: OutboundReportStop,
-  sqliteNowSec: number
+  stop: OutboundReportStop
 ): boolean {
   const latest = latestConsumedCoordinatorMessage(db, dispatchId, stop)
   const latestSec = latest ? Math.floor(parseDispatchUtcMs(latest.createdAt) / 1000) : null
@@ -260,7 +253,7 @@ function hasRemoteOutboundReport(
       if (latestSec !== null && Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec) {
         return false
       }
-      return sentInOrAfterTurn(createdAt, stop.turnStartedAt, sqliteNowSec)
+      return sentInOrAfterTurn(createdAt, stop.turnStartedAt)
     })
 }
 
@@ -283,16 +276,9 @@ function parseJsonRecord(raw: string | null): Record<string, unknown> | null {
   }
 }
 
-function sentInOrAfterTurn(
-  createdAt: string,
-  turnStartedAt: number | undefined,
-  sqliteNowSec: number
-): boolean {
+function sentInOrAfterTurn(createdAt: string, turnStartedAt: number | undefined): boolean {
   if (turnStartedAt === undefined) {
-    return true
+    return false
   }
-  const turnStartSec = Math.floor(turnStartedAt / 1000)
-  return (
-    turnStartSec > sqliteNowSec || Math.floor(parseDispatchUtcMs(createdAt) / 1000) >= turnStartSec
-  )
+  return Math.floor(parseDispatchUtcMs(createdAt) / 1000) >= Math.floor(turnStartedAt / 1000)
 }

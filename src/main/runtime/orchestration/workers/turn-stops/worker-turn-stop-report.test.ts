@@ -30,11 +30,9 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
   let runId: string
   let taskId: string
   let dispatchId: string
-  let clock: number
   let pendingTimers: (() => void)[]
 
   beforeEach(() => {
-    clock = Date.UTC(2026, 10, 25, 18, 0, 0)
     pendingTimers = []
     db = new OrchestrationDb(':memory:')
     const run = db.createRun({
@@ -82,9 +80,7 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
           }
         }
       },
-      async () => null,
-      undefined,
-      () => clock
+      async () => null
     )
   }
 
@@ -97,7 +93,7 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
           sessionId: WORKER_SESSION,
           turnId,
           outcome: 'success',
-          completedAt: clock
+          completedAt: Date.now()
         }
       },
       () => ({ status: 'idle', lastAssistantMessage: 'Done.' })
@@ -152,12 +148,10 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
     expect(stopEscalations()).toEqual([])
 
     // A later user chat turn with no new coordinator mail stays quiet too.
-    clock += 5_000
     completeTurn(reporter, 'turn-user')
     expect(stopEscalations()).toEqual([])
 
     // Second coordinator message answered via threaded reply (orca orchestration reply / --thread-id).
-    clock += 5_000
     const followUp = sendCoordinatorMail('step 2')
     db.insertMessage({
       from: `dispatch:${dispatchId}`,
@@ -235,7 +229,6 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
     completeTurn(reporter, 'turn-first')
     expect(stopEscalations()).toEqual([])
 
-    clock += 10_000
     const second = sendCoordinatorMail('question 2')
     // Threaded mail addressed to a non-coordinator peer does not answer the coordinator.
     db.insertMessage({
@@ -255,6 +248,16 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
   it('still escalates when coordinator mail is consumed out of order and an older message becomes read during the quiet window', () => {
     const reporter = createReporter()
 
+    // Insert `skipped` before `first` and leave it unread until the quiet window so a count-based
+    // slice(0, mailTaken) lookup would mistakenly select the already-answered `first`.
+    const skipped = db.insertMessage({
+      from: COORDINATOR_ADDRESS,
+      to: `dispatch:${dispatchId}`,
+      subject: 'skipped for now',
+      body: 'Unread earlier sequence',
+      type: 'status',
+      runId
+    })
     const first = sendCoordinatorMail('first')
     db.insertMessage({
       from: WORKER_ADDRESS,
@@ -269,15 +272,6 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
     completeTurn(reporter, 'turn-1')
     expect(stopEscalations()).toEqual([])
 
-    clock += 5_000
-    const skipped = db.insertMessage({
-      from: COORDINATOR_ADDRESS,
-      to: `dispatch:${dispatchId}`,
-      subject: 'skipped for now',
-      body: 'Unread earlier sequence',
-      type: 'status',
-      runId
-    })
     const third = sendCoordinatorMail('third consumed first')
 
     // Turn ends without answering `third`; before the quiet timer fires, `skipped` is marked read.
@@ -289,15 +283,49 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
           sessionId: WORKER_SESSION,
           turnId: 'turn-out-of-order',
           outcome: 'success',
-          completedAt: clock
+          completedAt: Date.now()
         }
       },
       () => ({ status: 'idle', lastAssistantMessage: 'Done.' })
     )
-    expect(third.sequence).toBeGreaterThan(skipped.sequence)
+    expect(first.sequence).toBeGreaterThan(skipped.sequence)
+    expect(third.sequence).toBeGreaterThan(first.sequence)
     db.markAsRead([skipped.id], { kind: 'session', sessionId: WORKER_SESSION })
     flushTimers()
     expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('does not let an earlier turn status suppress a silent stop when turnStartedAt is unknown or later', () => {
+    const earlierStatus = db.insertMessage({
+      from: WORKER_ADDRESS,
+      senderDispatchId: dispatchId,
+      to: `run:${runId}`,
+      subject: 'Earlier turn status',
+      body: 'Sent in a prior turn before restart',
+      type: 'status',
+      runId
+    })
+    db.db
+      .prepare("UPDATE messages SET created_at = datetime('now', '-10 seconds') WHERE id = ?")
+      .run(earlierStatus.id)
+
+    // First observed turn on a fresh reporter has unknown turnStartedAt and no consumed mail.
+    const reporter = createReporter()
+    completeTurn(reporter, 'turn-unknown-start')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+
+    // A later working turn with consumed mail still ignores the pre-turn status.
+    sendCoordinatorMail('follow-up after restart')
+    observeChatWorkerWorking(WORKER_SESSION, {
+      getDb: () => db,
+      isWaitingForMail: () => false,
+      notify: () => {}
+    })
+    completeTurn(reporter, 'turn-known-start-silent')
+    expect(stopEscalations()).toEqual([
+      'Worker stopped without reporting',
+      'Worker stopped without reporting'
+    ])
   })
 
   it('does not treat an earlier remote reply on the same thread as answering a newer coordinator message', () => {
