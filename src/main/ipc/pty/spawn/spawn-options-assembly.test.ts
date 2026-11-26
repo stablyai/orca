@@ -11,7 +11,7 @@ const assemble = () =>
     isDaemonHostSpawn: true,
     preAdoptedStablePane: false,
     isNewSession: true,
-    codexRuntime: 'native',
+    codexRuntime: 'host',
     expectedWslDistro: null,
     requestedAgentTeamsPath: undefined,
     selectedCodexHomePath: null,
@@ -20,7 +20,7 @@ const assemble = () =>
     sessionId: undefined,
     spawnIntent: undefined,
     store: undefined,
-    claudeAuth: undefined
+    claudeAuth: null
   })
 
 afterEach(() => {
