@@ -267,11 +267,6 @@ export function providerRelayRunUnknown(chatKey: string): boolean {
   return unknownRuns.has(chatKey)
 }
 
-/** The last run may still be running: listed by its daemon start, or that start can't say yet. */
-export function providerRelayRunMayContinue(chatKey: string): boolean {
-  return unknownRuns.has(chatKey) || keptRunningProviderRelayPid(chatKey) !== null
-}
-
 export function forgetKeptProviderRelay(chatKey: string, relay: KeptProviderRelay): void {
   if (listed.get(chatKey) === relay) {
     listed.delete(chatKey)

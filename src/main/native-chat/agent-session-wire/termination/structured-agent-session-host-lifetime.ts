@@ -29,6 +29,7 @@ import { structuredAgentSessionFailureWordsContext } from '../operations/structu
 import {
   detachProviderRelayForQuit,
   hasAttachedProviderRelay,
+  providerRelayHandedOffAtQuit,
   providerRelayReattached
 } from '../../../provider-relay/app-provider-relays'
 
@@ -292,12 +293,14 @@ async function detachKeptAgentUnderSerialize(
   if (!session || !child || (child.phase === 'starting' && !reopening) || child.close) {
     return false
   }
-  if (!hasAttachedProviderRelay(sessionId)) {
+  // Already handed back this quit (a close during the quit did it): still nothing ends here.
+  const handedOff = providerRelayHandedOffAtQuit(sessionId)
+  if (!handedOff && !hasAttachedProviderRelay(sessionId)) {
     return false
   }
   const working = !reopening && (await runningRootTurnItemId(session.journal)) !== null
   const open = reopening ? null : (context.deps.adapter.relayOpenWork?.(sessionId, working) ?? null)
-  if (!(await detachProviderRelayForQuit(sessionId, open))) {
+  if (!handedOff && !(await detachProviderRelayForQuit(sessionId, open))) {
     return false
   }
   // The agent goes on: what the adapter would still write here (its own teardown settling the turn,

@@ -8,7 +8,6 @@ export {
   providerRelayKeptFromLastRun,
   providerRelayChatsIdleStoppedThisRun,
   forgetProviderRelayRunVerdict,
-  providerRelayRunMayContinue,
   providerRelayRunUnknown,
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'
@@ -21,7 +20,8 @@ import {
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
-  providerRelayMayKeep
+  providerRelayMayKeep,
+  type KeptProviderRelay
 } from './provider-relay-launch-inventory'
 import { providerRelayRoute } from './provider-relay-route'
 import { providerRelayRunGate } from './provider-relay-run-liveness'
@@ -84,6 +84,8 @@ const KEEP_READER_WAIT_MS = 2_000
 const attached = new Map<string, RelayedProviderChild>()
 const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
 const carriedFor = new WeakMap<RelayedProviderChild, ProviderRelayCarriedWork>()
+/** The listed relay a reattached child came from, re-listed if a quit hands it back. */
+const relayOf = new WeakMap<RelayedProviderChild, KeptProviderRelay>()
 /** Attached children that kept running from before this app started. */
 const reattachedChildren = new WeakSet<RelayedProviderChild>()
 /** Chats whose reattached agent went back to the daemon unopened: its end here (the next one,
@@ -186,6 +188,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     endedSince = (attach?.exit ?? null) !== null && !providerRelayAgentOpensEnded(info.agent)
     if (attach && !endedSince) {
       forgetKeptProviderRelay(launch.chatKey, relay)
+      relayOf.set(child, relay)
       noteProviderRelayRunPlacement(launch.chatKey, channel.client, info.relayId)
       reattachedChildren.add(child)
       noteProviderRelayReattachedFromLastRun(launch.chatKey)
@@ -354,7 +357,21 @@ export async function detachProviderRelayForQuit(
     return false
   }
   attached.delete(chatKey)
+  handedOffAtQuit.add(chatKey)
+  // Listed again, as a hand-back is: a reattach this quit abandons still finds its relay.
+  const relay = relayOf.get(child)
+  if (relay) {
+    rememberKeptProviderRelay(chatKey, relay)
+  }
   // A failed detach request still hands the agent off: the closing stream detaches it daemon-side.
   await child.detach(policyFor(markers, carriedFor.get(child)?.merge(open) ?? open)).catch(() => {})
   return true
+}
+
+/** Chats whose agent this quit handed to its daemon; the process ends with the quit. */
+const handedOffAtQuit = new Set<string>()
+
+/** Handed to its daemon during this quit: its session ends without writing a turn end. */
+export function providerRelayHandedOffAtQuit(chatKey: string): boolean {
+  return handedOffAtQuit.has(chatKey)
 }
