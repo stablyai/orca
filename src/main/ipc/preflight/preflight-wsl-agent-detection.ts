@@ -48,8 +48,12 @@ export async function probeWslCommandsOnPath(
       shell: 'sh',
       timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
     })
-    // Timeout/nonzero results may contain partial stdout, not a complete inventory.
-    if (result.timedOut || result.code !== 0) {
+    if (
+      !result.environmentResolved ||
+      result.timedOut ||
+      result.code !== 0 ||
+      result.outputTruncated
+    ) {
       return null
     }
     return parseWslDetectedCommands(result.stdout)

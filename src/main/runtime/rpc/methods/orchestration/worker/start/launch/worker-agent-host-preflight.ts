@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { withTimeout } from '../../../../../../../../shared/concurrency/promise-timeout-fallback'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import {
@@ -69,10 +70,11 @@ export async function refuseUninstalledWorkerAgent(
   if (!agent || target.terminal || !repoSelector) {
     return
   }
-  const installed = await runtime
-    .detectProjectLaunchContext(repoSelector, agent)
-    .then((context): readonly string[] => context.agents)
-    .catch(() => null)
+  const installed = await withTimeout(
+    runtime.detectProjectLaunchContext(repoSelector, agent).then((context) => context.agents),
+    10_000,
+    null
+  )
   if (installed && !installed.includes(agent)) {
     throw new OrchestrationError(
       WORKER_AGENT_UNAVAILABLE,

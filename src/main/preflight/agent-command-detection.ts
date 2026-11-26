@@ -4,8 +4,11 @@ import {
   probeWslCommandsOnPath,
   type WslPreflightTarget
 } from '../ipc/preflight/preflight-wsl-agent-detection'
-import { getWslGuestEnvironmentGeneration } from '../wsl/execution/wsl-guest-environment'
-import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
+import {
+  getWslGuestEnvironmentGeneration,
+  invalidateWslGuestEnvironment
+} from '../wsl/execution/wsl-guest-environment'
+import { resolveWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
 import { detectCommandsInInstallDirs } from '../../shared/agent-launch/installation/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
@@ -34,12 +37,30 @@ type CommandInventory = {
   probed: ReadonlySet<string>
 }
 
-const INVENTORY_TIMEOUT_MS = 10_000
+type InventoryMode = 'read' | 'detect' | 'revalidate' | 'refresh'
+type InventoryScan = {
+  commands: Set<string>
+  mode: InventoryMode
+  targeted: boolean
+  generation: number | undefined
+}
+type PendingInventory = {
+  active: InventoryScan
+  queued?: InventoryScan
+  result: Promise<CommandInventory | null>
+}
 type InventorySlot = {
-  pending?: { result: Promise<CommandInventory | null>; fresh: boolean }
+  distro?: string
+  generation?: number
+  pending?: PendingInventory
   current?: CommandInventory
 }
-type InventoryMode = 'read' | 'targeted' | 'detect' | 'revalidate' | 'refresh'
+const scanPriority: Record<InventoryMode, number> = {
+  read: 0,
+  detect: 0,
+  revalidate: 1,
+  refresh: 2
+}
 let local: InventorySlot = {}
 let profile: string | undefined
 
@@ -66,9 +87,8 @@ const wslStockCommands = stockCommands('linux', 'wsl')
 
 async function scanLocalInventory(
   probed: ReadonlySet<string>,
-  readLoginPath: boolean,
-  isCurrent: () => boolean
-): Promise<CommandInventory | null> {
+  readLoginPath: boolean
+): Promise<CommandInventory> {
   const localEnv = buildLocalPreflightEnv()
   const env = localEnv ?? (readLoginPath ? await resolveLoginShellEnvironment() : process.env)
   const pathEnv = env.PATH ?? Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1]
@@ -77,9 +97,6 @@ async function scanLocalInventory(
     env,
     inventory: { isRuntimePath: isOrcaAgentRuntimePath, matches }
   })
-  if (!isCurrent()) {
-    return null
-  }
   const installs = await detectCommandsInInstallDirs(
     [...probed].filter((cmd) => !found.has(cmd) && !hasPathSeparatorToken(cmd)),
     pathEnv,
@@ -94,85 +111,127 @@ async function scanLocalInventory(
   return { matches, found, probed }
 }
 
+function inventoryGeneration(slot: InventorySlot): number | undefined {
+  return slot.distro ? getWslGuestEnvironmentGeneration(slot.distro) : undefined
+}
+
+async function scanInventory(
+  slot: InventorySlot,
+  scan: InventoryScan
+): Promise<CommandInventory | null> {
+  if (slot.distro) {
+    if (scan.mode === 'refresh') {
+      invalidateWslGuestEnvironment(slot.distro)
+    }
+    scan.generation = inventoryGeneration(slot)
+    const found = await probeWslCommandsOnPath({ distro: slot.distro }, [...scan.commands])
+    return found && { found, matches: new Map(), probed: scan.commands }
+  }
+  return scanLocalInventory(
+    scan.commands,
+    !scan.targeted && (scan.mode === 'read' || scan.mode === 'revalidate')
+  )
+}
+
+function publishInventory(
+  slot: InventorySlot,
+  result: CommandInventory,
+  scan: InventoryScan
+): void {
+  const previous = scan.targeted && slot.generation === scan.generation ? slot.current : undefined
+  const notProbed = (command: string) => !result.probed.has(command)
+  slot.current = previous
+    ? {
+        found: new Set([...result.found, ...[...previous.found].filter(notProbed)]),
+        matches: new Map([
+          ...result.matches,
+          ...[...previous.matches].filter(([command]) => notProbed(command))
+        ]),
+        probed: new Set([...previous.probed, ...result.probed])
+      }
+    : result
+  slot.generation = scan.generation
+}
+
 function readInventory(
   slot: InventorySlot,
   requested: readonly string[],
   mode: InventoryMode,
-  scan: (probed: ReadonlySet<string>, isCurrent: () => boolean) => Promise<CommandInventory | null>
+  targeted = false
 ): Promise<CommandInventory | null> {
-  const covers = (result: CommandInventory) => requested.every((cmd) => result.probed.has(cmd))
-  if ((mode === 'read' || mode === 'targeted') && slot.current && covers(slot.current)) {
-    return Promise.resolve(slot.current)
+  const generation = inventoryGeneration(slot)
+  const current = slot.generation === generation ? slot.current : undefined
+  if (mode === 'read' && current && requested.every((cmd) => current.probed.has(cmd))) {
+    return Promise.resolve(current)
   }
-  const fresh = mode === 'refresh' || mode === 'revalidate'
-  if (slot.pending && mode !== 'refresh' && (!fresh || slot.pending.fresh)) {
-    return slot.pending.result.then((result) =>
-      !result || covers(result) ? result : readInventory(slot, requested, mode, scan)
-    )
-  }
-  const isCurrent = (): boolean => slot.pending === pending
-  const result = withTimeout(scan(new Set(requested), isCurrent), INVENTORY_TIMEOUT_MS, null).then(
-    (result) => {
-      if (!isCurrent()) {
-        return null
+
+  const commands = targeted
+    ? requested
+    : [...(slot.distro ? wslStockCommands : localStockCommands), ...requested]
+  const pending = slot.pending
+  if (pending) {
+    const { active } = pending
+    if (
+      pending.queued ||
+      active.generation !== generation ||
+      scanPriority[mode] > scanPriority[active.mode] ||
+      !commands.every((cmd) => active.commands.has(cmd))
+    ) {
+      const queued = pending.queued ?? {
+        commands: new Set(active.commands),
+        mode,
+        targeted: active.targeted,
+        generation
       }
-      delete slot.pending
-      if (result) {
-        const previous = slot.current
-        const notProbed = (command: string) => !result.probed.has(command)
-        slot.current =
-          mode === 'targeted' && previous
-            ? {
-                found: new Set([...result.found, ...[...previous.found].filter(notProbed)]),
-                matches: new Map([
-                  ...result.matches,
-                  ...[...previous.matches].filter(([command]) => notProbed(command))
-                ]),
-                probed: new Set([...previous.probed, ...result.probed])
-              }
-            : result
+      for (const command of commands) {
+        queued.commands.add(command)
       }
-      return result
+      if (scanPriority[mode] > scanPriority[queued.mode]) {
+        queued.mode = mode
+      }
+      queued.targeted &&= targeted
+      pending.queued = queued
     }
-  )
-  const pending = { result, fresh }
-  slot.pending = pending
-  return result
+    return pending.result
+  }
+
+  // The same promise carries all waiters through a queued scan. Caller deadlines never retire it.
+  const batch: PendingInventory = {
+    active: { commands: new Set(commands), mode, targeted, generation },
+    result: Promise.resolve().then(async () => {
+      for (;;) {
+        const scan = batch.active
+        const result = await scanInventory(slot, scan).catch(() => null)
+        if (batch.queued) {
+          batch.active = batch.queued
+          delete batch.queued
+        } else if (scan.generation === inventoryGeneration(slot)) {
+          delete slot.pending
+          if (result) {
+            publishInventory(slot, result, scan)
+          } else if (slot.distro) {
+            delete slot.current
+          }
+          return result
+        }
+      }
+    })
+  }
+  slot.pending = batch
+  return batch.result
 }
 
-type WslInventorySlot = InventorySlot & { retryAfter?: number }
-const wsl = new Map<string, { generation: number; slot: WslInventorySlot }>()
+const wsl = new Map<string, InventorySlot>()
 
-function wslInventory(target: WslPreflightTarget): WslInventorySlot {
-  const key = target.distro?.toLowerCase() ?? ''
-  const generation = getWslGuestEnvironmentGeneration(target.distro)
-  const entry = wsl.get(key)
-  if (entry?.generation === generation) {
-    return entry.slot
+async function wslInventory(target: WslPreflightTarget): Promise<InventorySlot | undefined> {
+  const distro = target.distro?.trim() || (await resolveWslDefaultDistro())
+  if (typeof distro !== 'string') {
+    return undefined
   }
-  const slot: WslInventorySlot = {}
-  wsl.set(key, { slot, generation })
+  const key = distro.toLowerCase()
+  const slot = wsl.get(key) ?? { distro }
+  wsl.set(key, slot)
   return slot
-}
-
-function readWslInventory(
-  slot: WslInventorySlot,
-  target: WslPreflightTarget,
-  commands: readonly string[],
-  mode: InventoryMode
-): Promise<CommandInventory | null> {
-  if (mode !== 'refresh' && !slot.current && Date.now() < (slot.retryAfter ?? 0)) {
-    return Promise.resolve(null)
-  }
-  return readInventory(slot, commands, mode, async (probed) => {
-    const found = await probeWslCommandsOnPath(target, [...probed])
-    return found && { found, matches: new Map(), probed }
-  }).then((inventory) => {
-    if (!inventory && !slot.pending && Date.now() >= (slot.retryAfter ?? 0)) {
-      slot.retryAfter = Date.now() + 5_000
-    }
-    return inventory
-  })
 }
 
 export type TerminalAgentProgram =
@@ -198,15 +257,7 @@ export async function readLocalTerminalAgentProgram(
   refresh = false
 ): Promise<TerminalAgentProgram> {
   const slot = localInventory()
-  const current = !refresh && slot.current?.probed.has(program) ? slot.current : undefined
-  const inventory =
-    current ??
-    (await readInventory(
-      slot,
-      [...localStockCommands, program],
-      refresh ? 'revalidate' : 'read',
-      (probed, isCurrent) => scanLocalInventory(probed, true, isCurrent)
-    ))
+  const inventory = await readInventory(slot, [program], refresh ? 'revalidate' : 'read')
   return slot === localInventory() && inventory?.probed.has(program)
     ? qualifyProgram(inventory.matches.get(program), shell)
     : { kind: 'unknown' }
@@ -216,11 +267,9 @@ export async function readWslTerminalAgentProgram(
   target: WslPreflightTarget,
   program: string
 ): Promise<TerminalAgentProgram> {
-  const slot = wslInventory(target)
-  const inventory = slot.current?.probed.has(program)
-    ? slot.current
-    : await readWslInventory(slot, target, [...wslStockCommands, program], 'read')
-  if (slot !== wslInventory(target) || !inventory) {
+  const slot = await wslInventory(target)
+  const inventory = slot ? await readInventory(slot, [program], 'read') : null
+  if (!inventory?.probed.has(program)) {
     return { kind: 'unknown' }
   }
   return inventory.found.has(program) ? { kind: 'by-name', path: program } : { kind: 'unavailable' }
@@ -239,28 +288,19 @@ export async function detectAgentCommandsOnHost(
   if (options.connectionId) {
     throw new SshHostNotServedError(options.connectionId)
   }
-  const targeted = options.onlyRequested && !options.refresh
-  const mode = options.refresh ? 'refresh' : targeted ? 'targeted' : 'detect'
   const wslTarget = getPreflightWslTarget(options.context)
-  if (wslTarget) {
-    const slot = wslInventory(wslTarget)
-    const result = await readWslInventory(
-      slot,
-      wslTarget,
-      targeted ? commands : [...wslStockCommands, ...commands],
-      mode === 'detect' ? 'read' : mode
-    )
-    return new Set(
-      slot === wslInventory(wslTarget) ? commands.filter((cmd) => result?.found.has(cmd)) : []
-    )
+  const targeted = options.onlyRequested ?? false
+  const ordinaryMode = targeted ? 'read' : 'detect'
+  const refreshMode = targeted ? 'revalidate' : 'refresh'
+  const slot = wslTarget ? await wslInventory(wslTarget) : localInventory()
+  const inventory = slot
+    ? await readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, targeted)
+    : null
+  if (!inventory || (!wslTarget && slot !== localInventory())) {
+    throw new Error(`Could not complete ${wslTarget ? 'WSL' : 'local'} agent inventory`)
   }
-  const slot = localInventory()
-  const requested = targeted ? commands : [...localStockCommands, ...commands]
-  const inventory = await readInventory(slot, requested, mode, (probed, isCurrent) =>
-    scanLocalInventory(probed, false, isCurrent)
-  )
-  if (!inventory || slot !== localInventory()) {
-    throw new Error('Could not complete local agent inventory')
+  if (wslTarget) {
+    return new Set(commands.filter((cmd) => inventory.found.has(cmd)))
   }
   const shell = process.platform === 'win32' ? 'powershell' : 'posix'
   return new Set(

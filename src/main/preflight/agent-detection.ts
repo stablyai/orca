@@ -33,7 +33,6 @@ import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from '../ipc/preflight/preflight-remote-windows-terminal-capabilities'
-import { invalidateWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
 import { prunePreflightWslCache } from '../wsl/discovery/preflight-wsl-cache'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import {
@@ -141,8 +140,6 @@ export async function refreshShellPathAndDetectAgents(
 ): Promise<RefreshAgentsResult> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    // Discard cached guest PATH before detecting a newly installed WSL CLI.
-    invalidateWslGuestEnvironment(wslTarget.distro)
     const inventory = await detectInstalledAgentInventory(context, options, true)
     return {
       ...inventory,

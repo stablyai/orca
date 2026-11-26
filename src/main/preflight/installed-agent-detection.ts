@@ -161,9 +161,10 @@ export async function detectInstalledAgentInventory(
 
 export async function detectInstalledAgents(
   context?: PreflightRuntimeContext,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  revalidate = false
 ): Promise<string[]> {
-  return (await detectInstalledAgentInventory(context, options)).agents
+  return (await detectInstalledAgentInventory(context, options, revalidate)).agents
 }
 
 export async function detectInstalledAgentInventoryWithShellPathHydration(

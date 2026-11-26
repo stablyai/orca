@@ -1,8 +1,9 @@
-import type * as WslAgentDetection from '../../../../ipc/preflight/preflight-wsl-agent-detection'
 import type * as PreflightRuntimeTarget from '../../../../ipc/preflight/preflight-runtime-target'
 import type * as InstallerDetection from '../../../../../shared/agent-launch/installation/local-agent-install-dir-detection'
 import type * as NodeOs from 'node:os'
 import type * as AppEnvironment from '../../../../../shared/app-lifecycle/app-environment'
+import type * as WslDefaultDistro from '../../../../wsl/discovery/wsl-default-distro'
+import type * as WslRunner from '../../../../wsl/execution/wsl-runner'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -24,7 +25,13 @@ const fixture = vi.hoisted(() => {
     root: '',
     path: '',
     enumerate: vi.fn(() => []),
-    wslProbe: vi.fn(async () => new Set(['claude']))
+    wslProcess: vi.fn(async (): Promise<WslRunner.WslResult> => ({
+      code: 0,
+      stdout: '__ORCA_AGENT_PATH__claude\t/opt/tools/bin/claude\n',
+      stderr: '',
+      timedOut: false,
+      environmentResolved: true
+    }))
   })
 })
 
@@ -70,13 +77,17 @@ vi.mock(
 vi.mock('../../../../ipc/preflight/preflight-runtime-target', async (original) => {
   const target = await original<typeof PreflightRuntimeTarget>()
   return {
-    getPreflightWslTarget: (context?: { wslDefault?: boolean }) =>
-      context?.wslDefault ? {} : target.getPreflightWslTarget(context)
+    getPreflightWslTarget: (context?: PreflightRuntimeTarget.PreflightRuntimeContext) =>
+      target.getPreflightWslTarget(context, 'win32')
   }
 })
-vi.mock('../../../../ipc/preflight/preflight-wsl-agent-detection', async (original) => ({
-  ...(await original<typeof WslAgentDetection>()),
-  probeWslCommandsOnPath: fixture.wslProbe
+vi.mock('../../../../wsl/discovery/wsl-default-distro', async (original) => ({
+  ...(await original<typeof WslDefaultDistro>()),
+  resolveWslDefaultDistro: async () => 'TestUbuntu'
+}))
+vi.mock('../../../../wsl/execution/wsl-runner', async (original) => ({
+  ...(await original<typeof WslRunner>()),
+  runWslProcess: fixture.wslProcess
 }))
 
 const windows = process.platform === 'win32'
@@ -89,7 +100,7 @@ beforeEach(async () => {
   fixture.root = await mkdtemp(join(tmpdir(), 'orca-terminal-inventory-'))
   fixture.path = join(fixture.root, 'path')
   fixture.enumerate.mockClear()
-  fixture.wslProbe.mockClear()
+  fixture.wslProcess.mockReset()
 })
 
 afterEach(async () => {
@@ -135,10 +146,13 @@ it('migrates saved Orca and bare Claude heads through the same inventory', async
   expect(fixture.enumerate).toHaveBeenCalledTimes(1)
 })
 
-it('suppresses a generated launch and legacy resume while the inventory remains unknown', async () => {
+it('keeps a cold scan alive through launch timeouts and publishes the result for retries', async () => {
   const orca = await executable('agent-runtimes', 'claude', '1.0', claudeName)
+  const user = await executable('.local', 'bin', claudeName)
   fixture.path = dirname(orca)
+  const entered = Promise.withResolvers<void>()
   const gate = Promise.withResolvers<void>()
+  fixture.onScan = entered.resolve
   fixture.installs = gate.promise
   const inventory = detectInstalledAgentInventory()
   const saved = legacy(`${quoted(orca)} --verbose`)
@@ -152,18 +166,27 @@ it('suppresses a generated launch and legacy resume while the inventory remains 
     },
     shell
   )
-  const fresh = alignManagedAgentLaunchAtSpawn(
-    {
-      launchCommand: 'claude --verbose',
-      launchAgent: 'claude',
-      launchConfig: generated
-    },
-    shell
-  )
+  const launch = () =>
+    alignManagedAgentLaunchAtSpawn(
+      {
+        launchCommand: 'claude --verbose',
+        launchAgent: 'claude',
+        launchConfig: generated
+      },
+      shell
+    )
+  const fresh = launch()
   try {
+    await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
     expect(await resume).toEqual({ command: undefined, launchConfig: saved, blocked: 'unknown' })
     expect(await fresh).toEqual({ command: undefined, launchConfig: generated, blocked: 'unknown' })
+    const retry = launch()
+    gate.resolve()
+    expect((await inventory).agents).toContain('claude')
+    expect((await retry).command).toBe(`${quoted(user)} --verbose`)
+    expect((await launch()).command).toBe(`${quoted(user)} --verbose`)
+    expect(fixture.enumerate).toHaveBeenCalledTimes(1)
   } finally {
     gate.resolve()
     await inventory
@@ -248,7 +271,24 @@ it('uses one inventory lookup for direct user sign-in and leaves prepared shell 
 it('keeps local install selection after a WSL inventory refresh', async () => {
   const user = await executable('.local', 'bin', claudeName)
   await detectInstalledAgentInventory()
+  const target = { distro: 'TestUbuntu' }
+  invalidateWslGuestEnvironment(target.distro)
+  fixture.wslProcess.mockResolvedValueOnce({
+    code: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+    environmentResolved: true
+  })
+  await expect(readWslTerminalAgentProgram(target, 'claude')).resolves.toEqual({
+    kind: 'unavailable'
+  })
   await refreshAgentsOnHost({ kind: 'local', context: { wslDefault: true } }, undefined, true)
+  await expect(readWslTerminalAgentProgram(target, 'claude')).resolves.toEqual({
+    kind: 'by-name',
+    path: 'claude'
+  })
+  expect(fixture.wslProcess).toHaveBeenCalledTimes(2)
   // The existing local snapshot, rather than a new scan, answers this later generated launch.
   const result = await alignManagedAgentLaunchAtSpawn(
     {
@@ -272,37 +312,69 @@ it('shares guest inventory until that distro is invalidated', async () => {
     ])
   ).resolves.toEqual([{ kind: 'by-name', path: 'claude' }, { kind: 'unavailable' }])
   await readWslTerminalAgentProgram(target, 'claude')
-  expect(fixture.wslProbe).toHaveBeenCalledTimes(1)
+  expect(fixture.wslProcess).toHaveBeenCalledTimes(1)
   invalidateWslGuestEnvironment(target.distro)
   await readWslTerminalAgentProgram(target, 'claude')
-  expect(fixture.wslProbe).toHaveBeenCalledTimes(2)
+  expect(fixture.wslProcess).toHaveBeenCalledTimes(2)
+  fixture.wslProcess.mockResolvedValueOnce({
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__codex\t/opt/tools/bin/codex\n',
+    stderr: '',
+    timedOut: false,
+    environmentResolved: true
+  })
+  await expect(
+    detectAgentCommandsOnHost(['codex'], { context: { wslDistro: target.distro } })
+  ).resolves.toEqual(new Set(['codex']))
+  await expect(readWslTerminalAgentProgram(target, 'codex')).resolves.toEqual({
+    kind: 'by-name',
+    path: 'codex'
+  })
+  expect(fixture.wslProcess).toHaveBeenCalledTimes(3)
 })
 
-it('uses the warm snapshot during refresh and releases a timed-out scan slot', async () => {
-  const user = await executable('.local', 'bin', claudeName)
-  await readLocalTerminalAgentProgram('claude', shell)
+it('returns the queued refresh result to the cold waiter and overlapping refreshes', async () => {
   const entered = Promise.withResolvers<void>()
   const held = Promise.withResolvers<void>()
   fixture.onScan = entered.resolve
   fixture.installs = held.promise
-  vi.useFakeTimers()
-  const refresh = detectAgentCommandsOnHost(['claude'], { refresh: true }).catch(() => null)
+  const launch = readLocalTerminalAgentProgram('claude', shell)
   try {
     await entered.promise
-    await expect(readLocalTerminalAgentProgram('claude', shell)).resolves.toEqual({
-      kind: 'full-path',
-      path: user
-    })
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(await refresh).toBeNull()
-    fixture.installs = undefined
-    await expect(readLocalTerminalAgentProgram('claude', shell, true)).resolves.toEqual({
-      kind: 'full-path',
-      path: user
-    })
+    const user = await executable('path', claudeName)
+    const refresh = () => detectAgentCommandsOnHost(['claude'], { refresh: true })
+    const revalidate = readLocalTerminalAgentProgram('claude', shell, true)
+    const first = refresh()
+    const second = refresh()
+    held.resolve()
+    await expect(Promise.all([launch, revalidate, first, second])).resolves.toEqual([
+      { kind: 'by-name', path: user },
+      { kind: 'by-name', path: user },
+      new Set(['claude']),
+      new Set(['claude'])
+    ])
+    expect(fixture.enumerate).toHaveBeenCalledTimes(2)
   } finally {
     held.resolve()
+    await launch
   }
+})
+
+it('retries after an incomplete WSL probe whose fallback exited zero', async () => {
+  const target = { distro: 'SlowUbuntu' }
+  fixture.wslProcess.mockResolvedValueOnce({
+    code: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+    environmentResolved: false
+  })
+  await expect(readWslTerminalAgentProgram(target, 'claude')).resolves.toEqual({ kind: 'unknown' })
+  await expect(readWslTerminalAgentProgram(target, 'claude')).resolves.toEqual({
+    kind: 'by-name',
+    path: 'claude'
+  })
+  expect(fixture.wslProcess).toHaveBeenCalledTimes(2)
 })
 
 it.skipIf(windows)('expands the executable head for standalone Agent Teams', async () => {

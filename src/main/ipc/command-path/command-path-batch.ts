@@ -1,4 +1,6 @@
+import { realpath } from 'node:fs'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import {
   getExecutableNames,
   isQuotedWindowsPathEntry,
@@ -30,6 +32,15 @@ function getWindowsBatchDetectionExtensions(env: NodeJS.ProcessEnv, command: str
 }
 
 const DIRECT_DETECTION_COMMAND_LIMIT = 4
+const realpathNative = promisify(realpath.native)
+
+async function windowsHitSpelling(dir: string, candidate: string): Promise<string> {
+  const resolved = await realpathNative(candidate).catch(() => candidate)
+  // Keep PATH's entry if native realpath followed a link to a different path.
+  return path.win32.relative(candidate, resolved) === ''
+    ? joinCandidatePath(true, dir, path.win32.basename(resolved))
+    : candidate
+}
 
 export type AgentPathMatch = {
   user?: string
@@ -117,22 +128,23 @@ export async function findCommandsOnLocalPath(
             const checked = new Set<string>()
             for (const ext of extensions.get(command) ?? []) {
               const wanted = command + ext
-              const listed = names?.get(directoryNameKey(wanted))
-              if (names !== null && listed === undefined) {
+              const key = directoryNameKey(wanted)
+              const listed = names?.get(key)
+              if (
+                checked.has(key) ||
+                !remaining.has(command) ||
+                (names !== null && listed === undefined)
+              ) {
                 continue
               }
-              // PATHEXT is often uppercase. A case-sensitive directory can still need its spelling.
-              const spellings =
-                isWin && !listed ? [command + ext.toLowerCase(), wanted] : [listed ?? wanted]
-              for (const spelling of spellings) {
-                if (checked.has(spelling) || !remaining.has(command)) {
-                  continue
-                }
-                checked.add(spelling)
-                const candidate = joinCandidatePath(isWin, dir.dir, spelling)
-                if (await isExecutableFile(candidate, isWin)) {
-                  return [command, candidate]
-                }
+              checked.add(key)
+              const candidate = joinCandidatePath(isWin, dir.dir, listed ?? wanted)
+              if (await isExecutableFile(candidate, isWin)) {
+                const hit =
+                  isWin && !listed && process.platform === 'win32'
+                    ? await windowsHitSpelling(dir.dir, candidate)
+                    : candidate
+                return [command, hit]
               }
             }
             return undefined

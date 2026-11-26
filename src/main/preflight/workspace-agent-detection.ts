@@ -40,6 +40,7 @@ import {
 import {
   agentCommandOverrideDetectionOptions,
   detectInstalledAgentInventoryWithShellPathHydration,
+  detectInstalledAgents,
   type InstalledAgentDetectionOptions,
   type InstalledAgentInventory
 } from './installed-agent-detection'
@@ -225,10 +226,15 @@ export async function detectProjectLaunchContext(
     throw new Error('worktree_execution_host_unresolved')
   }
   const overrides = agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
-  const agents = await detectAgentsOnHost(
-    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
-    onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
+  const options = onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
+  const context = { projectRuntime }
+  let agents = await detectAgentsOnHost(
+    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context },
+    options
   )
+  if (onlyTuiAgent && !agents.includes(onlyTuiAgent)) {
+    agents = await detectInstalledAgents(context, options, true)
+  }
   return {
     agents: agents.filter(isTuiAgent),
     workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',
