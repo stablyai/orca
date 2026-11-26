@@ -43,11 +43,9 @@ async function lstatRegularFileStamp(path: string): Promise<FileStamp> {
       newestMs: Math.max(info.mtimeMs, info.ctimeMs)
     }
   } catch (error) {
-    if (
-      error instanceof Error &&
-      'code' in error &&
-      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-    ) {
+    // Only ENOENT is 'missing': the worker read fails closed on ENOTDIR (userDataPath is not a
+    // directory), so the allMissing fast path must not answer [] for it.
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return 'missing'
     }
     return null
