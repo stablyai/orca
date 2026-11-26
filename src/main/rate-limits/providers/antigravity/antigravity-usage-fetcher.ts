@@ -1,5 +1,4 @@
-import { runProcess } from '@orca/process-host'
-import type { ProcessResult } from '@orca/process-host/process-spec'
+import type { runProcess } from '@orca/process-host'
 import {
   localAccountRuntimeTargetKey,
   type LocalAccountRuntimeTarget
@@ -14,12 +13,12 @@ import {
   hasReachedAppVersion,
   parseCliVersion
 } from '../../../../shared/app-lifecycle/identity/app-version'
+import type { AntigravityHostProgramOptions } from './antigravity-usage-host-program'
 import {
-  resolveAntigravityHostProgram,
-  type AntigravityHostProgramOptions
-} from './antigravity-usage-host-program'
-import { withConfiguredProxyEnv } from '../../../network/configured-proxy-child-env'
-import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
+  createAntigravityHostRunner,
+  type AgyResult,
+  type AgyRun
+} from './antigravity-usage-host-runner'
 import type {
   ProviderRateLimits,
   UsageRateLimitFailureKind
@@ -78,12 +77,6 @@ export type FetchAntigravityRateLimitsOptions = AntigravityUsageDependencies & {
   target?: LocalAccountRuntimeTarget
   networkProxySettings?: NetworkProxySettings
 }
-
-type AgyResult = Pick<ProcessResult, 'code' | 'stdout' | 'stderr' | 'timedOut'> & {
-  signal?: ProcessResult['signal']
-  environmentResolved?: boolean
-}
-type AgyRun = (args: readonly string[], timeoutMs: number) => Promise<AgyResult>
 
 function unavailable(
   message: string,
@@ -169,6 +162,7 @@ async function readAntigravityUsage(
     )
 
   let run: AgyRun
+  let runUsage: ((now: () => number) => Promise<AgyResult>) | null = null
   const wslDistro = wsl?.wslDistro
   if (wsl) {
     // Background quota polling must not start stopped distros; run only in the distro gated here.
@@ -191,28 +185,14 @@ async function readAntigravityUsage(
         signal: options.signal
       })
   } else {
-    const platform = options.platform ?? process.platform
-    const resolveEnvironment = options.resolveEnvironment ?? (() => hostShellEnvironment())
-    // Why the env agent launches use: agy lives on the login-shell or saved Windows PATH, not Electron's.
-    const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
-    const resolved = await resolveAntigravityHostProgram(command, { ...options, platform, env })
-    if (resolved.kind !== 'found') {
-      return resolved.kind === 'missing'
+    const hostRunner = await createAntigravityHostRunner(command, options)
+    if (hostRunner.kind !== 'ready') {
+      return hostRunner.kind === 'missing'
         ? notFound()
-        : unavailable(resolved.message, resolved.failureKind, now())
+        : unavailable(hostRunner.message, hostRunner.failureKind, now())
     }
-    // agy is a Go CLI that reads only proxy env vars; WSL runs keep the guest's own proxy env.
-    const probeEnv = withConfiguredProxyEnv(env, options.networkProxySettings) ?? env
-    const runCommand = options.runCommand ?? runProcess
-    run = (args, timeoutMs) =>
-      runCommand({
-        program: resolved.program,
-        args,
-        env: probeEnv,
-        timeoutMs,
-        maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
-        signal: options.signal
-      })
+    run = hostRunner.run
+    runUsage = hostRunner.runUsage
   }
 
   // Recheck each read: the CLI can be replaced while Orca runs; unsupported reads spend quota.
@@ -241,7 +221,9 @@ async function readAntigravityUsage(
     )
   }
 
-  const result = await run(ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_USAGE_TIMEOUT_MS)
+  const result = await (runUsage
+    ? runUsage(now)
+    : run(ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_USAGE_TIMEOUT_MS))
 
   const reading = parseAntigravityUsageStdout(result.stdout)
   // A completed browser sign-in still yields a reading; only a failed read holds future polls.

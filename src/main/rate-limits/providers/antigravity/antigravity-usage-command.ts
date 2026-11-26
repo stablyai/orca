@@ -34,6 +34,9 @@ export const ANTIGRAVITY_SIGN_IN_HOLD_RETRY_AT_MS = Number.MAX_SAFE_INTEGER
 /** Cap on captured output; the envelope is a single JSON line well under a kilobyte. */
 export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024
 
+// Target URL for OS/PAC system proxy resolution; matches agy's Cloud Code quota endpoint.
+export const ANTIGRAVITY_PROXY_PROBE_URL = 'https://daily-cloudcode-pa.googleapis.com'
+
 // Use same Antigravity binary name as command detection.
 export function antigravityCommandName(): string {
   return TUI_AGENT_CONFIG.antigravity.detectCmd
