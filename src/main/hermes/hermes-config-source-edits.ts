@@ -20,6 +20,11 @@ function indentFragment(fragment: string, difference: number): string {
   )
 }
 
+// Comments parsed from a CRLF file keep their \r\n; callers add the file's line endings back.
+function crlfToLf(text: string): string {
+  return text.replaceAll('\r\n', '\n')
+}
+
 function requireRange(node: unknown): [number, number, number] {
   if (!isNode(node) || !node.range) {
     throw new Error('Missing Hermes YAML source range')
@@ -86,7 +91,7 @@ export function applyHermesPluginSourceEdits(source: string, document: Document)
   const printed = document.toString({ lineWidth: 0 })
   const updated = parseDocument(printed)
   if (!isMap(parseDocument(source).contents)) {
-    return source.includes('\r\n') ? printed.replaceAll('\n', '\r\n') : printed
+    return source.includes('\r\n') ? crlfToLf(printed).replaceAll('\n', '\r\n') : printed
   }
   if (!isMap(updated.contents)) {
     throw new Error('Missing updated Hermes mapping')
@@ -165,7 +170,7 @@ function replaceNode(source: string, parent: YAMLMap, previous: Node, next: YAML
   isolated.contents = sequence
   // The original leading comment remains outside the replaced source range.
   isolated.contents.commentBefore = undefined
-  let fragment = isolated.toString({ lineWidth: 0 })
+  let fragment = crlfToLf(isolated.toString({ lineWidth: 0 }))
   if (!source.slice(before[0], end).endsWith('\n') && !next.comment) {
     fragment = fragment.replace(/\n$/, '')
   }
