@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BotSharesSchema } from '../../../../../shared/bots/bot-team-shares'
+import type { BotShareLink } from '../sharing/use-bot-share-link'
 import { botSharingState, botSharingValue } from './bot-sharing-state'
 
 // Stored as older Orca wrote them: no acceptedAt, emailedAt or homeSessionId, plus an entry a newer
@@ -24,7 +25,13 @@ const STORED = BotSharesSchema.parse([
   },
   { kind: 'group', shareId: 's4', addedAt: 5 }
 ])
-const LINK = { url: 'https://orca.example/s/x', updatedAt: 1 }
+const LINK: BotShareLink = {
+  shareId: 'share-1',
+  url: 'https://orca.example/s/x',
+  versionId: 'v1',
+  updatedAt: null,
+  digest: null
+}
 const WORDS = { on: 'On', off: 'Off' }
 
 describe('an agent shared two ways', () => {

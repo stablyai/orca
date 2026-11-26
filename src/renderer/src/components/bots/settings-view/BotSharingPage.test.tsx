@@ -26,7 +26,10 @@ vi.mock('@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog', () => ({
 vi.mock('../bot-connector-entries', () => ({ useBotConnectorEntries: () => [] }))
 vi.mock('../use-bot-host-label', () => ({ useBotHostLabel: () => null }))
 vi.mock('../orca-cloud-signed-out', () => ({ useOrcaCloudSignedOut: () => false }))
-const linkRead = vi.hoisted(() => ({ current: { kind: 'read', link: null } as LinkRead }))
+const linkRead = vi.hoisted(() => {
+  const read: { current: LinkRead } = { current: { kind: 'read', link: null } }
+  return read
+})
 vi.mock('../sharing/use-bot-share-link', () => ({
   useBotShareLink: () => ({ read: linkRead.current, reread: () => {}, otherLinks: false })
 }))

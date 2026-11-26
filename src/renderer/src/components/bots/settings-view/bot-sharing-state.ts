@@ -1,5 +1,6 @@
 // Whether an agent is shared, read from both kinds of sharing: teammates who use it, and its copy link.
 import type { BotShare } from '../../../../../shared/bots/bot-team-shares'
+import type { BotShareLink } from '../sharing/use-bot-share-link'
 
 export type BotSharingState = {
   /** Teammates with access or invited, by name; a declined one no longer counts. */
@@ -10,7 +11,7 @@ export type BotSharingState = {
 
 export function botSharingState(
   shares: readonly BotShare[] | undefined,
-  link: object | null | undefined
+  link: BotShareLink | null | undefined
 ): BotSharingState {
   return {
     teammates: (shares ?? []).flatMap((share) =>
