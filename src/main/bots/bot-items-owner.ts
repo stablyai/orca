@@ -100,7 +100,7 @@ export class BotItemsOwner extends BotItemsWrites {
       if (withdrawn) {
         throw new BotItemError(
           'item_changed',
-          `Orca withdrew this question on item ${item.number} — ${botItemAskWithdrawnWords(withdrawn)}. Refresh to see the item, then reply.`
+          `Orca withdrew this question on item ${item.number} — ${botItemAskWithdrawnWords(withdrawn)}. No reply needed; refresh to see the latest, or add a comment if you still want to weigh in.`
         )
       }
       // While the bot asks, a comment not sent as plain is the answer: it names the question (a quick

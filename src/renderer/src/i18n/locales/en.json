@@ -30836,7 +30836,8 @@
         "sendSomeLabel": "Send {{count}} of {{total}} answers",
         "changeAnswer": "{{question}}: {{answer}}. Change answer",
         "heldImagesLimit": "Your answers go as one comment, which takes up to {{max}} images. Send the answers held so far first, or remove some.",
-        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Send the answers held so far first, or remove some."
+        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Send the answers held so far first, or remove some.",
+        "withdrawn": "Withdrawn — no reply needed"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

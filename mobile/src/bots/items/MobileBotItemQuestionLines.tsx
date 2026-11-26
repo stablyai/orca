@@ -100,7 +100,9 @@ export function MobileBotItemQuestionLines({
         <Text style={styles.ended}>
           {shownEnd === 'skipped'
             ? t('bots.items.ask.skipped', 'Skipped')
-            : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+            : shownEnd === 'withdrawn'
+              ? t('bots.items.ask.withdrawn', 'Withdrawn — no reply needed')
+              : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
         </Text>
       ) : null}
     </View>

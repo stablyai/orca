@@ -210,7 +210,9 @@ export function BotItemQuestionLines({
         <div className="mt-1.5 text-xs text-muted-foreground">
           {shownEnd === 'skipped'
             ? t('bots.items.ask.skipped', 'Skipped')
-            : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+            : shownEnd === 'withdrawn'
+              ? t('bots.items.ask.withdrawn', 'Withdrawn — no reply needed')
+              : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
         </div>
       ) : null}
     </div>
