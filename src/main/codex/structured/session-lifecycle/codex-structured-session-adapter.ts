@@ -53,6 +53,7 @@ import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
 import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
 import { CodexComposerPredictions } from '../turns/codex-composer-predictions'
 import { codexHoldsLiveProviderProcess } from './codex-live-provider-process'
+import { codexCliUpgradeRestart } from '../launch/codex-launched-cli-freshness'
 
 export class CodexStructuredSessionAdapter implements SessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
@@ -208,6 +209,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   heldSends = (id: string) => this.sessions.get(id)?.dispatchEchoes.heldSends()
 
   holdsLiveProviderProcess = codexHoldsLiveProviderProcess(this.sessions, this.acquisitions)
+  requiresCliUpgradeRestart = codexCliUpgradeRestart(this.sessions)
 
   backgroundTaskStops: NonNullable<SessionAdapter['backgroundTaskStops']> = (sessionId) =>
     backgroundStops.codexBackgroundTaskStops(this.sessions.get(sessionId))

@@ -287,6 +287,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     fence: number
     executionOptions?: AgentSessionExecutionOptions
   }): boolean
+  /** The live child runs an older CLI binary or version than the currently installed one. */
+  requiresCliUpgradeRestart?(sessionId: string, fence: number): Promise<boolean> | boolean
   /** Captures only this input's pending answer/output in the supplied live acquisition. */
   capturePendingOutput?(input: {
     sessionId: string

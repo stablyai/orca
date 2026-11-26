@@ -21,6 +21,7 @@ export type CodexLeaseRelease = { writerStopped: boolean; workloadGone: boolean 
 /** What a lease needs from the server it rides on. */
 export type CodexSharedLeaseHost = {
   readonly pid: number | undefined
+  readonly initializeResult?: unknown
   readonly closed: boolean
   readonly connection: CodexAppServerConnection
   claim: (
@@ -135,7 +136,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     }
     // The server was initialized once when it started; Codex refuses a second initialize.
     if (method === 'initialize') {
-      return Promise.resolve({})
+      return Promise.resolve(this.host.initializeResult ?? {})
     }
     return sendCodexLeaseRequest(this, method, params, options)
   }

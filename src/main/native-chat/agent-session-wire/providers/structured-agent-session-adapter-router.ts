@@ -158,6 +158,11 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     input
   ) => this.liveOwnerOrNull(input.sessionId)?.requiresModelTransitionRestart?.(input) ?? false
 
+  requiresCliUpgradeRestart: NonNullable<Adapter['requiresCliUpgradeRestart']> = (
+    sessionId,
+    fence
+  ) => this.liveOwnerOrNull(sessionId)?.requiresCliUpgradeRestart?.(sessionId, fence) ?? false
+
   capturePendingOutput: Adapter['capturePendingOutput'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.capturePendingOutput?.(input)
 
