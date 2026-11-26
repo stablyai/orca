@@ -69,6 +69,7 @@ export async function buildRotationStatus(args: {
   snapshot: Map<string, RotationFolderSnapshot>
   state: RotationState
   pendingSwitch: boolean
+  switchNeedsRepair: boolean
   now: number
 }): Promise<ClaudeAccountRotationStatus> {
   const { rotation, state, now } = args
@@ -133,6 +134,7 @@ export async function buildRotationStatus(args: {
     nextCandidateAccountId: sortCandidates(candidates, rotation, now)[0]?.accountId ?? null,
     lastNote: args.selectedAccountId ? (state.folders[args.selectedAccountId]?.note ?? null) : null,
     lastCheckedAt: state.lastCheckedAt ?? null,
-    pendingSwitch: args.pendingSwitch
+    pendingSwitch: args.pendingSwitch,
+    switchNeedsRepair: args.switchNeedsRepair
   }
 }

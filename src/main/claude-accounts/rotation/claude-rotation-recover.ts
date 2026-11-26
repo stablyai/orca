@@ -67,11 +67,12 @@ async function settle(journal: RotationJournal, deps: RotationSwapDeps): Promise
     // login of `a`, and the only copy of its own is the backup, so the post-swap check settles it.
     if (hashB !== journal.bOldRefresh && hasRefreshToken(oauthB)) {
       const inB = await accountHolding(oauthB, deps)
-      if (inB === null || journal.fromAccount === null) {
-        return 'undecided'
-      }
-      if (inB === journal.fromAccount) {
+      if (inB !== null && inB === journal.fromAccount) {
         return 'already_finished'
+      }
+      // Any account but its own may mean the login of `b` is left only in its backup.
+      if (inB === null || inB !== journal.toAccount) {
+        return 'undecided'
       }
     }
     return end('nothing_written')

@@ -12,7 +12,7 @@ import {
 export type RotationVerifyOutcome =
   | 'ok'
   | 'reverted'
-  | 'unexpected_account'
+  | 'needs_repair'
   | 'unchanged'
   | 'unverified'
   | 'waiting'
@@ -21,6 +21,7 @@ export type RotationVerifyOutcome =
  * After a swap, checks which account each folder holds. A session that wrote a login back over
  * either folder is settled first, so every account stays in one of them. The journal and its
  * backups stay until the account details match and both folders still hold what was checked.
+ * When a folder holds no login or a third account, they stay until it holds one of the two again.
  */
 export async function verifySwap(
   deps: RotationSwapDeps,
@@ -50,10 +51,17 @@ export async function verifySwap(
     return waiting
   }
   if (settled.kind === 'unexpected') {
-    return done('unexpected_account')
+    // A login may be left only in its backup, and filling the folder would overwrite whatever it
+    // holds, so the journal stays and keeps switching paused until both folders are back.
+    if (journal.needsRepair) {
+      return waiting
+    }
+    journal.needsRepair = true
+    await deps.files.saveJournal(journal)
+    return logged('needs_repair')
   }
   if (settled.kind === 'unknown') {
-    if (!gaveUp) {
+    if (!gaveUp || journal.needsRepair) {
       return waiting
     }
     return done(settled.aHash === journal.bOldRefresh ? 'unchanged' : 'unverified')

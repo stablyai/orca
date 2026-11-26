@@ -70,7 +70,8 @@ const status: ClaudeAccountRotationStatus = {
   nextCandidateAccountId: 'dev',
   lastNote: 'ok',
   lastCheckedAt: SWITCHED_AT + 120_000,
-  pendingSwitch: false
+  pendingSwitch: false,
+  switchNeedsRepair: false
 }
 
 function stubStatus(next: ClaudeAccountRotationStatus): () => void {

@@ -25711,6 +25711,7 @@
           "unnamed": "an unnamed account",
           "noAccounts": "Add at least two Claude accounts on this Mac to switch between them.",
           "pending": "Checking the last switch. New switches wait until it is confirmed.",
+          "needsRepair": "After the last switch, a folder has no login or one for another account. Switching is paused until that folder is signed in to one of the two accounts again.",
           "noCandidate": "The selected account is at its limit and no other account is free. Close sessions on another account or wait for a reset.",
           "lastSwitch": "Last switch {{when}}: {{from}} to {{to}}.",
           "next": "Next account to switch to: {{account}}.",
@@ -25727,7 +25728,7 @@
           "switchedSoonerReset": "Claude moved from {{from}} to {{to}}, whose weekly limit resets sooner.",
           "noCandidate": "Reached {{limits}}, but no other account is free to switch to. Close sessions on another account or wait for a reset.",
           "reverted": "A running Claude session kept the old login, so the last switch was undone.",
-          "unexpectedAccount": "After a switch, a folder signed in to an account Orca did not expect. Check the account folders in Settings."
+          "needsRepair": "After a switch, a folder has no login or one for another account. Orca keeps its backups of both logins and pauses switching until that folder is signed in to one of the two accounts again."
         }
       }
     },

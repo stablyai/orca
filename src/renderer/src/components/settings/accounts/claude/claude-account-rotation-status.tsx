@@ -60,6 +60,12 @@ function pauseLine(status: ClaudeAccountRotationStatus, t: Translate): string | 
       'Add at least two Claude accounts on this Mac to switch between them.'
     )
   }
+  if (status.switchNeedsRepair) {
+    return t(
+      'accounts.claude.rotation.status.needsRepair',
+      'After the last switch, a folder has no login or one for another account. Switching is paused until that folder is signed in to one of the two accounts again.'
+    )
+  }
   if (status.pendingSwitch) {
     return t(
       'accounts.claude.rotation.status.pending',

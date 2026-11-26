@@ -8,6 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '../../../ui/checkbox'
 import { Input } from '../../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
+import { rankedAccounts, withRank } from './claude-account-rotation-ranks'
 
 /** Saves a change built from the latest value, including a save still in flight. */
 export type RotationSave = (
@@ -18,28 +19,6 @@ const SHARED_LIMITS: ClaudeAccountRotationAccountSettings = {
   enabled: true,
   fiveHourPercent: null,
   weeklyPercent: null
-}
-
-function matchesAccount(entry: string, account: string): boolean {
-  return account.startsWith(entry) || entry.startsWith(account)
-}
-
-/** The priority list with `account` moved to `rank` (1-based), or taken out when null. */
-function withRank(
-  preferred: string[],
-  shown: string[],
-  account: string,
-  rank: number | null
-): string[] {
-  const isShown = (entry: string) => shown.some((name) => matchesAccount(entry, name))
-  // Entries of accounts not on this Mac keep their place after the ones shown.
-  const visible = preferred.filter((entry) => isShown(entry) && !matchesAccount(entry, account))
-  const hidden = preferred.filter((entry) => !isShown(entry))
-  if (rank !== null) {
-    const at = Math.min(rank - 1, visible.length)
-    visible.splice(at, 0, account)
-  }
-  return [...visible, ...hidden]
 }
 
 /** An empty value means the shared limit; saved on blur like the shared ones. */
@@ -109,9 +88,7 @@ export function ClaudeAccountRotationAccounts({
     return null
   }
   const shown = rows.map((row) => row.account)
-  const ranked = rotation.preferredAccounts.filter((entry) =>
-    shown.some((name) => matchesAccount(entry, name))
-  )
+  const ranked = rankedAccounts(rotation.preferredAccounts, shown)
   const setOwn = (account: string, patch: Partial<ClaudeAccountRotationAccountSettings>): void =>
     save((current) => ({
       accounts: {
@@ -156,7 +133,7 @@ export function ClaudeAccountRotationAccounts({
         <tbody>
           {rows.map(({ account, label }) => {
             const own = { ...SHARED_LIMITS, ...rotation.accounts[account] }
-            const index = ranked.findIndex((entry) => matchesAccount(entry, account))
+            const index = ranked.indexOf(account)
             // An unranked account can take the place right after the ranked ones, none further down.
             const places = index === -1 ? ranked.length + 1 : ranked.length
             return (

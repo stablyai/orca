@@ -13,7 +13,7 @@ export type RotationNoticeInput =
       toLabel: string | null
     }
   | { type: 'no-candidate'; limits: ClaudeAccountRotationLimit[] }
-  | { type: 'reverted' | 'unexpected_account' }
+  | { type: 'reverted' | 'needs_repair' }
 
 function describeLimits(limits: ClaudeAccountRotationLimit[]): string {
   return limits
@@ -80,8 +80,8 @@ export function rotationNotice(input: RotationNoticeInput): RotationNotice {
   return {
     title,
     body: translateMain(
-      'accounts.claude.rotation.notice.unexpectedAccount',
-      'After a switch, a folder signed in to an account Orca did not expect. Check the account folders in Settings.'
+      'accounts.claude.rotation.notice.needsRepair',
+      'After a switch, a folder has no login or one for another account. Orca keeps its backups of both logins and pauses switching until that folder is signed in to one of the two accounts again.'
     )
   }
 }

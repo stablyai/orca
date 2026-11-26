@@ -137,6 +137,7 @@ export class ClaudeAccountRotationService {
       snapshot: this.snapshot,
       state: await this.files.loadState(),
       pendingSwitch: await this.files.journalExists(),
+      switchNeedsRepair: (await this.files.loadJournal())?.needsRepair === true,
       now: this.deps.now()
     })
   }
@@ -189,7 +190,8 @@ export class ClaudeAccountRotationService {
           // Its backups may hold the only copy of a login, so it blocks swaps until removed.
           this.files.log('journal_unreadable')
         }
-        return ROTATION_TIMING.cycleMs
+        // Only the user can repair the folders, so look less often meanwhile.
+        return verified?.journal.needsRepair ? ROTATION_TIMING.idleMaxMs : ROTATION_TIMING.cycleMs
       }
     }
     const folders = await this.folders()
@@ -276,10 +278,11 @@ export class ClaudeAccountRotationService {
   }
 
   private afterVerify(outcome: RotationVerifyOutcome, journal: RotationJournal): void {
-    if (outcome === 'reverted') {
+    // A recovered swap reaches 'ok' here without passing afterSwap, so refresh after either.
+    if (outcome === 'ok' || outcome === 'reverted') {
       this.refreshUsage(journal)
     }
-    if (outcome === 'reverted' || outcome === 'unexpected_account') {
+    if (outcome === 'reverted' || outcome === 'needs_repair') {
       this.options.notify(rotationNotice({ type: outcome }))
     }
   }

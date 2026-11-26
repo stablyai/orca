@@ -151,4 +151,6 @@ export type ClaudeAccountRotationStatus = {
   lastNote: string | null
   lastCheckedAt: number | null
   pendingSwitch: boolean
+  /** The pending switch left a folder with no login or a third account; see the journal. */
+  switchNeedsRepair: boolean
 }

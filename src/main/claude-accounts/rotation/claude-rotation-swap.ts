@@ -68,10 +68,14 @@ export async function refreshLock(
   return new RotationDirLock(paths, deps.sleep)
 }
 
+/**
+ * Removes the journal before its backups: a failure part way must not leave a journal whose
+ * backup is gone. Backups left without a journal are never read, and the next swap overwrites them.
+ */
 export async function clearRotationJournal(deps: RotationSwapDeps): Promise<void> {
+  await deps.files.removeJournal()
   await deps.slots.remove(ROTATION_JOURNAL_SERVICE_A)
   await deps.slots.remove(ROTATION_JOURNAL_SERVICE_B)
-  await deps.files.removeJournal()
 }
 
 function backupOf(slot: ClaudeKeychainSlot, oauthAccount: unknown): ClaudeKeychainSlot {

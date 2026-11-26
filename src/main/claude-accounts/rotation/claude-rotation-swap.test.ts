@@ -16,6 +16,7 @@ import { checkRotationFolder } from './claude-rotation-check'
 import { externalRotatorActive } from './claude-rotation-folders'
 import {
   ROTATION_JOURNAL_SERVICE_A,
+  ROTATION_JOURNAL_SERVICE_B,
   type ClaudeKeychainSlot,
   type RotationSlotStore
 } from './claude-rotation-keychain'
@@ -329,6 +330,78 @@ it('does not clear the backups when a writes its old login back while the detail
   expect(await files.loadJournal()).not.toBeNull()
   expect((await verifySwap(deps, true))?.outcome).toBe('reverted')
   expect(keychain.slots.get('svc-b')).toEqual(slotOf('b'))
+})
+
+it('keeps the backups and pauses switching while a folder holds no login after a swap', async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  const a = folder(folders, 'a')
+  const b = folder(folders, 'b')
+  expect((await swapFolderLogins(a, b, request, deps)).ok).toBe(true)
+  // The session in a wrote its old login back and b was signed out: b's login is only in a backup.
+  keychain.slots.set('svc-a', slotOf('a'))
+  keychain.slots.set('svc-b', { mcpOAuth: { server: 'mcp-b' } })
+  expect((await verifySwap(deps, true))?.outcome).toBe('needs_repair')
+  expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
+  expect((await files.loadJournal())?.needsRepair).toBe(true)
+  expect(keychain.slots.get(ROTATION_JOURNAL_SERVICE_B)?.claudeAiOauth).toEqual(login('b'))
+  expect(await swapFolderLogins(a, b, request, deps)).toEqual({
+    ok: false,
+    detail: 'previous_swap_unverified'
+  })
+  // Past the give-up time, a login the server cannot name keeps the journal too.
+  deps.now = () => NOW + 1_000_000
+  const unnamed = { ...login('b'), accessToken: 'access-x', refreshToken: 'refresh-x' }
+  keychain.slots.set('svc-b', { ...slotOf('b'), claudeAiOauth: unnamed })
+  expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
+  expect(await files.loadJournal()).not.toBeNull()
+  // Signing b back in to its own account settles the folders and removes the backups.
+  const signedIn = { ...slotOf('b'), claudeAiOauth: { ...login('b'), refreshToken: 'refresh-b2' } }
+  keychain.slots.set('svc-b', signedIn)
+  expect((await verifySwap(deps, true))?.outcome).toBe('reverted')
+  expect(keychain.slots.get('svc-a')).toEqual(slotOf('a'))
+  expect(keychain.slots.get('svc-b')).toEqual(signedIn)
+  expect(await files.loadJournal()).toBeNull()
+  expect([...keychain.slots.keys()].sort()).toEqual(['svc-a', 'svc-b'])
+})
+
+it('keeps the backups when b holds a third account after a swap cut off before its journal step', async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  await swapFolderLogins(folder(folders, 'a'), folder(folders, 'b'), request, deps)
+  const journal = await files.loadJournal()
+  if (!journal) {
+    throw new Error('missing journal')
+  }
+  await files.saveJournal({ ...journal, step: 'a_written', meta: undefined })
+  // The session in a wrote its old login back and b was signed in to another account, so the
+  // login of b is left only in its backup.
+  keychain.slots.set('svc-a', slotOf('a'))
+  keychain.slots.set('svc-b', { ...slotOf('b'), claudeAiOauth: login('c') })
+  expect(await recoverInterruptedSwap(deps)).toBe('undecided')
+  expect(await files.loadJournal()).not.toBeNull()
+  expect(keychain.slots.get(ROTATION_JOURNAL_SERVICE_B)?.claudeAiOauth).toEqual(login('b'))
+})
+
+it('keeps the backups while the journal that points to them is still on disk', async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  expect(
+    (await swapFolderLogins(folder(folders, 'a'), folder(folders, 'b'), request, deps)).ok
+  ).toBe(true)
+  const removeJournal = files.removeJournal.bind(files)
+  let failed = false
+  files.removeJournal = async () => {
+    if (!failed) {
+      failed = true
+      throw new Error('disk full')
+    }
+    return removeJournal()
+  }
+  expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
+  expect(await files.loadJournal()).not.toBeNull()
+  expect(keychain.slots.has(ROTATION_JOURNAL_SERVICE_A)).toBe(true)
+  expect(keychain.slots.has(ROTATION_JOURNAL_SERVICE_B)).toBe(true)
+  expect((await verifySwap(deps, true))?.outcome).toBe('ok')
+  expect(await files.loadJournal()).toBeNull()
+  expect([...keychain.slots.keys()].sort()).toEqual(['svc-a', 'svc-b'])
 })
 
 it('treats files it cannot read as present, not absent', async () => {

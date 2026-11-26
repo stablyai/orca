@@ -47,6 +47,8 @@ export type RotationJournal = {
   /** Orca's account records before the swap, as fingerprints. */
   records?: { a: string | null; b: string | null }
   meta?: string
+  /** A folder held no login or a third account; the journal stays until both hold the two again. */
+  needsRepair?: boolean
 }
 
 const LOG_MAX_BYTES = 1024 * 1024
