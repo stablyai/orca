@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { hostSnapshotAffirmsWorktreeContents } from '../../../../src/shared/remote-runtime/session-graph/host-session-snapshot-authority'
+import {
+  hostSnapshotAffirmsAgentSessions,
+  hostSnapshotAffirmsWorktreeContents
+} from '../../../../src/shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { SESSION_TABS_PLACEHOLDER_SETTLES_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 
@@ -47,6 +50,41 @@ export function confirmsMirroredTabSelection(publicationEpoch?: string): boolean
   // Why: phone-local persistence acknowledges the mutation, not host focus;
   // keep the pending guard until any host publication confirms the selection.
   return !publicationEpoch?.startsWith('mobile-local:')
+}
+
+/** A host that can't read its chat store lists no chats, which proves none closed: keep the chats already
+ *  shown in place, inactive so the host's selection still decides which tab is open. */
+export function keepChatsHostCannotRead<T extends { id: string; type: string; isActive: boolean }>(
+  incoming: {
+    tabs: T[]
+    publicationEpoch?: string
+    snapshotVersion: number
+    agentSessionsUnverifiable?: true
+  },
+  current: readonly T[]
+): T[] {
+  if (
+    hostSnapshotAffirmsAgentSessions(incoming) ||
+    !hostSnapshotAffirmsWorktreeContents(incoming)
+  ) {
+    return incoming.tabs
+  }
+  const listedAt = new Map(incoming.tabs.map((tab, index) => [tab.id, index]))
+  const tabs: T[] = []
+  let next = 0
+  for (const tab of current) {
+    const at = listedAt.get(tab.id)
+    if (at !== undefined) {
+      if (at >= next) {
+        tabs.push(...incoming.tabs.slice(next, at + 1))
+        next = at + 1
+      }
+    } else if (tab.type === 'agent-session') {
+      tabs.push(tab.isActive ? { ...tab, isActive: false } : tab)
+    }
+  }
+  tabs.push(...incoming.tabs.slice(next))
+  return tabs
 }
 
 // Hide locally closed tabs until host absence confirms them; expire tombstones so failed closes cannot hide live tabs forever.
