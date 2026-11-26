@@ -388,7 +388,7 @@ async function main() {
       // Remove empty workspaces/repo parent left behind by worktree rm to avoid leaks.
       const worktreePath = seeded.worktreeId.split('::')[1]
       if (removed.status === 0 && worktreePath) {
-        rmSync(dirname(worktreePath), { recursive: true, force: true })
+        rmSync(dirname(worktreePath), { recursive: true, force: true, maxRetries: 3 })
       }
       if (removed.status !== 0) {
         log(
@@ -410,9 +410,9 @@ async function main() {
         fail(`server did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of SIGTERM`)
       }
     }
-    rmSync(userDataDir, { recursive: true, force: true })
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 3 })
     if (seeded?.repoPath) {
-      rmSync(seeded.repoPath, { recursive: true, force: true })
+      rmSync(seeded.repoPath, { recursive: true, force: true, maxRetries: 3 })
     }
   }
 
