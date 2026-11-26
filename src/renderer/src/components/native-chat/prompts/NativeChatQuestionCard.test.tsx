@@ -67,10 +67,12 @@ describe('NativeChatQuestionCard', () => {
   it('shows the question once in the band and omits its header, count, and arrows for one step', () => {
     renderCard({ prompt: tabsOrSpaces })
 
-    expect(container.querySelectorAll('[data-testid="native-chat-question-card-title"]')).toHaveLength(1)
-    expect(container.querySelector('[data-testid="native-chat-question-card-title"]')?.textContent).toBe(
-      'Do you prefer tabs or spaces?'
-    )
+    expect(
+      container.querySelectorAll('[data-testid="native-chat-question-card-title"]')
+    ).toHaveLength(1)
+    expect(
+      container.querySelector('[data-testid="native-chat-question-card-title"]')?.textContent
+    ).toBe('Do you prefer tabs or spaces?')
     expect(container.textContent).not.toContain('Indent')
     expect(container.textContent?.match(/Do you prefer tabs or spaces\?/g)).toHaveLength(1)
     expect(container.textContent).not.toContain('1 of 1')
@@ -78,10 +80,13 @@ describe('NativeChatQuestionCard', () => {
   })
 
   it('shows the count and step arrows only for multi-step questions', () => {
-    renderCard({ prompt: { questions: [question('One'), question('Two')] } })
+    renderCard({
+      prompt: { questions: [{ ...question('One'), header: 'Hidden header' }, question('Two')] }
+    })
 
     expect(container.textContent).toContain('1 of 2')
     expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
+    expect(card().getAttribute('aria-label')).toBe('One, 1 of 2')
   })
 
   it('shows a multi-step question once even when its header repeats it', () => {

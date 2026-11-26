@@ -21760,7 +21760,6 @@
         "nextQuestion": "Sonraki soru",
         "back": "Geri",
         "skipAndSubmit": "Atla ve gönder",
-        "stepLabel": "{{value0}}, {{value1}} / {{value2}}: {{value3}}",
         "questionStepLabel": "{{value0}}, {{value1}} / {{value2}}"
       },
       "ask": {

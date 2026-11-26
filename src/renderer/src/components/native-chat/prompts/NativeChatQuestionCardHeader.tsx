@@ -14,18 +14,6 @@ export function nativeChatQuestionCardLabel(
   if (total <= 1) {
     return question.question
   }
-  if (question.header && question.header !== question.question) {
-    return t(
-      'components.native-chat.question.stepLabel',
-      '{{value0}}, {{value1}} of {{value2}}: {{value3}}',
-      {
-        value0: question.header,
-        value1: index + 1,
-        value2: total,
-        value3: question.question
-      }
-    )
-  }
   return t(
     'components.native-chat.question.questionStepLabel',
     '{{value0}}, {{value1}} of {{value2}}',

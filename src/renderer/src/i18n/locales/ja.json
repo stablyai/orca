@@ -20107,7 +20107,6 @@
         "nextQuestion": "次の質問",
         "back": "戻る",
         "skipAndSubmit": "スキップして送信",
-        "stepLabel": "{{value0}}、{{value1}} / {{value2}}：{{value3}}",
         "questionStepLabel": "{{value0}}、{{value1}} / {{value2}}"
       },
       "approval": {

@@ -19990,7 +19990,6 @@
         "nextQuestion": "Question suivante",
         "back": "Retour",
         "skipAndSubmit": "Passer et envoyer",
-        "stepLabel": "{{value0}}, {{value1}} sur {{value2}} : {{value3}}",
         "questionStepLabel": "{{value0}}, {{value1}} sur {{value2}}"
       },
       "approval": {

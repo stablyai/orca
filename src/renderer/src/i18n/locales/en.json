@@ -21932,7 +21932,6 @@
         "nextQuestion": "Next question",
         "back": "Back",
         "skipAndSubmit": "Skip and submit",
-        "stepLabel": "{{value0}}, {{value1}} of {{value2}}: {{value3}}",
         "questionStepLabel": "{{value0}}, {{value1}} of {{value2}}"
       },
       "ask": {
