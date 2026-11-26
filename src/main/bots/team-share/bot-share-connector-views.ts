@@ -21,11 +21,6 @@ import type {
 const onlyShared = (botId: string | null, sharedBotId: string): string | null =>
   botId === sharedBotId ? botId : null
 
-/** Present optional fields only, so an absent one stays absent. */
-function defined<T extends object>(fields: T): T {
-  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as T
-}
-
 function slackState(state: ConnectorBotSlackState): ConnectorBotSlackState {
   switch (state.state) {
     case 'not_created':
@@ -34,14 +29,14 @@ function slackState(state: ConnectorBotSlackState): ConnectorBotSlackState {
     case 'grant_expired':
       return { state: state.state, teamId: state.teamId }
     case 'created':
-      return defined({
+      return {
         state: 'created',
         teamId: state.teamId,
         appId: state.appId,
         oauthFailure: state.oauthFailure
-      })
+      }
     case 'installed':
-      return defined({
+      return {
         state: 'installed',
         teamId: state.teamId,
         appId: state.appId,
@@ -54,10 +49,10 @@ function slackState(state: ConnectorBotSlackState): ConnectorBotSlackState {
         postAs: state.postAs,
         postAsPending: state.postAsPending,
         poster: state.poster
-          ? defined({ name: state.poster.name, avatarUrl: state.poster.avatarUrl })
+          ? { name: state.poster.name, avatarUrl: state.poster.avatarUrl }
           : undefined,
         computerName: state.computerName
-      })
+      }
   }
 }
 
@@ -115,7 +110,7 @@ export function botShareGitHubState(
 /** An account by its label and which services work: not the app it signed in through, Google's own
  *  words, or a link to turn an API on (both name the owner's Cloud project). */
 function googleAccount(account: GoogleAccountView): GoogleAccountView {
-  return defined({
+  return {
     email: account.email,
     status: account.status,
     services: account.services.map((service) => ({
@@ -124,19 +119,19 @@ function googleAccount(account: GoogleAccountView): GoogleAccountView {
     })),
     checkedAt: account.checkedAt,
     connectedAt: account.connectedAt
-  })
+  }
 }
 
 /** Read as the shared agent itself reads it (only its accounts), without the app's identity or key. */
 export function botShareGoogleStatus(view: GoogleStatusView, sharedBot: Bot): GoogleStatusView {
-  return defined({
+  return {
     client: view.client ? { clientId: '', source: view.client.source, savedAt: 0 } : null,
     accounts: view.accounts.map(googleAccount),
     defaultAccount: view.defaultAccount,
     bots: view.bots
       .filter((bot) => bot.id === sharedBot.id)
-      .map((bot) => defined({ id: bot.id, name: bot.name, accounts: bot.accounts?.slice() }))
-  })
+      .map((bot) => ({ id: bot.id, name: bot.name, accounts: bot.accounts?.slice() }))
+  }
 }
 
 export function botShareComposioStatus(status: ComposioStatus): ComposioStatus {
@@ -150,26 +145,26 @@ export function botShareComposioStatus(status: ComposioStatus): ComposioStatus {
 function toolSignIn(signIn: BotToolSignInStatus): BotToolSignInStatus {
   return signIn.state === 'signed-in'
     ? { state: 'signed-in', limited: signIn.limited }
-    : defined({ state: signIn.state, problem: signIn.problem })
+    : { state: signIn.state, problem: signIn.problem }
 }
 
 /** A tool by name and sign-in state: its URL or command line may carry a key. */
 function ownTool(tool: BotOwnTool): BotOwnTool {
-  return defined({
+  return {
     name: tool.name,
     detail: '',
     remote: tool.remote,
     signIn: tool.signIn ? toolSignIn(tool.signIn) : undefined
-  })
+  }
 }
 
 export function botShareTools(tools: BotTools): BotTools {
-  return defined({
+  return {
     agent: tools.agent,
     own: tools.own.map(ownTool),
-    inherited: tools.inherited.map((tool) => defined({ name: tool.name, plugin: tool.plugin })),
+    inherited: tools.inherited.map((tool) => ({ name: tool.name, plugin: tool.plugin })),
     hostMcpServers: tools.hostMcpServers
-  })
+  }
 }
 
 /** A cloud answer with its value seen through `view`; a refusal passes as it came. */

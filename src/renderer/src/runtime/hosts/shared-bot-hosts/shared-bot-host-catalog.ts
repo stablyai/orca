@@ -1,6 +1,6 @@
 // The agents shared with this Orca account, as main publishes them. Each is a host the app reaches by
 // its environment id; main routes its calls over the share link rather than a paired server's connection.
-import { useMemo, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import type {
   SharedBotHostsState,
   SharedBotHostView,
@@ -55,6 +55,7 @@ export function installSharedBotHostCatalog(): () => void {
     views = NO_HOSTS
     requests = NO_REQUESTS
     hostHomes.clear()
+    lastRoutes.clear()
     sharing = null
     hydrated = false
     for (const listener of listeners) {
@@ -130,14 +131,24 @@ export function noteSharedBotHostListing(
   }
 }
 
+type SharedBotHomeRoute = ReturnType<typeof sharedBotHomeOnHost>
+// The last answer per workspace, so a reader gets the same object while the answer is the same.
+const lastRoutes = new Map<string, { key: string; route: SharedBotHomeRoute }>()
+
+function stableSharedBotHomeOnHost(worktreeId: string | null | undefined): SharedBotHomeRoute {
+  const route = sharedBotHomeOnHost(worktreeId)
+  const key = JSON.stringify(route)
+  const last = lastRoutes.get(worktreeId ?? '')
+  if (last?.key === key) {
+    return last.route
+  }
+  lastRoutes.set(worktreeId ?? '', { key, route })
+  return route
+}
+
 /** `sharedBotHomeOnHost`, followed for its changes; the same object while its answer is the same. */
-export function useSharedBotHomeOnHost(
-  worktreeId: string | null | undefined
-): ReturnType<typeof sharedBotHomeOnHost> {
-  const key = useSyncExternalStore(subscribeSharedBotHosts, () =>
-    JSON.stringify(sharedBotHomeOnHost(worktreeId))
-  )
-  return useMemo(() => JSON.parse(key) as ReturnType<typeof sharedBotHomeOnHost>, [key])
+export function useSharedBotHomeOnHost(worktreeId: string | null | undefined): SharedBotHomeRoute {
+  return useSyncExternalStore(subscribeSharedBotHosts, () => stableSharedBotHomeOnHost(worktreeId))
 }
 
 /** Where this computer's home of a shared agent reads its files: that agent's home folder on the

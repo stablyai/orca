@@ -40,8 +40,8 @@ const ownersHost: BotActivityHost = {
   externalConversations: () => [],
   chatTabs: async () => Object.values(chats).map((sessionId) => ({ sessionId, title: sessionId })),
   statusRows: () => Object.values(chats).map(workerRow),
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Activity lists an automation by these fields.
   automations: () => [
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Activity lists an automation by these fields.
     {
       id: 'auto-1',
       name: 'Nightly',
