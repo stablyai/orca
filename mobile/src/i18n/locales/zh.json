@@ -167,26 +167,17 @@
       "runtimeAccessLink": "此链接适用于其他 Orca 应用。请扫描电脑上“设置” → “移动端”中的二维码，或在服务器上运行 orca pair --mobile"
     },
     "terminalSettings": {
-      "keepPhoneSize": "保持手机尺寸（默认）",
-      "leaveAppDescription": "在手机上使用终端时，Orca 会缩小终端尺寸以适应屏幕。关闭应用或切换到其他应用时，此设置决定终端是保持手机尺寸（避免交互式 CLI 工具的界面重新排版），还是恢复为桌面尺寸。您随时可以点击桌面横幅中的“恢复”手动调整尺寸",
       "leaveAppHeading": "离开应用时",
-      "noPairedDesktops": "尚未配对桌面。配对后即可设置终端行为",
       "restoreAfterMinutes_one": "{{count}} 分钟后",
       "restoreAfterMinutes_other": "{{count}} 分钟后",
       "restoreAfterSeconds_one": "{{count}} 秒后",
       "restoreAfterSeconds_other": "{{count}} 秒后",
-      "restoreHost": "恢复 {{name}}",
       "previewColumns_one": "{{count}} 列",
       "previewColumns_other": "{{count}} 列",
       "previewLabel": "终端预览",
-      "previewHeading": "预览",
-      "fontHeading": "字体",
-      "fontDescription": "在终端中双指缩放即可调整大小，调整结果会保存在这里。仅对此设备生效，不影响桌面端的终端",
       "font": "字体",
       "size": "大小",
       "sizePoints": "{{size}} 磅",
-      "smaller": "减小",
-      "larger": "增大",
       "lineSpacing": "行距",
       "lineSpacingTight": "紧凑",
       "lineSpacingNormal": "标准",
@@ -1643,19 +1634,10 @@
       "failed": "失败"
     },
     "terminalShortcutSettings": {
-      "addDescription": "创建组合键或文本宏",
-      "addShortcut": "添加自定义快捷键…",
-      "customShortcuts": "自定义快捷键",
-      "empty": "尚未设置自定义快捷键",
       "removeShortcut": "移除 {{label}}",
-      "resetDefaults": "恢复默认设置",
-      "resetDescription": "按原始顺序显示所有内置快捷键",
       "moreKeys": "更多按键",
-      "moreKeysDescription": "这些按键位于终端按键栏的 ⋯ 下。切换按键以显示或隐藏，按住拖动柄可调整顺序。已在按键栏中的按键（如 Esc 或方向键）不会显示在 ⋯ 下。",
-      "directionPad": "方向键盘",
       "showDirectionPad": "显示方向键盘",
-      "showDirectionPadDescription": "将方向键盘固定在侧边栏。关闭后，侧边栏会列出各个方向键。",
-      "showShortcut": "显示 {{label}} 快捷键"
+      "showDirectionPadDescription": "将方向键盘固定在侧边栏。关闭后，侧边栏会列出各个方向键。"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "使用一次速率限制重置额度？",
