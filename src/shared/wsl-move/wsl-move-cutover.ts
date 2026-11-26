@@ -89,6 +89,8 @@ const WslMoveCutoverSchema = z.object({
     .record(z.string().min(1).max(1_024), z.boolean())
     .optional()
     .catch(undefined),
+  // Startup's catch-up ran for this pre-local-automations move, so it never re-disables a copy re-enabled here.
+  localAutomationsCaughtUp: z.literal(true).optional().catch(undefined),
   // Drive letters mapped into the distro when the move was planned; every recovery reads these,
   // never the drive. Strict: a malformed list fails closed.
   mappedDrives: WslMappedDrivesSchema.optional(),

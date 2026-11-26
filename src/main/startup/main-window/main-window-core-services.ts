@@ -108,7 +108,10 @@ async function installMainWindowCoreServices(
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         fenceMainProcessCloudOnQuit()
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
+        await Promise.all([
+          preserveAgentAuthBeforeRestart({ codexRuntimeHome, store }),
+          state.core.runtime?.bots.slackIcons.shownRecords.finalSave()
+        ])
       },
       onQuit: quitFromUserCommand,
       orcaAccount,

@@ -1,11 +1,18 @@
 import { createServer, type Server } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { useVouchingSocketOwnerHelper } from '../../browser/network/tunnels/darwin-socket-owner-helper.test-fixture'
+import {
+  resetWindowsSecurityLoadForTests,
+  setWindowsSecurityForTests
+} from '../../../shared/secure-storage/windows-security-addon'
 import type { PairedServerSavedPortForwards } from '../../../shared/remote-runtime/host-catalog/paired-server-saved-port-forwards'
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { runtimeHostKeyFingerprint } from '../../ipc/runtime-environments/catalog/runtime-environment-host-key'
 import {
+  addPairedPortForward,
   closeAllPairedPortForwards,
   configurePairedPortForwards,
+  ensurePairedPortForward,
   listPairedPortForwards,
   restorePairedPortForwards
 } from './paired-port-forwards'
@@ -53,6 +60,13 @@ function configureWithSaved(
 }
 
 describe('paired port forward restore', () => {
+  // On macOS every forward checks its connections' owner through the bundled helper.
+  let restoreOwnerHelper = async (): Promise<void> => {}
+  beforeAll(async () => {
+    restoreOwnerHelper = (await useVouchingSocketOwnerHelper()).restore
+  })
+  afterAll(() => restoreOwnerHelper())
+
   afterEach(async () => {
     await closeAllPairedPortForwards()
   })
@@ -89,5 +103,37 @@ describe('paired port forward restore', () => {
     )
     expect(dialed).toBe(true)
     tunnel.dispose()
+  })
+
+  it('refuses every forward and keeps the saved ones when this computer cannot check accounts', async () => {
+    const realPlatform = process.platform
+    const port = await freePort()
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      setWindowsSecurityForTests(null)
+      const record = {
+        hostKeyFingerprint: runtimeHostKeyFingerprint('server-key-a'),
+        forwards: [{ localPort: port, remoteHost: 'localhost', remotePort: port }]
+      }
+      const saved = configureWithSaved(record, 'server-key-a')
+      await restorePairedPortForwards('env-1')
+      const refused = /can't confirm which account/
+      await expect(
+        ensurePairedPortForward({ environmentId: 'env-1', remotePort: port })
+      ).rejects.toThrow(refused)
+      await expect(
+        addPairedPortForward({
+          environmentId: 'env-1',
+          localPort: port,
+          remoteHost: 'localhost',
+          remotePort: port
+        })
+      ).rejects.toThrow(refused)
+      expect(listPairedPortForwards('env-1')).toEqual([])
+      expect(saved.get('env-1')).toEqual(record)
+    } finally {
+      Object.defineProperty(process, 'platform', { value: realPlatform })
+      resetWindowsSecurityLoadForTests()
+    }
   })
 })

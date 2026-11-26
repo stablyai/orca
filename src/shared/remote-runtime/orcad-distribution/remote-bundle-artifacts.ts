@@ -18,5 +18,7 @@ export const OPENCODE_SQLITE_READER_FILENAME = 'opencode-sqlite-reader.cjs'
 export const WSL_CLAUDE_PROFILE_HELPER_FILENAME = 'claude-profile-wsl.cjs'
 /** Built into the WSL guest bundle dir; links a Codex account's history into the distro's ~/.codex. */
 export const WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME = 'codex-account-history-wsl.cjs'
+/** Built into the WSL guest bundle dir; syncs a distro's ~/.codex/config.toml with its managed homes. */
+export const WSL_CODEX_CONFIG_SYNC_HELPER_FILENAME = 'codex-config-sync-wsl.cjs'
 /** Built into the WSL guest bundle dir; runs the owned OpenCode text task inside the distro. */
 export const OPENCODE_WSL_TEXT_TASK_FILENAME = 'opencode-text-task-wsl.cjs'

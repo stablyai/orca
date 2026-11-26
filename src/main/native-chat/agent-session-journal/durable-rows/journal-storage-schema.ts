@@ -178,7 +178,11 @@ export const storedMessageBody = messageBody.extend({
         computer: z.string().optional(),
         phone: z.string().optional()
       }),
-      z.object({ by: z.literal('agent') })
+      z.object({
+        by: z.literal('agent'),
+        deviceId: z.string().optional(),
+        own: z.boolean().optional()
+      })
     ])
     .optional(),
   origin: text,
@@ -186,6 +190,8 @@ export const storedMessageBody = messageBody.extend({
   connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
   leaveEligible: z.literal(true).optional(),
   connectorDelivery: storedConnectorDelivery.optional(),
+  carriedCards: z.array(z.object({ messageId: z.string(), fingerprint: z.string() })).optional(),
+  carriedAskers: z.array(storedConnectorAsker.nullable()).optional(),
   connectorClaim: z
     .object({
       cutTurnId: z.string(),
