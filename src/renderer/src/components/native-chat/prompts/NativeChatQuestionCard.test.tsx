@@ -64,6 +64,26 @@ const tabsOrSpaces: AskPrompt = {
 }
 
 describe('NativeChatQuestionCard', () => {
+  it('shows the question once in the band and omits its header, count, and arrows for one step', () => {
+    renderCard({ prompt: tabsOrSpaces })
+
+    expect(container.querySelectorAll('[data-testid="native-chat-question-card-title"]')).toHaveLength(1)
+    expect(container.querySelector('[data-testid="native-chat-question-card-title"]')?.textContent).toBe(
+      'Do you prefer tabs or spaces?'
+    )
+    expect(container.textContent).not.toContain('Indent')
+    expect(container.textContent?.match(/Do you prefer tabs or spaces\?/g)).toHaveLength(1)
+    expect(container.textContent).not.toContain('1 of 1')
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(0)
+  })
+
+  it('shows the count and step arrows only for multi-step questions', () => {
+    renderCard({ prompt: { questions: [question('One'), question('Two')] } })
+
+    expect(container.textContent).toContain('1 of 2')
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
+  })
+
   it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
     container.setAttribute('data-native-chat-root', 'true')
     act(() => {

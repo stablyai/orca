@@ -82,6 +82,37 @@ export const multiline = defineFixture({
   )
 })
 
+export const multiStep = defineFixture({
+  width: 560,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Where should this run?',
+              header: 'Location',
+              multiSelect: false,
+              options: [{ label: 'Local' }, { label: 'Remote' }]
+            },
+            {
+              question: 'Which connection should it use?',
+              header: 'Connection',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
+})
+
 function PendingAsyncQuestion() {
   const [pending, setPending] = useState(false)
   const title = 'What would you most like to do this weekend?'
