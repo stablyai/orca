@@ -190,3 +190,14 @@ export const crowdedSideChats = defineFixture({
     </Strip>
   )
 })
+
+export const sideChatWidths = defineFixture({
+  width: 550,
+  render: () => (
+    <Strip>
+      <ChatTab id="parent" title="Plan a release" forked={false} width={150} />
+      <ChatTab id="side-narrow" title="Review the API" forked={false} sideChat width={150} active />
+      <ChatTab id="side-wide" title="Compare approaches" forked={false} sideChat width={220} />
+    </Strip>
+  )
+})

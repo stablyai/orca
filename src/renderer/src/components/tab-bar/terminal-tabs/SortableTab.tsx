@@ -41,6 +41,7 @@ import {
   NativeChatNamingErrorBlock,
   NativeChatNamingFailedDialog
 } from '../session-actions/NativeChatNamingFailure'
+import { SideChatMarkedName } from './SideChatMarkedName'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
 import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
 
@@ -186,16 +187,11 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
-  const sideChatName = (
-    <span className="flex min-w-0 items-center gap-1">
-      <span className="hidden shrink-0 rounded-sm border border-border bg-muted px-1 text-3xs font-medium text-muted-foreground @min-[10rem]/tab:inline-flex group-data-[side-chat-only=true]/side-chat-pane:hidden">
-        {t('components.native-chat.currentSideChat.mark', 'btw')}
-      </span>
-      <span className="min-w-0 truncate">{displayTitle}</span>
-    </span>
-  )
   const titleNode = sideChat ? (
-    sideChatName
+    <SideChatMarkedName
+      name={displayTitle}
+      mark={t('components.native-chat.currentSideChat.mark', 'btw')}
+    />
   ) : fork ? (
     <ForkMarkedName name={displayTitle} narrowIcon />
   ) : (
