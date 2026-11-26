@@ -174,7 +174,9 @@ export function useBotSidebarOlderChats(input: {
     },
     [dueTimes]
   )
-  const dueCount = useNowSnapshot(OLDER_CHATS_CLOCK_MS, countDue)
+  // Wait on the clock only while a fold time is still ahead: none (a Home-only list) or all passed
+  // leaves no tick that could change the count. A new time re-reads the count on that render.
+  const dueCount = useNowSnapshot(OLDER_CHATS_CLOCK_MS, countDue, countDue(0) < dueTimes.length)
   const now = dueCount === 0 ? Number.NEGATIVE_INFINITY : dueTimes[dueCount - 1]!
   // The workspaces whose attention can change a fold: every line under a chat already due, and every
   // line no chat claims (whose attention nobody can place). Fewer than two due: nothing can fold, so none.
