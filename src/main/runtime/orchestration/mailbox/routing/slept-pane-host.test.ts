@@ -57,6 +57,15 @@ it('a runtime pane follows its repo to the rotated runtime id only when the old 
   expect(moved.on('runtime:new')('pane')).toBe(true)
   expect(moved.on('runtime:other')('pane')).toBe(false)
   expect(moved.on('ssh:runtime:new')('pane')).toBe(false)
+  const nested = { worktreeId: 'rt::/w', connectionId: 'host-a' }
+  const viaSameTarget = hostsFor(nested, 'runtime:old', [
+    { executionHostId: 'runtime:new', connectionId: 'host-a' }
+  ])
+  expect(viaSameTarget.on('runtime:new')('pane')).toBe(true)
+  const viaOtherTarget = hostsFor(nested, 'runtime:old', [
+    { executionHostId: 'runtime:new', connectionId: 'host-b' }
+  ])
+  expect(viaOtherTarget.on('runtime:new')('pane')).toBe(false)
   const stillOld = hostsFor(record, 'runtime:old', ['runtime:new', 'runtime:old'])
   expect(stillOld.on('runtime:new')('pane')).toBe(false)
   expect(stillOld.on('runtime:old')('pane')).toBe(true)

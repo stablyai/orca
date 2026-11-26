@@ -5,6 +5,7 @@ import {
   getRepoRoutingConnectionId,
   isRemoteExecutionHostId,
   isUnresolvedOwnerHostId,
+  normalizeHostPart,
   parseExecutionHostId,
   toSshExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
@@ -41,32 +42,36 @@ export class SleptPaneHost {
         return true
       }
       const partition = this.index.hostOf(paneKey)
+      const savedTarget = normalizeHostPart(record.connectionId)
+      const remotePartition =
+        isRemoteExecutionHostId(partition) && !isUnresolvedOwnerHostId(partition)
+      if (remotePartition && (onHost(partition) || (sshTarget && savedTarget === sshTarget))) {
+        return true
+      }
       const repos = this.repos(getRepoIdFromWorktreeId(record.worktreeId)) ?? NO_REPOS
       const repoOnHost = (repo: RepoHost) => onHost(getRepoExecutionHostId(repo))
+      // A pane's saved nested SSH target must match the registration that admits it.
+      const repoDialsSaved = (repo: RepoHost) =>
+        !savedTarget || getRepoRoutingConnectionId(repo) === savedTarget
       // A record whose host was unresolved when saved lands in the local partition.
-      if (isRemoteExecutionHostId(partition) && !isUnresolvedOwnerHostId(partition)) {
-        if (onHost(partition) || (sshTarget !== undefined && record.connectionId === sshTarget)) {
-          return true
-        }
+      if (remotePartition) {
         // A rotated runtime id keeps the old partition while the repo moves to the new runtime.
         const savedCanonical = canonicalExecutionHostId(partition)
         return (
           ssh?.kind === 'runtime' &&
           parseExecutionHostId(partition)?.kind === 'runtime' &&
-          repos.some(repoOnHost) &&
+          repos.some((repo) => repoOnHost(repo) && repoDialsSaved(repo)) &&
           !repos.some(
             (repo) => canonicalExecutionHostId(getRepoExecutionHostId(repo)) === savedCanonical
           )
         )
       }
-      if (record.connectionId) {
+      if (savedTarget) {
         // A runtime's pane names the nested SSH target it dials through that runtime's registration.
         return (
-          onHost(toSshExecutionHostId(record.connectionId)) ||
+          onHost(toSshExecutionHostId(savedTarget)) ||
           (ssh?.kind === 'runtime' &&
-            repos.some(
-              (repo) => getRepoRoutingConnectionId(repo) === record.connectionId && repoOnHost(repo)
-            ))
+            repos.some((repo) => repoDialsSaved(repo) && repoOnHost(repo)))
         )
       }
       if (onHost(partition)) {
