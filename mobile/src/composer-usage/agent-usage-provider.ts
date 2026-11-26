@@ -1,4 +1,10 @@
+import * as z from 'zod'
 import { getUsageWindowSections } from '../../../src/shared/agent-usage/display/usage-provider-windows'
+import {
+  parseUsageHistory,
+  usageHistoryKey,
+  type UsageHistorySample
+} from '../../../src/shared/agent-usage/rate-limits/usage-window-history'
 import {
   getActiveProviderRateLimits,
   getOtherUsageProviders
@@ -20,7 +26,9 @@ const AGENT_USAGE_PROVIDERS = new Map<string, string>([
   ['kimi', 'kimi'],
   ['antigravity', 'antigravity'],
   ['grok', 'grok'],
-  ['cursor', 'cursor']
+  ['cursor', 'cursor'],
+  ['zcode', 'zcode'],
+  ['muse', 'muse']
 ])
 
 export type ComposerUsageWindowChoice = 'session' | 'weekly'
@@ -37,6 +45,8 @@ export type AgentUsage = {
   /** The provider id the host reports, e.g. "opencode-go". */
   provider: string
   windows: UsageWindowEntry[]
+  /** The host's note on this reading, e.g. that no window has usage yet. */
+  notice?: string | null
 }
 
 export function usageProviderForAgent(agent: string | null | undefined): string | null {
@@ -64,13 +74,12 @@ function listUsageWindows(limits: ProviderRateLimits): UsageWindowEntry[] {
   })
 }
 
-/** The tab agent's provider usage, or null when the meter should stay hidden. */
-export function selectAgentUsage(
+/** One provider's usage windows, or null when the host reports none for it. */
+export function selectProviderUsage(
   snapshot: AccountsSnapshot | null,
-  agent: string | null | undefined
+  provider: string
 ): AgentUsage | null {
-  const provider = usageProviderForAgent(agent)
-  if (!snapshot || !provider) {
+  if (!snapshot) {
     return null
   }
   const limits =
@@ -78,7 +87,62 @@ export function selectAgentUsage(
       ? getActiveProviderRateLimits(snapshot, provider)
       : getOtherUsageProviders(snapshot).find((entry) => entry.provider === provider)
   const windows = limits ? listUsageWindows(limits) : []
-  return windows.length > 0 ? { provider, windows } : null
+  return windows.length > 0 ? { provider, windows, notice: limits?.notice ?? null } : null
+}
+
+/** The tab agent's provider usage, or null when the meter should stay hidden. */
+export function selectAgentUsage(
+  snapshot: AccountsSnapshot | null,
+  agent: string | null | undefined
+): AgentUsage | null {
+  const provider = usageProviderForAgent(agent)
+  return provider ? selectProviderUsage(snapshot, provider) : null
+}
+
+const PROVIDER_ORDER: readonly string[] = [
+  'claude',
+  'codex',
+  'gemini',
+  'opencode-go',
+  'kimi',
+  'antigravity',
+  'grok',
+  'cursor',
+  'minimax',
+  'zcode',
+  'muse'
+]
+
+/** Every provider with windows, the given one first, for the sheet's provider tabs. */
+export function listProviderUsages(snapshot: AccountsSnapshot | null, first: string): AgentUsage[] {
+  if (!snapshot) {
+    return []
+  }
+  const known = [first, ...PROVIDER_ORDER.filter((provider) => provider !== first)]
+  const extra = getOtherUsageProviders(snapshot)
+    .map((limits) => limits.provider)
+    .filter((provider) => !known.includes(provider))
+  return [...known, ...extra].flatMap((provider) => {
+    const usage = selectProviderUsage(snapshot, provider)
+    return usage ? [usage] : []
+  })
+}
+
+const UsageHistoryCarrierSchema = z.object({ usageHistory: z.unknown().optional() })
+
+/** The host's used-percent samples for one window, oldest first; empty on hosts that keep none. */
+export function readUsageWindowHistory(
+  snapshot: AccountsSnapshot | null,
+  provider: string,
+  windowId: string
+): UsageHistorySample[] {
+  const carrier = UsageHistoryCarrierSchema.safeParse(snapshot?.rateLimits)
+  if (!carrier.success) {
+    return []
+  }
+  const series = parseUsageHistory(carrier.data.usageHistory)[usageHistoryKey(provider, windowId)]
+  // The phone's Hermes engine lacks toSorted.
+  return series ? [...series.samples].sort((a, b) => a.at - b.at) : []
 }
 
 // Fall back to the other standard window, then whatever the provider reports (monthly-only plans).

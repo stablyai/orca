@@ -1,3 +1,5 @@
+import type { UsagePercentageDisplay } from '../../../src/shared/agent-usage/display/usage-percentage-display'
+
 export type UsagePaceWindow = {
   usedPercent: number
   windowMinutes: number
@@ -45,4 +47,23 @@ export function computeUsagePace(window: UsagePaceWindow, now: number): UsagePac
     deltaPercent,
     runOutBeforeResetMs: runOutBeforeResetMs > 0 ? runOutBeforeResetMs : null
   }
+}
+
+/** Where an even burn puts the bar's fill now (0–100), mirrored when the bar counts what remains. */
+export function usagePaceMarkerPercent(
+  window: Pick<UsagePaceWindow, 'windowMinutes' | 'resetsAt'>,
+  now: number,
+  display: UsagePercentageDisplay
+): number | null {
+  const windowMs = window.windowMinutes * 60_000
+  if (window.resetsAt == null || windowMs <= 0) {
+    return null
+  }
+  const remainingMs = window.resetsAt - now
+  // Same staleness rule as computeUsagePace: no marker where pace is unknown.
+  if (remainingMs <= 0 || remainingMs >= windowMs) {
+    return null
+  }
+  const elapsedPercent = ((windowMs - remainingMs) / windowMs) * 100
+  return display === 'remaining' ? 100 - elapsedPercent : elapsedPercent
 }

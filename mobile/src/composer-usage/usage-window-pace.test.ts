@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeUsagePace } from './usage-window-pace'
+import { computeUsagePace, usagePaceMarkerPercent } from './usage-window-pace'
 
 const HOUR = 3_600_000
 const NOW = 1_800_000_000_000
@@ -39,5 +39,20 @@ describe('computeUsagePace', () => {
     expect(computeUsagePace({ ...fiveHourWindow(50), resetsAt: NOW - 1 }, NOW)).toEqual({
       kind: 'unknown'
     })
+  })
+})
+
+describe('usagePaceMarkerPercent', () => {
+  it('marks the elapsed share of the window, mirrored when the bar counts what remains', () => {
+    expect(usagePaceMarkerPercent(fiveHourWindow(0), NOW, 'used')).toBe(40)
+    expect(usagePaceMarkerPercent(fiveHourWindow(0), NOW, 'remaining')).toBe(60)
+  })
+
+  it('hides the marker without a live reset inside the window', () => {
+    expect(usagePaceMarkerPercent({ windowMinutes: 300, resetsAt: null }, NOW, 'used')).toBeNull()
+    expect(usagePaceMarkerPercent({ windowMinutes: 300, resetsAt: NOW }, NOW, 'used')).toBeNull()
+    expect(
+      usagePaceMarkerPercent({ windowMinutes: 300, resetsAt: NOW + 6 * HOUR }, NOW, 'used')
+    ).toBeNull()
   })
 })

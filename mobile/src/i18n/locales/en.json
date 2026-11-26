@@ -8607,8 +8607,7 @@
       "weeklyTitle": "Weekly",
       "fableWeeklyTitle": "Weekly (Fable)",
       "monthlyTitle": "Monthly",
-      "resets": "Resets {{when}} · in {{duration}}",
-      "usedLeft": "{{used}}% used · {{left}}% left"
+      "resets": "Resets {{when}} · in {{duration}}"
     },
     "pace": {
       "onPace": "On pace",
@@ -8621,6 +8620,34 @@
       "label": "Show in composer",
       "session": "5-hour",
       "weekly": "Weekly"
+    },
+    "status": {
+      "exhausted": "limit reached",
+      "onPace": "on pace",
+      "under": "under pace",
+      "ahead": "ahead of pace"
+    },
+    "stats": {
+      "points": "{{value}} pts",
+      "perDay": "{{value}}%/day",
+      "perHour": "{{value}}%/hour",
+      "left": "{{percent}}% left",
+      "last24h": "Used last 24h",
+      "lastHour": "Used last hour",
+      "vsPace": "vs. pace",
+      "budgetDaily": "Daily budget",
+      "budgetHourly": "Hourly budget",
+      "atReset": "At reset"
+    },
+    "headline": {
+      "left": "{{percent}}% left",
+      "used": "{{percent}}% used"
+    },
+    "chart": {
+      "label": "{{window}} usage over time, with a dashed line for an even pace",
+      "legend": "Dashed line: an even pace to reset",
+      "legendNoReset": "Usage since the first reading",
+      "collecting": "Collecting usage history. The graph fills in as the desktop checks usage."
     }
   },
   "mcpServers": {
