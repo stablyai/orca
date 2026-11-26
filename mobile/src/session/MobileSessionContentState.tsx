@@ -19,7 +19,8 @@ export function MobileSessionContentState({
   creating,
   createError,
   onReconnect,
-  onRetryTabs
+  onRetryTabs,
+  onNewTab
 }: {
   connState: ConnectionState
   hostName: string | null
@@ -30,6 +31,8 @@ export function MobileSessionContentState({
   createError: string
   onReconnect: (() => void) | null
   onRetryTabs: () => void
+  /** Opens the New tab sheet; the top bar has no + of its own. */
+  onNewTab: () => void
 }) {
   const t = useMobileTranslation()
   const [stalled, setStalled] = useState(false)
@@ -84,16 +87,16 @@ export function MobileSessionContentState({
     return <MobileStateView loading title={t('session.activeContent.creatingTab', 'Creating...')} />
   }
   const createFailure = createError ? describeLoadError(createError, t) : null
-  // The bar above keeps its +, so the body only says what's here.
   return (
     <MobileStateView
       icon={SquareTerminal}
       title={t('session.activeContent.noTabs', 'No tabs open')}
       message={
         createFailure?.message ??
-        t('session.activeContent.noTabsHint', 'Start an agent or a terminal with +.')
+        t('session.activeContent.noTabsStart', 'Start an agent or a terminal.')
       }
       details={createFailure?.details}
+      action={{ label: t('session.sheets.newTab', 'New tab'), onPress: onNewTab }}
     />
   )
 }

@@ -3490,17 +3490,13 @@
       "requestFailed": "Ошибка запроса: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Показывает полное название рабочего пространства и его расположение",
       "backToWorktrees": "Вернуться к рабочим деревьям",
       "moreActions": "Другие действия с сессией",
-      "openSourceControl": "Открыть управление версиями",
       "reconnectToDesktop": "Переподключиться к компьютеру",
       "showSidebar": "Показать боковую панель",
       "terminalTitle": "Терминал",
       "terminalLayout": "Расположение терминалов",
-      "fileExplorer": "Проводник файлов",
       "sourceControl": "Управление исходным кодом",
-      "newTab": "Новая вкладка",
       "quickCommands": "Быстрые команды",
       "items": "Элементы",
       "itemsNeedYou": "Элементы, вас ждут: {{count}}",
@@ -3509,8 +3505,7 @@
     "headerMoreActionsSheet": {
       "agentHistory": "История агентов",
       "agentHistoryHint": "Просмотр и возобновление сессий агентов",
-      "checks": "Проверки",
-      "checksHint": "Открыть проверки пул-реквеста"
+      "checks": "Проверки"
     },
     "markdownReader": {
       "changedOnDesktop": "Изменён на компьютере",
@@ -3723,7 +3718,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
-      "newTab": "Новая вкладка",
       "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере"
     },
     "terminalActionSheetActions": {
@@ -4049,8 +4043,6 @@
       "oneTab": "1 вкладка",
       "tabCount": "Вкладок: {{count}}",
       "actionsHint": "Показывает действия для этой вкладки",
-      "next": "Следующая вкладка",
-      "previous": "Предыдущая вкладка",
       "hint": "Показывает все вкладки"
     },
     "contentState": {

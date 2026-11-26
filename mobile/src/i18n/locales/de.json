@@ -2908,17 +2908,13 @@
       "requestFailed": "Anfrage fehlgeschlagen: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Zeigt den vollständigen Namen des Arbeitsbereichs und wo er sich befindet",
       "backToWorktrees": "Zurück zu den Worktrees",
       "moreActions": "Weitere Sitzungsaktionen",
-      "openSourceControl": "Quellcodeverwaltung öffnen",
       "reconnectToDesktop": "Erneut mit dem Desktop verbinden",
       "showSidebar": "Seitenleiste anzeigen",
       "terminalTitle": "Terminal",
       "terminalLayout": "Terminal-Layout",
-      "fileExplorer": "Datei-Explorer",
       "sourceControl": "Quellcodeverwaltung",
-      "newTab": "Neuen Tab erstellen",
       "quickCommands": "Schnellbefehle",
       "items": "Einträge",
       "textSize": "Textgröße"
@@ -2926,8 +2922,7 @@
     "headerMoreActionsSheet": {
       "agentHistory": "Agentenverlauf",
       "agentHistoryHint": "Agentensitzungen durchsuchen und fortsetzen",
-      "checks": "Checks",
-      "checksHint": "Pull-Request-Checks öffnen"
+      "checks": "Checks"
     },
     "markdownReader": {
       "changedOnDesktop": "Auf dem Desktop geändert",
@@ -3138,7 +3133,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
-      "newTab": "Neuen Tab erstellen",
       "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
     },
     "terminalActionSheetActions": {
@@ -3510,8 +3504,6 @@
       "oneTab": "1 Tab",
       "tabCount": "{{count}} Tabs",
       "actionsHint": "Zeigt Aktionen für diesen Tab",
-      "next": "Nächster Tab",
-      "previous": "Vorheriger Tab",
       "hint": "Zeigt alle Tabs"
     },
     "textSizeSheet": {
