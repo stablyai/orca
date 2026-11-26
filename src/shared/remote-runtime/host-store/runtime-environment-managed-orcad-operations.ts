@@ -21,6 +21,7 @@ import {
 } from './runtime-environment-sidecar'
 import { resolveEnvironmentFromStore } from './runtime-environment-store-operations'
 import { findCollidingEnvironmentName } from '../host-catalog/runtime-environment-name-collision'
+import { findEnvironmentWithHostKey } from '../host-catalog/runtime-environment-host-key-match'
 
 /** Registers a server Orca deployed over SSH, paired through its own loopback tunnel. */
 export function addManagedOrcadEnvironment(
@@ -30,6 +31,7 @@ export function addManagedOrcadEnvironment(
     name: string
     pairingCode: string
     orcadDeployment: OrcadSshDeploymentLink
+    moveSavedServer: boolean
     now?: number
   }
 ): KnownRuntimeEnvironment {
@@ -38,6 +40,15 @@ export function addManagedOrcadEnvironment(
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid managed pairing code.')
   }
   const known = readEnvironmentStore(userDataPath, { recoverBlankStore: true }).environments
+  const saved = args.moveSavedServer
+    ? findEnvironmentWithHostKey(
+        known.filter((entry) => entry.id !== args.id && getOrcadSshDeployment(entry)),
+        offer.publicKeyB64
+      )
+    : undefined
+  if (saved) {
+    return moveManagedOrcadSshRoute(userDataPath, saved.id, args.orcadDeployment)
+  }
   if (known.some((entry) => entry.id === args.id)) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
@@ -86,6 +97,33 @@ export function addManagedOrcadEnvironment(
     )
   }
   return registered
+}
+
+function moveManagedOrcadSshRoute(
+  userDataPath: string,
+  environmentId: string,
+  route: Pick<OrcadSshDeploymentLink, 'sshTargetId' | 'sshTargetGeneration'>
+): KnownRuntimeEnvironment {
+  const store = readPersistedEnvironmentStore(userDataPath, { recoverBlankStore: true })
+  const persisted = resolveEnvironmentFromStore(store, environmentId)
+  const entry = readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, persisted)
+  const deployment = entry && getOrcadSshDeployment(entry)
+  if (!deployment) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'This server is not managed over SSH.'
+    )
+  }
+  const { binding: _binding, ...state } = entry
+  writeRuntimeEnvironmentSidecarEntry(userDataPath, store.environments, persisted, {
+    ...state,
+    orcadDeployment: {
+      ...deployment,
+      sshTargetId: route.sshTargetId,
+      sshTargetGeneration: route.sshTargetGeneration
+    }
+  })
+  return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
 }
 
 /** Remove the persisted server and deployment sidecar only once orcad is proven exited. */

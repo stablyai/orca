@@ -39,6 +39,7 @@ import { resolveOrcadMigrationFence } from '../../ssh/migration-source/orcad-mig
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { findCollidingEnvironmentName } from '../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
+import { finishManagedOrcadRouteMove } from './orcad-managed-route-move'
 import {
   isForceableOrcadDeferral,
   managedOrcadDeployPolicy,
@@ -156,11 +157,26 @@ export async function createManagedOrcadEnvironment(
           sshTargetGeneration: targetGeneration,
           localPort,
           remotePort: ORCAD_MANAGED_REMOTE_PORT
-        }
+        },
+        moveSavedServer: !args.migration
       })
+      const outcome = serving.created ? 'created' : 'already-current'
+      if (environment.id !== environmentId) {
+        const moved = await finishManagedOrcadRouteMove(userDataPath, {
+          environmentId: environment.id,
+          target: claimed,
+          provisionalEnvironmentId: environmentId,
+          signal: args.signal
+        })
+        return {
+          outcome,
+          environment: redactRuntimeEnvironment(moved),
+          activeVersion: serving.version
+        }
+      }
       environmentRegistered = true
       return {
-        outcome: serving.created ? 'created' : 'already-current',
+        outcome,
         environment: redactRuntimeEnvironment(environment),
         activeVersion: serving.version
       }
