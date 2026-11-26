@@ -6,11 +6,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/ex
 
 const SESSION = 'chat-with-held-approval'
 
-const keptRelay = (chatKey: string): ProviderRelayInfo => ({
+const keptRelay = (chatKey: string, pid: number | null = process.pid): ProviderRelayInfo => ({
   relayId: `r-${chatKey}`,
   chatKey,
   agent: 'codex-test',
-  pid: process.pid,
+  pid,
   spawnedAtMs: 1,
   attached: false,
   exit: null,
@@ -132,10 +132,11 @@ it.skipIf(process.platform === 'win32')(
     const session = openSession()
     const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
     adopt(SESSION, session)
-    late.answer([keptRelay('another-chat')])
+    // Another chat's relay with no process, so the listing reads no process before it settles.
+    late.answer([keptRelay('another-chat', null)])
     await fresh.relays.providerRelayListingSettled()
-    // The listing reads the listed relay's process, so the settle lands after real I/O.
-    await vi.waitFor(() => expect(settle).toHaveBeenCalledTimes(1), { timeout: 5_000 })
+    await settleTurns()
+    expect(settle).toHaveBeenCalledTimes(1)
     expect(settle).toHaveBeenCalledWith(SESSION, session, 3, 6)
   }
 )
@@ -235,7 +236,6 @@ it.skipIf(process.platform === 'win32')(
     }
     daemon.recover()
     await inventory.listKeptProviderRelays(async () => [daemon.client], true)
-    await vi.waitFor(() => expect(settle).toHaveBeenCalledTimes(1), { timeout: 5_000 })
     await settleTurns()
     expect(settle).toHaveBeenCalledTimes(1)
     expect(settle).toHaveBeenCalledWith('chat-0', expect.anything(), 3, 6)
