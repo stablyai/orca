@@ -12,6 +12,11 @@ export const PINNED_GROUP_KEY = 'pinned'
 
 export const BOTS_GROUP_KEY = 'bots'
 
+/** A bot group's fold in the Bots section, by its host-qualified sidebar key. */
+export function getBotGroupFoldKey(groupEntryKey: string): string {
+  return `bot-group:${groupEntryKey}`
+}
+
 /** The whole Projects section, foldable while the Bots section sits above it. */
 export const PROJECTS_SECTION_GROUP_KEY = 'projects-section'
 

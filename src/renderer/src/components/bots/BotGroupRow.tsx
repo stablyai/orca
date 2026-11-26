@@ -21,6 +21,15 @@ import { BotSidebarRow } from './BotSidebarRow'
 import { botErrorMessage } from './bot-presentation'
 import { botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
 import { BotGroupFaces } from './BotGroupFaces'
+import { BotRowFoldToggle, botRowFoldMark } from './BotRow'
+
+/** A group's fold over its member bots' rows. */
+export type BotGroupRowFold = {
+  folded: boolean
+  /** While folded, the most urgent live status among its members. */
+  membersLive: 'permission' | 'working' | null
+  onToggle: () => void
+}
 
 /** A group in the Bots section: its members' faces, then the room's newest post. */
 export function BotGroupRow({
@@ -31,7 +40,8 @@ export function BotGroupRow({
   onOpen,
   onManageMembers,
   onDelete,
-  dragHandle = false
+  dragHandle = false,
+  fold = null
 }: {
   group: BotGroup
   home: FolderWorkspace
@@ -42,6 +52,8 @@ export function BotGroupRow({
   onManageMembers: () => void
   onDelete: () => void
   dragHandle?: boolean
+  /** Set when members list under the row. */
+  fold?: BotGroupRowFold | null
 }): React.JSX.Element {
   const t = useTranslate()
   const workspaceId = folderWorkspaceKey(home.id)
@@ -70,6 +82,7 @@ export function BotGroupRow({
       status={status}
       isUnread={home.isUnread}
       isActive={isActive}
+      expanded={fold ? !fold.folded : undefined}
       dragHandle={dragHandle}
       onOpen={() => {
         void openBotGroup(group)
@@ -89,6 +102,16 @@ export function BotGroupRow({
       }}
       age={botRowLineAge(line, now)}
       line={<BotRowLineView line={line} unread={home.isUnread} now={now} />}
+      trailing={
+        fold ? (
+          <BotRowFoldToggle
+            name={group.name}
+            folded={fold.folded}
+            mark={botRowFoldMark(fold.folded ? fold.membersLive : null, status === 'working')}
+            onToggle={fold.onToggle}
+          />
+        ) : null
+      }
       hoverDetails={() => (
         <BotGroupHoverDetails
           group={group}

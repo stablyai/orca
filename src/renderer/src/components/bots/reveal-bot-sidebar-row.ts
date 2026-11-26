@@ -2,6 +2,12 @@ import { useAppStore } from '@/store'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { readBotsEnabled } from '@/lib/bot-catalog'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
+import { botGroupFoldToOpen } from './bot-group-folders'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { readBotHostIds } from '@/lib/bot-catalog-snapshot'
+import { withKeptBotHomes } from '@/lib/bot-host-kept-homes'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { isHome } from '../../../../shared/bots/bot-homes'
 
 const READY_DEADLINE_MS = 500
 
@@ -16,6 +22,17 @@ function scrollListToRow(list: HTMLElement, row: HTMLElement): void {
   } else if (rowBox.bottom > listBox.bottom) {
     list.scrollTop += rowBox.bottom - listBox.bottom
   }
+}
+
+/**
+ * The group fold to open so a revealed bot's row lists. Only groups the section lists count: a
+ * group whose home isn't loaded has no row, so it can't already be showing the bot.
+ */
+export function botGroupFoldToReveal(entryKey: string): string | null {
+  const store = useAppStore.getState()
+  const homes = withKeptBotHomes(selectFolderWorkspaces(store), readBotHostIds())
+  const listed = readBotGroups().filter((group) => homes.some((home) => isHome(home, [group])))
+  return botGroupFoldToOpen(entryKey, listed, store.collapsedGroups)
 }
 
 function findListedRow(
@@ -65,7 +82,12 @@ export function revealBotSidebarRow({
   if (store.collapsedGroups.has(BOTS_GROUP_KEY)) {
     store.toggleCollapsedGroup(BOTS_GROUP_KEY)
   }
-  let retries = defer ? 1 : 0
+  // A bot in folded groups shows once one of them unfolds, a frame later.
+  const groupFold = botGroupFoldToReveal(sidebarKey)
+  if (groupFold) {
+    store.toggleCollapsedGroup(groupFold)
+  }
+  let retries = defer || groupFold ? 1 : 0
   let seekDeadline: number | null = null
   const step = (): void => {
     frame = null

@@ -3,9 +3,11 @@ import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
+import { botGroupMemberRefs } from '../../../../shared/bots/bot-sidebar-entries'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
@@ -23,7 +25,7 @@ export function mixable(hostId: ExecutionHostId): boolean {
 export function withUnlistedMembers(bots: readonly Bot[], group: BotGroup | undefined): Bot[] {
   const listed = new Set(bots.map(botRefKey))
   const unlisted = (group?.remoteMembers ?? []).flatMap((member): Bot[] => {
-    const hostId = `runtime:${member.environmentId}` as const
+    const hostId = toRuntimeExecutionHostId(member.environmentId)
     return listed.has(botRefKey({ hostId, id: member.botId }))
       ? []
       : [
@@ -54,12 +56,7 @@ export function withUnlistedMembers(bots: readonly Bot[], group: BotGroup | unde
 
 /** The group's members by host-qualified key, local ones first as saved, then remote ones. */
 export function groupMemberKeys(group: BotGroup): string[] {
-  return [
-    ...group.members.map((member) => botRefKey({ hostId: group.hostId, id: member.botId })),
-    ...(group.remoteMembers ?? []).map((member) =>
-      botRefKey({ hostId: `runtime:${member.environmentId}`, id: member.botId })
-    )
-  ]
+  return botGroupMemberRefs(group).map(botRefKey)
 }
 
 /** The picked bots on paired computers, as the room here saves them. A member whose computer is
