@@ -96,7 +96,7 @@ export function useWorktreeDiffFileNavigation({
   }, [activeFile, shownRowKeys])
   const workingTreeRowKey = useMemo(
     () =>
-      activeFile
+      activeFile?.mode === 'edit'
         ? (buildActiveOpenRowKeys(`unstaged::${activeFile.relativePath}`, shownRowKeys)
             .values()
             .next().value ?? null)
@@ -105,9 +105,9 @@ export function useWorktreeDiffFileNavigation({
   )
   // Kept so a hop still knows where the active file's row sat once the panel drops it.
   const [retainedRow, setRetainedRow] = useState<RetainedRow | null>(null)
-  // Scoped to the file so a retained row can never place another file's hop. A working-tree row shown again
-  // wins; otherwise the retained row wins, because once staging removes that row an edit tab would
-  // match the staged row instead.
+  // Scoped to the file so a retained row can never place another file's hop. For an edit tab a working-tree
+  // row shown again wins, then the retained row, because once staging removes that row the tab would match
+  // the staged row instead. Diff tabs always follow the row of their own staging side.
   const retainedActiveRow = activeFile && retainedRow?.fileId === activeFile.id ? retainedRow : null
   const activeRowKey = workingTreeRowKey ?? retainedActiveRow?.rowKey ?? shownRowKey
   useEffect(() => {

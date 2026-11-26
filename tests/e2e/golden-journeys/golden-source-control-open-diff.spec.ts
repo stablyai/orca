@@ -140,6 +140,28 @@ test('@golden navigates changed files in panel order from diff controls', async 
   // One click only: a hop that started from the file's new staged row would land on untracked.ts instead.
   await orcaPage.getByRole('button', { name: 'Previous change' }).click()
   await expectActiveEditor(orcaPage, fixture.worktreePath, 'deleted.ts', DELETED_DIFF)
+
+  // A partially staged file keeps its staged row for the staged diff, in both directions.
+  writeFileSync(path.join(fixture.worktreePath, 'unstaged.ts'), 'one\ntwo\nthree\n')
+  await expect
+    .poll(() => getShownRowKeys(orcaPage), { timeout: 20_000 })
+    .toContain('unstaged::unstaged.ts')
+  await openEntry(orcaPage, 'unstaged.ts', 'last')
+  await expectActiveEditor(orcaPage, fixture.worktreePath, 'unstaged.ts', PARTIALLY_STAGED_DIFF)
+  await pressDiffShortcutUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'Shift+F7',
+    'staged-only.ts',
+    STAGED_DIFF
+  )
+  await pressDiffShortcutUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'F7',
+    'unstaged.ts',
+    PARTIALLY_STAGED_DIFF
+  )
   await openEntry(orcaPage, 'staged-only.ts')
   await expectActiveEditor(orcaPage, fixture.worktreePath, 'staged-only.ts', STAGED_DIFF)
   await pressDiffShortcutUntil(
@@ -154,6 +176,8 @@ test('@golden navigates changed files in panel order from diff controls', async 
 const UNSTAGED_DIFF: RenderedEditor = { title: ' (diff)', addedLine: 'two' }
 const DELETED_DIFF: RenderedEditor = { title: ' (diff)', removedLine: 'one' }
 const STAGED_DIFF: RenderedEditor = { title: ' (staged diff)', addedLine: 'two' }
+// Only the staged line shows in the staged diff; 'three' is the new working-tree change.
+const PARTIALLY_STAGED_DIFF: RenderedEditor = { title: ' (staged diff)', addedLine: 'two' }
 // Hops into working-tree rows land on Changes tabs.
 const UNSTAGED_CHANGES: RenderedEditor = { title: '', addedLine: 'two' }
 const UNTRACKED_CHANGES: RenderedEditor = { title: '', addedLine: 'new' }
@@ -195,10 +219,16 @@ async function getShownRowKeys(page: Page): Promise<string[]> {
   )
 }
 
-async function openEntry(page: Page, relativePath: string): Promise<void> {
+// 'last' picks the Staged section's row of a file that also has working-tree changes.
+async function openEntry(
+  page: Page,
+  relativePath: string,
+  which: 'first' | 'last' = 'first'
+): Promise<void> {
   await page
     .locator('[data-testid="source-control-entry"]')
     .filter({ hasText: relativePath })
+    [which]()
     .click()
 }
 
