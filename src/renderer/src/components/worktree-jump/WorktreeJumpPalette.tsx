@@ -46,6 +46,7 @@ function WorktreeJumpPaletteContent({
     visible,
     lingering,
     resultsReady,
+    revealResultsNow,
     createLookupGuard
   })
   return (

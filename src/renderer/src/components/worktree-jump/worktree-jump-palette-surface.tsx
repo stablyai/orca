@@ -76,7 +76,8 @@ export function WorktreeJumpPaletteSurface({
         onValueChange: controller.handleCommandSelectionChange,
         className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
-          if (!resultsReady && RESULT_KEYS.has(event.key)) {
+          // Ctrl/Cmd chords include cmdk's Ctrl+N/J/P/K list navigation.
+          if (!resultsReady && (RESULT_KEYS.has(event.key) || event.ctrlKey || event.metaKey)) {
             revealResultsNow()
           }
           if (

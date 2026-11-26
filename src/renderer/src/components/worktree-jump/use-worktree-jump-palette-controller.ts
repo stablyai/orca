@@ -25,11 +25,13 @@ export function useWorktreeJumpPaletteController({
   visible,
   lingering,
   resultsReady,
+  revealResultsNow,
   createLookupGuard
 }: {
   visible: boolean
   lingering: boolean
   resultsReady: boolean
+  revealResultsNow: () => void
   createLookupGuard: WorktreePaletteRequestGuard
 }) {
   const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering, resultsReady })
@@ -187,6 +189,7 @@ export function useWorktreeJumpPaletteController({
     value: localState.query
   })
   const createAction = useWorktreeJumpPaletteCreateAction({
+    revealResultsNow,
     ...storeState,
     ...localState,
     ...filter,
