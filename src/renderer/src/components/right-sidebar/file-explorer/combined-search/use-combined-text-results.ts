@@ -45,9 +45,12 @@ export function useCombinedTextResults({
     () => buildSearchRows(deferredResults.results, collapsedFiles),
     [collapsedFiles, deferredResults.results]
   )
-  // A settled error belongs to the live draft even without an owner (a skipped scan has none).
+  // A skipped scan settles its reason without an owner; any other error must come from the current owner.
+  const errorOwnerIsLive = storedResultOwner === null || isCurrentOwner(storedResultOwner)
   const textError =
-    textQueryActive && committedQuery === query ? (searchState?.error ?? null) : null
+    textQueryActive && committedQuery === query && errorOwnerIsLive
+      ? (searchState?.error ?? null)
+      : null
   // Results are null only before a scan settles (a settled miss is an empty result), so that is pending too.
   const textPending =
     textQueryActive &&

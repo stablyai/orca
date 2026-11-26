@@ -73,12 +73,18 @@ type Field = ReturnType<typeof renderField>['result']
 type FieldState = ReturnType<typeof useCombinedSearch>
 const mounted: { field: FieldState | null; renders: string[] } = { field: null, renders: [] }
 
-function FieldHost({ worktreeId }: { worktreeId: string }): null {
+function FieldHost({
+  worktreeId,
+  worktreePath = '/repo'
+}: {
+  worktreeId: string
+  worktreePath?: string | null
+}): null {
   const [start] = useState(() => getInitialSearchDraft(worktreeId))
   const [query, setQuery] = useState(start.text)
   mounted.field = useCombinedSearch({
     activeWorktreeId: worktreeId,
-    worktreePath: '/repo',
+    worktreePath,
     query,
     setQuery,
     nameMatches: query.trim() ? { total: 0, matches: [] } : null,
@@ -200,5 +206,16 @@ describe('combined search text state', () => {
     })
     render(<FieldHost worktreeId="wt-a" />)
     expect(field().field.query).toBe('')
+  })
+
+  it('says text search is unavailable instead of No results when the scan is skipped', async () => {
+    render(<FieldHost worktreeId="wt-skip" worktreePath={null} />)
+    act(() => field().field.onQueryChange('cart'))
+    await pause()
+    const keys = mounted.renders.at(-1) ?? ''
+    expect(keys).toContain('error:text')
+    expect(keys).not.toContain('no-results')
+    expect(field().field.loading).toBe(false)
+    expect(pending).toEqual([])
   })
 })
