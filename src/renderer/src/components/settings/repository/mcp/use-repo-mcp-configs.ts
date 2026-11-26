@@ -28,6 +28,7 @@ import { extractIpcErrorMessage } from '../../../../runtime/errors/ipc-error'
 import { isWindowsUserAgent } from '../../../../app-shell/platform/user-agent-platform'
 import { loadMcpConfigInspections } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
 import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
@@ -180,7 +181,12 @@ export function useRepoMcpConfigs(repo: Repo) {
         if (mountedRef.current) {
           setConfigs(missingInspections)
           setInspectionUnavailableMessage(
-            extractIpcErrorMessage(error, 'Unable to inspect MCP configs.')
+            // Module translate, not the hook's t: t's identity tracks the language, so listing it
+            // as a dependency would rerun this inspection on every language or catalog change.
+            extractIpcErrorMessage(
+              error,
+              translate('settings.mcp.inspectConfigsFailed', 'Unable to inspect MCP configs.')
+            )
           )
         }
       }
@@ -287,7 +293,12 @@ export function useRepoMcpConfigs(repo: Repo) {
         }
       )
     } catch (error) {
-      toast.error(extractIpcErrorMessage(error, 'Failed to create MCP config.'))
+      toast.error(
+        extractIpcErrorMessage(
+          error,
+          t('settings.mcp.createConfigFailed', 'Failed to create MCP config.')
+        )
+      )
     }
   }
 

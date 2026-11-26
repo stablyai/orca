@@ -1,10 +1,13 @@
-// Whether an item's comments take attachments, and where they upload: the item's chat on the bot's
-// host, whose attachment store and claims then hold them as that chat's own.
+// Stage the files on the item's host. The host claims them for the chat receiving the comment.
 import { useMemo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { NativeChatStructuredAttachmentSession } from '../../native-chat/attachments/uploads/native-chat-attachment-owner'
-import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY
+} from '../../../../../shared/bot-runtime-capabilities'
+import { botItemAttachmentTarget } from '../../../../../shared/agent-session/agent-session-attachments'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { useBotHostLabel } from '../use-bot-host-label'
@@ -25,7 +28,7 @@ export type BotItemCommentAttachments = {
 
 export function useBotItemCommentAttachments(
   bot: Pick<Bot, 'hostId'>,
-  item: Pick<BotItem, 'chat'>,
+  item: Pick<BotItem, 'chat' | 'uid'>,
   target: BotItemCommentAttachTarget | null
 ): BotItemCommentAttachments {
   const t = useTranslate()
@@ -39,8 +42,16 @@ export function useBotItemCommentAttachments(
       BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY
     ) === true
   const { id, gone, title } = item.chat
+  const itemTarget =
+    environmentId === null ||
+    readCachedRuntimeEnvironmentCapability(
+      environmentId,
+      BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY
+    ) === true
+      ? botItemAttachmentTarget(item.uid)
+      : null
   return useMemo((): BotItemCommentAttachments => {
-    if (gone) {
+    if (!itemTarget && gone) {
       return {
         session: null,
         blocked: t(
@@ -63,6 +74,9 @@ export function useBotItemCommentAttachments(
     if (!target) {
       return { session: null, blocked: null }
     }
-    return { session: { sessionId: id, runtimeEnvironmentId: environmentId }, blocked: null }
-  }, [environmentId, gone, hostLabel, hostTakes, id, t, target, title])
+    return {
+      session: { sessionId: itemTarget ?? id, runtimeEnvironmentId: environmentId },
+      blocked: null
+    }
+  }, [environmentId, gone, hostLabel, hostTakes, id, itemTarget, t, target, title])
 }

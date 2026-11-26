@@ -67,6 +67,11 @@ export const McpServerDiscover = z.object({})
 
 // `key`: a discovered server's, from mcpServers.discover.
 export const McpServerImport = z.object({ key: z.string().min(1).max(512) })
+// `agents`: the ones its confirm said it leaves; the host takes it out of no other agent's files.
+// Absent from older clients.
+export const McpServerMove = McpServerImport.extend({
+  agents: z.array(z.string().min(1).max(64)).max(64).optional()
+})
 
 // The agents whose own MCP file Orca keeps its servers in, with the user's consent.
 export const McpServerAgentFilesAllow = z.object({
