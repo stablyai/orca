@@ -30,7 +30,7 @@ async function writeProjectSkill(): Promise<Repo> {
     join(project, '.claude', 'skills', 'ref-oss', 'SKILL.md'),
     '---\nname: ref-oss\ndescription: Look at reference repos\n---\n'
   )
-  return { id: 'repo-1', path: project, displayName: 'project' } as Repo
+  return { id: 'repo-1', path: project, displayName: 'project', badgeColor: '#000', addedAt: 0 }
 }
 
 async function homeSkillNames(linkedSkillsFolder: string, agent: 'claude' | 'codex') {
