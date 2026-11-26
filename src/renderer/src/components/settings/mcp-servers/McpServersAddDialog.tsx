@@ -22,6 +22,7 @@ import {
   type McpServerCatalogEntry
 } from '../../../../../shared/mcp-servers/mcp-server-catalog'
 import { addMcpServer, type McpServerView } from '@/runtime/mcp-servers/mcp-servers-client'
+import type { McpServerWorkspaces } from '../../../../../shared/mcp-servers/mcp-servers'
 import {
   McpServersCatalog,
   mcpCatalogLine,
@@ -34,16 +35,24 @@ import { showMcpServerChangeToast } from './mcp-server-change-toast'
 import type { McpSignInServer } from './McpServerSignInDialog'
 
 type Step =
-  | { kind: 'custom'; initial?: BotToolServer }
+  | { kind: 'custom'; initial?: BotToolServer; headerPrefixes?: Record<string, string> }
   | { kind: 'variable'; entry: McpServerCatalogEntry }
   | { kind: 'adding'; entry: McpServerCatalogEntry }
 
-/** The entry as Custom server starts it: its address, and the header its token goes in. */
-function customStart(entry: McpServerCatalogEntry): BotToolServer {
+/**
+ * The entry as Custom server starts it: its address, and an empty row for the header its token goes
+ * in. The value's fixed start (`Bearer `) is added on save, so a pasted bare token works.
+ */
+function customStart(entry: McpServerCatalogEntry): Step {
+  const headers = entry.headers ?? []
   return {
-    name: entry.id,
-    url: entry.url,
-    headers: Object.fromEntries((entry.headers ?? []).map((row) => [row.key, row.value]))
+    kind: 'custom',
+    initial: {
+      name: entry.id,
+      url: entry.url,
+      headers: Object.fromEntries(headers.map((row) => [row.key, '']))
+    },
+    headerPrefixes: Object.fromEntries(headers.map((row) => [row.key, row.value]))
   }
 }
 
@@ -139,7 +148,8 @@ export function McpServersAddDialog({
   open,
   onOpenChange,
   onSignIn,
-  onManage
+  onManage,
+  workspaces
 }: {
   target: RuntimeClientTarget
   servers: readonly McpServerView[]
@@ -147,6 +157,8 @@ export function McpServersAddDialog({
   onOpenChange: (open: boolean) => void
   onSignIn: (server: McpSignInServer) => void
   onManage: (server: McpServerView) => void
+  /** Where an added server is on from the start (a repo's "Add a server for this repo"). */
+  workspaces?: McpServerWorkspaces
 }): React.JSX.Element {
   const t = useTranslate()
   const [step, setStep] = useState<Step | null>(null)
@@ -172,7 +184,11 @@ export function McpServersAddDialog({
   const addEntry = (entry: McpServerCatalogEntry, url: string): void => {
     setStep({ kind: 'adding', entry })
     const asked = opening.current
-    void addMcpServer(target, { source: url, name: entry.id }).then(
+    void addMcpServer(target, {
+      source: url,
+      name: entry.id,
+      ...(workspaces ? { workspaces } : {})
+    }).then(
       (server) => (opening.current === asked ? added(server) : undefined),
       (error: unknown) => {
         toast.error(botToolErrorMessage(error))
@@ -184,7 +200,7 @@ export function McpServersAddDialog({
   }
   const pickEntry = (entry: McpServerCatalogEntry): void => {
     if (entry.headers) {
-      setStep({ kind: 'custom', initial: customStart(entry) })
+      setStep(customStart(entry))
     } else if (entry.variable) {
       setStep({ kind: 'variable', entry })
     } else {
@@ -207,7 +223,22 @@ export function McpServersAddDialog({
             target={target}
             servers={servers}
             initial={step.initial}
-            onAdded={(server) => (server ? added(server) : close())}
+            headerPrefixes={step.headerPrefixes}
+            workspaces={workspaces}
+            onAdded={(addedServers) => {
+              const [only] = addedServers
+              if (addedServers.length === 1 && only) {
+                added(only)
+                return
+              }
+              close()
+              void showMcpServerChangeToast(
+                target,
+                t('settings.mcpServers.toast.addedMany', '{{count}} servers added', {
+                  count: addedServers.length
+                })
+              )
+            }}
             onCancel={() => setStep(null)}
           />
         ) : step?.kind === 'variable' ? (

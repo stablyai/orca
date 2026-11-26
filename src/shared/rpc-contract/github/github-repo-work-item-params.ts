@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 
@@ -39,6 +40,8 @@ export const WorkItemsCount = RepoSelector.extend({
   query: OptionalString
 })
 
-export const RateLimit = z.object({
-  force: z.boolean().optional()
-})
+export const RateLimit = lazyZodSchema(() =>
+  z.object({
+    force: z.boolean().optional()
+  })
+)

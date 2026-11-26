@@ -1,4 +1,4 @@
-// One item, in the list's place: a frozen header (title, status, links, Reply), then the description
+// One item, in the list's place: a frozen header (title, status, links), then the description
 // (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
 // The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
@@ -16,6 +16,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
+import type { BotItemHeldAnswer } from '../../../../../shared/bots/bot-item-held-answers'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -30,6 +31,7 @@ import { useBotGroupFileContexts } from '../BotGroupTranscriptOwner'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/actions/native-chat-file-link-existence'
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
+import { NativeChatLinkPeekProvider } from '../../native-chat/links/previews/native-chat-link-peek-context'
 import { useNativeChatLinkActions } from '../../native-chat/links/actions/use-native-chat-link-actions'
 import { BotItemActivityList } from './BotItemActivityList'
 import { useBotItemStatusNotes } from './BotItemStatusNoteDialog'
@@ -38,10 +40,9 @@ import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommen
 import { NativeChatSelectionQuote } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
-import { useBotItemNeedsYouJump } from './BotItemReplyJump'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
-import { useBotItemView, useWaitingQuestionPage, type BotItemViewRead } from './use-bot-item-view'
+import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
@@ -204,8 +205,7 @@ export function BotItemBody({
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
-  const activityShown = view.eventsRead && activityMounted
-  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest, revealRow, leaveEnd } =
+  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest, leaveEnd } =
     useBotTranscriptFollow({
       itemCount: view.events.length + pending.shown.length,
       isWorking: false,
@@ -260,10 +260,11 @@ export function BotItemBody({
               answerWaiting()
               comment.current?.fill(text)
             },
-            recover: (text: string) => {
-              // A comment of its own: it answers no line, whatever the box names next.
-              answerNone()
-              comment.current?.fill(text, true)
+            restore: (answer: BotItemHeldAnswer, plain?: boolean) => {
+              // A comment of its own answers no line, whatever the box names next.
+              const bind = plain ? answerNone : answerWaiting
+              bind()
+              return comment.current?.restore(answer, plain) ?? false
             },
             type: () => {
               answerWaiting()
@@ -274,17 +275,21 @@ export function BotItemBody({
           },
     [deleted, comment, quick, answerNone, answerWaiting, steps, sent]
   )
-  const loadingTarget = useWaitingQuestionPage(item.waitingAsk ?? item.question?.eventId, view)
-  const answering = steps?.sending ?? pending.shown.some(({ failed }) => !failed)
+  // The waiting question's comment, with its words and quick replies, is read even when it is older
+  // than the loaded page (later comments can push it back): earlier pages load until it shows.
+  const questionId = item.waitingAsk ?? item.question?.eventId
+  const questionUnread =
+    view.eventsRead &&
+    questionId !== undefined &&
+    !view.events.some((event) => event.id === questionId)
+  const { hasEarlier, loadEarlier } = view
+  const earliest = view.events[0]?.id
+  useEffect(() => {
+    if (questionUnread && hasEarlier) {
+      loadEarlier()
+    }
+  }, [questionUnread, hasEarlier, earliest, loadEarlier])
   const waitingOn = waitingLine ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
-  const needsYou = useBotItemNeedsYouJump({
-    eligible: item.status === 'needs_you' && !deleted && !answering,
-    activityShown,
-    loadingTarget,
-    scrollRef,
-    revealRow,
-    comment
-  })
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
     isVisible: true
@@ -304,98 +309,98 @@ export function BotItemBody({
         <NativeChatTextAttachmentScope enabled>
           {/* A size container: the comment box caps its height to a share of this pane's (`cqh`). */}
           <NativeChatPaneFileDropSurface className="flex min-h-0 flex-1 flex-col [container-type:size]">
-            <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
-              <NativeChatLinkClickContext value={links.onLinkClick}>
-                <div className="relative flex min-h-0 flex-1 flex-col">
-                  <div
-                    ref={scrollRef}
-                    {...scrollerProps}
-                    className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
-                  >
-                    <BotItemHeader
-                      bot={bot}
-                      item={item}
-                      chatTitle={chatTitle}
-                      deleted={deleted}
-                      onStatus={(to) => notes.move([item], to)}
-                      snoozing={snoozing}
-                      scrollRef={scrollRef}
-                      reply={needsYou.reply}
-                      onHeight={needsYou.setHeaderHeight}
-                    />
-                    <div ref={contentRef} className="flex flex-col gap-4 px-3.5 pt-2">
-                      {item.description ? (
-                        <BotItemClampedText
-                          text={item.description}
-                          clampClassName="max-h-[57px]"
-                          // Opening the description above the Activity must not follow it to the end.
-                          onToggle={leaveEnd}
-                        />
-                      ) : null}
-                      {item.status === 'canceled' || item.status === 'done' ? (
-                        <BotItemCloseNote item={item} />
-                      ) : null}
-                      <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-xs @max-[284px]:grid-cols-[72px_minmax(0,1fr)]">
-                        <dt className="leading-6 text-muted-foreground">
-                          {t('bots.items.field.chat', 'Chat')}
-                        </dt>
-                        <dd className="flex h-6 items-center">
-                          <button
-                            type="button"
-                            className="flex min-w-0 items-center gap-1.5 text-foreground hover:underline"
-                            onClick={() => openBotSession(bot, item.chat.id)}
-                          >
-                            <ChatIcon className="size-3 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{chatTitle}</span>
-                            <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-                          </button>
-                        </dd>
-                        {item.doneMeans ? (
-                          <>
-                            <dt className="leading-[18px] text-muted-foreground">
-                              {t('bots.items.field.doneMeans', 'Done means')}
-                            </dt>
-                            <dd className="leading-[18px] text-foreground [overflow-wrap:anywhere]">
-                              {item.doneMeans}
-                            </dd>
-                          </>
-                        ) : null}
-                      </dl>
-                      <section className="pb-2">
-                        <h3 className="mb-1.5 text-xs text-muted-foreground">
-                          {t('bots.items.view.activity', 'Activity')}
-                        </h3>
-                        {view.hasEarlier ? (
-                          <Button variant="ghost" size="xs" onClick={view.loadEarlier}>
-                            {t('bots.items.view.showEarlier', 'Show earlier')}
-                          </Button>
-                        ) : null}
-                        {/* From the list's row, the Activity shows once read: never a false "No comments". */}
-                        {activityShown ? (
-                          <BotItemActivityList
-                            bot={bot}
-                            item={item}
-                            events={view.events}
-                            pending={pending}
-                            quickReplies={quickReplies}
-                            needsYou={needsYou.mark}
+            {/* Links in the text and the header chips find their repo from the bot's folder on its own host. */}
+            <NativeChatLinkPeekProvider
+              fileLinkContext={fileContext?.fileLinkContext ?? null}
+              hostId={bot.hostId}
+            >
+              <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
+                <NativeChatLinkClickContext value={links.onLinkClick}>
+                  <div className="relative flex min-h-0 flex-1 flex-col">
+                    <div
+                      ref={scrollRef}
+                      {...scrollerProps}
+                      className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
+                    >
+                      <BotItemHeader
+                        bot={bot}
+                        item={item}
+                        chatTitle={chatTitle}
+                        deleted={deleted}
+                        onStatus={(to) => notes.move([item], to)}
+                        snoozing={snoozing}
+                        scrollRef={scrollRef}
+                      />
+                      <div ref={contentRef} className="flex flex-col gap-4 px-3.5 pt-2">
+                        {item.description ? (
+                          <BotItemClampedText
+                            text={item.description}
+                            clampClassName="max-h-[57px]"
+                            // Opening the description above the Activity must not follow it to the end.
+                            onToggle={leaveEnd}
                           />
                         ) : null}
-                      </section>
+                        {item.status === 'canceled' || item.status === 'done' ? (
+                          <BotItemCloseNote item={item} />
+                        ) : null}
+                        <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-xs @max-[284px]:grid-cols-[72px_minmax(0,1fr)]">
+                          <dt className="leading-6 text-muted-foreground">
+                            {t('bots.items.field.chat', 'Chat')}
+                          </dt>
+                          <dd className="flex h-6 items-center">
+                            <button
+                              type="button"
+                              className="flex min-w-0 items-center gap-1.5 text-foreground hover:underline"
+                              onClick={() => openBotSession(bot, item.chat.id)}
+                            >
+                              <ChatIcon className="size-3 shrink-0 text-muted-foreground" />
+                              <span className="truncate">{chatTitle}</span>
+                              <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+                            </button>
+                          </dd>
+                          {item.doneMeans ? (
+                            <>
+                              <dt className="leading-[18px] text-muted-foreground">
+                                {t('bots.items.field.doneMeans', 'Done means')}
+                              </dt>
+                              <dd className="leading-[18px] text-foreground [overflow-wrap:anywhere]">
+                                {item.doneMeans}
+                              </dd>
+                            </>
+                          ) : null}
+                        </dl>
+                        <section className="pb-2">
+                          <h3 className="mb-1.5 text-xs text-muted-foreground">
+                            {t('bots.items.view.activity', 'Activity')}
+                          </h3>
+                          {view.hasEarlier ? (
+                            <Button variant="ghost" size="xs" onClick={view.loadEarlier}>
+                              {t('bots.items.view.showEarlier', 'Show earlier')}
+                            </Button>
+                          ) : null}
+                          {/* From the list's row, the Activity shows once read: never a false "No comments". */}
+                          {view.eventsRead && activityMounted ? (
+                            <BotItemActivityList
+                              bot={bot}
+                              item={item}
+                              events={view.events}
+                              pending={pending}
+                              quickReplies={quickReplies}
+                            />
+                          ) : null}
+                        </section>
+                      </div>
                     </div>
+                    {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-b from-transparent to-sidebar"
+                    />
+                    <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
                   </div>
-                  {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-b from-transparent to-sidebar"
-                  />
-                  <NativeChatJumpToLatest
-                    visible={showJump && !needsYou.pointsDown}
-                    onJump={jumpToLatest}
-                  />
-                </div>
-              </NativeChatLinkClickContext>
-            </NativeChatFileLinkExistenceContext>
+                </NativeChatLinkClickContext>
+              </NativeChatFileLinkExistenceContext>
+            </NativeChatLinkPeekProvider>
             <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
             <NativeChatSelectionQuote rootRef={pane} composerRef={comment} enabled={!deleted} />
             {deleted ? (
@@ -408,7 +413,6 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
-                describedBy={needsYou.describedBy}
                 onShowQuestion={(eventId) =>
                   revealBotItemComment(scrollRef.current, eventId, 'flash')
                 }

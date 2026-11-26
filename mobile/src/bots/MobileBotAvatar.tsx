@@ -86,15 +86,15 @@ function OutfitLayer({
   id: BotMascotId
   size: number
 }) {
-  const { sheet, column, row } = mobileBotOutfitAsset(outfit, id)
+  const { sheet, left, top } = mobileBotOutfitAsset(outfit, id)
   return (
     <View style={[StyleSheet.absoluteFill, styles.window]}>
       <Image
         source={sheet}
         style={{
           position: 'absolute',
-          left: -column * size,
-          top: -row * size,
+          left: left * size,
+          top: top * size,
           width: size * OUTFIT_SHEET_COLUMNS,
           height: size * OUTFIT_SHEET_ROWS
         }}
