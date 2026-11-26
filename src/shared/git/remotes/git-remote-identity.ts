@@ -71,7 +71,7 @@ export function normalizeGitRemoteUrl(remoteUrl: string): string | null {
     return null
   }
 
-  const scpMatch = trimmed.includes('://')
+  const scpMatch = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(trimmed)
     ? null
     : /^([^@\s:]+@)?(\[[^\]\s]+\]|[^:\s]+):(.+)$/.exec(trimmed)
   if (scpMatch) {

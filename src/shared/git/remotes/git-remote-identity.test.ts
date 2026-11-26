@@ -12,5 +12,8 @@ it('keeps a bracketed IPv6 SCP host intact when deriving repository identity', (
     remoteUrl: 'git@[2001:db8::1]:team/repo.git'
   })
   expect(normalizeGitRemoteUrl('git@example.test:team/repo.git')).toBe('example.test/team/repo')
+  expect(normalizeGitRemoteUrl('git@example.test:team/repo://archive.git')).toBe(
+    'example.test/team/repo://archive'
+  )
   expect(normalizeGitRemoteUrl('C:\\repos\\repo.git')).toBeNull()
 })
