@@ -8,8 +8,11 @@ import type {
   NgitWorkItemList,
   NgitWorktreeBaseResult
 } from '../../shared/ngit/ngit-work-item-types'
+import { npubEncode } from 'nostr-tools/nip19'
 import { formatNostrCloneUrl } from './nostr-repository-address'
-import { getNostrRepoRef } from './repository-ref'
+import { getNostrPushRemote, getNostrRepoRef } from './repository-ref'
+import { mergeNgitPullRequest } from './pull-request-merge'
+import { getNgitViewer } from './ngit-viewer'
 import { forgetNostrRepositorySnapshots, getNostrRepositorySnapshot } from './repository-snapshot'
 import { projectNostrComment, type ProjectedWorkItem } from './work-item-projection'
 import {
@@ -70,7 +73,8 @@ export async function getNgitWorkItemDetails(
       projectNostrComment(event, eventId, commentProfiles)
     ),
     patches: projected.patches,
-    cloneUrls: projected.cloneUrls
+    cloneUrls: projected.cloneUrls,
+    maintainers: snapshot!.repository.maintainers.map((pubkey) => npubEncode(pubkey))
   }
 }
 
@@ -118,6 +122,35 @@ export const setNgitRepoWorkItemStatus = (
   eventId: string,
   action: NgitStatusAction
 ) => write(repo, localGit, (target) => setNgitWorkItemStatus(target, type, eventId, action))
+
+export async function mergeNgitRepoPullRequest(
+  repo: Repo,
+  localGit: LocalGitExecOptions,
+  eventId: string
+): Promise<NgitMutationResult> {
+  if (getRepoRoutingConnectionId(repo)) {
+    return { ok: false, error: 'Merging is not available for SSH repositories yet.' }
+  }
+  // Decided on a fresh read: the tip, status and maintainers must be current.
+  const snapshot = await readSnapshot(repo, localGit, true)
+  const pull = snapshot?.items.find(({ item }) => item.eventId === eventId && item.type === 'pr')
+  if (!snapshot || !pull || pull.item.state !== 'open') {
+    return { ok: false, error: 'Only an open pull request can be merged. Refresh and try again.' }
+  }
+  const remote = await getNostrPushRemote(repo.path, localGit)
+  if (!remote) {
+    return { ok: false, error: 'Merging needs a nostr:// remote to push to.' }
+  }
+  const { account } = await getNgitViewer(repo.path)
+  const maintainers: string[] = snapshot.repository.maintainers.map((pubkey) => npubEncode(pubkey))
+  // Checked first, so nobody is left with a merge commit they cannot publish.
+  if (!account || !maintainers.includes(account.npub)) {
+    return { ok: false, error: 'Only a repository maintainer signed in to ngit can merge.' }
+  }
+  const result = await mergeNgitPullRequest(repo.path, pull, remote, localGit)
+  forgetNostrRepositorySnapshots()
+  return result
+}
 
 export async function resolveNgitPullRequestBase(
   repo: Repo,

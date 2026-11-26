@@ -44,6 +44,13 @@ export const NGIT_METHODS = [
       runtime.ngit.setStatus(params.repo, params.type, params.eventId, params.action)
   }),
   defineMethod({
+    name: 'ngit.mergePr',
+    permission: 'workspace',
+    params: NgitWorkItemSelector,
+    handler: async (params, { runtime }) =>
+      runtime.ngit.mergePullRequest(params.repo, params.eventId)
+  }),
+  defineMethod({
     name: 'ngit.resolvePrBase',
     permission: 'workspace',
     params: NgitWorkItemSelector,

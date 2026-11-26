@@ -37,7 +37,7 @@ function actionLabel(action: NgitStatusAction, type: NgitWorkItem['type']): stri
     reopen: translate('components.taskPage.ngit.actionReopen', 'Reopen'),
     ready: translate('components.taskPage.ngit.actionReady', 'Ready for review'),
     draft: translate('components.taskPage.ngit.actionDraft', 'Convert to draft'),
-    applied: translate('components.taskPage.ngit.actionApplied', 'Mark merged')
+    applied: translate('components.taskPage.ngit.actionAppliedElsewhere', 'Mark merged elsewhere')
   }
   return labels[action]
 }

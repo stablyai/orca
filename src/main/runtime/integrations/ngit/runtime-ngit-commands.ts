@@ -6,6 +6,7 @@ import {
   createNgitRepoIssue,
   getNgitWorkItemDetails,
   listNgitWorkItems,
+  mergeNgitRepoPullRequest,
   resolveNgitPullRequestBase,
   setNgitRepoWorkItemStatus
 } from '../../../ngit/repository-work-items'
@@ -46,6 +47,10 @@ export class RuntimeNgitCommands {
     action: NgitStatusAction
   ) {
     return setNgitRepoWorkItemStatus(...(await this.target(selector)), type, eventId, action)
+  }
+
+  async mergePullRequest(selector: string, eventId: string) {
+    return mergeNgitRepoPullRequest(...(await this.target(selector)), eventId)
   }
 
   async resolvePullRequestBase(selector: string, eventId: string) {

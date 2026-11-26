@@ -86,6 +86,18 @@ export async function getNostrRepoRef(
   )
 }
 
+/** The remote a merge may push to: a nostr one, never a `maintainers.yaml` guess. */
+export async function getNostrPushRemote(
+  repoPath: string,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<string | null> {
+  const remotes = (await listCachedRemoteNames(repoPath, null, localGitOptions)) ?? []
+  const ordered = ['origin', ...remotes.filter((name) => name !== 'origin')]
+  const ref = await firstNostrRemote(repoPath, ordered, null, localGitOptions)
+  // A GRASP git URL reads fine, but only a nostr:// push publishes the merge status.
+  return ref?.remoteName ?? null
+}
+
 async function firstNostrRemote(
   repoPath: string,
   remoteNames: readonly string[],

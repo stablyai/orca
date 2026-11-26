@@ -1968,6 +1968,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ngit.addComment': NgitCommentAdd,
   'ngit.createIssue': NgitIssueCreate,
   'ngit.listWorkItems': NgitWorkItemsList,
+  'ngit.mergePr': NgitWorkItemSelector,
   'ngit.resolvePrBase': NgitWorkItemSelector,
   'ngit.setStatus': NgitStatusChange,
   'ngit.viewer': NgitRepoSelector,

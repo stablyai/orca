@@ -54,6 +54,8 @@ export type NgitWorkItemDetails = {
   patches: NgitPatch[]
   /** Where the PR's commits can be fetched from. */
   cloneUrls: string[]
+  /** npubs allowed to merge. */
+  maintainers: string[]
 }
 
 export type NgitWorkItemList = {

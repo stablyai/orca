@@ -35,6 +35,7 @@ export function ngitApiFor(repo: Repo) {
       write('ngit.addComment', { type, eventId, body }),
     setStatus: (type: NgitWorkItem['type'], eventId: string, action: NgitStatusAction) =>
       write('ngit.setStatus', { type, eventId, action }),
+    mergePr: (eventId: string) => write('ngit.mergePr', { eventId }),
     resolvePrBase: (eventId: string) =>
       call<NgitWorktreeBaseResult>('ngit.resolvePrBase', { eventId }, WRITE_TIMEOUT_MS),
     viewer: () => call<NgitViewer>('ngit.viewer', {})

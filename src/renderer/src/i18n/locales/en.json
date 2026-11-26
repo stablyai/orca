@@ -24527,7 +24527,6 @@
     },
     "taskPage": {
       "ngit": {
-        "source": "ngit",
         "viewIssues": "Issues",
         "viewPrs": "PRs & patches",
         "stateOpen": "Open",
@@ -24567,17 +24566,21 @@
         "actionReopen": "Reopen",
         "actionReady": "Ready for review",
         "actionDraft": "Convert to draft",
-        "actionApplied": "Mark merged",
         "stateDraft": "Draft",
         "typeIssue": "Issue",
         "typePatch": "Patch",
         "typePr": "PR",
         "publishFailed": "ngit could not publish: {{error}}",
         "fetchingPr": "Fetching the pull request…",
-        "commentCount": "Comments: {{total}}",
-        "viewDetails": "View details",
         "actionCloseIssue": "Close issue",
-        "actionClosePr": "Close PR"
+        "actionClosePr": "Close PR",
+        "source": "ngit",
+        "maintainersMerge": "Only maintainers can merge.",
+        "mergePr": "Merge pull request",
+        "mergeWarning": "Creates a merge commit on {{branch}} and pushes it, publishing “{{title}}” as merged. This cannot be undone.",
+        "defaultBranch": "the default branch",
+        "confirmMerge": "Merge and push",
+        "actionAppliedElsewhere": "Mark merged elsewhere"
       }
     }
   },

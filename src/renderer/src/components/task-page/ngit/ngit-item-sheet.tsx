@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
-import { ExternalLink, LoaderCircle, RefreshCw, Send, X } from 'lucide-react'
+import { LoaderCircle, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -9,16 +8,13 @@ import {
   SheetDescription,
   SheetTitle
 } from '@/components/ui/sheet'
-import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
-import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { ngitShortId, type NgitWorkItem } from '../../../../../shared/ngit/ngit-work-item-types'
 import { NgitStateIcon, ngitStateLabel, ngitTypeLabel } from './ngit-work-item-state'
-import { NgitStatusActions } from './ngit-status-actions'
 import { useNgitItemDetails } from './use-ngit-item-details'
+import { NgitConversation } from './ngit-conversation'
+import { NgitItemActions } from './ngit-item-actions'
 
 export function NgitItemSheet({
   item,
@@ -36,23 +32,10 @@ export function NgitItemSheet({
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const { details, viewer, error, loading, writing, refresh, publish } = useNgitItemDetails(
-    item,
-    repo,
-    onChanged
-  )
-  const [comment, setComment] = useState('')
+  const state = useNgitItemDetails(item, repo, onChanged)
+  const { details, error, loading, refresh } = state
   // A reread after a write is newer than the list row.
   const shown = details?.item ?? item
-  const cannotSign = viewer !== null && viewer.account === null
-  const canComment = comment.trim().length > 0 && !writing && !cannotSign
-  const submitComment = (): void => {
-    void publish((api) => api.addComment(item.type, item.eventId, comment)).then((published) => {
-      if (published) {
-        setComment('')
-      }
-    })
-  }
   const timestamp = (value: string): string => new Date(value).toLocaleString(intlLocale)
 
   return (
@@ -128,127 +111,10 @@ export function NgitItemSheet({
         </header>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 scrollbar-sleek">
-          {error ? (
-            <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          ) : null}
-          {details?.body ? (
-            <CommentMarkdown content={details.body} variant="document" />
-          ) : details ? (
-            <p className="text-sm text-muted-foreground">
-              {t('components.taskPage.ngit.noDescription', 'No description.')}
-            </p>
-          ) : null}
-          {details?.patches.map((patch) => (
-            <details key={patch.id} className="rounded-md border border-border/50">
-              <summary className="cursor-pointer truncate px-3 py-2 text-xs">
-                <span className="font-mono text-muted-foreground">{patch.commit?.slice(0, 8)}</span>{' '}
-                {patch.subject}
-              </summary>
-              <pre className="max-h-96 overflow-auto border-t border-border/50 px-3 py-2 font-mono text-xs scrollbar-sleek">
-                {patch.content}
-              </pre>
-            </details>
-          ))}
-          {details ? (
-            <section className="space-y-3 border-t border-border/40 pt-4">
-              {details.comments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {t('components.taskPage.ngit.noComments', 'No comments yet.')}
-                </p>
-              ) : (
-                details.comments.map((entry) => (
-                  <article key={entry.id} className="rounded-md border border-border/50">
-                    <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">{entry.author}</span>
-                      <span>{timestamp(entry.createdAt)}</span>
-                      {entry.replyToId ? (
-                        <span>{t('components.taskPage.ngit.reply', 'reply')}</span>
-                      ) : null}
-                    </div>
-                    <div className="px-3 py-2">
-                      <CommentMarkdown content={entry.body} />
-                    </div>
-                  </article>
-                ))
-              )}
-            </section>
-          ) : loading ? (
-            <div className="flex items-center justify-center py-12">
-              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : null}
+          <NgitConversation details={details} error={error} loading={loading} />
         </div>
-
-        <footer className="flex-none space-y-3 border-t border-border/40 px-5 py-3">
-          {cannotSign ? (
-            <p className="text-xs text-muted-foreground">
-              {viewer.cliInstalled
-                ? t(
-                    'components.taskPage.ngit.signInToWrite',
-                    'Run ngit account login on this machine to comment or change status.'
-                  )
-                : t(
-                    'components.taskPage.ngit.installToWrite',
-                    'Install the ngit CLI on this machine to comment or change status.'
-                  )}
-            </p>
-          ) : null}
-          <div className="flex items-end gap-2">
-            <ImeTextarea
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-              placeholder={
-                viewer?.account
-                  ? t('components.taskPage.ngit.commentAs', 'Comment publicly as {{name}}…', {
-                      name: viewer.account.name ?? viewer.account.npub.slice(0, 12)
-                    })
-                  : t('components.taskPage.ngit.commentPlaceholder', 'Comment…')
-              }
-              rows={2}
-              disabled={writing || cannotSign}
-              className="min-h-9 w-full resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm shadow-xs focus:border-ring focus:outline-none focus:ring-[3px] focus:ring-ring/50"
-              onKeyDown={(event) => {
-                if (isScreenSubmitShortcut(event) && canComment) {
-                  event.preventDefault()
-                  submitComment()
-                }
-              }}
-            />
-            <Button size="sm" disabled={!canComment} onClick={submitComment} className="shrink-0">
-              {writing ? (
-                <LoaderCircle className="size-3.5 animate-spin" />
-              ) : (
-                <Send className="size-3.5" />
-              )}
-              {t('components.taskPage.ngit.comment', 'Comment')}
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(event) => openAppHttpLink(shown.url, { event })}
-            >
-              <ExternalLink className="size-3.5" />
-              {t('components.taskPage.ngit.openInBrowser', 'Open on gitworkshop.dev')}
-            </Button>
-            <div className="flex flex-wrap items-center gap-2">
-              <NgitStatusActions
-                item={shown}
-                disabled={writing || cannotSign}
-                onAction={(action) =>
-                  void publish((api) => api.setStatus(item.type, item.eventId, action))
-                }
-              />
-              {onUse ? (
-                <Button size="sm" onClick={() => onUse(shown)}>
-                  {t('components.taskPage.ngit.createWorkspace', 'Create workspace')}
-                </Button>
-              ) : null}
-            </div>
-          </div>
+        <footer className="flex-none border-t border-border/40 px-5 py-3">
+          <NgitItemActions item={item} state={state} onUse={onUse} />
         </footer>
       </SheetContent>
     </Sheet>
