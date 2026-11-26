@@ -6,6 +6,8 @@ import '../../db/dispatch-row-writer'
 import { reconcileQuestions } from './question-reconcile'
 import { readQuestionPartyFacts, type QuestionPartyReads } from './question-party-facts'
 import { QuestionReconciler } from './question-reconciler'
+import { installQuestionReconciler } from './question-reconciler-install'
+import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import { noteQuestionEdge } from '../../db/messages/question-edges'
 
 const HANDLE = 'term_coordinator'
@@ -81,6 +83,7 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
   let live: boolean
   let working: boolean
   let agentTakesInput: boolean
+  let chatRead: Promise<void>
   let told: string[]
   let reconciler: QuestionReconciler
   let stop: () => void
@@ -90,11 +93,15 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     live = true
     working = false
     agentTakesInput = false
+    chatRead = Promise.resolve()
     told = []
     reconciler = new QuestionReconciler(db, {
       reads: {
         liveSession: (root) => root,
-        chatRunning: async () => false,
+        chatRunning: async () => {
+          await chatRead
+          return false
+        },
         chatReceiving: () => null,
         chatHandingOver: () => false,
         terminal: (handle) =>
@@ -138,7 +145,7 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     await reconciler.settled()
   }
 
-  async function take(): Promise<string> {
+  function ask(): string {
     const admitted = db.admitBotRequest({
       rootKey: 'a',
       fromBotId: 'ranger',
@@ -148,7 +155,10 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
       record: '{}',
       message: { from: 'orca_session_id:asker', to: HANDLE, subject: 'q', type: 'question' }
     })
-    const id = admitted.kind === 'sent' ? admitted.message.id : ''
+    return admitted.kind === 'sent' ? admitted.message.id : ''
+  }
+
+  async function take(id = ask()): Promise<string> {
     db.markAsRead([id], { kind: 'terminal', handle: HANDLE })
     await settle()
     return id
@@ -212,6 +222,39 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     expect(told).toEqual([id])
   })
 
+  it('does not tell on a binding read before a Run bound to it mid-decision', async () => {
+    const id = ask()
+    // A worker started for the question, whose chat the decision awaits after reading the terminal.
+    const task = db.createTask({ runId: coordinate(), spec: 'work' })
+    db.unbindOtherRunsForCoordinator(
+      { terminalHandle: HANDLE, paneKey: PANE, orcaSessionId: null },
+      'run_none'
+    )
+    const linked = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_worker',
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    db.db
+      .prepare(
+        `UPDATE dispatch_contexts SET for_message_id = ?, assignee_handle = NULL,
+           assignee_orca_session_id = 'worker-chat' WHERE id = ?`
+      )
+      .run(id, linked.id)
+    let release = (): void => undefined
+    chatRead = new Promise((resolve) => (release = resolve))
+    db.markAsRead([id], { kind: 'terminal', handle: HANDLE })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const runId = coordinate()
+    noteQuestionEdge({ kind: 'mailbox', mailbox: `run:${runId}` })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    chatRead = Promise.resolve()
+    release()
+    await settle()
+    expect(told).toEqual([])
+  })
+
   it('still tells when an agent coordinator stops at its shell', async () => {
     coordinate()
     working = true
@@ -221,5 +264,73 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     reconciler.terminalChanged(TAKER, false)
     await settle()
     expect(told).toEqual([id])
+  })
+})
+
+describe('an agent seen in an agent-less terminal before its take is first decided', () => {
+  it('clears the agent-less hold, so that agent stopping tells', async () => {
+    const PANE = 'tab-1:22222222-2222-4222-8222-222222222222'
+    const db = new OrchestrationDb(':memory:')
+    const told: string[] = []
+    let panes: (change: AgentPaneChange) => void = () => undefined
+    let release = (): void => undefined
+    const firstNotices = new Promise<void>((resolve) => (release = resolve))
+    db.createRun({
+      objective: 'o',
+      coordinatorHandle: HANDLE,
+      coordinatorPaneKey: PANE,
+      coordinatorOrcaSessionId: null
+    })
+    const { reconciler, stop } = installQuestionReconciler(db, {
+      reads: {
+        liveSession: (root) => root,
+        chatReceiving: () => null,
+        chatHandingOver: () => false,
+        terminal: (handle) =>
+          handle === HANDLE
+            ? { ptyId: 'pty-1', paneKeys: [PANE], asking: false, takesInput: false, working: false }
+            : null,
+        terminalHandingOver: () => false
+      },
+      notices: async () => {
+        await firstNotices
+        return (notice) => {
+          db.recordBotRequestOutcome(notice.messageId, 'unanswered')
+          told.push(notice.messageId)
+          return 'told'
+        }
+      },
+      sessionParty: (sessionId) => `session:${sessionId}`,
+      terminalOfPty: () => HANDLE,
+      terminalOfPane: () => HANDLE,
+      subscribePanes: (listener) => {
+        panes = listener
+        return () => undefined
+      }
+    })
+    try {
+      const admitted = db.admitBotRequest({
+        rootKey: 'a',
+        fromBotId: 'ranger',
+        toBotId: 'docs',
+        purpose: 'question',
+        depth: 1,
+        record: '{}',
+        message: { from: 'orca_session_id:asker', to: HANDLE, subject: 'q', type: 'question' }
+      })
+      const id = admitted.kind === 'sent' ? admitted.message.id : ''
+      db.markAsRead([id], { kind: 'terminal', handle: HANDLE })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      // An agent starts and stops there while the first decision waits.
+      panes({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'done', at: 1 })
+      panes({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'rest', at: 2 })
+      release()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await reconciler.settled()
+      expect(told).toEqual([id])
+    } finally {
+      stop()
+      db.close()
+    }
   })
 })

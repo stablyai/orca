@@ -121,7 +121,13 @@ export class QuestionReconciler {
 
   /** Whether any question waits on an edge; false skips every lookup. */
   watching(): boolean {
-    return this.awaiting.size > 0 || this.linked.size > 0 || this.changing.size > 0
+    // An agent-less take is held before its first decision records it: an agent seen there meanwhile must clear it.
+    return (
+      this.awaiting.size > 0 ||
+      this.linked.size > 0 ||
+      this.changing.size > 0 ||
+      this.agentless.size > 0
+    )
   }
 
   private changed(key: string): void {
@@ -149,12 +155,10 @@ export class QuestionReconciler {
         if (this.awaiting.size > 0) {
           takersLinkedTo(this.db, edge.id).forEach((taker) => this.request(taker))
         }
-        // An agent-less reader holds only while it still works an open Dispatch or coordinates.
-        return this.agentless.forEach((_, party) => this.request(party))
+        return this.redecideAgentless()
       case 'mailbox':
         if (/^(run|dispatch):/.test(edge.mailbox)) {
-          // A Run or Dispatch changed readers (or ended a pass): an agent-less reader may have lost it.
-          this.agentless.forEach((_, party) => this.request(party))
+          this.redecideAgentless()
         }
         return this.mailboxChanged(edge.mailbox)
       case 'pane':
@@ -183,6 +187,15 @@ export class QuestionReconciler {
     } else {
       this.agentless.delete(taker)
     }
+  }
+
+  /** A Run or Dispatch changed readers or state: an agent-less reader holds only while it still
+   *  coordinates or works one, and a decision reading it now read its binding before the change. */
+  private redecideAgentless(): void {
+    this.agentless.forEach((_, party) => {
+      this.changed(`party:${party}`)
+      this.request(party)
+    })
   }
 
   /** An agent that took input there since (even one never seen working) now shows its stop. */
