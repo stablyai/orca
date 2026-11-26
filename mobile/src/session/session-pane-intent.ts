@@ -14,6 +14,7 @@ export const SESSION_REQUEST_PARAMS = [
   'paneKey',
   'botItem',
   'homeDraft',
+  'goalHandoff',
   SESSION_PANE_INTENT_PARAM
 ] as const
 

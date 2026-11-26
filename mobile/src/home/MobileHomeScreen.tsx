@@ -32,6 +32,7 @@ import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-
 import { useMobileHomeData } from './use-mobile-home-data'
 import { useHomeSparePage } from './use-home-spare-page'
 import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
+import { MobileCommander } from '../commander/MobileCommander'
 import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeBotsTab } from './tabs/MobileHomeBotsTab'
@@ -72,6 +73,7 @@ export function MobileHomeScreen() {
   const agentActions = useAgentListRowActions(
     tabBarHeight,
     data.sortedHosts,
+    data.allClients,
     data.applyAgentActivity
   )
 
@@ -83,7 +85,7 @@ export function MobileHomeScreen() {
   // Android Back from another tab returns to Feed before it leaves the app.
   useFocusEffect(
     useCallback(() => {
-      if (tab === 'feed') {
+      if (tab === 'feed' || tab === 'commander') {
         return undefined
       }
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -228,6 +230,13 @@ export function MobileHomeScreen() {
                     onPairDesktop={pairDesktop}
                     onOpenTasks={openTasks}
                     onOpenSettings={openSettings}
+                  />
+                ) : id === 'commander' ? (
+                  <MobileCommander
+                    onExit={() => selectTab('feed')}
+                    data={data}
+                    handlers={agentActions.handlers}
+                    active={tab === id && data.homeFocused}
                   />
                 ) : id === 'bots' ? (
                   <MobileHomeBotsTab

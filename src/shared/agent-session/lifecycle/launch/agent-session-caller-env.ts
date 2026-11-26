@@ -30,6 +30,7 @@ export const SHARED_TOOL_PROCESS_BOT_FIELD = 'orcaBot'
 
 /** A bot run's key to Orca's bot tool relay; the host names the calling bot by it, never by the session id. */
 export const BOT_TOOLS_TOKEN_ENV = 'ORCA_BOT_TOOLS_TOKEN'
+export const COMMANDER_HOME_CAPABILITY_ENV = 'ORCA_COMMANDER_HOME_CAPABILITY'
 
 /** A non-bot session's key to the relay for its host's MCP servers; it names no bot. */
 export const MCP_TOKEN_ENV = 'ORCA_MCP_TOKEN'
@@ -39,6 +40,7 @@ export const CALLER_IDENTITY_ENV: readonly string[] = [
   ORCA_AGENT_SESSION_ID_ENV,
   'ORCA_TERMINAL_HANDLE',
   BOT_TOOLS_TOKEN_ENV,
+  COMMANDER_HOME_CAPABILITY_ENV,
   MCP_TOKEN_ENV
 ]
 

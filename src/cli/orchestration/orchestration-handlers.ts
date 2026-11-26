@@ -1,3 +1,4 @@
+import { askCommanderPreference } from './commander/ask-preference'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { ORCHESTRATION_CHECK_HANDLER } from './messages/message-check-handler'
 import {
@@ -17,6 +18,7 @@ import { ORCHESTRATION_WORKER_OBSERVATION_HANDLERS } from './workers/worker-obse
 import { ORCHESTRATION_WORKER_TERMINAL_HANDLERS } from './workers/worker-terminal-handlers'
 
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration preference-ask': askCommanderPreference,
   ...ORCHESTRATION_RUN_HANDLERS,
   ...ORCHESTRATION_SEND_HANDLER,
   ...ORCHESTRATION_CHECK_HANDLER,

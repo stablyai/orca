@@ -6,6 +6,9 @@
   "author": "stablyai",
   "bin": {
     "orca": "./out/cli/index.js",
+    "orca-commander-briefing": "./scripts/commander-briefing.mjs",
+    "orca-commander-code-graph": "./scripts/commander-code-graph.mjs",
+    "orca-commander-handoff": "./scripts/commander-handoff.mjs",
     "orca-dev": "./config/scripts/development/launch/orca-dev.mjs"
   },
   "main": "./out/main/index.js",
@@ -40,6 +43,7 @@
     "prepare": "husky",
     "test": "node config/scripts/workspace-package-build/build-workspace-packages.mjs && node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node && node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts",
     "test:changed": "node config/scripts/workspace-package-build/build-workspace-packages.mjs && node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node && node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts --changed=HEAD",
+    "test:commander": "node --test scripts/commander-briefing.test.mjs scripts/commander-handoff.test.mjs scripts/commander-code-graph.test.mjs scripts/commander-memory-tools.test.mjs cloud/apps/commander-memory/memory.test.mjs cloud/apps/commander-memory/dispatch-plans.test.mjs",
     "test:node": "pnpm run build:packages && node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node && vitest run --config config/vitest.config.ts",
     "test:node-server": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/ci/unit-selection/run-node-server-tests.mjs",
     "test:skill-sharing:release": "vitest run --config config/vitest.config.ts src/main/skills",

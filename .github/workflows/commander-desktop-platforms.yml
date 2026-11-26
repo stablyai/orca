@@ -1,0 +1,57 @@
+name: Commander desktop platforms
+
+on:
+  pull_request:
+    paths:
+      - 'src/renderer/src/components/commander/**'
+      - 'src/renderer/src/lib/bot-home-navigation.ts'
+      - 'src/main/commander/**'
+      - 'src/main/runtime/rpc/methods/commander-*.ts'
+      - 'src/shared/commander/**'
+      - 'src/shared/rpc-contract/commander-*.ts'
+      - 'cloud/apps/commander-memory/**'
+      - 'scripts/commander-code-graph*.mjs'
+      - 'scripts/commander-memory-tools*.mjs'
+      - '.github/workflows/commander-desktop-platforms.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commander-platforms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  commander:
+    name: Commander on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Exercise account isolation and durable SQLite revisions
+        run: node --test cloud/apps/commander-memory/memory.test.mjs cloud/apps/commander-memory/dispatch-plans.test.mjs
+      - name: Exercise host selection, handoff editing and draft resumption
+        run: >-
+          pnpm test
+          src/shared/commander/
+          src/main/commander/
+          src/main/runtime/rpc/methods/commander-chat.test.ts
+          src/main/runtime/rpc/methods/commander-phone.test.ts
+          src/renderer/src/components/commander/
+          --maxWorkers=2
+      - name: Read tracked code with native and Git path separators
+        run: node --test scripts/commander-code-graph.test.mjs
+      - name: Resume a project handoff from a fresh MCP client
+        run: node --test scripts/commander-memory-tools.test.mjs

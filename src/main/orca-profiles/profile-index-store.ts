@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
@@ -48,8 +49,7 @@ function isProfileSummary(value: unknown): value is OrcaProfileSummary {
   if (!isObject(value)) {
     return false
   }
-  const avatar = value.avatar
-  const cloud = value.cloud
+  const { avatar, cloud } = value
   return (
     typeof value.id === 'string' &&
     // Index IDs become path segments; reject traversal outside the profile directory.
@@ -96,6 +96,14 @@ function sanitizeProfileName(value: unknown): string {
 function readProfileIndexFile(indexPath: string): OrcaProfileIndex | null {
   try {
     return normalizeProfileIndex(JSON.parse(readFileSync(indexPath, 'utf-8')))
+  } catch {
+    return null
+  }
+}
+
+async function readProfileIndexFileAsync(indexPath: string): Promise<OrcaProfileIndex | null> {
+  try {
+    return normalizeProfileIndex(JSON.parse(await readFile(indexPath, 'utf8')))
   } catch {
     return null
   }
@@ -161,6 +169,27 @@ function getActiveProfile(index: OrcaProfileIndex): OrcaProfileSummary {
     index.profiles[0] ??
     createDefaultLocalOrcaProfile(Date.now())
   )
+}
+
+/** Read the profile initialized by startup without repairing, migrating or creating state. */
+export async function readInitializedActiveOrcaProfile(
+  userDataPath: string
+): Promise<ActiveOrcaProfileState> {
+  const indexPath = getOrcaProfileIndexPath(userDataPath)
+  const index =
+    (await readProfileIndexFileAsync(indexPath)) ??
+    (await readProfileIndexFileAsync(`${indexPath}.bak`))
+  if (!index) {
+    throw new Error('Could not read the active Orca profile.')
+  }
+  const profile = getActiveProfile(index)
+  return {
+    index,
+    profile,
+    dataFile: getOrcaProfileDataFile(profile.id, userDataPath),
+    stateDatabaseFile: getOrcaProfileStateDatabaseFile(profile.id, userDataPath),
+    profileDirectory: getOrcaProfileDirectory(profile.id, userDataPath)
+  }
 }
 
 export function ensureActiveOrcaProfile(

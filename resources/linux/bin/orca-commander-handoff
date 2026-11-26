@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+launcher=$(readlink -f -- "$0")
+bin=$(dirname -- "$launcher")
+unset NODE_OPTIONS NODE_REPL_EXTERNAL_MODULE
+export ELECTRON_RUN_AS_NODE=1
+exec "$bin/../../orca-ide" "$bin/commander-handoff.mjs" "$@"

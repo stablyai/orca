@@ -253,8 +253,7 @@ export function useMobileHomeData() {
     },
     [queryClient]
   )
-  const agentActivity = useAgentActivityWrites(allClients, refetchHostAgents)
-  const { pendingActivity } = agentActivity
+  const { apply, pendingActivity } = useAgentActivityWrites(allClients, refetchHostAgents)
   const agentList = useMemo<AgentListInput>(
     () => ({
       hosts: sortedHosts,
@@ -309,8 +308,9 @@ export function useMobileHomeData() {
 
   return {
     ...connections,
+    homeFocused,
     accountsByHost,
-    applyAgentActivity: agentActivity.apply,
+    applyAgentActivity: apply,
     activeAgents,
     bots,
     botsByHost,

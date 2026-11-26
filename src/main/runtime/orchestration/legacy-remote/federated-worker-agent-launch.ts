@@ -17,6 +17,51 @@ import {
 } from './federation-effects'
 import type { FederationAttachStartInput } from '../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { assertCommanderProject } from '../../rpc/methods/orchestration/worker/start/placement/commander-project'
+import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
+import { OrchestrationError } from '../orchestration-error'
+
+export function missingWorktree(selector: string): OrchestrationError {
+  return new OrchestrationError(
+    'worktree_not_found_on_server',
+    `Worktree ${selector} was not found on the selected worker server.`
+  )
+}
+
+export async function checkFederatedWorkerPlacement(
+  runtime: OrcaRuntimeService,
+  params: FederationAttachStartInput,
+  agent: TuiAgent | undefined
+) {
+  const requestedWorktree = params.worktree
+  const createsWorktree = requestedWorktree === 'new-top-level'
+  // The same installed-agent check as every start, before anything is created here.
+  const workspace = createsWorktree
+    ? undefined
+    : await runtime.showManagedTerminalWorkspace(requestedWorktree).catch((error: unknown) => {
+        if (params.commanderProjectId && error instanceof Error) {
+          if (error.message === 'selector_not_found') {
+            throw missingWorktree(requestedWorktree)
+          }
+          throw new OrchestrationError(
+            'invalid_argument',
+            `Cannot resolve worktree ${requestedWorktree}: ${error.message}`,
+            { effectsApplied: false }
+          )
+        }
+        return undefined
+      })
+  const repoSelector = createsWorktree ? params.repo : workspace && `id:${workspace.repoId}`
+  await refuseUninstalledWorkerAgent(runtime, {
+    agent,
+    terminal: params.terminal,
+    repoSelector
+  })
+  if (params.commanderProjectId) {
+    await assertCommanderProject(runtime, params.commanderProjectId, repoSelector)
+  }
+  return workspace
+}
 
 const TERMINAL_ONLY_MESSAGE = 'A federated worker starts a terminal agent only.'
 

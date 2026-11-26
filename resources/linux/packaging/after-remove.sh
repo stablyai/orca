@@ -1,5 +1,5 @@
 #!/bin/bash
-# Remove only our install-owned symlink; preserve any unrelated /usr/bin/orca-ide.
+# Remove only links installed by this package.
 set -e
 
 # RPM passes an instance count; dpkg passes the package lifecycle action.
@@ -8,15 +8,15 @@ case "${1-}" in
   *) exit 0 ;;
 esac
 
-link="/usr/bin/orca-ide"
-
-if [ -L "$link" ]; then
+for name in orca-ide orca-commander-handoff; do
+  link="/usr/bin/$name"
+  [ -L "$link" ] || continue
   target="$(readlink "$link" || true)"
   case "$target" in
-    /opt/Orca/*|/opt/orca-ide/*|/opt/orca/*)
+    "/opt/Orca/resources/bin/$name"|"/opt/orca-ide/resources/bin/$name"|"/opt/orca/resources/bin/$name")
       rm -f "$link"
       ;;
   esac
-fi
+done
 
 exit 0

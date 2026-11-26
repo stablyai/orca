@@ -47,6 +47,9 @@ export function createLocalWorkerStartDispatch(
 ) {
   const startOptions = {
     worktree: requestedWorktree,
+    ...(params.commander
+      ? { routingDecision: params.commander.decisionPageId, routingReason: params.commander.reason }
+      : {}),
     mode,
     resolvedWorktreeId: resolvedWorktreeId ?? null,
     name: params.name ?? null,

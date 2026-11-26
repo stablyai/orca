@@ -209,7 +209,7 @@ export async function prepareWorkerStart(
   })
   if (params.spec) {
     // Before the Run resolves, so a refused spec cannot leave a new Run bound.
-    await assertWorkerStartTaskSpecWithinPromptBudget(params.spec)
+    await assertWorkerStartTaskSpecWithinPromptBudget(params.spec, params.commander)
   }
   const taskDeps = parseTaskDeps(params.deps)
   const qualified = followUp
@@ -262,7 +262,7 @@ export async function prepareWorkerStart(
     })
   }
   if (existingTask) {
-    await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)
+    await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec, params.commander)
   }
   if (followUp) {
     const placement = await followUp.place(() => {
@@ -295,7 +295,7 @@ export async function prepareWorkerStart(
       spec
     }
     followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }
-    await assertWorkerStartTaskSpecWithinPromptBudget(spec)
+    await assertWorkerStartTaskSpecWithinPromptBudget(spec, params.commander)
   }
   return {
     params,

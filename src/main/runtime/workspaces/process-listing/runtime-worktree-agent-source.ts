@@ -23,6 +23,7 @@ export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'
   providerSessionId?: string
   orcaSessionId?: string
   prompt: string
+  askSummary?: string
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null

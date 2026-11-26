@@ -5,6 +5,11 @@ import { ActionSheetModal, type ActionSheetAction } from '../components/sheets/A
 import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { homeAgentRelayHostId } from '../worktree/catalog/home-worktree-info'
+import { serverUpdateNeededNotice } from '../host-route-notice'
+import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { workspaceRouteExecutionHost } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import type { HostProfile } from '../host-catalog/host-profile'
 import type { AgentActivityChange, AgentListRow } from './agent-list-rows'
@@ -18,6 +23,7 @@ import type { AgentActivityFailure } from './use-agent-activity-writes'
 export function useAgentListRowActions(
   toastBottomInset: number,
   hosts: readonly HostProfile[],
+  clients: readonly { hostId: string; client: RpcClient }[],
   applyActivity: (
     rows: readonly AgentListRow[],
     change: AgentActivityChange
@@ -30,17 +36,29 @@ export function useAgentListRowActions(
   const [target, setTarget] = useState<AgentListRow | null>(null)
 
   const open = useCallback(
-    (row: AgentListRow, withPane: boolean) =>
+    (row: AgentListRow, withPane: boolean) => {
+      const executionHost = homeAgentRelayHostId(row.entry)
+      let routeHost
+      if (executionHost?.startsWith('runtime:')) {
+        const client = clients.find((entry) => entry.hostId === row.hostId)?.client ?? null
+        const status = client && readConnectionStatusProbe(client)
+        routeHost = workspaceRouteExecutionHost(client, status?.capabilities ?? [], executionHost)
+        if (!routeHost) {
+          showToast(serverUpdateNeededNotice(executionHost))
+          return
+        }
+      }
       openMobileSession({
+        executionHost: routeHost,
         hostId: row.hostId,
         worktreeId: row.entry.worktreeId,
         name: row.entry.workspaceName,
-        ...(row.entry.executionHost ? { executionHost: row.entry.executionHost.id } : {}),
         // Home's lists span desktops, so Back returns to them rather than to this desktop's list.
         standalone: true,
         ...(withPane ? { paneKey: row.entry.agent.paneKey } : {})
-      }),
-    [openMobileSession]
+      })
+    },
+    [clients, openMobileSession, showToast]
   )
   const change = useCallback(
     (rows: readonly AgentListRow[], next: AgentActivityChange) => {

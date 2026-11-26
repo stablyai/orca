@@ -6,6 +6,7 @@ import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import type { BotToolServer } from '../../shared/bot-tools'
 import {
   BOT_TOOLS_TOKEN_ENV,
+  COMMANDER_HOME_CAPABILITY_ENV,
   MCP_TOKEN_ENV
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
@@ -49,6 +50,17 @@ export class SessionMcpTools {
     /** Which of `servers` came from the host's list, which the `/mcp` tray shows as Orca's. */
     readonly hostNames: ReadonlySet<string>
   ) {}
+
+  withCommanderCapability(provider: string, capability: string): SessionMcpTools {
+    const extra = { [COMMANDER_HOME_CAPABILITY_ENV]: capability }
+    return new SessionMcpTools(
+      this.servers,
+      provider === 'codex' ? this.env : { ...this.env, ...extra },
+      provider === 'codex' ? { ...this.commandEnv, ...extra } : this.commandEnv,
+      this.relayed,
+      this.hostNames
+    )
+  }
 
   /**
    * A bot's launch always gets its token, whichever agent runs it: its tools present it to the

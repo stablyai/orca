@@ -22,6 +22,8 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   stage?: string
   turnStart?: string
   next?: string
+  routingDecision?: string
+  routingReason?: string
   keptOpen?: true
   /** Whether to keep it open when the caller asked nothing; older hosts send none. */
   keepOpenByDefault?: boolean
@@ -69,6 +71,8 @@ type WorkerStartFields = {
   warning?: string
   residualResources?: string[]
   nextCommands?: string[]
+  routingDecision?: string
+  routingReason?: string
   keptOpen?: true
   linkedItem?: WorkerStartReceipt['linkedItem']
   questionNotLinked?: string
@@ -107,6 +111,8 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         residualResources:
           value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
+        routingDecision: value.routingDecision,
+        routingReason: value.routingReason,
         keptOpen: value.keptOpen,
         linkedItem: value.linkedItem,
         readyBy: value.readyBy,

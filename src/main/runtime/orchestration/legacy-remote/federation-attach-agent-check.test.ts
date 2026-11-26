@@ -12,12 +12,19 @@ afterEach(() => {
 })
 
 // An older paired home starts its workers here through the legacy attach.
-it("refuses an older home's worker whose agent this computer lacks before attaching anything", async () => {
+it.each([
+  { lookupError: null, code: 'worker_agent_unavailable' },
+  { lookupError: 'selector_not_found', code: 'worktree_not_found_on_server' },
+  { lookupError: 'selector_ambiguous', code: 'invalid_argument' }
+])('refuses the start with $code before attaching anything', async ({ lookupError, code }) => {
   const { db, runtime } = createWorkerReleaseFixture()
-  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue(
+  const workspace = vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach reads only the workspace and repo ids.
     { id: 'repo::worktree', repoId: 'repo' } as never
   )
+  if (lookupError) {
+    workspace.mockRejectedValue(new Error(lookupError))
+  }
   vi.spyOn(runtime, 'detectProjectLaunchContext').mockResolvedValue({
     agents: ['claude'],
     workspaceKind: 'git-worktree',
@@ -46,13 +53,14 @@ it("refuses an older home's worker whose agent this computer lacks before attach
           taskSpec: 'work',
           protocolVersion: 3,
           worktree: 'id:repo::worktree',
-          agent: 'codex'
+          agent: 'codex',
+          commanderProjectId: lookupError ? 'github:acme/repo' : undefined
         }),
         ctx
       )
     )
     .catch((error: unknown) => error)
-  expect(refused).toMatchObject({ code: 'worker_agent_unavailable' })
+  expect(refused).toMatchObject({ code })
   expect(runtime.createTerminal).not.toHaveBeenCalled()
   expect(db.getRemoteDispatchAttachment('ctx_attach000001')).toBeUndefined()
   db.close()

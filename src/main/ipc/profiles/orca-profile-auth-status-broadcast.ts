@@ -1,3 +1,4 @@
+import { refreshCommanderRecovery } from '../../commander/commander-recovery-service'
 import { BrowserWindow } from 'electron'
 import {
   ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL,
@@ -23,6 +24,7 @@ function broadcast(channel: string, ...args: unknown[]): void {
 }
 
 export function broadcastOrcaProfileAuthStatusChanged(): void {
+  refreshCommanderRecovery()
   broadcast(ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL)
 }
 

@@ -6,6 +6,7 @@ import type { Worktree } from '../workspace-list/workspace-list-types'
 import type { WorktreeCatalogSnapshot } from './worktree-catalog-snapshot-client'
 
 export type HomeWorktreeSummary = {
+  hostId?: ExecutionHostId
   worktreeId: string
   repo: string
   branch: string
@@ -24,6 +25,7 @@ export type HomeWorktreeSummary = {
 
 /** One agent on a desktop, with the workspace it runs in. */
 export type HomeAgentEntry = Readonly<{
+  hostId?: ExecutionHostId
   worktreeId: string
   workspaceName: string
   repo: string
@@ -37,7 +39,16 @@ export type HomeAgentEntry = Readonly<{
 
 export type HomeAgentBot = Readonly<{ id: string; name: string; avatar: string | null }>
 
+export function homeAgentRelayHostId(entry: HomeAgentEntry): ExecutionHostId | undefined {
+  return (
+    entry.executionHost?.id ?? (entry.hostId?.startsWith('runtime:') ? entry.hostId : undefined)
+  )
+}
+
+export type HomeProjectWorktree = Pick<HomeWorktreeSummary, 'worktreeId' | 'repo' | 'hostId'>
+
 export type HostWorktreeInfo = {
+  projects?: readonly HomeProjectWorktree[]
   hostId: string
   totalWorktrees: number
   activeCount: number
@@ -60,7 +71,7 @@ export type HostWorktreeInfo = {
 export function homeAgentEntries(
   worktrees: readonly Pick<
     HomeWorktreeSummary,
-    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents'
+    'worktreeId' | 'displayName' | 'repo' | 'branch' | 'agents' | 'hostId'
   >[],
   botByHomeId: ReadonlyMap<string, HomeAgentBot> = new Map()
 ): HomeAgentEntry[] {
@@ -70,6 +81,7 @@ export function homeAgentEntries(
     }
     const bot = botByHomeId.get(worktree.worktreeId)
     return worktree.agents.map((agent) => ({
+      ...(worktree.hostId && { hostId: worktree.hostId }),
       worktreeId: worktree.worktreeId,
       workspaceName: bot?.name || worktree.displayName || worktree.repo,
       repo: worktree.repo,
@@ -84,6 +96,7 @@ export function homeAgentEntries(
 export type HomeWorktreeRead = {
   data:
     | {
+        projects?: readonly HomeProjectWorktree[]
         totalWorktrees: number
         activeCount: number
         agents: readonly HomeAgentEntry[]
@@ -120,6 +133,7 @@ export function homeWorktreeInfo(
   const agents = data.agents.length > 0 ? data.agents : undefined
   return {
     hostId,
+    ...(data.projects && { projects: data.projects }),
     totalWorktrees: data.totalWorktrees,
     activeCount: data.activeCount,
     ...(live ? { agents: data.agents } : agents ? { lastSeenAgents: agents } : {}),

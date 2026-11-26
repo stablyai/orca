@@ -15,6 +15,9 @@ import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/m
 import { usePairedMobileDevices } from '../components/mobile/paired-mobile-devices'
 import { useBotSlackIcons } from '../components/bots/use-bot-slack-icons'
 
+const CommanderCheckpointPublisher = lazy(
+  () => import('../components/commander/CommanderCheckpointPublisher')
+)
 const DashboardPopoutBridge = lazy(
   () => import('../components/dashboard/popout-bridge/DashboardPopoutBridge')
 )
@@ -36,6 +39,11 @@ export function AppBackgroundServices(): React.JSX.Element {
 
   return (
     <>
+      {workspaceSessionReady && window.api.commanderMemory ? (
+        <Suspense fallback={null}>
+          <CommanderCheckpointPublisher />
+        </Suspense>
+      ) : null}
       <NativeChatVisualGuestThemePublisher />
       <WorkspacePortScanner enabled={workspaceSessionReady} />
       <ActiveWorkspaceSyncGate />

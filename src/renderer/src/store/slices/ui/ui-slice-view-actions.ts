@@ -5,6 +5,14 @@ import { appendAutomationsPageEntry } from './automations-page-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    previousViewBeforeCommander: 'terminal',
+    openCommanderPage: () =>
+      set((state) => ({
+        activeView: 'commander',
+        previousViewBeforeCommander:
+          state.activeView === 'commander' ? state.previousViewBeforeCommander : state.activeView
+      })),
+    closeCommanderPage: () => set((state) => ({ activeView: state.previousViewBeforeCommander })),
     openActivityPage: () => {
       set((state) => ({
         activeView: 'activity',

@@ -9,7 +9,8 @@ import {
   PanelLeftClose,
   Server,
   SquareTerminal,
-  UserCircle
+  UserCircle,
+  Workflow
 } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
@@ -83,8 +84,10 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
 
 export function HostScreenHeader({
   controller,
-  collapsingTitle
+  collapsingTitle,
+  onOpenCommander
 }: {
+  onOpenCommander: () => void
   controller: HostScreenController
   /** Set when the list shows the host name as its PageTitle; the bar then shows it only once scrolled. */
   collapsingTitle?: CollapsingTitle
@@ -115,6 +118,14 @@ export function HostScreenHeader({
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 
   const navigationGroup: ActionSheetAction[] = [
+    {
+      id: 'commander',
+      label: t('commander.title', 'Commander Center'),
+      icon: Workflow,
+      disabled: disconnected,
+      closeBeforePress: true,
+      onPress: onOpenCommander
+    },
     {
       id: 'tasks',
       label: t('hostScreen.hostScreenHeader.tasks', 'Tasks'),

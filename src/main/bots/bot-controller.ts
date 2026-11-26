@@ -5,11 +5,10 @@ import {
   requireStoredBot
 } from './bot-controller-store'
 // The bots on this computer, each homed in a folder workspace of the hidden Bots project group.
-import { BOT_IMPORT_REPLY_FILE } from '../../shared/bots/bot-import'
 import { join } from 'node:path'
 import { BOT_AVATAR_FILE, type BotPictureRevision, isUploadAvatar } from '../../shared/bot-avatar'
 import { type Bot, botFolderName } from '../../shared/bot-types'
-import { assertBotNameFree, freeBotName } from './bot-free-name'
+import { assertBotNameFree } from './bot-free-name'
 import { areHostBotsEnabled, assertHostBotsEnabled } from './bot-team-policy'
 import { type BotRosterEntry, botRosterFields, soulSpecialty } from '../../shared/bot-roster'
 import {
@@ -19,9 +18,6 @@ import {
   type BotHostUpdates
 } from '../../shared/rpc-contract/bots-params'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
-import { proposalSoul } from '../../shared/bots/bot-proposal'
-import { botTemplate } from '../../shared/bots/bot-templates'
-import { templateBotFolderName } from '../../shared/bots/bot-template-view'
 import { botOfferCreation } from './bot-offer-creation'
 import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
 import { type BotSlackIcons, botSlackIconsOf } from './bot-slack-icon-store'
@@ -33,8 +29,8 @@ import {
   readBotHomePicture,
   writeBotAvatarImage
 } from './bot-avatar-revision'
-import { makeBotsHome } from './bot-home-workspace'
-import { newBotRecord } from './bot-new-record'
+import { commanderBotDefaults, findOrCreateCommander } from './commander-bot'
+import { createBotWithHome, makeBotsHome } from './bot-home-workspace'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 
 /** Where a new bot came from, kept on its record. */
@@ -149,60 +145,46 @@ export class BotController {
   /** `origin`: made from a link (with its sharer's SOUL.md) or a built-in template; its first turn runs
    *  first-run rules like any new bot's. */
   create(input: BotCreateParams, origin?: BotOrigin): Promise<Bot> {
-    return this.serialize(async () => {
-      const store = requireBotStore(this.deps.getStore())
-      const bot = await this.makeBot(store, input, origin)
-      store.saveBot(bot)
-      await persistBotStore(store)
-      this.deps.notifyBotsWritten(true)
-      return bot
-    })
+    return this.serialize(() =>
+      this.createAndSave(requireBotStore(this.deps.getStore()), input, origin)
+    )
+  }
+
+  ensureCommander(chooseAgent: () => Promise<Bot['agent']>): Promise<Bot> {
+    return this.serialize(() =>
+      findOrCreateCommander(
+        () => {
+          this.assertEnabled()
+          return requireBotStore(this.deps.getStore())
+        },
+        chooseAgent,
+        persistBotStore,
+        (store, input) => this.createAndSave(store, input, commanderBotDefaults)
+      )
+    )
+  }
+
+  private async createAndSave(
+    store: BotStore,
+    input: BotCreateParams,
+    origin?: BotOrigin | typeof commanderBotDefaults
+  ): Promise<Bot> {
+    const bot = await createBotWithHome(this.deps, store, input, origin)
+    store.saveBot(bot)
+    await persistBotStore(store)
+    this.deps.notifyBotsWritten(true)
+    return bot
   }
 
   /** One bot per offer card, with any `install` (a template's package) in the same step; see bot-offer-creation. */
   readonly createFromOffer = botOfferCreation<BotStore, BotOrigin>({
     queue: (work) => this.serialize(() => work(requireBotStore(this.deps.getStore()))),
-    makeBot: (store, input, origin) => this.makeBot(store, input, origin),
+    makeBot: (store, input, origin) => createBotWithHome(this.deps, store, input, origin),
     saved: async (store) => {
       await persistBotStore(store)
       this.deps.notifyBotsWritten(true)
     }
   })
-
-  /** The new bot with its home written, not yet saved; run inside the queue. */
-  private async makeBot(
-    store: BotStore,
-    input: BotCreateParams,
-    origin: BotOrigin = {}
-  ): Promise<Bot> {
-    const name = freeBotName(store.getBots(), input.name)
-    const draft = { ...newBotRecord({ ...input, name }, Date.now()), ...origin }
-    const bot: Bot = {
-      ...draft,
-      ...(await makeBotsHome(
-        this.deps,
-        store,
-        templateBotFolderName(name, botTemplate(origin.templateId), input.templateNameShown),
-        name,
-        draft.agent,
-        (path, folder) =>
-          writeBotHome(
-            this.deps.filesystem,
-            path,
-            { ...draft, folder, folderWorkspaceId: '' },
-            input.seed ? proposalSoul(name, input.seed) : undefined
-          )
-      ))
-    }
-    const reply = input.importFrom?.reply?.trim()
-    if (reply) {
-      // The old bot's own words: read as data by the import, never sent as a turn.
-      const home = botHomeFolder(bot, this.deps.botsRoot())
-      await this.deps.filesystem.makeDirectory(join(home, 'import'))
-      await this.deps.filesystem.writeText(join(home, BOT_IMPORT_REPLY_FILE), `${reply}\n`)
-    }
-    return bot
-  }
 
   /** A hidden home for a bot group, made as a bot's is: `<bots root>/group-<slug>` in Bots. */
   createGroupHome(name: string, agent: Bot['agent']) {

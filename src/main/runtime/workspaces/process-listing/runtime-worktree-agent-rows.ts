@@ -125,6 +125,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       displayName,
       ...(conversationName ? { conversationName } : {}),
       ...(conversationName && forked(source.tabId) ? { conversationForked: true as const } : {}),
+      ...(source.askSummary ? { askSummary: source.askSummary } : {}),
       lastAssistantMessage: source.lastAssistantMessage,
       toolName: source.toolName,
       toolInput: source.toolInput,

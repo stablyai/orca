@@ -1,11 +1,15 @@
+import { commanderTaskSpec } from '../../../../../../../../shared/orchestration/workers/commander-task-spec'
 import {
   isWorkerStartTaskSpecTooLarge,
   ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES
 } from '../../../../../../../../shared/orchestration/workers/orchestration-worker-start-prompt-budget'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
-export async function assertWorkerStartTaskSpecWithinPromptBudget(spec: string): Promise<void> {
-  if (!(await isWorkerStartTaskSpecTooLarge(spec))) {
+export async function assertWorkerStartTaskSpecWithinPromptBudget(
+  spec: string,
+  commander?: { guidelines: string }
+): Promise<void> {
+  if (!(await isWorkerStartTaskSpecTooLarge(commanderTaskSpec(spec, commander)))) {
     return
   }
   throw new OrchestrationError(

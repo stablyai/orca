@@ -12,7 +12,11 @@ import {
   workerStartTargetLabel
 } from '../../rpc/methods/orchestration/worker/start/worker-start-selector-refusal'
 import type { FederationEffect } from './federation-effects'
-import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
+import {
+  checkFederatedWorkerPlacement,
+  launchFederatedWorkerAgent,
+  missingWorktree
+} from './federated-worker-agent-launch'
 import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
 import {
   monitorFederatedSetup,
@@ -32,7 +36,6 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/o
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
-import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineOrchestrationMethod({
@@ -60,18 +63,15 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
-      if (params.worktree === 'current' || params.worktree === 'new-child') {
+      const { worktree: requestedWorktree } = params
+      if (requestedWorktree === 'current' || requestedWorktree === 'new-child') {
         throw new OrchestrationError(
           'invalid_argument',
           'A remote worker requires an exact existing worktree or new-top-level.'
         )
       }
-      const createsWorktree = params.worktree === 'new-top-level'
-      const targetLabel = workerStartTargetLabel({
-        ...params,
-        createsWorktree,
-        requestedWorktree: params.worktree
-      })
+      const createsWorktree = requestedWorktree === 'new-top-level'
+      const targetLabel = workerStartTargetLabel({ ...params, createsWorktree, requestedWorktree })
       const { agent, launch } = await refuseUnmatchedWorkerSelector(targetLabel, () =>
         prepareFederationWorkerLaunchOnHost({ params, createsWorktree, runtime })
       )
@@ -84,16 +84,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           })
         )
       }
-      // The same installed-agent check as every start, before anything is created here.
-      await refuseUninstalledWorkerAgent(runtime, {
-        agent,
-        terminal: params.terminal,
-        repoSelector: createsWorktree
-          ? params.repo
-          : (await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => undefined))
-              ?.repoId
-      })
-
+      const workspace = await checkFederatedWorkerPlacement(runtime, params, agent)
       const db = runtime.getOrchestrationDb()
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
       const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {
@@ -154,12 +145,10 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         if (createsWorktree) {
           ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
         } else {
-          worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
-            throw new OrchestrationError(
-              'worktree_not_found_on_server',
-              `Worktree ${params.worktree} was not found on the selected worker server.`
-            )
-          })
+          if (!workspace) {
+            throw missingWorktree(requestedWorktree)
+          }
+          worktree = workspace
           effects.push(
             { kind: 'worktree', action: 'reused', id: worktree.id },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }

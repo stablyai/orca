@@ -1,3 +1,4 @@
+import { assertCommanderProject } from './commander-project'
 import { isFolderRepo } from '../../../../../../../../shared/repository/repo-kind'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
@@ -20,15 +21,23 @@ export async function assertOrchestrationWorktreeCreationSupported(args: {
 export async function resolveExistingWorkerWorkspace(
   runtime: OrcaRuntimeService,
   creationTarget: { repoSelector: string } | undefined,
-  existingWorktree: string
+  existingWorktree: string,
+  commander?: { projectId: string }
 ): Promise<Awaited<ReturnType<OrcaRuntimeService['showManagedTerminalWorkspace']>> | undefined> {
   if (!creationTarget) {
-    return runtime.showManagedTerminalWorkspace(existingWorktree)
+    const workspace = await runtime.showManagedTerminalWorkspace(existingWorktree)
+    if (commander) {
+      await assertCommanderProject(runtime, commander.projectId, `id:${workspace.repoId}`)
+    }
+    return workspace
   }
   await assertOrchestrationWorktreeCreationSupported({
     runtime,
     repoSelector: creationTarget.repoSelector,
     existingPlacement: 'current or an exact existing folder workspace'
   })
+  if (commander) {
+    await assertCommanderProject(runtime, commander.projectId, creationTarget.repoSelector)
+  }
   return undefined
 }

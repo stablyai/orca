@@ -13,7 +13,11 @@ import {
   flattenAgentRowLineage,
   type AgentRowNode
 } from '../worktree/agent-lineage/agent-row-lineage'
-import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
+import {
+  homeAgentRelayHostId,
+  type HomeAgentEntry,
+  type HostWorktreeInfo
+} from '../worktree/catalog/home-worktree-info'
 import { agentListTitle } from './agent-list-row-text'
 
 export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
@@ -96,11 +100,11 @@ export function hostAgents(input: AgentListInput, hostId: string): HostAgents {
   const pending = (key: string) => input.pendingActivity?.[key]
   // Only what the desktop lists, less what the phone just cleared; a cleared agent's workers stay, as roots.
   const entries = (liveAgents ?? info?.lastSeenAgents ?? info?.agents ?? []).filter((entry) => {
-    const change = pending(rowKey(entry.executionHost?.id, entry.agent.paneKey))
+    const change = pending(rowKey(homeAgentRelayHostId(entry), entry.agent.paneKey))
     return entry.agent.activity?.listed !== false && !(change && 'cleared' in change)
   })
   const entryByKey = new Map(
-    entries.map((entry) => [rowKey(entry.executionHost?.id, entry.agent.paneKey), entry])
+    entries.map((entry) => [rowKey(homeAgentRelayHostId(entry), entry.agent.paneKey), entry])
   )
   const toRow = (
     node: AgentRowNode,
@@ -149,7 +153,7 @@ export function hostAgents(input: AgentListInput, hostId: string): HostAgents {
   }
   const byServer = new Map<string | undefined, HomeAgentEntry[]>()
   for (const entry of entries) {
-    const server = entry.executionHost?.id
+    const server = homeAgentRelayHostId(entry)
     const group = byServer.get(server)
     if (group) {
       group.push(entry)

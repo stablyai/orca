@@ -1,3 +1,4 @@
+import { registerCommanderMemoryHandlers } from './commander-memory-handlers'
 import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
@@ -296,5 +297,6 @@ export function registerOrcaProfileHandlers(
     }
   )
 
+  registerCommanderMemoryHandlers()
   registerOrcaProfileOrgMemberHandlers()
 }

@@ -1,3 +1,4 @@
+import { installCommanderHomePreferences } from '../commander/commander-home-session'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { DesktopCore } from './desktop-core'
@@ -252,6 +253,9 @@ export async function composeDesktopCore(
     attachBrowserHost: native.attachBrowserHost,
     registerCleanup: deps.registerCleanup
   })
+  if (!native.isServeMode()) {
+    deps.registerCleanup(installCommanderHomePreferences(runtime))
+  }
   core.rendererCheckpoint = createRendererShutdownCheckpointService(
     store,
     (session) => runtime.quitResumeRecordsFor(session),

@@ -152,7 +152,12 @@ export function nativeStackReturn(
 export type NativeSessionReturn = NativeStackReturn &
   Readonly<{
     routeKey: string
-    params: { paneKey: string; botItem: string | undefined; paneIntent: string }
+    params: {
+      paneKey: string
+      goalHandoff?: string
+      botItem: string | undefined
+      paneIntent: string
+    }
   }>
 
 const SESSION_HREF = /^\/h\/[^/?#]+\/session\/[^/?#]+(?:[?#]|$)/
@@ -186,6 +191,7 @@ export function nativeSessionReturn(
     routeKey: match.routeKey,
     params: {
       paneKey,
+      goalHandoff: hrefQuery(href).get('goalHandoff') ?? undefined,
       botItem:
         parseMobileSessionItemTarget(botItem) || parseMobileSessionAccessTarget(botItem)
           ? botItem

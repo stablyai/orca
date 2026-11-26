@@ -83,9 +83,7 @@ export function isBotAgent(agent: string): agent is BotAgent {
 }
 
 /** Memory upkeep runs tool-free, so every bot agent runs it; Look around is `lookAroundSupported`. */
-export function tidyUpSupported(agent: string): boolean {
-  return isBotAgent(agent)
-}
+export const tidyUpSupported: (agent: string) => boolean = isBotAgent
 
 export const BOT_NAME_MAX_LENGTH = 64
 export const BOT_HANDED_PAIRED_WORKSPACES_MAX = 50
@@ -273,6 +271,8 @@ export const BotSchema = z.object({
   importedFrom: BotImportedFromSchema.optional().catch(undefined),
   /** The shared link it was made from. */
   sharedFrom: BotSharedFromSchema.optional().catch(undefined),
+  /** A host-owned role that survives renaming. Only the host assigns it at creation. */
+  systemRole: z.literal('commander').optional().catch(undefined),
   /** The built-in template it was made from. */
   templateId: z.string().max(64).optional().catch(undefined),
   createdAt: z.number(),

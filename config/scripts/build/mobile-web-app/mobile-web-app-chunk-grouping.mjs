@@ -1,9 +1,10 @@
 import { realpathSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
+export const LAZY_ENTRY_NAMESPACE = 'orca-lazy-entry'
 export const ROUTE_ENTRY_NAMESPACE = 'orca-route-entry'
 
 export const isScriptOutput = (path) => path.endsWith('.js')
@@ -99,4 +100,71 @@ export function lazyModulesToAnchor(metafile, entryOutputPath) {
       )
       .map(([, output]) => [realpathSync(resolve(mobileDir, output.entryPoint)), output.exports])
   )
+}
+
+// Resolve route imports through metafile inputs before content hashes erase source paths.
+export function routeChunkNames(metafile, routes, renamed) {
+  const owner = new Map()
+  for (const [output, { inputs }] of Object.entries(metafile.outputs)) {
+    for (const input of Object.keys(inputs ?? {})) {
+      // realpath lookup matches esbuild’s symlink-resolved input keys (including macOS /var scratch paths).
+      owner.set(resolve(mobileDir, input), basename(output))
+    }
+  }
+  return Object.fromEntries(
+    routes.map(({ key, module }) => {
+      const emittedName = owner.get(realpathSync(module))
+      if (!emittedName) {
+        throw new Error(`[build-mobile-web-app-bundle] ${key} reached no output`)
+      }
+      return [key, renamed.get(emittedName).name]
+    })
+  )
+}
+
+// One lazily imported chunk per UI language; the page fetches only the active one after init.
+const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
+
+export function localeCatalogOutputs(metafile) {
+  return new Set(
+    Object.entries(metafile.outputs)
+      .filter(([, output]) => {
+        const inputs = Object.keys(output.inputs ?? {})
+        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
+      })
+      .map(([output]) => basename(output))
+  )
+}
+
+// A host opens Commander only on request. Charge its own script to the on-demand budget
+// only when every incoming edge loads it dynamically; shared dependencies remain eager.
+export function commanderChunkOnDemand(metafile, renamed) {
+  const screen = 'src/host-screen/host-commander-screen.tsx'
+  const outputs = Object.entries(metafile.outputs)
+  const chunk = outputs.find(
+    ([, { entryPoint, inputs }]) =>
+      Object.hasOwn(inputs, screen) &&
+      (entryPoint === screen ||
+        (entryPoint?.startsWith(`${LAZY_ENTRY_NAMESPACE}:`) &&
+          resolve(entryPoint.slice(LAZY_ENTRY_NAMESPACE.length + 1)) ===
+            resolve(mobileDir, screen)))
+  )
+  if (!chunk) {
+    return null
+  }
+  const [path] = chunk
+  const imports = outputs.flatMap(([, item]) => item.imports.filter((edge) => edge.path === path))
+  if (!imports.length || !imports.every((edge) => edge.kind === 'dynamic-import')) {
+    return null
+  }
+  const script = renamed.get(basename(path))
+  return { name: script.name, byteLength: script.bytes.byteLength }
+}
+
+// The entry and its chunks, without locale catalogs: what the chunk fence and its sweep table count.
+export function pageScriptCount(metafile) {
+  const catalogs = localeCatalogOutputs(metafile)
+  return Object.keys(metafile.outputs).filter(
+    (output) => isScriptOutput(output) && !catalogs.has(basename(output))
+  ).length
 }

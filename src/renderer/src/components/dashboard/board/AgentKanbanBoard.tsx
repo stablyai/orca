@@ -107,6 +107,7 @@ function KanbanColumn({
 
 type AgentKanbanBoardProps = {
   snapshot: DashboardSnapshot
+  focusedBucket?: DashboardBucket
   /** Fill the pop-out window or the in-window drawer’s host. */
   containerClassName?: string
   /** Default to the pop-out IPC relay; in-window hosts acknowledge directly in the store. */
@@ -123,6 +124,7 @@ type AgentKanbanBoardProps = {
 /** Share snapshot-fed status columns across pop-out and in-window hosts with injected routing and sizing. */
 export function AgentKanbanBoard({
   snapshot,
+  focusedBucket,
   containerClassName = 'h-screen w-screen',
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
@@ -133,8 +135,12 @@ export function AgentKanbanBoard({
   const t = useTranslate()
   const visibleBuckets = useMemo(
     () =>
-      DASHBOARD_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
-    [snapshot.showIdle]
+      focusedBucket
+        ? [focusedBucket]
+        : DASHBOARD_BUCKET_ORDER.filter(
+            (bucket) => bucket !== 'idle' || snapshot.showIdle === true
+          ),
+    [focusedBucket, snapshot.showIdle]
   )
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
