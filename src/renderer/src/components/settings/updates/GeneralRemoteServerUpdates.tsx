@@ -326,7 +326,12 @@ function statusDotClass(entry: RemoteServerUpdateEntry): string {
       return 'bg-destructive'
     case 'offline':
       return 'border border-muted-foreground'
-    default:
+    // Busy phases draw a spinner instead of this dot.
+    case 'checking':
+    case 'checking-update':
+    case 'downloading':
+    case 'queued':
+    case 'restarting':
       return 'bg-muted-foreground'
   }
 }
