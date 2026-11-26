@@ -7,9 +7,10 @@ import { readBotTurn } from './orchestration/messaging/bot-recipient'
 
 /** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was:
  *  read as every check reads a turn, so a teammate's request taken in the owner's own chat is
- *  theirs, but by index alone, so a close costs the same however long the chat ran. A turn only
- *  the whole chat could place keeps the chat's record, as closes did before they read turns;
- *  unknown, never the owner, when neither says. Only who, not where they asked. */
+ *  theirs, but by index alone from a chat already open, so a close costs the same however long the
+ *  chat ran. A turn that read can't place (a chat at rest, a crowded window, a failed read) keeps
+ *  the chat's record, as closes did before they read turns; unknown, never the owner, when there is
+ *  none. Only who, not where they asked. */
 export async function closingTurnActsFor(
   runtime: OrcaRuntimeService,
   writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> }
@@ -44,11 +45,11 @@ async function closingAskers(
         ? [...turn.askers, { kind: 'unknown' }]
         : turn.askers
   } catch (error) {
-    if (error instanceof Error && error.name === 'JournalWindowNotIndexed') {
-      return chatRecord(runtime, writer.actor.chatId)
+    // A chat at rest, or a turn only the whole chat could place, is not read: an expected answer.
+    if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
+      console.warn('[bots] could not read whom a closing turn acts for', error)
     }
-    console.warn('[bots] could not read whom a closing turn acts for', error)
-    return UNKNOWN
+    return chatRecord(runtime, writer.actor.chatId)
   }
 }
 

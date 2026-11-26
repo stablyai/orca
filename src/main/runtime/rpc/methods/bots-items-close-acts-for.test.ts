@@ -174,12 +174,18 @@ describe('whom a close keeps its closing turn acting for', () => {
     expect(await close().finally(() => (host.journalReads = reads))).toEqual([KEPT])
   })
 
-  it('is unknown, never the owner, when the read fails', async () => {
-    const { close } = closing({})
+  it("keeps the chat's record, opening nothing, when the chat is at rest or its read fails", async () => {
+    const atRest = closing({ record: { actsFor: [DANA] } })
+    host.journals.clear()
+    expect(await atRest.close()).toEqual([KEPT])
+    const failing = closing({ record: { actsFor: [DANA] } })
     const reads = host.journalReads
     host.journalReads = async () => {
       throw new Error('unreadable')
     }
-    expect(await close().finally(() => (host.journalReads = reads))).toEqual([{ kind: 'unknown' }])
+    expect(await failing.close().finally(() => (host.journalReads = reads))).toEqual([KEPT])
+    // With no record, unknown: never the owner.
+    host.journals.clear()
+    expect(await closing({}).close()).toEqual([{ kind: 'unknown' }])
   })
 })

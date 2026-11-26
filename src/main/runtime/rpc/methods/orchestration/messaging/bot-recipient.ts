@@ -15,6 +15,7 @@ import {
   type BotRequestConversation
 } from '../../../../../bots/bot-request-asker'
 import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
+import { JournalWindowNotIndexed } from '../../../../../native-chat/agent-session-journal/journal-operation-window-sends'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
@@ -260,9 +261,9 @@ export async function readBotTurn(
   sessionId: string,
   opening?: AgentJournalMessageItem,
   /** Only whom the turn acts for, by index alone: where an automation's run happened is not read,
-   *  the conversation's record is taken as saved, an unopened /clear root is not opened, and a turn
-   *  only the whole chat could place throws `JournalWindowNotIndexed`, so the read's cost never
-   *  grows with the chat's history. */
+   *  the conversation's record is taken as saved, a chat or /clear root at rest is not opened, and a
+   *  turn only the whole chat could place throws `JournalWindowNotIndexed`, as does a chat at rest,
+   *  so the read's cost never grows with the chat's history. */
   { indexedOnly = false }: { indexedOnly?: boolean } = {}
 ): Promise<{
   turn: BotActingTurn
@@ -301,6 +302,10 @@ export async function readBotTurn(
             automationPlace(runtime, sessionId, run, conversation)
         }),
     conversationWorkspaceId: workspaceId
+  }
+  if (!opening && indexedOnly && !host.hasSession(sessionId)) {
+    // Opening a chat at rest can convert its whole history first. Checked in the tick that reads.
+    throw new JournalWindowNotIndexed()
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
