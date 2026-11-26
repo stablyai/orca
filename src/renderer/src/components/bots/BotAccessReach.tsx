@@ -43,8 +43,9 @@ import { botAgentLabel, botErrorMessage } from './bot-presentation'
 import { useBotGoogleReach } from './google/google-connect-client'
 import { setBotGoogle } from './google/set-bot-google'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
-import { NewBotDialog } from './NewBotDialog'
 import { useBotAccessPlace } from './use-bot-access-place'
+
+import { LazyNewBotDialog } from './lazy-bot-dialogs'
 import { useBotConnectorPaged } from './bot-connector-page'
 
 const copy = (t: Translate, id: BotAccessCopyId, values: Record<string, unknown> = {}): string =>
@@ -263,11 +264,11 @@ function BotAccessAdvice({
       return
     }
     if (fix === 'google-off') {
-      // Undo gives back the same accounts it had.
-      const accounts = bot.googleAccounts
+      // Undo gives back the same accounts it had, from off: a change made since is refused.
+      const undo = (): Promise<boolean> => turnOnGoogle(bot, bot.googleAccounts, { on: false })
       run(
         () => setBotGoogle(bot, false),
-        () => setApplied((all) => [...all, { fix, undo: () => turnOnGoogle(bot, accounts) }])
+        () => setApplied((all) => [...all, { fix, undo }])
       )
       return
     }
@@ -360,7 +361,7 @@ function BotAccessAdvice({
           </Button>
         </p>
       ) : null}
-      {newBotOpen ? <NewBotDialog open onOpenChange={setNewBotOpen} /> : null}
+      {newBotOpen ? <LazyNewBotDialog open onOpenChange={setNewBotOpen} /> : null}
     </section>
   )
 }

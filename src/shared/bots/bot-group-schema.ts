@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { BOT_AGENTS, BotNameSchema } from '../bot-types'
+import { BotAgentReadSchema, BotNameSchema } from '../bot-types'
 import { BotAvatarColorSchema } from './bot-avatar-color'
 import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
@@ -46,7 +46,7 @@ export const BotGroupRemoteMemberSchema = z.object({
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
   avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
-  agent: z.enum(BOT_AGENTS)
+  agent: BotAgentReadSchema
 })
 
 /** Bots on paired computers, as the desktop listed them for a create or edit. */
@@ -105,7 +105,7 @@ const BotGroupTurnSchema = z.object({
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
   avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
-  agent: z.enum(BOT_AGENTS),
+  agent: BotAgentReadSchema,
   sessionId: z.string(),
   mailbox: z.literal(true).optional(),
   /** Read from the worker relation, never stored on the message. */

@@ -21,6 +21,7 @@ export const PAIRED_DESKTOP_METHODS = [
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',
+  'mobileRelay.hosts.unwatchRows',
   // The sidebar's Project grouping inputs, as the desktop window last published them.
   'mobileRelay.projectSections',
   'speech.dictation.cancel',

@@ -1,29 +1,32 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
 } from '../text-generation-failure-copy'
 import type { GenerationOutputParse } from './opencode-generation-output'
 
-const messageSchema = z.discriminatedUnion('role', [
-  z
-    .object({
-      role: z.literal('assistant'),
-      content: z.string().optional(),
-      tool_calls: z
-        .array(
-          z.object({
-            type: z.literal('function'),
-            id: z.string(),
-            function: z.object({ name: z.string(), arguments: z.string() })
-          })
-        )
-        .optional()
-    })
-    .refine((message) => message.content !== undefined || (message.tool_calls?.length ?? 0) > 0),
-  z.object({ role: z.literal('tool'), tool_call_id: z.string(), content: z.string() }),
-  z.object({ role: z.literal('meta'), type: z.string() })
-])
+const messageSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('role', [
+    z
+      .object({
+        role: z.literal('assistant'),
+        content: z.string().optional(),
+        tool_calls: z
+          .array(
+            z.object({
+              type: z.literal('function'),
+              id: z.string(),
+              function: z.object({ name: z.string(), arguments: z.string() })
+            })
+          )
+          .optional()
+      })
+      .refine((message) => message.content !== undefined || (message.tool_calls?.length ?? 0) > 0),
+    z.object({ role: z.literal('tool'), tool_call_id: z.string(), content: z.string() }),
+    z.object({ role: z.literal('meta'), type: z.string() })
+  ])
+)
 
 export function parseKimiGenerationOutput(stdout: string): GenerationOutputParse {
   let answer = ''
@@ -50,7 +53,7 @@ export function parseKimiGenerationOutput(stdout: string): GenerationOutputParse
   return { ok: true, text: answer }
 }
 
-const failureSchema = z.object({ type: z.literal('error'), code: z.string() })
+const failureSchema = lazyZodSchema(() => z.object({ type: z.literal('error'), code: z.string() }))
 
 export function findKimiGenerationFailure(stdout: string): TextGenerationFailureFields | null {
   for (const line of stdout.split(/\r?\n/)) {

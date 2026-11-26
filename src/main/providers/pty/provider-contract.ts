@@ -62,6 +62,8 @@ export type PtySpawnOptions = {
   /** Main-validated home provenance for an automatic Codex session resume. */
   codexHomePathOverride?: { value: string | null }
   command?: string
+  /** Pane text shown before a fresh startup command, written by the host that spawns its shell. */
+  startupNotice?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
   /** Minimal allowlisted launch ownership preserved by daemon reattach. */
@@ -225,7 +227,9 @@ export type IPtyProvider = {
     /** Foreground proof and root-PID lookups only: read `ptyIds` from their established owner.
      *  Never a census or an exit proof that reads a PTY's absence as its end. */
     targetOwnerOnly?: boolean
-    /** Diagnostic display only: include generations whose routing owner is unverifiable. */
+    /** Every listed generation, including those whose routing owner is unverifiable: for diagnostic
+     *  display, and for exit proof, where a live unrouted generation must not read as gone. Never for
+     *  routing input. Still requires a complete inventory. */
     includeUnrouted?: boolean
   }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>

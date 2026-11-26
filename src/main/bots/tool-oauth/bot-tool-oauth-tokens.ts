@@ -156,13 +156,13 @@ function usable(entry: BotToolOAuthEntry | null): BotToolGrant | null {
 
 /**
  * The token to send now, refreshed first when it's about to expire; null when there is no sign-in
- * a call could use. Never opens a browser and never registers.
+ * a call could use. Never opens a browser and never registers. `entry`: the sign-in just read.
  */
 export async function botToolAccessToken(
   key: BotToolOAuthKey,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  entry = readBotToolOAuth(key.folder, key.credentialId)
 ): Promise<BotToolGrant | null> {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
   if (!entry?.record.tokens) {
     return null
   }
@@ -181,9 +181,9 @@ export async function botToolAccessToken(
 export async function refreshBotToolAccessToken(
   key: BotToolOAuthKey,
   rejected: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  entry = readBotToolOAuth(key.folder, key.credentialId)
 ): Promise<BotToolGrant | null> {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
   const tokens = entry?.record.tokens
   if (!entry || !tokens) {
     return null
@@ -215,7 +215,11 @@ export async function refreshBotToolAccessToken(
 
 /** The row's state, from the store alone; null when the tool isn't one Orca signs in to. */
 export function botToolSignInState(key: BotToolOAuthKey): BotToolSignInStatus | null {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
+  return botToolSignInStatusOf(readBotToolOAuth(key.folder, key.credentialId))
+}
+
+/** `botToolSignInState` for a sign-in already read. */
+export function botToolSignInStatusOf(entry: BotToolOAuthEntry | null): BotToolSignInStatus | null {
   if (!entry) {
     return null
   }

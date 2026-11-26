@@ -26,6 +26,7 @@ import {
   getCodexStatusActiveId,
   scopeCodexAuthFailure
 } from '../accounts/status-bar-codex-accounts'
+import { useWslOwnerUsage } from './use-wsl-owner-usage'
 
 // Why: accounts.list({refreshUsage}) waits for the host's provider fetches.
 const REMOTE_USAGE_REFRESH_TIMEOUT_MS = 30_000
@@ -34,8 +35,9 @@ const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 /** A remote host (SSH-managed server or paired Orca) that owns the shown usage. */
 export type RemoteUsageOwner = {
   environmentId: string | null
+  /** Set when this desktop stands in for a WSL host's distro, whose accounts it manages. */
+  wslDistro?: string
   label: string
-  unavailableReason?: string
 }
 
 /** The Settings host that owns the shown usage, so its accounts open beside the bar's numbers. */
@@ -45,7 +47,10 @@ export function getUsageOwnerHostScope(
   return remoteOwner
     ? remoteOwner.environmentId
       ? { kind: 'environment', environmentId: remoteOwner.environmentId }
-      : null
+      : // Why: this desktop manages a WSL host's distro accounts, so its Settings own them.
+        remoteOwner.wslDistro
+        ? LOCAL_TARGET
+        : null
     : LOCAL_TARGET
 }
 
@@ -83,10 +88,7 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   return useAccountOwnerUsage(owner, local, visibleHostLabel)
 }
 
-/**
- * One owner's accounts and usage: this device's store, or the host's own accounts stream.
- * A null (unproven) or WSL owner has no account transport, so it shows unavailable usage.
- */
+/** One owner's usage: this device's store, a host's accounts stream, or a WSL host's distro read; null shows unavailable. */
 export function useAccountOwnerUsage(
   owner: AccountOwner | null,
   local: RateLimitState,
@@ -95,7 +97,7 @@ export function useAccountOwnerUsage(
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const wslDistro = owner?.wslHostDistro ?? null
-  const unavailable = owner === null || wslDistro !== null
+  const unavailable = owner === null
   const ownerId = owner && !wslDistro ? runtimeTargetEnvironmentId(owner.target) : null
   const ownerName = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === ownerId)?.name ?? null
@@ -129,15 +131,10 @@ export function useAccountOwnerUsage(
 
   const remoteOwner = useMemo<RemoteUsageOwner | null>(
     () =>
-      unavailable || ownerId
+      unavailable || ownerId || wslDistro
         ? {
             environmentId: ownerId,
-            unavailableReason: wslDistro
-              ? t(
-                  'auto.components.status.bar.UsageRosterPanel.wslUsageNotShown',
-                  "WSL usage isn't shown yet"
-                )
-              : undefined,
+            ...(wslDistro ? { wslDistro } : {}),
             label:
               hostLabel ||
               (wslDistro ? `WSL ${wslDistro}` : null) ||
@@ -148,6 +145,7 @@ export function useAccountOwnerUsage(
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
     [ownerId, ownerName, hostLabel, unavailable, wslDistro, languageRevision, t]
   )
+  const wsl = useWslOwnerUsage(wslDistro, local, remoteOwner?.label ?? '')
 
   const ownerState = useMemo<OwnerUsageState>(() => {
     if (!remoteOwner) {
@@ -160,6 +158,9 @@ export function useAccountOwnerUsage(
         reason: 'unsupported-owner',
         lastKnown: null
       }
+    }
+    if (wsl.state) {
+      return wsl.state
     }
     if (!owned) {
       return { kind: 'remote-pending' }
@@ -175,7 +176,7 @@ export function useAccountOwnerUsage(
     return owned.snapshot?.rateLimits
       ? { kind: 'remote', ownerLabel: remoteOwner.label, rateLimits: owned.snapshot.rateLimits }
       : { kind: 'remote-pending' }
-  }, [remoteOwner, owned, unavailable])
+  }, [remoteOwner, owned, unavailable, wsl.state])
 
   const rateLimits = useMemo(
     () => resolveOwnerUsageRateLimits(local, ownerState, t),
@@ -217,6 +218,6 @@ export function useAccountOwnerUsage(
     rateLimits: scopedRateLimits,
     accounts: ownerId ? (owned?.snapshot ?? null) : null,
     remoteOwner,
-    refreshRemote: ownerId || unavailable ? refreshRemote : null
+    refreshRemote: wslDistro ? wsl.refresh : ownerId || unavailable ? refreshRemote : null
   }
 }

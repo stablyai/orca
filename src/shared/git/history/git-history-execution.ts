@@ -188,7 +188,10 @@ export async function loadGitHistoryFromExecutor(
     options.branchOnly &&
     rawBaseRef?.revision &&
     !(await isBaseOfItself(git, cwd, rawBaseRef, currentRef))
-      ? await resolveBranchRange(git, cwd, headOid, rawBaseRef, options.branchListOnly === true)
+      ? options.branchListOnly
+        ? // The list needs only the base to cut at; its counts cost several Git commands per read.
+          { range: { baseRef: rawBaseRef }, unpushedIds: null }
+        : await resolveBranchRange(git, cwd, headOid, rawBaseRef)
       : undefined
 
   // Keep upstream/base as comparison metadata so old workspaces do not gain fetched commits outside their HEAD history.

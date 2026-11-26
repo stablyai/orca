@@ -15,6 +15,7 @@ import type { RpcContext } from '../../../rpc/core'
 import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/worker-start-method'
 import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { OrchestrationError } from '../../orchestration-error'
+import { nameRefusingComputer } from '../../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
 import { workerLaunchAgent } from '../../workers/launch/worker-launch-observation'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
@@ -217,7 +218,7 @@ export async function startRemoteOwnedWorker(
       createdByStart: !existingTask,
       nothingSent
     })
-    throw inServerTerms(error, { server: server.name, forward })
+    throw nameRefusingComputer(inServerTerms(error, { server: server.name, forward }), server.name)
   }
   const started = StartedOnServer.safeParse(receipt)
   if (started.success) {

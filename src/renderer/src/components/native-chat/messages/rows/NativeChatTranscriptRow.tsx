@@ -32,6 +32,10 @@ import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/nativ
 export type NativeChatTranscriptRowContext = {
   turnBot?: BotChatIdentity | null
   agentName?: string
+  /** The chat this transcript shows, so its replies draw at once only text their own chat held. */
+  heldTextSession?: string
+  /** Its agent saves replies as they grow, so a reply that redraws whole may show only saves. */
+  savesAsRepliesGrow?: boolean
   /** The prompts the host says still wait on the person; absent from an older host. */
   actionablePromptIds?: readonly string[] | undefined
   expandSignal: boolean
@@ -219,6 +223,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}
           revealedDiff={
+            context.revealedDiff &&
             (workRun ?? [message]).some((member) => member.id === context.revealedDiff?.messageId)
               ? (context.revealedDiff ?? undefined)
               : undefined
