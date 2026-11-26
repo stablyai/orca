@@ -115,6 +115,14 @@ const launch = (agent: TuiAgent, command: string): TerminalMcpLaunchInput => ({
   codexHome: null
 })
 
+function mcpConfigPath(command: string | null | undefined): string {
+  const parsed = tokenizeStartupCommand(command ?? '', 'posix')
+  const prefix = '--mcp-config='
+  const flag = parsed.ok ? parsed.tokens.find((token) => token.startsWith(prefix)) : undefined
+  expect(flag).toBeDefined()
+  return flag!.slice(prefix.length)
+}
+
 describe('the host list in an agent terminal', () => {
   it('leaves the launch exactly as it was while the switch is off', async () => {
     const hostFolder = await hostList()
@@ -204,14 +212,13 @@ describe('the host list in an agent terminal', () => {
     const input = launch('claude', 'claude --foo')
     const { command } = await withTerminalMcpServers(input, { relay, hostFolder })
 
-    const file = /--mcp-config=([^' ]+)/.exec(command ?? '')?.[1]
-    expect(file).toBeDefined()
+    const file = mcpConfigPath(command)
     expect(command).not.toContain(TOKEN)
     expect(command).not.toContain('hunter2')
     if (process.platform !== 'win32') {
-      expect(statSync(file!).mode & 0o777).toBe(0o600)
+      expect(statSync(file).mode & 0o777).toBe(0o600)
     }
-    const config = readFileSync(file!, 'utf8')
+    const config = readFileSync(file, 'utf8')
     expect(config).not.toContain(TOKEN)
     expect(config).not.toContain('hunter2')
     expect(JSON.parse(config).mcpServers).toEqual({
@@ -265,8 +272,7 @@ describe('the host list in an agent terminal', () => {
     ])
     const input = launch('claude', 'claude')
     const { command } = await withTerminalMcpServers(input, { relay, hostFolder: folder })
-    const file = /--mcp-config=([^' ]+)/.exec(command ?? '')?.[1]
-    const config = readFileSync(file!, 'utf8')
+    const config = readFileSync(mcpConfigPath(command), 'utf8')
     expect(JSON.parse(config).mcpServers).toEqual({
       pg: {
         type: 'http',
