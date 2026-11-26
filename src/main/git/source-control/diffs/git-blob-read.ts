@@ -129,7 +129,11 @@ async function readGitBlob(
         return bufferToBlob(raw, filePath, rawEncoding)
       }
       if (!isBinaryBuffer(stdout) && isUtf8(stdout)) {
-        return { content: decodeChangedTextconvOutput(raw, stdout), isBinary: false, exists: true }
+        return {
+          content: decodeChangedTextconvOutput(raw, stdout, rawEncoding === 'utf-8'),
+          isBinary: false,
+          exists: true
+        }
       }
     }
     return bufferToBlob(stdout, filePath, options.encoding)
@@ -142,14 +146,37 @@ async function readGitBlob(
   }
 }
 
-function decodeChangedTextconvOutput(raw: Buffer, output: Buffer): string {
+function decodeChangedTextconvOutput(raw: Buffer, output: Buffer, rawIsUtf8: boolean): string {
   const utf8 = output.toString('utf8')
   const gb18030 = tryDecodeGb18030(output)
   if (gb18030 === undefined || gb18030 === utf8) {
     return utf8
   }
-  // A driver can edit only line endings. Override an ambiguous result only for an exact transcode.
-  return tryDecodeGb18030(raw) === utf8 ? utf8 : gb18030
+  const original = rawIsUtf8 ? raw.toString('utf8') : tryDecodeGb18030(raw)
+  return original !== undefined && sameTextIgnoringCrlf(original, utf8) ? utf8 : gb18030
+}
+
+// A driver can transcode and normalize line endings in one pass. Compare without copying either diff.
+function sameTextIgnoringCrlf(left: string, right: string): boolean {
+  if (left === right) {
+    return true
+  }
+  let i = 0
+  let j = 0
+  while (i < left.length && j < right.length) {
+    if (left.startsWith('\r\n', i)) {
+      i++
+    }
+    if (right.startsWith('\r\n', j)) {
+      j++
+    }
+    if (left[i] !== right[j]) {
+      return false
+    }
+    i++
+    j++
+  }
+  return i === left.length && j === right.length
 }
 
 function tryDecodeGb18030(bytes: Buffer): string | undefined {

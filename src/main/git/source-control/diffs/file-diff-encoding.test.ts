@@ -135,3 +135,28 @@ it.each([
     expect((await read('gb18030')).modifiedContent).toBe(gb18030)
   }
 )
+
+it.each([
+  { attributes: '-text', bytes: 'c4e3bac30d0a953282360a', expected: '你好\n𠀀\n' },
+  { attributes: '-text working-tree-encoding=GB18030', bytes: 'c4e3bac30d0a', expected: '你好\n' }
+])(
+  'recognizes a transcode with CRLF normalization ($attributes)',
+  async ({ attributes, bytes, expected }) => {
+    const { repo, git } = createRepo()
+    writeFileSync(join(repo, '.gitattributes'), `sample.c ${attributes} diff=legacy\n`)
+    writeFileSync(
+      join(repo, 'convert.cjs'),
+      [
+        "const bytes = require('node:fs').readFileSync(process.argv[2])",
+        "const text = new TextDecoder('gb18030').decode(bytes)",
+        "process.stdout.write(text.replaceAll('\\r\\n', '\\n'), 'utf8')"
+      ].join('\n')
+    )
+    git('config', 'diff.legacy.textconv', 'node convert.cjs')
+    writeFileSync(join(repo, 'sample.c'), Buffer.from(bytes, 'hex'))
+    git('add', 'sample.c')
+
+    const diff = await getDiff(repo, 'sample.c', true, false, { encoding: 'gb18030' })
+    expect(diff.modifiedContent).toBe(expected)
+  }
+)
