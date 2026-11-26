@@ -11,12 +11,7 @@ import {
 import { dirname, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
-
-/**
- * Where a verified copy waits while the open check runs: nothing opens it by this name, so a
- * process that has it open now is one that already did, which the check sees.
- */
-export const HELD_COPIES_DIR = '.orca-copies-deleting'
+import { HELD_COPIES_DIR } from './codex-account-history-cleanup-manifest'
 
 /** A copy whose bytes its ~/.codex original holds, with both files as they were checked. */
 export type VerifiedCopy = { copy: string; original: string; copyKey: string; originalKey: string }

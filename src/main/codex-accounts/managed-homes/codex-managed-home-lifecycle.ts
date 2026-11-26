@@ -17,11 +17,11 @@ import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
 import {
   CODEX_DATABASE_FILE,
+  HELD_COPIES_DIR,
   HISTORY_CLEANUP_MANIFEST,
   PRE_SHARE_DATABASES_DIR,
   SET_ASIDE_ROLLOUTS_DIR
 } from '../../codex/history/shared-store/codex-account-history-cleanup-manifest'
-import { HELD_COPIES_DIR } from '../../codex/history/shared-store/codex-account-copies-hold'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
