@@ -146,7 +146,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
 }): React.JSX.Element {
   const messagingEnabled = useNativeChatMessagingStyle()
   const messaging = messagingEnabled && context.turnBot != null
-  const arriving = useNativeChatMessageArrival(
+  const { arriving, finish: finishArrival } = useNativeChatMessageArrival(
     slot.kind === 'message' ? slot.message.id : undefined,
     messaging &&
       slot.kind === 'message' &&
@@ -212,6 +212,14 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     <div
       ref={arriving ? observeOffscreenAnimation : undefined}
       data-native-chat-arrival={arriving ? '' : undefined}
+      onAnimationEnd={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          event.animationName === 'native-chat-message-arrival'
+        ) {
+          finishArrival()
+        }
+      }}
       className={cn(
         'flex flex-col gap-5',
         arriving && 'native-chat-message-arrival',

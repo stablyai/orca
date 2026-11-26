@@ -100,11 +100,23 @@ export function NativeChatBotRequestCard({
   const t = useTranslate()
   const bot = useBots().find((entry) => entry.id === card.toBotId)
   if (messaging && card.messageId && !card.client) {
+    if (bot) {
+      return (
+        <KnownBotRequestCard
+          bot={bot}
+          card={card}
+          cardId={cardId}
+          timestamp={timestamp}
+          defaultOpen
+          compact
+        />
+      )
+    }
     return (
       <NativeChatBotMessageNote
         id={cardId}
         label={t('components.native-chat.messaging.messaged', 'Messaged {{name}}', {
-          name: bot?.name ?? card.toBotName
+          name: card.toBotName
         })}
       >
         <NativeChatBotRequestCard
@@ -155,14 +167,17 @@ function KnownBotRequestCard({
   card,
   cardId,
   timestamp,
-  defaultOpen
+  defaultOpen,
+  compact = false
 }: {
   bot: Bot
+  compact?: boolean
   defaultOpen: boolean
   card: BotRequestCard
   cardId: string
   timestamp: number | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const status = useWorktreeActivityStatus(folderWorkspaceKey(bot.folderWorkspaceId))
   const reading = useOutcome(bot, card.messageId, status)
   // The chat the request went to, unless that is Home now; Home until it's known.
@@ -171,7 +186,7 @@ function KnownBotRequestCard({
     chatId && chatId !== bot.chatSessionId ? openBotSession(bot, chatId) : void openBotHomeTab(bot)
   const view = botRequestCardView(card, reading, status, say)
   const subject = view.sent ? card.subject : ''
-  return (
+  const row = (
     <NativeChatEventRow
       defaultOpen={defaultOpen}
       icon={REQUEST_ICON}
@@ -216,5 +231,24 @@ function KnownBotRequestCard({
         </span>
       ) : null}
     </NativeChatEventRow>
+  )
+  return compact ? (
+    <NativeChatBotMessageNote
+      id={cardId}
+      label={t('components.native-chat.messaging.messaged', 'Messaged {{name}}', {
+        name: bot.name
+      })}
+      status={
+        reading.outcome === 'answered'
+          ? 'answered'
+          : view.dot === 'working' || view.dot === 'permission'
+            ? 'waiting'
+            : undefined
+      }
+    >
+      {row}
+    </NativeChatBotMessageNote>
+  ) : (
+    row
   )
 }

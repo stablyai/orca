@@ -1,11 +1,14 @@
 // Virtualizer owns row anchoring; scroll hook owns follow intent. Use container coordinates and never reattach a parked reader from geometry alone.
 
+import { useNativeChatMessagingRowChrome } from './use-native-chat-messaging-row-chrome'
+import type { NativeChatTimedRow } from '../../conversation/slots/native-chat-timed-rows'
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import {
   NATIVE_CHAT_ROW_GAP_PX,
+  nativeChatMessagingRowHeight,
   type NativeChatRowTypography,
   DEFAULT_ROW_TYPOGRAPHY
 } from './native-chat-row-height-estimate'
@@ -55,6 +58,7 @@ export function useNativeChatTranscriptWindow({
   isVisible,
   revealIndex,
   newRowsMarkerIndex,
+  botChat,
   typography = DEFAULT_ROW_TYPOGRAPHY
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -64,6 +68,7 @@ export function useNativeChatTranscriptWindow({
   revealIndex: number
   /** Slot drawing the "New" marker, or -1. */
   newRowsMarkerIndex?: number
+  botChat?: { timedRows?: readonly NativeChatTimedRow[] }
   /** Chat text scale; gap scales with the text size. */
   typography?: NativeChatRowTypography
 }): NativeChatTranscriptWindow {
@@ -85,9 +90,21 @@ export function useNativeChatTranscriptWindow({
   const keySlots = stageBesideStreamedText(slots)
   const encodedItemKeys = useMemo(() => JSON.stringify(keySlots.map(nativeChatSlotKey)), [keySlots])
   const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
+  const messagingChrome = useNativeChatMessagingRowChrome(
+    keySlots,
+    botChat !== undefined,
+    botChat?.timedRows,
+    newRowsMarkerIndex
+  )
   const estimateSize = useCallback(
-    (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
-    [slots]
+    (index: number) => {
+      const height = slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX
+      const chrome = messagingChrome?.get(index)
+      return chrome
+        ? nativeChatMessagingRowHeight(height, chrome.divider, chrome.joinsAbove, typography)
+        : height
+    },
+    [slots, messagingChrome, typography]
   )
   const getItemKey = useCallback((index: number) => itemKeys[index] ?? index, [itemKeys])
   // Pinned-set identity must invalidate cached mounted indexes so reveals mount their row; measurement memoization stays separate.

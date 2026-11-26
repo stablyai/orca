@@ -143,17 +143,28 @@ export function NativeChatTranscriptItems({
 export function NativeChatWaitingTranscriptItems({
   slots,
   context,
-  agentMail = true
+  agentMail = true,
+  preceding
 }: {
   slots: readonly NativeChatTranscriptSlot[]
   context: NativeChatTranscriptRowContext
   /** Ends with other agents' waiting mail; rows stacked outside a conversation have none. */
   agentMail?: boolean
+  preceding?: readonly NativeChatTranscriptSlot[]
 }): React.JSX.Element {
   const messaging = useNativeChatMessagingStyle() && context.turnBot != null
   const timeDividers = useMemo(
-    () => (messaging ? nativeChatTimeDividers(slots) : new Map<number, number>()),
-    [slots, messaging]
+    () =>
+      messaging
+        ? nativeChatTimeDividers(
+            slots,
+            preceding?.findLast(
+              (slot) =>
+                slot.kind === 'message' && slot.drawsMessage && slot.message.timestamp !== null
+            )
+          )
+        : new Map<number, number>(),
+    [slots, messaging, preceding]
   )
   return (
     <>

@@ -1,3 +1,4 @@
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
@@ -14,12 +15,13 @@ export function NativeChatMessagingStatus({
   visible: boolean
 }): React.JSX.Element {
   const windowVisible = useWindowStreamVisible(0)
+  const reducedMotion = usePrefersReducedMotion()
   const [held, setHeld] = useState<{ label: string; previous: string | null }>({
     label,
     previous: null
   })
-  if (held.label !== label) {
-    setHeld({ label, previous: held.label })
+  if (held.label !== label || (reducedMotion && held.previous !== null)) {
+    setHeld({ label, previous: reducedMotion ? null : held.label })
   }
   return (
     <span

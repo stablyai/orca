@@ -1,3 +1,4 @@
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   selectActiveToolCall,
@@ -37,7 +38,23 @@ export function NativeChatTranscriptTail({
     frontier.message.role === 'assistant' &&
     block?.type === 'text' &&
     block.text.trim().length > 0
-  if (line && !replying) {
+  if (line && replying) {
+    return (
+      <div
+        className="-mt-3 flex min-h-6 items-center px-3.5 text-chat-foreground-faint"
+        role="status"
+        aria-label={
+          line.stopping
+            ? t('components.native-chat.status.stopping', 'Stopping…')
+            : t('components.native-chat.status.working', 'Working…')
+        }
+        data-native-chat-working-after-reply=""
+      >
+        <LoadingSpinner className="size-3.5" />
+      </div>
+    )
+  }
+  if (line) {
     const call =
       messaging && frontier?.kind === 'message'
         ? selectActiveToolCall(

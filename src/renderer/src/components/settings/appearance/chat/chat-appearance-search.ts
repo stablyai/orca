@@ -93,7 +93,7 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
         title: translate('settings.appearance.chat.messageStyle', 'Message style'),
         description: translate(
           'settings.appearance.chat.messageStyleDescription',
-          'Bubble layout for one-to-one bot chats. Coding chats keep the default layout.'
+          'Messaging adds live status, arrival motion, time and New dividers, and compact handoff notes to one-to-one bot chats. Coding chats keep the default layout.'
         ),
         keywords: getChatMessageStyleOptions().map((option) => option.label)
       },

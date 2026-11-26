@@ -210,7 +210,7 @@
         "messageStyle": "Estilo de mensajes",
         "messageStyleDefault": "Predeterminado",
         "messageStyleMessaging": "Mensajería",
-        "messageStyleDescription": "Burbujas para chats individuales con bots. Los chats de programación conservan el diseño predeterminado."
+        "messageStyleDescription": "Mensajería añade estado en vivo, animaciones de llegada, separadores de hora y mensajes nuevos, y notas de traspaso compactas a los chats individuales con bots. Los chats de programación conservan el diseño predeterminado."
       },
       "editorTheme": {
         "light": "Tema claro del editor",
@@ -20950,7 +20950,9 @@
         "usingTool": "Usando {{tool}}",
         "todayAt": "Hoy {{time}}",
         "messaged": "Mensaje enviado a {{name}}",
-        "messageFrom": "Mensaje de {{name}}"
+        "messageFrom": "Mensaje de {{name}}",
+        "answered": "Respondido",
+        "waiting": "En espera"
       }
     },
     "tab": {

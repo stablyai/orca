@@ -803,7 +803,7 @@
         "messageStyle": "Nachrichtenstil",
         "messageStyleDefault": "Standard",
         "messageStyleMessaging": "Messenger",
-        "messageStyleDescription": "Sprechblasen für Einzelchats mit Bots. Programmierchats behalten das Standardlayout."
+        "messageStyleDescription": "Messenger ergänzt Einzelchats mit Bots um Live-Status, Eingangsanimationen, Zeit- und Neu-Trenner sowie kompakte Übergabenotizen. Programmierchats behalten das Standardlayout."
       },
       "editorTheme": {
         "light": "Helles Editor-Design",
@@ -21271,7 +21271,9 @@
         "usingTool": "Verwendet {{tool}}",
         "todayAt": "Heute {{time}}",
         "messaged": "Nachricht an {{name}}",
-        "messageFrom": "Nachricht von {{name}}"
+        "messageFrom": "Nachricht von {{name}}",
+        "answered": "Beantwortet",
+        "waiting": "Wartet"
       }
     },
     "tab": {

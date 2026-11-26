@@ -61,12 +61,13 @@ export const hidden = defineFixture({
   render: () => <ChangingStatus visible={false} />
 })
 
-function TranscriptStatus({ reply = false }: { reply?: boolean }) {
+function TranscriptStatus({ reply = false, quiet = false }: { reply?: boolean; quiet?: boolean }) {
+  const [repliedAt] = useState(() => Date.now() - 30_000)
   const messages: NativeChatMessage[] = [
     {
       id: 'ask',
       role: 'user',
-      timestamp: 1,
+      timestamp: quiet ? repliedAt - 1_000 : 1,
       source: 'transcript',
       blocks: [{ type: 'text', text: 'Check the PDF for my meeting.' }]
     }
@@ -75,7 +76,7 @@ function TranscriptStatus({ reply = false }: { reply?: boolean }) {
     messages.push({
       id: 'answer',
       role: 'assistant',
-      timestamp: 2,
+      timestamp: quiet ? repliedAt : 2,
       source: 'transcript',
       blocks: [{ type: 'text', text: 'Your meeting is tomorrow at 9:00.' }]
     })
@@ -86,7 +87,7 @@ function TranscriptStatus({ reply = false }: { reply?: boolean }) {
     liveTurnKey: 'ask',
     receipts: new Map(),
     turnStatuses: {
-      active: { startedAt: 1, workedSeconds: null, thinking: false },
+      active: { startedAt: quiet ? repliedAt - 2_000 : 1, workedSeconds: null, thinking: false },
       completedByTurn: {}
     },
     turnDiffs: new Map(),
@@ -119,7 +120,7 @@ function TranscriptStatus({ reply = false }: { reply?: boolean }) {
         line={{
           thinking: false,
           stopping: false,
-          activityText: 'Reading the PDF',
+          activityText: quiet ? null : 'Reading the PDF',
           reasoning: null
         }}
         awaitingInput={false}
@@ -143,4 +144,11 @@ export const replying = defineFixture({
   width: 640,
   setup: messagingSetup,
   render: () => <TranscriptStatus reply />
+})
+
+// The host still reports working, thirty seconds after this saved reply, with no new blocks.
+export const quietAfterReply = defineFixture({
+  width: 640,
+  setup: messagingSetup,
+  render: () => <TranscriptStatus reply quiet />
 })

@@ -1,10 +1,12 @@
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 export function nativeChatTimeDividers(
-  slots: readonly NativeChatTranscriptSlot[]
+  slots: readonly NativeChatTranscriptSlot[],
+  preceding?: NativeChatTranscriptSlot
 ): ReadonlyMap<number, number> {
   const dividers = new Map<number, number>()
-  let previous: number | null = null
+  let previous =
+    preceding?.kind === 'message' && preceding.drawsMessage ? preceding.message.timestamp : null
   slots.forEach((slot, index) => {
     if (slot.kind !== 'message' || !slot.drawsMessage || slot.message.timestamp === null) {
       return

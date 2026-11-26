@@ -898,7 +898,7 @@
         "messageStyle": "Mesaj stili",
         "messageStyleDefault": "Varsayılan",
         "messageStyleMessaging": "Mesajlaşma",
-        "messageStyleDescription": "Botlarla bire bir sohbetler için mesaj balonları. Kodlama sohbetleri varsayılan düzeni korur."
+        "messageStyleDescription": "Mesajlaşma, botlarla bire bir sohbetlere canlı durum, geliş animasyonu, zaman ve yeni mesaj ayraçları ile kısa devir notları ekler. Kodlama sohbetleri varsayılan düzeni korur."
       },
       "editorTheme": {
         "light": "Açık düzenleyici teması",
@@ -22934,7 +22934,9 @@
         "usingTool": "{{tool}} kullanılıyor",
         "todayAt": "Bugün {{time}}",
         "messaged": "{{name}} adlı bota mesaj gönderildi",
-        "messageFrom": "{{name}} adlı bottan mesaj"
+        "messageFrom": "{{name}} adlı bottan mesaj",
+        "answered": "Yanıtlandı",
+        "waiting": "Bekliyor"
       }
     },
     "tab": {

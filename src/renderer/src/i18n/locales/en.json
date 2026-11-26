@@ -899,7 +899,7 @@
         "messageStyle": "Message style",
         "messageStyleDefault": "Default",
         "messageStyleMessaging": "Messaging",
-        "messageStyleDescription": "Bubble layout for one-to-one bot chats. Coding chats keep the default layout."
+        "messageStyleDescription": "Messaging adds live status, arrival motion, time and New dividers, and compact handoff notes to one-to-one bot chats. Coding chats keep the default layout."
       },
       "editorTheme": {
         "light": "Light editor theme",
@@ -23142,7 +23142,9 @@
         "usingTool": "Using {{tool}}",
         "todayAt": "Today {{time}}",
         "messaged": "Messaged {{name}}",
-        "messageFrom": "Message from {{name}}"
+        "messageFrom": "Message from {{name}}",
+        "answered": "Answered",
+        "waiting": "Waiting"
       }
     },
     "tab": {

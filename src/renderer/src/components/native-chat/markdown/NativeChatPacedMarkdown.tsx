@@ -29,18 +29,19 @@ export function NativeChatPacedMarkdown({
   const root = useRef<HTMLDivElement | null>(null)
   const paced = useNativeChatPacedText(rowKey, content, streaming, root, savedRevision)
   const reducedMotion = usePrefersReducedMotion()
-  const [phrase, setPhrase] = useState('')
+  const [phrase, setPhrase] = useState({ text: '', fadeFrom: 0 })
+  const previousPhraseEnd = content.startsWith(phrase.text) ? phrase.text.length : 0
   const end = phraseChunks
     ? nativeChatPhraseEnd(
         content,
-        content.startsWith(phrase) ? phrase.length : 0,
+        previousPhraseEnd,
         paced.text.length,
         !streaming || reducedMotion || paced.text === content
       )
     : paced.text.length
   const shown = phraseChunks ? content.slice(0, end) : paced.text
-  if (phraseChunks && phrase !== shown) {
-    setPhrase(shown)
+  if (phraseChunks && phrase.text !== shown) {
+    setPhrase({ text: shown, fadeFrom: Math.min(paced.fadeFrom ?? end, previousPhraseEnd) })
   }
   useKeptMathSelection(root, streaming || paced.revealing)
   return (
@@ -50,8 +51,16 @@ export function NativeChatPacedMarkdown({
       rowKey={rowKey}
       content={shown}
       streaming={streaming || paced.revealing}
-      fadeFrom={paced.fadeFrom}
-      fadeHold={paced.fadeHold}
+      fadeFrom={
+        phraseChunks && paced.fadeFrom !== undefined
+          ? Math.min(paced.fadeFrom, phrase.fadeFrom)
+          : paced.fadeFrom
+      }
+      fadeHold={
+        phraseChunks && paced.fadeHold
+          ? { from: Math.min(paced.fadeHold.from, end), to: Math.min(paced.fadeHold.to, end) }
+          : paced.fadeHold
+      }
       fadeAnimates={paced.fadeAnimates}
     />
   )

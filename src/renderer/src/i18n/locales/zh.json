@@ -225,7 +225,7 @@
         "messageStyle": "消息样式",
         "messageStyleDefault": "默认",
         "messageStyleMessaging": "即时通讯",
-        "messageStyleDescription": "以气泡显示与机器人的一对一聊天。编程聊天保留默认布局。"
+        "messageStyleDescription": "即时通讯会为与机器人的一对一聊天加入实时状态、消息入场动画、时间与新消息分隔线和精简交接备注。编程聊天保留默认布局。"
       },
       "editorTheme": {
         "light": "浅色编辑器主题",
@@ -22024,7 +22024,9 @@
         "usingTool": "正在使用 {{tool}}",
         "todayAt": "今天 {{time}}",
         "messaged": "已发送消息给 {{name}}",
-        "messageFrom": "来自 {{name}} 的消息"
+        "messageFrom": "来自 {{name}} 的消息",
+        "answered": "已回复",
+        "waiting": "等待中"
       }
     },
     "tab": {

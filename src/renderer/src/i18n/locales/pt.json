@@ -1601,7 +1601,7 @@
         "messageStyle": "Estilo de mensagens",
         "messageStyleDefault": "Padrão",
         "messageStyleMessaging": "Mensagens",
-        "messageStyleDescription": "Balões para conversas individuais com bots. Os chats de programação mantêm o layout padrão."
+        "messageStyleDescription": "Mensagens adiciona status ao vivo, animações de chegada, divisórias de horário e novas mensagens e notas compactas de transferência às conversas individuais com bots. Os chats de programação mantêm o layout padrão."
       },
       "editorTheme": {
         "light": "Tema claro do editor",
@@ -22804,7 +22804,9 @@
         "usingTool": "Usando {{tool}}",
         "todayAt": "Hoje {{time}}",
         "messaged": "Mensagem enviada a {{name}}",
-        "messageFrom": "Mensagem de {{name}}"
+        "messageFrom": "Mensagem de {{name}}",
+        "answered": "Respondido",
+        "waiting": "Aguardando"
       }
     },
     "tab": {

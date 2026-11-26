@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NativeChatReplyRevealsContext } from '../../markdown/native-chat-reply-reveals'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '../../../../store/index'
@@ -186,4 +187,32 @@ export const streamingArrival = defineFixture({
       <Conversation streamingText="I’ll check your calendar, then keep tomorrow afternoon free." />
     </NativeChatReplyRevealsContext>
   )
+})
+
+function SlowPacing() {
+  const [step, setStep] = useState(0)
+  const [reveals] = useState(() => ({
+    begun: new Set(['followup']),
+    arrived: new Set<string>(),
+    drawn: new Map()
+  }))
+  const parts = ['I’ll check', ' your calendar,', ' then keep', ' tomorrow afternoon free.']
+  return (
+    <NativeChatReplyRevealsContext value={reveals}>
+      <button
+        type="button"
+        className="sr-only"
+        data-advance-phrase
+        onClick={() => setStep((current) => Math.min(parts.length - 1, current + 1))}
+      >
+        More text
+      </button>
+      <Conversation streamingText={parts.slice(0, step + 1).join('')} />
+    </NativeChatReplyRevealsContext>
+  )
+}
+export const slowPacing = defineFixture({
+  width: 640,
+  setup: () => setStyle('messaging'),
+  render: () => <SlowPacing />
 })

@@ -259,6 +259,7 @@ export function NativeChatMessageList({
     // Rail jumps, diff reveals and subagent reveals share one mutually exclusive pin.
     revealIndex: navigationRequest.revealIndex,
     newRowsMarkerIndex: newRows.index,
+    botChat: turnBot ? { timedRows } : undefined,
     typography
   })
   const transcriptScroll = useNativeChatTranscriptScroll({
@@ -277,10 +278,9 @@ export function NativeChatMessageList({
     onLeaveEnd: historyRetention.leaveEnd,
     onReturnToEnd: historyRetention.returnToEnd
   })
-  const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
-    transcriptScroll
+  const { scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } = transcriptScroll
+  const { showJump, onScroll, recordReaderScroll } = transcriptScroll
   const toolRunScroll = useToolRunScroll(scrollRef, isVisible, transcriptWindow, transcriptScroll)
-  const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
     historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
@@ -361,6 +361,7 @@ export function NativeChatMessageList({
     readerAtEnd,
     onRevealDiff: navigation.revealDiff
   })
+  const waitingRows = { slots: waitingSlots, context: rowContext, preceding: slots }
 
   return (
     <NativeChatBotHomeScope kickoff={botHome} isVisible={isVisible}>
@@ -415,7 +416,7 @@ export function NativeChatMessageList({
                   slots={slots}
                   visible={isVisible}
                 />
-                <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                <NativeChatWaitingTranscriptItems {...waitingRows} />
               </NativeChatTranscriptColumn>
             </div>
           </NativeChatTranscriptViewport>
