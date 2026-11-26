@@ -2,6 +2,7 @@ import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/remov
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
+import { capturePersonalProjectOpening } from '@/lib/personal-project-opening'
 import { activateWebRuntimeSessionWorktree } from '@/runtime/web-session-tabs-sync/actions/web-runtime-worktree-activation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { registerWorktreeActivation } from '@/lib/workspace/activation/worktree-activation-nav-registration'
@@ -175,6 +176,8 @@ export function activateAndRevealWorktreeWithOutcome(
     state.setActiveView('terminal')
     return { opened: { primaryTabId: null } }
   }
+  const personalOpening = capturePersonalProjectOpening(state, wt.repoId, worktreeId, opts)
+  let activationAcknowledgement: Promise<boolean> = Promise.resolve(true)
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
@@ -193,7 +196,7 @@ export function activateAndRevealWorktreeWithOutcome(
   }
   noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
-  state.setActiveWorktree(
+  const activated = state.setActiveWorktree(
     worktreeId,
     opts?.executionHostId,
     buildActivationStateTransition(state, worktreeId, {
@@ -210,7 +213,7 @@ export function activateAndRevealWorktreeWithOutcome(
       : runtimeEnvironmentIdOrLocalUnlessTwin(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
-    void activateWebRuntimeSessionWorktree({
+    activationAcknowledgement = activateWebRuntimeSessionWorktree({
       worktreeId,
       environmentId: ownerRuntimeEnvironmentId
     })
@@ -293,6 +296,7 @@ export function activateAndRevealWorktreeWithOutcome(
     })
   recordShownTabFocus(useAppStore.getState(), worktreeId)
 
+  personalOpening?.(activated, activationAcknowledgement)
   return { opened: { primaryTabId, ...(startupAccepted ? { startupAccepted } : {}) } }
 }
 

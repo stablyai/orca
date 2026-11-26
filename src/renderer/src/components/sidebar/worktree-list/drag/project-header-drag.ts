@@ -1,3 +1,4 @@
+import { computeProjectPinTierDropPreview } from './project-header-drag-pin-tier'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
@@ -5,10 +6,7 @@ import {
 import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import {
-  computeProjectHeaderDropPreview,
-  measureProjectHeaderDragRects
-} from './project-header-drop'
+import { measureProjectHeaderDragRects } from './project-header-drop'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import {
   INITIAL_REPO_DRAG_STATE,
@@ -29,7 +27,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 export function useRepoHeaderDrag({
   orderedRepoIds,
   sidebarRepoHeaderIdsByBucket,
-  repoById,
+  sidebarRepoHeaderRowsByBucket,
   getLiveRepos,
   usesProjectGroupOrdering,
   onCommitRepoOrder,
@@ -46,8 +44,8 @@ export function useRepoHeaderDrag({
   orderedIdsRef.current = orderedRepoIds
   const sidebarRepoHeaderIdsByBucketRef = useRef(sidebarRepoHeaderIdsByBucket)
   sidebarRepoHeaderIdsByBucketRef.current = sidebarRepoHeaderIdsByBucket
-  const repoByIdRef = useRef(repoById)
-  repoByIdRef.current = repoById
+  const sidebarRepoHeaderRowsByBucketRef = useRef(sidebarRepoHeaderRowsByBucket)
+  sidebarRepoHeaderRowsByBucketRef.current = sidebarRepoHeaderRowsByBucket
   const usesProjectGroupOrderingRef = useRef(usesProjectGroupOrdering)
   usesProjectGroupOrderingRef.current = usesProjectGroupOrdering
   const onCommitRepoOrderRef = useRef(onCommitRepoOrder)
@@ -92,14 +90,7 @@ export function useRepoHeaderDrag({
       if (!session || !container) {
         return null
       }
-      return computeProjectHeaderDropPreview({
-        pointerY,
-        containerTop: container.getBoundingClientRect().top,
-        scrollTop: container.scrollTop,
-        rects: session.headerRects,
-        sidebarRepoHeaderIds: session.sidebarRepoHeaderIds,
-        contentBottom: container.scrollHeight
-      })
+      return computeProjectPinTierDropPreview(session, pointerY, container)
     },
     []
   )
@@ -162,8 +153,9 @@ export function useRepoHeaderDrag({
         sidebarDropIndex,
         onCommitRootProjectOrder: rootDragRef.current.onCommitRootProjectOrder,
         orderedRepoIds: orderedIdsRef.current,
-        repoById: repoByIdRef.current,
+        currentRepoHeaderRowsByBucket: sidebarRepoHeaderRowsByBucketRef.current,
         liveRepos: getLiveReposRef.current(),
+        currentBuckets: sidebarRepoHeaderIdsByBucketRef.current,
         usesProjectGroupOrdering: usesProjectGroupOrderingRef.current,
         onCommitRepoOrder: onCommitRepoOrderRef.current,
         onCommitProjectGroupOrder: onCommitProjectGroupOrderRef.current

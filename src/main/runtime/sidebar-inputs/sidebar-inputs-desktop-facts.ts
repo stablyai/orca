@@ -37,6 +37,7 @@ export const SIDEBAR_VIEW_UI_FIELDS = [
   'groupBy',
   'sortBy',
   'projectOrderBy',
+  'personalProjectOrder',
   'hideSleepingWorkspaces',
   'hideDefaultBranchWorkspace',
   'alwaysShowDefaultBranchWorkspace',

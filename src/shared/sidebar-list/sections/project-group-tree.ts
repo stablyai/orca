@@ -9,7 +9,7 @@ import {
   getEffectiveProjectGroupManualRank
 } from '../../project/groups/project-groups'
 import {
-  compareRecentRank,
+  compareProjectEntries,
   createRecentRankLookup,
   withRepoSectionDisplayLabels,
   type ActivityItem
@@ -49,22 +49,17 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     groupByProjectGroupId.set(projectGroupId, list)
   }
 
+  const rankForEntry = createRecentRankLookup<[string, V]>()
   const sortRepoEntriesWithinGroup = (list: [string, V][]): [string, V][] => {
-    if (projectOrderBy === 'recent') {
-      if (list.length < 2) {
-        return [...list]
-      }
-      const getRecentRank = createRecentRankLookup<[string, V]>()
-      return [...list].sort((left, right) =>
-        compareRecentRank(getRecentRank(left), getRecentRank(right))
+    return withRepoSectionDisplayLabels(list).sort((left, right) =>
+      compareProjectEntries(
+        left,
+        right,
+        projectOrderBy,
+        (entry) => getEffectiveProjectGroupManualRank(entry[1].repo, repoOrder),
+        rankForEntry
       )
-    }
-    // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
-    return [...list].sort((left, right) => {
-      const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
-      const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
-      return leftRank - rightRank
-    })
+    )
   }
 
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))

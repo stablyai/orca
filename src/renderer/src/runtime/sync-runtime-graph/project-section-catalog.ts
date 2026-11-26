@@ -10,6 +10,7 @@ type CatalogSource = {
   repos: AppState['repos']
   projection: ProjectHostSetupProjection
   projectOrderBy: AppState['projectOrderBy']
+  personalProjectOrder?: AppState['personalProjectOrder']
   projectGroups: AppState['projectGroups']
   catalog: MobileProjectSectionCatalog
 }
@@ -20,7 +21,12 @@ let cachedCatalogSource: CatalogSource | null = null
 export function getProjectSectionCatalogFromState(
   state: Pick<
     AppState,
-    'repos' | 'projects' | 'projectHostSetups' | 'projectOrderBy' | 'projectGroups'
+    | 'repos'
+    | 'projects'
+    | 'projectHostSetups'
+    | 'projectOrderBy'
+    | 'personalProjectOrder'
+    | 'projectGroups'
   >
 ): MobileProjectSectionCatalog | null {
   // Why: graph publication must not fail on a store slice that holds no repo catalog.
@@ -34,6 +40,7 @@ export function getProjectSectionCatalogFromState(
     cached.repos === state.repos &&
     cached.projection === projection &&
     cached.projectOrderBy === state.projectOrderBy &&
+    cached.personalProjectOrder === state.personalProjectOrder &&
     cached.projectGroups === state.projectGroups
   ) {
     return cached.catalog
@@ -42,12 +49,14 @@ export function getProjectSectionCatalogFromState(
     state.repos,
     projection,
     state.projectOrderBy,
-    state.projectGroups
+    state.projectGroups,
+    state.personalProjectOrder
   )
   cachedCatalogSource = {
     repos: state.repos,
     projection,
     projectOrderBy: state.projectOrderBy,
+    personalProjectOrder: state.personalProjectOrder,
     projectGroups: state.projectGroups,
     catalog
   }

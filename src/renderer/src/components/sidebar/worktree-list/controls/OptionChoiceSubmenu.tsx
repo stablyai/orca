@@ -12,6 +12,7 @@ type OptionChoice<Id extends string> = {
   id: Id
   readonly label: string
   readonly description: string | null
+  readonly disabled?: boolean
 }
 
 /** An options-menu row ("Sort by  Manual ›") whose submenu picks one choice, each described on hover. */
@@ -45,7 +46,7 @@ export function OptionChoiceSubmenu<Id extends string>({
           value={value}
           onValueChange={(next) => {
             const choice = choices.find((candidate) => candidate.id === next)
-            if (choice) {
+            if (choice && !choice.disabled) {
               onChange(choice.id)
             }
           }}
@@ -55,6 +56,7 @@ export function OptionChoiceSubmenu<Id extends string>({
               <DropdownMenuRadioItem
                 key={choice.id}
                 value={choice.id}
+                disabled={choice.disabled}
                 // Keep the menu open for comparing modes and toggling properties.
                 onSelect={(e) => e.preventDefault()}
               >

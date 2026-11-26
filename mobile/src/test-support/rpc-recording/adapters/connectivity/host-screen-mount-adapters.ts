@@ -15,6 +15,7 @@ export function hostScreenMountAdapters(
       ).useHostViewSettings
       const state = observableModel(context, {
         clientRef: { current: context.client },
+        servedProjectSections: null,
         view: INITIAL_MOBILE_VIEW,
         viewRef: { current: INITIAL_MOBILE_VIEW },
         rememberView: () => {}

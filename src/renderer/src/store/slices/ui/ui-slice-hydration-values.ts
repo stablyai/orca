@@ -1,3 +1,4 @@
+import type { AppState } from '../../types'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   TaskResumeState,
@@ -8,7 +9,13 @@ import type { ContextualTourId } from '../../../../../shared/feature-education/c
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
-import { sanitizePaneKeyTimestampRecord } from './ui-slice-hydration-sanitizers'
+import {
+  sanitizePersistedSidebarWidth,
+  sanitizePaneKeyTimestampRecord
+} from './ui-slice-hydration-sanitizers'
+
+const MAX_LEFT_SIDEBAR_WIDTH = 500
+const MAX_RIGHT_SIDEBAR_WIDTH = 4000
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
@@ -174,5 +181,23 @@ export function hydrateAgentReadState(
     acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
     activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
+  }
+}
+
+export function hydrateSidebarWidths(
+  ui: Pick<PersistedUIState, 'sidebarWidth' | 'rightSidebarWidth'>,
+  current: Pick<AppState, 'sidebarWidth' | 'rightSidebarWidth'>
+): Pick<AppState, 'sidebarWidth' | 'rightSidebarWidth'> {
+  return {
+    sidebarWidth: sanitizePersistedSidebarWidth(
+      ui.sidebarWidth,
+      current.sidebarWidth,
+      MAX_LEFT_SIDEBAR_WIDTH
+    ),
+    rightSidebarWidth: sanitizePersistedSidebarWidth(
+      ui.rightSidebarWidth,
+      current.rightSidebarWidth,
+      MAX_RIGHT_SIDEBAR_WIDTH
+    )
   }
 }

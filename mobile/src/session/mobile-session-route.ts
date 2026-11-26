@@ -10,6 +10,7 @@ export type MobileSessionRouteParams = {
   hostId: string
   worktreeId: string
   paneKey?: string
+  projectOpen?: string
   botItem?: string
   /** Added once to the bot's Home Chat draft, as its Ask in chat does. */
   homeDraft?: string
@@ -29,6 +30,7 @@ export function mobileSessionRouteTarget({
   botItem,
   homeDraft,
   executionHost,
+  projectOpen,
   standalone
 }: MobileSessionRouteParams): HostStackRouteTarget {
   return {
@@ -41,6 +43,7 @@ export function mobileSessionRouteTarget({
       ...(botItem ? { botItem } : {}),
       ...(homeDraft ? { homeDraft } : {}),
       ...(executionHost ? { executionHost } : {}),
+      ...(projectOpen ? { projectOpen } : {}),
       ...(standalone ? { [STANDALONE_SESSION_PARAM]: '1' } : {})
     }
   }

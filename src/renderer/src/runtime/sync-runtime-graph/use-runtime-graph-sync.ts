@@ -64,6 +64,7 @@ export function useRuntimeGraphSync(): void {
           state.projects !== previousState.projects ||
           state.projectHostSetups !== previousState.projectHostSetups ||
           state.projectOrderBy !== previousState.projectOrderBy ||
+          state.personalProjectOrder !== previousState.personalProjectOrder ||
           state.projectGroups !== previousState.projectGroups
         ) {
           scheduleRuntimeGraphSync()

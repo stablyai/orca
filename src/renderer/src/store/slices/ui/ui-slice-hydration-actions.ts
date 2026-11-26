@@ -1,3 +1,4 @@
+import { newerPersonalProjectOrder } from '../../../../../shared/personal-project-order'
 import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
@@ -72,12 +73,11 @@ import {
   hydrateReadAndBotState,
   sanitizeTaskResumeState
 } from './ui-slice-bot-sidebar-hydration'
+import { hydrateSidebarWidths } from './ui-slice-hydration-values'
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
-const MAX_LEFT_SIDEBAR_WIDTH = 500
-const MAX_RIGHT_SIDEBAR_WIDTH = 4000
 /** Builds hydration actions that reconcile authoritative UI state without discarding pending local edits. */
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -107,16 +107,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
-          sidebarWidth: sanitizePersistedSidebarWidth(
-            ui.sidebarWidth,
-            s.sidebarWidth,
-            MAX_LEFT_SIDEBAR_WIDTH
-          ),
-          rightSidebarWidth: sanitizePersistedSidebarWidth(
-            ui.rightSidebarWidth,
-            s.rightSidebarWidth,
-            MAX_RIGHT_SIDEBAR_WIDTH
-          ),
+          ...hydrateSidebarWidths(ui, s),
           markdownTocPanelWidth: clampMarkdownTocPanelWidth(
             ui.markdownTocPanelWidth,
             undefined,
@@ -135,6 +126,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,
+          personalProjectOrder: newerPersonalProjectOrder(
+            s.personalProjectOrder,
+            ui.personalProjectOrder
+          ),
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
           showActiveOnly: false,
           // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).

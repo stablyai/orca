@@ -1,3 +1,4 @@
+import type { PersonalProjectOrder } from '../../../../src/shared/personal-project-order'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -8,11 +9,17 @@ import { filterProjectGroupsForVisibleHosts } from '../../../../src/shared/sideb
 import { getLogicalRepoOrderRankById } from '../../../../src/shared/sidebar-list/sections/project-section-order'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import type { ServedProjectSections } from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
-import {
-  NO_PROJECT_SECTION_CATALOG,
-  type ProjectSectionCatalog
-} from '../workspace-list/workspace-list-sections'
-import type { SectionRepo } from '../workspace-list/workspace-list-types'
+import type { ProjectSectionCatalog, SectionRepo } from '../workspace-list/workspace-list-types'
+
+export type { ProjectSectionCatalog } from '../workspace-list/workspace-list-types'
+
+export const NO_PROJECT_SECTION_CATALOG: ProjectSectionCatalog = {
+  repos: [],
+  grouping: null,
+  projectGroups: [],
+  repoOrder: undefined,
+  projectOrderBy: 'manual'
+}
 
 // Use served all-host project grouping; older desktops fall back to repo grouping.
 // Only visible hosts’ repos open empty sections, and only their project groups list.
@@ -23,7 +30,9 @@ export function buildProjectSectionCatalog(
   /** The host's own groups (projectGroup.list), for a desktop whose catalog carries none. */
   hostProjectGroups: readonly ProjectGroup[],
   visibleHostIds: readonly ExecutionHostId[] | null,
-  projectOrderBy: ProjectOrderBy | null
+  /** The shared UI value; null until read, when the served one stands in. */
+  projectOrderBy: ProjectOrderBy | null,
+  personalProjectOrder?: PersonalProjectOrder
 ): ProjectSectionCatalog {
   const shown = (repos: readonly SectionRepo[]) =>
     visibleHostIds
@@ -53,7 +62,11 @@ export function buildProjectSectionCatalog(
   )
   return {
     repos: shown(repos),
-    grouping: { projects: served.projects, projectHostSetups: served.setups },
+    grouping: {
+      projects: served.projects,
+      projectHostSetups: served.setups,
+      personalProjectOrder: personalProjectOrder ?? served.personalProjectOrder
+    },
     projectGroups,
     // Why: served repos come in the sidebar's header order, cross-host manual order included.
     repoOrder: getLogicalRepoOrderRankById(served.repos.map((repo) => repo.id)),
