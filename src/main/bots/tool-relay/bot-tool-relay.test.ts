@@ -23,7 +23,7 @@ let relay: BotToolRelay
 function toolsFolder(url: string, id: string, secret = SECRET): string {
   const folder = mkdtempSync(join(tmpdir(), 'relay-bot-'))
   dirs.push(folder)
-  changeBotToolCredentials(folder, new Map([[id, { url, headers: { 'x-api-key': secret } }]]))
+  changeBotToolCredentials(folder, new Map([[id, { url, headers: { 'X-Api-Key': secret } }]]))
   writeToolsFile(folder, { [id]: url })
   return folder
 }
@@ -53,7 +53,7 @@ afterEach(() => {
 })
 
 describe("Orca's tool relay", () => {
-  it("passes every other header both ways, the saved ones win, and the bot's token stays behind", async () => {
+  it("passes every other header both ways, the saved ones win, and the agent's token stays behind", async () => {
     const tool = await upstream((_seen, res) => {
       res.writeHead(200, {
         'content-type': 'application/json',
