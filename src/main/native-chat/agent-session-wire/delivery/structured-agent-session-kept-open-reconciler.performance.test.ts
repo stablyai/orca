@@ -1,6 +1,6 @@
-// Perf contract for #47783: chats waiting on unreachable daemon starts share one retry timer,
-// and none is left once no chat waits (per-start or per-chat timers, or a timer kept after the
-// last close, fail it).
+// Perf contract for #47783: chats waiting on unreachable daemon starts share one retry timer and
+// one 5 min cadence, and no timer is left once no chat waits (per-start or per-chat timers, per-start
+// cadences, or a timer kept after the last close fail it).
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
@@ -10,6 +10,7 @@ import {
 import type { ProviderRelayRunRecord } from '../../../provider-relay/app-provider-relays'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import { StructuredAgentSessionKeptOpens } from './structured-agent-session-kept-open-reconciler'
+import { readProcessStartTimeMs } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -72,3 +73,85 @@ it('keeps one retry timer for every waiting chat on every unreachable start, and
     keptOpens.dispose()
   }
 })
+
+it.skipIf(process.platform === 'win32')(
+  'wakes on one shared 5 min cadence however many starts wait and whenever each began',
+  async () => {
+    const realStartMs = await readProcessStartTimeMs(process.pid)
+    const settle = async () => {
+      for (let i = 0; i < 4; i += 1) {
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+    }
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    vi.resetModules()
+    const relays = await import('../../../provider-relay/app-provider-relays')
+    const inventory = await import('../../../provider-relay/provider-relay-launch-inventory')
+    const { StructuredAgentSessionKeptOpens: KeptOpens } =
+      await import('./structured-agent-session-kept-open-reconciler')
+    relays.registerReattachableProviderRelayAgent('codex-test', { provider: 'codex' })
+    // No daemon start answers, and each one's daemon (this process) is alive: every ask stays unknown.
+    relays.installProviderRelayRoute({
+      current: async () => null,
+      all: async () => [],
+      appVersion: 'test',
+      idleStopMs: () => null
+    })
+    const starts = 20
+    const asks: number[] = []
+    const records = new Map<string, ProviderRelayRunRecord>()
+    const sessions = new Map<string, StructuredAgentSessionHostSession>()
+    const keptOpens = new KeptOpens({
+      sessions,
+      serialize: (_id, task) => task(),
+      trackStart: (start) => start,
+      record: (id) => {
+        asks.push(Date.now())
+        return records.get(id) ?? null
+      },
+      fence: () => 1,
+      settle: async () => {},
+      logger: { warn: () => {} }
+    })
+    for (let i = 0; i < starts; i += 1) {
+      const sessionId = `staggered-${i}`
+      records.set(sessionId, {
+        sessionId,
+        provider: 'codex',
+        location: { executionHostId: LOCAL_EXECUTION_HOST_ID },
+        lastRunPlacement: {
+          fence: 1,
+          kind: 'relayed',
+          relayId: `relay-${i}`,
+          daemon: { instance: `start-${i}`, pid: process.pid, startedAtMs: realStartMs ?? 1 },
+          agent: { hostId: 'host', pid: process.pid, processStartTimeMs: 1, spawnToken: `t-${i}` }
+        }
+      })
+      const open = { child: null, journal: { cursor: () => ({ sequence: 0 }) } }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only the journal cursor and child of an open session.
+      sessions.set(sessionId, open as unknown as StructuredAgentSessionHostSession)
+      inventory.noteProviderRelayRunVerdict(
+        sessionId,
+        inventory.beginProviderRelayRunAsk(sessionId),
+        'unknown'
+      )
+      keptOpens.adopted(sessionId, sessions.get(sessionId)!)
+      // Each start begins waiting 37 s after the last, so their backoffs never line up on their own.
+      for (let s = 0; s < 37; s += 1) {
+        await vi.advanceTimersByTimeAsync(1_000)
+        await settle()
+      }
+    }
+    asks.length = 0
+    const hourFrom = Date.now() + 60 * 60_000
+    for (let s = 0; s < 2 * 60 * 60; s += 5) {
+      await vi.advanceTimersByTimeAsync(5_000)
+      await settle()
+    }
+    const lastHour = new Set(asks.filter((at) => at >= hourFrom))
+    // One wakeup per 5 min for all twenty starts, not one per start.
+    expect(lastHour.size).toBe(12)
+    expect(asks.filter((at) => at >= hourFrom)).toHaveLength(12 * starts)
+    keptOpens.dispose()
+  }
+)

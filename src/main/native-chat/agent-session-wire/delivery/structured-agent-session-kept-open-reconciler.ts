@@ -45,9 +45,9 @@ type InstanceRetry = {
  * Chats opened as kept while their run's daemon start couldn't say whether it still runs. Only that
  * start's word, or its daemon and agent proven gone, settles one. The open's boundary lives on its
  * session. Each daemon start asks again for its own waiting chats only: at once when that start
- * says hello again (never within 2 s of its last ask), otherwise backing off from 2 s to 5 min, for
- * as long as one of its chats stays open and waiting. One shared timer serves every start, and none
- * exists once no chat waits. A send asks at once through the gate, however long it waited.
+ * says hello again (never within 2 s of its last ask), otherwise backing off from 2 s to one 5 min
+ * cadence all starts share, for as long as one of its chats stays open and waiting. One shared timer
+ * serves every start, and none exists once no chat waits. A send asks at once through the gate, however long it waited.
  */
 export class StructuredAgentSessionKeptOpens {
   private readonly opened = new WeakMap<StructuredAgentSessionHostSession, number>()
@@ -56,6 +56,7 @@ export class StructuredAgentSessionKeptOpens {
   private readonly waitingOn = new Map<string, string>()
   private timer: NodeJS.Timeout | null = null
   private timerDueAt = Number.POSITIVE_INFINITY
+  private readonly cadenceFrom = Date.now()
   private disposed = false
 
   constructor(private readonly input: StructuredAgentSessionKeptOpensInput) {
@@ -203,9 +204,19 @@ export class StructuredAgentSessionKeptOpens {
       retry.dueAt = retry.lastStartedAt + RETRY_FIRST_MS
     } else {
       retry.attempt += 1
-      retry.dueAt = Date.now() + Math.min(RETRY_FIRST_MS * 2 ** (retry.attempt - 1), RETRY_MAX_MS)
+      const backoffMs = RETRY_FIRST_MS * 2 ** (retry.attempt - 1)
+      retry.dueAt = backoffMs < RETRY_MAX_MS ? Date.now() + backoffMs : this.nextCeilingTick()
     }
     this.arm()
+  }
+
+  /**
+   * Starts backed off to the ceiling share one 5 min cadence, so their wakeups don't multiply with
+   * how many there are or when each last finished.
+   */
+  private nextCeilingTick(): number {
+    const after = Date.now() + RETRY_FIRST_MS
+    return this.cadenceFrom + Math.ceil((after - this.cadenceFrom) / RETRY_MAX_MS) * RETRY_MAX_MS
   }
 
   private end(instance: string, retry: InstanceRetry): void {
