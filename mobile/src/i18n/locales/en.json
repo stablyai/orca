@@ -2045,8 +2045,8 @@
       "titleLabel": "Title",
       "descriptionLabel": "Description",
       "writeWithAi": "Write with AI",
-      "descriptionPlaceholder": "Optional",
-      "draft": "Create as draft"
+      "draft": "Create as draft",
+      "create": "Create"
     },
     "screens": {
       "hideLog": "Hide log",

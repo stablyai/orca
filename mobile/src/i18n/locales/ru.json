@@ -3026,8 +3026,8 @@
       "titleLabel": "Заголовок",
       "descriptionLabel": "Описание",
       "writeWithAi": "Написать с помощью ИИ",
-      "descriptionPlaceholder": "Необязательно",
-      "draft": "Создать как черновик"
+      "draft": "Создать как черновик",
+      "create": "Создать"
     },
     "screens": {
       "hideLog": "Скрыть журнал",

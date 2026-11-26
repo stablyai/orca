@@ -2350,6 +2350,7 @@
       "description": "Beschreibung bearbeiten"
     },
     "createSheet": {
+      "create": "Erstellen",
       "base": "Basis",
       "searchBranches": "Branches suchen",
       "branchSearchFailed": "Branch-Suche fehlgeschlagen.",

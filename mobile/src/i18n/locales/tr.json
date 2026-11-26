@@ -2872,8 +2872,8 @@
       "titleLabel": "Başlık",
       "descriptionLabel": "Açıklama",
       "writeWithAi": "Yapay zekâyla yaz",
-      "descriptionPlaceholder": "İsteğe bağlı",
-      "draft": "Taslak olarak oluştur"
+      "draft": "Taslak olarak oluştur",
+      "create": "Oluştur"
     },
     "screens": {
       "hideLog": "Günlüğü gizle",

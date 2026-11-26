@@ -137,14 +137,15 @@ export const prTabStyles = themedStyleSheet(() => ({
 }))
 
 export const prSheetStyles = themedStyleSheet(() => ({
-  body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md },
-  note: { color: colors.textSecondary, fontSize: 13 },
-  error: { color: colors.statusRed, fontSize: 13 },
+  // Groups span the sheet like every other sheet's; text lines up with the rows' 16 pt inset.
+  body: { paddingBottom: spacing.lg, gap: spacing.md },
+  note: { color: colors.textSecondary, fontSize: 13, paddingHorizontal: spacing.lg },
+  error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.lg },
   state: { color: colors.textSecondary, fontSize: typography.metaSize },
   approved: { color: colors.statusGreen },
   field: {
     fontSize: COMPOSER_TEXT_SIZE,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md
   },
   multiline: { minHeight: 160, maxHeight: 320, textAlignVertical: 'top' }

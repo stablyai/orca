@@ -2512,8 +2512,8 @@
       "titleLabel": "제목",
       "descriptionLabel": "설명",
       "writeWithAi": "AI로 작성",
-      "descriptionPlaceholder": "선택 사항",
-      "draft": "초안으로 만들기"
+      "draft": "초안으로 만들기",
+      "create": "만들기"
     },
     "screens": {
       "hideLog": "로그 숨기기",

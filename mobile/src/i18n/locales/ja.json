@@ -2348,6 +2348,7 @@
       "description": "説明を編集"
     },
     "createSheet": {
+      "create": "作成",
       "base": "ベース",
       "searchBranches": "ブランチを検索",
       "branchSearchFailed": "ブランチを検索できませんでした。",

@@ -2714,8 +2714,8 @@
       "titleLabel": "标题",
       "descriptionLabel": "描述",
       "writeWithAi": "用 AI 撰写",
-      "descriptionPlaceholder": "可选",
-      "draft": "创建为草稿"
+      "draft": "创建为草稿",
+      "create": "创建"
     },
     "screens": {
       "hideLog": "隐藏日志",
