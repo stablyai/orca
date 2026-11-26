@@ -31,7 +31,7 @@ export function useWorktreeJumpPaletteController({
   lingering: boolean
   createLookupGuard: WorktreePaletteRequestGuard
 }) {
-  const resultsReady = useResultsReadyAfterOpeningPaint(visible)
+  const { resultsReady, revealResultsNow } = useResultsReadyAfterOpeningPaint(visible)
   const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering, resultsReady })
   const localState = useWorktreeJumpPaletteLocalState({ createLookupGuard, visible })
   // Showing only bots, every other section keeps the inputs it had, so none of its work reruns.
@@ -215,6 +215,7 @@ export function useWorktreeJumpPaletteController({
     ...selectionLifecycle,
     ...selectionActions,
     resultsReady,
+    revealResultsNow,
     botScope,
     botScopeNote: botScopeEntries.botScopeNote,
     paletteNowMs: worktrees.hasQuery ? paletteSearchContext.nowMs : storeState.paletteNowMs,

@@ -1,4 +1,5 @@
-import { startTransition, useEffect, useState } from 'react'
+import { startTransition, useCallback, useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 // Hidden windows may never run animation frames; results must still arrive there.
 const HIDDEN_WINDOW_FALLBACK_MS = 100
@@ -7,7 +8,10 @@ const HIDDEN_WINDOW_FALLBACK_MS = 100
  * False on the render that opens the palette, then true once that frame has painted, so
  * the input shows within a frame and the result index builds right after.
  */
-export function useResultsReadyAfterOpeningPaint(visible: boolean): boolean {
+export function useResultsReadyAfterOpeningPaint(visible: boolean): {
+  resultsReady: boolean
+  revealResultsNow: () => void
+} {
   const [ready, setReady] = useState(false)
   useEffect(() => {
     if (!visible || ready) {
@@ -31,5 +35,9 @@ export function useResultsReadyAfterOpeningPaint(visible: boolean): boolean {
       window.clearTimeout(fallbackTimer)
     }
   }, [visible, ready])
-  return ready
+  // An Enter or arrow key before the results land must act on them, as it did when opening blocked.
+  const revealResultsNow = useCallback(() => {
+    flushSync(() => setReady(true))
+  }, [])
+  return { resultsReady: ready, revealResultsNow }
 }

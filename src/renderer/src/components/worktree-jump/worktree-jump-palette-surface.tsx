@@ -18,6 +18,8 @@ import {
   getWorktreeJumpPaletteResultCount
 } from './results/worktree-jump-palette-empty-state'
 
+const RESULT_KEYS = new Set(['Enter', 'ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'])
+
 export function WorktreeJumpPaletteSurface({
   controller
 }: {
@@ -70,6 +72,9 @@ export function WorktreeJumpPaletteSurface({
         onValueChange: controller.handleCommandSelectionChange,
         className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
+          if (!controller.resultsReady && RESULT_KEYS.has(event.key)) {
+            controller.revealResultsNow()
+          }
           if (
             selectedTask &&
             event.key === 'Enter' &&
