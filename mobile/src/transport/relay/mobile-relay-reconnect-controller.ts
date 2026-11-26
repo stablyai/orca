@@ -233,8 +233,8 @@ export class RelayReconnectController {
     return null
   }
 
-  // pendingOnly: the failed dial used an unconfirmed pending install, whose validity only the relay knows.
-  registerFailure(error: Error | null, scheduleRetry = true, pendingOnly = false): void {
+  // unconfirmed: the dial's token may not exist (pending) or was refused by a possibly stale director.
+  registerFailure(error: Error | null, scheduleRetry = true, unconfirmed = false): void {
     // Bank rejection evidence before gated early return, except when a live authenticated relay disproves revocation.
     if (!this.activeSession) {
       this.evidence.record(error)
@@ -259,9 +259,13 @@ export class RelayReconnectController {
       ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
       : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
-    if (error instanceof MobileE2EEAuthenticationError || (pendingOnly && !credentialRejected)) {
-      // E2EE rejection can be transient during credential commit, and an unconfirmed pending install may not
-      // exist; gate slow reprobes (and one retry per network change or resume) instead of fast retries.
+    // A 4404 follows the cell's credential check, so it keeps the host-offline cadence even when unconfirmed.
+    if (
+      error instanceof MobileE2EEAuthenticationError ||
+      (unconfirmed && !credentialRejected && !hostOffline)
+    ) {
+      // E2EE rejection can be transient during credential commit, and an unconfirmed token may be dead;
+      // gate slow reprobes (and one retry per network change or resume) instead of fast retries.
       this.holdGate(scheduleRetry, 'external-signal')
       return
     }

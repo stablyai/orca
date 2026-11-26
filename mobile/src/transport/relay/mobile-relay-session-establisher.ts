@@ -18,6 +18,10 @@ import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-cl
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
+function isDirectorRefusal(error: Error | null): boolean {
+  return error instanceof RelayDirectorHttpError && error.status === 401
+}
+
 type EstablishResult = { ok: true } | { ok: false; error: Error }
 
 function directWon(logical: StableLogicalRpcClient): boolean {
@@ -67,20 +71,21 @@ export class MobileRelaySessionEstablisher {
     this.relay = relay
   }
 
-  // Try the next credential only after the relay refuses one; pendingOnly marks a failed pending dial.
+  // Try the next credential only after the relay refuses one. unconfirmed: the last failure used the
+  // unconfirmed pending install, or ended in a director 401 that may be stale; only the cell can tell.
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
     | { outcome: 'established' }
     | { outcome: 'aborted' }
-    | { outcome: 'failed'; error: Error | null; pendingOnly: boolean }
+    | { outcome: 'failed'; error: Error | null; unconfirmed: boolean }
   > {
     let lastError: Error | null = null
-    let pendingOnly = false
+    let usedPending = false
     const bundle = this.args.bundle()
     const pending = bundle ? pendingRelayCredentialLease(bundle) : null
     for (const credential of credentials) {
-      pendingOnly = credential.token === pending?.token
+      usedPending = credential.token === pending?.token
       const result = await this.dial(credential)
       if (result.ok) {
         return { outcome: 'established' }
@@ -97,11 +102,15 @@ export class MobileRelaySessionEstablisher {
       }
       // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
       // the next credential without condemning this one.
-      if (!(result.error instanceof RelayDirectorHttpError && result.error.status === 401)) {
+      if (!isDirectorRefusal(result.error)) {
         break
       }
     }
-    return { outcome: 'failed', error: lastError, pendingOnly }
+    return {
+      outcome: 'failed',
+      error: lastError,
+      unconfirmed: usedPending || isDirectorRefusal(lastError)
+    }
   }
 
   dial(credential: { token: string; version: number }): Promise<EstablishResult> {

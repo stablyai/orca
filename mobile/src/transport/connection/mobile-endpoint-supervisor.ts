@@ -291,7 +291,7 @@ export class MobileEndpointSupervisor {
       }
       // Record a dial completing after cleanup without recreating foreground timers.
       const scheduleRetry = (!forceReplacement || ownsRecovery) && this.isActive()
-      this.relayReconnect.registerFailure(dialed.error, scheduleRetry, dialed.pendingOnly)
+      this.relayReconnect.registerFailure(dialed.error, scheduleRetry, dialed.unconfirmed)
       recoveryPresentation.clearIfCredentialBlocked(this.logical, this.relayReconnect)
       if (ownsRecovery) {
         suspendRelayIfStillConnected(this.relayReconnect, this.logical)
