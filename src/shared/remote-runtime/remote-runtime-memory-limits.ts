@@ -9,7 +9,7 @@ export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
 // Why: a host refuses a larger client frame by closing the socket (1009), failing every call on it.
 export const REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES = 1024 * 1024
 // Why: a sealed frame is base64 of nonce, MAC and (v2) a 42-byte header around the request JSON.
-const REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES = 128
+export const REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES = 128
 /** The largest request JSON that still fits a host's inbound frame once sealed. */
 export const REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES =
   Math.floor(REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES / 4) * 3 -

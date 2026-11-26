@@ -1,6 +1,5 @@
 // A stand-in Relay cell for tests: one client socket spliced to one host socket with the cell's own
 // flow control (cloud/apps/relay/src/connections/splice-forwarder.ts) and its real limits.
-import { Socket } from 'node:net'
 import { WebSocket, WebSocketServer, type RawData } from 'ws'
 import { RELAY_ADMISSION_BUDGETS as LIMITS } from '../../../../../cloud/packages/relay-contract/src/admission-budgets'
 
@@ -21,12 +20,6 @@ function frameBytes(data: RawData): number {
   return Array.isArray(data)
     ? data.reduce((total, part) => total + part.byteLength, 0)
     : data.byteLength
-}
-
-// The cell pauses a socket's TCP reads to push back on its sender; ws keeps that socket as `_socket`.
-function tcp(socket: WebSocket): Socket | null {
-  const raw: unknown = Reflect.get(socket, '_socket')
-  return raw instanceof Socket ? raw : null
 }
 
 export async function startRelayCellStandIn(hostUrl: string): Promise<RelayCellStandIn> {
@@ -80,7 +73,7 @@ export async function startRelayCellStandIn(hostUrl: string): Promise<RelayCellS
         }
         if (queue.length === 0) {
           wedgedSince = null
-          tcp(source)?.resume()
+          source.resume()
           return
         }
         if (wedgedSince !== null && Date.now() - wedgedSince >= LIMITS.spliceWedgedTimeoutMs) {
@@ -118,7 +111,8 @@ export async function startRelayCellStandIn(hostUrl: string): Promise<RelayCellS
         queue.push({ data, binary, bytes })
         queuedBytes += bytes
         wedgedSince ??= Date.now()
-        tcp(source)?.pause()
+        // The cell pauses the sender's TCP reads to push back on it; ws pauses its socket the same way.
+        source.pause()
         if (queue.length === 1) {
           flush()
         }

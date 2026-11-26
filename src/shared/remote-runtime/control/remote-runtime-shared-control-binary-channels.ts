@@ -1,17 +1,13 @@
-import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import {
-  BINARY_CHANNEL_HEADER_BYTES,
   BinaryChannelOpcode,
   decodeBinaryChannelFrame,
   encodeBinaryChannelFrame,
-  isBinaryChannelKind
+  isBinaryChannelKind,
+  MAX_CLIENT_CHANNEL_PAYLOAD_BYTES
 } from '../protocol/runtime-binary-channel'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
 
 const EMPTY = new Uint8Array()
-// What fits a stream's own socket fits its channel; one oversized frame must fail only its send.
-const MAX_CHANNEL_PAYLOAD_BYTES =
-  REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES - BINARY_CHANNEL_HEADER_BYTES
 // Ended streams leave a stale owner entry until the next miss; sweep well before it matters.
 const STALE_OWNER_SWEEP_AT = 64
 
@@ -57,7 +53,7 @@ export class SharedControlBinaryChannels {
     const channel = subscription.binaryChannel
     return (
       channel !== undefined &&
-      payload.byteLength <= MAX_CHANNEL_PAYLOAD_BYTES &&
+      payload.byteLength <= MAX_CLIENT_CHANNEL_PAYLOAD_BYTES &&
       subscription.sent &&
       !subscription.closed &&
       this.args.send(

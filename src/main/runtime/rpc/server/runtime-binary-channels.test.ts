@@ -3,6 +3,7 @@ import {
   BinaryChannelOpcode,
   decodeBinaryChannelFrame,
   encodeBinaryChannelFrame,
+  MAX_HOST_CHANNEL_PAYLOAD_BYTES,
   MAX_OPEN_BINARY_CHANNELS
 } from '../../../../shared/remote-runtime/protocol/runtime-binary-channel'
 import {
@@ -157,15 +158,17 @@ describe('runtime binary channels', () => {
     errors.mockRestore()
   })
 
-  it('never sends a frame the header would push over the frame limit', () => {
+  it('never sends a frame that, sealed, would exceed the client frame limit', () => {
     const { open } = host()
     const sent: number[] = []
     const channel = open(1, (bytes) => {
       sent.push(bytes.byteLength)
     })
-    expect(channel.sendBinary(new Uint8Array(8 * 1024 * 1024))).toBe(false)
-    channel.sendBinary(new Uint8Array(8 * 1024 * 1024 - 8))
-    expect(sent).toEqual([8 * 1024 * 1024])
+    expect(channel.sendBinary(new Uint8Array(8 * 1024 * 1024 - 8))).toBe(false)
+    channel.sendBinary(new Uint8Array(MAX_HOST_CHANNEL_PAYLOAD_BYTES))
+    expect(sent).toHaveLength(1)
+    // E2EE v2 seals a binary frame with 82 bytes; the client takes up to 8 MiB + 64.
+    expect(sent[0] + 82).toBeLessThanOrEqual(8 * 1024 * 1024 + 64)
   })
 
   it('encodes only valid channel numbers and decodes only well-formed frames', () => {

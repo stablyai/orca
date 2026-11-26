@@ -1,5 +1,5 @@
 // A real host behind a stand-in Relay cell, reached by a control connection that is its one link.
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
@@ -19,7 +19,7 @@ export async function startOneLinkHostBehindCell(
   methods: readonly RpcAnyMethodDeclaration[],
   cleanups: (() => Promise<void> | void)[]
 ) {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-one-link-'))
+  const userDataPath = await mkdtemp(join(tmpdir(), 'orca-one-link-'))
   const server = new OrcaRuntimeRpcServer({
     runtime: new OrcaRuntimeService(),
     userDataPath,
@@ -30,7 +30,7 @@ export async function startOneLinkHostBehindCell(
   await server.start()
   cleanups.push(async () => {
     await server.stop().catch(() => {})
-    rmSync(userDataPath, { recursive: true, force: true })
+    await rm(userDataPath, { recursive: true, force: true })
   })
   const offer = server.createPairingOffer({ address: '127.0.0.1', scope: 'runtime', name: 'Desk' })
   if (!offer.available) {

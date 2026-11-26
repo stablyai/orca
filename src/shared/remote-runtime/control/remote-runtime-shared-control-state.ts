@@ -132,7 +132,11 @@ export function handleSharedControlSubscriptionResponse(
     }
   }
   subscription.callbacks.onResponse(delivered)
-  if (response.ok && isEndResult(response.result)) {
+  // A channel stream's error ended it on the host, which released its channel.
+  if (
+    (response.ok && isEndResult(response.result)) ||
+    (!response.ok && subscription.binaryChannel !== undefined)
+  ) {
     finishSharedControlSubscription(subscriptions, subscription, false)
   }
 }

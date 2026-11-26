@@ -59,9 +59,26 @@ export function closeSharedControlSocket(args: {
     error: args.error,
     preserveReadyWaitersAndPendingRequests: args.preserveReadyWaitersAndPendingRequests
   })
-  return () => {
-    for (const stream of endedStreams) {
+  return () => notifyChannelStreamsEnded(endedStreams)
+}
+
+/** The channel streams a closing connection ends; tell their owners with the returned function. */
+export function channelStreamsEndedByClose(
+  subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
+): () => void {
+  const streams = Array.from(subscriptions.values()).filter(
+    (subscription) => subscription.binaryChannel !== undefined && !subscription.closed
+  )
+  return () => notifyChannelStreamsEnded(streams)
+}
+
+// One owner's throwing onClose must not keep the others from hearing, or stop the reconnect.
+function notifyChannelStreamsEnded(streams: SharedControlLogicalSubscription<unknown>[]): void {
+  for (const stream of streams) {
+    try {
       stream.callbacks.onClose?.()
+    } catch (error) {
+      console.warn('[remote-runtime] a stream close handler failed', error)
     }
   }
 }

@@ -1,12 +1,11 @@
 import {
-  BINARY_CHANNEL_HEADER_BYTES,
   BinaryChannelOpcode,
   decodeBinaryChannelFrame,
   encodeBinaryChannelFrame,
   isBinaryChannelKind,
+  MAX_HOST_CHANNEL_PAYLOAD_BYTES,
   MAX_OPEN_BINARY_CHANNELS
 } from '../../../../shared/remote-runtime/protocol/runtime-binary-channel'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { RuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
@@ -28,11 +27,6 @@ export type OpenedBinaryChannel = {
   /** Releases the channel if this request opened it; a request that joined it leaves it open. */
   release: () => void
 }
-
-// The channel header must not push a frame the stream sized to the limit over it, which would
-// close the whole socket instead of failing one send.
-const MAX_CHANNEL_PAYLOAD_BYTES =
-  REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES - BINARY_CHANNEL_HEADER_BYTES
 
 /**
  * The binary channels open on each socket (see `runtime-binary-channel.ts`). Each channel is a
@@ -82,7 +76,7 @@ export class RuntimeBinaryChannels {
       signal: open.abort.signal,
       capabilities: open.capabilities,
       sendBinary: (bytes, options) =>
-        table.get(channel) === open && bytes.byteLength <= MAX_CHANNEL_PAYLOAD_BYTES
+        table.get(channel) === open && bytes.byteLength <= MAX_HOST_CHANNEL_PAYLOAD_BYTES
           ? sendBinary(
               encodeBinaryChannelFrame({
                 opcode: BinaryChannelOpcode.Data,

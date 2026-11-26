@@ -15,7 +15,7 @@ import { SharedControlReconnectScheduler } from './remote-runtime-shared-control
 import { SharedControlRetiredRequestIds } from '../requests/remote-runtime-shared-control-retired-request-ids'
 import { SharedControlReadinessTimer } from './remote-runtime-shared-control-stability'
 import * as sharedControlState from './remote-runtime-shared-control-state'
-import { closeSharedControlSocket, LOCAL_CLOSE } from './remote-runtime-shared-control-socket-close'
+import * as socketClose from './remote-runtime-shared-control-socket-close'
 import { SharedControlSocketGeneration } from './remote-runtime-shared-control-socket-generation'
 import { refreshRemoteRuntimeSharedControl } from './remote-runtime-shared-control-refresh'
 import { SharedControlDiagnosticsTracker } from './remote-runtime-shared-control-diagnostics'
@@ -106,8 +106,11 @@ export class RemoteRuntimeSharedControlConnection {
     this.retryEpoch += 1
     this.socketGeneration.invalidate()
     this.reconnect.clear()
+    // Its channel streams end with it, as on a drop; their owners hear once it closed.
+    const notifyChannelStreams = socketClose.channelStreamsEndedByClose(this.subscriptions)
     Array.from(this.subscriptions.keys()).forEach((id) => this.closeSubscription(id))
     this.closeSocket(error)
+    notifyChannelStreams()
     this.publishDiagnostics()
   }
   readonly retryNow = (): boolean => this.reconnect.retryNow()
@@ -167,9 +170,7 @@ export class RemoteRuntimeSharedControlConnection {
       })
     void openPreparedSharedControlChannel(this.options, {
       current: () => current() && !this.intentionallyClosed,
-      prepared: () => {
-        this.opening = null
-      },
+      prepared: () => void (this.opening = null),
       hasDemand: () => !demand || this.readyWaiters.length > 0 || this.subscriptions.size > 0,
       refuse: (error) =>
         sharedControlState.rejectSharedControlReadyWaiters(this.readyWaiters, error),
@@ -294,8 +295,9 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private closeSocket(error?: Error, options: SharedControlTypes.CloseSocketOptions = {}): void {
-    const notifyEndedStreams = closeSharedControlSocket({
-      reportClose: () => this.diagnostics.markSocketClosed(options.close ?? LOCAL_CLOSE),
+    const notifyEndedStreams = socketClose.closeSharedControlSocket({
+      reportClose: () =>
+        this.diagnostics.markSocketClosed(options.close ?? socketClose.LOCAL_CLOSE),
       environmentId: this.options.environmentId,
       state: this.state,
       pendingRequests: this.pendingRequests,
