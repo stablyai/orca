@@ -94,7 +94,11 @@ export function useMobileChatModelChoices(
   worktreeId: string,
   launch?: BotLaunch
 ): BotModelChoices | null {
-  const [answer, setAnswer] = useState<{ key: string; host: HostChoices | null } | null>(null)
+  const [answer, setAnswer] = useState<{
+    client: RpcClient
+    key: string
+    host: HostChoices | null
+  } | null>(null)
   const key = `${agent}\n${worktreeId}`
   useEffect(() => {
     if (!client || !online || !agent) {
@@ -102,16 +106,20 @@ export function useMobileChatModelChoices(
     }
     const controller = new AbortController()
     void readHostChoices(client, agent, worktreeId, controller.signal).then(
-      (host) => !controller.signal.aborted && setAnswer({ key, host }),
+      (host) => !controller.signal.aborted && setAnswer({ client, key, host }),
       () =>
         !controller.signal.aborted &&
-        setAnswer((held) => (held?.key === key && held.host ? held : { key, host: null }))
+        setAnswer((held) =>
+          held?.client === client && held.key === key && held.host
+            ? held
+            : { client, key, host: null }
+        )
     )
     return () => {
       controller.abort()
     }
   }, [client, online, agent, worktreeId, key])
-  const host = answer?.key === key ? answer.host : null
+  const host = answer?.client === client && answer.key === key ? answer.host : null
   if (!host || !isTuiAgent(agent)) {
     return null
   }

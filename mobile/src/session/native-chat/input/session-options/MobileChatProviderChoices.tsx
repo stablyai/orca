@@ -1,8 +1,8 @@
 import { chatSwitchPermissionCopy } from '../../../../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ConfirmContent } from '../../../../components/sheets/ConfirmModal'
 import { ListGroup, ListRow, SectionHeader } from '../../../../components/list/ListGroup'
-import { useMobileChatModelChoices } from '../../../../bots/use-bot-model-choices'
+import type { BotModelChoices } from '../../../../bots/use-bot-model-choices'
 import { useOptionalHostProtocolGates } from '../../../../components/host-connection/host-protocol-gates-context'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MobileAgentTileGrid } from '../../../agent-launch/MobileAgentTileGrid'
@@ -13,20 +13,24 @@ import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/c
 import { AgentSessionSelectProviderResultSchema } from '../../../../../../src/shared/agent-session/lifecycle/records/agent-session-provider-selection'
 import type { AgentSessionSelectProviderParams } from '../../../../../../src/shared/agent-session/lifecycle/records/agent-session-provider-selection'
 import type { MobileChatProviderPickerScope } from './use-mobile-chat-provider-picker'
+import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
 
 export function MobileChatProviderChoices({
   scope,
   active,
-  onError
+  catalog,
+  children
 }: {
   scope: MobileChatProviderPickerScope
   active: string
-  onError: (message: string) => void
+  catalog: BotModelChoices | null
+  children: ReactNode
 }) {
   const t = useMobileTranslation()
   const status = useOptionalHostProtocolGates()
   const [pending, setPending] = useState(false)
   const [moreModels, setMoreModels] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<
     | (AgentSessionSelectProviderParams & {
         consent: NonNullable<AgentSessionSelectProviderParams['consent']>
@@ -34,14 +38,6 @@ export function MobileChatProviderChoices({
     | null
   >(null)
   const { client, sessionId, worktreeId, hostId, selection } = scope
-  const { model: selectedModel, ...selectedOptions } = selection?.options ?? {}
-  const catalog = useMobileChatModelChoices(
-    client,
-    client.getState() === 'connected',
-    selection?.agent,
-    worktreeId,
-    { model: selectedModel, options: selectedOptions }
-  )
   const { options } = useMobileNewTabAgentOptions({
     client,
     hostId,
@@ -56,13 +52,14 @@ export function MobileChatProviderChoices({
       return
     }
     setPending(true)
+    setError(null)
     try {
       const result = AgentSessionSelectProviderResultSchema.parse(
         await callAgentSession(client, 'agentSession.selectProvider', params)
       )
       if (result.status === 'consent-required') {
         if (params.consent) {
-          onError(
+          setError(
             t(
               'chat.providerSwitch.changed',
               'Chat permissions changed. Pick the agent again to continue.'
@@ -80,7 +77,7 @@ export function MobileChatProviderChoices({
         })
       }
     } catch {
-      onError(t('chat.providerSwitch.failed', 'Couldn’t select this agent.'))
+      setError(t('chat.providerSwitch.failed', 'Couldn’t select this agent.'))
     } finally {
       setPending(false)
     }
@@ -126,6 +123,7 @@ export function MobileChatProviderChoices({
           void pick(agent)
         }}
       />
+      {error ? <SessionOptionCaption>{error}</SessionOptionCaption> : null}
       {selection && catalog && catalog.models.length > 0 ? (
         <>
           <SectionHeader title={t('bots.settings.model', 'Model')} />
@@ -176,6 +174,7 @@ export function MobileChatProviderChoices({
           ) : null}
         </>
       ) : null}
+      {children}
     </>
   )
 }
