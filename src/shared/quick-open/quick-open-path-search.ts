@@ -6,6 +6,7 @@ import { isClipboardTextByteLengthOverLimit } from '../clipboard/clipboard-text'
 import { compareFileNames } from '../file-listing/file-name-sort'
 import {
   asciiIdentifierBoundaries,
+  NON_ASCII,
   unicodeIdentifierBoundaries
 } from './quick-open-identifier-boundaries'
 
@@ -141,8 +142,6 @@ export class QuickOpenPathRanker {
 }
 
 type QuickOpenQueryTerm = { text: string; withoutSeparators: string | undefined }
-
-const NON_ASCII = /[\u0080-\u{10ffff}]/u
 
 // Why: macOS often stores names decomposed (NFD) while keyboards type composed (NFC); recompose after
 // lowercasing too, since case mapping can leave a sequence decomposed (J\u030c → j\u030c, not ǰ).

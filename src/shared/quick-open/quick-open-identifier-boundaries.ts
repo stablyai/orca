@@ -1,3 +1,5 @@
+export const NON_ASCII = /[\u0080-\u{10ffff}]/u
+
 const isUpper = (code: number): boolean => code >= 65 && code <= 90
 const isLower = (code: number): boolean => code >= 97 && code <= 122
 
@@ -23,6 +25,7 @@ export function asciiIdentifierBoundaries(searchPath: string): Set<number> | und
 export function unicodeIdentifierBoundaries(searchPath: string): Set<number> | undefined {
   const boundaries = new Set<number>()
   let lowerOffset = 0
+  let segmentStart = 0
   for (let index = 0; index < searchPath.length; index++) {
     if (
       index > 0 &&
@@ -30,9 +33,14 @@ export function unicodeIdentifierBoundaries(searchPath: string): Set<number> | u
       (/[a-z0-9]/.test(searchPath[index - 1]) ||
         (/[A-Z]/.test(searchPath[index - 1]) && /[a-z]/.test(searchPath[index + 1] ?? '')))
     ) {
+      // Why: offsets index the NFC lowercase path (J + caron -> ǰ); ASCII never composes backwards.
+      const segment = searchPath.slice(segmentStart, index)
+      lowerOffset += NON_ASCII.test(segment)
+        ? segment.toLowerCase().normalize('NFC').length
+        : segment.length
       boundaries.add(lowerOffset)
+      segmentStart = index
     }
-    lowerOffset += searchPath[index].toLowerCase().length
   }
   return boundaries.size > 0 ? boundaries : undefined
 }
