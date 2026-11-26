@@ -96,7 +96,9 @@ export async function forwardedChatLineage(
 
 /** The caller's options a server's start takes; this Orca's own fields, and a lineage claim the
  *  caller made itself, stay here. */
-export function serverStartOptions(params: StartParams) {
+export function serverStartOptions(
+  params: StartParams & { inheritedLaunchPreferences?: boolean }
+) {
   const {
     from: _from,
     run: _run,
@@ -105,6 +107,7 @@ export function serverStartOptions(params: StartParams) {
     deps: _deps,
     parent: _parent,
     chatLineage: _chatLineage,
+    inheritedLaunchPreferences: _inheritedLaunchPreferences,
     ...options
   } = params
   return options

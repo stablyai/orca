@@ -1,5 +1,4 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -13,9 +12,9 @@ import {
 import { orchestrationMigrationData } from '../../../../shared/orchestration/orchestration-rpc-contract'
 import { OrchestrationError } from '../orchestration-error'
 import {
-  assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
-  createPendingWorkerLaunchReceipt,
+  joinWorkerStartWarnings,
+  resolveFederatedWorkerLaunchPreferences,
   resolveFederatedWorkerLaunchReceipt
 } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-validation'
@@ -68,11 +67,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const createsWorktree = createMode !== undefined
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
-  const requestedLaunch = createPendingWorkerLaunchReceipt({
-    agent: isTuiAgent(params.agent) ? params.agent : null,
-    model: params.model,
-    effort: params.effort
-  })
   const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
@@ -97,9 +91,14 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
-  assertWorkerLaunchPreferencesRuntimeSupported({
-    model: params.model,
-    effort: params.effort,
+  const {
+    model: effectiveModel,
+    effort: effectiveEffort,
+    requestedLaunch,
+    warning: launchDropWarning
+  } = resolveFederatedWorkerLaunchPreferences({
+    params,
+    createsWorktree,
     capabilities: status.capabilities,
     serverName: server.name
   })
@@ -208,8 +207,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
             : undefined,
           terminal: params.terminal,
           agent: params.agent,
-          model: params.model,
-          effort: params.effort,
+          model: effectiveModel,
+          effort: effectiveEffort,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode
         },
@@ -237,6 +236,10 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       const reportsTurnStops = status.capabilities?.includes(
         ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
       )
+      const warning = joinWorkerStartWarnings(
+        launchDropWarning,
+        childParent && 'warning' in childParent ? childParent.warning : undefined
+      )
       readyResult = withWorkerStartNext(
         {
           runId,
@@ -250,7 +253,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           timeoutMs: budgets.readinessTimeoutMs,
           effects: remote.effects ?? [],
           residualResources: remote.residualResources ?? [],
-          ...(childParent && 'warning' in childParent ? { warning: childParent.warning } : {})
+          ...(warning ? { warning } : {})
         },
         reportsTurnStops
           ? undefined

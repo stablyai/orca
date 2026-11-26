@@ -1,5 +1,4 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
-import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
@@ -39,7 +38,8 @@ import {
   releaseRetriedWorkerTerminal
 } from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority } from './placement/worker-placement-topology'
-import { prepareLocalWorkerStart } from './launch/worker-start-validation'
+import { joinWorkerStartWarnings } from './launch/worker-launch-preferences'
+import { resolveLocalWorkerStartLaunch } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import { handOverWhenReady, wakeReusedSleptAgent } from './readiness/placed-worker-readiness'
 import type { WorkerStartMutation } from './worker-start-mutation'
@@ -100,18 +100,16 @@ export async function startLocalWorker(args: {
         : { worktree: existingWorktree }
     )
   )
-  let openCodeModelLaunchSupported = false
-  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
-      probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, { worktree: existingWorktree })
-    )
-  }
-
-  const { agent, launch } = prepareLocalWorkerStart({
+  const {
+    agent,
+    launch,
+    warning: retryLaunchWarning
+  } = await resolveLocalWorkerStartLaunch({
     params: launchParams,
     createsWorktree,
-    runtime,
-    openCodeModelLaunchSupported
+    existingWorktree,
+    targetLabel,
+    runtime
   })
 
   const creationTarget = createsWorktree
@@ -284,7 +282,7 @@ export async function startLocalWorker(args: {
         timeoutMs,
         readinessDeadline: deliveryDeadline,
         effects,
-        terminalRevealWarning: placement.warning,
+        terminalRevealWarning: joinWorkerStartWarnings(retryLaunchWarning, placement.warning),
         onStage
       })
     }
@@ -297,7 +295,13 @@ export async function startLocalWorker(args: {
       timeoutMs,
       readinessDeadline,
       launchedAt,
-      receipt: { runId: run.id, taskId: task.id, launch: placed.launch, mode },
+      receipt: {
+        runId: run.id,
+        taskId: task.id,
+        launch: placed.launch,
+        mode,
+        warning: joinWorkerStartWarnings(retryLaunchWarning, placed.warning)
+      },
       onSetupFailed: () => onStage('setup_wait'),
       handOver,
       bindTerminal,

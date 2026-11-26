@@ -88,9 +88,7 @@ function createRetryStartFixture() {
       }).action
     ).toBe('settled')
     if (options.releaseTerminal !== false) {
-      await expect(
-        base.call('orchestration.workerRelease', { dispatch: started.dispatchId })
-      ).resolves.toMatchObject({ state: 'released' })
+      await releaseWorker(started.dispatchId)
     }
     return {
       taskId: task.id,
@@ -105,7 +103,12 @@ function createRetryStartFixture() {
     ).resolves.toMatchObject({ state: 'released' })
   }
 
-  return { db, runtime, activeRunId, callStart, startFailedAttempt, releaseWorker }
+  function nextWorkerHandle(): string {
+    seq += 1
+    return `term_worker_${seq}`
+  }
+
+  return { db, runtime, activeRunId, callStart, startFailedAttempt, releaseWorker, nextWorkerHandle }
 }
 
 describe('worker-start --retry-of launch preference rehydration', () => {
@@ -117,8 +120,8 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     vi.restoreAllMocks()
   })
 
-  it('rehydrates agent, model, and effort when --agent is omitted on --retry-of', async () => {
-    const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
+  it('rehydrates agent, model, and effort when --agent, --model, and --effort are omitted', async () => {
+    const { db, runtime, callStart, startFailedAttempt, releaseWorker } = createRetryStartFixture()
     activeDb = db
     const first = await startFailedAttempt({
       agent: 'codex',
@@ -155,63 +158,77 @@ describe('worker-start --retry-of launch preference rehydration', () => {
         requested: { agent: 'codex', model: 'gpt-5.2-codex', effort: 'high' }
       }
     })
-  })
 
-  it('overrides only the specified --model or --effort flag while preserving the rest', async () => {
-    const { db, callStart, startFailedAttempt, releaseWorker } = createRetryStartFixture()
-    activeDb = db
-    const first = await startFailedAttempt({
-      agent: 'codex',
-      model: 'gpt-5.2-codex',
-      effort: 'high'
-    })
-
-    const effortOverride = await callStart({
-      task: first.taskId,
-      from: 'term_coord',
-      retryOf: first.dispatchId,
-      effort: 'medium'
-    })
-    expect(effortOverride).toMatchObject({
-      state: 'ready',
-      launch: {
-        requested: { agent: 'codex', model: 'gpt-5.2-codex', effort: 'medium' },
-        effective: { agent: 'codex', model: 'gpt-5.2-codex', effort: 'medium' }
-      }
-    })
-    if (!isStartReceipt(effortOverride)) {
-      throw new Error('expected effort override receipt')
-    }
     expect(
       db.settleWorkerReport({
         taskId: first.taskId,
-        dispatchId: effortOverride.dispatchId,
+        dispatchId: retried.dispatchId,
         outcome: 'failed',
         result: 'second attempt failed'
       }).action
     ).toBe('settled')
-    await releaseWorker(effortOverride.dispatchId)
+    await releaseWorker(retried.dispatchId)
+
+    const sameAgentExplicit = await callStart({
+      task: first.taskId,
+      from: 'term_coord',
+      retryOf: retried.dispatchId,
+      agent: 'codex'
+    })
+    expect(sameAgentExplicit).toMatchObject({
+      state: 'ready',
+      launch: {
+        requested: { agent: 'codex', model: 'gpt-5.2-codex', effort: 'high' },
+        effective: { agent: 'codex', model: 'gpt-5.2-codex', effort: 'high' }
+      }
+    })
+  })
+
+  it('treats model and effort as one unit so an explicit --model does not inherit an incompatible prior effort', async () => {
+    const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
+    activeDb = db
+    // Claude opus accepts effort=high, whereas haiku accepts no effort levels at all.
+    const first = await startFailedAttempt({
+      agent: 'claude',
+      model: 'opus',
+      effort: 'high'
+    })
+
+    await expect(
+      callStart({
+        task: first.taskId,
+        from: 'term_coord',
+        retryOf: first.dispatchId,
+        effort: 'medium'
+      })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: '--effort requires --model.'
+    })
 
     const modelOverride = await callStart({
       task: first.taskId,
       from: 'term_coord',
-      retryOf: effortOverride.dispatchId,
-      agent: 'codex',
-      model: 'gpt-5.5'
+      retryOf: first.dispatchId,
+      model: 'haiku'
     })
     expect(modelOverride).toMatchObject({
       state: 'ready',
       launch: {
-        requested: { agent: 'codex', model: 'gpt-5.5', effort: 'medium' },
-        effective: { agent: 'codex', model: 'gpt-5.5', effort: 'medium' }
+        requested: { agent: 'claude', model: 'haiku', effort: null },
+        effective: { agent: 'claude', model: 'haiku', effort: null }
       }
+    })
+    expect(modelOverride).not.toHaveProperty('warning')
+    expect(vi.mocked(runtime.createTerminal).mock.calls[1]?.[1]).toMatchObject({
+      startupAgent: 'claude',
+      launchPreferences: { model: 'haiku' }
     })
   })
 
   it('does not carry over the prior model or effort on a cross-agent --agent override', async () => {
     const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
     activeDb = db
-    // Codex accepts effort=minimal, whereas Claude rejects it; carrying it over would fail launch validation.
     const first = await startFailedAttempt({
       agent: 'codex',
       model: 'gpt-5.2-codex',
@@ -291,7 +308,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
     expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses paired-server retries when rehydrated model or effort targets an older peer without launch-preferences capability', async () => {
+  it('drops inherited model and effort with a warning when retrying on an older peer without launch-preferences capability', async () => {
     const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
     activeDb = db
     const first = await startFailedAttempt({
@@ -305,13 +322,31 @@ describe('worker-start --retry-of launch preference rehydration', () => {
       peerFingerprint: 'peer_fp_older',
       pairingRevision: 1
     })
-    const callPeer = vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockResolvedValue({
-      runtimeId: 'rt_older_peer',
-      capabilities: [
-        ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-        ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
-      ]
-    })
+    vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+    const callPeer = vi
+      .spyOn(runtime, 'callOrchestrationWorkerServer')
+      .mockImplementation(async (_envId, method, payload) => {
+        if (method === 'status.get') {
+          return {
+            runtimeId: 'rt_older_peer',
+            capabilities: [
+              ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+              ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+            ]
+          }
+        }
+        const dispatchId =
+          typeof payload === 'object' && payload !== null && 'dispatchId' in payload
+            ? String(payload.dispatchId)
+            : 'ctx_unknown'
+        return {
+          dispatchId,
+          state: 'ready',
+          runtimeEpoch: 'rt_older_peer',
+          worktreeId: 'remote-worktree',
+          terminalHandle: 'term_remote_worker'
+        }
+      })
 
     await expect(
       callStart(
@@ -320,15 +355,16 @@ describe('worker-start --retry-of launch preference rehydration', () => {
           from: 'term_coord',
           retryOf: first.dispatchId,
           on: 'older-peer',
-          worktree: 'id:remote-worktree'
+          worktree: 'id:remote-worktree',
+          model: 'gpt-5.2-codex'
         },
         {
           runtime,
           orchestrationMutation: {
             callerFingerprint: 'caller_coord',
-            requestId: 'req_older_peer_retry',
+            requestId: 'req_explicit_older_peer_retry',
             method: 'orchestration.workerStart',
-            payloadHash: 'hash_older_peer_retry'
+            payloadHash: 'hash_explicit_older_peer_retry'
           }
         }
       )
@@ -337,50 +373,142 @@ describe('worker-start --retry-of launch preference rehydration', () => {
       message: 'Connected server older-peer does not support worker model or effort overrides.'
     })
 
-    expect(callPeer).toHaveBeenCalledTimes(1)
-    expect(callPeer.mock.calls[0]?.[1]).toBe('status.get')
-    expect(db.getDispatchContext(first.taskId)?.id).toBe(first.dispatchId)
+    const retried = await callStart(
+      {
+        task: first.taskId,
+        from: 'term_coord',
+        retryOf: first.dispatchId,
+        on: 'older-peer',
+        worktree: 'id:remote-worktree'
+      },
+      {
+        runtime,
+        orchestrationMutation: {
+          callerFingerprint: 'caller_coord',
+          requestId: 'req_older_peer_retry',
+          method: 'orchestration.workerStart',
+          payloadHash: 'hash_older_peer_retry'
+        }
+      }
+    )
+
+    expect(retried).toMatchObject({
+      state: 'ready',
+      launch: {
+        requested: { agent: 'codex', model: null, effort: null },
+        effective: { agent: 'codex', model: null, effort: null }
+      },
+      warning:
+        'not carrying over model gpt-5.2-codex / effort high from the retried worker: Connected server older-peer does not support worker model or effort overrides.'
+    })
+    const attachCall = callPeer.mock.calls.find(
+      ([, method]) => method === 'orchestration.federationAttachStart'
+    )
+    expect(attachCall?.[2]).toMatchObject({
+      agent: 'codex',
+      model: undefined,
+      effort: undefined
+    })
   })
 
-  it('runs OpenCode model launch probing when --retry-of rehydrates an opencode model', async () => {
-    const { db, runtime, activeRunId, callStart, releaseWorker } = createRetryStartFixture()
+  it('drops inherited opencode --model with a warning when retried on new-top-level or an unsupported host', async () => {
+    const { db, runtime, callStart, startFailedAttempt, releaseWorker, nextWorkerHandle } =
+      createRetryStartFixture()
     activeDb = db
     vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
       selector === 'opencode' ? 'opencode' : undefined
     )
+    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockImplementation(async (handle) => ({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    }))
     const probe = vi
       .spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport')
       .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false)
+    vi.spyOn(runtime, 'showRepo').mockResolvedValue(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setup resolution reads only repo hook metadata when present.
+      { id: 'repo', path: '/tmp/repo' } as never
+    )
+    const createWorktree = vi
+      .spyOn(runtime, 'createManagedWorktree')
+      .mockImplementation(async (options) => {
+        const handle = nextWorkerHandle()
+        const terminal = { handle, worktreeId: 'repo::new-wt', title: 'worker' }
+        options.onStartupTerminalCreated?.(terminal)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker worktree creation reads only worktree identity and startupTerminal.
+        return {
+          worktree: { id: 'repo::new-wt', repoId: 'repo', displayName: 'new-wt' },
+          startupTerminal: terminal
+        } as never
+      })
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({ terminals: [] })
 
-    const task = db.createTask({ spec: 'opencode retry task', runId: activeRunId })
-    const first = await callStart({
-      task: task.id,
-      from: 'term_coord',
+    const first = await startFailedAttempt({
       agent: 'opencode',
       model: 'anthropic/claude-sonnet-4-5'
     })
-    if (!isStartReceipt(first)) {
-      throw new Error('expected initial opencode start receipt')
-    }
-    expect(first.state).toBe('failed')
-    await releaseWorker(first.dispatchId)
 
     await expect(
       callStart({
-        task: task.id,
+        task: first.taskId,
         from: 'term_coord',
-        retryOf: first.dispatchId
+        retryOf: first.dispatchId,
+        worktree: 'new-top-level',
+        repo: 'repo',
+        name: 'new-wt',
+        model: 'anthropic/claude-sonnet-4-5'
       })
     ).rejects.toMatchObject({
       code: 'capability_unsupported',
       message:
-        'OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
+        'OpenCode model selection requires an existing worktree. Use --worktree current or an existing worktree selector, or omit --model.'
     })
 
-    expect(probe).toHaveBeenNthCalledWith(2, {
-      worktree: 'id:repo::worktree',
+    const topLevelRetry = await callStart({
+      task: first.taskId,
+      from: 'term_coord',
+      retryOf: first.dispatchId,
+      worktree: 'new-top-level',
+      repo: 'repo',
+      name: 'new-wt'
+    })
+    expect(topLevelRetry).toMatchObject({
+      state: 'ready',
+      launch: {
+        requested: { agent: 'opencode', model: null, effort: null },
+        effective: { agent: 'opencode', model: null, effort: null }
+      },
+      warning:
+        'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode model selection requires an existing worktree. Use --worktree current or an existing worktree selector, or omit --model.'
+    })
+    expect(createWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupLaunchPreferences')
+    await releaseWorker(
+      isStartReceipt(topLevelRetry) ? topLevelRetry.dispatchId : first.dispatchId
+    )
+
+    const second = await startFailedAttempt({
+      agent: 'opencode',
       model: 'anthropic/claude-sonnet-4-5'
     })
+    const hostFallbackRetry = await callStart({
+      task: second.taskId,
+      from: 'term_coord',
+      retryOf: second.dispatchId
+    })
+    expect(hostFallbackRetry).toMatchObject({
+      state: 'ready',
+      launch: {
+        requested: { agent: 'opencode', model: null, effort: null },
+        effective: { agent: 'opencode', model: null, effort: null }
+      },
+      warning:
+        'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
+    })
+    expect(probe).toHaveBeenCalledTimes(3)
   })
 })

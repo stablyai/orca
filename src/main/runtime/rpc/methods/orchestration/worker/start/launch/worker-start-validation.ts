@@ -10,8 +10,14 @@ import type { FederationAttachStartInput } from '../../../../../../../../shared/
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
+  formatDroppedRetryLaunchWarning,
   resolveWorkerLaunchPreferences
 } from './worker-launch-preferences'
+import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
+import {
+  refuseUnmatchedWorkerSelector,
+  type WorkerStartSelectorLabel
+} from '../worker-start-selector-refusal'
 import type { WorkerStartInput } from '../worker-start-input'
 
 type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
@@ -83,8 +89,52 @@ export function prepareLocalWorkerStart(args: {
     agent: params.agent,
     model: params.model,
     effort: params.effort,
+    inheritedLaunchPreferences: params.inheritedLaunchPreferences,
     missingAgentMessage: 'A configured --agent is required when worker-start creates a terminal.'
   })
+}
+
+export async function resolveLocalWorkerStartLaunch(args: {
+  params: WorkerStartInput
+  createsWorktree: boolean
+  existingWorktree: string
+  targetLabel: WorkerStartSelectorLabel
+  runtime: OrcaRuntimeService
+}): Promise<{
+  agent: TuiAgent | undefined
+  launch: WorkerStartLaunch
+  warning?: string
+}> {
+  const { params, createsWorktree, existingWorktree, targetLabel, runtime } = args
+  let openCodeModelLaunchSupported = false
+  let probeDropWarning: string | undefined
+  if (!createsWorktree && params.agent === 'opencode' && params.model) {
+    try {
+      openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+        probeWorkerOpenCodeModelLaunchSupport(runtime, params, { worktree: existingWorktree })
+      )
+    } catch (error) {
+      if (
+        params.inheritedLaunchPreferences &&
+        error instanceof OrchestrationError &&
+        error.code === 'capability_unsupported'
+      ) {
+        probeDropWarning = formatDroppedRetryLaunchWarning(params, error.message)
+      } else {
+        throw error
+      }
+    }
+  }
+  const prepared = prepareLocalWorkerStart({
+    params: probeDropWarning
+      ? { ...params, model: undefined, effort: undefined, inheritedLaunchPreferences: false }
+      : params,
+    createsWorktree,
+    runtime,
+    openCodeModelLaunchSupported
+  })
+  const warning = probeDropWarning ?? prepared.launch.warning
+  return { ...prepared, ...(warning ? { warning } : {}) }
 }
 
 export function prepareFederationAttachmentWorkerStart(args: {
@@ -140,6 +190,7 @@ function resolveWorkerStartAgent(args: {
   agent?: string
   model?: string
   effort?: string
+  inheritedLaunchPreferences?: boolean
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const agent = args.agent
@@ -168,7 +219,8 @@ function resolveWorkerStartAgent(args: {
         openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
         createsWorktree: args.createsWorktree,
         model: args.model,
-        effort: args.effort
+        effort: args.effort,
+        inheritedLaunchPreferences: args.inheritedLaunchPreferences
       })
     }
   }

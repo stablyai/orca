@@ -82,18 +82,45 @@ export function createPendingWorkerLaunchReceipt(args: {
   }
 }
 
+export function formatDroppedRetryLaunchWarning(
+  dropped: { model?: string; effort?: string },
+  reason: string
+): string {
+  const parts = [
+    dropped.model ? `model ${dropped.model}` : undefined,
+    dropped.effort ? `effort ${dropped.effort}` : undefined
+  ].filter((part): part is string => Boolean(part))
+  return `not carrying over ${parts.join(' / ')} from the retried worker: ${reason.replace(/\s+/g, ' ').trim()}`
+}
+
+export function joinWorkerStartWarnings(
+  ...warnings: ReadonlyArray<string | undefined>
+): string | undefined {
+  const present = warnings.filter((warning): warning is string => Boolean(warning))
+  return present.length ? present.join(' ') : undefined
+}
+
 export function resolveWorkerLaunchPreferences(args: {
   agent: TuiAgent
   openCodeModelLaunchSupported?: boolean
   createsWorktree?: boolean
   model?: string
   effort?: string
+  inheritedLaunchPreferences?: boolean
 }): {
   preferences: AgentLaunchPreferences | undefined
   receipt: OrchestrationWorkerLaunchReceipt
+  warning?: string
 } {
   const checked = checkAgentLaunchModelPreferences(args)
   if ('refusal' in checked) {
+    if (args.inheritedLaunchPreferences && (args.model || args.effort)) {
+      return {
+        preferences: undefined,
+        receipt: createWorkerLaunchReceipt({ agent: args.agent }),
+        warning: formatDroppedRetryLaunchWarning(args, checked.refusal.message)
+      }
+    }
     throw new OrchestrationError(checked.refusal.code, checked.refusal.message)
   }
   const { preferences } = checked
@@ -130,6 +157,64 @@ export function assertWorkerLaunchPreferencesRuntimeSupported(args: {
       'capability_unsupported',
       `Connected server ${args.serverName} does not support worker model or effort overrides.`
     )
+  }
+}
+
+export function resolveFederatedWorkerLaunchPreferences(args: {
+  params: {
+    agent?: string
+    model?: string
+    effort?: string
+    inheritedLaunchPreferences?: boolean
+  }
+  createsWorktree: boolean
+  capabilities?: readonly string[]
+  serverName: string
+}): {
+  model: string | undefined
+  effort: string | undefined
+  requestedLaunch: OrchestrationWorkerLaunchReceipt
+  warning?: string
+} {
+  const { params, createsWorktree, capabilities, serverName } = args
+  let { model, effort } = params
+  let warning: string | undefined
+  const tuiAgent = isTuiAgent(params.agent) ? params.agent : null
+  if ((model || effort) && tuiAgent && (tuiAgent !== 'opencode' || createsWorktree)) {
+    const checked = checkAgentLaunchModelPreferences({
+      agent: tuiAgent,
+      createsWorktree,
+      model,
+      effort
+    })
+    if ('refusal' in checked) {
+      if (!params.inheritedLaunchPreferences) {
+        throw new OrchestrationError(checked.refusal.code, checked.refusal.message)
+      }
+      warning = formatDroppedRetryLaunchWarning({ model, effort }, checked.refusal.message)
+      model = undefined
+      effort = undefined
+    }
+  }
+  if (
+    (model || effort) &&
+    !capabilities?.includes(ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY)
+  ) {
+    if (!params.inheritedLaunchPreferences) {
+      assertWorkerLaunchPreferencesRuntimeSupported({ model, effort, capabilities, serverName })
+    }
+    warning = formatDroppedRetryLaunchWarning(
+      { model, effort },
+      `Connected server ${serverName} does not support worker model or effort overrides.`
+    )
+    model = undefined
+    effort = undefined
+  }
+  return {
+    model,
+    effort,
+    requestedLaunch: createPendingWorkerLaunchReceipt({ agent: tuiAgent, model, effort }),
+    ...(warning ? { warning } : {})
   }
 }
 

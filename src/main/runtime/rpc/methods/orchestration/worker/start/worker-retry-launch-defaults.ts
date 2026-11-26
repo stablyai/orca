@@ -17,6 +17,7 @@ export function withRetryWorkerLaunchDefaults<
     agent?: string
     model?: string
     effort?: string
+    inheritedLaunchPreferences?: boolean
   }
 >(runtime: RetryLaunchRuntime, db: OrchestrationDb, taskId: string | undefined, params: T): T {
   if (!params.retryOf || params.terminal) {
@@ -33,16 +34,18 @@ export function withRetryWorkerLaunchDefaults<
   const prior = parseRecordedWorkerLaunchOptions(priorWorker.start_options)
   const agent = params.agent ?? prior.agent
   const sameAgent = matchesRetriedAgent(runtime, Boolean(params.on), agent, prior)
-  const model = params.model ?? (sameAgent ? prior.model : undefined)
-  const effort = params.effort ?? (sameAgent ? prior.effort : undefined)
-  if (agent === params.agent && model === params.model && effort === params.effort) {
+  const callerSpecifiedPreferences = params.model !== undefined || params.effort !== undefined
+  const inheritPreferences =
+    !callerSpecifiedPreferences && sameAgent && Boolean(prior.model || prior.effort)
+  if (agent === params.agent && !inheritPreferences) {
     return params
   }
   return {
     ...params,
     ...(agent !== undefined ? { agent } : {}),
-    ...(model !== undefined ? { model } : {}),
-    ...(effort !== undefined ? { effort } : {})
+    ...(inheritPreferences && prior.model !== undefined ? { model: prior.model } : {}),
+    ...(inheritPreferences && prior.effort !== undefined ? { effort: prior.effort } : {}),
+    ...(inheritPreferences ? { inheritedLaunchPreferences: true } : {})
   }
 }
 
