@@ -52,7 +52,10 @@ export function pruneSlackAnswerPresentations(
       t.lifecycle_state IS NOT 'running'
         AND COALESCE(t.turn_completed_at,0)<=?
         AND NOT EXISTS (SELECT 1 FROM journal_connector_replies r
-          WHERE r.session_id=p.session_id AND r.outcome IS NULL AND r.epoch=p.epoch)
+          JOIN journal_submission_attempts s ON s.session_id=r.session_id AND s.epoch=r.epoch
+            AND s.message_id=COALESCE(r.claim_message_id,r.message_id) AND s.current=1
+          WHERE r.session_id=p.session_id AND r.epoch=p.epoch AND r.outcome IS NULL
+            AND (s.item_id=t.opener_item_id OR s.steer_turn_item_id=p.turn_item_id))
         AND NOT EXISTS (SELECT 1 FROM journal_connector_replies r
           WHERE r.session_id=p.session_id AND r.epoch=p.epoch AND r.turn_item_id=p.turn_item_id
             AND r.has_presentation=1 AND r.sent_at IS NULL) AS removable

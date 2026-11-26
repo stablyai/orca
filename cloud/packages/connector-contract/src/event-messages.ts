@@ -8,7 +8,12 @@ import {
   ConnectorTurnForSchema
 } from './connector-wire-scalars.js'
 import { OptionalConnectorFailureSchema } from './failure-messages.js'
-import { SLACK_PRESENTATION_EVENT_VERSION, SLACK_PRESENTATION_POST_VERSION, SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
+import {
+  SLACK_PRESENTATION_EVENT_VERSION,
+  SLACK_PRESENTATION_POST_VERSION,
+  SlackAnswerPresentationSchema,
+  slackAnswerText
+} from './slack-answer-presentation.js'
 
 const PromptOptionSchema = z.object({
   id: OpaqueIdSchema,
@@ -141,11 +146,12 @@ export const ConnectorReplyEventSchema = z
   })
   .refine((reply) => reply.deliveryIds.includes(reply.answerDeliveryId))
   .refine((reply) => (reply.outcome === 'answered') === (reply.prose !== undefined))
-  .refine(({ conversation, outcome, prose, presentation }) =>
-    !presentation || (
-      conversation.source === 'slack' && outcome === 'answered' &&
-      prose === slackAnswerText(presentation)
-    )
+  .refine(
+    ({ conversation, outcome, prose, presentation }) =>
+      !presentation ||
+      (conversation.source === 'slack' &&
+        outcome === 'answered' &&
+        prose === slackAnswerText(presentation))
   )
 
 const ActivityTextSchema = z.string().min(1).max(CONNECTOR_LIMITS.maxActivityTextChars)
@@ -171,7 +177,7 @@ export type ConnectorActivityEvent = z.infer<typeof ConnectorActivityEventSchema
 
 // Identities: linked by pane, prompt by pane + promptId, a turn by pane + its turn-started `at` (turnId).
 // actsFor: whom the linked chat acts for, once recorded; an older machine leaves it out.
-export const ConnectorEventSchema = z.discriminatedUnion('kind', [
+const ConnectorNonReplyEvents = [
   z.object({
     ...PaneEvent,
     kind: z.literal('linked'),
@@ -213,9 +219,7 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     stopReason: z.string().min(1).nullable(),
     lastAssistantMessage: z
       .string()
-      .refine(
-        (text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLongAnswerBytes
-      )
+      .refine((text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLongAnswerBytes)
       .optional(),
     // A chat turn's cause; someone typing in Orca ('local') is not mirrored back.
     origin: z.enum(['delivery', 'local']).optional(),
@@ -230,10 +234,6 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
     // itself then. Sent only to a cloud that lists replies.paused.
     resumes: z.literal(true).optional().catch(undefined)
   }),
-  // Sent only to a cloud whose hello answer lists replies.outbox: the outcome of the admitted
-  // deliveries one turn answered in one conversation. answerDeliveryId (the earliest of them) keys
-  // the answer, so every retry and replay posts it once.
-  ConnectorReplyEventSchema,
   // Whether orchestration workers the conversation's agent started still run, sent only to a cloud
   // whose hello answer lists `workers`. Running keeps the conversation working after its turn ends.
   z.object({ ...PaneEvent, kind: z.literal('workers'), running: z.boolean() }),
@@ -261,6 +261,16 @@ export const ConnectorEventSchema = z.discriminatedUnion('kind', [
       )
       .max(CONNECTOR_LIMITS.maxSnapshotConversations)
   })
+] as const
+
+// The answer delivery keys the outbox result across every replay.
+export const ConnectorEventSchema = z.discriminatedUnion('kind', [
+  ...ConnectorNonReplyEvents,
+  ConnectorReplyEventSchema
+])
+const ConnectorTextEventSchema = z.discriminatedUnion('kind', [
+  ...ConnectorNonReplyEvents,
+  ConnectorReplyEventSchema.safeExtend({ presentation: z.never().optional() })
 ])
 
 const fitsOneEvent = (event: unknown) =>
@@ -272,12 +282,13 @@ const fitsOneEvent = (event: unknown) =>
 // that hello's high-water mark, so a late original never undoes newer state.
 export const CONNECTOR_AUDIENCE_EVENTS_VERSION = 2
 
-export const ConnectorEventsRequestSchema = z
+const EventBatch = { helloRev: SequenceSchema, seq: SequenceSchema }
+
+const TextEvents = z
   .object({
-    v: z.union([z.literal(1), z.literal(CONNECTOR_AUDIENCE_EVENTS_VERSION), z.literal(SLACK_PRESENTATION_EVENT_VERSION)]),
-    helloRev: SequenceSchema,
-    seq: SequenceSchema,
-    events: z.array(ConnectorEventSchema.refine(fitsOneEvent)).min(1)
+    ...EventBatch,
+    v: z.literal([1, CONNECTOR_AUDIENCE_EVENTS_VERSION]),
+    events: z.array(ConnectorTextEventSchema.refine(fitsOneEvent)).min(1)
   })
   .refine(
     ({ v, events }) =>
@@ -290,8 +301,19 @@ export const ConnectorEventsRequestSchema = z
       ),
     { message: 'Private prompts require audience-aware event requests' }
   )
-  .refine(({ v, events }) => (v === SLACK_PRESENTATION_EVENT_VERSION) ===
-    events.some((event) => event.kind === 'reply' && event.presentation))
+
+const PresentationEvents = z
+  .object({
+    ...EventBatch,
+    v: z.literal(SLACK_PRESENTATION_EVENT_VERSION),
+    events: z.array(ConnectorEventSchema.refine(fitsOneEvent)).min(1)
+  })
+  .refine(({ events }) => events.some((event) => event.kind === 'reply' && event.presentation))
+
+export const ConnectorEventsRequestSchema = z.discriminatedUnion('v', [
+  TextEvents,
+  PresentationEvents
+])
 
 // One inline note on a pull request's diff: a file, a line in its new version (LEFT: the old one),
 // and what it says.
@@ -307,24 +329,36 @@ export const ConnectorReviewCommentSchema = z.object({
 // whose body is the text; where a source has no reviews, its notes follow the text.
 // answerDeliveryId: the delivery whose answer this is (a reply event's answerDeliveryId), so the
 // reply and that answer share one key; left out when the turn can't be named.
-export const ConnectorReplyRequestSchema = z.object({
-  v: z.union([z.literal(1), z.literal(SLACK_PRESENTATION_POST_VERSION)]),
-  replyId: OpaqueIdSchema,
-  conversation: ConnectorConversationSchema,
-  turnId: EpochMsSchema,
-  text: z.string().min(1),
-  presentation: SlackAnswerPresentationSchema.optional(),
-  answerDeliveryId: OpaqueIdSchema.optional(),
-  // Whom the turn acts for when no delivery started it (see ConnectorTurnForSchema).
-  turnFor: ConnectorTurnForSchema.optional(),
-  review: z
-    .object({
-      comments: z.array(ConnectorReviewCommentSchema).min(1).max(CONNECTOR_LIMITS.maxReviewComments)
-    })
-    .optional()
-}).refine(({ v, conversation, review, text, presentation }) =>
-  v === 1 ? !presentation : Boolean(presentation && conversation.source === 'slack' && !review && text === slackAnswerText(presentation))
-)
+export const ConnectorReplyRequestSchema = z
+  .object({
+    v: z.union([z.literal(1), z.literal(SLACK_PRESENTATION_POST_VERSION)]),
+    replyId: OpaqueIdSchema,
+    conversation: ConnectorConversationSchema,
+    turnId: EpochMsSchema,
+    text: z.string().min(1),
+    presentation: SlackAnswerPresentationSchema.optional(),
+    answerDeliveryId: OpaqueIdSchema.optional(),
+    // Whom the turn acts for when no delivery started it (see ConnectorTurnForSchema).
+    turnFor: ConnectorTurnForSchema.optional(),
+    review: z
+      .object({
+        comments: z
+          .array(ConnectorReviewCommentSchema)
+          .min(1)
+          .max(CONNECTOR_LIMITS.maxReviewComments)
+      })
+      .optional()
+  })
+  .refine(({ v, conversation, review, text, presentation }) =>
+    v === 1
+      ? !presentation
+      : Boolean(
+          presentation &&
+          conversation.source === 'slack' &&
+          !review &&
+          text === slackAnswerText(presentation)
+        )
+  )
 
 // notices: why the reply can't wake an Orca bot it mentions; an older machine drops them.
 export const ConnectorReplyResponseSchema = z.discriminatedUnion('status', [

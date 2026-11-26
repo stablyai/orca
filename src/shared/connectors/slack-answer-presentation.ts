@@ -1,6 +1,15 @@
 import * as z from 'zod'
 
 export const CONNECTOR_SLACK_PRESENTATION_FEATURE = 'slack.answerPresentation'
+export const CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE = 'slack.answerPresentation.text'
+/** A rollback can still verify and deliver a prepared answer as text. */
+export function takesSlackAnswerPresentation(features: ReadonlySet<string> | null): boolean {
+  return (
+    features?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE) === true ||
+    features?.has(CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE) === true
+  )
+}
+
 export const SLACK_PRESENTATION_POST_VERSION = 2
 export const SLACK_PRESENTATION_EVENT_VERSION = 3
 export const SLACK_PRESENTATION_UNCONFIRMED =

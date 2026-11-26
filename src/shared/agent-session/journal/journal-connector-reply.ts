@@ -45,7 +45,8 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   answerDeliveryId: string
   turnItemId?: string
   prose?: string
-  hasPresentation?: true
+  /** The selected root final that can carry a prepared Slack answer. */
+  presentationTurn?: JournalSlackAnswerTurn
   failure?: ConnectorFailure
   links?: ConnectorWorkLink[]
   /** How long the answered turn ran, on the machine's own clock. */

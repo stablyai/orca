@@ -1,5 +1,6 @@
 // What a bot's host sends toward Slack, with local paths reduced to file names (slack-local-paths.ts).
 // Files, ids and every other field stay as they are; other sources get the text untouched.
+import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import type { ConnectorActionArgs } from '../../shared/connector-action-contract'
 import type { ConnectorReview } from '../../shared/connector-review-contract'
 import { isRefOf, slackChannelIdOf } from '../../shared/connector-place-names'
@@ -18,6 +19,8 @@ export function matchingSlackPresentation(
 ): boolean {
   return (
     presentation.visual !== undefined &&
+    !isQuietBotResult(presentation.text) &&
+    !isQuietBotResult(text) &&
     slackAnswerText(presentation) === text &&
     redactLocalPaths(text) === text
   )

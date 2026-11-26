@@ -1,6 +1,7 @@
 import * as z from 'zod'
 
 export const CONNECTOR_SLACK_PRESENTATION_FEATURE = 'slack.answerPresentation'
+export const CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE = 'slack.answerPresentation.text'
 export const SLACK_PRESENTATION_POST_VERSION = 2
 export const SLACK_PRESENTATION_EVENT_VERSION = 3
 export const SLACK_ANSWER_MAX_BYTES = 12 * 1024
@@ -10,8 +11,7 @@ const MAX_PROJECTED_BYTES = 8 * 1024
 
 // A presentation is literal text. An independently authorized source link can be
 // rendered by the posting adapter, but the author cannot supply a URL or Slack markup.
-const UNSAFE_TEXT =
-  /[<>`@]|\p{Cf}|\p{Cs}|:\/\/|\b(?:javascript:|data:|mailto:|www\.)|\]\s*\(/iu
+const UNSAFE_TEXT = /[<>`@]|\p{Cf}|\p{Cs}|:\/\/|\b(?:javascript:|data:|mailto:|www\.)|\]\s*\(/iu
 const CONTROL = /\p{Cc}/u
 
 function containsDomain(text: string): boolean {
@@ -23,7 +23,10 @@ function containsDomain(text: string): boolean {
       dotEndsAt = labelEndsAt === token.index ? token.index + 1 : -1
       continue
     }
-    if (dotEndsAt === token.index && /^[a-z]{2,63}\b/iu.test(text.slice(token.index, token.index + 64))) {
+    if (
+      dotEndsAt === token.index &&
+      /^[a-z]{2,63}\b/iu.test(text.slice(token.index, token.index + 64))
+    ) {
       return true
     }
     labelEndsAt = /[a-z\d]/iu.test(word) ? token.index + word.length : -1

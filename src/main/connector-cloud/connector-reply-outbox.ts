@@ -1,17 +1,14 @@
 import {
+  drainReplyBody,
+  fitReplyProse,
   replyDeliveryIds,
   replyEventsOf,
   type ConnectorReplyEvent,
   type FilledConnectorReply as Filled
 } from './connector-reply-events'
-// The reply outbox's sender (design item 125 §3): filled, unsent rows go to the cloud as reply events
-// under a hello that lists replies.outbox, else through /replies (the kill switch); a row is marked
-// sent only once the cloud accepted it.
-import { createHash } from 'node:crypto'
-import {
-  cloudConversation,
-  type ConnectorEvent,
-  type ConnectorFailure
+import type {
+  ConnectorEvent,
+  ConnectorFailure
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
   JournalConnectorReplyCut,
@@ -19,14 +16,9 @@ import type {
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
   JournalConnectorReplyRetryRows,
-  JournalConnectorReplyRow,
-  JournalSlackAnswerTurn
+  JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
-import type { SlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
-import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../shared/agent-session/journal/journal-connector-reply'
 import type { ConnectorResult } from './connector-cloud-request'
-import { capAnswer } from './connector-snapshot'
-import { outcomeSentence } from './connector-reply-outcome-sentence'
 import type { ConnectorReplyBody } from './connector-replies'
 
 export type ConnectorReplyJournal = {
@@ -39,10 +31,6 @@ export type ConnectorReplyJournal = {
     includePresentations?: boolean
   ): Promise<JournalConnectorReplyRow[]>
   fillOutcomes(fills: readonly JournalConnectorReplyFill[]): Promise<boolean>
-  answerPresentation?(
-    turn: JournalSlackAnswerTurn,
-    prose: string
-  ): Promise<SlackAnswerPresentation | undefined>
   sent(keys: readonly JournalConnectorReplyKey[]): Promise<void>
 }
 
@@ -80,20 +68,7 @@ const RETRY_MS = 30_000
 // serialized), so a page stays a small part of the reader's 64 MB reply limit.
 const PAGE_ROWS = 200
 
-/** The kill-switch drain's reply id: stable per delivery, so its post id is idempotent. */
-export function drainReplyId(deliveryId: string): string {
-  return `outcome-${createHash('sha256').update(deliveryId).digest('base64url')}`
-}
-
-// A prose an older build kept whole is cut to the cap, with the note a cut answer carries, so one
-// huge answer still fits its event and holds back nothing behind it.
-const fitted = (row: Filled): Filled =>
-  row.fill.prose === undefined
-    ? row
-    : {
-        ...row,
-        fill: { ...row.fill, prose: capAnswer(row.fill.prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) }
-      }
+export { drainReplyId } from './connector-reply-events'
 
 /**
  * One account's filled, unsent rows on their way to the cloud. A row handed to the events transport
@@ -106,6 +81,9 @@ export class ConnectorReplyOutbox {
   private running: Promise<void> | null = null
   private again = false
   private awaitingPage = false
+  private nextPageAfter: string | null = null
+  private rescan = false
+  private readonly deferred = new Set<string>()
   private retired = false
   private retry: ReturnType<typeof setTimeout> | null = null
 
@@ -133,6 +111,22 @@ export class ConnectorReplyOutbox {
     ids.forEach((id) => this.inFlight.delete(id))
   }
 
+  released(ids: readonly string[], retry: boolean): void {
+    this.forget(ids)
+    if (retry) {
+      if (this.hooks.route().presentations) {
+        ids.forEach((id) => this.deferred.add(id))
+      }
+      this.retryLater()
+    }
+    this.advancePage()
+  }
+
+  resetPages(): void {
+    this.nextPageAfter = null
+    this.rescan = false
+  }
+
   /** The cloud accepted these events: their rows are sent. */
   async accepted(events: readonly ConnectorEvent[]): Promise<void> {
     const ids = replyDeliveryIds(events)
@@ -143,14 +137,18 @@ export class ConnectorReplyOutbox {
     try {
       await journal.sent(ids.map((deliveryId) => ({ account: this.account, deliveryId })))
       this.forget(ids)
-      if (this.awaitingPage && this.inFlight.size === 0) {
-        this.awaitingPage = false
-        void this.drain()
-      }
+      this.advancePage()
     } catch (error) {
       this.forget(ids)
       console.warn('[connector] could not mark replies sent', error)
       this.retryLater()
+    }
+  }
+
+  private advancePage(): void {
+    if (this.awaitingPage && this.inFlight.size === 0) {
+      this.awaitingPage = false
+      void this.drain()
     }
   }
 
@@ -185,14 +183,17 @@ export class ConnectorReplyOutbox {
       return
     }
     const route = this.hooks.route()
-    if (route.presentations && this.inFlight.size > 0) {
+    const boundedEvents = route.presentations && route.outbox
+    if (boundedEvents && this.inFlight.size > 0) {
       this.awaitingPage = true
+      this.rescan = true
       return
     }
     this.awaitingPage = false
     // Page by page in delivery id order, so no backlog outgrows one read. A row a page leaves (in
     // flight, or refused) stays behind the cursor for a later drain; kept counts the refused.
-    let after: string | null = null
+    let after = boundedEvents ? this.nextPageAfter : null
+    this.nextPageAfter = null
     let kept = 0
     for (;;) {
       let page: JournalConnectorReplyRow[]
@@ -208,6 +209,12 @@ export class ConnectorReplyOutbox {
       if (this.retired) {
         return
       }
+      const current = this.hooks.route()
+      if (current.presentations !== route.presentations || current.outbox !== route.outbox) {
+        this.resetPages()
+        this.again = true
+        return
+      }
       after = page.at(-1)?.deliveryId ?? after
       const owed = page
         .filter(
@@ -215,9 +222,10 @@ export class ConnectorReplyOutbox {
             row.account === this.account &&
             row.fill !== undefined &&
             !this.inFlight.has(row.deliveryId) &&
+            !this.deferred.has(row.deliveryId) &&
             !route.setAside?.has(row.deliveryId)
         )
-        .map(fitted)
+        .map(fitReplyProse)
       if (owed.length > 0) {
         this.setWaiting(kept + owed.length)
         // The hello and client as they are now, after the read; and the account still this one,
@@ -226,14 +234,25 @@ export class ConnectorReplyOutbox {
         if (this.retired || !client || outbox === undefined) {
           return
         }
+        if (presentations !== route.presentations || outbox !== route.outbox) {
+          this.resetPages()
+          this.again = true
+          return
+        }
         if (outbox) {
           owed.forEach((row) => this.inFlight.add(row.deliveryId))
-          client.push(replyEventsOf(owed))
           if (presentations) {
             this.awaitingPage = page.length === PAGE_ROWS
+            this.nextPageAfter = this.awaitingPage ? after : null
+            if (!this.awaitingPage && this.rescan) {
+              this.rescan = false
+              this.again = true
+            }
             this.setWaiting(this.awaitingPage ? 1 : 0)
+            client.push(replyEventsOf(owed))
             return
           }
+          client.push(replyEventsOf(owed))
           this.setWaiting(kept)
           if (page.length < PAGE_ROWS) {
             return
@@ -248,6 +267,10 @@ export class ConnectorReplyOutbox {
       }
       if (page.length < PAGE_ROWS) {
         this.setWaiting(kept)
+        if (boundedEvents && after && this.rescan) {
+          this.rescan = false
+          this.again = true
+        }
         return
       }
     }
@@ -263,29 +286,26 @@ export class ConnectorReplyOutbox {
   ): Promise<number | null> {
     let left = owed.length
     for (const row of owed) {
-      const { outcome, prose, answerDeliveryId, filledAt, toolsRan } = row.fill
-      const conversation = cloudConversation(row.conversation)
-      if (outcome !== 'quiet' && conversation) {
+      if (row.fill.outcome !== 'quiet') {
         // Checked just before the wire: still this account, still the kill switch's hello.
-        const { client, outbox } = this.hooks.route()
-        if (this.retired || !client || outbox !== false) {
-          this.again ||= outbox === true
+        const route = this.hooks.route()
+        const { client, outbox, presentations } = route
+        if (
+          this.retired ||
+          !client ||
+          outbox !== false ||
+          (row.fill.presentation && !presentations)
+        ) {
+          this.again ||=
+            outbox === true || Boolean(client && outbox === false && row.fill.presentation)
           return null
         }
-        const posted = await client.post({
-          replyId: drainReplyId(row.deliveryId),
-          conversation,
-          turnId: filledAt,
-          text:
-            outcome === 'answered' && prose
-              ? prose
-              : outcomeSentence(outcome, client.hostName(), toolsRan),
-          answerDeliveryId
-        })
+        const body = drainReplyBody(row, client.hostName)
+        const posted = body && (await client.post(body))
         if (this.retired) {
           return null
         }
-        if (!posted.ok) {
+        if (posted && !posted.ok) {
           this.scheduleRetry()
           continue
         }
@@ -307,9 +327,13 @@ export class ConnectorReplyOutbox {
   }
 
   private scheduleRetry(): void {
-    this.stopRetry()
+    if (this.retry) {
+      return
+    }
     this.retry = setTimeout(() => {
       this.retry = null
+      this.deferred.clear()
+      this.resetPages()
       this.hooks.wake()
     }, RETRY_MS)
     this.retry.unref?.()

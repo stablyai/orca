@@ -18,7 +18,7 @@ import { capAnswer, jsonBytes, unsupported } from './connector-snapshot'
 import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
 import { isSlackConversation } from './connector-slack-text'
 import {
-  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  takesSlackAnswerPresentation,
   SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
 } from '../../shared/connectors/slack-answer-presentation'
@@ -166,7 +166,7 @@ export function answerFor(
     const prose = answerTextFor(said, cloudFeatures)
     if (
       event.presentation &&
-      (!cloudFeatures.has(CONNECTOR_SLACK_PRESENTATION_FEATURE) ||
+      (!takesSlackAnswerPresentation(cloudFeatures) ||
         !isSlackConversation(event.conversation) ||
         prose !== slackAnswerText(event.presentation))
     ) {

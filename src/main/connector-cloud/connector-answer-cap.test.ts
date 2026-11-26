@@ -4,6 +4,7 @@ import { answerFor } from './connector-event-wire'
 import { capAnswer } from './connector-snapshot'
 import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
   SlackAnswerPresentationSchema,
   SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
@@ -80,6 +81,7 @@ describe('answerFor', () => {
     })
     const rich = { ...reply, prose: slackAnswerText(presentation), presentation }
     expect(answerFor(rich, new Set([CONNECTOR_SLACK_PRESENTATION_FEATURE]))).toBe(rich)
+    expect(answerFor(rich, new Set([CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE]))).toBe(rich)
     expect(answerFor(rich, new Set())).toEqual({
       ...reply,
       prose: SLACK_PRESENTATION_UNCONFIRMED

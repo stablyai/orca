@@ -18,7 +18,6 @@ import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-messa
 import type { EmptyTurnRetry } from './external-conversation-reply-empty-retry'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { SLACK_PRESENTATION_UNCONFIRMED } from '../../shared/connectors/slack-answer-presentation'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -183,15 +182,6 @@ export function conversationReplyFill(
       silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)
     }
     const fills: JournalConnectorReplyFill[] = []
-    const presentation =
-      turn.bot && turn.outcome === 'success' && turn.journalEpoch && own.length > 0
-        ? await store
-            .answerPresentation?.(
-              { sessionId: turn.sessionId, epoch: turn.journalEpoch, turnItemId: turn.turnItemId },
-              turn.prose
-            )
-            .catch(() => undefined)
-        : undefined
     for (const row of own) {
       const conversation = JSON.stringify([row.account, row.conversation])
       const { outcome, prose } = connectorReplyTurnOutcome({
@@ -199,7 +189,10 @@ export function conversationReplyFill(
         silencedWhole: silencedWhole.get(conversation) === true
       })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
-      const visualAnswer = presentation && prose === turn.prose
+      const presentationTurn =
+        turn.bot && outcome === 'answered' && prose === turn.prose && turn.journalEpoch
+          ? { sessionId: turn.sessionId, epoch: turn.journalEpoch, turnItemId: turn.turnItemId }
+          : undefined
       fills.push({
         account: row.account,
         deliveryId: row.deliveryId,
@@ -207,11 +200,8 @@ export function conversationReplyFill(
         outcome,
         answerDeliveryId,
         turnItemId: turn.turnItemId,
-        ...(visualAnswer
-          ? { prose: SLACK_PRESENTATION_UNCONFIRMED, hasPresentation: true }
-          : prose
-            ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) }
-            : {}),
+        ...(prose ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
+        ...(presentationTurn ? { presentationTurn } : {}),
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
         ...(turn.links.length > 0 ? { links: turn.links } : {}),
         ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {}),

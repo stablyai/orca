@@ -9,7 +9,7 @@ import {
   type ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
-import { CONNECTOR_SLACK_PRESENTATION_FEATURE } from '../../shared/connectors/slack-answer-presentation'
+import { takesSlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
 import type {
   ConversationEvent,
   ConversationSnapshot
@@ -116,15 +116,14 @@ export class ConnectorTurnEvents {
         if (failure?.status === 400) {
           const ids = replyDeliveryIds([item])
           ids.forEach((id) => this.setAside.add(id))
-          this.replies.forget(ids)
-          if (ids.length > 0) {
-            void this.replies.drain()
-          }
+          this.replies.released(ids, false)
           return
         }
         // A sibling of a held reply (one answer split across events) leaves the held ids held.
-        this.replies.forget(replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)))
-        this.replies.retryLater()
+        this.replies.released(
+          replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)),
+          true
+        )
       }
     })
   }
@@ -225,8 +224,7 @@ export class ConnectorTurnEvents {
         }
       },
       outbox: this.repliesOutbox,
-      presentations:
-        this.repliesOutbox === true && this.cloudFeatures.has(CONNECTOR_SLACK_PRESENTATION_FEATURE),
+      presentations: takesSlackAnswerPresentation(this.cloudFeatures),
       setAside: this.setAside
     }
   }
@@ -246,6 +244,7 @@ export class ConnectorTurnEvents {
     })
     this.replies.forget([...this.setAside, ...replyDeliveryIds(released)])
     this.setAside.clear()
+    this.replies.resetPages()
   }
 
   /** True until the next snapshot once the caps dropped an event. */

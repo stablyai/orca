@@ -1,10 +1,17 @@
+import { createHash } from 'node:crypto'
 import {
   CONNECTOR_CLIENT_LIMITS,
   cloudConversation,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
-import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
+import {
+  JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
+  type JournalConnectorReplyRow
+} from '../../shared/agent-session/journal/journal-connector-reply'
 import { slackAnswerText } from '../../shared/connectors/slack-answer-presentation'
+import { outcomeSentence } from './connector-reply-outcome-sentence'
+import type { ConnectorReplyBody } from './connector-replies'
+import { capAnswer } from './connector-snapshot'
 
 export type ConnectorReplyEvent = Extract<ConnectorEvent, { kind: 'reply' }>
 
@@ -16,6 +23,44 @@ export const replyDeliveryIds = (events: readonly ConnectorEvent[]): string[] =>
 
 export type FilledConnectorReply = JournalConnectorReplyRow & {
   fill: NonNullable<JournalConnectorReplyRow['fill']>
+}
+
+// Older builds could store an answer longer than the current event's cap.
+export const fitReplyProse = (row: FilledConnectorReply): FilledConnectorReply =>
+  row.fill.prose === undefined
+    ? row
+    : {
+        ...row,
+        fill: { ...row.fill, prose: capAnswer(row.fill.prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) }
+      }
+
+/** The kill-switch drain keeps the same reply id across retries. */
+export function drainReplyId(deliveryId: string): string {
+  return `outcome-${createHash('sha256').update(deliveryId).digest('base64url')}`
+}
+
+export function drainReplyBody(
+  row: FilledConnectorReply,
+  hostName: () => string
+): ConnectorReplyBody | null {
+  const conversation = cloudConversation(row.conversation)
+  if (!conversation) {
+    return null
+  }
+  const { outcome, prose, presentation, answerDeliveryId, filledAt, turnStartedAt, toolsRan } =
+    row.fill
+  return {
+    replyId: drainReplyId(row.deliveryId),
+    conversation,
+    answerDeliveryId,
+    turnId: presentation ? (turnStartedAt ?? filledAt) : filledAt,
+    ...(presentation
+      ? { text: slackAnswerText(presentation), presentation }
+      : {
+          text:
+            outcome === 'answered' && prose ? prose : outcomeSentence(outcome, hostName(), toolsRan)
+        })
+  }
 }
 
 /** One event per conversation and answer, at most the contract's ids each. */

@@ -1,6 +1,12 @@
 import type { ConnectorFailure } from '../../../../shared/connectors/connector-cloud-contract'
 import type Database from '../../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  SLACK_ANSWER_MAX_TEXT,
+  SLACK_PRESENTATION_UNCONFIRMED,
+  slackAnswerText
+} from '../../../../shared/connectors/slack-answer-presentation'
+import { journalSlackAnswerPresentation } from './journal-slack-answer-presentation'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   answersThroughOutbox,
@@ -114,6 +120,7 @@ export function fillJournalConnectorReplies(
   const open = fillWhere(EXPECT_OPEN)
   const claimed = fillWhere(EXPECT_CLAIMED)
   const owed = fillWhere(EXPECT_CUT)
+  const answerText = new Map<string, string | undefined>()
   let filled = 0
   for (const row of fills) {
     const expect = row.expect
@@ -123,13 +130,29 @@ export function fillJournalConnectorReplies(
         : 'claimMessageId' in expect
           ? [claimed, [expect.claimMessageId]]
           : [owed, [expect.cutTurnId]]
+    const { presentationTurn, prose } = row
+    let hasPresentation = false
+    if (
+      presentationTurn &&
+      row.outcome === 'answered' &&
+      prose &&
+      prose.length <= SLACK_ANSWER_MAX_TEXT &&
+      prose.includes('\nSource: ')
+    ) {
+      const key = JSON.stringify(presentationTurn)
+      if (!answerText.has(key)) {
+        const answer = journalSlackAnswerPresentation(db, presentationTurn)
+        answerText.set(key, answer?.visual ? slackAnswerText(answer) : undefined)
+      }
+      hasPresentation = answerText.get(key) === prose
+    }
     filled += Number(
       fill.run(
         row.outcome,
         row.answerDeliveryId,
         row.turnItemId ?? null,
-        row.prose ?? null,
-        row.hasPresentation ? 1 : null,
+        hasPresentation ? SLACK_PRESENTATION_UNCONFIRMED : (prose ?? null),
+        hasPresentation ? 1 : null,
         failureJson(row.failure),
         row.links?.length ? JSON.stringify(row.links) : null,
         row.tookMs ?? null,

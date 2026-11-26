@@ -270,9 +270,11 @@ export class ConnectorCloud {
         onOwed: () => this.reconcile(),
         // This account's own transport, fenced at the wire: never another account's.
         post: async (body) =>
-          this.activeAccount() === account
-            ? await postConnectorOutboxReply(this.transportFor(account), body)
-            : SIGNED_OUT,
+          this.activeAccount() !== account
+            ? SIGNED_OUT
+            : ((await (body.presentation
+                ? this.reply(body, () => this.activeAccount() === account)
+                : postConnectorOutboxReply(this.transportFor(account), body))) ?? SIGNED_OUT),
         hostName: () => this.options.machine.hostName()
       })
       this.options.machine.resetConversations?.()
@@ -363,11 +365,8 @@ export class ConnectorCloud {
   }
 
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */
-  reply(
-    ...args: Parameters<ConnectorPollClient['reply']>
-  ): ReturnType<ConnectorPollClient['reply']> | null {
-    return this.client?.reply(...args) ?? null
-  }
+  readonly reply = (...args: Parameters<ConnectorPollClient['reply']>) =>
+    this.client?.reply(...args) ?? null
 
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */
   postAsBot(

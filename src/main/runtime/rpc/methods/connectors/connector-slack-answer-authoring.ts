@@ -3,7 +3,6 @@ import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
   slackAnswerText
 } from '../../../../../shared/connectors/slack-answer-presentation'
-import { isQuietBotResult } from '../../../../../shared/bot-quiet-result'
 import { slackAnswerRoute } from '../../../../bots/bot-slack-answer-guidance'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -17,13 +16,15 @@ export function requireSlackAnswerCaller(context: RpcContext, sessionId: string)
   if (
     !host ||
     sessionCallerOf(context.orchestrationCaller)?.sessionId !== sessionId ||
-    !runtime.bots.enabled() ||
-    !botOfSession(runtime.bots, sessionId, host)
+    !runtime.bots.enabled()
   ) {
     throw new Error('not_this_bots_conversation')
   }
   if (!runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE)) {
     throw new Error('slack_presentation_unavailable')
+  }
+  if (!botOfSession(runtime.bots, sessionId, host)) {
+    throw new Error('not_this_bots_conversation')
   }
   return host
 }
@@ -44,7 +45,7 @@ export const CONNECTOR_PREPARE_SLACK_ANSWER_METHOD = defineMethod({
       throw new Error('not_a_cloud_conversation')
     }
     const text = slackAnswerText(presentation)
-    if (!matchingSlackPresentation(presentation, text) || isQuietBotResult(text)) {
+    if (!matchingSlackPresentation(presentation, text)) {
       throw new Error('invalid_slack_presentation')
     }
     const saved = await host.deps.store

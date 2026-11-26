@@ -30,7 +30,6 @@ import {
   slackAnswerText,
   type SlackAnswerPresentation
 } from '../../../../../shared/connectors/slack-answer-presentation'
-import { isQuietBotResult } from '../../../../../shared/bot-quiet-result'
 import {
   CONNECTOR_PREPARE_SLACK_ANSWER_METHOD,
   requireSlackAnswerCaller
@@ -168,7 +167,7 @@ export const CONNECTOR_METHODS = [
     handler: ({ sessionId, replyId, presentation }, context) => {
       requireSlackAnswerCaller(context, sessionId)
       const text = slackAnswerText(presentation)
-      if (!matchingSlackPresentation(presentation, text) || isQuietBotResult(text)) {
+      if (!matchingSlackPresentation(presentation, text)) {
         throw new Error('invalid_slack_presentation')
       }
       return replyToConversation({ sessionId, replyId, text }, context, presentation)

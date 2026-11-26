@@ -9,6 +9,7 @@ import type { ConnectorTurnEvents } from './connector-turn-events'
 export class ConnectorEventRequests {
   private release: (() => void) | null = null
   private pause: Promise<null> | null = null
+  private readonly presentationRefused = new WeakSet<ConnectorEvent>()
 
   constructor(
     private readonly deps: {
@@ -54,23 +55,33 @@ export class ConnectorEventRequests {
     seq: number
   ): Promise<ConnectorFailure | null> {
     const v = this.deps.events.requestVersion(helloRev)
-    const presented = events.some((event) => event.kind === 'reply' && event.presentation)
+    const presented = events.find((event) => event.kind === 'reply' && event.presentation)
     const failure = await this.deps.post(
       { v: presented ? SLACK_PRESENTATION_EVENT_VERSION : v, helloRev, seq, events },
       helloRev,
       events
     )
-    // A batch with replies is never an audience rejection: the sender splits it down to the one
-    // event the cloud can't take, so its siblings still go.
-    const replies = events.some((event) => event.kind === 'reply')
-    if (v === CONNECTOR_AUDIENCE_EVENTS_VERSION && failure?.status === 400 && !replies) {
-      const pause = this.deps.rejected(helloRev, failure)
-      if (pause) {
-        this.pause = pause
-        this.stop()
-        this.deps.events.resetLive()
+    if (failure?.status === 400) {
+      // An older receiver rejects the version before it can apply any event.
+      if (presented && !this.presentationRefused.has(presented)) {
+        this.presentationRefused.add(presented)
+        this.rehello(helloRev, failure)
+      } else if (
+        v === CONNECTOR_AUDIENCE_EVENTS_VERSION &&
+        !events.some((event) => event.kind === 'reply')
+      ) {
+        this.rehello(helloRev, failure)
       }
     }
     return failure
+  }
+
+  private rehello(helloRev: number, failure: ConnectorFailure): void {
+    const pause = this.deps.rejected(helloRev, failure)
+    if (pause) {
+      this.pause = pause
+      this.stop()
+      this.deps.events.resetLive()
+    }
   }
 }

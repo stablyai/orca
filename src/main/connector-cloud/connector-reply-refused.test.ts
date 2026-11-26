@@ -3,10 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { CONNECTOR_REPLIES_OUTBOX_FEATURE } from '../../shared/connectors/connector-cloud-contract'
-import { CONNECTOR_SLACK_PRESENTATION_FEATURE } from '../../shared/connectors/slack-answer-presentation'
+import {
+  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+  SlackAnswerPresentationSchema,
+  SLACK_PRESENTATION_UNCONFIRMED,
+  slackAnswerText
+} from '../../shared/connectors/slack-answer-presentation'
+import type { ConnectorReplyBody } from './connector-replies'
 import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
 import type { ConnectorFailure } from './connector-cloud-request'
 import { ConnectorTurnEvents } from './connector-turn-events'
+import { ConnectorEventRequests } from './connector-event-requests'
+import { ConnectorOutboxSender } from './connector-outbox'
 
 const dirs: string[] = []
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
@@ -123,6 +132,87 @@ it('loads the next journal page only once the outbox accepts the current page', 
     }
     expect(reads).toBe(2)
     expect(events.next(1)?.batch).toMatchObject([{ kind: 'reply', answerDeliveryId: 'd200' }])
+  } finally {
+    events.clear()
+  }
+})
+
+it('hands an owed answer to the disclosure check after the event route rolls back', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-reply-rollback-'))
+  dirs.push(dir)
+  const presentation = SlackAnswerPresentationSchema.parse({
+    v: 1,
+    text: 'Two tests passed.',
+    visual: {
+      kind: 'bar',
+      title: 'Tests',
+      source: 'Build report',
+      axis: 'Result',
+      unit: 'count',
+      labels: ['Passed', 'Failed'],
+      series: [{ label: 'Tests', values: [2, 0] }]
+    }
+  })
+  const posted: ConnectorReplyBody[] = []
+  const events = new ConnectorTurnEvents(dir, 'ada', undefined, {
+    journal: () => ({
+      read: async () => [],
+      readOwed: async (_account, after, _limit, includePresentations) =>
+        after === null
+          ? [
+              {
+                ...row,
+                fill: {
+                  ...row.fill!,
+                  prose: SLACK_PRESENTATION_UNCONFIRMED,
+                  turnStartedAt: 8,
+                  ...(includePresentations ? { presentation } : {})
+                }
+              }
+            ]
+          : [],
+      fillOutcomes: async () => false,
+      sent: async () => {}
+    }),
+    onOwed: () => {},
+    post: async (body) => {
+      posted.push(body)
+      return { ok: true, value: {} }
+    },
+    hostName: () => 'laptop'
+  })
+  try {
+    let revision: number | null = 1
+    const requests = new ConnectorEventRequests({
+      events,
+      watch: () => () => {},
+      observe: () => {},
+      flush: () => {},
+      post: async () => refusal(400, 'invalid_request'),
+      rejected: () => {
+        revision = null
+        return Promise.resolve(null)
+      }
+    })
+    const sender = new ConnectorOutboxSender(
+      events,
+      (batch, rev, seq) => requests.post(batch, rev, seq),
+      () => revision,
+      () => 0.5
+    )
+    events.useCloudFeatures(
+      new Set([CONNECTOR_REPLIES_OUTBOX_FEATURE, CONNECTOR_SLACK_PRESENTATION_FEATURE])
+    )
+    requests.watch()
+    await events.drainReplies()
+    sender.flush()
+    await Promise.resolve()
+    expect(revision).toBeNull()
+    events.useCloudFeatures(new Set([CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE]))
+    events.resetLive()
+    requests.watch()
+    await events.drainReplies()
+    expect(posted).toMatchObject([{ text: slackAnswerText(presentation), presentation, turnId: 8 }])
   } finally {
     events.clear()
   }

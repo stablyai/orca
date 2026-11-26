@@ -16,7 +16,8 @@ import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies
 import { JOURNAL_DOMAIN_SCHEMA_001 } from '../database/journal-domain-schema-001'
 import {
   SlackAnswerPresentationSchema,
-  SLACK_PRESENTATION_UNCONFIRMED
+  SLACK_PRESENTATION_UNCONFIRMED,
+  slackAnswerText
 } from '../../../../shared/connectors/slack-answer-presentation'
 import {
   journalSlackAnswerPresentation,
@@ -103,14 +104,14 @@ it('binds preparation to a running root turn and keeps the first filled presenta
     answerDeliveryId: 'd',
     turnItemId: turn.turnItemId,
     outcome: 'answered' as const,
-    prose: SLACK_PRESENTATION_UNCONFIRMED,
-    hasPresentation: true as const
+    prose: slackAnswerText(presentation),
+    presentationTurn: turn
   }
   expect(fillJournalConnectorReplies(db, [first], 10)).toBe(1)
   expect(
     fillJournalConnectorReplies(
       db,
-      [{ ...first, outcome: 'quiet', prose: undefined, hasPresentation: undefined }],
+      [{ ...first, outcome: 'quiet', prose: undefined, presentationTurn: undefined }],
       11
     )
   ).toBe(0)
@@ -131,6 +132,16 @@ it('binds preparation to a running root turn and keeps the first filled presenta
     expect(pruneSlackAnswerPresentations(reopened, 100, 50)).toEqual({ deleted: 0, more: false })
     expect(journalSlackAnswerPresentation(reopened, turn)).toEqual(presentation)
     sentJournalConnectorReplies(reopened, [{ account: 'a', deliveryId: 'd' }], 101)
+    recordJournalConnectorReplies(reopened, turn, 'unrelated', false, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'An unrelated pending request' }],
+      connectorDelivery: {
+        account: 'a',
+        deliveryId: 'unrelated',
+        conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' }
+      }
+    })
     expect(pruneSlackAnswerPresentations(reopened, 150, 50)).toEqual({ deleted: 1, more: false })
     expect(journalSlackAnswerPresentation(reopened, turn)).toBeUndefined()
   } finally {

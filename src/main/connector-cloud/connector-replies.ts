@@ -19,7 +19,7 @@ import type { ConnectorTransport } from './connector-machine'
 import { connectorRetryDelayMs } from './connector-outbox'
 import { matchingSlackPresentation, slackBotPostBody, slackReplyBody } from './connector-slack-text'
 import {
-  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  takesSlackAnswerPresentation,
   SLACK_PRESENTATION_POST_VERSION,
   SLACK_PRESENTATION_UNCONFIRMED,
   type SlackAnswerPresentation
@@ -56,7 +56,7 @@ export function replyPresentationFor(
 ): ConnectorReplyBody {
   if (
     body.presentation &&
-    (!features?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE) ||
+    (!takesSlackAnswerPresentation(features) ||
       body.conversation.source !== 'slack' ||
       body.review ||
       !matchingSlackPresentation(body.presentation, body.text))
@@ -152,7 +152,7 @@ export function botPostPresentationFor(
   if (
     'presentation' in body &&
     body.presentation &&
-    (!features?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE) ||
+    (!takesSlackAnswerPresentation(features) ||
       ('ref' in body && !isRefOf('slack', body.ref)) ||
       !matchingSlackPresentation(body.presentation, body.text))
   ) {

@@ -47,6 +47,8 @@ export class ConnectorPollClient {
   private botsSaid = false
   // Hellos go one at a time, so a late answer never replaces a newer revision.
   private saying: Promise<ConnectorFailure | null> = Promise.resolve(null)
+  private postRefresh: { rev: number | null; result: Promise<ConnectorFailure | null> } | null =
+    null
   private failures = 0
   private readonly respread = new pollControl.ConnectorRehelloSpread()
   // When the last answered poll went out; failed ones don't count.
@@ -135,12 +137,18 @@ export class ConnectorPollClient {
     random: () => this.random(),
     features: () => this.features,
     helloRev: () => this.helloRev,
-    refresh: async (helloRev) => {
-      if (this.helloRev === helloRev) {
-        this.helloRev = this.snapshots.drop('post-409')
-        this.wake.helloDropped()
+    refresh: (helloRev) => {
+      if (this.helloRev !== null && this.helloRev !== helloRev) {
+        return Promise.resolve(null)
       }
-      return await this.sayHello()
+      if (this.helloRev === null && this.postRefresh?.rev === helloRev) {
+        return this.postRefresh.result
+      }
+      this.helloRev = this.snapshots.drop('post-409')
+      this.wake.helloDropped()
+      const result = this.sayHello()
+      this.postRefresh = { rev: helloRev, result }
+      return result
     }
   })
 
@@ -298,6 +306,7 @@ export class ConnectorPollClient {
     this.helloSaid = JSON.stringify(said)
     this.botsSaid = said.bots !== null
     this.features = new Set(answer.features)
+    this.postRefresh = null
     const current = this.helloRev !== null
     this.helloRev = null
     this.options.events.useCloudFeatures(this.features, answer.helloRev)
