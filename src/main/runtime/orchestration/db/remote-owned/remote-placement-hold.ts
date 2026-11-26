@@ -15,7 +15,6 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
-  creator_request_key: string | null
 } & RemoteStartCreatorColumns
 
 export type RemoteStartCreator = Pick<
@@ -23,26 +22,23 @@ export type RemoteStartCreator = Pick<
   'creatorHandle' | 'creatorOrcaSessionId' | 'creatorTurnSource'
 >
 
-/** A reservation names who asked for it, under its own request key; its Dispatch copies it only
- *  while that key is still the reservation's. */
+/** A reservation names who asked for it; the attempt this Orca's receipt names copies it. */
 export function recordPlacementCreator(
   db: OrchestrationDb,
-  placement: { taskId: string; requestKey: string },
+  taskId: string,
   creator: RemoteStartCreator | undefined
 ): void {
   db.db
     .prepare(
       `UPDATE remote_placements
-       SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?,
-         creator_request_key = ?
+       SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?
        WHERE task_id = ?`
     )
     .run(
       creator?.creatorHandle ?? null,
       creator?.creatorOrcaSessionId ?? null,
       creator?.creatorTurnSource ?? null,
-      placement.requestKey,
-      placement.taskId
+      taskId
     )
 }
 
@@ -55,7 +51,7 @@ export function resendRemoteReservation(
   creator: RemoteStartCreator | undefined
 ): void {
   if (existing.never_sent_at !== null) {
-    recordPlacementCreator(db, placement, creator)
+    recordPlacementCreator(db, placement.taskId, creator)
   }
   db.db
     .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')

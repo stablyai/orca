@@ -46,9 +46,7 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   -- Who started it, and whether a connector conversation woke that turn, as a local Dispatch records.
   creator_handle          TEXT,
   creator_orca_session_id TEXT,
-  creator_turn_source     TEXT,
-  -- The request those were recorded for: they describe only the reservation under that key.
-  creator_request_key     TEXT
+  creator_turn_source     TEXT
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);
@@ -79,7 +77,7 @@ CREATE TABLE IF NOT EXISTS remote_dispatches (
   -- When this Orca recorded the server's start answer or, after that, its latest state for the
   -- Dispatch. Reports and this Orca's own stop bookkeeping leave it.
   updated_at         TEXT NOT NULL DEFAULT (datetime('now')),
-  -- Copied from its placement when first recorded, so its mail reports where its start was asked.
+  -- Copied from its placement by this Orca's own receipt of the start, so its start outcome reports where it was asked.
   creator_handle          TEXT,
   creator_orca_session_id TEXT,
   creator_turn_source     TEXT

@@ -15,6 +15,7 @@ import {
   isDeliberateRest,
   isFailedLeadTurnFence,
   presenceReportId,
+  startOutcomeReportId,
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
@@ -294,7 +295,9 @@ function reconcileWorkerReport(
         ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
         : isFailedLeadTurnFence(row.fence)
           ? stopReportId(dispatchId, row.fence)
-          : presenceReportId(dispatchId, row.generation)
+          : rest.reason === 'start-failed' || rest.reason === 'never-ready'
+            ? startOutcomeReportId(dispatchId)
+            : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )

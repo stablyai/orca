@@ -112,7 +112,7 @@ export function reserveRemotePlacement(
         task.status,
         params.retryOf ?? null
       )
-    recordPlacementCreator(db, { taskId: task.id, requestKey: params.requestKey }, params.creator)
+    recordPlacementCreator(db, task.id, params.creator)
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
       id: task.id,
@@ -205,6 +205,10 @@ export function recordRemoteStart(
             agent: params.agent
           })
         : undefined
+    // This Orca's own receipt of the start it sent: its asker is the attempt's, as a local creator.
+    if (record && placement?.request_key === params.requestKey) {
+      recordRemoteAttemptCreator(db, record.dispatch_id, placement)
+    }
     if (record && params.peerRunId) {
       noteRemoteRunLinkPeerRun(db, params.conversationId, params.peerRunId)
     }
@@ -237,9 +241,6 @@ export function adoptRemoteAttempt(
   if (known) {
     // A Dispatch this Orca already knew predates the placement's attempt or reservation; only a new one is its answer.
     return record
-  }
-  if (placement.state === 'reserved' && placement.creator_request_key === placement.request_key) {
-    recordRemoteAttemptCreator(db, record.dispatch_id, placement)
   }
   db.db
     .prepare(`UPDATE remote_placements SET state = 'accepted', dispatch_id = ? WHERE task_id = ?`)

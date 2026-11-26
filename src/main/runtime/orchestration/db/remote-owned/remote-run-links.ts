@@ -179,7 +179,7 @@ export function closeRemoteRunLink(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
     const held = db.db
       .prepare(
-        `SELECT placement.task_id, placement.run_id, placement.dispatch_id, placement.state, task.status
+        `SELECT placement.task_id, placement.run_id, placement.dispatch_id, task.status
          FROM remote_placements placement JOIN tasks task ON task.id = placement.task_id
          LEFT JOIN remote_dispatches attempt ON attempt.dispatch_id = placement.dispatch_id
          WHERE placement.conversation_id = ?
@@ -189,7 +189,6 @@ export function closeRemoteRunLink(
       task_id: string
       run_id: string
       dispatch_id: string | null
-      state: 'reserved' | 'accepted'
       status: 'dispatched' | 'blocked'
     }[]
     const now = new Date().toISOString()
@@ -204,9 +203,7 @@ export function closeRemoteRunLink(
         projection: { result, completed_at: now }
       })
       // As a local worker's failure is: the Run's coordinator is told.
-      // A reservation's Dispatch ID names the attempt it retries, not this one, until the server answers.
-      const dispatchId =
-        (placement.state === 'accepted' ? placement.dispatch_id : null) ?? placement.task_id
+      const dispatchId = placement.dispatch_id ?? placement.task_id
       escalateWorkerFailure(
         db,
         { id: dispatchId, run_id: placement.run_id, task_id: placement.task_id },

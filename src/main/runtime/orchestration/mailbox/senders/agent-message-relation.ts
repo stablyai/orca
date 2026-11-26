@@ -48,9 +48,6 @@ function dispatchWorkerLineage(
     dispatch &&
     (db.getFederatedDispatch(dispatchId) ||
       (localDispatch(dispatch) && LOCAL_DISPATCH_RESULTS.has(args.messageType ?? '')))
-  if (!dispatch) {
-    return remoteWorkerLineage(db, dispatchId, args, recipient)
-  }
   const creator = known && dispatch.run_id === runId ? dispatch : null
   return creator &&
     sameParty(
@@ -61,18 +58,16 @@ function dispatchWorkerLineage(
     : UNKNOWN
 }
 
-/** A paired server's worker for this Run (worker-start --on), named by the `dispatch:` address Orca
- *  writes its results under there: 'worker' when the start this Orca recorded was the recipient's, as
- *  a local Dispatch's is. Its worker's own mail stays unknown: only the server knows its assignee. */
+/** A paired server's worker for this Run (worker-start --on): 'worker' when this Orca's own receipt
+ *  of the start names the recipient as its asker, as a local Dispatch's creator does. */
 function remoteWorkerLineage(
   db: OrchestrationDb,
   dispatchId: string,
-  args: Pick<RelationArgs, 'runId' | 'messageType'>,
+  runId: string,
   recipient: Party
 ): Lineage {
   const record = getRemoteDispatch(db, dispatchId)
-  return record?.run_id === args.runId &&
-    LOCAL_DISPATCH_RESULTS.has(args.messageType ?? '') &&
+  return record?.run_id === runId &&
     sameParty(
       { terminalHandle: record.creator_handle, orcaSessionId: record.creator_orca_session_id },
       recipient
@@ -90,6 +85,8 @@ type RelationArgs = {
   recipientDispatchId: string | null
   /** The mail's type: a local dispatch's own mail is lineage only for its results. */
   messageType?: string
+  /** A start outcome Orca wrote for this Dispatch, proven by its runtime-minted id. */
+  startOutcomeDispatchId?: string
 }
 
 /** Delivery-time evidence only; missing, ambiguous or foreign lineage is unknown. */
@@ -119,6 +116,10 @@ export function agentMessageLineage(args: RelationArgs): Lineage {
       args.recipient === `run:${runId}`
         ? runCoordinatorKey(run)
         : resolveOrchestrationParty(args.recipient, db)
+    // A paired server's worker has no Dispatch here: only Orca's own report of its start counts.
+    if (args.startOutcomeDispatchId && !db.getDispatchContextById(args.startOutcomeDispatchId)) {
+      return remoteWorkerLineage(db, args.startOutcomeDispatchId, runId, recipient)
+    }
     if (sender.address.startsWith('dispatch:')) {
       return dispatchWorkerLineage(db, sender.address.slice('dispatch:'.length), args, recipient)
     }

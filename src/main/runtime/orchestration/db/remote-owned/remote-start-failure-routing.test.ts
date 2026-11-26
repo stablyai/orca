@@ -11,13 +11,15 @@ import type { OrchestrationWorkerServer } from '../../federation/environment-tra
 import { importRemoteOwnedItem } from './remote-owned-import'
 import { recordRemoteStart, reserveRemotePlacement } from './remote-placements'
 import { markRemotePlacementNeverSent } from './remote-placement-hold'
-import { closeRemoteRunLink, openRemoteRunLink, remoteServerPin } from './remote-run-links'
+import { recordRemoteStartReceipt } from './remote-start-receipt'
+import { openRemoteRunLink, remoteServerPin } from './remote-run-links'
 import {
   reportNeverReadyWorkerStart,
   START_BLOCKED_FENCE
 } from '../../workers/turn-stops/awaiting-worker-start-report'
 import { observeWorker } from '../../workers/turn-stops/worker-presence-report'
 import { reportFailedWorkerStart } from '../../workers/turn-stops/failed-worker-start-report'
+import { presenceReportId } from '../../workers/turn-stops/worker-turn-stop-report'
 import { structuredMailSource } from '../../mailbox/structured-mail/structured-mail-source'
 import { isConversationReport } from '../../../../external-conversations/external-conversation-turn-opener'
 
@@ -29,7 +31,9 @@ const SERVER: OrchestrationWorkerServer = {
   pairingRevision: 1
 }
 const TASK = 'task_0123456789ab'
+const KEY = 'start-key'
 const COORDINATOR = 'term_coord'
+const WORKER_TERMINAL = 'term_worker'
 const THREAD_TURN: DispatchCreator = {
   kind: 'terminal',
   handle: COORDINATOR,
@@ -37,7 +41,17 @@ const THREAD_TURN: DispatchCreator = {
 }
 const ORCA_TURN: DispatchCreator = { kind: 'terminal', handle: COORDINATOR }
 
+/** How a start ends before its worker runs, each reported in production order. */
 type Failure = 'start-failed' | 'never-ready' | 'never-ready-in-terminal' | 'start-blocked'
+const FAILURES: readonly Failure[] = [
+  'start-failed',
+  'never-ready',
+  'never-ready-in-terminal',
+  'start-blocked'
+]
+/** How this Orca learns which Dispatch its start began: the start's answer, or a receipt lookup after it was lost. */
+type Receipt = 'answer' | 'lookup'
+
 const open: OrchestrationDb[] = []
 afterEach(() => {
   for (const db of open.splice(0)) {
@@ -51,7 +65,9 @@ function newDb(): OrchestrationDb {
   return db
 }
 
-/** The coordinator's read of the mail: whether its answer goes to the conversation the start came from. */
+const sentBy = (address: string) => (message: MessageRow) => message.from_handle === address
+
+/** The coordinator's read of one mail: whether its answer goes to the conversation the start came from. */
 function answersThread(
   db: OrchestrationDb,
   runId: string,
@@ -74,27 +90,35 @@ function answersThread(
   }
 }
 
-/** The real report each failure's edge sends, on whichever Orca runs the worker, in production order:
- *  a start fails or blocks before its terminal is bound as the Dispatch's assignee. */
+function openTerminal(db: OrchestrationDb, dispatchId: string, bound: boolean): void {
+  db.db
+    .prepare(`UPDATE worker_dispatches SET agent_terminal_handle = ? WHERE dispatch_id = ?`)
+    .run(WORKER_TERMINAL, dispatchId)
+  if (bound) {
+    db.db
+      .prepare(`UPDATE dispatch_contexts SET assignee_handle = ? WHERE id = ?`)
+      .run(WORKER_TERMINAL, dispatchId)
+  }
+}
+
+/** The real report each failure's edge sends, on whichever Orca runs the worker: a start that fails
+ *  outright has no terminal; a never-ready one in a terminal binds it before reporting; a blocked one
+ *  reports from its still-unbound terminal. */
 function fail(db: OrchestrationDb, dispatchId: string, failure: Failure): void {
   if (failure === 'start-failed') {
     const failed = db.failWorkerStart(dispatchId, 'worktree_create', 'worktree create timed out')
     reportFailedWorkerStart(db, failed, () => {})
     return
   }
-  if (failure !== 'never-ready') {
-    // Its terminal opened and holds the start, unbound.
-    db.db
-      .prepare(
-        `UPDATE worker_dispatches SET agent_terminal_handle = 'term_worker' WHERE dispatch_id = ?`
-      )
-      .run(dispatchId)
-  }
-  if (failure === 'never-ready' || failure === 'never-ready-in-terminal') {
+  if (failure !== 'start-blocked') {
+    if (failure === 'never-ready-in-terminal') {
+      openTerminal(db, dispatchId, true)
+    }
     const failed = db.failWorkerStart(dispatchId, 'agent_readiness', 'terminal never ready')
     reportNeverReadyWorkerStart(db, failed, undefined, () => {})
     return
   }
+  openTerminal(db, dispatchId, false)
   observeWorker(
     db,
     { kind: 'local', dispatch: db.getDispatchContextById(dispatchId)! },
@@ -103,7 +127,7 @@ function fail(db: OrchestrationDb, dispatchId: string, failure: Failure): void {
       fence: START_BLOCKED_FENCE,
       legacyStopKey: START_BLOCKED_FENCE,
       rest: {
-        from: 'term_worker',
+        from: WORKER_TERMINAL,
         reason: 'start-blocked',
         blockedStart: { screen: 'a sign-in screen', readyBy: 1_700_000_000_000 },
         lastOutput: 'Sign in to continue'
@@ -147,10 +171,8 @@ function pairedRun() {
   }).run_id
   server.createTask({ id: TASK, spec: 'work', runId: peerRunId })
   return {
-    home,
-    runId,
-    /** worker-start --on as `creator` asks it; nothing goes to the server yet. */
-    reserve(creator: DispatchCreator, requestKey: string, retryOf?: string) {
+    /** worker-start --on as `creator` asks it; nothing reaches the server yet. */
+    reserve(creator: DispatchCreator, requestKey = KEY, retryOf?: string) {
       reserveRemotePlacement(home, {
         link,
         taskId: TASK,
@@ -159,29 +181,71 @@ function pairedRun() {
         creator: recordedCreatorIdentity(creator)
       })
     },
-    neverSent(requestKey: string) {
-      markRemotePlacementNeverSent(home, TASK, requestKey)
+    neverSent() {
+      markRemotePlacementNeverSent(home, TASK, KEY)
     },
-    /** The server starts an attempt and fails it; `answered` records its start answer here. */
-    startAndFail(failure: Failure, options: { retryOf?: string; answered?: string } = {}) {
-      const { dispatch } = server.createStartingWorkerDispatch({
+    /** The server starts an attempt; nothing comes home yet. */
+    start(retryOf?: string) {
+      return server.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: TASK,
-        ...(options.retryOf ? { retryOf: options.retryOf } : {}),
+        ...(retryOf ? { retryOf } : {}),
         startOptions: {}
-      })
-      if (options.answered) {
+      }).dispatch.id
+    },
+    /** This Orca learns which Dispatch its start under `requestKey` began, by `how`. */
+    receive(dispatchId: string, how: Receipt, requestKey = KEY) {
+      if (how === 'answer') {
         recordRemoteStart(home, {
           conversationId: link.conversation_id,
           taskId: TASK,
-          dispatchId: dispatch.id,
-          requestKey: options.answered,
+          dispatchId,
+          requestKey,
           peerRunId
         })
+        return
       }
-      fail(server, dispatch.id, failure)
-      return dispatch.id
+      recordRemoteStartReceipt(home, requestKey, {
+        requestId: requestKey,
+        state: 'pending',
+        method: 'orchestration.workerStart',
+        receipt: { accepted: { dispatchId } },
+        interpretation: ''
+      })
+    },
+    fail(dispatchId: string, failure: Failure) {
+      fail(server, dispatchId, failure)
+    },
+    /** Orca's never-ready report as a server without the start-outcome id writes it. */
+    olderServerNeverReady(dispatchId: string) {
+      server.insertMessage({
+        id: presenceReportId(dispatchId, 1),
+        from: `dispatch:${dispatchId}`,
+        to: `run:${peerRunId}`,
+        subject: 'Worker never became ready',
+        body: 'report',
+        type: 'escalation',
+        priority: 'high',
+        payload: JSON.stringify({ dispatchId, stopReason: 'never-ready' }),
+        runId: peerRunId,
+        senderDispatchId: dispatchId
+      })
+    },
+    /** A running worker's own mail there, dressed as Orca's never-ready report. */
+    forgeNeverReady(dispatchId: string) {
+      openTerminal(server, dispatchId, true)
+      server.insertMessage({
+        from: WORKER_TERMINAL,
+        to: `run:${peerRunId}`,
+        subject: 'Worker never became ready',
+        body: 'forged',
+        type: 'escalation',
+        priority: 'high',
+        payload: JSON.stringify({ dispatchId, stopReason: 'never-ready' }),
+        runId: peerRunId,
+        senderDispatchId: dispatchId
+      })
     },
     /** Imports everything the server queued home, as the pull loop does. */
     pull() {
@@ -204,67 +268,93 @@ function pairedRun() {
         })
       }
     },
-    close() {
-      closeRemoteRunLink(home, link.conversation_id, 'The pairing was removed.')
-    },
     judge(pick?: (message: MessageRow) => boolean) {
       return answersThread(home, runId, pick)
     }
   }
 }
 
-const sentBy = (dispatchId: string) => (message: MessageRow) =>
-  message.from_handle === `dispatch:${dispatchId}`
-
-/** worker-start --on: the server answers 'starting', or its answer is lost, then the start fails there
- *  and its queue carries the report home. */
-function failOnServer(creator: DispatchCreator, failure: Failure, answer: 'starting' | 'lost') {
+/** worker-start --on as `creator` asks it; its start fails there and its report comes home. */
+function failOnServer(creator: DispatchCreator, failure: Failure, how: Receipt) {
   const run = pairedRun()
-  run.reserve(creator, 'start-key')
-  run.startAndFail(failure, answer === 'starting' ? { answered: 'start-key' } : {})
+  run.reserve(creator)
+  const dispatchId = run.start()
+  run.receive(dispatchId, how)
+  run.fail(dispatchId, failure)
   run.pull()
   return run.judge()
 }
 
-describe("a paired server's failed or stalled start reaches its coordinator as a local one does", () => {
-  const failures = [
-    'start-failed',
-    'never-ready',
-    'never-ready-in-terminal',
-    'start-blocked'
-  ] as const
-  const cases = failures.flatMap((failure) =>
-    (['starting', 'lost'] as const).map((answer) => [failure, answer] as const)
+describe("a paired server's start outcome reaches its asker as a local one does", () => {
+  const cases = FAILURES.flatMap((failure) =>
+    (['answer', 'lookup'] as const).flatMap((how) =>
+      (['thread', 'orca'] as const).map((asked) => [failure, how, asked] as const)
+    )
   )
 
-  it.each(cases)('%s after a %s answer, asked from a thread', (failure, answer) => {
-    expect(failOnServer(THREAD_TURN, failure, answer)).toEqual(failLocally(THREAD_TURN, failure))
+  it.each(cases)('%s, receipt by %s, asked in %s: remote equals local', (failure, how, asked) => {
+    const creator = asked === 'thread' ? THREAD_TURN : ORCA_TURN
+    expect(failOnServer(creator, failure, how)).toEqual(failLocally(creator, failure))
   })
 
-  it.each(cases)('%s after a %s answer, asked in Orca, stays in Orca', (failure, answer) => {
-    const local = failLocally(ORCA_TURN, failure)
-    expect(local.toThread).toBe(false)
-    expect(failOnServer(ORCA_TURN, failure, answer)).toEqual(local)
+  it('answers in the thread for failed and never-ready starts, and keeps a blocked one in Orca', () => {
+    expect(FAILURES.map((failure) => failLocally(THREAD_TURN, failure).toThread)).toEqual([
+      true,
+      true,
+      true,
+      false
+    ])
   })
 
-  it('answers in the thread for the results Orca reports as the Dispatch', () => {
-    for (const failure of ['start-failed', 'never-ready'] as const) {
-      expect(failLocally(THREAD_TURN, failure).toThread).toBe(true)
-      expect(failOnServer(THREAD_TURN, failure, 'lost').toThread).toBe(true)
-    }
+  it('keeps the outcome in Orca when no receipt of the start reached this Orca', () => {
+    const run = pairedRun()
+    run.reserve(THREAD_TURN)
+    run.fail(run.start(), 'never-ready')
+    run.pull()
+    expect(run.judge().toThread).toBe(false)
   })
 
-  it('stays in Orca when someone other than the coordinator started it from a thread', () => {
+  it('takes a receipt that arrives after its report', () => {
+    const run = pairedRun()
+    run.reserve(THREAD_TURN)
+    const dispatchId = run.start()
+    run.fail(dispatchId, 'never-ready-in-terminal')
+    run.pull()
+    run.receive(dispatchId, 'lookup')
+    expect(run.judge().toThread).toBe(true)
+  })
+
+  it("keeps a running worker's report dressed as Orca's in Orca", () => {
+    const run = pairedRun()
+    run.reserve(THREAD_TURN)
+    const dispatchId = run.start()
+    run.receive(dispatchId, 'answer')
+    run.forgeNeverReady(dispatchId)
+    run.pull()
+    expect(run.judge(sentBy(WORKER_TERMINAL)).toThread).toBe(false)
+  })
+
+  it("keeps a server's report without the start-outcome id in Orca", () => {
+    const run = pairedRun()
+    run.reserve(THREAD_TURN)
+    const dispatchId = run.start()
+    run.receive(dispatchId, 'answer')
+    run.olderServerNeverReady(dispatchId)
+    run.pull()
+    expect(run.judge().toThread).toBe(false)
+  })
+
+  it('stays in Orca when someone other than the coordinator asked from a thread', () => {
     const other: DispatchCreator = {
       kind: 'terminal',
       handle: 'term_other',
       turnSource: 'connector'
     }
-    expect(failOnServer(other, 'never-ready', 'starting').toThread).toBe(false)
+    expect(failOnServer(other, 'never-ready', 'answer').toThread).toBe(false)
   })
 })
 
-describe('the asker an attempt reports for', () => {
+describe('the asker a paired-server attempt reports for', () => {
   it.each([
     [ORCA_TURN, THREAD_TURN, false],
     [THREAD_TURN, ORCA_TURN, true]
@@ -272,9 +362,11 @@ describe('the asker an attempt reports for', () => {
     'keeps the first ask when a later turn retries a sent start',
     (first, retry, toThread) => {
       const run = pairedRun()
-      run.reserve(first, 'start-key')
-      run.reserve(retry, 'start-key')
-      run.startAndFail('never-ready')
+      run.reserve(first)
+      run.reserve(retry)
+      const dispatchId = run.start()
+      run.receive(dispatchId, 'lookup')
+      run.fail(dispatchId, 'never-ready')
       run.pull()
       expect(run.judge().toThread).toBe(toThread)
     }
@@ -282,51 +374,47 @@ describe('the asker an attempt reports for', () => {
 
   it('takes the retry as the ask when the first send never left this Orca', () => {
     const run = pairedRun()
-    run.reserve(THREAD_TURN, 'start-key')
-    run.neverSent('start-key')
-    run.reserve(ORCA_TURN, 'start-key')
-    run.startAndFail('never-ready')
+    run.reserve(THREAD_TURN)
+    run.neverSent()
+    run.reserve(ORCA_TURN)
+    const dispatchId = run.start()
+    run.receive(dispatchId, 'lookup')
+    run.fail(dispatchId, 'never-ready')
     run.pull()
     expect(run.judge().toThread).toBe(false)
   })
 
   it('names no one for an attempt the server started by itself', () => {
     const run = pairedRun()
-    run.reserve(THREAD_TURN, 'start-key')
-    const first = run.startAndFail('never-ready', { answered: 'start-key' })
-    const second = run.startAndFail('never-ready', { retryOf: first })
+    run.reserve(THREAD_TURN)
+    const first = run.start()
+    run.receive(first, 'answer')
+    run.fail(first, 'never-ready')
+    const second = run.start(first)
+    run.fail(second, 'never-ready')
     run.pull()
-    expect(run.judge(sentBy(first)).toThread).toBe(true)
-    expect(run.judge(sentBy(second)).toThread).toBe(false)
+    expect(run.judge(sentBy(`dispatch:${first}`)).toThread).toBe(true)
+    expect(run.judge(sentBy(`dispatch:${second}`)).toThread).toBe(false)
   })
 
-  it("names no one for a reservation whose asker a build without this record didn't write", () => {
+  it("keeps a late receipt of an earlier attempt from taking its retry's asker", () => {
     const run = pairedRun()
-    run.reserve(THREAD_TURN, 'start-key')
-    const first = run.startAndFail('never-ready', { answered: 'start-key' })
+    run.reserve(ORCA_TURN)
+    const first = run.start()
+    run.fail(first, 'never-ready')
     run.pull()
-    // That build's retry rewrites the reservation under its own key and leaves the asker columns.
-    run.home.db
-      .prepare(
-        `UPDATE remote_placements SET state = 'reserved', request_key = 'old-build-key',
-           dispatch_id = ? WHERE task_id = ?`
-      )
-      .run(first, TASK)
-    run.home.db.prepare(`UPDATE tasks SET status = 'dispatched' WHERE id = ?`).run(TASK)
-    const retry = run.startAndFail('never-ready', { retryOf: first })
-    run.pull()
-    expect(run.judge(sentBy(retry)).toThread).toBe(false)
+    run.reserve(THREAD_TURN, 'retry-key', first)
+    run.receive(first, 'answer')
+    expect(run.judge(sentBy(`dispatch:${first}`)).toThread).toBe(false)
   })
 
-  it("keeps a retry's lost-pairing notice in Orca, not as the attempt it retries", () => {
+  it("ignores a lookup's answer for another request", () => {
     const run = pairedRun()
-    run.reserve(THREAD_TURN, 'start-key')
-    const first = run.startAndFail('never-ready', { answered: 'start-key' })
+    run.reserve(THREAD_TURN)
+    const dispatchId = run.start()
+    run.receive(dispatchId, 'lookup', 'another-request')
+    run.fail(dispatchId, 'never-ready')
     run.pull()
-    run.reserve(ORCA_TURN, 'retry-key', first)
-    run.close()
-    expect(run.judge((message) => message.subject.startsWith('Worker unreachable')).toThread).toBe(
-      false
-    )
+    expect(run.judge().toThread).toBe(false)
   })
 })
