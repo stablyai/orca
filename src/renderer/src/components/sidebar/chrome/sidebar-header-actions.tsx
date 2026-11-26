@@ -93,10 +93,13 @@ function NewWorkspaceButton({
 export function SidebarHeaderActions({
   onWorkspaceBoardMenuOpenChange,
   agentsViewActive = false,
+  inboxShowing = false,
   activityOptionsTarget
 }: {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   agentsViewActive?: boolean
+  /** Rail on with Activity open: the header is Activity's alone, so the project controls leave. */
+  inboxShowing?: boolean
   activityOptionsTarget?: React.Ref<HTMLDivElement>
 }): React.JSX.Element {
   const openMenusRef = useRef({ options: false, addProject: false })
@@ -112,7 +115,15 @@ export function SidebarHeaderActions({
 
   return (
     <div className="flex shrink-0 items-center gap-1" data-sidebar-header-actions="">
-      <div ref={activityOptionsTarget} className="flex size-6 shrink-0 items-center">
+      <div
+        ref={activityOptionsTarget}
+        // The inbox adds Mark all read beside its options, so its slot grows with them.
+        className={
+          inboxShowing
+            ? 'flex h-6 shrink-0 items-center gap-1'
+            : 'flex size-6 shrink-0 items-center'
+        }
+      >
         {agentsViewActive ? null : (
           <SidebarWorkspaceOptionsMenu
             preserveWorkspaceBoardOpen
@@ -120,11 +131,15 @@ export function SidebarHeaderActions({
           />
         )}
       </div>
-      <AddProjectButton
-        preserveWorkspaceBoardOpen
-        onMenuOpenChange={(open) => updateMenuOpen('addProject', open)}
-      />
-      <NewWorkspaceButton preserveWorkspaceBoardOpen />
+      {inboxShowing ? null : (
+        <>
+          <AddProjectButton
+            preserveWorkspaceBoardOpen
+            onMenuOpenChange={(open) => updateMenuOpen('addProject', open)}
+          />
+          <NewWorkspaceButton preserveWorkspaceBoardOpen />
+        </>
+      )}
     </div>
   )
 }

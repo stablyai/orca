@@ -82,18 +82,43 @@ export function isWorkspacesRailItemActive(
   return state.activeView === 'terminal' && (state.sidebarBody ?? 'workspaces') === 'workspaces'
 }
 
-/** Re-clicking an active Workspaces toggles the list; from anywhere else it returns to the list and never collapses it. */
-export function activateWorkspacesRailItem(store: RailNavigationStore): void {
+/** The list column's two rail items: Workspaces shows the workspace list, Activity the inbox. */
+export type ListRailItemId = 'workspaces' | 'activity'
+
+function listRailItemBody(item: ListRailItemId): UISlice['sidebarBody'] {
+  return item === 'activity' ? 'agents' : 'workspaces'
+}
+
+export function isListRailItemActive(
+  state: Pick<UISlice, 'activeView' | 'sidebarBody'>,
+  item: ListRailItemId
+): boolean {
+  return (
+    state.activeView === 'terminal' &&
+    (state.sidebarBody ?? 'workspaces') === listRailItemBody(item)
+  )
+}
+
+/**
+ * Re-clicking an active list item (Workspaces or Activity) toggles the list; from anywhere else it returns to the
+ * list showing that body and never collapses it.
+ */
+export function activateListRailItem(store: RailNavigationStore, item: ListRailItemId): void {
   const { getState } = store
-  if (isWorkspacesRailItemActive(getState())) {
+  if (isListRailItemActive(getState(), item)) {
     getState().toggleSidebar()
     return
   }
   returnToTerminalView(store)
-  getState().setSidebarBody('workspaces')
+  getState().setSidebarBody(listRailItemBody(item))
   if (!getState().sidebarOpen) {
     getState().setSidebarOpen(true)
   }
+}
+
+/** Re-clicking an active Workspaces toggles the list; from anywhere else it returns to the list and never collapses it. */
+export function activateWorkspacesRailItem(store: RailNavigationStore): void {
+  activateListRailItem(store, 'workspaces')
 }
 
 /**
