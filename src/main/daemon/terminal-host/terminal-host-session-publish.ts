@@ -198,6 +198,20 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
+  const command = opts.command
+  if (command && !startupCommandWritten && shellReadySupported) {
+    // The zsh wrapper runs the command from its first line editor; an rc file that execs tmux or another shell never gets there.
+    session.armStartupCommandExecFallback(() => {
+      staging.current = stageStartupCommand({
+        command,
+        shellPath: subprocess.shellPath,
+        orcaBuiltLine: opts.launchAgent !== undefined
+      })
+      return buildStartupCommandSubmission(staging.current.command, {
+        bracketedPasteSafe: true
+      })
+    })
+  }
   if (startupCommandWritten && opts.command) {
     staging.current = stageStartupCommand({
       command: opts.command,

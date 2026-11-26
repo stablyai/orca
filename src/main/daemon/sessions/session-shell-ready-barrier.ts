@@ -17,6 +17,10 @@ import { basename } from 'node:path'
 import type { ShellReadyState } from '../protocol/daemon-rpc-contract'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
+
+function loginShellName(name: string | null): string | null {
+  return name?.replace(/^-/, '') || null
+}
 // Ctrl+U kills typed text left of the cursor in zsh, bash and fish, the only shells this barrier holds commands for.
 // The leading space keeps the cursor off column 0, where bash rings the bell on ^U (e.g. on an already empty line).
 const KILL_TYPED_LINE = ' \x15'
@@ -44,6 +48,8 @@ export class SessionShellReadyBarrier {
   private releaseDeviceAttributesResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
   private typedAhead = false
+  private shellPid: number | null = null
+  private execFallback: (() => string) | null = null
   private readonly postReadyFlushGate: PostReadyFlushGate
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
@@ -93,6 +99,11 @@ export class SessionShellReadyBarrier {
     return true
   }
 
+  /** The wrapper runs this startup command itself; type it at ready timeout only if zsh exec-ed into another program first. */
+  setExecFallback(build: () => string): void {
+    this.execFallback = build
+  }
+
   /** Track input typed while a startup command is held, so the flush can clear the line first. */
   observeTypedInput(data: string): void {
     if (this.preReadyStdinQueue.length > 0 && !extractOnlyTerminalQueryReplies(data)) {
@@ -105,6 +116,7 @@ export class SessionShellReadyBarrier {
     if (this._state === 'pending' && this.scanState) {
       const scanned = scanShellStartupOutput(this.scanState, data)
       data = scanned.output
+      this.shellPid ??= scanned.shellPid
       if (scanned.ready) {
         this.transitionToReady(scanned.postMarkerBytesObserved)
         releaseStartupDeviceAttributes = true
@@ -162,6 +174,7 @@ export class SessionShellReadyBarrier {
   private transitionToReady(postMarkerBytesObserved = false): void {
     this._state = 'ready'
     this.scanState = null
+    this.execFallback = null
     this.clearReadyTimer()
     if (this.preReadyStdinQueue.length === 0) {
       return
@@ -195,6 +208,25 @@ export class SessionShellReadyBarrier {
     this.releaseDeviceAttributes()
     this.releaseHeldBytes()
     this.flushPreReadyQueue()
+    const execFallback = this.execFallback
+    this.execFallback = null
+    if (execFallback && this.shellExecedAway()) {
+      this.reportReadiness('startup-command-exec-fallback', {})
+      this.deps.noteQueuedInputWritten?.()
+      this.deps.subprocess.write(execFallback())
+    }
+  }
+
+  // exec keeps the shell's pid and process group, so a foreground group led by that pid under another name means
+  // .zshrc handed the terminal to tmux, fish or bash and the wrapper's line editor will never run.
+  private shellExecedAway(): boolean {
+    const { subprocess } = this.deps
+    if (this.shellPid === null || subprocess.readForegroundGroup?.() !== this.shellPid) {
+      return false
+    }
+    const name = loginShellName(subprocess.getForegroundProcess({ rawFallback: true }))
+    const shellName = loginShellName(subprocess.shellPath ? basename(subprocess.shellPath) : null)
+    return name !== null && shellName !== null && name !== shellName
   }
 
   private flushPreReadyQueue(): void {

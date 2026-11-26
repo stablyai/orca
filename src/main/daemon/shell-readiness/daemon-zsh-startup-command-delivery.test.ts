@@ -56,11 +56,14 @@ describe('daemon zsh startup command delivery', () => {
       const home = join(scratch, 'home')
       const outPath = join(scratch, 'ran.txt')
       const answerPath = join(scratch, 'answer.txt')
+      const inheritedPath = join(scratch, 'inherited.txt')
       rmSync(home, { recursive: true, force: true })
       mkdirSync(home, { recursive: true })
       writeFileSync(
         join(home, '.zshrc'),
-        `printf 'Would you like to update? [Y/n] '\nread -r -t 2 -k 1 option\nprint -r -- "<$option>" > ${JSON.stringify(answerPath)}\n`
+        `printf 'Would you like to update? [Y/n] '\nread -r -t 2 -k 1 option\nprint -r -- "<$option>" > ${JSON.stringify(answerPath)}\n` +
+          // A process the rc file starts (a tmux server, an agent) must not inherit the launch line.
+          `/usr/bin/env | grep -c '^${POSIX_SHELL_STARTUP_COMMAND_ENV}=' > ${JSON.stringify(inheritedPath)}\n`
       )
       const command = `print -r -- launched-in-full > ${JSON.stringify(outPath)}`
       const config = getShellLaunchConfig(ZSH_PATH, ['ready', 'markers'], {
@@ -79,6 +82,7 @@ describe('daemon zsh startup command delivery', () => {
           ...config.env
         }
       })
+      const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
       try {
         const deadline = Date.now() + 15_000
         while (!existsSync(outPath) && Date.now() < deadline) {
@@ -86,11 +90,14 @@ describe('daemon zsh startup command delivery', () => {
         }
       } finally {
         proc.kill()
+        // afterEach removes the scratch dir; a still-dying zsh writing into it fails that with ENOTEMPTY.
+        await exited
       }
 
       expect(readFileSync(outPath, 'utf8').trim()).toBe('launched-in-full')
       // Nothing was typed, so the rc file's question saw no key.
       expect(readFileSync(answerPath, 'utf8').trim()).toBe('<>')
+      expect(readFileSync(inheritedPath, 'utf8').trim()).toBe('0')
     },
     20_000
   )

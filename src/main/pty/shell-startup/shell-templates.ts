@@ -16,6 +16,11 @@ builtin unset ${SHELL_STARTUP_FEATURE_ENV}
 # Consume now: user config can drop the deferred hook, leaving exported history state to leak into children.
 builtin typeset -g _orca_histfile="\${ORCA_HISTFILE:-}"
 builtin unset ORCA_HISTFILE
+# Consume now: processes the rc files start (a tmux server, an agent) must not inherit the launch line.
+if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
+  builtin typeset -g _orca_startup_command="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
+  builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+fi
 __orca_has_feature() { (( \${_orca_shell_features[(Ie)$1]} )) }`
 
 export const BASH_FEATURE_CHANNEL_BLOCK = `_orca_shell_features=",\${${SHELL_STARTUP_FEATURE_ENV}:-},"
@@ -69,10 +74,10 @@ export function getZshShellReadyMarkerRegistrationBlock(
     : `  printf "${escapedMarker}"`
   const startupCommandBlock = supportsStartupCommand
     ? `
-  if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
-    BUFFER="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
+  if (( \${+_orca_startup_command} )); then
+    BUFFER="$_orca_startup_command"
     CURSOR=\${#BUFFER}
-    builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+    builtin unset _orca_startup_command
     zle accept-line
   fi`
     : ''
