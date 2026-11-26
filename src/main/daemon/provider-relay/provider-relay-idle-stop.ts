@@ -68,7 +68,7 @@ export class ProviderRelayIdleStop {
         readonly size: number
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
-        startMethods: ReadonlySet<string>
+        setStartMethods: (methods: readonly string[]) => void
         awaitingStart: (itemId: string) => boolean
       }
       stoppedBy: ProviderRelayStop
@@ -88,9 +88,7 @@ export class ProviderRelayIdleStop {
       pendingCount: () => relay.pending.size + relay.pending.working.size,
       askingCount: () => relay.pending.size,
       awaitingStart: (itemId) => relay.pending.awaitingStart(itemId),
-      startApprovals: (methods) => {
-        relay.pending.startMethods = new Set(methods)
-      },
+      startApprovals: (methods) => relay.pending.setStartMethods(methods),
       workRequests: (methods) => {
         relay.pending.workMethods = new Set(methods)
       },

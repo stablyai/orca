@@ -99,7 +99,28 @@ export class ProviderRelayPendingRequests {
   private readonly starting = new Map<string, string>()
   private readonly startingCounts = new Map<string, number>()
   /** Request methods that ask to start an item (from the detach policy). */
-  startMethods: ReadonlySet<string> = new Set()
+  private startMethods: ReadonlySet<string> = new Set()
+
+  /** A policy naming other start methods reclassifies the requests already held (a rare change). */
+  setStartMethods(methods: readonly string[]): void {
+    const next = new Set(methods)
+    if (next.size === this.startMethods.size && methods.every((m) => this.startMethods.has(m))) {
+      return
+    }
+    this.startMethods = next
+    this.starting.clear()
+    this.startingCounts.clear()
+    for (const [key, { line }] of this.pending) {
+      const message = parseObject(line)
+      const item =
+        message && typeof message.method === 'string'
+          ? this.startsItem(message.method, message.params)
+          : null
+      if (item !== null) {
+        this.countStart(key, item)
+      }
+    }
+  }
 
   /** True while a waiting request asks to start this item: it hasn't started running. */
   awaitingStart(itemId: string): boolean {
@@ -124,9 +145,13 @@ export class ProviderRelayPendingRequests {
     this.pending.set(key, record)
     this.pendingChars += record.line.length
     if (startsItem !== null) {
-      this.starting.set(key, startsItem)
-      this.startingCounts.set(startsItem, (this.startingCounts.get(startsItem) ?? 0) + 1)
+      this.countStart(key, startsItem)
     }
+  }
+
+  private countStart(key: string, item: string): void {
+    this.starting.set(key, item)
+    this.startingCounts.set(item, (this.startingCounts.get(item) ?? 0) + 1)
   }
 
   /** A whole-item start approval names the item; one with an `approvalId` targets a running one. */
