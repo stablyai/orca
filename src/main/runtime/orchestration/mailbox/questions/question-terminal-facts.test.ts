@@ -255,6 +255,40 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     expect(told).toEqual([])
   })
 
+  it('does not tell on a terminal read before an agent-less take committed mid-decision', async () => {
+    coordinate()
+    // An agent took a first question, with a worker started for it whose chat the decision awaits.
+    working = true
+    const first = ask()
+    const task = db.createTask({ runId: coordinate(), spec: 'work' })
+    const linked = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_worker',
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    db.db
+      .prepare(
+        `UPDATE dispatch_contexts SET for_message_id = ?, assignee_handle = NULL,
+           assignee_orca_session_id = 'worker-chat' WHERE id = ?`
+      )
+      .run(first, linked.id)
+    await take(first)
+    // The agent stops; while that decision awaits the worker's chat, the shell takes another.
+    working = false
+    let release = (): void => undefined
+    chatRead = new Promise((resolve) => (release = resolve))
+    reconciler.terminalChanged(TAKER, false)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const second = ask()
+    db.markAsRead([second], { kind: 'terminal', handle: HANDLE })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    chatRead = Promise.resolve()
+    release()
+    await settle()
+    expect(told).toEqual([])
+  })
+
   it('still tells when an agent coordinator stops at its shell', async () => {
     coordinate()
     working = true

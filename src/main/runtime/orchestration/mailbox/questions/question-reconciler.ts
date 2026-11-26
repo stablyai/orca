@@ -83,7 +83,7 @@ export class QuestionReconciler {
   /** `agent`: an agent phase shows there now, so its phase, not the pty, shows when it stops. */
   terminalChanged(party: string | null, working: boolean, agent = working): void {
     if (party && agent) {
-      this.agentless.delete(party)
+      this.holdAgentless(party, undefined)
     }
     if (party && this.watching()) {
       this.partyChanged(party, working)
@@ -145,7 +145,7 @@ export class QuestionReconciler {
         // in place under the same pty id.
         for (const [party, ptyId] of this.agentless) {
           if (ptyId === edge.ptyId) {
-            this.agentless.delete(party)
+            this.holdAgentless(party, undefined)
             this.terminalChanged(party, false)
           }
         }
@@ -182,11 +182,23 @@ export class QuestionReconciler {
       return
     }
     const terminal = this.deps.reads.terminal(taker.slice('terminal:'.length))
-    if (terminal && !terminal.working && !terminal.takesInput) {
-      this.agentless.set(taker, terminal.ptyId)
-    } else {
-      this.agentless.delete(taker)
+    this.holdAgentless(
+      taker,
+      terminal && !terminal.working && !terminal.takesInput ? terminal.ptyId : undefined
+    )
+  }
+
+  /** Every change to an agent-less hold goes here: a decision reading this party read it before. */
+  private holdAgentless(party: string, ptyId: string | undefined): void {
+    if (this.agentless.get(party) === ptyId) {
+      return
     }
+    if (ptyId === undefined) {
+      this.agentless.delete(party)
+    } else {
+      this.agentless.set(party, ptyId)
+    }
+    this.changed(`party:${party}`)
   }
 
   /** A Run or Dispatch changed readers or state: an agent-less reader holds only while it still
@@ -205,7 +217,7 @@ export class QuestionReconciler {
     }
     const terminal = this.deps.reads.terminal(taker.slice('terminal:'.length))
     if (terminal?.working || terminal?.takesInput) {
-      this.agentless.delete(taker)
+      this.holdAgentless(taker, undefined)
     }
   }
 
@@ -251,7 +263,7 @@ export class QuestionReconciler {
     if (questions.length === 0) {
       this.forget(taker)
       this.unverified.delete(taker)
-      this.agentless.delete(taker)
+      this.holdAgentless(taker, undefined)
       return
     }
     this.forgetAgentlessWithAgent(taker)
