@@ -3,6 +3,7 @@ import type { SleepingAgentWakeRequest } from '../../../shared/workspace/lifecyc
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
 import { requestRendererReply } from './renderer-reply-request'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export function requestSleepingPaneWake(
   window: BrowserWindow,
@@ -60,7 +61,7 @@ export function registerSleepingMailAvailability(
         const named = typeof environmentId === 'string' && environmentId
         runtime.retrySleptMailboxWakes(
           paneKey,
-          paneKey === undefined && (named ? `runtime:${environmentId}` : true)
+          paneKey === undefined && (named ? toRuntimeExecutionHostId(named) : true)
         )
       }
     }

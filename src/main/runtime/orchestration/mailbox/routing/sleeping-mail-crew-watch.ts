@@ -5,6 +5,7 @@ import {
   type CrewInvalidation
 } from '../../crew/crew-changes'
 import { sleepingMailChangeScope } from './sleeping-mail-change-scope'
+import { toSshExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 type SleepingMailScope = { mailboxes: Iterable<string>; panes: Iterable<string> }
 
@@ -72,7 +73,7 @@ export class SleepingMailCrewWatch {
  *  edge can unblock only a wake that failed there, never a sleeper with nothing owed. */
 export function retryOnHostConnect(
   subscribe: (listener: (event: RuntimeClientEvent) => void) => unknown,
-  retry: (host: `ssh:${string}`) => void
+  retry: (host: ReturnType<typeof toSshExecutionHostId>) => void
 ): ReadonlySet<string> {
   // Only hosts up now: a disconnected or removed target leaves nothing behind.
   const connected = new Set<string>()
@@ -86,7 +87,7 @@ export function retryOnHostConnect(
     }
     if (!connected.has(event.targetId)) {
       connected.add(event.targetId)
-      retry(`ssh:${event.targetId}`)
+      retry(toSshExecutionHostId(event.targetId))
     }
   })
   return connected
