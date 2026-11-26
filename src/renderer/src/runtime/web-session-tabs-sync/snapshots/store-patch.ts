@@ -36,9 +36,6 @@ function copyWebClientChatReadMarksForPatch(
   verdict: HostSessionMirrorPatchVerdict,
   affectedWorkspaces: readonly string[]
 ): AppState | Partial<AppState> {
-  if (!isWebClientLocation() || state.chatReadMarksCopiedHere) {
-    return patch
-  }
   const complete = verdict.fullInventory !== undefined
   const workspaceIds = complete
     ? verdict.frames.map(({ worktreeId }) => worktreeId)
@@ -79,12 +76,16 @@ export function applyWebSessionTabsStorePatch(
     state: AppState,
     changedAgentPaneKeys: Set<string>
   ): AppState | Partial<AppState> => {
-    const patch = copyWebClientChatReadMarksForPatch(
-      state,
-      buildPatch(state, changedAgentPaneKeys),
-      hostMirrorVerdict,
-      affectedWorkspaces
-    )
+    const shouldCopyChatReadMarks = isWebClientLocation() && !state.chatReadMarksCopiedHere
+    const builtPatch = buildPatch(state, changedAgentPaneKeys)
+    const patch = shouldCopyChatReadMarks
+      ? copyWebClientChatReadMarksForPatch(
+          state,
+          builtPatch,
+          hostMirrorVerdict,
+          affectedWorkspaces
+        )
+      : builtPatch
     markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
