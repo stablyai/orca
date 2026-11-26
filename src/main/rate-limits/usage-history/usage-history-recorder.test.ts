@@ -48,4 +48,25 @@ describe('UsageHistoryRecorder', () => {
       { at: now - 3_600_000, usedPercent: 14 }
     ])
   })
+
+  it('keeps saved samples when a reading is flushed before the file loads', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'usage-history-'))
+    dirs.push(dir)
+    const file = join(dir, 'history.json')
+    const first = new UsageHistoryRecorder(file)
+    await first.loaded
+    first.record({ claude: limits(10, now - 7_200_000) }, now)
+    await first.flush()
+
+    const early = new UsageHistoryRecorder(file)
+    early.record({ claude: limits(20, now - 3_600_000) }, now)
+    await early.flush()
+
+    const reopened = new UsageHistoryRecorder(file)
+    await reopened.loaded
+    expect(reopened.snapshot(now)['claude:weekly']?.samples).toEqual([
+      { at: now - 7_200_000, usedPercent: 10 },
+      { at: now - 3_600_000, usedPercent: 20 }
+    ])
+  })
 })

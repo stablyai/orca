@@ -118,6 +118,8 @@ export class UsageHistoryRecorder {
     this.dirty = true
     const filePath = this.filePath
     this.drain = this.drain.then(async () => {
+      // A flush during startup must not replace the file with only the samples taken so far.
+      await this.loaded
       while (this.dirty) {
         this.dirty = false
         await writePluginFileAtomically(filePath, JSON.stringify(this.history), {
