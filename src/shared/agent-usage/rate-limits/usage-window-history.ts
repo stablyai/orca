@@ -8,6 +8,8 @@ export type UsageWindowHistory = {
   resetsAt: number | null
   windowMinutes: number
   samples: UsageHistorySample[]
+  /** Account and runtime this series was read from. Absent when the host did not say. */
+  owner?: string
 }
 
 /** Keyed by `${providerKey}:${windowId}`, e.g. `claude:weekly` or `codex:session`. */
@@ -16,7 +18,8 @@ export type UsageHistoryByWindow = Record<string, UsageWindowHistory>
 const UsageWindowHistorySchema = z.object({
   resetsAt: z.number().finite().nullable(),
   windowMinutes: z.number().finite().positive(),
-  samples: z.array(z.object({ at: z.number().finite(), usedPercent: z.number().finite() }))
+  samples: z.array(z.object({ at: z.number().finite(), usedPercent: z.number().finite() })),
+  owner: z.string().min(1).optional()
 })
 
 /** Persisted or streamed history; a malformed series is dropped rather than failing the rest. */
