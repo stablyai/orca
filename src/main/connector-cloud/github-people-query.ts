@@ -110,15 +110,17 @@ function errorLoss(
   if (!parsed.success) {
     return { ...lost, unattributed: true }
   }
+  // The exact spellings this query emitted: `r0`, never `r00`.
+  const repositories = new Set(target.repositories.map((_repo, index) => `r${index}`))
+  const owners = new Set(target.owners.map((_owner, index) => `a${index}`))
   for (const error of parsed.data.errors) {
     const [head, connection] = error.path ?? []
-    const repo = typeof head === 'string' ? /^r(\d+)$/.exec(head) : null
-    const owner = typeof head === 'string' ? /^a(\d+)$/.exec(head) : null
+    const repo = typeof head === 'string' && repositories.has(head)
     const kind =
-      owner && Number(owner[1]) < target.owners.length ? OwnerKind.safeParse(data[owner[0]]) : null
+      typeof head === 'string' && owners.has(head) ? OwnerKind.safeParse(data[head]) : null
     const through = (selected: string): boolean =>
       connection === undefined || connection === selected
-    if (repo && Number(repo[1]) < target.repositories.length && through('assignableUsers')) {
+    if (repo && through('assignableUsers')) {
       lost.repositories = true
     } else if (
       kind?.success &&

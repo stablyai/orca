@@ -129,11 +129,13 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
   const [keptOnlyMe, setKeptOnlyMe] = useState<BotMember[] | null>(null)
 
   // Only this list's change goes to the host, which applies it to the people it has now, so an edit
-  // made elsewhere meanwhile is kept. A failed save offers Try again, without asking again.
+  // made elsewhere meanwhile is kept. A failed save offers Try again: by default the same change
+  // again, or `retry` for an add, which first checks who it would add now.
   const saveMembers = (
     updates: Pick<BotUpdateParams['updates'], 'addMembers' | 'removeMembers'>,
     failed: string,
-    saved?: () => void
+    saved?: () => void,
+    retry?: () => void
   ): void => {
     const attempt = (): void => {
       setSave({ kind: 'saving' })
@@ -143,7 +145,11 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
           saved?.()
         },
         (error: unknown) =>
-          setSave({ kind: 'failed', message: fullMessage(error) ?? failed, retry: attempt })
+          setSave({
+            kind: 'failed',
+            message: fullMessage(error) ?? failed,
+            retry: retry ?? attempt
+          })
       )
     }
     attempt()
@@ -182,6 +188,45 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
       request ? () => void decideAccessRequest(request, 'declined') : undefined
     )
 
+  // Who among `people` to add now, as of this moment: once no check the picker had asked could still
+  // change one of them, renamed or dropped as those checks say, and only those still eligible.
+  // Waits only on checks already out; the eligibility and identity read and whatever the caller
+  // does next run with nothing in between.
+  const qualify = async (
+    people: readonly BotMember[],
+    proposal?: WhoCanAskProposal
+  ): Promise<BotMember[]> => {
+    while (proposal?.held(people)) {
+      await proposal.settled()
+    }
+    return stillEligible(proposal ? proposal.current(people) : [...people])
+  }
+
+  // Writes the last approved people, asking again first whenever they would change (someone
+  // stopped being eligible, or a check renamed or displaced someone): never on an earlier answer.
+  // A failed save's Try again comes back here, so it too adds who is right then.
+  const deliver = async (approved: BotMember[], proposal?: WhoCanAskProposal): Promise<void> => {
+    for (;;) {
+      const now = await qualify(approved, proposal)
+      if (sameProposal(now, approved)) {
+        break
+      }
+      if (now.length === 0 || !(await confirmPeople(now))) {
+        return
+      }
+      approved = now
+    }
+    const { bot: current, service: list } = latest.current
+    saveMembers(
+      { addMembers: newBotMembers(current.members, approved, list) },
+      t('bots.whoCanAsk.addFailed', 'Couldn’t add {{names}}.', {
+        names: approved.map((member) => member.name || member.id).join(', ')
+      }),
+      () => setKeptOnlyMe(null),
+      () => void deliver(approved, proposal)
+    )
+  }
+
   // The picker closes first, so the confirmation is the only thing on screen. `proposal`: the
   // picker's checks still settling, so who is written is who the checks finally say.
   const add = async (
@@ -197,28 +242,11 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
       }
       return
     }
-    // Only who was confirmed is saved: if someone stopped being eligible, or a check the picker
-    // had asked renamed or displaced someone, while the confirmation was open, the rest are asked
-    // about again, under their names now, rather than saved on the earlier answer.
-    const settled = (people: BotMember[]) => (proposal ? proposal.settle(people) : people)
-    let people = await settled(picked)
-    for (;;) {
-      if (people.length === 0 || !(await confirmPeople(people))) {
-        return
-      }
-      const now = await settled(stillEligible(people))
-      if (sameProposal(now, people)) {
-        break
-      }
-      people = now
+    const first = await qualify(picked, proposal)
+    if (first.length === 0 || !(await confirmPeople(first))) {
+      return
     }
-    saveMembers(
-      { addMembers: newBotMembers(latest.current.bot.members, people, service) },
-      t('bots.whoCanAsk.addFailed', 'Couldn’t add {{names}}.', {
-        names: people.map((member) => member.name || member.id).join(', ')
-      }),
-      () => setKeptOnlyMe(null)
-    )
+    await deliver(first, proposal)
   }
 
   const review = (request: HostAccessRequest): void => {

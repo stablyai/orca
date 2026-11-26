@@ -256,6 +256,33 @@ describe('what a read covered', () => {
     })
   })
 
+  it('GPS-C9-02: only the exact alias spelling the query emitted names a kind', () => {
+    const mixed = targetOf({ repositories: ['a/b'], owners: ['acme'], more: false }).target
+    const org = {
+      __typename: 'Organization',
+      membersWithRole: { totalCount: 1, nodes: [person(2, 'x')] }
+    }
+    const data = { r0: users(person(3, 'y')), a0: org, a00: org }
+    const lost = (path: unknown[]) => readRoster(json(data, [{ message: 'x', path }]), mixed)?.lost
+    const neutral = { repositories: false, organizations: false, unattributed: true }
+    // Padded spellings this query never emitted name nothing, even beside a typed owner.
+    expect(lost(['r00', 'assignableUsers'])).toEqual(neutral)
+    expect(lost(['a00', 'membersWithRole'])).toEqual(neutral)
+    expect(lost(['r00'])).toEqual(neutral)
+    // The canonical ones, at the root or through their own connection, do.
+    expect(lost(['r0', 'assignableUsers'])).toEqual({
+      repositories: true,
+      organizations: false,
+      unattributed: false
+    })
+    expect(lost(['r0'])).toEqual({ repositories: true, organizations: false, unattributed: false })
+    expect(lost(['a0', 'membersWithRole'])).toEqual({
+      repositories: false,
+      organizations: true,
+      unattributed: false
+    })
+  })
+
   it('GPS-C7-05: a capped personal account beside a direct repo sets only the per-account cap', () => {
     const mixed = targetOf({ repositories: ['a/b'], owners: ['amy'], more: false }).target
     const personal = {

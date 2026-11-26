@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // Who can ask › Add on GitHub with the real access confirmation: the gesture that opened it (a
-// held Enter on Add, a double-click) answers neither of its buttons; a fresh press does, once.
+// held Enter or Space on Add, a double-click) answers neither of its buttons; a fresh press does,
+// once.
 // Setup's turn-on step with the production service and grant path. Synthetic data only.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -155,6 +156,53 @@ describe('GPS-C8-02: the gesture that opened the confirmation answers neither bu
     expect(host.update.mock.calls[0]?.[1].addMembers).toEqual([
       expect.objectContaining({ id: '41', name: 'maya-c', source: 'github' })
     ])
+  })
+
+  it('Space on the focused Add opens it too', async () => {
+    render(
+      <ConfirmationDialogProvider>
+        <HostedWhoCanAsk />
+      </ConfirmationDialogProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add people' }))
+    await settle(300)
+    pickRow('maya-cMaya C')
+    const keys = user()
+    addButton().focus()
+    await keys.keyboard('[Space]')
+    await settle()
+    expect(dialog()).toBeTruthy()
+    expect(host.update).not.toHaveBeenCalled()
+  })
+
+  it('a Space held from before it opened, released on Cancel or Give access, answers neither', async () => {
+    await openedByEnter()
+    for (const name of ['Cancel', 'Give access']) {
+      // Released with no press since it opened: its default is withheld, and the keyboard click
+      // a button makes on Space's release (no click count) doesn't answer.
+      expect(fireEvent.keyUp(button(name), { key: ' ' })).toBe(false)
+      fireEvent.click(button(name), { detail: 0 })
+      await settle()
+    }
+    expect(dialog()).toBeTruthy()
+    expect(host.update).not.toHaveBeenCalled()
+  })
+
+  it('a fresh Space on the focused Cancel answers it, and nothing is written', async () => {
+    const keys = await openedByEnter()
+    await keys.keyboard('[Space]')
+    await settle()
+    expect(dialog()).toBeNull()
+    expect(host.update).not.toHaveBeenCalled()
+  })
+
+  it('a fresh Space on the focused Give access writes once', async () => {
+    const keys = await openedByEnter()
+    button('Give access').focus()
+    await keys.keyboard('[Space]')
+    await settle()
+    expect(dialog()).toBeNull()
+    expect(host.update).toHaveBeenCalledOnce()
   })
 
   it('Enter in the search still ticks the highlighted row; Add appears only once someone is ticked', async () => {

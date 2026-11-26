@@ -472,6 +472,28 @@ describe('GPS-C7-04, GPS-C7-05: a known lost kind, and the personal-account cap,
     ])
   })
 
+  it('GPS-C9-02: a padded alias’s loss reads neutrally; the canonical one names its kind', () => {
+    // What the parser hands over for ['r00', ...] and for ['r0', ...] on the same mixed read.
+    const neutral = noteOf({
+      complete: false,
+      lost: { repositories: false, organizations: false, unattributed: true }
+    })
+    const repo = noteOf({
+      complete: false,
+      lost: { repositories: true, organizations: false, unattributed: false }
+    })
+    expect(neutral).toEqual([
+      `Repo list from ${day(READ_AT)}.`,
+      'Some repos or orgs couldn’t be read.',
+      'Repos read as @reader-x.'
+    ])
+    expect(repo).toEqual([
+      `Repo list from ${day(READ_AT)}.`,
+      'Some repos or members couldn’t be read.',
+      'Repos read as @reader-x.'
+    ])
+  })
+
   it('a direct repo read whole and a personal account capped: the cap is per account', () => {
     expect(noteOf({ cut: { people: false, members: false, repositories: true } })).toEqual([
       `Repo list from ${day(READ_AT)}.`,

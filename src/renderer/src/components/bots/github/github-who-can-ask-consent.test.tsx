@@ -2,7 +2,7 @@
 // Who can ask › Add on GitHub, mounted as setup's turn-on step (production service, real list and
 // grant path): checks the picker had asked that settle while the grant's confirmation is open,
 // through every confirmation and every write, in setup and in Settings. Synthetic data only.
-import { act, cleanup, fireEvent } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addButton,
@@ -19,6 +19,7 @@ import {
   type Users
 } from './github-who-can-ask-mount'
 import { ROSTER_WAIT_MS } from './github-who-can-ask-session'
+import { botMembersFullError } from '../../../../../shared/bots/bot-member-capacity'
 
 const host = vi.hoisted(() => {
   let view: unknown = null
@@ -247,5 +248,115 @@ describe('GPS-C8-01: checks settling while the confirmation is open', () => {
     expect(host.update).not.toHaveBeenCalled()
     await land(answer, true)
     expect(stamped()).toEqual([[{ id: '41', name: 'maya-c', source: 'github', workspaceId: '11' }]])
+  })
+})
+
+describe('GPS-C9-01: who is written is decided right before each write', () => {
+  it('an owner linked while a check is awaited after approval: asks again for the rest only', async () => {
+    const roster = deferred<People>()
+    const lee = deferred<Users>()
+    calls().people.mockReturnValue(roster.promise)
+    calls().users.mockImplementation(({ query }) =>
+      query === 'jordan'
+        ? Promise.resolve(usersOf([{ id: '50', name: 'jordan' }]))
+        : query === 'maya-c'
+          ? Promise.resolve(usersOf([{ id: '41', name: 'maya-c' }]))
+          : query === 'lee'
+            ? lee.promise
+            : Promise.resolve(usersOf([]))
+    )
+    mountWhoCanAsk()
+    await typeQuery('jordan', 300 + ROSTER_WAIT_MS)
+    pickRow('jordanRepos still loading')
+    await typeQuery('maya-c', 300 + ROSTER_WAIT_MS)
+    pickRow('maya-cRepos still loading')
+    await typeQuery('lee')
+    const first = heldAnswer()
+    await clickAdd()
+    // The list lands during the confirmation: the "lee" check is now about Jordan Lee.
+    await land(roster, {
+      ok: true,
+      value: rosterOf([{ id: '50', login: 'jordan', name: 'Jordan Lee' }])
+    })
+    await land(first, true)
+    // While that check is awaited, Maya's account is linked as the owner's.
+    await act(async () => {
+      host.publish(
+        gitHubView([
+          { userId: '1', login: 'owner-one' },
+          { userId: '41', login: 'maya-c' }
+        ])
+      )
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(host.update).not.toHaveBeenCalled()
+    const second = heldAnswer()
+    // The check finds no one named "lee": Jordan is unchanged, Maya is no longer eligible.
+    await land(lee, usersOf([]))
+    expect(asked()).toEqual([
+      [
+        { id: '50', name: 'jordan' },
+        { id: '41', name: 'maya-c' }
+      ],
+      [{ id: '50', name: 'jordan' }]
+    ])
+    expect(host.update).not.toHaveBeenCalled()
+    await land(second, true)
+    expect(stamped()).toEqual([[{ id: '50', name: 'jordan', source: 'github' }]])
+  })
+
+  const refusedThenRenamed = async (renamed: boolean) => {
+    calls().people.mockReturnValue(read(rosterOf([{ id: '41', login: 'maya-c', name: 'Maya C' }])))
+    const jordy = deferred<Users>()
+    calls().users.mockImplementation(({ query }) =>
+      query === 'jordan'
+        ? Promise.resolve(usersOf([{ id: '50', name: 'jordan' }]))
+        : query === 'jordy'
+          ? jordy.promise
+          : Promise.resolve(usersOf([]))
+    )
+    // The writer refuses before sending anything, as its local capacity check does.
+    host.update.mockRejectedValueOnce(
+      botMembersFullError({ scope: 'bot', limit: 20, names: ['jordan'] })
+    )
+    mountSettingsWhoCanAsk('11')
+    await typeQuery('jordan')
+    pickRow('jordanNot in your repo list')
+    // A check that isn't about the pick: Add goes ahead.
+    await typeQuery('jordy')
+    await clickAdd()
+    expect(host.update).toHaveBeenCalledOnce()
+    expect(screen.getByRole('alert').textContent).toContain('Nobody was added')
+    // After the refusal, that check finds id 50 under a new login (or nothing at all).
+    await land(jordy, usersOf(renamed ? [{ id: '50', name: 'jordy' }] : []))
+  }
+
+  it('a refused save’s Try again asks again under the new login, then writes it once', async () => {
+    await refusedThenRenamed(true)
+    const again = heldAnswer()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(asked()).toEqual([[{ id: '50', name: 'jordan' }], [{ id: '50', name: 'jordy' }]])
+    expect(host.update).toHaveBeenCalledOnce()
+    await land(again, true)
+    expect(stamped()).toEqual([
+      [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }],
+      [{ id: '50', name: 'jordy', source: 'github', workspaceId: '11' }]
+    ])
+  })
+
+  it('a refused save’s Try again with nothing changed writes the same people, without asking', async () => {
+    await refusedThenRenamed(false)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(asked()).toHaveLength(1)
+    expect(stamped()).toEqual([
+      [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }],
+      [{ id: '50', name: 'jordan', source: 'github', workspaceId: '11' }]
+    ])
   })
 })

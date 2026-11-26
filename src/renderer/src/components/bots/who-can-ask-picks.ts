@@ -67,11 +67,17 @@ export function heldPicks(
 }
 
 /** The picks handed to Add, still tied to the checks this picker open had already asked: those
- *  keep settling after the picker closes, so the grant can see what they found before writing. */
+ *  keep settling after the picker closes, so the grant can see what they found before writing.
+ *  Reads are synchronous, so the grant can decide and hand off to the writer with nothing in
+ *  between; only `settled` waits, and only on checks already out. */
 export type WhoCanAskProposal = {
-  /** `people` as those checks now leave them (renamed, or dropped when shown to be someone
-   *  else), once no check still out could change one of them. */
-  settle: (people: readonly BotMember[]) => Promise<BotMember[]>
+  /** Whether a check still out could change one of `people`. */
+  held: (people: readonly BotMember[]) => boolean
+  /** `people` as the checks leave them now: renamed, or dropped when shown to be someone else. */
+  current: (people: readonly BotMember[]) => BotMember[]
+  /** Resolves when the next check settles (no new check is asked; each settles on its own
+   *  bounds). */
+  settled: () => Promise<void>
 }
 
 export function whoCanAskProposal(
@@ -82,18 +88,14 @@ export function whoCanAskProposal(
   const asTicked = [...ticked]
   const names = { ...realNames }
   return {
-    settle: async (people) => {
-      // No new check is asked: this waits only on ones already out, which settle on their own
-      // bounds, and looks again each time one does.
-      while (heldPicks(people, asTicked, names, ledger).length > 0) {
-        await new Promise<void>((resolve) => {
-          const stop = ledger.onSettle(() => {
-            stop()
-            resolve()
-          })
+    held: (people) => heldPicks(people, asTicked, names, ledger).length > 0,
+    current: (people) => currentPicks(people, () => true, ledger),
+    settled: () =>
+      new Promise<void>((resolve) => {
+        const stop = ledger.onSettle(() => {
+          stop()
+          resolve()
         })
-      }
-      return currentPicks(people, () => true, ledger)
-    }
+      })
   }
 }
