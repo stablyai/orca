@@ -1,9 +1,9 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
+import { readBots, readLiveBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { useAccessRequests } from '@/lib/bot-access-requests'
 import {
   hasActivityInboxAgentAttention,
@@ -54,7 +54,15 @@ export function useActivityInboxAttention(): ActivityInboxAttention {
   )
   // Never useBots(): it would start a bots.list. The snapshot notifies only when its lists change.
   const botTasks = useSyncExternalStore(subscribeToBotChanges, hasActivityInboxBotAttention)
-  const access = useAccessRequests().some(isLiveAccessRequest)
+  const requests = useAccessRequests()
+  // Whether a request is live reads its host's state and the bot list, so re-check when either changes.
+  const liveHosts = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds)
+  const bots = useSyncExternalStore(subscribeToBotChanges, readBots)
+  const access = useMemo(
+    () => requests.some((request) => isLiveAccessRequest(request)),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- liveHosts and bots are what isLiveAccessRequest reads.
+    [requests, liveHosts, bots]
+  )
   return { agents, bots: botTasks || access }
 }
 

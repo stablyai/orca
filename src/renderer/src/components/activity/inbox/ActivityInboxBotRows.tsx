@@ -1,6 +1,6 @@
 // The bot side of the inbox: which bots have items for you, those items, and pending access requests.
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
+import { readBots, readLiveBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { useAccessRequests, type HostAccessRequest } from '@/lib/bot-access-requests'
 import { botRefKey } from '@/lib/bot-hosts'
 import { useBotItems } from '@/components/bots/items/use-bot-items'
@@ -25,11 +25,17 @@ export type ActivityInboxBotSources = {
 /** From what the renderer already holds (no fetch): the bots to read items for, and access requests. */
 export function useActivityInboxBotSources(): ActivityInboxBotSources {
   const botsKey = useSyncExternalStore(subscribeToBotChanges, readBotsNeedingYouKey)
-  // botsKey changes exactly when the set does; the read itself is the snapshot's in-memory lists.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
-  const bots = useMemo(() => readActivityInboxBots(), [botsKey])
+  // The bot list's identity too, so a renamed bot or a changed itemsStale reaches the rows.
+  const allBots = useSyncExternalStore(subscribeToBotChanges, readBots)
+  const liveHosts = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds)
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- botsKey and allBots are what the read depends on.
+  const bots = useMemo(() => readActivityInboxBots(), [botsKey, allBots])
   const allRequests = useAccessRequests()
-  const requests = useMemo(() => allRequests.filter(isLiveAccessRequest), [allRequests])
+  const requests = useMemo(
+    () => allRequests.filter((request) => isLiveAccessRequest(request)),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- liveHosts and allBots are what the filter reads.
+    [allRequests, liveHosts, allBots]
+  )
   return { bots, requests }
 }
 
@@ -47,17 +53,20 @@ export function ActivityInboxBotItemsReader({
   bot: Bot
   onItems: (key: string, value: BotItemsNeedingYou | undefined) => void
 }): null {
-  const { read } = useBotItems(bot)
+  const { read, state } = useBotItems(bot)
   const key = botRefKey(bot)
   useEffect(() => {
     // Grouped as the list lands (staleness reads the clock), not during render.
     const staleDays = botItemStaleDays(bot.itemsStale)
     const now = Date.now()
+    // A read that failed with nothing kept settles as no rows, so the inbox never waits on it forever.
     const items = read
       ? read.items.filter((item) => botItemGroupOf(item, staleDays, now) === 'needs_you')
-      : null
+      : state === 'failed'
+        ? []
+        : null
     onItems(key, { bot, items })
-  }, [key, bot, read, onItems])
+  }, [key, bot, read, state, onItems])
   useEffect(() => () => onItems(key, undefined), [key, onItems])
   return null
 }

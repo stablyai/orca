@@ -107,14 +107,14 @@ function AccessEntryRow({
   entry: Extract<ActivityInboxEntry, { kind: 'access' }>
 }): React.JSX.Element {
   const t = useTranslate()
+  // The name can be empty; the request toast falls back to the handle the same way.
+  const requester = request.requester.name || request.requester.handle
   return (
     <ActivityInboxRow
       avatar={bot ? botAvatar(bot) : <UserPlus className="size-3.5 text-muted-foreground" />}
-      title={bot?.name ?? request.requester.name}
+      title={bot?.name ?? requester}
       timestamp={request.createdAt}
-      line={t('activityInbox.accessRequest', '{{name}} asked for access', {
-        name: request.requester.name
-      })}
+      line={t('activityInbox.accessRequest', '{{name}} asked for access', { name: requester })}
       ask
       contextIcon={<UserPlus className="size-3" aria-hidden />}
       context={t('activityInbox.accessContext', 'Access request · {{source}}', {

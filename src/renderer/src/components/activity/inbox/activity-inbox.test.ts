@@ -80,6 +80,39 @@ describe('hasActivityInboxAgentAttention', () => {
     expect(hasActivityInboxAgentAttention(source({ a: child }), NOW)).toBe(false)
   })
 
+  it('stays dark for a cancelled turn, which the list shows as Interrupted and never lists', () => {
+    const cancelled = entry({ interrupted: true })
+    expect(hasActivityInboxAgentAttention(source({ a: cancelled }), NOW)).toBe(false)
+  })
+
+  it('lights for an unread failed main agent even while its row is still live, as the list lists it', () => {
+    const failed = entry({
+      state: 'working',
+      stateStartedAt: NOW - 10,
+      mainAgent: { state: 'done', outcome: 'failure' }
+    } as Partial<AgentStatusEntry>)
+    expect(hasActivityInboxAgentAttention(source({ a: failed }), NOW)).toBe(true)
+    expect(hasActivityInboxAgentAttention(source({ a: failed }, { acked: { a: NOW } }), NOW)).toBe(
+      false
+    )
+  })
+
+  it('ignores a migration-blocked pane with no Activity row', () => {
+    const blocked = {
+      ...source({}),
+      migrationUnsupportedByPtyId: {
+        pty: {
+          ptyId: 'pty',
+          paneKey: 'gone:leaf',
+          reason: 'legacy-numeric-pane-key',
+          source: 'local',
+          updatedAt: NOW
+        }
+      }
+    } as Parameters<typeof hasActivityInboxAgentAttention>[0]
+    expect(hasActivityInboxAgentAttention(blocked, NOW)).toBe(false)
+  })
+
   it('ignores panes with no Activity row', () => {
     expect(hasActivityInboxAgentAttention(source({ a: entry() }, { rows: [] }), NOW)).toBe(false)
   })
