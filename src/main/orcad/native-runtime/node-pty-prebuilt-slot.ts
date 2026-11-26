@@ -5,6 +5,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'no
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { usesNodePtySpawnHelper } from './node-pty-spawn-helper'
 import {
   COMPAT_SERVER_TARGET_BASES,
@@ -21,23 +22,27 @@ const SHA256 = /^[0-9a-f]{64}$/
 // Slot-relative POSIX paths prevent manifest traversal outside build/Release.
 const SLOT_FILE = /^(?!.*(?:^|\/)\.\.(?:\/|$))[\w.-]+(?:\/[\w.-]+)*$/
 
-const PrebuiltSlotEntrySchema = z.object({
-  platform: z.string(),
-  arch: z.string(),
-  libc: z.enum(['glibc', 'musl', 'none']),
-  /** Highest required strong GLIBC_ symbol; null off glibc. */
-  glibc: z.string().nullable(),
-  napi: z.number().int().positive(),
-  files: z.record(z.string().regex(SLOT_FILE), z.string().regex(SHA256))
-})
+const PrebuiltSlotEntrySchema = lazyZodSchema(() =>
+  z.object({
+    platform: z.string(),
+    arch: z.string(),
+    libc: z.enum(['glibc', 'musl', 'none']),
+    /** Highest required strong GLIBC_ symbol; null off glibc. */
+    glibc: z.string().nullable(),
+    napi: z.number().int().positive(),
+    files: z.record(z.string().regex(SLOT_FILE), z.string().regex(SHA256))
+  })
+)
 
-const PrebuiltSlotManifestSchema = z.object({
-  schemaVersion: z.literal(2),
-  module: z.string(),
-  version: z.string(),
-  napi: z.number().int().positive(),
-  slots: z.record(z.string(), PrebuiltSlotEntrySchema)
-})
+const PrebuiltSlotManifestSchema = lazyZodSchema(() =>
+  z.object({
+    schemaVersion: z.literal(2),
+    module: z.string(),
+    version: z.string(),
+    napi: z.number().int().positive(),
+    slots: z.record(z.string(), PrebuiltSlotEntrySchema)
+  })
+)
 
 export type PrebuiltSlotEntry = z.infer<typeof PrebuiltSlotEntrySchema>
 type PrebuiltSlotManifest = z.infer<typeof PrebuiltSlotManifestSchema>
