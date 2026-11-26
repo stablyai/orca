@@ -146,7 +146,8 @@ async function scanRoot(
 
 // A path can belong to home and repo roots with different depth; key by sourceKind too.
 function rootScanKey(root: SkillScanRoot): string {
-  return `${root.sourceKind}\0${[...root.providers].sort().join(',')}\0${root.path}`
+  const traversal = root.id.startsWith('pi-package-') ? 'pi-package' : 'default'
+  return `${root.sourceKind}\0${[...root.providers].sort().join(',')}\0${traversal}\0${root.path}`
 }
 
 async function scanRootShared(
