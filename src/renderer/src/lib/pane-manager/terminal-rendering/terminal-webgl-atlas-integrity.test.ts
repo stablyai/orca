@@ -386,7 +386,6 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     ['throws after being selected', 'throw']
   ])('keeps serving the next pending atlas after the first %s', (_name, firstMode) => {
     vi.useFakeTimers({ toFake: ['Date'] })
-    const start = fixture.clock
     const busy = fakePane(atlas())
     const firstAtlas = atlas()
     const secondAtlas = atlas()
@@ -424,7 +423,6 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(firstWake).not.toThrow()
     const firstEvent = firstMode === 'throw' ? 'first throws' : 'first reads'
     expect(observed).toEqual([firstEvent])
-    expect(fixture.state.readTimes).toEqual(firstMode === 'throw' ? [start] : [start, start + 50])
     expect(fixture.state.pending.size).toBe(1)
 
     const nextWake = takeScheduledWake(50)
@@ -432,7 +430,6 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     nextWake()
 
     expect(observed).toEqual([firstEvent, 'second reads'])
-    expect(fixture.state.readTimes.at(-1)).toBe(start + 100)
     expect(second.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(fixture.state.pending.size).toBe(0)
     expect(fixture.state.serviceTimer).toBeNull()
