@@ -22,19 +22,13 @@ function frameBytes(data: RawData): number {
     : data.byteLength
 }
 
-export async function startRelayCellStandIn(hostUrl: string): Promise<RelayCellStandIn> {
-  const server = new WebSocketServer({ port: 0, host: '127.0.0.1', maxPayload: 8 * 1024 * 1024 })
-  await new Promise<void>((resolve) => server.once('listening', () => resolve()))
-  const address = server.address()
-  if (!address || typeof address === 'string') {
-    throw new Error('stand-in cell has no port')
-  }
+/** The cell's splicing, shared by stand-ins that reach the host either way. */
+export function createCellSplicer() {
   const splices = new Set<() => void>()
   const limitCloses: string[] = []
   let clientStalledUntil = 0
 
-  server.on('connection', (client) => {
-    const host = new WebSocket(hostUrl, { maxPayload: 8 * 1024 * 1024 })
+  const splice = (client: WebSocket, host: WebSocket): void => {
     let closed = false
     const timers = new Set<ReturnType<typeof setTimeout>>()
     const close = (limit?: string): void => {
@@ -118,41 +112,70 @@ export async function startRelayCellStandIn(hostUrl: string): Promise<RelayCellS
         }
       })
     }
+    direction(client, host, false)
+    direction(host, client, true)
+    client.once('close', () => close())
+    host.once('close', () => close())
+    client.once('error', () => close())
+    host.once('error', () => close())
+  }
+
+  const closeAll = (): void => {
+    for (const close of Array.from(splices)) {
+      close()
+    }
+  }
+  return {
+    splice,
+    limitCloses,
+    cut: closeAll,
+    stallClient: (ms: number) => {
+      clientStalledUntil = Date.now() + ms
+    }
+  }
+}
+
+/** A cell in front of a plain host socket: each client connection is spliced to a new one. */
+export async function startRelayCellStandIn(hostUrl: string): Promise<RelayCellStandIn> {
+  const server = new WebSocketServer({ port: 0, host: '127.0.0.1', maxPayload: 8 * 1024 * 1024 })
+  await new Promise<void>((resolve) => server.once('listening', () => resolve()))
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('stand-in cell has no port')
+  }
+  const splicer = createCellSplicer()
+  server.on('connection', (client) => {
+    const host = new WebSocket(hostUrl, { maxPayload: 8 * 1024 * 1024 })
     // Frames from a client that arrive before the host socket opens wait for it, as at a cell.
     const early: Queued[] = []
     const holdEarly = (data: RawData, binary: boolean): void => {
       early.push({ data, binary, bytes: frameBytes(data) })
     }
+    const abandon = (): void => {
+      client.terminate()
+      host.terminate()
+    }
     client.on('message', holdEarly)
+    client.once('close', abandon)
+    host.once('error', abandon)
     host.once('open', () => {
       client.off('message', holdEarly)
+      client.off('close', abandon)
+      host.off('error', abandon)
       for (const frame of early.splice(0)) {
         host.send(frame.data, { binary: frame.binary })
       }
-      direction(client, host, false)
-      direction(host, client, true)
+      splicer.splice(client, host)
     })
-    client.once('close', () => close())
-    host.once('close', () => close())
-    client.once('error', () => close())
-    host.once('error', () => close())
   })
 
   return {
     url: `ws://127.0.0.1:${address.port}`,
-    limitCloses,
-    cut: () => {
-      for (const close of Array.from(splices)) {
-        close()
-      }
-    },
-    stallClient: (ms) => {
-      clientStalledUntil = Date.now() + ms
-    },
+    limitCloses: splicer.limitCloses,
+    cut: splicer.cut,
+    stallClient: splicer.stallClient,
     close: async () => {
-      for (const close of Array.from(splices)) {
-        close()
-      }
+      splicer.cut()
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
   }

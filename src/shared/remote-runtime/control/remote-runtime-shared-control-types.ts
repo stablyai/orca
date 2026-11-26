@@ -158,8 +158,11 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   appHeartbeat?: SharedControlAppHeartbeatOptions
   /** Null uses normal retry; a promise owns token recovery and decides whether this connection retries. */
   onAuthenticationRejected?: () => Promise<'retry' | 'stop' | null> | null
-  /** Opens the authenticated channel, e.g. over Relay; absent opens a direct socket to the endpoint. */
-  openChannel?: AuthenticatedRuntimeChannelOpener
+  /**
+   * Opens the authenticated channel declaring these capabilities, e.g. over Relay; absent opens a
+   * direct socket to the endpoint.
+   */
+  openChannel?: (clientCapabilities: readonly string[]) => AuthenticatedRuntimeChannelOpener
   /** Carry streams' binary on this one connection (both sides must support binary channels). */
   binaryChannels?: boolean
 }

@@ -126,7 +126,7 @@ export function registerMobileHandlers(
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
-      const offer = await requestRuntimePairingOffer(
+      const direct = await requestRuntimePairingOffer(
         rpcServer,
         {
           address: args?.address,
@@ -136,6 +136,7 @@ export function registerMobileHandlers(
         },
         getDefaultRouteInterfaceNames
       )
+      const offer = direct.available ? await rpcServer.withTestRelayInvite(direct) : direct
       if (!offer.available) {
         // Preserve actionable widening failure guidance rather than generic unavailability.
         return offer.reason === 'network_exposure_failed'

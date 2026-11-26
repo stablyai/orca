@@ -33,10 +33,8 @@ import { declareWslHostClient } from '../../../wsl/host-lifecycle/wsl-host-clien
 import { onWslHostIdleStopCleared } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
 import { declarePairedDesktopAccount } from './paired-desktop-account-declaration'
 import { clearRemoteRuntimeOneLink } from '../../../../shared/remote-runtime/control/remote-runtime-one-link'
-import {
-  noteOneLinkHostCapabilities,
-  remoteRuntimeOneLinkAllowed
-} from './runtime-environment-one-link'
+import { claimRelayOneLink, controlLinkOptions } from './runtime-environment-relay-link'
+import { noteOneLinkHostCapabilities } from './runtime-environment-one-link'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -284,8 +282,8 @@ function getSharedControlConnection(
         ...sharedControlEnvironmentPolicy(environmentId),
         // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
         appHeartbeat: {},
-        // Ready for one link; used only once the host's status lists binary channels.
-        binaryChannels: remoteRuntimeOneLinkAllowed(environmentId),
+        // Ready for one link; a direct host uses it once its status lists binary channels.
+        ...controlLinkOptions(environmentId, pairedConnection),
         // R39: every ready socket, including after a reconnect, re-declares this installation, and
         // the Orca account it is signed in to.
         onReady: async () => {
@@ -320,6 +318,7 @@ function getSharedControlConnection(
       })
     cached = { pairingKey, answeredAt: () => answeredAt, connection }
     sharedControlConnections.set(environmentId, cached)
+    claimRelayOneLink(environmentId, pairedConnection, connection)
     const entry = cached
     // Ready requires this socket's own server frame, which stamps its answer time.
     setSharedControlAnswerSource(environmentId, entry.connection, () =>

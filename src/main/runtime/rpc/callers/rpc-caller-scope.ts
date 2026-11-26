@@ -7,7 +7,12 @@ export type RpcCallerScope =
   | { kind: 'owner' }
   /** Delegated phones inherit at most their paired desktop's scope, which never includes pairing-admin. */
   | { kind: 'mobile'; delegated?: boolean }
-  | { kind: 'runtime-paired'; grants: readonly RuntimeDeviceGrant[] }
+  | {
+      kind: 'runtime-paired'
+      grants: readonly RuntimeDeviceGrant[]
+      /** Test-only: a desktop paired over Relay keeps its own Relay credential, as a phone does. */
+      relayCredentialSelf?: true
+    }
   /** A teammate the owner shared one bot with, by the share row their device key signed in as. */
   | BotShareCallerScope
 
@@ -31,6 +36,12 @@ const RUNTIME_PAIRED_STANDARD: ReadonlySet<RpcMethodPermission> = new Set([
   'device-self'
 ])
 
+// A Relay client's calls for its own Relay credential (installed and renewed through this host).
+const RELAY_CREDENTIAL_SELF_METHODS: ReadonlySet<string> = new Set([
+  'pairing.getEndpoints',
+  'pairing.provisionRelay'
+])
+
 /** Mobile checks unknown methods by name because older phones interpret forbidden as unsupported; other callers retain method_not_found. */
 export function denyRpcMethodForCaller(
   scope: RpcCallerScope,
@@ -52,6 +63,9 @@ export function denyRpcMethodForCaller(
       : `Method '${methodName}' is not available to a shared agent's teammates`
   }
   if (scope.kind === 'owner' || permission === undefined) {
+    return null
+  }
+  if (scope.relayCredentialSelf && RELAY_CREDENTIAL_SELF_METHODS.has(methodName)) {
     return null
   }
   return !RUNTIME_PAIRED_STANDARD.has(permission) &&

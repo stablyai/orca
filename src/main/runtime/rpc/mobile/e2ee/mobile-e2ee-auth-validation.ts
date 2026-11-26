@@ -1,3 +1,4 @@
+import { hostReadsTokenCapabilities } from '../../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
 import { publicKeyFromBase64 } from '../../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { parseRemoteRuntimeJsonText } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-frames'
@@ -101,13 +102,20 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
   v2TokenCapabilities?: boolean
+  /** Decides v2TokenCapabilities when it isn't given (runtime-relay-endpoint.ts). */
+  transport?: 'direct' | 'relay'
   resolveDevice: (token: string) => TDevice | null
   // Absent on a host that does not accept device keys: key auth is then bad_auth, as before.
   resolveDeviceKey?: (deviceId: string) => DeviceKeyResolution<TDevice>
 }):
   | { ok: true; device: TDevice; clientCapabilities: unknown }
   | { ok: false; code: MobileE2EEAuthFailureCode; deviceId?: string } {
-  const auth = classifyE2EEAuth(args.plaintext, args.v2Session, args.v2TokenCapabilities)
+  const auth = classifyE2EEAuth(
+    args.plaintext,
+    args.v2Session,
+    args.v2TokenCapabilities ??
+      (args.transport ? hostReadsTokenCapabilities(args.transport) : false)
+  )
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
     // Why: a keyed row has no token, so presenting one can never match it.

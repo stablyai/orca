@@ -1,3 +1,4 @@
+import { withTestRelayReach } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import { sharedHostStatusSnapshots } from '../requests/runtime-environment-shared-hosts'
 import {
@@ -81,7 +82,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       args: { name: string; pairingCode: string }
     ): Promise<{ environment: PublicKnownRuntimeEnvironment }> => {
       // An unverified code must not replace a working pairing.
-      const environment = await addEnvironmentFromPairingCode(getUserDataPath(), args)
+      const environment = await addEnvironmentFromPairingCode(getUserDataPath(), {
+        ...args,
+        pairingCode: withTestRelayReach(args.pairingCode)
+      })
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
     }
