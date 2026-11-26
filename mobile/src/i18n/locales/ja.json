@@ -2750,17 +2750,13 @@
       "requestFailed": "リクエストに失敗しました: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "ワークスペースの完全な名前と場所を表示します",
       "backToWorktrees": "ワークツリー一覧に戻る",
       "moreActions": "セッションのその他の操作",
-      "openSourceControl": "ソース管理を開く",
       "reconnectToDesktop": "デスクトップに再接続",
       "showSidebar": "サイドバーを表示",
       "terminalTitle": "ターミナル",
       "terminalLayout": "ターミナルのレイアウト",
-      "fileExplorer": "ファイルエクスプローラー",
       "sourceControl": "ソース管理",
-      "newTab": "新規タブ",
       "quickCommands": "クイックコマンド",
       "items": "アイテム",
       "textSize": "テキストサイズ"
@@ -2768,8 +2764,7 @@
     "headerMoreActionsSheet": {
       "agentHistory": "Agent の履歴",
       "agentHistoryHint": "Agent セッションを閲覧・再開",
-      "checks": "チェック",
-      "checksHint": "PR のチェックを開く"
+      "checks": "チェック"
     },
     "markdownReader": {
       "changedOnDesktop": "デスクトップで変更済み",
@@ -2974,7 +2969,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
-      "newTab": "新規タブ",
       "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。"
     },
     "terminalActionSheetActions": {
@@ -3346,8 +3340,6 @@
       "oneTab": "1 個のタブ",
       "tabCount": "{{count}} 個のタブ",
       "actionsHint": "このタブの操作を表示します",
-      "next": "次のタブ",
-      "previous": "前のタブ",
       "hint": "すべてのタブを表示"
     },
     "textSizeSheet": {

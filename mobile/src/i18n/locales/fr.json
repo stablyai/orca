@@ -2796,25 +2796,20 @@
       "requestFailed": "Échec de la requête : {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
-      "openSourceControl": "Ouvrir le contrôle de code source",
       "reconnectToDesktop": "Se reconnecter à l'ordinateur",
       "showSidebar": "Afficher la barre latérale",
       "terminalTitle": "Terminal",
       "terminalLayout": "Disposition du terminal",
-      "fileExplorer": "Explorateur de fichiers",
       "sourceControl": "Contrôle de code source",
-      "newTab": "Nouvel onglet",
       "quickCommands": "Commandes rapides",
       "items": "Éléments"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
       "agentHistoryHint": "Parcourir et reprendre des sessions d'agent",
-      "checks": "Vérifications",
-      "checksHint": "Ouvrir les vérifications de la pull request"
+      "checks": "Vérifications"
     },
     "markdownReader": {
       "changedOnDesktop": "Modifié sur l'ordinateur",
@@ -3013,7 +3008,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
-      "newTab": "Nouvel onglet",
       "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
     },
     "terminalActionSheetActions": {
@@ -3319,8 +3313,6 @@
       "oneTab": "1 onglet",
       "tabCount": "Onglets : {{count}}",
       "actionsHint": "Affiche les actions de cet onglet",
-      "next": "Onglet suivant",
-      "previous": "Onglet précédent",
       "hint": "Affiche tous les onglets"
     }
   },

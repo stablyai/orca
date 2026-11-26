@@ -2380,17 +2380,13 @@
       "requestFailed": "請求失敗：{{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "顯示工作區的完整名稱及其所在位置",
       "backToWorktrees": "返回工作樹",
       "moreActions": "更多工作階段操作",
-      "openSourceControl": "開啟原始碼控制",
       "reconnectToDesktop": "重新連線至電腦",
       "showSidebar": "顯示側邊欄",
       "terminalTitle": "終端機",
       "terminalLayout": "終端機版面配置",
-      "fileExplorer": "檔案總管",
       "sourceControl": "原始碼控制",
-      "newTab": "新分頁",
       "quickCommands": "快速命令",
       "items": "項目",
       "textSize": "文字大小"
@@ -2398,8 +2394,7 @@
     "headerMoreActionsSheet": {
       "agentHistory": "代理程式歷史紀錄",
       "agentHistoryHint": "瀏覽並恢復代理程式工作階段",
-      "checks": "檢查項目",
-      "checksHint": "開啟 PR 檢查項目"
+      "checks": "檢查項目"
     },
     "markdownReader": {
       "changedOnDesktop": "已在電腦上變更",
@@ -2604,7 +2599,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
-      "newTab": "新分頁",
       "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令"
     },
     "terminalActionSheetActions": {
@@ -2976,8 +2970,6 @@
       "oneTab": "1 個分頁",
       "tabCount": "{{count}} 個分頁",
       "actionsHint": "顯示此分頁的操作",
-      "next": "下一個分頁",
-      "previous": "上一個分頁",
       "hint": "顯示所有分頁"
     },
     "textSizeSheet": {
