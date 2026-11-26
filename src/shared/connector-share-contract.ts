@@ -49,9 +49,7 @@ export const ShareAcceptDelivery = z
     accountId: Id,
     devicePublicKey: PublicKey,
     sealKey: PublicKey,
-    deviceName: Name.optional(),
-    /** The teammate's account name; older clouds send none. */
-    name: Name.optional()
+    deviceName: Name.optional()
   })
   .refine(isOnItsShare)
 

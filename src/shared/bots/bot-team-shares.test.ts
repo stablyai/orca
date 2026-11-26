@@ -5,7 +5,6 @@ import {
   BOT_SHARES_FULL,
   BotSharesSchema,
   withBotShareInvites,
-  withBotShareNamed,
   withBotShareResolved,
   withBotSharesEmailed,
   type BotShare
@@ -152,9 +151,9 @@ describe('a Home Chat for each person, as the bot file keeps them', () => {
 })
 
 describe('a teammate share stored before names', () => {
-  it('reads by its email until an accept names it, and only that account is named', () => {
+  it('reads by its email until a repeat resolve names it; a repeat never clears or rewrites', () => {
     // A row an older build wrote: an account share with no name.
-    const [stored] = BotSharesSchema.parse([
+    const stored = BotSharesSchema.parse([
       {
         kind: 'account',
         shareId: 'a',
@@ -163,27 +162,23 @@ describe('a teammate share stored before names', () => {
         addedAt: 1
       }
     ])
-    const bot = { shares: [stored] }
-    expect(botSharePersonName(bot, 'acct-alice')).toBe('alice@example.com')
-    expect(botHomeName(bot, { accountId: 'acct-alice' })).toBe('alice@example.com’s Home')
-
-    expect(withBotShareNamed(bot.shares, { shareId: 'a', accountId: 'acct-alice' })).toBe(
-      bot.shares
+    expect(botSharePersonName({ shares: stored }, 'acct-alice')).toBe('alice@example.com')
+    expect(botHomeName({ shares: stored }, { accountId: 'acct-alice' })).toBe(
+      'alice@example.com’s Home'
     )
-    expect(
-      withBotShareNamed(bot.shares, { shareId: 'a', accountId: 'acct-bob', name: 'Bob' })
-    ).toBe(bot.shares)
 
-    const named = {
-      shares: [
-        ...withBotShareNamed(bot.shares, {
-          shareId: 'a',
-          accountId: 'acct-alice',
-          name: 'Alice Kim'
-        })
-      ]
-    }
-    expect(botHomeName(named, { accountId: 'acct-alice' })).toBe('Alice Kim’s Home')
-    expect(BotSharesSchema.parse(JSON.parse(JSON.stringify(named.shares)))).toEqual(named.shares)
+    const again = { shareId: 'a', email: 'alice@example.com', accountId: 'acct-alice' }
+    expect(withBotShareResolved(stored, again)).toBe(stored)
+    expect(
+      withBotShareResolved(stored, { ...again, accountId: 'acct-bob', name: 'Bob' })
+    ).toBeNull()
+
+    const named = withBotShareResolved(stored, { ...again, name: 'Alice Kim' })!
+    expect(botHomeName({ shares: [...named] }, { accountId: 'acct-alice' })).toBe(
+      'Alice Kim’s Home'
+    )
+    expect(withBotShareResolved(named, { ...again, name: 'Alice Kim' })).toBe(named)
+    expect(withBotShareResolved(named, again)).toBe(named)
+    expect(BotSharesSchema.parse(JSON.parse(JSON.stringify(named)))).toEqual(named)
   })
 })

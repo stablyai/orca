@@ -105,7 +105,8 @@ export function withBotSharesEmailed(
 /**
  * An invite signed in as an Orca account, applied to the list as the host has it now: null when
  * the share is gone or no longer that email's (removed while the cloud resolved it). An account
- * already on the list keeps its own share, and the invite goes. The same list back: nothing to write.
+ * already on the list keeps its own share, and the invite goes. A repeat for the account share gives
+ * it the name it carries. The same list back: nothing to write.
  */
 export function withBotShareResolved(
   shares: readonly BotShare[],
@@ -116,7 +117,8 @@ export function withBotShareResolved(
     return null
   }
   if (share.kind === 'account') {
-    return share.accountId === resolved.accountId ? shares : null
+    // A repeat names a share resolved before the cloud sent names.
+    return share.accountId === resolved.accountId ? withBotShareNamed(shares, resolved) : null
   }
   if (shares.some((entry) => entry.kind === 'account' && entry.accountId === resolved.accountId)) {
     return shares.filter((entry) => entry.shareId !== share.shareId)
@@ -130,6 +132,24 @@ export function withBotShareResolved(
     addedAt: share.addedAt
   }
   return shares.map((entry) => (entry === share ? account : entry))
+}
+
+/** The list with that account's share named `name`; the same list when it has no name to give or
+ *  already has it, so a repeat never writes and a missing name never clears one. */
+function withBotShareNamed(
+  shares: readonly BotShare[],
+  named: { shareId: string; accountId: string; name?: string }
+): readonly BotShare[] {
+  const share = shares.find((entry) => entry.shareId === named.shareId)
+  if (
+    !named.name ||
+    share?.kind !== 'account' ||
+    share.accountId !== named.accountId ||
+    share.name === named.name
+  ) {
+    return shares
+  }
+  return shares.map((entry) => (entry === share ? { ...share, name: named.name } : entry))
 }
 
 /** A share's teammate answer, as the owner's list and the teammate's computer each keep it. */
@@ -169,24 +189,6 @@ export function withBotShareAnswer(
     return shares
   }
   return shares.map((entry) => (entry === share ? { ...share, [field]: at } : entry))
-}
-
-/** The list with that account's share named `name`: a share resolved before the cloud sent names
- *  gets one from a later accept. The same list when there is nothing to change. */
-export function withBotShareNamed(
-  shares: readonly BotShare[],
-  named: { shareId: string; accountId: string; name?: string }
-): readonly BotShare[] {
-  const share = shares.find((entry) => entry.shareId === named.shareId)
-  if (
-    !named.name ||
-    share?.kind !== 'account' ||
-    share.accountId !== named.accountId ||
-    share.name === named.name
-  ) {
-    return shares
-  }
-  return shares.map((entry) => (entry === share ? { ...share, name: named.name } : entry))
 }
 
 /** The list with each account share whose teammate already reaches the bot marked accepted: shares
