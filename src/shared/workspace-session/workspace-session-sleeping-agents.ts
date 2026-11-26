@@ -123,8 +123,10 @@ export const sleepingAgentSessionRecordSchema = lazyZodSchema(() =>
     )
 )
 
-export const sleepingAgentSessionsByPaneKeySchema = salvagingRecord(
-  z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
-  sleepingAgentSessionRecordSchema,
-  (paneKey, record) => record.paneKey === paneKey
-).transform((records) => (Object.keys(records).length > 0 ? records : undefined))
+export const sleepingAgentSessionsByPaneKeySchema = lazyZodSchema(() =>
+  salvagingRecord(
+    z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
+    sleepingAgentSessionRecordSchema,
+    (paneKey, record) => record.paneKey === paneKey
+  ).transform((records) => (Object.keys(records).length > 0 ? records : undefined))
+)
