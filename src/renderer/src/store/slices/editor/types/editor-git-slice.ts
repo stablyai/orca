@@ -117,6 +117,7 @@ export type EditorGitSlice = {
   seedFileSearchQuery: (worktreeId: string, query: string) => void
   seedFileSearchIncludePattern: (worktreeId: string, includePattern: string) => void
   consumeFileSearchSeedRequest: (worktreeId: string, seedRequestId: number) => void
+  consumeFileSearchFocusRequest: (worktreeId: string, focusRequestId: number) => void
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
 

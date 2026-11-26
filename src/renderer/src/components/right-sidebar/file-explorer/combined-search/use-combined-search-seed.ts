@@ -8,18 +8,19 @@ export function useCombinedSearchSeed({
   seedRequestId,
   focusRequestId,
   query,
-  lastCommittedQueryRef,
   inputRef,
-  applySeededQuery
+  applySeededQuery,
+  rerunDraft
 }: {
   activeWorktreeId: string | null
   seedRequestId: number | undefined
   focusRequestId: number | undefined
   query: string
-  lastCommittedQueryRef: React.RefObject<string | null>
   inputRef: React.RefObject<HTMLInputElement | null>
-  /** Runs the text search for the seeded or live query at any length. */
+  /** Replaces the draft with a seeded query and searches it at any length. */
   applySeededQuery: (query: string) => void
+  /** Reruns the live draft after a filters-only seed (Find in Folder). */
+  rerunDraft: (query: string) => void
 }): void {
   const liveQueryRef = useRef(query)
   liveQueryRef.current = query
@@ -39,12 +40,11 @@ export function useCombinedSearchSeed({
       return
     }
     const state = useAppStore.getState()
-    const stored = state.fileSearchStateByWorktree[activeWorktreeId]?.query ?? ''
-    const live = liveQueryRef.current
-    // A stored query this panel did not commit is a query seed; otherwise only filters changed.
-    const nextQuery = stored !== lastCommittedQueryRef.current && stored.trim() ? stored : live
-    if (nextQuery.trim()) {
-      applySeededQuery(nextQuery)
+    const seeded = state.fileSearchStateByWorktree[activeWorktreeId]
+    if (seeded?.seedKind === 'query' && seeded.query.trim()) {
+      applySeededQuery(seeded.query)
+    } else if (liveQueryRef.current.trim()) {
+      rerunDraft(liveQueryRef.current)
     }
     if (selectionFrameRef.current !== null) {
       cancelAnimationFrame(selectionFrameRef.current)
@@ -55,11 +55,13 @@ export function useCombinedSearchSeed({
       inputRef.current?.select()
     })
     state.consumeFileSearchSeedRequest(activeWorktreeId, seedRequestId)
-  }, [activeWorktreeId, applySeededQuery, inputRef, lastCommittedQueryRef, seedRequestId])
+  }, [activeWorktreeId, applySeededQuery, inputRef, rerunDraft, seedRequestId])
 
+  // Consumed once so a remount or workspace switch never replays an old focus request.
   useEffect(() => {
     if (activeWorktreeId && focusRequestId !== undefined) {
       inputRef.current?.focus()
+      useAppStore.getState().consumeFileSearchFocusRequest(activeWorktreeId, focusRequestId)
     }
   }, [activeWorktreeId, focusRequestId, inputRef])
 }

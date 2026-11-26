@@ -12,9 +12,13 @@ export type RightSidebarRoute = {
 /** The Files tree hides under search results; consumers that watch or decorate it treat that like the old search view. */
 export function getExplorerTreeView(state: {
   rightSidebarExplorerView: RightSidebarExplorerView
-  fileExplorerSearchActive?: boolean
+  activeWorktreeId?: string | null
+  fileSearchStateByWorktree?: Record<string, { active?: boolean } | undefined>
 }): RightSidebarExplorerView {
-  return state.fileExplorerSearchActive ? 'search' : state.rightSidebarExplorerView
+  const searchState = state.activeWorktreeId
+    ? state.fileSearchStateByWorktree?.[state.activeWorktreeId]
+    : undefined
+  return searchState?.active ? 'search' : state.rightSidebarExplorerView
 }
 
 export type NormalizeRightSidebarRouteOptions = {

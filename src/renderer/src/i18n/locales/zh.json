@@ -24876,12 +24876,10 @@
       "label": "文件浏览器根目录",
       "full": "仓库根目录",
       "back": "返回 {{path}}",
-      "searchScope": "搜索范围：工作区文件",
       "retry": "重试",
       "sparseStatus": "稀疏检出",
       "scopeDetails": "关于稀疏检出范围",
       "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件，仓库根目录视图也会显示根目录和上级文件夹中已检出的文件",
-      "searchExplanation": "“名称”筛选当前查看的文件夹，“内容”搜索整个工作区，稀疏检出排除的文件不会被搜索",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
     },

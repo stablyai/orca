@@ -23072,12 +23072,10 @@
       "label": "Stammverzeichnis des Explorers",
       "full": "Repository-Stammverzeichnis",
       "back": "Zurück zu {{path}}",
-      "searchScope": "Suchbereich: Dateien des Arbeitsbereichs",
       "retry": "Erneut versuchen",
       "sparseStatus": "Partieller Checkout",
       "scopeDetails": "Zum Umfang des partiellen Checkouts",
       "scopeExplanation": "Die Ordnerauswahl ändert die Anzeige, nicht die Auswahl der ausgecheckten Dateien. Der Repository-Stamm umfasst die ausgecheckten Dateien im Stammverzeichnis und in übergeordneten Ordnern.",
-      "searchExplanation": "„Namen“ filtert den angezeigten Ordner. „Inhalt“ durchsucht den gesamten Arbeitsbereich. Beim partiellen Checkout ausgelassene Dateien werden nicht durchsucht.",
       "folderLoadError": "Dieser Ordner konnte nicht geladen werden:",
       "emptyFolder": "Keine Dateien in diesem Ordner"
     },

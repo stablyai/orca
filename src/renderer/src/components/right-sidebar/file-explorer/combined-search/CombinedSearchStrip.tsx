@@ -8,7 +8,6 @@ import {
   SearchFilters,
   type SearchFiltersProps
 } from '../content-search/SearchFilters'
-import { shouldShowSearchOptions } from './search-options-visibility'
 import { COMBINED_SEARCH_LISTBOX_ID } from './combined-search-rows'
 import type { CombinedSearchFieldState } from './combined-search-types'
 
@@ -24,8 +23,15 @@ export function CombinedSearchStrip({
   const t = useTranslate()
   const [focused, setFocused] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const showOptions = shouldShowSearchOptions(focused, field.query)
+  // Text-match options stay out of the way until the user is searching.
+  const showOptions = focused || field.query.length > 0
   const activeFilterCount = countActiveSearchFilters(filters)
+  const filterSummary = [
+    filters.includePattern.trim(),
+    filters.excludePattern.trim() && `!${filters.excludePattern.trim()}`
+  ]
+    .filter(Boolean)
+    .join(', ')
   // A set filter stays visible at rest so it never silently narrows text results.
   const showToolbar = showOptions || filtersOpen || activeFilterCount > 0
   const hasQuery = field.query.trim().length > 0
@@ -52,7 +58,7 @@ export function CombinedSearchStrip({
           type="text"
           role="combobox"
           aria-expanded={hasQuery}
-          aria-controls={COMBINED_SEARCH_LISTBOX_ID}
+          aria-controls={hasQuery ? COMBINED_SEARCH_LISTBOX_ID : undefined}
           aria-autocomplete="list"
           aria-activedescendant={field.activeDescendantId}
           aria-label={searchLabel}
@@ -117,9 +123,13 @@ export function CombinedSearchStrip({
             <Regex className="size-3.5" />
           </ToggleButton>
           <span className="flex-1" />
-          {activeFilterCount > 0 ? (
-            <span className="pr-1 text-2xs tabular-nums text-muted-foreground">
-              {t('fileSearch.filters.active', '{{count}} active', { count: activeFilterCount })}
+          {filterSummary ? (
+            <span
+              className="min-w-0 max-w-[60%] truncate rounded-sm bg-muted px-1.5 text-2xs text-muted-foreground"
+              title={filterSummary}
+              data-search-filter-chip=""
+            >
+              {filterSummary}
             </span>
           ) : null}
           <ToggleButton

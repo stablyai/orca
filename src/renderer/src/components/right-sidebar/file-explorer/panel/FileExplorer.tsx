@@ -79,7 +79,9 @@ function FileExplorerFiles(): React.JSX.Element {
   const displayRootPath = getExplorerDisplayRootPath(worktreePath, rootChoice)
   const displayDepth = getExplorerDisplayDepth(worktreePath, displayRootPath)
   // Search results cover the tree; treat that like the old search view so hidden tree work pauses.
-  const searchActive = useAppStore((s) => s.fileExplorerSearchActive)
+  const searchActive = useAppStore((s) =>
+    activeWorktreeId ? s.fileSearchStateByWorktree[activeWorktreeId]?.active === true : false
+  )
   const treeView = searchActive ? 'search' : 'files'
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
     explorerView: treeView,
@@ -184,7 +186,7 @@ function FileExplorerFiles(): React.JSX.Element {
     clearSearch,
     rowProjection,
     pathOwner: openInOwner,
-    sourceWorkspaceId: tree.sourceWorkspaceId,
+    displayRootPath,
     connectionId: activeRepo?.connectionId ?? null,
     runtimeDownloadContext: paneState.runtimeDownloadContext,
     deleteShortcutLabel: paneState.deletion.deleteShortcutLabel,
@@ -224,7 +226,7 @@ function FileExplorerFiles(): React.JSX.Element {
           {...getRouteForLocalPathOpenOwner(openInOwner)}
           workspaceId={activeWorktreeId}
           refresh={manualRefresh}
-          canRefresh
+          canRefresh={!searchActive}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
           showGitIgnoredFilesToggle={activeRepoSupportsGit}
@@ -252,11 +254,12 @@ function FileExplorerFiles(): React.JSX.Element {
             disabled={
               Boolean(paneState.dragDrop.dragSourcePath) || paneState.dragDrop.isNativeDragOver
             }
-            searching={false}
             sparse={!!activeWorktree?.isSparse}
           />
         )}
         <FileExplorerSearchPane
+          // Local worktrees share one owner key, so the draft is owned per worktree here.
+          key={activeWorktreeId ?? ''}
           controlRef={searchControlRef}
           activeWorktreeId={activeWorktreeId}
           worktreePath={worktreePath}

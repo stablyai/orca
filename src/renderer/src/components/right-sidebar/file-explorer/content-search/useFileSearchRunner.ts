@@ -96,35 +96,35 @@ export function useFileSearchRunner({
         searchTimerRef.current = null
       }
 
-      if (!worktreePath || !activeWorktreeId || ownerIsTwin) {
-        updateActiveSearchState({ query, results: null, resultOwner: null, loading: false })
-        return
-      }
-
-      const currentSearchState = useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId]
-      if (
-        getRuntimeFileSearchRejectedField({
-          query,
-          includePattern: currentSearchState?.includePattern || undefined,
-          excludePattern: currentSearchState?.excludePattern || undefined
-        })
-      ) {
-        updateActiveSearchState({
-          query,
-          error: null,
-          results: createEmptyRuntimeFileSearchResult(),
-          resultOwner: createFileSearchResultOwner(activeWorktreeId, runtimeEnvironmentId, {
-            rootPath: worktreePath,
-            executionHostId
-          }),
-          loading: false
-        })
-        return
-      }
-
-      // Why: typing shares this field with the name filter, so the store is written once per pause, not per keystroke.
+      // Why: typing shares this field with the name filter, so every store write waits for the pause.
       searchTimerRef.current = setTimeout(async () => {
         searchTimerRef.current = null
+        if (!worktreePath || !activeWorktreeId || ownerIsTwin) {
+          updateActiveSearchState({ query, results: null, resultOwner: null, loading: false })
+          return
+        }
+
+        const currentSearchState =
+          useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId]
+        if (
+          getRuntimeFileSearchRejectedField({
+            query,
+            includePattern: currentSearchState?.includePattern || undefined,
+            excludePattern: currentSearchState?.excludePattern || undefined
+          })
+        ) {
+          updateActiveSearchState({
+            query,
+            error: null,
+            results: createEmptyRuntimeFileSearchResult(),
+            resultOwner: createFileSearchResultOwner(activeWorktreeId, runtimeEnvironmentId, {
+              rootPath: worktreePath,
+              executionHostId
+            }),
+            loading: false
+          })
+          return
+        }
         if (options?.allowShortQuery ? !query.trim() : !isTextSearchQuery(query)) {
           updateActiveSearchState({
             query,

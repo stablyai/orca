@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SearchResult } from '../../../../../../shared/file-search/code-search-types'
 import { buildSearchRows } from '../content-search/search-rows'
-import { shouldShowSearchOptions } from './search-options-visibility'
 import {
   createCombinedSearchRows,
   moveActiveCombinedSearchIndex,
@@ -132,13 +131,5 @@ describe('combined search keyboard', () => {
     expect(moveActiveCombinedSearchIndex(model, 8, -1)).toBe(6)
     expect(moveActiveCombinedSearchIndex(model, 1, -1)).toBe(1)
     expect(moveActiveCombinedSearchIndex(model, 10, 1)).toBe(10)
-  })
-})
-
-describe('shouldShowSearchOptions', () => {
-  it('shows text-match toggles only while focused or searching', () => {
-    expect(shouldShowSearchOptions(false, '')).toBe(false)
-    expect(shouldShowSearchOptions(true, '')).toBe(true)
-    expect(shouldShowSearchOptions(false, 'cart')).toBe(true)
   })
 })

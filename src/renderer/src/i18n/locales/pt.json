@@ -23974,12 +23974,10 @@
       "label": "Raiz do explorador",
       "full": "Raiz do repositório",
       "back": "Voltar para {{path}}",
-      "searchScope": "Escopo da busca: arquivos do espaço de trabalho",
       "retry": "Tentar novamente",
       "sparseStatus": "Checkout esparso",
       "scopeDetails": "Sobre o escopo do checkout esparso",
       "scopeExplanation": "O seletor de pastas altera o que você vê, não quais arquivos estão no checkout. A raiz do repositório inclui os arquivos da raiz e das pastas ancestrais que estão no checkout.",
-      "searchExplanation": "Nomes filtra a pasta que você está visualizando. Conteúdo pesquisa em todo o espaço de trabalho. Arquivos omitidos pelo checkout esparso não são pesquisados.",
       "folderLoadError": "Não foi possível carregar esta pasta:",
       "emptyFolder": "Nenhum arquivo nesta pasta"
     },

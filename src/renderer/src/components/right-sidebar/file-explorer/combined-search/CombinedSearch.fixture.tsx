@@ -259,6 +259,7 @@ function CombinedSearchHarness({
               onActivateRow={activateRow}
               rowActions={ROW_ACTIONS}
               toNode={toNode}
+              workspaceId={null}
             />
           </div>
         ) : null}

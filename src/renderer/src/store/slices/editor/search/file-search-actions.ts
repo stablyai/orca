@@ -13,6 +13,7 @@ export function createFileSearchActions(
   | 'seedFileSearchQuery'
   | 'seedFileSearchIncludePattern'
   | 'consumeFileSearchSeedRequest'
+  | 'consumeFileSearchFocusRequest'
   | 'toggleFileSearchCollapsedFile'
   | 'clearFileSearch'
 > {
@@ -79,6 +80,22 @@ export function createFileSearchActions(
         }
         const next = { ...current }
         delete next.seedRequestId
+        delete next.seedKind
+        return {
+          fileSearchStateByWorktree: {
+            ...s.fileSearchStateByWorktree,
+            [worktreeId]: next
+          }
+        }
+      }),
+    consumeFileSearchFocusRequest: (worktreeId, focusRequestId) =>
+      set((s) => {
+        const current = s.fileSearchStateByWorktree[worktreeId]
+        if (!current || current.focusRequestId !== focusRequestId) {
+          return s
+        }
+        const next = { ...current }
+        delete next.focusRequestId
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
@@ -108,7 +125,16 @@ export function createFileSearchActions(
     clearFileSearch: (worktreeId) =>
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId]
-        if (!current) {
+        // Why: clearing an already empty search must not clone the per-worktree map on every key.
+        if (
+          !current ||
+          (!current.query &&
+            !current.results &&
+            !current.resultOwner &&
+            !current.loading &&
+            !current.error &&
+            current.collapsedFiles.size === 0)
+        ) {
           return s
         }
         return {

@@ -18,6 +18,7 @@ import {
 import type { CombinedSearchFieldState, CombinedSearchResultsState } from './combined-search-types'
 import { useCombinedSearchNavigation } from './use-combined-search-navigation'
 import { useCombinedSearchSeed } from './use-combined-search-seed'
+import { useSearchDraftLifecycle } from './use-search-draft-lifecycle'
 import type { NameMatch, NameMatchResults } from './name-match-results'
 
 const EMPTY_COLLAPSED_FILES = new Set<string>()
@@ -77,13 +78,8 @@ export function useCombinedSearch({
   const includeInputRef = useRef<HTMLInputElement>(null)
   const excludeInputRef = useRef<HTMLInputElement>(null)
 
-  // The query this panel last committed; a different stored query can only come from a seed.
-  const lastCommittedQueryRef = useRef<string | null>(null)
   const updateActiveSearchState = useCallback(
     (updates: Partial<NonNullable<typeof searchState>>) => {
-      if (updates.query !== undefined) {
-        lastCommittedQueryRef.current = updates.query
-      }
       if (activeWorktreeId) {
         updateFileSearchState(activeWorktreeId, updates)
       }
@@ -118,7 +114,9 @@ export function useCombinedSearch({
 
   const textQueryActive =
     isTextSearchQuery(query) || (forcedShortQuery === query && query.trim().length > 0)
-  const resultsAreCurrent = textQueryActive && isCurrentOwner(storedResultOwner)
+  // Only results committed for the live draft are shown or activated, never a previous query's.
+  const resultsAreCurrent =
+    textQueryActive && committedQuery === query && isCurrentOwner(storedResultOwner)
   const committedResults = useMemo(
     () => ({
       results: resultsAreCurrent ? storedResults : null,
@@ -161,7 +159,6 @@ export function useCombinedSearch({
   const clearQuery = useCallback(() => {
     setQuery('')
     setForcedShortQuery(null)
-    lastCommittedQueryRef.current = ''
     cancelPendingSearch()
     if (activeWorktreeId) {
       clearFileSearch(activeWorktreeId)
@@ -242,10 +239,11 @@ export function useCombinedSearch({
     seedRequestId,
     focusRequestId,
     query,
-    lastCommittedQueryRef,
     inputRef,
-    applySeededQuery
+    applySeededQuery,
+    rerunDraft: runTextSearch
   })
+  useSearchDraftLifecycle({ activeWorktreeId, query, updateActiveSearchState, runTextSearch })
 
   return {
     clearQuery,

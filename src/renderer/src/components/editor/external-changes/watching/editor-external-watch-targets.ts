@@ -54,7 +54,7 @@ export type EditorExternalWatchTargetState = Pick<
       | 'activeWorkspaceExecutionHostId'
       | 'rightSidebarEffectiveTab'
       | 'lastVisitedAtByWorktreeId'
-      | 'fileExplorerSearchActive'
+      | 'fileSearchStateByWorktree'
     >
   >
 

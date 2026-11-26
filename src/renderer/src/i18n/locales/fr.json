@@ -23334,12 +23334,10 @@
       "label": "Racine de l’explorateur",
       "full": "Racine du dépôt",
       "back": "Revenir à {{path}}",
-      "searchScope": "Portée : fichiers de l’espace de travail",
       "retry": "Réessayer",
       "sparseStatus": "Extraction partielle",
       "scopeDetails": "À propos de la portée de l’extraction partielle",
       "scopeExplanation": "Le sélecteur de dossiers change l’affichage, pas les fichiers extraits. La racine du dépôt inclut les fichiers extraits à la racine et dans les dossiers parents.",
-      "searchExplanation": "Noms filtre le dossier affiché. Contenu recherche dans tout l’espace de travail. Les fichiers exclus de l’extraction partielle ne sont pas recherchés.",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
     },

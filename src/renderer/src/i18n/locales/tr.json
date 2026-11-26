@@ -25247,12 +25247,10 @@
       "label": "Dosya Gezgini kökü",
       "full": "Repo kökü",
       "back": "{{path}} yoluna dön",
-      "searchScope": "Arama kapsamı: çalışma alanı dosyaları",
       "retry": "Tekrar dene",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "Sparse checkout kapsamı hakkında",
       "scopeExplanation": "Klasör seçici, çalışma alanına alınan dosyaları değil, gördüklerinizi değiştirir. Repo kökü, çalışma alanına alınan kök ve üst klasörlerdeki dosyaları içerir.",
-      "searchExplanation": "Adlar, görüntülediğiniz klasörü filtreler. İçerik, tüm çalışma alanında arama yapar. Sparse checkout dışında bırakılan dosyalar aranmaz.",
       "folderLoadError": "Bu klasör yüklenemedi:",
       "emptyFolder": "Bu klasörde dosya yok"
     },

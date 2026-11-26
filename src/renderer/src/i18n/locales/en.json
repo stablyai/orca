@@ -25428,14 +25428,13 @@
       "label": "Explorer root",
       "full": "Repository root",
       "back": "Back to {{path}}",
-      "searchScope": "Search scope: workspace files",
       "retry": "Retry",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "About sparse checkout scope",
       "scopeExplanation": "The folder picker changes what you see, not which files are checked out. Repository root includes the checked-out root and ancestor files.",
-      "searchExplanation": "Names filters the folder you are viewing. Contents searches across the workspace. Files omitted by sparse checkout are not searched.",
       "folderLoadError": "Could not load this folder:",
-      "emptyFolder": "No files in this folder"
+      "emptyFolder": "No files in this folder",
+      "combinedSearchExplanation": "Search finds file names in the folder you are viewing and text across the workspace. Files omitted by sparse checkout are not searched."
     },
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
@@ -25449,7 +25448,9 @@
       "showAll": "Show all {{count}}",
       "noResults": "No results",
       "placeholder": "Search",
-      "placeholderScoped": "Search {{path}}"
+      "placeholderScoped": "Search {{path}}",
+      "textInWorkspace": "Text in workspace",
+      "refine": "Too many matches. Refine the search."
     }
   },
   "sparsePreset": {

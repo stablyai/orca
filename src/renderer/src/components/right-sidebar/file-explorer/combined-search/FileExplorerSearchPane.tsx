@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
-import { useAppStore } from '@/store/index'
+import React, { useCallback, useImperativeHandle, useMemo, useState } from 'react'
 import { joinPath } from '@/lib/path'
 import { useFileExplorerNameFilter } from '../panel/use-file-explorer-name-filter'
 import { useClearNameFilterForReveal } from '../navigation/use-clear-name-filter-for-reveal'
@@ -12,7 +11,12 @@ import {
 import { CombinedSearchStrip } from './CombinedSearchStrip'
 import { CombinedSearchResults } from './CombinedSearchResults'
 import { useCombinedSearch } from './useCombinedSearch'
-import type { NameMatch, NameMatchResults } from './name-match-results'
+import { getInitialSearchDraft } from './use-search-draft-lifecycle'
+import {
+  NAME_MATCH_PREVIEW_LIMIT,
+  type NameMatch,
+  type NameMatchResults
+} from './name-match-results'
 import type { NameMatchRowActions } from './use-name-match-row-actions'
 
 export type FileExplorerSearchControl = { clear: () => void }
@@ -56,13 +60,8 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
   rowActions: NameMatchRowActions
   tree: React.ReactNode
 }): React.JSX.Element {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(() => getInitialSearchDraft(activeWorktreeId))
   const hasQuery = query.trim().length > 0
-  const setFileExplorerSearchActive = useAppStore((s) => s.setFileExplorerSearchActive)
-  useEffect(() => {
-    setFileExplorerSearchActive(hasQuery)
-  }, [hasQuery, setFileExplorerSearchActive])
-  useEffect(() => () => setFileExplorerSearchActive(false), [setFileExplorerSearchActive])
 
   const { nameFilterFiles, nameMatches, showAllNameMatches } = useFileExplorerNameFilter({
     query,
@@ -74,9 +73,15 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
   const operationOwner = nameFilterFiles.operationOwner
 
   // Check-ignore runs over the rendered rows only, never the whole match set.
+  // Bounded to the preview rows, and stable across pauses that keep the same rows.
+  const renderedNameKey =
+    nameMatches?.matches
+      .slice(0, NAME_MATCH_PREVIEW_LIMIT)
+      .map((match) => match.relativePath)
+      .join('\n') ?? ''
   const renderedNamePaths = useMemo(
-    () => nameMatches?.matches.map((match) => match.relativePath) ?? [],
-    [nameMatches]
+    () => (renderedNameKey ? renderedNameKey.split('\n') : []),
+    [renderedNameKey]
   )
   const ignoredPaths = useFileExplorerIgnoredPaths({
     activeWorktreeId,
@@ -146,6 +151,7 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
               scopeLabel={scopeLabel}
               rowActions={rowActions}
               toNode={toNode}
+              workspaceId={activeWorktreeId}
             />
           </div>
         ) : null}

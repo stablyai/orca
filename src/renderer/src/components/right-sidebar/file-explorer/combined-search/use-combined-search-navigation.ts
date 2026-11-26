@@ -1,11 +1,30 @@
 import type React from 'react'
 import { useCallback, useMemo, useState } from 'react'
 import {
+  getCombinedSearchOptionId,
   moveActiveCombinedSearchIndex,
   resolveActiveCombinedSearchIndex,
   type CombinedSearchRow,
   type CombinedSearchRowModel
 } from './combined-search-rows'
+
+/** Opens the highlighted row's context menu from the keyboard, as a right click on it would. */
+function openActiveRowMenu(activeIndex: number): void {
+  const row =
+    activeIndex === -1 ? null : document.getElementById(getCombinedSearchOptionId(activeIndex))
+  if (!row) {
+    return
+  }
+  const rect = row.getBoundingClientRect()
+  row.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + 16,
+      clientY: rect.top + rect.height / 2
+    })
+  )
+}
 
 /** Focus stays in the field; ↑/↓ move a highlighted row tracked by key so arriving results never shift it. */
 export function useCombinedSearchNavigation({
@@ -59,6 +78,11 @@ export function useCombinedSearchNavigation({
         return
       }
       if (!query.trim()) {
+        return
+      }
+      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+        event.preventDefault()
+        openActiveRowMenu(activeIndex)
         return
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

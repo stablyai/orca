@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   WORKSPACE_FILE_PATH_MIME,
@@ -19,7 +19,12 @@ export type NameMatchRowActions = {
   startRename: (node: TreeNode) => void
   duplicate: (node: TreeNode) => void
   requestDelete: (node: TreeNode) => void
-  dragStart: (event: React.DragEvent<HTMLElement>, node: TreeNode) => void
+  /** Stamped with the result's own workspace and listing owner, never the hidden tree's. */
+  dragStart: (
+    event: React.DragEvent<HTMLElement>,
+    node: TreeNode,
+    workspaceId: string | null
+  ) => void
   canOpenInOrcaBrowser: (path: string) => boolean
   deleteShortcutLabel: string
   connectionId: string | null
@@ -35,7 +40,7 @@ export function useNameMatchRowActions({
   clearSearch,
   rowProjection,
   pathOwner,
-  sourceWorkspaceId,
+  displayRootPath,
   connectionId,
   runtimeDownloadContext,
   deleteShortcutLabel,
@@ -52,7 +57,7 @@ export function useNameMatchRowActions({
   clearSearch: () => void
   rowProjection: FileExplorerRowProjection
   pathOwner: LocalPathOpenOwner
-  sourceWorkspaceId: string | null
+  displayRootPath: string | null
   connectionId: string | null
   runtimeDownloadContext: RuntimeFileOperationArgs | null
   deleteShortcutLabel: string
@@ -67,7 +72,15 @@ export function useNameMatchRowActions({
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
   const [pendingTreeAction, setPendingTreeAction] = useState<PendingTreeAction | null>(null)
 
+  // A query typed after the reveal replaces it, so its inline edit must not start later.
+  const wasSearchActiveRef = useRef(searchActive)
   useEffect(() => {
+    const startedNewSearch = searchActive && !wasSearchActiveRef.current
+    wasSearchActiveRef.current = searchActive
+    if (startedNewSearch && pendingTreeAction) {
+      setPendingTreeAction(null)
+      return
+    }
     if (!pendingTreeAction || searchActive) {
       return
     }
@@ -109,27 +122,35 @@ export function useNameMatchRowActions({
     [pathOwner]
   )
   const startNew = useCallback(
-    (type: 'file' | 'folder', dir: string, depth: number) =>
-      revealThen(dir, () => startNewInTree(type, dir, depth)),
-    [revealThen, startNewInTree]
+    (type: 'file' | 'folder', dir: string, depth: number) => {
+      // The display root has no row of its own, so its inline input starts as soon as the tree shows.
+      if (dir === displayRootPath) {
+        clearSearch()
+        setPendingTreeAction(null)
+        startNewInTree(type, dir, depth)
+        return
+      }
+      revealThen(dir, () => startNewInTree(type, dir, depth))
+    },
+    [clearSearch, displayRootPath, revealThen, startNewInTree]
   )
   const startRename = useCallback(
     (node: TreeNode) => revealThen(node.path, (row) => startRenameInTree(row)),
     [revealThen, startRenameInTree]
   )
   const dragStart = useCallback(
-    (event: React.DragEvent<HTMLElement>, node: TreeNode) => {
+    (event: React.DragEvent<HTMLElement>, node: TreeNode, workspaceId: string | null) => {
       event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
       const owner = node.operationOwner
       writeWorkspaceFileDragSourceIfResolved(
         event.dataTransfer,
-        sourceWorkspaceId,
+        workspaceId,
         getFileExplorerOperationExecutionHostId(owner),
         owner?.kind === 'runtime' ? owner.environmentId : undefined
       )
       event.dataTransfer.effectAllowed = 'copyMove'
     },
-    [sourceWorkspaceId]
+    []
   )
 
   return useMemo(

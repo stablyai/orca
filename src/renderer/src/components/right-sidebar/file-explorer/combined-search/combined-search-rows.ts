@@ -15,6 +15,8 @@ export type CombinedSearchHeadRow =
   | { type: 'show-all'; total: number }
   | { type: 'no-results' }
   | { type: 'error'; section: 'files' | 'text'; message: string }
+  /** A capped source returned no rows it can show; more specific text would find them. */
+  | { type: 'refine'; section: 'files' | 'text' }
 
 export type CombinedSearchRow = CombinedSearchHeadRow | SearchRow
 
@@ -56,6 +58,9 @@ export function createCombinedSearchRows({
   if (namesError) {
     head.push({ type: 'section', section: 'files', count: '' })
     head.push({ type: 'error', section: 'files', message: namesError })
+  } else if (names && names.total === 0 && names.truncated) {
+    head.push({ type: 'section', section: 'files', count: '0+' })
+    head.push({ type: 'refine', section: 'files' })
   } else if (names && names.total > 0) {
     head.push({
       type: 'section',
@@ -75,6 +80,9 @@ export function createCombinedSearchRows({
     head.push({ type: 'error', section: 'text', message: textError })
   } else if (tail.length > 0 && textResult) {
     head.push({ type: 'section', section: 'text', count: formatTextMatchCount(textResult) })
+  } else if (textResult?.truncated) {
+    head.push({ type: 'section', section: 'text', count: formatTextMatchCount(textResult) })
+    head.push({ type: 'refine', section: 'text' })
   }
   // A capped or still-loading source may hide matches, so only a settled, complete miss says No results.
   if (head.length === 0 && names !== null && !names.truncated && !textPending) {
@@ -103,6 +111,8 @@ export function getCombinedSearchRowKey(row: CombinedSearchRow): string {
       return 'no-results'
     case 'error':
       return `error:${row.section}`
+    case 'refine':
+      return `refine:${row.section}`
     case 'file':
       return `file:${row.fileResult.filePath}`
     case 'match':
@@ -112,7 +122,8 @@ export function getCombinedSearchRowKey(row: CombinedSearchRow): string {
 
 export function isSelectableCombinedSearchRow(row: CombinedSearchRow | undefined): boolean {
   return (
-    row !== undefined && row.type !== 'section' && row.type !== 'no-results' && row.type !== 'error'
+    row !== undefined &&
+    (row.type === 'name' || row.type === 'show-all' || row.type === 'file' || row.type === 'match')
   )
 }
 

@@ -53,6 +53,15 @@ function optionClassName(active: boolean): string {
   )
 }
 
+/** The row menu does not restore focus (the tree relies on that), so hand it back to the field. */
+function restoreFieldFocus(): void {
+  requestAnimationFrame(() => {
+    if (document.activeElement === document.body || document.activeElement === null) {
+      document.querySelector<HTMLInputElement>('[data-combined-search-field] input')?.focus()
+    }
+  })
+}
+
 /** Left mouse would move focus out of the field; opening hands focus to the editor instead. */
 function keepFieldFocus(event: React.MouseEvent): void {
   if (event.button === 0) {
@@ -109,7 +118,8 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
   onActivate,
   scopeLabel,
   rowActions,
-  toNode
+  toNode,
+  workspaceId
 }: {
   row: CombinedSearchRow
   index: number
@@ -118,6 +128,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
   scopeLabel?: string
   rowActions: NameMatchRowActions
   toNode: ToNode
+  workspaceId: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const copyPathLabel = t('auto.components.right.sidebar.SearchResultItems.3596b9668d', 'Copy Path')
@@ -140,7 +151,9 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
         >
           <span>
             {row.section === 'text'
-              ? t('fileExplorer.combinedSearch.text', 'Text')
+              ? scopeLabel
+                ? t('fileExplorer.combinedSearch.textInWorkspace', 'Text in workspace')
+                : t('fileExplorer.combinedSearch.text', 'Text')
               : scopeLabel
                 ? t('fileExplorer.combinedSearch.filesIn', 'Files in {{path}}', {
                     path: scopeLabel
@@ -158,7 +171,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
           title={row.match.relativePath}
           className={cn(optionClassName(active), 'h-6 gap-1.5')}
           draggable={node !== null}
-          onDragStart={node ? (event) => rowActions.dragStart(event, node) : undefined}
+          onDragStart={node ? (event) => rowActions.dragStart(event, node, workspaceId) : undefined}
           onDoubleClick={() => onActivate(index, true)}
         >
           <FileTypeIcon
@@ -184,7 +197,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
         return content
       }
       return (
-        <ContextMenu>
+        <ContextMenu onOpenChange={(open) => !open && restoreFieldFocus()}>
           <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
           <FileExplorerRowContextMenu
             node={node}
@@ -232,6 +245,12 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
           className="whitespace-pre-wrap break-words px-2 py-1 text-xs text-destructive"
         >
           {row.message}
+        </div>
+      )
+    case 'refine':
+      return (
+        <div role="status" className="flex h-6 items-center px-2 text-xs text-muted-foreground">
+          {t('fileExplorer.combinedSearch.refine', 'Too many matches. Refine the search.')}
         </div>
       )
     case 'no-results':
@@ -307,11 +326,13 @@ export function CombinedSearchResults({
   onActivateRow,
   scopeLabel,
   rowActions,
-  toNode
+  toNode,
+  workspaceId
 }: CombinedSearchResultsState & {
   scopeLabel?: string
   rowActions: NameMatchRowActions
   toNode: ToNode
+  workspaceId: string | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
@@ -383,6 +404,7 @@ export function CombinedSearchResults({
                 scopeLabel={scopeLabel}
                 rowActions={rowActions}
                 toNode={toNode}
+                workspaceId={workspaceId}
               />
             </div>
           )

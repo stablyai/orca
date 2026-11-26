@@ -22568,12 +22568,10 @@
       "label": "Raíz del explorador",
       "full": "Raíz del repositorio",
       "back": "Volver a {{path}}",
-      "searchScope": "Ámbito: archivos del espacio de trabajo",
       "retry": "Reintentar",
       "sparseStatus": "Checkout disperso",
       "scopeDetails": "Acerca del alcance del checkout disperso",
       "scopeExplanation": "El selector de carpetas cambia lo que ves, no los archivos del checkout. La raíz del repositorio incluye los archivos presentes en la raíz y en las carpetas superiores.",
-      "searchExplanation": "Nombres filtra la carpeta que estás viendo. Contenido busca en todo el espacio de trabajo. No se buscan los archivos omitidos por el checkout disperso.",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
     },
