@@ -1,8 +1,8 @@
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { parseRuntimeRelayEndpoint } from '../pairing/runtime-relay-endpoint'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
-import { isRpcResponse, type RpcResponse } from '../rpc/rpc-response-shape'
 import type { RelayClientPlatform } from '../relay/client/relay-client-platform'
+import { PairedE2EEAuthenticationError } from '../relay/client/paired-e2ee-v2-physical-channel'
 import { RelayE2eeLink, RelayOuterError } from '../relay/client/relay-e2ee-link'
 import {
   keepRelayResumeCredential,
@@ -15,10 +15,13 @@ import type {
   AuthenticatedRuntimeChannelEvents,
   AuthenticatedRuntimeChannelOpener
 } from './remote-runtime-authenticated-channel'
+import { createRelayCredentialCalls } from './remote-runtime-relay-credential-calls'
 
-// Calls this channel makes for its own credential, kept out of the connection's id space.
-const CREDENTIAL_CALL_PREFIX = 'relay-credential-'
-const CREDENTIAL_CALL_TIMEOUT_MS = 30_000
+/**
+ * What a dial presents: the host's invite, the installed resume credential, or a resume credential
+ * whose install may have committed before the link dropped (its version unknown until it answers).
+ */
+type RelayRuntimeDial = SharedHostRelayCredential | { kind: 'pending-resume'; token: string }
 
 export type RuntimeRelayCredentialStore = {
   entry: () => SharedHostLinkEntry | undefined
@@ -42,8 +45,8 @@ export function relayRuntimeChannelOpener(
 ): AuthenticatedRuntimeChannelOpener {
   return (events) => {
     const entry = config.store.entry()
-    const credential = entry ? credentialToDial(entry, Date.now()) : null
-    if (!entry || !credential) {
+    const dial = entry ? credentialToDial(entry, Date.now()) : null
+    if (!entry || !dial) {
       return {
         ok: false,
         error: new RemoteRuntimeClientError(
@@ -54,17 +57,17 @@ export function relayRuntimeChannelOpener(
     }
     return {
       ok: true,
-      channel: openRelayRuntimeChannel(connection, config, entry, credential, events)
+      channel: openRelayRuntimeChannel(connection, config, entry, dial, events)
     }
   }
 }
 
-function credentialToDial(
-  entry: SharedHostLinkEntry,
-  now: number
-): SharedHostRelayCredential | null {
+function credentialToDial(entry: SharedHostLinkEntry, now: number): RelayRuntimeDial | null {
   if (entry.resume) {
     return { kind: 'resume', token: entry.resume.token, version: entry.resume.version }
+  }
+  if (entry.pendingResume) {
+    return { kind: 'pending-resume', token: entry.pendingResume.token }
   }
   const invite = entry.offer?.relay
   return invite && invite.inviteExpiresAt > now && invite.inviteToken !== entry.refusedInvite
@@ -76,66 +79,43 @@ function openRelayRuntimeChannel(
   connection: PairedRuntimeConnection,
   config: Parameters<typeof relayRuntimeChannelOpener>[1],
   entry: SharedHostLinkEntry,
-  credential: SharedHostRelayCredential,
+  dial: RelayRuntimeDial,
   events: AuthenticatedRuntimeChannelEvents
 ) {
   let state: 'connecting' | 'open' | 'closed' = 'connecting'
   let ready = false
-  let credentialCalls = 0
-  const pendingCalls = new Map<string, (response: RpcResponse) => void>()
+  const calls = createRelayCredentialCalls(connection.credential.deviceToken, (payload) =>
+    link.sendText(payload)
+  )
+  const shut = (): void => {
+    state = 'closed'
+    calls.failAll(new Error('relay link closed'))
+    link.close()
+  }
   const end = (error: RemoteRuntimeClientError, close?: { code: number; reason: string }): void => {
     if (state !== 'closed') {
-      state = 'closed'
-      link.close()
+      shut()
       events.onClosed(error, close ? 'socket_close' : 'protocol_error', close)
     }
   }
-  // The credential calls ride this link before the control connection may use it.
-  const port = {
-    sendRequest: (method: string, params?: unknown): Promise<RpcResponse> =>
-      new Promise((resolve, reject) => {
-        const id = `${CREDENTIAL_CALL_PREFIX}${++credentialCalls}`
-        const timer = setTimeout(() => {
-          pendingCalls.delete(id)
-          reject(new Error(`${method} timed out`))
-        }, CREDENTIAL_CALL_TIMEOUT_MS)
-        pendingCalls.set(id, (response) => {
-          clearTimeout(timer)
-          resolve(response)
-        })
-        const deviceToken = connection.credential.deviceToken
-        if (!link.sendText(JSON.stringify({ id, deviceToken, method, params }))) {
-          clearTimeout(timer)
-          pendingCalls.delete(id)
-          reject(new Error('relay link closed'))
-        }
-      })
-  }
-  const answerCredentialCall = (plaintext: string): boolean => {
-    if (!plaintext.includes(CREDENTIAL_CALL_PREFIX)) {
-      return false
-    }
-    let value: unknown
-    try {
-      value = JSON.parse(plaintext)
-    } catch {
-      return false
-    }
-    const answer = isRpcResponse(value) ? pendingCalls.get(value.id) : undefined
-    if (!answer || !isRpcResponse(value)) {
-      return false
-    }
-    pendingCalls.delete(value.id)
-    answer(value)
-    return true
+  // A closed link's credential work must not overwrite what a newer link keeps.
+  const liveStore = {
+    entry: config.store.entry,
+    save: (next: SharedHostLinkEntry) => {
+      if (state !== 'closed') {
+        config.store.save(next)
+      }
+    },
+    randomBytes: config.randomBytes,
+    newId: config.newId
   }
   const relay = entry.resume?.relay ?? entry.offer!.relay
   const link = new RelayE2eeLink({
     platform: config.platform,
     endpoint: { cellUrl: relay.cellUrl, relayHostId: relay.relayHostId },
-    ...(credential.kind === 'invite'
-      ? { credential: credential.inviteToken, expectedCredentialKind: 'invite' as const }
-      : { credential: credential.token, expectedCredentialKind: 'resume' as const }),
+    ...(dial.kind === 'invite'
+      ? { credential: dial.inviteToken, expectedCredentialKind: 'invite' as const }
+      : { credential: dial.token, expectedCredentialKind: 'resume' as const }),
     authCredential: connection.credential,
     clientCapabilities: config.clientCapabilities,
     // Token auth over Relay carries capabilities, as a direct socket's does.
@@ -147,9 +127,8 @@ function openRelayRuntimeChannel(
     },
     onHello: (hello) => {
       if (
-        credential.kind === 'resume' &&
-        (hello.credentialKind !== 'resume' ||
-          hello.acceptedCredentialVersion !== credential.version)
+        dial.kind === 'resume' &&
+        (hello.credentialKind !== 'resume' || hello.acceptedCredentialVersion !== dial.version)
       ) {
         end(
           new RemoteRuntimeClientError(
@@ -163,34 +142,31 @@ function openRelayRuntimeChannel(
     },
     onAuthenticated: () => {
       events.onAnswer()
-      // Invite: install a resume credential before anything else. Resume: renew it alongside.
-      const kept = keepRelayResumeCredential(
-        port,
-        credential,
-        {
-          entry: config.store.entry,
-          save: config.store.save,
-          randomBytes: config.randomBytes,
-          newId: config.newId
-        },
-        'runtime'
-      )
+      // Invite, or an install that may have committed: install (idempotent per reqId) before
+      // anything else. Resume: renew alongside.
+      const mode = dial.kind === 'resume' ? 'renew' : 'install'
+      const kept = keepRelayResumeCredential(calls.port, mode, liveStore, 'runtime')
       const becomeReady = (): void => {
         if (state !== 'closed' && !ready) {
           ready = true
           events.onAuthenticated()
         }
       }
-      if (credential.kind === 'resume') {
+      if (mode === 'renew') {
         becomeReady()
-        void kept.catch(() => {})
+        // Like the share link: a failed renewal is logged; the next dial confirms again.
+        void kept.catch((error: unknown) => {
+          if (state !== 'closed') {
+            console.warn('[remote-runtime] Relay resume renewal failed', errorMessage(error))
+          }
+        })
         return
       }
       void kept.then(becomeReady, (error: unknown) =>
         end(
           new RemoteRuntimeClientError(
             'relay_credential_install_failed',
-            `Could not keep this server's Relay pairing: ${error instanceof Error ? error.message : String(error)}`
+            `Could not keep this server's Relay pairing: ${errorMessage(error)}`
           )
         )
       )
@@ -198,7 +174,7 @@ function openRelayRuntimeChannel(
     onText: (plaintext) => {
       events.onAnswer()
       events.onActivity?.()
-      if (!answerCredentialCall(plaintext) && ready) {
+      if (!calls.answer(plaintext) && ready) {
         events.onText(plaintext)
       }
     },
@@ -213,8 +189,13 @@ function openRelayRuntimeChannel(
       if (relayRefusedCredential(error)) {
         const current = config.store.entry()
         if (current) {
-          config.store.save(withoutRefusedCredential(current, credential))
+          config.store.save(withoutRefusedDial(current, dial))
         }
+      }
+      if (error instanceof PairedE2EEAuthenticationError) {
+        // The host itself refused this device (revoked or unknown): its pairing owner recovers.
+        end(new RemoteRuntimeClientError('unauthorized', error.message))
+        return
       }
       const code = error instanceof RelayOuterError ? error.code : 1006
       end(
@@ -229,11 +210,19 @@ function openRelayRuntimeChannel(
     state: () => state,
     sendText: (plaintext: string) => ready && link.sendText(plaintext),
     sendBinary: (plaintext: Uint8Array<ArrayBufferLike>) => ready && link.sendBinary(plaintext),
-    close: () => {
-      state = 'closed'
-      link.close()
-    }
+    close: shut
   }
+}
+
+/** A refused pending resume never committed: drop it, so the next dial installs on the invite. */
+function withoutRefusedDial(entry: SharedHostLinkEntry, dial: RelayRuntimeDial) {
+  return dial.kind === 'pending-resume'
+    ? { ...entry, pendingResume: undefined }
+    : withoutRefusedCredential(entry, dial)
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 /** The Relay reach a test-paired runtime's endpoint names, as a link entry with its first invite. */

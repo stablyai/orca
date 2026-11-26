@@ -1,3 +1,5 @@
+import { isRuntimeRelayEndpoint } from '../pairing/runtime-relay-endpoint'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type {
   RuntimeOrchestrationEnvelope,
@@ -154,4 +156,14 @@ export async function sendRemoteRuntimeRequestOnOneLink<TResult>(
     }
   )
   return await sent
+}
+
+/** A host paired over Relay has no address to dial: without its link, say so instead of dialing. */
+export function refuseRelayOnlyHostWithoutLink(connection: PairedRuntimeConnection): void {
+  if (isRuntimeRelayEndpoint(connection.endpoint)) {
+    throw new RemoteRuntimeClientError(
+      'remote_runtime_unavailable',
+      'This server is reached only over Relay, and its Relay link is not open yet.'
+    )
+  }
 }

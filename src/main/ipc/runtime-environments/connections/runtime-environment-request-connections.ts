@@ -49,6 +49,7 @@ type CachedSharedControlConnection = {
 
 const requestConnections = new Map<string, CachedRuntimeConnection>()
 const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
+const closeSharedControl = (id: string): void => closeRemoteRuntimeSharedControlConnection(id)
 
 export const {
   getRuntimeEnvironmentStatusOwner,
@@ -318,7 +319,7 @@ function getSharedControlConnection(
       })
     cached = { pairingKey, answeredAt: () => answeredAt, connection }
     sharedControlConnections.set(environmentId, cached)
-    claimRelayOneLink(environmentId, pairedConnection, connection)
+    claimRelayOneLink(environmentId, pairedConnection, connection, closeSharedControl)
     const entry = cached
     // Ready requires this socket's own server frame, which stamps its answer time.
     setSharedControlAnswerSource(environmentId, entry.connection, () =>

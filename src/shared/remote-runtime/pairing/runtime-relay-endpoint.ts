@@ -70,6 +70,15 @@ export function parseRuntimeRelayEndpoint(endpoint: string): RuntimeRelayReach |
   }
 }
 
+/** What the UI and logs may show of an endpoint: a Relay one names its host, never its invite. */
+export function redactRuntimeRelayEndpoint(endpoint: string): string {
+  if (!isRuntimeRelayEndpoint(endpoint)) {
+    return endpoint
+  }
+  const reach = parseRuntimeRelayEndpoint(endpoint)
+  return `${RELAY_ENDPOINT_PREFIX}${reach?.relayHostId ?? 'invalid'}`
+}
+
 /** Under the test switch, a pairing code with a Relay invite pairs over Relay only. */
 export function withTestRelayReach(pairingCode: string): string {
   const offer = runtimeRelayPairingTestSwitchOn() ? parsePairingCode(pairingCode) : null

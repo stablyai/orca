@@ -26,7 +26,7 @@ export function remoteRuntimeOneLinkAllowed(
     return false
   }
   if (isRuntimeRelayEndpoint(connection.endpoint)) {
-    return remoteRuntimeOneLinkTestSwitchOn() || isActiveCloudFlagOn(ORCA_CLOUD_RELAY_ONE_LINK_FLAG)
+    return isActiveCloudFlagOn(ORCA_CLOUD_RELAY_ONE_LINK_FLAG) || remoteRuntimeOneLinkTestSwitchOn()
   }
   return remoteRuntimeOneLinkTestSwitchOn() && !isWslOrcadEnvironmentId(environmentId)
 }
@@ -41,9 +41,10 @@ export function noteOneLinkHostCapabilities(
   hostCapabilities: readonly string[] | undefined,
   control: () => RemoteRuntimeSharedControlConnection
 ): void {
+  // A Relay host's link is its only way there; its opener refuses while one link is off.
   const oneLink =
-    remoteRuntimeOneLinkAllowed(environmentId, pairedConnection) &&
-    (isRuntimeRelayEndpoint(pairedConnection.endpoint) ||
+    isRuntimeRelayEndpoint(pairedConnection.endpoint) ||
+    (remoteRuntimeOneLinkAllowed(environmentId, pairedConnection) &&
       (hostCapabilities?.includes(RUNTIME_BINARY_CHANNELS_CAPABILITY) ?? false))
   setRemoteRuntimeOneLink(environmentId, pairedConnection, oneLink ? control : null)
 }

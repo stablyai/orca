@@ -30,7 +30,13 @@ export async function withTestRelayInvite<T extends { pairingUrl: string; device
   if (!provider || !direct) {
     return pairingUnavailable('relay_mint_failed', 'Orca Relay is not available on this host.')
   }
-  const { relay, binding } = await provider.createPairingRelay(offer.deviceId)
+  let minted: Awaited<ReturnType<MobileRelayPairingProvider['createPairingRelay']>>
+  try {
+    minted = await provider.createPairingRelay(offer.deviceId)
+  } catch {
+    return pairingUnavailable('relay_mint_failed', 'Could not create a Relay invite.')
+  }
+  const { relay, binding } = minted
   if (!(await host.bind(offer.deviceId, binding))) {
     host.retain(offer.deviceId, binding)
     return pairingUnavailable('relay_mint_failed', 'Could not store the Relay binding.')

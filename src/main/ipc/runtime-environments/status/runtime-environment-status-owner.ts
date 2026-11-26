@@ -1,3 +1,4 @@
+import { isRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import '../../../../shared/remote-runtime/protocol/protocol-version'
@@ -69,6 +70,19 @@ async function answerRefusedPairing(
   return runtimeEnvironmentChangedFailure(environment, 'status.get', outcome === 'repaired')
 }
 
+/**
+ * Whether a status probe goes over the host's control connection: a host paired over Relay always
+ * (its link is the only way there, and opening it makes it the host's one link), any other once
+ * that connection is ready and proven.
+ */
+export function statusProbeRidesControl(
+  connection: { endpoint: string },
+  controlReady: boolean,
+  controlProven: boolean
+): boolean {
+  return isRuntimeRelayEndpoint(connection.endpoint) || (controlReady && controlProven)
+}
+
 export function createRuntimeEnvironmentStatusOwner(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,
@@ -116,9 +130,12 @@ export function createRuntimeEnvironmentStatusOwner(
     evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, connection)
     let response: RuntimeHostStatusResponse
     try {
-      response = await (transport.isReady() &&
-      getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
-        'supported'
+      response = await (statusProbeRidesControl(
+        connection,
+        transport.isReady(),
+        getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
+          'supported'
+      )
         ? transport.request(signal)
         : sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
             connection,

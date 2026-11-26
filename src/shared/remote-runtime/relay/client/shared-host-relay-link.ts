@@ -73,10 +73,10 @@ export function relayRefusedCredential(error: Error): boolean {
   )
 }
 
-/** Invite: install a resume credential for later dials. Resume: renew it with the host. */
+/** After an invite: install a resume credential for later dials. After a resume: renew it. */
 export async function keepRelayResumeCredential<Entry extends SharedHostLinkEntry>(
   client: RelayRequestPort,
-  credential: SharedHostRelayCredential,
+  mode: 'install' | 'renew',
   deps: Pick<SharedHostRelayLinkDeps<Entry>, 'entry' | 'save' | 'randomBytes' | 'newId'>,
   reqIdPrefix: string
 ): Promise<void> {
@@ -84,7 +84,7 @@ export async function keepRelayResumeCredential<Entry extends SharedHostLinkEntr
   if (!entry) {
     return
   }
-  if (credential.kind === 'resume') {
+  if (mode === 'renew') {
     if (entry.resume) {
       await confirmRelayResume(client, `confirm-${deps.newId()}`, entry.resume.relay.relayHostId)
     }
@@ -96,8 +96,11 @@ export async function keepRelayResumeCredential<Entry extends SharedHostLinkEntr
   }
   deps.save({ ...entry, pendingResume: pending })
   const { installed, relay } = await installRelayResumeCredential(client, pending)
+  const current = deps.entry() ?? entry
   deps.save({
-    ...(deps.entry() ?? entry),
+    ...current,
+    // Installing spent the invite: a refused resume must not fall back to dialing it.
+    refusedInvite: current.offer?.relay.inviteToken ?? current.refusedInvite,
     pendingResume: undefined,
     resume: {
       token: pending.token,
@@ -203,7 +206,12 @@ export class SharedHostRelayLink<Entry extends SharedHostLinkEntry> {
         },
         {
           onAuthenticated: () => {
-            void keepRelayResumeCredential(client, credential, this.deps, 'share').then(
+            void keepRelayResumeCredential(
+              client,
+              credential.kind === 'invite' ? 'install' : 'renew',
+              this.deps,
+              'share'
+            ).then(
               () => {
                 // Closed while the resume credential settled: this link is no longer the live one.
                 if (this.client !== client) {
