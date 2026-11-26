@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AcpRequestContext } from '../transport/acp-json-rpc-peer'
 import {
   PermissionOptionSchema,
@@ -15,12 +16,14 @@ export type AcpPermissionHandler = (
 ) => RequestPermissionResponse | Promise<RequestPermissionResponse>
 
 const cancelled: RequestPermissionResponse = { outcome: { outcome: 'cancelled' } }
-const routingSchema = z.looseObject({
-  sessionId: z.string(),
-  toolCall: z.looseObject({ toolCallId: z.string() }),
-  options: z.array(z.unknown())
-})
-const optionRoutingSchema = z.looseObject({ optionId: z.string() })
+const routingSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionId: z.string(),
+    toolCall: z.looseObject({ toolCallId: z.string() }),
+    options: z.array(z.unknown())
+  })
+)
+const optionRoutingSchema = lazyZodSchema(() => z.looseObject({ optionId: z.string() }))
 
 // Preserve unknown fields for forward compatibility; report malformed known fields.
 function readableFields(

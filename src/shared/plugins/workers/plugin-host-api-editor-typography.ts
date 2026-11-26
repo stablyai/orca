@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import {
   resolveEditorTypography,
@@ -12,23 +13,25 @@ export const PLUGIN_EDITOR_TYPOGRAPHY_SINCE = '1.4.257'
 const FONT_FAMILY_MAX = 8 * 1024
 
 /** What `editor.readTypography` answers and `editor.typography.changed` carries. */
-export const pluginEditorTypographySchema = z
-  .object({
-    /** The font family Orca gives its file editor, as configured (the terminal font when unset). */
-    fontFamily: z.string().min(1).max(FONT_FAMILY_MAX),
-    /** The same family as a full CSS `font-family` stack, with Orca's monospace fallbacks. */
-    cssFontFamily: z.string().min(1).max(FONT_FAMILY_MAX),
-    /** Pixels, with the editor zoom applied. */
-    fontSize: z.number().finite().positive(),
-    /** A CSS `font-weight`: `normal`, or `100` to `900`. */
-    fontWeight: z.string().min(1).max(16),
-    /** Pixels; 0 when Orca leaves line spacing automatic. */
-    lineHeight: z.number().finite().nonnegative(),
-    fontLigatures: z.boolean(),
-    wordWrap: z.enum(['on', 'off']),
-    minimap: z.boolean()
-  })
-  .strict()
+export const pluginEditorTypographySchema = lazyZodSchema(() =>
+  z
+    .object({
+      /** The font family Orca gives its file editor, as configured (the terminal font when unset). */
+      fontFamily: z.string().min(1).max(FONT_FAMILY_MAX),
+      /** The same family as a full CSS `font-family` stack, with Orca's monospace fallbacks. */
+      cssFontFamily: z.string().min(1).max(FONT_FAMILY_MAX),
+      /** Pixels, with the editor zoom applied. */
+      fontSize: z.number().finite().positive(),
+      /** A CSS `font-weight`: `normal`, or `100` to `900`. */
+      fontWeight: z.string().min(1).max(16),
+      /** Pixels; 0 when Orca leaves line spacing automatic. */
+      lineHeight: z.number().finite().nonnegative(),
+      fontLigatures: z.boolean(),
+      wordWrap: z.enum(['on', 'off']),
+      minimap: z.boolean()
+    })
+    .strict()
+)
 
 export type PluginEditorTypography = z.infer<typeof pluginEditorTypographySchema>
 

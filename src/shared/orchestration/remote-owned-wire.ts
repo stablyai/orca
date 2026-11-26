@@ -61,7 +61,12 @@ export const RemoteOwnedWorkerState = lazyZodSchema(() =>
       status: z.enum(['pending', 'dispatched', 'completed', 'failed', 'circuit_broken']),
       workerState: z.string().min(1).nullable(),
       lastFailure: z.string().nullable(),
-      agent: z.string().nullable()
+      agent: z.string().nullable(),
+      // Absent from older servers. The workspace its worker runs in, and the server's Dispatch that
+      // started it (a worker's own helper) or that it continues (a follow-up), so home places it.
+      worktreeId: z.string().min(1).nullish(),
+      creatorDispatchId: z.string().min(1).nullish(),
+      followUpOf: z.string().min(1).nullish()
     }),
     task: z.object({
       status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']),

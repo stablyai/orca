@@ -1,5 +1,6 @@
 import { webContents } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -33,10 +34,10 @@ import {
   resolveSidePanelWorkspace
 } from '../side-panel/browser-extension-side-panel-open'
 
-const tabIdSchema = z.number().int().nonnegative()
-const targetSchema = z
-  .object({ tabId: tabIdSchema.optional(), windowId: z.number().int().optional() })
-  .loose()
+const tabIdSchema = lazyZodSchema(() => z.number().int().nonnegative())
+const targetSchema = lazyZodSchema(() =>
+  z.object({ tabId: tabIdSchema.optional(), windowId: z.number().int().optional() }).loose()
+)
 
 /** Orca's browser tabs all sit in its one main window; popouts have no side panel. */
 function requireMainWindowId(windowId: number): number {
