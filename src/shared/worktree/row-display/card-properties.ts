@@ -136,6 +136,8 @@ export type WorktreeCardDetails = {
   metaRow: boolean
   /** The branch or folder path in the meta row; the new card style makes it the opt-in Branch property. */
   identity: boolean
+  /** The project's name beside its badge. */
+  projectName: boolean
   issue: boolean
   linearIssue: boolean
   jiraIssue: boolean
@@ -163,6 +165,7 @@ export function getWorktreeCardDetails(
     repoInTitle: settings.newCardStyle || compactCards,
     metaRow,
     identity: metaRow && (!settings.newCardStyle || shows('branch')),
+    projectName: shows('project-name'),
     issue: shows('issue'),
     linearIssue: shows('linear-issue'),
     jiraIssue: shows('jira-issue'),

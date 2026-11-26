@@ -69,7 +69,7 @@ export function WorktreeCardRepoChip({
       >
         <RepoMark repo={repo} />
         {showName && (
-          <span className="min-w-0 truncate text-3xs leading-3.5 text-muted-foreground lowercase">
+          <span className="min-w-0 truncate text-3xs leading-3.5 text-muted-foreground">
             {repo.displayName}
           </span>
         )}
