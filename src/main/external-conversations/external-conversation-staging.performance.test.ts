@@ -110,35 +110,50 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
   }
 })
 
-it.each([100, 1000])('bounds unsettled image probes across %i retired deliveries', async (count) => {
-  const storage = Promise.withResolvers<{ bytes: number; fileId: string }>()
-  let reads = 0
-  const probes = new ConnectorImageProbes(() => {
-    reads++
-    return storage.promise
-  })
-  const result = { bytes: 8, fileId: 'FSHOT' }
-  try {
-    for (let index = 0; index < count; index++) {
-      const poll = new AbortController()
-      const inspection = connectorImageInspection(undefined, poll.signal, { probes })
-      const first = inspection.image('same-file')
-      const second = inspection.image(`file-${index}`)
-      await Promise.resolve()
-      poll.abort()
-      expect(await first).toBe('limit')
-      expect(await second).toBe('limit')
+it.each([100, 1000])(
+  'bounds unsettled image probes across %i retired deliveries',
+  async (count) => {
+    const storage = Promise.withResolvers<{ bytes: number; fileId: string }>()
+    let reads = 0
+    const probes = new ConnectorImageProbes(() => {
+      reads++
+      return storage.promise
+    })
+    const result = { bytes: 8, fileId: 'FSHOT' }
+    try {
+      for (let index = 0; index < count; index++) {
+        const poll = new AbortController()
+        const inspection = connectorImageInspection(undefined, poll.signal, { probes })
+        const first = inspection.image('same-file')
+        const second = inspection.image(`file-${index}`)
+        await Promise.resolve()
+        poll.abort()
+        expect(await first).toBe('limit')
+        expect(await second).toBe('limit')
+      }
+      expect(reads).toBe(8)
+      const successor = connectorImageInspection(undefined, new AbortController().signal, {
+        probes
+      })
+      const same = successor.image('same-file')
+      const queued = successor.image('new-file')
+      const delivery = new AbortController()
+      const capacity = new AbortController()
+      const shortWait = connectorImageInspection(undefined, delivery.signal, {
+        probes,
+        queueSignal: capacity.signal
+      })
+      const crowded = shortWait.image('other-file')
+      capacity.abort()
+      expect(await crowded).toBe('limit')
+      expect(delivery.signal.aborted).toBe(false)
+      expect(reads).toBe(8)
+      storage.resolve(result)
+      expect(await same).toEqual(result)
+      expect(await queued).toEqual(result)
+      expect(reads).toBe(9)
+    } finally {
+      storage.resolve(result)
     }
-    expect(reads).toBe(8)
-    const successor = connectorImageInspection(undefined, new AbortController().signal, { probes })
-    const same = successor.image('same-file')
-    const queued = successor.image('new-file')
-    expect(reads).toBe(8)
-    storage.resolve(result)
-    expect(await same).toEqual(result)
-    expect(await queued).toEqual(result)
-    expect(reads).toBe(9)
-  } finally {
-    storage.resolve(result)
   }
-})
+)

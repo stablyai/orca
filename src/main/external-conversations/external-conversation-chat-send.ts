@@ -95,7 +95,10 @@ export async function deliverToChat(
             delivery.preparation
               ? signal
               : AbortSignal.any([signal, AbortSignal.timeout(ASKER_IMAGES_BUDGET_MS)]),
-            { allPaths: Boolean(delivery.askerImages && earlierImageContext) }
+            {
+              allPaths: Boolean(delivery.askerImages && earlierImageContext),
+              queueSignal: delivery.preparation?.imageProbeQueueSignal(signal)
+            }
           )
         : undefined
     let firstCarry: Promise<CarriedMessages> | undefined

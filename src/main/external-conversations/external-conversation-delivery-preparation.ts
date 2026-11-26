@@ -49,6 +49,16 @@ export class DeliveryPreparation {
     return (this.msLeft?.() ?? Infinity) <= 0
   }
 
+  imageProbeQueueSignal(signal: AbortSignal): AbortSignal {
+    const remaining = this.msLeft?.()
+    if (remaining === undefined) {
+      return signal
+    }
+    // Reserve half the remaining lease for the request itself when other chats hold all slots.
+    const wait = Math.max(0, Math.min(2_147_483_647, Math.floor(remaining / 2)))
+    return AbortSignal.any([signal, wait > 0 ? AbortSignal.timeout(wait) : AbortSignal.abort()])
+  }
+
   stopped(signal: AbortSignal): Delivery | null {
     if (this.expired() || signal.reason?.name === 'TimeoutError') {
       return { outcome: 'expired' }

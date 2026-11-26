@@ -117,6 +117,7 @@ export async function carriedMessages(
   const start = progress?.owner.read(progress.key, eligible, now) ?? 0
   let missingPrefix = start
   let missingUntil = Infinity
+  let resume = false
   const carried: JournalReturnedCard[] = []
   const blocks: NativeChatBlock[] = []
   // Keep the oldest whole requests whose images fit; each remaining card can still be retried.
@@ -143,6 +144,8 @@ export async function carriedMessages(
           ? await inspection.image(path)
           : undefined
       if (probe === 'limit') {
+        // Reach uninspected cards before rechecking this prefix, even between sparse deliveries.
+        resume = carried.length === 0
         break cards
       }
       // An older, unreadable card can still be edited. It needn't hold up the later ones.
@@ -182,8 +185,8 @@ export async function carriedMessages(
     carried.push(each)
     blocks.push(...withSentLine(ownBlocks, each.submittedAt, now))
   }
-  if (progress && missingPrefix > start) {
-    progress.owner.remember(progress.key, eligible, missingPrefix, missingUntil)
+  if (progress && missingPrefix > 0) {
+    progress.owner.remember(progress.key, eligible, missingPrefix, missingUntil, resume)
   }
   return {
     blocks,

@@ -451,120 +451,127 @@ it('carries the oldest cards whose images fit one message; the rest wait for the
   expect(returnedIds()).toEqual(['c'])
 })
 
-it.each([20, 200])('carries healthy files after %i unavailable images and retries restored files', async (unavailableCount) => {
-  const byteLength = 9 * 1024 * 1024
-  const oldIds = ['F0', 'F1', 'F2', 'F3']
-  const failed = asked('d-failed', 'four images')
-  const attachmentStore = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
-    hasSession: () => true
-  })
-  const fixture = Buffer.alloc(byteLength)
-  fixture.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-  for (const fileId of oldIds) {
-    const { path } = await storeConnectorImage(
-      attachmentStore,
-      `${fileId}.png`,
-      fixture,
-      fileId,
-      new AbortController().signal
+it.each([20, 200])(
+  'carries healthy files after %i unavailable images and retries restored files',
+  async (unavailableCount) => {
+    const byteLength = 9 * 1024 * 1024
+    const oldIds = ['F0', 'F1', 'F2', 'F3']
+    const failed = asked('d-failed', 'four images')
+    const attachmentStore = new AgentSessionAttachmentStore(
+      join(dir, 'agent-session-attachments'),
+      {
+        hasSession: () => true
+      }
     )
-    failed.blocks.push({ type: 'image-ref', path })
-  }
-  for (let index = 0; index < unavailableCount; index += 1) {
-    const id = `missing-${index}`
-    failedStart(
-      id,
-      asked(id, 'missing upload', THREAD, [join(dir, `${id}.png`)]),
-      'notSignedIn',
-      NOW + index
-    )
-  }
-  failedStart('failed', failed, 'notSignedIn', NOW + unavailableCount)
-  let probeNow = NOW + unavailableCount + 30
-  const images = new ConnectorImageProbes(undefined, () => probeNow)
-  const progress = new ReturnedImageProgress()
-  const carry = () =>
-    carriedMessages(
-      THREAD,
-      readJournalDomainReturnedCards(db, target, NOW + unavailableCount + 30),
-      ACCOUNT,
-      probeNow,
-      [],
-      connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, {
-        probes: images
-      }),
-      { owner: progress, key: 'thread' }
-    )
-  expect((await carry()).cards).toEqual([])
-  // Interleaved conversations may evict all path misses. The returned queue can still advance.
-  images.clearRetries()
-  let carried = await carry()
-  for (let batch = 1; batch < unavailableCount / 20; batch += 1) {
-    carried = await carry()
-  }
+    const fixture = Buffer.alloc(byteLength)
+    fixture.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    for (const fileId of oldIds) {
+      const { path } = await storeConnectorImage(
+        attachmentStore,
+        `${fileId}.png`,
+        fixture,
+        fileId,
+        new AbortController().signal
+      )
+      failed.blocks.push({ type: 'image-ref', path })
+    }
+    for (let index = 0; index < unavailableCount; index += 1) {
+      const id = `missing-${index}`
+      failedStart(
+        id,
+        asked(id, 'missing upload', THREAD, [join(dir, `${id}.png`)]),
+        'notSignedIn',
+        NOW + index
+      )
+    }
+    failedStart('failed', failed, 'notSignedIn', NOW + unavailableCount)
+    let probeNow = NOW + unavailableCount + 30
+    const images = new ConnectorImageProbes(undefined, () => probeNow)
+    const progress = new ReturnedImageProgress()
+    const carry = () =>
+      carriedMessages(
+        THREAD,
+        readJournalDomainReturnedCards(db, target, NOW + unavailableCount + 30),
+        ACCOUNT,
+        probeNow,
+        [],
+        connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, {
+          probes: images
+        }),
+        { owner: progress, key: 'thread' }
+      )
+    expect((await carry()).cards).toEqual([])
+    // Interleaved conversations may evict all path misses. The returned queue can still advance.
+    images.clearRetries()
+    probeNow += RETURNED_IMAGE_RETRY_MS + 1
+    let carried = await carry()
+    for (let batch = 1; batch < unavailableCount / 20; batch += 1) {
+      probeNow += RETURNED_IMAGE_RETRY_MS + 1
+      carried = await carry()
+    }
 
-  const reads: string[] = []
-  const stage = connectorAskerImages({
-    reader:
-      () =>
-      async ({ fileId }) => {
-        reads.push(fileId)
-        return {
-          ok: true,
-          value: {
+    const reads: string[] = []
+    const stage = connectorAskerImages({
+      reader:
+        () =>
+        async ({ fileId }) => {
+          reads.push(fileId)
+          return {
             ok: true,
-            result: {
-              download: {
-                name: `${fileId}.png`,
-                size: byteLength,
-                url: 'https://fixture.invalid/image',
-                ticket: 'fixture'
+            value: {
+              ok: true,
+              result: {
+                download: {
+                  name: `${fileId}.png`,
+                  size: byteLength,
+                  url: 'https://fixture.invalid/image',
+                  ticket: 'fixture'
+                }
               }
             }
           }
+        },
+      store: async (name, image) => ({ path: stagedImage(name, image.byteLength) }),
+      fetch: async () => new Response(new Uint8Array(fixture))
+    })
+    const staged = await stage({
+      botId: 'seeded',
+      conversation: THREAD,
+      signal: new AbortController().signal,
+      asker: {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        text: '@bot',
+        context: [],
+        earlierOwn: {
+          messages: [
+            {
+              at: NOW,
+              text: 'These too',
+              messageRef: 'slack:T1:C1:1.2:1.2',
+              files: ['F0', 'F4', 'F5', 'F6', 'F7'].map((id) => ({
+                id,
+                name: 'shot.png',
+                type: 'image/png'
+              }))
+            }
+          ]
         }
       },
-    store: async (name, image) => ({ path: stagedImage(name, image.byteLength) }),
-    fetch: async () => new Response(new Uint8Array(fixture))
-  })
-  const staged = await stage({
-    botId: 'seeded',
-    conversation: THREAD,
-    signal: new AbortController().signal,
-    asker: {
-      userId: 'U1',
-      role: 'owner',
-      place: { kind: 'public_channel', id: 'C1' },
-      text: '@bot',
-      context: [],
-      earlierOwn: {
-        messages: [
-          {
-            at: NOW,
-            text: 'These too',
-            messageRef: 'slack:T1:C1:1.2:1.2',
-            files: ['F0', 'F4', 'F5', 'F6', 'F7'].map((id) => ({
-              id,
-              name: 'shot.png',
-              type: 'image/png'
-            }))
-          }
-        ]
-      }
-    },
-    earlierBudget: async () => carried.earlierBudget
-  })
-  expect(carried.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
-  expect(staged.map(({ fileId }) => fileId)).toEqual(['F4', 'F5', 'F6'])
-  expect(reads).toEqual(['F4', 'F5', 'F6', 'F7'])
-  const restored = openSync(join(dir, 'missing-0.png'), 'w')
-  ftruncateSync(restored, 1)
-  closeSync(restored)
-  expect((await carry()).cards.map(({ messageId }) => messageId)).toEqual(['failed'])
-  probeNow += RETURNED_IMAGE_RETRY_MS
-  const retried = await carry()
-  expect(retried.cards.map(({ messageId }) => messageId)).toContain('missing-0')
-})
+      earlierBudget: async () => carried.earlierBudget
+    })
+    expect(carried.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
+    expect(staged.map(({ fileId }) => fileId)).toEqual(['F4', 'F5', 'F6'])
+    expect(reads).toEqual(['F4', 'F5', 'F6', 'F7'])
+    const restored = openSync(join(dir, 'missing-0.png'), 'w')
+    ftruncateSync(restored, 1)
+    closeSync(restored)
+    probeNow += RETURNED_IMAGE_RETRY_MS
+    const retried = await carry()
+    expect(retried.cards.map(({ messageId }) => messageId)).toContain('missing-0')
+  }
+)
 
 it('updates screenshot positions even when a nested image precedes its label', async () => {
   const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {

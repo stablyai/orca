@@ -148,17 +148,13 @@ export function installExternalConversations(
       receipts: new DeliveryReceipts(
         () => runtime.getOrchestrationDb(),
         (attempt) =>
-          recoverConnectorAdmission(
-            attempt,
-            runtime,
-            (thread, chat) => {
-              const { source, externalId, title, asker } = thread
-              const key = { source, externalId }
-              if (!findLink(store, key)) {
-                seam?.linkChat(key, chat, { title }, asker)
-              }
+          recoverConnectorAdmission(attempt, runtime, (thread, chat) => {
+            const { source, externalId, title, asker } = thread
+            const key = { source, externalId }
+            if (!findLink(store, key)) {
+              seam?.linkChat(key, chat, { title }, asker)
             }
-          )
+          })
       ),
       onWorkspaceRemoved: (listener) =>
         runtime.onWorktreeLifecycle((event) => {

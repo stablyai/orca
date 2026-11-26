@@ -89,10 +89,24 @@ export class ConnectorImageProbes {
     return retry
   }
 
-  async read(root: string | undefined, path: string, signal: AbortSignal): Promise<ImageProbe> {
+  async read(
+    root: string | undefined,
+    path: string,
+    signal: AbortSignal,
+    queueSignal: AbortSignal
+  ): Promise<ImageProbe> {
     let pending = this.active.get(path)
     if (!pending) {
-      const release = await this.slots.acquire(0, signal)
+      const permitSignal = this.slots.hasCapacity ? signal : queueSignal
+      const release = await this.slots.acquire(0, permitSignal).catch((error) => {
+        if (permitSignal.aborted) {
+          return undefined
+        }
+        throw error
+      })
+      if (!release) {
+        return 'limit'
+      }
       pending = this.active.get(path)
       const retry = this.cachedRetry(path)
       if (pending || signal.aborted || retry) {
@@ -137,7 +151,7 @@ export const connectorImageProbes = new ConnectorImageProbes()
 export function connectorImageInspection(
   root: string | undefined,
   signal: AbortSignal,
-  { probes = connectorImageProbes, allPaths = true } = {}
+  { probes = connectorImageProbes, allPaths = true, queueSignal = signal } = {}
 ) {
   // A card edit may require another read of the queue, but the same immutable upload needs one probe.
   const images = new Map<string, Promise<ImageProbe>>()
@@ -157,7 +171,7 @@ export function connectorImageInspection(
         if (images.size >= AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
           return Promise.resolve('limit')
         }
-        lookup = probes.read(root, path, signal).catch((error) => {
+        lookup = probes.read(root, path, signal, queueSignal).catch((error) => {
           if (signal.aborted) {
             return 'limit' as const
           }

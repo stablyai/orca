@@ -371,7 +371,8 @@ it('names the native positions of earlier screenshots in their chronological con
           }
         }),
       fetch: async () => new Response(png),
-      store: (name, bytes, fileId, signal) => storeConnectorImage(store, name, bytes, fileId, signal)
+      store: (name, bytes, fileId, signal) =>
+        storeConnectorImage(store, name, bytes, fileId, signal)
     })
   }
   expect(await deliveries.deliver(chatHost(rig.host), KEY, CHAT, request)).toEqual({

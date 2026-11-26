@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
 
 // An unchanged prefix of broken cards must not spend every delivery's file inspection budget.
-type MissingPrefix = { count: number; digest: string; expiresAt: number }
+type MissingPrefix = { count: number; digest: string; expiresAt: number; resume: boolean }
 
 export class ReturnedImageProgress {
   private readonly prefixes = new Map<string, MissingPrefix>()
@@ -11,7 +11,7 @@ export class ReturnedImageProgress {
     const prefix = this.prefixes.get(key)
     if (
       prefix &&
-      now < prefix.expiresAt &&
+      (prefix.resume || now < prefix.expiresAt) &&
       prefix.count <= eligible.length &&
       this.digest(eligible, prefix.count) === prefix.digest
     ) {
@@ -25,14 +25,20 @@ export class ReturnedImageProgress {
     key: string,
     eligible: readonly JournalReturnedCard[],
     count: number,
-    missingUntil: number
+    missingUntil: number,
+    resume: boolean
   ): void {
-    const expiresAt = Math.min(this.prefixes.get(key)?.expiresAt ?? Infinity, missingUntil)
+    const previous = this.prefixes.get(key)
+    const expiresAt = Math.min(previous?.expiresAt ?? Infinity, missingUntil)
+    if (previous?.count === count && previous.resume === resume && previous.expiresAt === expiresAt) {
+      return
+    }
     this.prefixes.delete(key)
     this.prefixes.set(key, {
       count,
       expiresAt,
-      digest: this.digest(eligible, count)
+      resume,
+      digest: previous?.count === count ? previous.digest : this.digest(eligible, count)
     })
     if (this.prefixes.size > 8192) {
       const oldest = this.prefixes.keys().next()

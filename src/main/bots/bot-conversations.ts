@@ -39,7 +39,11 @@ export function botConversations(deps: {
       }
       if (kind === 'bot-chat') {
         const sessionId = await deps.ensureChat(botId)
-        return { worktreeId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId, agent: bot.agent }
+        return {
+          worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
+          sessionId,
+          agent: bot.agent
+        }
       }
       return deps.startSession(bot, opening)
     },

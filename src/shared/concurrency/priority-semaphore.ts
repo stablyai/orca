@@ -16,6 +16,10 @@ export class PrioritySemaphore {
     this.available = concurrency
   }
 
+  get hasCapacity(): boolean {
+    return this.available > 0
+  }
+
   acquire(priority: Priority, signal?: AbortSignal): Promise<() => void> {
     if (signal?.aborted) {
       return Promise.reject(signal.reason)
