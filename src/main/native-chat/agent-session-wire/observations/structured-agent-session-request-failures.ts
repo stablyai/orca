@@ -121,7 +121,9 @@ export class StructuredAgentSessionRequestFailures {
     }
     const stopSettle = session.journal.stopMarks.fact()
     const exit =
-      ended.observedAt === undefined ? undefined : { fence: ended.fence, observedAt: ended.observedAt }
+      ended.observedAt === undefined
+        ? undefined
+        : { fence: ended.fence, observedAt: ended.observedAt }
     const running = session.journal
       .readInOrder((reads) => reads.runningRequest(stopSettle, exit))
       .then((request) => {
@@ -217,7 +219,10 @@ export class StructuredAgentSessionRequestFailures {
     const generation = child?.fence === request.fence ? child.generation : undefined
     const clientMessageId = request.clientMessageId
     const death = outcome === 'interruption' && ended ? { ...ended } : undefined
-    let words: AgentSessionFailureWordsContext | Promise<AgentSessionFailureWordsContext> | undefined
+    let words:
+      | AgentSessionFailureWordsContext
+      | Promise<AgentSessionFailureWordsContext>
+      | undefined
     this.deps.onFailure({
       sessionId,
       agent: journal.identity.agent,

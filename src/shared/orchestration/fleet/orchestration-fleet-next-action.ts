@@ -1,5 +1,9 @@
 import { isUnsupervisedSettledDispatch } from './orchestration-fleet-outcome-resolution'
-import type { FleetDurableWorker, FleetLiveness, FleetNextAction } from './orchestration-fleet-projection'
+import type {
+  FleetDurableWorker,
+  FleetLiveness,
+  FleetNextAction
+} from './orchestration-fleet-projection'
 
 /** Worker states that carry an outcome; anything else is still supposed to be running. */
 export const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])

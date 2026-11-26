@@ -40,7 +40,11 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   // Check the same failure hold as agent mail admission once, while settling this exit.
   const journal = input.unexpectedExitJournal
   const canResumeByMail =
-    journal && (await journal.queuedMessages.failureHolds().then((held) => !held, () => false))
+    journal &&
+    (await journal.queuedMessages.failureHolds().then(
+      (held) => !held,
+      () => false
+    ))
   return releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,

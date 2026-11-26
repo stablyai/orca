@@ -144,7 +144,9 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
         body: {
           kind: 'status',
           ...agentSessionFailureWords(
-            agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: NOW + 60_000 } }),
+            agentSessionFailureFact('usageLimitReached', {
+              usageLimit: { resetsAt: NOW + 60_000 }
+            }),
             { surface: 'row' }
           )
         }
@@ -277,11 +279,13 @@ it('wakes on a proven exit when the journal detail read fails and leaves an expl
   const writeStarted = deferred<void>()
   const releaseWrite = deferred<void>()
   const appendSteps = worker.journal.appendSteps.bind(worker.journal)
-  const slowWrite = vi.spyOn(worker.journal, 'appendSteps').mockImplementationOnce(async (...args) => {
-    writeStarted.resolve(undefined)
-    await releaseWrite.promise
-    return appendSteps(...args)
-  })
+  const slowWrite = vi
+    .spyOn(worker.journal, 'appendSteps')
+    .mockImplementationOnce(async (...args) => {
+      writeStarted.resolve(undefined)
+      await releaseWrite.promise
+      return appendSteps(...args)
+    })
   try {
     worker.writePartialReply()
     const written = worker.sink.written?.()
