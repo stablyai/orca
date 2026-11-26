@@ -8,6 +8,7 @@ import {
   resolveWorkerThreadEntryPath
 } from '../../worker-threads/worker-thread-entry-path'
 import type {
+  DetectionDirectoryListing,
   DetectionDirectoryRequest,
   DetectionDirectoryResponse
 } from './command-path-directory-worker-protocol'
@@ -32,7 +33,7 @@ export class DetectionDirectoryWorkerClient {
   private readonly host: LazyWorkerThreadHost<DetectionDirectoryResponse>
   private readonly pending = new Map<
     number,
-    { resolve: (names: Map<string, string> | null) => void; timer?: NodeJS.Timeout }
+    { resolve: (names: DetectionDirectoryListing) => void; timer?: NodeJS.Timeout }
   >()
   private nextId = 1
 
@@ -65,7 +66,7 @@ export class DetectionDirectoryWorkerClient {
     })
   }
 
-  read(dir: string): Promise<Map<string, string> | null> {
+  read(dir: string): Promise<DetectionDirectoryListing> {
     if (!this.retainPending && this.pending.size >= MAX_PENDING_LISTINGS) {
       return Promise.resolve(null)
     }
@@ -84,7 +85,7 @@ export class DetectionDirectoryWorkerClient {
         worker.ref()
       }
       this.pending.set(id, { resolve, timer })
-      const request: DetectionDirectoryRequest = { id, dir }
+      const request: DetectionDirectoryRequest = { id, dir, inventory: this.retainPending }
       try {
         worker.postMessage(request)
       } catch {
@@ -117,7 +118,7 @@ let inventoryClient: DetectionDirectoryWorkerClient | undefined
 export function readDetectionDirectoryViaWorker(
   dir: string,
   retainPending = false
-): Promise<Map<string, string> | null> {
+): Promise<DetectionDirectoryListing> {
   if (retainPending) {
     inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, true)
     return inventoryClient.read(dir)

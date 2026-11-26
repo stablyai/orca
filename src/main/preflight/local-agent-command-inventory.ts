@@ -55,7 +55,17 @@ export async function scanLocalAgentCommandInventory(
     signal
   }
   const scanPathAndInstallers = async (): Promise<void> => {
-    await findCommandsOnLocalPath(names, options)
+    const pathScan = new AbortController()
+    const pathSignal = AbortSignal.any([signal, pathScan.signal])
+    try {
+      await findCommandsOnLocalPath(names, {
+        ...options,
+        probes: new InventoryFsProbes(pathSignal),
+        signal: pathSignal
+      })
+    } finally {
+      pathScan.abort()
+    }
     const installerCommands = names.filter((cmd) => !found.has(cmd) && !hasPathSeparatorToken(cmd))
     let installerUnverified = false
     const installs = await detectCommandsInInstallDirs(installerCommands, pathEnv, {

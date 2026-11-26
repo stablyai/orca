@@ -2,6 +2,7 @@ import { realpath } from 'node:fs/promises'
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import {
   abortSignalReason,
+  isAbortSignalReason,
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
@@ -14,6 +15,7 @@ import { resolveCmdLaunchFolderProgram } from '../ipc/command-path/cmd-launch-fo
 import { checkExecutableFile, isExecutableFile } from '../ipc/command-path/command-path-directory'
 import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import {
+  AgentInventoryDeadlineError,
   selectTerminalAgentProgram,
   type TerminalAgentProgramSelection
 } from '../preflight/agent-command-detection'
@@ -97,7 +99,9 @@ export async function selectSpawnAgentProgram(
     signal
   })
   const { program, result: selected } = selection
-  throwIfSignalAborted(signal)
+  if (!(signal.reason instanceof AgentInventoryDeadlineError)) {
+    throwIfSignalAborted(signal)
+  }
   if (selected.kind !== 'by-name') {
     return selection
   }
@@ -106,18 +110,27 @@ export async function selectSpawnAgentProgram(
     return { program, result: { kind: 'full-path', path: selected.path } }
   }
   if (process.platform === 'win32' && shell === 'cmd') {
-    const first = await resolveCmdLaunchFolderProgram(
-      program,
-      await readCwd(),
-      effective('PATHEXT'),
-      signal
-    )
-    if (
-      first &&
-      normalizeRuntimePathForComparison(first) !== normalizeRuntimePathForComparison(selected.path)
-    ) {
-      return { program, result: { kind: 'full-path', path: selected.path } }
+    try {
+      throwIfSignalAborted(signal)
+      const first = await resolveCmdLaunchFolderProgram(
+        program,
+        await readCwd(),
+        effective('PATHEXT'),
+        signal
+      )
+      if (
+        !first ||
+        normalizeRuntimePathForComparison(first) ===
+          normalizeRuntimePathForComparison(selected.path)
+      ) {
+        return selection
+      }
+    } catch (error) {
+      if (!(error instanceof AgentInventoryDeadlineError && isAbortSignalReason(signal, error))) {
+        throw error
+      }
     }
+    return { program, result: { kind: 'full-path', path: selected.path } }
   }
   return selection
 }

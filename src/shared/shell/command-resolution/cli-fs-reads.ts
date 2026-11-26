@@ -1,6 +1,10 @@
 import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs'
 import { access, open, readdir, readFile, stat } from 'node:fs/promises'
-import { UNVERIFIED_FS_PROBE, type InventoryFsProbes } from './inventory-fs-probes'
+import {
+  isMissingPathError,
+  UNVERIFIED_FS_PROBE,
+  type InventoryFsProbes
+} from './inventory-fs-probes'
 import {
   hasNativeExecutableMagic,
   isNativeExecutable,
@@ -85,9 +89,20 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
 export type CliFsProbeOptions = { probes: InventoryFsProbes; onUnverified: () => void }
 
 async function readInstallDirectories(path: string): Promise<string[]> {
-  return (await readdir(path, { withFileTypes: true }))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
+  try {
+    return (await readdir(path, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+  } catch (error) {
+    if (
+      !isMissingPathError(error) ||
+      (typeof error === 'object' && error !== null && 'path' in error && error.path === path)
+    ) {
+      throw error
+    }
+    // On DT_UNKNOWN filesystems a vanished entry can fail the Dirent conversion.
+    return readdir(path)
+  }
 }
 
 async function readAsync(

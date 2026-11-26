@@ -16,6 +16,13 @@ import {
   checkExecutableFile,
   scanDetectionDirectories
 } from './command-path-directory'
+import {
+  recordDirectoryMatch,
+  scanInventoryPathCommand,
+  type AgentPathMatch,
+  type DirectoryCandidate,
+  type PathDirectory
+} from './command-path-inventory-scan'
 import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
 import {
   getWindowsPathSearchExtensions,
@@ -53,12 +60,7 @@ async function windowsHitSpelling(
     : candidate
 }
 
-export type AgentPathMatch = {
-  user?: string
-  // Null means an earlier candidate could not be verified, so a later hit must use its full path.
-  first?: string | null
-  unquoted?: string | null
-}
+export type { AgentPathMatch } from './command-path-inventory-scan'
 
 type AgentPathInventory = {
   isRuntimePath: (entry: string) => boolean
@@ -139,9 +141,8 @@ export async function findCommandsOnLocalPath(
         : ['']
     ])
   )
-  type Directory = (typeof directories)[number]
-  type DirectoryProbe = { command: string; hit?: string; uncertain: boolean }
-  const needsHit = (command: string, dir: Directory): boolean => {
+  type DirectoryProbe = DirectoryCandidate & { command: string }
+  const needsHit = (command: string, dir: PathDirectory): boolean => {
     const hit = inventory?.matches.get(command)
     return (
       hit?.first === undefined ||
@@ -149,9 +150,84 @@ export async function findCommandsOnLocalPath(
       (!dir.runtime && !hit?.user)
     )
   }
+  type Listing = Map<string, string> | null | typeof UNVERIFIED_FS_PROBE
+  const readListing = async (dir: PathDirectory): Promise<Listing> => {
+    if (!isWin && remaining.size <= DIRECT_DETECTION_COMMAND_LIMIT) {
+      return null
+    }
+    const read = async (): Promise<Listing> => {
+      const names = await readDetectionDirectoryViaWorker(dir.dir, probes !== undefined)
+      return names === 'unverified' ? UNVERIFIED_FS_PROBE : names
+    }
+    return probes ? probes.read(dir.dir, 'listing', read) : read()
+  }
+  const probeCommand = async (
+    command: string,
+    dir: PathDirectory,
+    listing: Listing
+  ): Promise<DirectoryCandidate> => {
+    const names = listing === UNVERIFIED_FS_PROBE ? null : listing
+    const checked = new Set<string>()
+    let uncertain = listing === UNVERIFIED_FS_PROBE
+    for (const ext of extensions.get(command) ?? []) {
+      const wanted = command + ext.toLowerCase()
+      const key = directoryNameKey(wanted)
+      const listed = names?.get(key)
+      if (checked.has(key) || !remaining.has(command) || (names !== null && listed === undefined)) {
+        continue
+      }
+      checked.add(key)
+      const candidate = joinCandidatePath(isWin, dir.dir, isWin ? (listed ?? wanted) : wanted)
+      const outcome = await checkExecutableFile(candidate, isWin, probes)
+      if (outcome === 'executable') {
+        const hit =
+          isWin && !listed && process.platform === 'win32'
+            ? await windowsHitSpelling(dir.dir, candidate, probes)
+            : candidate
+        return { hit, uncertain }
+      }
+      uncertain ||= outcome === 'unknown'
+    }
+    return { uncertain }
+  }
+  if (inventory && probes && options.signal) {
+    const { signal } = options
+    const listings = new Map<string, Promise<Listing>>()
+    await Promise.all(
+      [...remaining].map(async (command) => {
+        const candidates = new Map<string, Promise<DirectoryCandidate>>()
+        const uncertain = await scanInventoryPathCommand(
+          directories,
+          (dir) => {
+            let candidate = candidates.get(dir.key)
+            if (!candidate) {
+              const listing = listings.get(dir.key) ?? readListing(dir)
+              listings.set(dir.key, listing)
+              candidate = listing.then((names) => probeCommand(command, dir, names))
+              candidates.set(dir.key, candidate)
+            }
+            return candidate
+          },
+          (match) => {
+            inventory.matches.set(command, match)
+            if (match.user) {
+              found.add(command)
+              options.matches?.set(command, match.user)
+            }
+          },
+          signal
+        )
+        remaining.delete(command)
+        if (uncertain) {
+          options.unverified?.add(command)
+        }
+      })
+    )
+    return found
+  }
   // A quoted and unquoted occurrence may have different precedence, but share one physical read.
   const repeatedReads = new Map<string, Promise<DirectoryProbe[]>>()
-  const scan = async (dir: Directory): Promise<DirectoryProbe[]> => {
+  const scan = async (dir: PathDirectory): Promise<DirectoryProbe[]> => {
     const needsReplay = inventory && seen.has(dir.key) && seen.has(`${dir.key}\0quoted`)
     const pending = repeatedReads.get(dir.key)
     if (pending) {
@@ -159,49 +235,13 @@ export async function findCommandsOnLocalPath(
       return pending
     }
     const read = async (): Promise<DirectoryProbe[]> => {
-      const listing =
-        !isWin && remaining.size <= DIRECT_DETECTION_COMMAND_LIMIT
-          ? null
-          : await (probes
-              ? probes.read(dir.dir, 'listing', () =>
-                  readDetectionDirectoryViaWorker(dir.dir, true)
-                )
-              : readDetectionDirectoryViaWorker(dir.dir))
-      const names = listing === UNVERIFIED_FS_PROBE ? null : listing
+      const listing = await readListing(dir)
       const candidates = await Promise.all(
         [...remaining]
           .filter((command) => needsReplay || needsHit(command, dir))
           .map(async (command): Promise<DirectoryProbe | undefined> => {
-            const checked = new Set<string>()
-            let uncertain = listing === UNVERIFIED_FS_PROBE
-            for (const ext of extensions.get(command) ?? []) {
-              const wanted = command + ext.toLowerCase()
-              const key = directoryNameKey(wanted)
-              const listed = names?.get(key)
-              if (
-                checked.has(key) ||
-                !remaining.has(command) ||
-                (names !== null && listed === undefined)
-              ) {
-                continue
-              }
-              checked.add(key)
-              const candidate = joinCandidatePath(
-                isWin,
-                dir.dir,
-                isWin ? (listed ?? wanted) : wanted
-              )
-              const outcome = await checkExecutableFile(candidate, isWin, probes)
-              if (outcome === 'executable') {
-                const hit =
-                  isWin && !listed && process.platform === 'win32'
-                    ? await windowsHitSpelling(dir.dir, candidate, probes)
-                    : candidate
-                return { command, hit, uncertain }
-              }
-              uncertain ||= outcome === 'unknown'
-            }
-            return uncertain ? { command, uncertain } : undefined
+            const candidate = await probeCommand(command, dir, listing)
+            return candidate.hit || candidate.uncertain ? { command, ...candidate } : undefined
           })
       )
       return candidates.filter((probe) => probe !== undefined)
@@ -212,7 +252,7 @@ export async function findCommandsOnLocalPath(
     }
     return result
   }
-  const commit = (dir: Directory, probes: DirectoryProbe[]): void => {
+  const commit = (dir: PathDirectory, probes: DirectoryProbe[]): void => {
     for (const { command, hit, uncertain } of probes) {
       if (!remaining.has(command)) {
         continue
@@ -222,21 +262,12 @@ export async function findCommandsOnLocalPath(
       }
       if (inventory) {
         const match = inventory.matches.get(command) ?? {}
-        const winner = uncertain ? null : hit
-        if (match.first === undefined) {
-          match.first = winner
-        }
-        if (!dir.quoted && match.unquoted === undefined) {
-          match.unquoted = winner
-        }
-        if (!dir.runtime && hit) {
-          match.user ??= hit
-        }
+        const user = recordDirectoryMatch(match, dir, { hit, uncertain })
         inventory.matches.set(command, match)
-        if (!match.user || match.unquoted === undefined) {
+        if (!user) {
           continue
         }
-        options.matches?.set(command, match.user)
+        options.matches?.set(command, user)
       } else if (hit) {
         options.matches?.set(command, hit)
       } else {

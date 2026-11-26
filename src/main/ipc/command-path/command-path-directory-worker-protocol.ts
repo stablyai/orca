@@ -1,6 +1,8 @@
-export type DetectionDirectoryRequest = { id: number; dir: string }
+export type DetectionDirectoryRequest = { id: number; dir: string; inventory: boolean }
+
+export type DetectionDirectoryListing = Map<string, string> | null | 'unverified'
 
 export type DetectionDirectoryResponse = {
   id: number
-  names: Map<string, string> | null
+  names: DetectionDirectoryListing
 }

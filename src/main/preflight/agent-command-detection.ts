@@ -126,7 +126,7 @@ export async function selectTerminalAgentProgram(
         })
       : undefined
     const publication = read
-      ? await waitForPromiseWithSignal(read.result, waitSignal).catch((error: unknown) => {
+      ? await read.wait(waitSignal).catch((error: unknown) => {
           if (
             !wsl &&
             error instanceof AgentInventoryDeadlineError &&
@@ -187,7 +187,7 @@ function completeInventoryAfter(
   sequence: number,
   commands: readonly string[]
 ) {
-  const latest = currentInventoryPublication(slot)
+  const latest = currentInventoryPublication(slot, 'complete')
   return latest &&
     latest.sequence > sequence &&
     !latest.inventory.incomplete &&
@@ -238,7 +238,7 @@ export async function detectAgentCommandInventoryOnHost(
         waitForCompletion:
           options.waitForCompletion || (!options.refresh && options.afterPublication !== undefined)
       })
-      return { slot, publication: await waitForPromiseWithSignal(read.result, waitSignal) }
+      return { slot, publication: await read.wait(waitSignal) }
     } catch (error) {
       if (error instanceof AgentInventoryDeadlineError && isAbortSignalReason(waitSignal, error)) {
         const published = slot && currentInventoryPublication(slot)

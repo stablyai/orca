@@ -3,9 +3,11 @@ import { access, constants as fsConstants, opendir, stat } from 'node:fs/promise
 import path from 'node:path'
 import {
   isMissingPathError,
+  isPathPermissionError,
   UNVERIFIED_FS_PROBE,
   type InventoryFsProbes
 } from '../../../shared/shell/command-resolution/inventory-fs-probes'
+import type { DetectionDirectoryListing } from './command-path-directory-worker-protocol'
 
 const MAX_DETECTION_DIRECTORY_ENTRIES = 128
 
@@ -27,7 +29,7 @@ export async function checkExecutableFile(
     // Follow symlinked CLIs to their real targets.
     stats = await (probes ? probes.read(candidate, 'stat', () => stat(candidate)) : stat(candidate))
   } catch (error) {
-    return isMissingPathError(error) ? 'missing' : 'unknown'
+    return isMissingPathError(error) || isPathPermissionError(error) ? 'missing' : 'unknown'
   }
   if (stats === UNVERIFIED_FS_PROBE) {
     return 'unknown'
@@ -48,7 +50,9 @@ export async function checkExecutableFile(
     await access(candidate, fsConstants.X_OK)
     return 'executable'
   } catch (error) {
-    return isMissingPathError(error, (stats.mode & 0o111) === 0) ? 'missing' : 'unknown'
+    return isMissingPathError(error) || ((stats.mode & 0o111) === 0 && isPathPermissionError(error))
+      ? 'missing'
+      : 'unknown'
   }
 }
 
@@ -85,16 +89,19 @@ export async function scanDetectionDirectories<T, Hit>(
   }
 }
 
-export async function readDetectionDirectory(dir: string): Promise<Map<string, string> | null> {
+export async function readDetectionDirectory(
+  dir: string,
+  inventory = false
+): Promise<DetectionDirectoryListing> {
   let directory: Dir
   try {
     directory = await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
   } catch (error) {
-    if (isMissingPathError(error)) {
+    if (isMissingPathError(error) || (inventory && isPathPermissionError(error))) {
       return new Map()
     }
     // Searchable-but-unreadable directories still admit stat on known names.
-    return null
+    return inventory ? 'unverified' : null
   }
   try {
     const names = new Map<string, string>()
@@ -111,8 +118,11 @@ export async function readDetectionDirectory(dir: string): Promise<Map<string, s
       names.set(directoryNameKey(entry.name), entry.name)
     }
     return names
-  } catch {
+  } catch (error) {
+    if (inventory && isPathPermissionError(error)) {
+      return new Map()
+    }
     // A vanished entry during Dirent conversion cannot prove the directory empty.
-    return null
+    return inventory ? 'unverified' : null
   }
 }

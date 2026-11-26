@@ -14,7 +14,7 @@ if (!parentPort) {
 const port = parentPort
 
 port.on('message', (request: DetectionDirectoryRequest) => {
-  void readDetectionDirectory(request.dir).then((names) => {
+  void readDetectionDirectory(request.dir, request.inventory).then((names) => {
     const response: DetectionDirectoryResponse = { id: request.id, names }
     port.postMessage(response)
   })

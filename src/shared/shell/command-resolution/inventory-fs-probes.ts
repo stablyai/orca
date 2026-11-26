@@ -19,14 +19,21 @@ type PendingProbe = { kind: ProbeKind; result: Promise<ProbeResult> }
 
 const pendingByPath = new Map<string, PendingProbe>()
 
-export function isMissingPathError(error: unknown, nonExecutable = false): boolean {
+export function isPathPermissionError(error: unknown): boolean {
   return (
     !!error &&
     typeof error === 'object' &&
     'code' in error &&
-    (error.code === 'ENOENT' ||
-      error.code === 'ENOTDIR' ||
-      (nonExecutable && (error.code === 'EACCES' || error.code === 'EPERM')))
+    (error.code === 'EACCES' || error.code === 'EPERM')
+  )
+}
+
+export function isMissingPathError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
   )
 }
 
@@ -36,16 +43,24 @@ export class InventoryFsProbes {
   read<K extends ProbeKind>(
     path: string,
     kind: K,
-    read: () => Promise<ProbeValues[K] | null>
+    read: () => Promise<ProbeValues[K] | null | typeof UNVERIFIED_FS_PROBE>
   ): Promise<ProbeValues[K] | null | typeof UNVERIFIED_FS_PROBE>
-  async read(path: string, kind: ProbeKind, read: () => Promise<ProbeValue>): Promise<ProbeResult> {
+  async read(
+    path: string,
+    kind: ProbeKind,
+    read: () => Promise<ProbeResult>
+  ): Promise<ProbeResult> {
     while (!this.signal.aborted) {
       let pending = pendingByPath.get(path)
       if (!pending) {
         const result = Promise.resolve()
           .then(read)
           .catch((error: unknown): null | typeof UNVERIFIED_FS_PROBE =>
-            isMissingPathError(error) ? null : UNVERIFIED_FS_PROBE
+            isMissingPathError(error) ||
+            ((kind === 'stat' || kind === 'dirs' || kind === 'listing') &&
+              isPathPermissionError(error))
+              ? null
+              : UNVERIFIED_FS_PROBE
           )
           .finally(() => pendingByPath.delete(path))
         pending = { kind, result }
@@ -71,7 +86,10 @@ export class InventoryFsProbes {
         return true
       } catch (error) {
         // A denial on a file with execute bits can come from an inaccessible parent.
-        if (isMissingPathError(error, (stats.mode & 0o111) === 0)) {
+        if (
+          isMissingPathError(error) ||
+          ((stats.mode & 0o111) === 0 && isPathPermissionError(error))
+        ) {
           return false
         }
         throw error

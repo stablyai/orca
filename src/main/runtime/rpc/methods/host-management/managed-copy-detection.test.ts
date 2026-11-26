@@ -503,11 +503,11 @@ it('lets two pickers reuse a completed inventory after their cold deadlines', as
     await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
     await expect(detections).resolves.toMatchObject([
-      { agents: [], incomplete: true, afterPublication: 0 },
-      { agents: [], incomplete: true, afterPublication: 0 }
+      { agents: ['claude'], incomplete: true, afterPublication: 0 },
+      { agents: ['claude'], incomplete: true, afterPublication: 0 }
     ])
   } finally {
-    const completion = readLocalTerminalAgentProgram('claude', shell)
+    const completion = detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION)
     held.resolve()
     await completion
   }

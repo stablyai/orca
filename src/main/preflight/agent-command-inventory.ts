@@ -3,19 +3,18 @@ import {
   getWslGuestEnvironmentGeneration,
   invalidateWslGuestEnvironment
 } from '../wsl/execution/wsl-guest-environment'
-import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
+import {
+  mergeInventory,
+  publishInventory,
+  type CommandInventory,
+  type InventoryPublication,
+  type InventoryPublications
+} from './agent-command-inventory-publication'
 import {
   partialLocalAgentCommandInventory,
   scanLocalAgentCommandInventory
 } from './local-agent-command-inventory'
-
-type CommandInventory = {
-  found: Set<string>
-  matches: Map<string, AgentPathMatch>
-  // An incomplete WSL probe only settles commands it actually found.
-  probed: ReadonlySet<string>
-  incomplete?: boolean
-}
 
 export const INVENTORY_WAIT_MS = 10_000
 const INVENTORY_RETRY_MS = 5_000
@@ -27,6 +26,7 @@ type InventoryScan = {
   controller: AbortController
   progress: Pick<CommandInventory, 'found' | 'matches'>
   partial?: InventoryPublication
+  successor?: InventoryScan
   started: boolean
   commands: Set<string>
   mode: InventoryMode
@@ -38,21 +38,14 @@ type PendingInventory = {
   active: InventoryScan
   queued?: InventoryScan
 }
-type InventoryPublication = {
-  inventory: CommandInventory
-  generation: number | undefined
-  sequence: number
-  partial?: boolean
-}
 type InventoryRead = {
-  result: Promise<InventoryPublication | null>
+  wait: (signal: AbortSignal) => Promise<InventoryPublication | null>
   snapshot: () => InventoryPublication | null
 }
-export type InventorySlot = {
+export type InventorySlot = InventoryPublications & {
   stockCommands: readonly string[]
   distro?: string
   pending?: PendingInventory
-  published?: InventoryPublication
   retry?: { after: number; generation: number | undefined }
   missRetry?: { after: number; generation: number | undefined }
 }
@@ -66,8 +59,12 @@ function inventoryGeneration(slot: InventorySlot): number | undefined {
   return slot.distro ? getWslGuestEnvironmentGeneration(slot.distro) : undefined
 }
 
-export function currentInventoryPublication(slot: InventorySlot): InventoryPublication | undefined {
-  return slot.published?.generation === inventoryGeneration(slot) ? slot.published : undefined
+export function currentInventoryPublication(
+  slot: InventorySlot,
+  kind: 'latest' | 'complete' = 'latest'
+): InventoryPublication | undefined {
+  const publication = kind === 'latest' ? slot.published : slot.completed
+  return publication?.generation === inventoryGeneration(slot) ? publication : undefined
 }
 
 async function scanInventory(
@@ -95,35 +92,13 @@ async function scanInventory(
   return scanLocalAgentCommandInventory(commands, readLoginPath, progress, controller.signal)
 }
 
-function publishInventory(
-  slot: InventorySlot,
-  result: CommandInventory,
-  scan: InventoryScan,
-  partial = false
-): InventoryPublication {
-  const previous =
-    scan.targeted && slot.published?.generation === scan.generation
-      ? slot.published?.inventory
-      : undefined
-  const notScanned = (command: string) => !scan.commands.has(command)
-  const inventory = previous
-    ? {
-        ...result,
-        found: new Set([...result.found, ...[...previous.found].filter(notScanned)]),
-        matches: new Map([
-          ...result.matches,
-          ...[...previous.matches].filter(([command]) => notScanned(command))
-        ]),
-        probed: new Set([...result.probed, ...[...previous.probed].filter(notScanned)])
-      }
-    : result
-  slot.published = {
-    inventory,
-    generation: scan.generation,
-    sequence: (slot.published?.sequence ?? 0) + 1,
-    partial
-  }
-  return slot.published
+function partialInventory(slot: InventorySlot, scan: InventoryScan): CommandInventory {
+  const progress = partialLocalAgentCommandInventory(scan.progress)
+  return mergeInventory(
+    progress,
+    currentInventoryPublication(slot, 'complete')?.inventory,
+    progress.probed
+  )
 }
 
 function createScan(
@@ -167,8 +142,7 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
     const timer = slot.distro
       ? undefined
       : setTimeout(() => {
-          const snapshot = partialLocalAgentCommandInventory(scan.progress)
-          scan.partial = publishInventory(slot, snapshot, scan, true)
+          scan.partial = publishInventory(slot, partialInventory(slot, scan), scan, true)
           scan.publication.resolve(scan.partial)
           if (pending.queued) {
             scan.controller.abort()
@@ -180,7 +154,9 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
       continue
     }
     let publication: InventoryPublication | null = scan.partial ?? null
-    if (!scan.controller.signal.aborted) {
+    if (scan.controller.signal.aborted) {
+      scan.successor = pending.queued
+    } else {
       if (
         result &&
         scan.revalidatesMiss?.every((cmd) => result.probed.has(cmd) && !result.found.has(cmd))
@@ -241,11 +217,13 @@ export function readInventory(
     current &&
     ((acceptAnyMatch && hasMatch) ||
       requested.every(
-        (cmd) => current.probed.has(cmd) && (!current.incomplete || current.found.has(cmd))
+        (cmd) =>
+          current.probed.has(cmd) &&
+          (acceptAnyMatch || !current.incomplete || current.found.has(cmd))
       ))
   const revalidateMiss = settled && revalidateUnavailable && !hasMatch
   const readPublished = (): InventoryRead => ({
-    result: Promise.resolve(published ?? null),
+    wait: (signal) => waitForPromiseWithSignal(Promise.resolve(published ?? null), signal),
     snapshot: () => published ?? null
   })
   if (settled && !revalidateMiss && (!published?.partial || !waitForCompletion || acceptAnyMatch)) {
@@ -253,12 +231,24 @@ export function readInventory(
   }
 
   const readScan = (scan: InventoryScan): InventoryRead => ({
-    result: (waitForCompletion ? scan.complete : scan.publication).promise,
+    wait: async (signal) => {
+      if (!waitForCompletion) {
+        return waitForPromiseWithSignal(scan.publication.promise, signal)
+      }
+      for (;;) {
+        const publication = await waitForPromiseWithSignal(scan.complete.promise, signal)
+        const successor = scan.successor
+        if (!successor || !requested.every((command) => successor.commands.has(command))) {
+          return publication
+        }
+        scan = successor
+      }
+    },
     snapshot: () =>
       slot.distro
         ? (currentInventoryPublication(slot) ?? null)
         : {
-            inventory: partialLocalAgentCommandInventory(scan.progress),
+            inventory: partialInventory(slot, scan),
             generation,
             sequence: scan.partial?.sequence ?? slot.published?.sequence ?? 0,
             partial: true
