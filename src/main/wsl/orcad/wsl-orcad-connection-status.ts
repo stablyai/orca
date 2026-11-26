@@ -92,6 +92,8 @@ export type WslOrcadConnectIntent = {
   noBoot?: boolean
   /** How a no-boot connect confirms the distro runs (set by the connector). */
   requireRunning?: (distro: string) => Promise<boolean>
+  /** Ends the connect's deploy and its wsl.exe calls (a migration trial's cap). */
+  signal?: AbortSignal
 }
 
 /** Retain failed-connect deferrals so Update/Force remains available when nothing serves. */

@@ -39,10 +39,11 @@ export async function connectWslHostForUser(
   port.parked.delete(environmentId)
   const { intent, pastUncountedTerminals } = options
   if (intent !== 'restart-as-wsl-host') {
-    const connect = () =>
+    const connect = (signal?: AbortSignal) =>
       port.connector.connect(distro, {
         ...(intent ? { intent } : {}),
-        ...(pastUncountedTerminals ? { pastUncountedTerminals } : {})
+        ...(pastUncountedTerminals ? { pastUncountedTerminals } : {}),
+        ...(signal ? { signal } : {})
       })
     await connect().catch(async (error: unknown) => {
       // #49180: an unpinned host's paired server may run under another Linux user of the distro.

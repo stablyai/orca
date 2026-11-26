@@ -15,14 +15,22 @@ import { ORCAD_PUBLIC_KEY_SED } from './wsl-host-ssh-orcad-conflict'
 import { E2EE_KEYPAIR_FILENAME } from '../../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
-const ACCOUNT_KEYS_SCRIPT = `getent passwd | while IFS=: read -r _orca_n _ _ _ _ _orca_h _; do _orca_f="$_orca_h/.orca/${E2EE_KEYPAIR_FILENAME}"; [ -n "$_orca_h" ] && [ ! -L "$_orca_h/.orca" ] && [ -f "$_orca_f" ] && [ ! -L "$_orca_f" ] || continue; _orca_k=$(head -c 4096 "$_orca_f" | ${ORCAD_PUBLIC_KEY_SED}); [ -n "$_orca_k" ] && printf '%s %s\\n' "$_orca_n" "$_orca_k"; done`
+/** The scan over `passwd` lines (`getent passwd`; a test seam swaps the source). */
+function accountKeysScript(passwd: string): string {
+  return `${passwd} | while IFS=: read -r _orca_n _ _ _ _ _orca_h _; do _orca_f="$_orca_h/.orca/${E2EE_KEYPAIR_FILENAME}"; [ -n "$_orca_h" ] && [ ! -L "$_orca_h/.orca" ] && [ -f "$_orca_f" ] && [ ! -L "$_orca_f" ] || continue; _orca_k=$(head -c 4096 "$_orca_f" | ${ORCAD_PUBLIC_KEY_SED} | head -n 1); [ -n "$_orca_k" ] && printf '%s %s\\n' "$_orca_n" "$_orca_k"; done`
+}
 
 // Guest side ends itself too: an abandoned wsl.exe must not leave a root scan running.
 const GUEST_TIMEOUT_S = 10
 const PROBE_TIMEOUT_MS = 15_000
 
 /** One `<name> <public key>` line per account; root reads only regular, non-symlinked, small key files. */
-export const WSL_ACCOUNT_KEYS_COMMAND = `if command -v timeout >/dev/null 2>&1; then exec timeout ${GUEST_TIMEOUT_S} sh -c ${quotePosixShell(ACCOUNT_KEYS_SCRIPT)}; fi; ${ACCOUNT_KEYS_SCRIPT}`
+export function wslAccountKeysCommand(passwd = 'getent passwd'): string {
+  const script = accountKeysScript(passwd)
+  return `if command -v timeout >/dev/null 2>&1; then exec timeout ${GUEST_TIMEOUT_S} sh -c ${quotePosixShell(script)}; fi; ${script}`
+}
+
+export const WSL_ACCOUNT_KEYS_COMMAND = wslAccountKeysCommand()
 
 /** The single account whose key is `publicKeyB64`; null when none or several hold it. */
 export function accountHoldingKey(output: string, publicKeyB64: string): string | null {
@@ -39,14 +47,16 @@ export type WslPairedAccount = { linuxUser: string; offer: PairingOffer }
 /** Reads only: the account whose orcad holds the saved pairing's key, or null. */
 export async function findPairedWslAccount(
   userDataPath: string,
-  record: WslHostDeploymentRecord
+  record: WslHostDeploymentRecord,
+  /** The name the distro resolves to now (a rename); defaults to the record's. */
+  distro = record.distro
 ): Promise<WslPairedAccount | null> {
   const offer = await resolveEnvironmentPairingOffer(userDataPath, record.environmentId)
   const publicKeyB64 = record.pairingPublicKeyB64 ?? offer?.publicKeyB64
   if (record.linuxUser || !offer || !publicKeyB64) {
     return null
   }
-  const { distro, environmentId } = record
+  const { environmentId } = record
   const signal = AbortSignal.timeout(PROBE_TIMEOUT_MS)
   const transport = createWslOrcadHostTransport({
     target: { kind: 'wsl', id: environmentId, distro, label: distro },
@@ -76,7 +86,7 @@ export function connectAsPairedWslAccount(
   userDataPath: string,
   record: WslHostDeploymentRecord,
   found: WslPairedAccount,
-  connect: () => Promise<unknown>,
+  connect: (signal: AbortSignal) => Promise<unknown>,
   persist: (
     ...args: Parameters<typeof refreshWslHostPairing>
   ) => Promise<unknown> = refreshWslHostPairing,
@@ -87,7 +97,9 @@ export function connectAsPairedWslAccount(
     return pending
   }
   const trial = withWslHostLinuxUser(record.distro, found.linuxUser, async () => {
-    await withTimeout(connect(), timeoutMs, record.distro)
+    // Aborting, not just rejecting: once the override ends, no step of the connect may run as the default user.
+    const cap = AbortSignal.timeout(timeoutMs)
+    await raceAbort(connect(cap), cap, record.distro)
     // The saved pairing is unchanged, so this write only adds the pin.
     await persist(userDataPath, record.environmentId, {
       pairingCode: encodePairingOffer(found.offer),
@@ -102,19 +114,16 @@ export function connectAsPairedWslAccount(
   return trial
 }
 
-async function withTimeout<T>(work: Promise<T>, ms: number, distro: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`Connecting ${distro} as its paired account took too long.`)),
-      ms
-    )
+async function raceAbort<T>(work: Promise<T>, signal: AbortSignal, distro: string): Promise<T> {
+  const aborted = new Promise<never>((_, reject) => {
+    const fail = (): void =>
+      reject(new Error(`Connecting ${distro} as its paired account took too long.`))
+    if (signal.aborted) {
+      fail()
+    }
+    signal.addEventListener('abort', fail, { once: true })
   })
-  try {
-    return await Promise.race([work, timeout])
-  } finally {
-    clearTimeout(timer)
-  }
+  return await Promise.race([work, aborted])
 }
 
 /** Stops as the record's account under `name` (pins are keyed by the record's name); an unpinned changed host is stopped as its paired account. */
@@ -131,7 +140,7 @@ export async function stopAsHostAccount<T>(
   } catch (error) {
     const found =
       error instanceof WslHostAccountChangedError && !record.linuxUser
-        ? await findPairedWslAccount(userDataPath, record)
+        ? await findPairedWslAccount(userDataPath, record, name)
         : null
     if (!found) {
       throw error

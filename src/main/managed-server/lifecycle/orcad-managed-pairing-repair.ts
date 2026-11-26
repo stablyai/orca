@@ -196,7 +196,8 @@ export class ManagedOrcadPairingRepairs<
         OrcadManagedIdentityError.foreignPort(
           deployment.remotePort,
           "the host's server now publishes a different host key than the one this desktop pinned",
-          true
+          // Only a readable, different key is proof; an unparseable offer may be half written.
+          Boolean(offer)
         )
       )
     }

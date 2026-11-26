@@ -139,8 +139,10 @@ describe('pinning the account behind an unpinned host', () => {
 
   it('runs one trial per host and ends a hung one, dropping its account', async () => {
     let connects = 0
-    const hung = (): Promise<never> => {
+    let seen: AbortSignal | undefined
+    const hung = (signal: AbortSignal): Promise<never> => {
       connects += 1
+      seen = signal
       return new Promise<never>(() => {})
     }
     const persist = async (): Promise<void> => {}
@@ -163,6 +165,8 @@ describe('pinning the account behind an unpinned host', () => {
     await expect(first).rejects.toThrow(/too long/)
     await expect(second).rejects.toThrow(/too long/)
     expect(connects).toBe(1)
+    // Aborted, so none of the connect's later steps run once the override is gone.
+    expect(seen?.aborted).toBe(true)
     expect(pinnedWslHostLinuxUser(record.distro)).toBeUndefined()
   })
 })
