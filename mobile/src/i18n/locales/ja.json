@@ -2970,7 +2970,6 @@
     },
     "quickCommandEditorForm": {
       "action": "操作",
-      "addQuickCommand": "クイックコマンドを追加",
       "advanced": "詳細設定",
       "agent": "Agent",
       "agentPrompt": "Agent プロンプト",
@@ -2989,7 +2988,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} 文字",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "長すぎるため保存できません。",
-      "scope": "スコープ",
       "terminalCommand": "ターミナルコマンド"
     },
     "quickCommandLaunch": {
@@ -3018,9 +3016,9 @@
       "chooseAgentTitle": "Agent を選択",
       "deleteConfirmMessage": "このクイックコマンドは保存されたリストから削除されます。",
       "editTitle": "クイックコマンドの編集",
-      "editorDescription": "ターミナルコマンドや Agent プロンプトを保存して、すぐに使えるようにします。",
       "title": "クイックコマンド",
-      "untitled": "無題"
+      "untitled": "無題",
+      "add": "追加"
     },
     "routeHelpers": {
       "connected": "接続済み",

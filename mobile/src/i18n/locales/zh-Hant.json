@@ -3266,7 +3266,6 @@
     },
     "quickCommandEditorForm": {
       "action": "操作",
-      "addQuickCommand": "新增快速命令",
       "advanced": "進階",
       "agent": "代理程式",
       "agentPrompt": "代理程式提示詞",
@@ -3285,7 +3284,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} 個字元",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "內容過長，無法儲存。",
-      "scope": "範圍",
       "terminalCommand": "終端機命令"
     },
     "quickCommandLaunch": {
@@ -3314,9 +3312,9 @@
       "chooseAgentTitle": "選擇代理程式",
       "deleteConfirmMessage": "該快速命令將從你儲存的清單中刪除。",
       "editTitle": "編輯快速命令",
-      "editorDescription": "儲存終端機命令或代理程式提示詞，方便快速取用。",
       "title": "快速命令",
-      "untitled": "無題"
+      "untitled": "無題",
+      "add": "新增"
     },
     "routeHelpers": {
       "connected": "已連線",
