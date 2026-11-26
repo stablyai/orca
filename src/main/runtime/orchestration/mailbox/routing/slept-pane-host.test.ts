@@ -2,14 +2,19 @@ import { expect, it } from 'vitest'
 import type { SleptMailRecord } from './mail-wake-obligation'
 import { SleptPaneHost } from './slept-pane-host'
 
+type Registration = string | { executionHostId: string; connectionId: string }
+
 const hostsFor = (
   record: Pick<SleptMailRecord, 'worktreeId' | 'connectionId'>,
   partition: string | null,
-  registrations: readonly string[]
+  registrations: readonly Registration[]
 ) => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host check reads only worktreeId and connectionId.
   const records = new Map([['pane', record as SleptMailRecord]])
-  return new SleptPaneHost({ hostOf: () => partition, records }, () => new Set(registrations))
+  const repos = registrations.map((repo) =>
+    typeof repo === 'string' ? { executionHostId: repo, connectionId: null } : repo
+  )
+  return new SleptPaneHost({ hostOf: () => partition, records }, () => repos)
 }
 
 it('matches a slept pane to its host however the saved host id is spelled', () => {
@@ -38,10 +43,22 @@ it('a pane whose partition or saved connection names host A is not on its twin r
   expect(nested.on('ssh:host-a')('pane')).toBe(true)
   expect(nested.on('ssh:host-b')('pane')).toBe(false)
   const unpartitioned = hostsFor({ worktreeId: 'rt::/w', connectionId: 'host-a' }, 'local', [
-    'runtime:env'
+    { executionHostId: 'runtime:env', connectionId: 'host-a' },
+    'runtime:other'
   ])
   expect(unpartitioned.on('runtime:env')('pane')).toBe(true)
   expect(unpartitioned.on('runtime:other')('pane')).toBe(false)
+})
+
+it('a runtime pane follows its repo to the rotated runtime id only when the old id lost the repo', () => {
+  const record = { worktreeId: 'rt::/w', connectionId: null }
+  const moved = hostsFor(record, 'runtime:old', ['runtime:new'])
+  expect(moved.on('runtime:new')('pane')).toBe(true)
+  expect(moved.on('runtime:other')('pane')).toBe(false)
+  expect(moved.on('ssh:runtime:new')('pane')).toBe(false)
+  const stillOld = hostsFor(record, 'runtime:old', ['runtime:new', 'runtime:old'])
+  expect(stillOld.on('runtime:new')('pane')).toBe(false)
+  expect(stillOld.on('runtime:old')('pane')).toBe(true)
 })
 
 it('a pane with no known owner counts as on every host', () => {

@@ -441,7 +441,7 @@ it.each([100, 1_000])(
         getWorkspaceSession: () => session,
         getWorkspaceSessionHostIds: () => ['local'],
         onWorkspaceSessionWritten: () => () => {},
-        getRepoRegistrationHosts: () => new Set(['local'])
+        getRepoRegistrations: (id: string) => [{ id, connectionId: null }]
       })
     )
     const resumeSleepingAgents = vi.fn(async () => false)
@@ -511,7 +511,10 @@ it.each([100, 500])(
         // B registered the twin first, so a first-registration lookup names B.
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host checks read only the repo's host fields.
         getRepo: (id: string) => ({ id, connectionId: 'host-b' }) as never,
-        getRepoRegistrationHosts: () => new Set(['ssh:host-b', hostA] as const)
+        getRepoRegistrations: (id: string) => [
+          { id, connectionId: 'host-b' },
+          { id, connectionId: 'host-a' }
+        ]
       })
     )
     const resumeSleepingAgents = vi.fn(async () => false)

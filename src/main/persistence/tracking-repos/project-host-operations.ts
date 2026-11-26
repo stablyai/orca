@@ -260,9 +260,9 @@ export class ProjectHostPersistenceOperations {
     return this.state.repos.length
   }
 
-  /** Every host `id` is registered on, by key: never a pass over every registration. */
-  getRepoRegistrationHosts(id: string): ReadonlySet<ExecutionHostId> {
-    return this.repoLookup().registrationHostsFor(id)
+  /** Every registration under `id`, by key: never a pass over every registration. */
+  getRepoRegistrations(id: string): readonly RepoHostTarget[] {
+    return this.repoLookup().rowsFor(id)
   }
 
   /** The first registration under `id`, by key. */

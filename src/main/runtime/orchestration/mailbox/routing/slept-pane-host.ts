@@ -1,5 +1,7 @@
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   canonicalExecutionHostId,
+  getRepoExecutionHostId,
   isRemoteExecutionHostId,
   isUnresolvedOwnerHostId,
   parseExecutionHostId,
@@ -8,6 +10,10 @@ import {
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { SleptMailRecord } from './mail-wake-obligation'
 
+type RepoHost = Pick<Repo, 'connectionId' | 'executionHostId'>
+
+const NO_REPOS: readonly RepoHost[] = []
+
 /** Which host each slept pane's agent runs on, so one host's availability edge retries only its own. */
 export class SleptPaneHost {
   constructor(
@@ -15,7 +21,7 @@ export class SleptPaneHost {
       hostOf(paneKey: string): string | null
       readonly records: ReadonlyMap<string, SleptMailRecord>
     },
-    private readonly repoHosts: (repoId: string) => ReadonlySet<string> | undefined
+    private readonly repos: (repoId: string) => readonly RepoHost[] | undefined
   ) {}
 
   /** The pane's own partition or saved SSH connection names its owner; only a pane neither names
@@ -34,17 +40,28 @@ export class SleptPaneHost {
         return true
       }
       const partition = this.index.hostOf(paneKey)
+      const repos = this.repos(getRepoIdFromWorktreeId(record.worktreeId)) ?? NO_REPOS
+      const repoOnHost = (repo: RepoHost) => onHost(getRepoExecutionHostId(repo))
       // A record whose host was unresolved when saved lands in the local partition.
       if (isRemoteExecutionHostId(partition) && !isUnresolvedOwnerHostId(partition)) {
-        // A runtime's pane may still name the nested SSH target it dials.
-        return onHost(partition) || (sshTarget !== undefined && record.connectionId === sshTarget)
+        if (onHost(partition) || (sshTarget !== undefined && record.connectionId === sshTarget)) {
+          return true
+        }
+        // A rotated runtime id keeps the old partition while the repo moves to the new runtime.
+        const savedCanonical = canonicalExecutionHostId(partition)
+        return (
+          ssh?.kind === 'runtime' &&
+          parseExecutionHostId(partition)?.kind === 'runtime' &&
+          repos.some(repoOnHost) &&
+          !repos.some((repo) => canonicalExecutionHostId(getRepoExecutionHostId(repo)) === savedCanonical)
+        )
       }
-      const repoId = getRepoIdFromWorktreeId(record.worktreeId)
       if (record.connectionId) {
-        // A runtime's pane names the nested SSH target it dials, so its runtime registration counts.
+        // A runtime's pane names the nested SSH target it dials through that runtime's registration.
         return (
           onHost(toSshExecutionHostId(record.connectionId)) ||
-          (ssh?.kind === 'runtime' && [...(this.repoHosts(repoId) ?? [])].some(onHost))
+          (ssh?.kind === 'runtime' &&
+            repos.some((repo) => repo.connectionId === record.connectionId && repoOnHost(repo)))
         )
       }
       if (onHost(partition)) {
@@ -52,11 +69,11 @@ export class SleptPaneHost {
       }
       // A twin repo registered on several hosts can't name one owner, so any of them counts.
       let known = false
-      for (const saved of this.repoHosts(repoId) ?? []) {
-        if (onHost(saved)) {
+      for (const repo of repos) {
+        if (repoOnHost(repo)) {
           return true
         }
-        known ||= !isUnresolvedOwnerHostId(saved)
+        known ||= !isUnresolvedOwnerHostId(getRepoExecutionHostId(repo))
       }
       return !known
     }
