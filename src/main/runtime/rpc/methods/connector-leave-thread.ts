@@ -57,9 +57,13 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     }
     const seam = runtime.getExternalConversationSeam()
     const target = seam?.replyTarget(chatPaneKey(sessionId)) ?? null
-    const key = target?.key
-    if (!seam || !key || key.source !== 'slack' || !slackThreadBotUser(key.externalId)) {
+    if (!seam || target?.key.source !== 'slack' || !slackThreadBotUser(target.key.externalId)) {
       throw new ConnectorActError('not_a_thread', NOT_A_THREAD)
+    }
+    // Narrowed to Slack, so it stays a cloud conversation once local sources join the union.
+    const key: ConnectorConversation = {
+      source: target.key.source,
+      externalId: target.key.externalId
     }
     // Only an @mention brings it back: never leave where the cloud can't say there was one.
     if (!runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE)) {
