@@ -57,6 +57,9 @@ type Props = {
   questionKeys?: readonly string[]
   /** Unsent picks and typed words kept by question key, so a card that closes opens with them. */
   drafts?: MobileNativeChatAskDrafts
+  /** The free-text row's words, shown as an action (pencil, muted) so no option can read like it:
+   *  an item's ask, whose options are shown as written. Without it the row reads "Other…". */
+  ownWords?: string
 }
 
 function confirmLabels(t: Translate) {
@@ -82,7 +85,8 @@ export function MobileNativeChatAsk({
   freeTextInputs,
   notice,
   questionKeys,
-  drafts
+  drafts,
+  ownWords
 }: Props): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -357,7 +361,8 @@ export function MobileNativeChatAsk({
         ))}
         {otherAllowed && !typesOnly(index) ? (
           <MobileNativeChatAskOptionRow
-            label={t('chat.ask.other', 'Other…')}
+            label={ownWords ?? t('chat.ask.other', 'Other…')}
+            action={ownWords !== undefined}
             selected={otherSelected}
             multi={q.multiSelect}
             disabled={submitting}

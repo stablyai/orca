@@ -22,7 +22,12 @@ vi.mock('react-native', () => ({
   Linking: { openURL: () => Promise.resolve() },
   Platform: { OS: 'ios', select: (o: Record<string, unknown>) => o.ios }
 }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronDown: 'ChevronDown', X: 'X' }))
+vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
+  ChevronDown: 'ChevronDown',
+  Pencil: 'Pencil',
+  X: 'X'
+}))
 vi.mock(
   '../../session/native-chat/transcript/message-content/MobileNativeChatQuestionText',
   async () => {
@@ -146,7 +151,8 @@ const pressable = (label: string): ReactTestInstance =>
 
 function typeOther(text: string): void {
   if (!otherInput()) {
-    const row = tree!.root.find((node) => node.props.label === 'Other…')
+    // The card's own free-text row: an action on an item's ask.
+    const row = tree!.root.find((node) => node.props.action === true)
     act(() => row.props.onPress())
   }
   act(() => otherInput()!.props.onChangeText(text))

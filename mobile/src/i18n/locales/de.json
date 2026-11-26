@@ -5817,7 +5817,8 @@
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
         "skipped": "Übersprungen",
         "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Fotos aufnimmt. Entferne einige und versuche es erneut.",
-        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Entferne einige und versuche es erneut."
+        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Entferne einige und versuche es erneut.",
+        "typeAnswer": "Antwort eingeben"
       }
     },
     "needs": {

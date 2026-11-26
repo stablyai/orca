@@ -5203,7 +5203,8 @@
         "replacedByNewer": "Sustituida por una pregunta más reciente",
         "skipped": "Omitidas",
         "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} fotos. Quita algunas e inténtalo de nuevo.",
-        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Quita algunas e inténtalo de nuevo."
+        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Quita algunas e inténtalo de nuevo.",
+        "typeAnswer": "Escribe tu respuesta"
       }
     },
     "needs": {

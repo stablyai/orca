@@ -100,3 +100,7 @@ export const commaWait = defineFixture({
   width: 360,
   render: () => <WaitingAsk ask={RECOMMENDED_ASKS.commaWait.stored} />
 })
+export const multiline = defineFixture({
+  width: 360,
+  render: () => <WaitingAsk ask={RECOMMENDED_ASKS.multiline.stored} />
+})

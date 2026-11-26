@@ -6245,7 +6245,8 @@
         "replacedByNewer": "已由較新的問題取代",
         "skipped": "已略過",
         "heldImagesLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 張照片。請移除一些後再試一次。",
-        "heldSkillsLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 個技能。請移除一些後再試一次。"
+        "heldSkillsLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 個技能。請移除一些後再試一次。",
+        "typeAnswer": "輸入您的回答"
       }
     },
     "needs": {

@@ -6,6 +6,12 @@ import {
 } from '../../shared/bots/bot-item-ask-recommended.test-fixture'
 import type { BotItemAsk } from '../../shared/bots/bot-item-ask'
 import type { BotItemBotActor, BotItemOwnerActor } from './bot-items-input'
+import {
+  BOT_ITEM_EVENT_KINDS,
+  botItemEventId,
+  type BotItemEvent
+} from '../../shared/bots/bot-items'
+import { botItemQuestionPairing } from '../../shared/bots/bot-item-question-answers'
 import { botItemChangeMail } from './bot-items-mail-text'
 import { BotItemsStore } from './bot-items-store'
 
@@ -43,7 +49,14 @@ function asked(ask: BotItemAsk) {
       mail: botItemChangeMail([{ event: reply, item: store.get(uid)! }])?.body ?? ''
     }
   }
-  return { data: event.data, shape: botItemQuestionShape(event.data), answer }
+  return {
+    data: event.data,
+    shape: botItemQuestionShape(event.data),
+    answer,
+    store,
+    uid,
+    questionEvent
+  }
 }
 
 it.each(Object.entries(RECOMMENDED_ASKS))(
@@ -181,4 +194,30 @@ it('keeps the folded several-question answers apart, the pair read back as its p
   expect(picks(one.reply.data)[0]).not.toEqual(['Audit', 'Notify'])
   fenced(two.mail, RECOMMENDED_ASK_ANSWERS.severalFoldedPair)
   fenced(one.mail, RECOMMENDED_ASK_ANSWERS.severalFoldedOne)
+})
+
+it('pairs a stepped answer with both questions when a label of several lines reads like it', () => {
+  const { store, uid, questionEvent, answer } = asked(RECOMMENDED_ASKS.multiline.written)
+  const askId = botItemEventId(questionEvent)
+  // The item's view reads which ask waits, as an open item does, before the answer comes.
+  expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(askId)
+  const { reply } = answer(RECOMMENDED_ASK_ANSWERS.multilineStepped)
+  const events = store
+    .events(uid, 0, 200)
+    .map(({ id, kind, actor, data, createdAt }): BotItemEvent => ({
+      id: botItemEventId(id),
+      kind: BOT_ITEM_EVENT_KINDS.find((known) => known === kind) ?? 'edited',
+      actor,
+      data,
+      at: createdAt
+    }))
+  const pairing = botItemQuestionPairing({ status: store.get(uid)!.status }, events)
+  const entry = pairing.questions.get(askId)
+  // Each question's answer is the comment just committed, and nothing is left waiting.
+  expect(entry?.answers.map((at) => at?.id ?? null)).toEqual([
+    botItemEventId(reply.id),
+    botItemEventId(reply.id)
+  ])
+  expect(entry?.waiting).toBe(false)
+  expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()
 })

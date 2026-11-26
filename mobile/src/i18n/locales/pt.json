@@ -5849,7 +5849,8 @@
         "replacedByNewer": "Substituída por uma pergunta mais recente",
         "skipped": "Ignoradas",
         "heldImagesLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} fotos. Remova algumas e tente novamente.",
-        "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Remova algumas e tente novamente."
+        "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Remova algumas e tente novamente.",
+        "typeAnswer": "Digite sua resposta"
       }
     },
     "needs": {

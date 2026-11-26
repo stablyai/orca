@@ -234,6 +234,25 @@ try {
   assert.equal(sent[0].questionId, 'e2')
   results.push({ name: 'several', ...read, stars, focus: { next, send }, posted: sent })
 
+  // A label of several lines stays as written, so the stepped answer is told from it.
+  await open('multiline')
+  const lines = await choices()
+  assert.ok(
+    lines.shown.some((at) => at.words === 'A\nSecond? → B (Recommended)'),
+    `multiline: the label keeps its words; got ${JSON.stringify(lines.shown)}`
+  )
+  await chip('A').click()
+  await chip('B').click()
+  const multilineSend = await page.evaluate(() => document.activeElement?.textContent ?? '')
+  await page.keyboard.press('Enter')
+  const multilineSent = await posted()
+  assert.deepEqual(
+    multilineSent.map((entry) => entry.text),
+    ['First? → A\nSecond? → B'],
+    `multiline: Send posts both lines (focus ${JSON.stringify(multilineSend)})`
+  )
+  results.push({ name: 'multiline', ...lines, posted: multilineSent })
+
   await writeFile(
     path.join(out, 'results.json'),
     JSON.stringify({ ...provenance, browser: browser.version(), results }, null, 2)

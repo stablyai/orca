@@ -7512,7 +7512,8 @@
         "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
         "skipped": "Atlandı",
         "heldImagesLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} fotoğraf alır. Birkaçını kaldırıp yeniden dene.",
-        "heldSkillsLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} beceri alır. Birkaçını kaldırıp yeniden dene."
+        "heldSkillsLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} beceri alır. Birkaçını kaldırıp yeniden dene.",
+        "typeAnswer": "Yanıtınızı yazın"
       }
     },
     "needs": {

@@ -73,11 +73,11 @@ const folded = (label: string): string => label.replace(/\s+/g, ' ')
 /** The ask as stored: `recommended` is the one mark of the recommended option, so a "(Recommended)"
  *  an agent also wrote into a label leaves the label, and marks that option when --recommended didn't
  *  and it is the only one. A label is cleaned only when its answer still can't be mistaken for another:
- *  one the words would empty, leave still ending in a mark, or leave reading like a sibling (spacing
- *  aside, as answers are sent) keeps them, and so does every label of a pick-several question whose
- *  labels hold ", " as written or cleaned, the way its picks are joined. A recommendation is read from
- *  the words only when they leave the label, and several marked with no flag keep their words. Cleaning
- *  never makes the ask's text longer. */
+ *  one of several lines, or one the words would empty, leave still ending in a mark, or leave reading
+ *  like a sibling (spacing aside, as answers are sent) keeps them, and so does every label of a
+ *  pick-several question whose labels hold ", " as written or cleaned, the way its picks are joined. A
+ *  recommendation is read from the words only when they leave the label, and several marked with no
+ *  flag keep their words. Cleaning never makes the ask's text longer. */
 export function normalizeBotItemAsk(ask: BotItemAsk): BotItemAsk {
   return {
     ...ask,
@@ -94,6 +94,8 @@ export function normalizeBotItemAsk(ask: BotItemAsk): BotItemAsk {
         bare[index] !== written[index] &&
         keys[index] !== '' &&
         !ANY_TRAILING_MARK.test(bare[index]!) &&
+        // A label of several lines can read like a whole answer to several questions once cleaned.
+        !/[\r\n]/.test(written[index]!) &&
         keys.indexOf(keys[index]!) === keys.lastIndexOf(keys[index]!)
       const recommended =
         question.recommended ?? (marked.length === 1 && cleans(marked[0]!) ? marked[0] : undefined)

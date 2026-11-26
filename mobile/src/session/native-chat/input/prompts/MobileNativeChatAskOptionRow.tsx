@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check, Pencil } from 'lucide-react-native'
 import { MobileNativeChatOptionThumbnail } from '../session-options/MobileNativeChatOptionThumbnail'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
@@ -13,6 +13,7 @@ export function MobileNativeChatAskOptionRow({
   description,
   recommended,
   literal,
+  action,
   preview,
   onPreview,
   selected,
@@ -25,6 +26,8 @@ export function MobileNativeChatAskOptionRow({
   recommended?: boolean
   /** Shown as written, with the pill only from `recommended`. */
   literal?: boolean
+  /** The card's own free-text action, not an option: a pencil before muted words. */
+  action?: boolean
   /** Read-only inspection is separate from choosing the option. */
   preview?: string
   onPreview?: () => void
@@ -65,15 +68,22 @@ export function MobileNativeChatAskOptionRow({
         {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
       </View>
       <View style={styles.optionBody}>
-        <Text style={styles.optionLabel}>
-          {shown.shown}
-          {recommended || shown.recommended ? (
-            <Text style={styles.recommended}>
-              {'  '}
-              {t('chat.ask.recommended', 'Recommended')}
-            </Text>
-          ) : null}
-        </Text>
+        {action ? (
+          <View style={styles.actionRow}>
+            <Pencil size={13} color={colors.textMuted} strokeWidth={2} />
+            <Text style={[styles.optionLabel, styles.actionLabel]}>{shown.shown}</Text>
+          </View>
+        ) : (
+          <Text style={styles.optionLabel}>
+            {shown.shown}
+            {recommended || shown.recommended ? (
+              <Text style={styles.recommended}>
+                {'  '}
+                {t('chat.ask.recommended', 'Recommended')}
+              </Text>
+            ) : null}
+          </Text>
+        )}
         {description ? (
           <Text style={styles.optionDescription} numberOfLines={3}>
             {description}
@@ -142,6 +152,16 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  // The card's free-text action reads quieter than the options it sits under.
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  actionLabel: {
+    color: colors.textMuted,
+    fontWeight: '400'
   },
   // The phone's Recommended tag (the voice model list's).
   recommended: {

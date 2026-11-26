@@ -36,6 +36,7 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronUp: 'ChevronUp',
+  Pencil: 'Pencil',
   X: 'X'
 }))
 vi.mock(
@@ -108,11 +109,11 @@ function mount(ask: BotItemAsk): Sent[] {
 const isHost = (node: { type: unknown }, name: string): boolean => node.type === name
 const textOf = (node: ReactTestInstance | string): string =>
   typeof node === 'string' ? node : node.children.map(textOf).join('')
-// The ask's own options; Other… for your own words is the card's.
-const rows = (): ReactTestInstance[] =>
-  tree!.root
-    .findAllByType(MobileNativeChatAskOptionRow)
-    .filter((row) => row.props.label !== 'Other…')
+// The ask's own options. The card's free-text row is told apart by what it is, not its words: on an
+// item's ask it is an action (`action`), on an agent prompt the row after the options.
+const allRows = (): ReactTestInstance[] => tree!.root.findAllByType(MobileNativeChatAskOptionRow)
+const freeText = (): ReactTestInstance => allRows().at(-1)!
+const rows = (): ReactTestInstance[] => allRows().slice(0, -1)
 /** What each row reads: its label, then the pill when it shows one. */
 const shown = (): string[] =>
   rows().map((row) =>
@@ -348,4 +349,43 @@ it("still reads an agent prompt's inline mark as its pill: only an item's ask sh
     )
   })
   expect(shown()).toEqual(['Tabs  Recommended', 'Spaces'])
+  // An agent prompt keeps its "Other…" row as before, not an action.
+  expect(freeText().props).toMatchObject({ label: 'Other…', action: false })
+})
+
+it('steps a label of several lines and its stepped answer apart', async () => {
+  vi.useFakeTimers()
+  const { multiline } = RECOMMENDED_ASKS
+  const sent = mount(multiline.stored)
+  expect(shown()).toEqual(['A', 'A\nSecond? → B (Recommended)'])
+  await press('A')
+  await press('B')
+  expect(sent.map((entry) => entry.text)).toEqual([RECOMMENDED_ASK_ANSWERS.multilineStepped])
+})
+
+it('tells an authored "Other…" from the card\'s own free-text action before either is chosen', async () => {
+  vi.useFakeTimers()
+  const { otherAuthored } = RECOMMENDED_ASKS
+  mount(otherAuthored.stored)
+  // The authored option reads as written with its flag's pill; the action reads as one, with its pencil.
+  expect(shown()).toEqual(['Other…  Recommended', 'Wait'])
+  expect(rows()[0]!.props.action).toBeFalsy()
+  expect(freeText().props).toMatchObject({ label: 'Type your answer', action: true })
+  expect(freeText().findAll((node) => isHost(node, 'Pencil'))).toHaveLength(1)
+  expect(rows()[0]!.findAll((node) => isHost(node, 'Pencil'))).toHaveLength(0)
+  // The authored option posts its words.
+  expect(await posts(otherAuthored.stored, ['Other…'], false)).toBe(
+    RECOMMENDED_ASK_ANSWERS.otherAuthored
+  )
+  // On its own mount, the action opens the box for your words and posts nothing.
+  act(() => tree!.unmount())
+  tree = null
+  await queries?.end()
+  const sent = mount(otherAuthored.stored)
+  act(() => freeText().props.onPress())
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS)
+  })
+  expect(tree!.root.findAll((node) => isHost(node, 'MessageBox'))).toHaveLength(1)
+  expect(sent).toEqual([])
 })

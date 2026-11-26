@@ -195,6 +195,9 @@ export function useMobileBotItemAskSlot({
           return true
         }}
         cancelLabel={t('bots.items.ask.notNow', 'Not now')}
+        // Its options show as written and may say "Other…" themselves: the free-text row reads as
+        // an action, as desktop's own-words chip does.
+        ownWords={t('bots.items.ask.typeAnswer', 'Type your answer')}
         onCollapse={fold}
       />
     )

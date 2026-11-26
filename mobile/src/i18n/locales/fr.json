@@ -5697,7 +5697,8 @@
         "replacedByNewer": "Remplacée par une question plus récente",
         "skipped": "Ignorées",
         "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} photos. Retirez-en quelques-unes et réessayez.",
-        "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Retirez-en quelques-uns et réessayez."
+        "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Retirez-en quelques-uns et réessayez.",
+        "typeAnswer": "Saisissez votre réponse"
       }
     },
     "needs": {

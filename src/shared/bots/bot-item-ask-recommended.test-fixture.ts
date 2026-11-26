@@ -99,7 +99,17 @@ export const RECOMMENDED_ASKS = {
   severalFolded: kept(
     question('Scope?', ['Audit,  Notify (Recommended)', 'Audit', 'Notify'], { multi: true }),
     question('Ship?', ['Yes', 'No'])
-  )
+  ),
+  // A label of several lines that, cleaned, would read like the whole answer to both questions.
+  multiline: kept(
+    question('First?', ['A', 'A\nSecond? → B (Recommended)']),
+    question('Second?', ['B', 'C'])
+  ),
+  // An authored option that, cleaned, says what the phone's own free-text row used to.
+  otherAuthored: {
+    written: ask(question('Go?', ['Other… [recommended]', 'Wait'])),
+    stored: ask(question('Go?', ['Other…', 'Wait'], { recommended: 0 }))
+  }
 } satisfies Record<string, { written: BotItemAsk; stored: BotItemAsk }>
 
 /** The comment each surface posts for these asks: the desktop browser check and the phone card test
@@ -133,5 +143,8 @@ export const RECOMMENDED_ASK_ANSWERS = {
   subsetsReorderedSecond: 'C, A, B (Recommended)',
   // The answer lines fold spacing; the label's own words still differ from the two picks.
   severalFoldedPair: 'Scope? → Audit, Notify\nShip? → Yes',
-  severalFoldedOne: 'Scope? → Audit, Notify (Recommended)\nShip? → Yes'
+  severalFoldedOne: 'Scope? → Audit, Notify (Recommended)\nShip? → Yes',
+  // Stepped: A for the first question, B for the second.
+  multilineStepped: 'First? → A\nSecond? → B',
+  otherAuthored: 'Other…'
 } as const
