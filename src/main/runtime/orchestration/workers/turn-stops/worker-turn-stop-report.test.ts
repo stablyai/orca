@@ -317,21 +317,23 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
 
     // On a fresh open Dispatch with no consumed mail, a cancelled turn at .900s that sent a status
     // must not suppress the next silent turn in the exact same second (.950s).
+    const secondSession = createOrcaSessionId(() => '33333333-3333-4333-8333-333333333333')
+    const secondWorkerAddress = formatOrcaSessionAddress(secondSession)
     const secondTaskId = db.createTask({ spec: 'same-second sequence watermark', runId }).id
     const secondDispatchId = db.createDispatchContext({
       taskId: secondTaskId,
-      assigneeHandle: WORKER_ADDRESS,
+      assigneeHandle: secondWorkerAddress,
       creator: { kind: 'session', orcaSessionId: COORDINATOR_SESSION },
       maxDepth: Number.MAX_SAFE_INTEGER
     }).id
     clock = Date.UTC(2026, 10, 25, 18, 0, 0, 100)
-    observeChatWorkerWorking(WORKER_SESSION, {
+    observeChatWorkerWorking(secondSession, {
       getDb: () => db,
       isWaitingForMail: () => false,
       notify: () => {}
     })
     db.insertMessage({
-      from: WORKER_ADDRESS,
+      from: secondWorkerAddress,
       senderDispatchId: secondDispatchId,
       to: `run:${runId}`,
       subject: 'Cancelled turn status',
@@ -345,16 +347,29 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
         type: 'completion',
         completion: {
           scope: SESSION_SCOPE,
-          sessionId: WORKER_SESSION,
+          sessionId: secondSession,
           turnId: 'turn-cancelled-same-sec',
-          outcome: 'cancelled',
+          outcome: 'cancellation',
           completedAt: clock
         }
       },
       () => ({ status: 'idle', lastAssistantMessage: '' })
     )
     clock = Date.UTC(2026, 10, 25, 18, 0, 0, 950)
-    completeTurn(reporter, 'turn-silent-same-sec')
+    reporter.onTurnAttention(
+      {
+        type: 'completion',
+        completion: {
+          scope: SESSION_SCOPE,
+          sessionId: secondSession,
+          turnId: 'turn-silent-same-sec',
+          outcome: 'success',
+          completedAt: clock
+        }
+      },
+      () => ({ status: 'idle', lastAssistantMessage: 'Done.' })
+    )
+    flushTimers()
     expect(stopEscalations()).toEqual([
       'Worker stopped without reporting',
       'Worker stopped without reporting'
@@ -369,10 +384,10 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
       type: 'status',
       runId
     })
-    db.markAsRead([mail.id], { kind: 'session', sessionId: WORKER_SESSION })
+    db.markAsRead([mail.id], { kind: 'session', sessionId: secondSession })
     clock = Date.UTC(2026, 10, 25, 18, 0, 0, 980)
     db.insertMessage({
-      from: WORKER_ADDRESS,
+      from: secondWorkerAddress,
       senderDispatchId: secondDispatchId,
       to: `run:${runId}`,
       subject: 'Same-second valid status',
@@ -380,7 +395,20 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
       type: 'status',
       runId
     })
-    completeTurn(reporter, 'turn-reported-same-sec')
+    reporter.onTurnAttention(
+      {
+        type: 'completion',
+        completion: {
+          scope: SESSION_SCOPE,
+          sessionId: secondSession,
+          turnId: 'turn-reported-same-sec',
+          outcome: 'success',
+          completedAt: clock
+        }
+      },
+      () => ({ status: 'idle', lastAssistantMessage: 'Done.' })
+    )
+    flushTimers()
     expect(stopEscalations()).toHaveLength(2)
   })
 
