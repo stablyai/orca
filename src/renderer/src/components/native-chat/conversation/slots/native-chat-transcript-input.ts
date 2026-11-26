@@ -27,6 +27,8 @@ export type NativeChatTranscriptSlotsInput = {
   openedPullRequests?: ReadonlyMap<string, readonly NativeChatOpenedPullRequest[]>
   /** Turns the reader opened. Everything else with a duration stays folded. */
   expandedTurnKeys: ReadonlySet<string>
+  /** Rows whose run an older page grew at its start, each with the id its disclosures keep. */
+  carriedDisclosureIds?: ReadonlyMap<string, string>
   isWorking: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
   lifecycleWorking: boolean

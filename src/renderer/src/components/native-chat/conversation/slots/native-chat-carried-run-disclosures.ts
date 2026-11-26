@@ -12,11 +12,25 @@ export const NO_CARRIED_RUN_DISCLOSURES: ReadonlyMap<string, string> = new Map()
 /** Carries made a few pages back; a folded turn keeps its runs' ids until it opens again. */
 const MAX_CARRIED_RUN_DISCLOSURES = 64
 
+/** `carried` without rows no longer loaded; itself when it keeps them all. */
+export function nativeChatLoadedCarries(
+  carried: ReadonlyMap<string, string>,
+  messages: readonly NativeChatMessage[]
+): ReadonlyMap<string, string> {
+  if (carried.size === 0) {
+    return carried
+  }
+  const loaded = new Set(messages.map((message) => message.id))
+  const kept = new Map([...carried].filter(([head]) => loaded.has(head)))
+  return kept.size === carried.size ? carried : kept
+}
+
 /**
- * After a commit whose first row changed (the only way a run's head moves earlier): each row with a
- * new head that holds a head the previous build drew (as a run member, or because it took in that
- * row's tool calls) is that same run, grown at its start, and keeps that head's disclosure id.
- * Returns `carried` itself when nothing new is carried.
+ * After older rows arrived before the head (the only way a run's head moves earlier): each row
+ * with a new head that holds a head the previous window drew (as a run member, or because it took
+ * in that row's tool calls) is that same run, grown at its start, and keeps the disclosure id that
+ * head used, so a run grown over many pages keeps its first one. When several earlier heads land
+ * in one row, the earliest wins. Returns `carried` itself when nothing new is carried.
  */
 export function nativeChatFindCarriedRunDisclosures(
   previous: {
@@ -74,21 +88,4 @@ export function nativeChatFindCarriedRunDisclosures(
     next.delete(head)
   }
   return next
-}
-
-/** Draws each carried row under the id it keeps; nothing to do while nothing is carried. */
-export function nativeChatApplyCarriedRunDisclosures(
-  slots: NativeChatTranscriptSlot[],
-  carried: ReadonlyMap<string, string>
-): NativeChatTranscriptSlot[] {
-  if (carried.size === 0) {
-    return slots
-  }
-  return slots.map((slot) => {
-    if (slot.kind !== 'message') {
-      return slot
-    }
-    const disclosureId = carried.get(slot.message.id)
-    return disclosureId === undefined ? slot : { ...slot, disclosureId }
-  })
 }

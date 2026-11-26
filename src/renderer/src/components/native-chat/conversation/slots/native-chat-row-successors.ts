@@ -4,17 +4,20 @@
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
-/** The named tool calls in a row; an unnamed call can't be followed. */
+/** The named tool calls in a row; an unnamed or blank call can't be followed. */
 function callIds(message: NativeChatMessage): string[] {
   return message.blocks.flatMap((block) =>
-    block.type === 'tool-call' && block.callId !== undefined ? [block.callId] : []
+    block.type === 'tool-call' && block.callId !== undefined && block.callId.trim() !== ''
+      ? [block.callId]
+      : []
   )
 }
 
 /**
  * Each of `ids` (rows of the `previous` read) mapped to the row of the `current` read that holds
- * it: itself when it is still there, else the row now holding its first tool call. Rows with no
- * such successor are absent. Linear in both reads, and only reads either when an id is gone.
+ * it: itself when it is still there, else the one row now holding all of its named tool calls.
+ * Absent when there is no such single row: no named calls, a call two current rows both name, or
+ * calls split across rows. Linear in both reads, and reads either only when an id is gone.
  */
 export function nativeChatRowSuccessors(
   previous: readonly NativeChatMessage[],
@@ -35,20 +38,20 @@ export function nativeChatRowSuccessors(
     return successors
   }
   const previousById = new Map(previous.map((message) => [message.id, message]))
-  const callOwners = new Map<string, string>()
+  // A call two current rows both name could be either one: it leads nowhere.
+  const callOwners = new Map<string, string | null>()
   for (const message of current) {
     for (const callId of callIds(message)) {
-      callOwners.set(callId, message.id)
+      const owner = callOwners.get(callId)
+      callOwners.set(callId, owner === undefined || owner === message.id ? message.id : null)
     }
   }
   for (const id of gone) {
     const message = previousById.get(id)
-    const owner = message
-      ? callIds(message)
-          .map((callId) => callOwners.get(callId))
-          .find((candidate) => candidate !== undefined)
-      : undefined
-    if (owner !== undefined) {
+    const calls = message ? callIds(message) : []
+    const owners = new Set(calls.map((callId) => callOwners.get(callId) ?? null))
+    const [owner] = owners
+    if (calls.length > 0 && owners.size === 1 && owner !== null && owner !== undefined) {
       successors.set(id, owner)
     }
   }

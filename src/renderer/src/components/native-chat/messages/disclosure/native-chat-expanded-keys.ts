@@ -21,6 +21,20 @@ export function toggleNativeChatExpandedKey(
   return next
 }
 
+/** Opens each of `keys` as the reader would, one at a time under the same cap. */
+export function openNativeChatExpandedKeys(
+  current: ReadonlySet<string>,
+  keys: Iterable<string>
+): ReadonlySet<string> {
+  let next = current
+  for (const key of keys) {
+    if (!next.has(key)) {
+      next = toggleNativeChatExpandedKey(next, key)
+    }
+  }
+  return next
+}
+
 /** Remember the reader’s explicit choice over inferred state, evicting the oldest choice at capacity. */
 export function chooseNativeChatExpanded(
   current: ReadonlyMap<string, boolean>,

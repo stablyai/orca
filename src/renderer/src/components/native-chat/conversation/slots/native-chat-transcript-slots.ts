@@ -260,6 +260,16 @@ export function buildNativeChatTranscript(
     nativeChatTranscriptWorkRuns(slots, typography),
     typography
   )
+  // Set here, in the structural build, so streamed frames patch these slots like any other.
+  const carried = input.carriedDisclosureIds
+  if (carried && carried.size > 0) {
+    for (const slot of drawn) {
+      const disclosureId = slot.kind === 'message' ? carried.get(slot.message.id) : undefined
+      if (slot.kind === 'message' && disclosureId !== undefined) {
+        slot.disclosureId = disclosureId
+      }
+    }
+  }
   // One action holder per turn: its last drawn response with words, else (when folding hid them)
   // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()

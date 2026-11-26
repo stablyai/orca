@@ -15,14 +15,14 @@ import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-in
 import { createNativeChatStreamedTranscript } from './native-chat-transcript-streamed-slots'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { useNativeChatWorkers } from '../../native-chat-workers-context'
-import { nativeChatApplyCarriedRunDisclosures } from './native-chat-carried-run-disclosures'
+import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
+import { openNativeChatExpandedKeys } from '../../messages/disclosure/native-chat-expanded-keys'
+import { NO_TURNS, withTurns } from './native-chat-held-open-turns'
 import {
   NO_HEAD_TRACK,
-  NO_TURNS,
   nativeChatNextHeadTrack,
-  withTurns,
   type NativeChatHeadTrack
-} from './native-chat-held-open-turns'
+} from './native-chat-head-track'
 import {
   NO_LEAVING_TURNS,
   useNativeChatQuietTurnLeave
@@ -35,13 +35,17 @@ export function useNativeChatTranscriptSlots({
   line,
   structureMessages,
   setExpandedTurnKeys,
-  loadingOlder = false,
+  history,
   ...input
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'workers'> & {
   /** Receives turns kept open because an older page would fold work the reader was looking at. */
   setExpandedTurnKeys?: (update: (current: ReadonlySet<string>) => ReadonlySet<string>) => void
-  /** The reader is paging older history in (by scrolling up or asking). */
-  loadingOlder?: boolean
+  /** Whose older history this is (another session or reset starts over), and whether the reader
+   *  is paging it in (by scrolling up or asking). */
+  history?: Pick<
+    NativeChatLiveSession,
+    'agent' | 'sessionId' | 'olderHistoryGeneration' | 'loadingEarlier'
+  >
   /** `messages` as of their last change other than a streaming reply's text, row for row. */
   structureMessages?: readonly NativeChatMessage[]
   line: {
@@ -128,6 +132,10 @@ export function useNativeChatTranscriptSlots({
   // Built from the saved rows, so a live window that only grows a reply rebuilds no structure.
   const saved = structureRows
   const [head, setHead] = useState<NativeChatHeadTrack>(NO_HEAD_TRACK)
+  const loadingOlder = history?.loadingEarlier === true
+  const historySource = history
+    ? `${history.agent}:${history.sessionId}:${history.olderHistoryGeneration}`
+    : undefined
   // A held turn draws as the reader's own expanded turn until their expanded turns hold it.
   const drawnExpandedTurnKeys = withTurns(expandedTurnKeys, head.held)
   const buildInput = useMemo(
@@ -142,6 +150,7 @@ export function useNativeChatTranscriptSlots({
       turnDiffs,
       openedPullRequests,
       expandedTurnKeys: drawnExpandedTurnKeys,
+      carriedDisclosureIds: head.carried,
       isWorking,
       lifecycleWorking,
       subagentHeads,
@@ -154,6 +163,7 @@ export function useNativeChatTranscriptSlots({
       leavingTurnKeys,
       workers,
       drawnExpandedTurnKeys,
+      head.carried,
       imageSources,
       forkOffer,
       isWorking,
@@ -171,12 +181,14 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const [streamedTranscript] = useState(createNativeChatStreamedTranscript)
-  const { slots, forkPoint, quietTurnKeys } = useMemo(() => {
-    const built = streamedTranscript(buildInput, saved, messages)
-    return { ...built, slots: nativeChatApplyCarriedRunDisclosures(built.slots, head.carried) }
-  }, [streamedTranscript, buildInput, saved, messages, head.carried])
+  const { slots, forkPoint, quietTurnKeys } = useMemo(
+    () => streamedTranscript(buildInput, saved, messages),
+    [streamedTranscript, buildInput, saved, messages]
+  )
   // Only when the first row changes (mount, an older page) does this look back at the head.
-  if (head.build === null || head.build.messages[0]?.id !== messages[0]?.id) {
+  if (head.source !== historySource) {
+    setHead({ ...NO_HEAD_TRACK, source: historySource })
+  } else if (head.window === null || head.window.messages[0]?.id !== messages[0]?.id) {
     setHead(
       nativeChatNextHeadTrack(
         head,
@@ -200,7 +212,7 @@ export function useNativeChatTranscriptSlots({
   })
   useLayoutEffect(() => {
     if (head.held.size > 0) {
-      setExpandedTurnKeys?.((current) => withTurns(current, head.held))
+      setExpandedTurnKeys?.((current) => openNativeChatExpandedKeys(current, head.held))
     }
   }, [head.held, setExpandedTurnKeys])
   return { slots, forkPoint, liveLine }

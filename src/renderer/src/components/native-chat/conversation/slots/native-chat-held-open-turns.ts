@@ -3,16 +3,8 @@
 // exactly as if they had opened it; they can still fold it from its status row.
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import {
-  NO_CARRIED_RUN_DISCLOSURES,
-  nativeChatFindCarriedRunDisclosures
-} from './native-chat-carried-run-disclosures'
-import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 import { nativeChatRowSuccessors } from './native-chat-row-successors'
-import {
-  buildNativeChatTranscript,
-  type NativeChatTranscriptSlot
-} from './native-chat-transcript-slots'
+import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** One committed build: what was loaded, which turn each row belongs to, and what was drawn. */
 export type NativeChatTranscriptBuild = {
@@ -23,31 +15,17 @@ export type NativeChatTranscriptBuild = {
 
 export const NO_TURNS: ReadonlySet<string> = new Set()
 
+/** `turns` with `more` added; `turns` itself when that adds nothing. */
 export function withTurns(
   turns: ReadonlySet<string>,
   more: ReadonlySet<string>
 ): ReadonlySet<string> {
-  return more.size === 0 ? turns : new Set([...turns, ...more])
-}
-
-/** What the transcript remembers about its head between first-row changes. */
-export type NativeChatHeadTrack = {
-  /** The build when the first row last changed (or at mount): what the reader had at the head. */
-  build: NativeChatTranscriptBuild | null
-  /** Turns an older page would have folded, until the reader's expanded turns take them over. */
-  held: ReadonlySet<string>
-  /** Runs whose head moved earlier, by their current head, with the disclosure id each keeps. */
-  carried: ReadonlyMap<string, string>
-  /** The reader paged older history since the head was recorded: the next older rows are theirs,
-   *  not a chat's first load arriving in steps. */
-  paging: boolean
-}
-
-export const NO_HEAD_TRACK: NativeChatHeadTrack = {
-  build: null,
-  held: NO_TURNS,
-  carried: NO_CARRIED_RUN_DISCLOSURES,
-  paging: false
+  for (const key of more) {
+    if (!turns.has(key)) {
+      return new Set([...turns, ...more])
+    }
+  }
+  return turns
 }
 
 function drawnIds(slot: NativeChatTranscriptSlot): readonly string[] {
@@ -133,40 +111,4 @@ export function nativeChatTurnsHeldOpen(
     }
   }
   return held.size > 0 ? held : NO_TURNS
-}
-
-/** The head track after a commit whose first row changed: turns to hold, runs to carry. */
-export function nativeChatNextHeadTrack(
-  head: NativeChatHeadTrack,
-  input: NativeChatTranscriptSlotsInput,
-  slots: readonly NativeChatTranscriptSlot[],
-  paging: boolean
-): NativeChatHeadTrack {
-  const current = { messages: input.messages, turnKeys: input.turnKeys, slots }
-  // Only older rows the reader paged in can fold a turn they saw or move a run's head; a window
-  // trimming its head, or a first load arriving in steps, can't.
-  if (
-    head.build === null ||
-    !(head.paging || paging) ||
-    input.messages.length <= head.build.messages.length
-  ) {
-    return { ...head, build: current, paging }
-  }
-  const expanded = withTurns(input.expandedTurnKeys, head.held)
-  const held = nativeChatTurnsHeldOpen(head.build, current, expanded)
-  // A held turn draws its runs again; find carries among them as they will be drawn.
-  const drawn =
-    held.size === 0
-      ? slots
-      : buildNativeChatTranscript({ ...input, expandedTurnKeys: withTurns(expanded, held) }).slots
-  return {
-    build: current,
-    held: withTurns(head.held, held),
-    carried: nativeChatFindCarriedRunDisclosures(
-      head.build,
-      { messages: input.messages, slots: drawn },
-      head.carried
-    ),
-    paging
-  }
 }
