@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
@@ -86,6 +86,32 @@ function useNudging(environmentId: string): boolean {
   return nudging
 }
 
+// Why a slot: the server name must ellipsize before the words around it, wherever a locale puts it.
+const SERVER_SLOT = '\u2063'
+
+function ServerTitle({
+  template,
+  serverName,
+  className
+}: {
+  template: string
+  serverName: string
+  className?: string
+}): React.JSX.Element {
+  const [before, after] = template.split(SERVER_SLOT)
+  if (after === undefined) {
+    return <span className={cn('min-w-0 truncate', className)}>{template}</span>
+  }
+  return (
+    <span className={cn('flex min-w-0 overflow-hidden', className)}>
+      {before ? <span className="shrink-0 whitespace-pre">{before}</span> : null}
+      {/* Why only the name shrinks: any shrink on the words around it ellipsizes them first. */}
+      <span className="min-w-[3ch] truncate">{serverName}</span>
+      {after ? <span className="shrink-0 whitespace-pre">{after}</span> : null}
+    </span>
+  )
+}
+
 export function RemoteServerOutageCardLine({
   environmentId,
   downSince,
@@ -106,9 +132,12 @@ export function RemoteServerOutageCardLine({
   )
   const nudging = useNudging(environmentId)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const detailsRef = useRef<HTMLDivElement>(null)
   const now = useRecoveryClock(downSince !== null && !leaving)
   const copy = remoteRuntimeRecoveryCopy(cause, serverName, t)
-  const title = stopped ? remoteServerCantReachTitle(serverName, t) : copy.title
+  const titleTemplate = stopped
+    ? remoteServerCantReachTitle(SERVER_SLOT, t)
+    : remoteRuntimeRecoveryCopy(cause, SERVER_SLOT, t).title
   const timer =
     downSince === null ? null : remoteRuntimeDownForCompactLabel(now - downSince, intlLocale)
   const reconnect = (): void => {
@@ -117,105 +146,117 @@ export function RemoteServerOutageCardLine({
   }
   const showTailscale = cause === 'connection-lost' && tailscaleHost !== null
   return (
-    <div
-      data-remote-server-outage-notice={environmentId}
-      data-terminal-remote-runtime-recovery-cause={cause}
-      data-remote-server-outage-state={stopped ? 'stopped' : 'retrying'}
-      className={cn(
-        'pointer-events-auto flex max-w-full items-center gap-2.5 rounded-[10px] border border-border bg-card py-2.5 pr-2 pl-3 text-[13px] text-card-foreground shadow-floating transition-opacity duration-150',
-        leaving && 'pointer-events-none opacity-0',
-        nudging && 'remote-server-outage-nudge'
-      )}
-      role="status"
-      aria-live="polite"
-    >
-      {stopped ? (
-        <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-status-warning" />
-      ) : (
-        <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
-      )}
-      <span className="min-w-0 truncate font-semibold">{title}</span>
-      {timer !== null ? (
-        // Why hidden: a per-second tick inside the live region would re-announce the card.
-        <span aria-hidden="true" className="shrink-0 tabular-nums text-muted-foreground">
-          {timer}
-        </span>
-      ) : null}
-      {stopped ? (
-        <Button size="xs" className="shrink-0" onClick={reconnect}>
-          {t(
-            'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
-            'Reconnect'
+    <Popover open={!stopped && detailsOpen} onOpenChange={setDetailsOpen}>
+      <PopoverAnchor asChild>
+        <div
+          data-remote-server-outage-notice={environmentId}
+          data-terminal-remote-runtime-recovery-cause={cause}
+          data-remote-server-outage-state={stopped ? 'stopped' : 'retrying'}
+          className={cn(
+            'pointer-events-auto flex max-w-full items-center gap-2.5 rounded-[10px] border border-border bg-card py-2.5 pr-2 pl-3 text-[13px] text-card-foreground shadow-floating transition-opacity duration-150',
+            leaving && 'pointer-events-none opacity-0',
+            nudging && 'remote-server-outage-nudge'
           )}
-        </Button>
-      ) : (
-        <Popover open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              size="xs"
-              variant="ghost"
-              className="shrink-0 text-muted-foreground"
-              data-remote-server-outage-details=""
-            >
+          role="status"
+          aria-live="polite"
+        >
+          {stopped ? (
+            <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-status-warning" />
+          ) : (
+            <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+          )}
+          <ServerTitle template={titleTemplate} serverName={serverName} className="font-semibold" />
+          {timer !== null ? (
+            // Why hidden: a per-second tick inside the live region would re-announce the card.
+            <span aria-hidden="true" className="shrink-0 tabular-nums text-muted-foreground">
+              {timer}
+            </span>
+          ) : null}
+          {stopped ? (
+            <Button size="xs" className="shrink-0" onClick={reconnect}>
               {t(
-                'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.detailsButton',
-                'Details'
+                'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
+                'Reconnect'
               )}
             </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            side="bottom"
-            align="center"
-            sideOffset={8}
-            className="w-[300px] max-w-[calc(100vw-16px)] p-2 text-xs"
-            data-remote-server-outage-details-popover={environmentId}
-          >
-            <div className="flex items-center gap-2 px-1 py-1">
-              <span className="min-w-0 truncate text-[13px] font-semibold">{title}</span>
-              {timer !== null ? (
-                <span
-                  aria-hidden="true"
-                  className="ml-auto shrink-0 tabular-nums text-muted-foreground"
-                >
-                  {timer}
-                </span>
-              ) : null}
-            </div>
-            {showTailscale ? (
-              <>
-                <div className="px-1 py-1 text-muted-foreground">
-                  {t(
-                    'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.tailscaleHintTitle',
-                    'Check the Tailscale path'
-                  )}
-                </div>
-                <div className="mx-1 mt-1 mb-1.5 flex min-w-0 items-center gap-1 rounded-md bg-muted py-1 pr-1 pl-2">
-                  <code className="min-w-0 flex-1 truncate font-mono text-[11px] select-text">
-                    {tailscalePingCommand(tailscaleHost)}
-                  </code>
-                  <CopyTextButton
-                    text={tailscalePingCommand(tailscaleHost)}
-                    label={t(
-                      'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.copyPingCommand',
-                      'Copy command'
-                    )}
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="px-1 py-1 leading-5 text-muted-foreground">{copy.body}</div>
-            )}
-            <div className="flex justify-end px-1 pt-0.5">
-              <Button size="xs" onClick={reconnect}>
+          ) : (
+            <PopoverTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="shrink-0 text-muted-foreground"
+                data-remote-server-outage-details=""
+              >
                 {t(
-                  'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectNowButton',
-                  'Reconnect now'
+                  'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.detailsButton',
+                  'Details'
                 )}
               </Button>
+            </PopoverTrigger>
+          )}
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        ref={detailsRef}
+        side="bottom"
+        align="start"
+        sideOffset={8}
+        className="w-[300px] max-w-[calc(100vw-16px)] p-2 text-xs outline-none"
+        data-remote-server-outage-details-popover={environmentId}
+        // Why the panel itself: focusing its first control would ring the copy button on every open.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          detailsRef.current?.focus()
+        }}
+      >
+        <div className="flex items-center gap-2 px-1 py-1">
+          <ServerTitle
+            template={titleTemplate}
+            serverName={serverName}
+            className="text-[13px] font-semibold"
+          />
+          {timer !== null ? (
+            <span
+              aria-hidden="true"
+              className="ml-auto shrink-0 tabular-nums text-muted-foreground"
+            >
+              {timer}
+            </span>
+          ) : null}
+        </div>
+        {showTailscale ? (
+          <>
+            <div className="px-1 py-1 text-muted-foreground">
+              {t(
+                'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.tailscaleHintTitle',
+                'Check the Tailscale path'
+              )}
             </div>
-          </PopoverContent>
-        </Popover>
-      )}
-    </div>
+            <div className="mx-1 mt-1 mb-1.5 flex min-w-0 items-center gap-1 rounded-md bg-muted py-1 pr-1 pl-2">
+              <code className="min-w-0 flex-1 truncate font-mono text-[11px] select-text">
+                {tailscalePingCommand(tailscaleHost)}
+              </code>
+              <CopyTextButton
+                text={tailscalePingCommand(tailscaleHost)}
+                label={t(
+                  'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.copyPingCommand',
+                  'Copy command'
+                )}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="px-1 py-1 leading-5 text-muted-foreground">{copy.body}</div>
+        )}
+        <div className="flex justify-end px-1 pt-0.5">
+          <Button size="xs" onClick={reconnect}>
+            {t(
+              'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectNowButton',
+              'Reconnect now'
+            )}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

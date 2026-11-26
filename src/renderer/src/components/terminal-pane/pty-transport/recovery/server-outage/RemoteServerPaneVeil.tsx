@@ -9,25 +9,28 @@ function forwardWheelToTerminal(event: WheelEvent, terminal: Terminal): void {
   }
   // Why: only the copy may reach ancestors, or a wheel listener above the pane would run twice.
   event.stopPropagation()
-  target.dispatchEvent(
-    new WheelEvent('wheel', {
-      deltaX: event.deltaX,
-      deltaY: event.deltaY,
-      deltaZ: event.deltaZ,
-      deltaMode: event.deltaMode,
-      clientX: event.clientX,
-      clientY: event.clientY,
-      screenX: event.screenX,
-      screenY: event.screenY,
-      ctrlKey: event.ctrlKey,
-      shiftKey: event.shiftKey,
-      altKey: event.altKey,
-      metaKey: event.metaKey,
-      bubbles: true,
-      cancelable: true,
-      composed: true
-    })
-  )
+  const copy = new WheelEvent('wheel', {
+    deltaX: event.deltaX,
+    deltaY: event.deltaY,
+    deltaZ: event.deltaZ,
+    deltaMode: event.deltaMode,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    screenX: event.screenX,
+    screenY: event.screenY,
+    ctrlKey: event.ctrlKey,
+    shiftKey: event.shiftKey,
+    altKey: event.altKey,
+    metaKey: event.metaKey,
+    bubbles: true,
+    cancelable: true,
+    composed: true
+  })
+  // Why: xterm scrolls by the legacy wheelDelta fields, which a constructed WheelEvent leaves at 0.
+  const legacy = event as WheelEvent & { wheelDeltaX?: number; wheelDeltaY?: number }
+  Object.defineProperty(copy, 'wheelDeltaX', { value: legacy.wheelDeltaX ?? 0 })
+  Object.defineProperty(copy, 'wheelDeltaY', { value: legacy.wheelDeltaY ?? 0 })
+  target.dispatchEvent(copy)
 }
 
 /** Covers a pane whose server is down: pointer input stops here, scrollback still scrolls, and a click points at the card. */

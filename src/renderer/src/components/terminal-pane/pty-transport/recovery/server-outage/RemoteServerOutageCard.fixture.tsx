@@ -52,13 +52,23 @@ function FixtureTerminal({
     if (!host) {
       return
     }
-    const terminal = new Terminal({ fontSize: 11, rows: 14, cols: 60, scrollback: 500 })
+    const foreground = getComputedStyle(host).getPropertyValue('color')
+    const terminal = new Terminal({
+      fontSize: 11,
+      rows: 14,
+      cols: 60,
+      scrollback: 500,
+      allowTransparency: true,
+      theme: { background: '#00000000', foreground }
+    })
     terminal.open(host)
     terminal.write(SCROLLBACK)
     onTerminal(terminal)
     return () => terminal.dispose()
   }, [onTerminal])
-  return <div ref={hostRef} className="absolute inset-0 overflow-hidden px-2 pt-1" />
+  return (
+    <div ref={hostRef} className="absolute inset-0 overflow-hidden px-2 pt-1 text-foreground" />
+  )
 }
 
 type PaneSpec = { environmentId: string | null; id: string }
@@ -228,7 +238,7 @@ export const narrowWindow = staticFixture({
   groups: ONE_PANE,
   servers: [DEVBOX],
   stopped: true,
-  width: 240
+  width: 320
 })
 export const twoServersDown = staticFixture({
   groups: [
