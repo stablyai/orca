@@ -28003,6 +28003,7 @@
         "body": "安装在 Windows 上的智能体无法在 WSL 中运行。请在发行版中安装一个智能体并登录，它就会显示在这里。",
         "copied": "已复制",
         "copy": "复制",
+        "checkAgain": "重新检查",
         "checking": "正在重新检查…"
       },
       "hostSleeping": "休眠中 · 使用时唤醒",

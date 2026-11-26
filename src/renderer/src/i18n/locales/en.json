@@ -27853,6 +27853,7 @@
         "body": "Agents installed on Windows can’t run inside WSL. Install one in the distro and sign in, and it shows up here.",
         "copied": "Copied",
         "copy": "Copy",
+        "checkAgain": "Check again",
         "checking": "Checking again…"
       },
       "hostSleeping": "Sleeping · wakes when used",
