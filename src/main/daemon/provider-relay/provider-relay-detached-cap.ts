@@ -55,7 +55,8 @@ export class ProviderRelayDetachedCap {
   detached(relay: CappableRelay): void {
     if (relay.live && relay.attachedClientId === null) {
       this.detachedAt.set(relay, this.now())
-      if (!relay.idleStopPolicy.tracking || relay.idleStopPolicy.unaccounted) {
+      const policy = relay.idleStopPolicy
+      if (!policy.tracking || policy.unaccounted || policy.onlyWaiting) {
         this.counted.add(relay)
       }
       this.update()

@@ -214,6 +214,11 @@ export class ProviderRelayOpenWork {
     return [...this.groups.values()].some((tasks) => tasks.size > 0)
   }
 
+  /** Open work in any group but `group`. */
+  openOutside(group: string): boolean {
+    return [...this.groups].some(([name, tasks]) => name !== group && tasks.size > 0)
+  }
+
   /**
    * The open tasks as key parts per group; work it couldn't account for is one task of its own,
    * except `handed` to an attaching app, which replays those lines from its cursor and sees it.

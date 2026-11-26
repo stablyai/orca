@@ -57,26 +57,40 @@ describe('a detached agent with output no app took', () => {
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
-  it('caps an agent whose only open item is a waiting approval, never one with a running turn', async () => {
-    const pending = { count: 1 }
+  it('caps an agent whose turn is only waiting on an approval, never one running a command or an unblocked turn', async () => {
+    const approvals = { count: 1 }
     const counted = vi.fn()
-    const idle = new ProviderRelayIdleStop({
-      attached: () => false,
-      live: () => true,
-      pendingCount: () => pending.count,
-      unacked: () => [],
-      stop: vi.fn(),
-      idleUnread: counted
-    })
-    const policy = readProviderRelayDetachPolicy({
-      idleStopMs: IDLE_MS,
-      markers: CODEX_RELAY_WORK_MARKERS.markers,
-      open: {}
-    })
-    idle.arm(policy)
+    const detachWith = (open: Record<string, string[][]>) => {
+      const idle = new ProviderRelayIdleStop({
+        attached: () => false,
+        live: () => true,
+        pendingCount: () => approvals.count,
+        askingCount: () => approvals.count,
+        unacked: () => [],
+        stop: vi.fn(),
+        idleUnread: counted
+      })
+      idle.arm(
+        readProviderRelayDetachPolicy({
+          idleStopMs: IDLE_MS,
+          markers: CODEX_RELAY_WORK_MARKERS.markers,
+          open
+        })
+      )
+      return idle
+    }
+    // A Codex turn blocked on an approval (a normal quit with one pending) is waiting, not busy.
+    const blocked = detachWith({ turn: [['thread-1']] })
+    expect(blocked.onlyWaiting).toBe(true)
     await vi.advanceTimersByTimeAsync(IDLE_MS)
-    expect(idle.onlyWaiting).toBe(true)
     expect(counted).toHaveBeenCalledTimes(1)
+    // A command still running is busy, approval or not.
+    expect(detachWith({ turn: [['thread-1']], command: [['thread-1', 'cmd-1']] }).onlyWaiting).toBe(
+      false
+    )
+    // A turn with no approval waiting is running.
+    approvals.count = 0
+    expect(blocked.onlyWaiting).toBe(false)
     let now = 0
     const cap = new ProviderRelayDetachedCap(
       () => {},

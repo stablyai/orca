@@ -12,10 +12,15 @@ import type { ProviderRelayStop } from './provider-relay-detached-cap'
 
 export { readProviderRelayDetachPolicy } from './provider-relay-detach-policy'
 
+/** The marker group of an agent's turns: one blocked on an approval is waiting, not busy. */
+export const PROVIDER_RELAY_TURN_GROUP = 'turn'
+
 type IdleStopHost = {
   attached: () => boolean
   live: () => boolean
   pendingCount: () => number
+  /** Of those, the agent's own requests waiting on the user (approvals). */
+  askingCount?: () => number
   workRequests?: (methods: readonly string[]) => void
   /**
    * Lines after the last ack: the app may not have counted them in its open set yet. Null when some
@@ -76,6 +81,7 @@ export class ProviderRelayIdleStop {
       live: () => relay.live,
       // Held approvals, and the app's own work requests (an ACP turn) the agent hasn't answered.
       pendingCount: () => relay.pending.size + relay.pending.working.size,
+      askingCount: () => relay.pending.size,
       workRequests: (methods) => {
         relay.pending.workMethods = new Set(methods)
       },
@@ -111,9 +117,21 @@ export class ProviderRelayIdleStop {
     )
   }
 
-  /** Tracked, with nothing open but an approval waiting: the detached cap bounds it. */
+  /**
+   * Tracked, and waiting on an approval with nothing else running: a turn blocked on it isn't busy,
+   * but a running command or background task, or a request of the app's own (a turn), is. The
+   * detached cap bounds it.
+   */
   get onlyWaiting(): boolean {
-    return this.armed && this.work !== null && !this.work.busy && this.host.pendingCount() > 0
+    const asking = this.host.askingCount?.() ?? 0
+    return (
+      asking > 0 &&
+      this.armed &&
+      this.work !== null &&
+      !this.work.unaccounted &&
+      this.host.pendingCount() === asking &&
+      !this.work.openOutside(PROVIDER_RELAY_TURN_GROUP)
+    )
   }
 
   get unread(): boolean {
@@ -262,7 +280,7 @@ export class ProviderRelayIdleStop {
     if (this.work.busy || this.host.pendingCount() > 0) {
       this.waitingForLine = true
       if (this.unaccounted || this.onlyWaiting) {
-        // Counted by the detached cap, as unknown work is; only a running turn or command isn't.
+        // Counted by the detached cap, as unknown work is; only running work isn't.
         this.host.idleUnread?.()
       }
       return
