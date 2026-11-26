@@ -74,7 +74,7 @@ export function useNativeChatOlderHistory({
   useLayoutEffect(() => {
     heldRef.current = read
   }, [read, olderHistoryGeneration])
-  // Older pages applied, counted in the same batch as the read that applies each.
+  // Older pages that added rows, counted in the same batch as the read that applies each.
   const [olderPages, setOlderPages] = useState(0)
   const loadEarlier = useCallback((): Promise<NativeChatOlderPageResult> => {
     // A callback from before a trim, snapshot or rebind holds a base that has since moved.
@@ -116,7 +116,9 @@ export function useNativeChatOlderHistory({
           // Replace the ordered base tail to prepend history; preserve separate live appends.
           heldRef.current = { phase: 'ready', messages: result.messages }
           setRead(heldRef.current)
-          setOlderPages((count) => count + 1)
+          if (result.messages.length > loadedCount) {
+            setOlderPages((count) => count + 1)
+          }
           transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
           const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
           setHasMore(more)
@@ -153,7 +155,9 @@ export function useNativeChatOlderHistory({
           // A rewrite racing this page is corrected by the replacement frame that follows it.
           heldRef.current = { phase: 'ready', messages: [...page, ...held.messages] }
           setRead(heldRef.current)
-          setOlderPages((count) => count + 1)
+          if (page.length > 0) {
+            setOlderPages((count) => count + 1)
+          }
           limitRef.current = Math.max(limitRef.current, held.messages.length + page.length)
           const more = result.hasMore ?? page.length >= NATIVE_CHAT_PAGE
           setHasMore(more)

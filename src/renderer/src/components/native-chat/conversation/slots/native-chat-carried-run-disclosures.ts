@@ -3,7 +3,6 @@
 // reader opened in it (the run, an output inside it) stays open, and what they never opened
 // stays closed.
 
-import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 export const NO_CARRIED_RUN_DISCLOSURES: ReadonlyMap<string, string> = new Map()
@@ -14,13 +13,26 @@ const MAX_CARRIED_RUN_DISCLOSURES = 64
 /** `carried` without rows no longer loaded; itself when it keeps them all. */
 export function nativeChatLoadedCarries(
   carried: ReadonlyMap<string, string>,
-  messages: readonly NativeChatMessage[]
+  loaded: ReadonlySet<string>
 ): ReadonlyMap<string, string> {
   if (carried.size === 0) {
     return carried
   }
-  const loaded = new Set(messages.map((message) => message.id))
   const kept = new Map([...carried].filter(([head]) => loaded.has(head)))
+  return kept.size === carried.size ? carried : kept
+}
+
+/** `carried` without carries whose id now belongs to a row drawn as its own run again (a later
+ *  update split the run the page had joined): that id stays with its original owner. */
+export function nativeChatOwnedCarries(
+  carried: ReadonlyMap<string, string>,
+  slots: readonly NativeChatTranscriptSlot[]
+): ReadonlyMap<string, string> {
+  if (carried.size === 0) {
+    return carried
+  }
+  const heads = new Set(slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message.id] : [])))
+  const kept = new Map([...carried].filter(([head, id]) => head === id || !heads.has(id)))
   return kept.size === carried.size ? carried : kept
 }
 
@@ -64,4 +76,22 @@ export function nativeChatCarryAcrossPage(
     next.delete(head)
   }
   return next
+}
+
+/** Marks each drawn row that keeps a carried id; an id whose original row is drawn as its own run
+ *  again stays with that row. For the structural build, on slots it just made. */
+export function nativeChatMarkCarriedDisclosures(
+  drawn: readonly NativeChatTranscriptSlot[],
+  carried: ReadonlyMap<string, string> | undefined
+): void {
+  if (!carried || carried.size === 0) {
+    return
+  }
+  const heads = new Set(drawn.flatMap((slot) => (slot.kind === 'message' ? [slot.message.id] : [])))
+  for (const slot of drawn) {
+    const disclosureId = slot.kind === 'message' ? carried.get(slot.message.id) : undefined
+    if (slot.kind === 'message' && disclosureId !== undefined && !heads.has(disclosureId)) {
+      slot.disclosureId = disclosureId
+    }
+  }
 }

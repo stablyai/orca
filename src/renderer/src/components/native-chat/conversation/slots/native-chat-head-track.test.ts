@@ -87,6 +87,7 @@ function commit(
       pages,
       input: { ...drawnInput, expandedTurnKeys: next.expandedTurnKeys },
       structure: next.messages,
+      loaded: new Set(next.messages.map((message) => message.id)),
       slots
     })
     if (stepped === current) {
@@ -142,9 +143,13 @@ it('takes nothing from changes that are not an applied page that continues the w
   head = commit(head, input(reordered, none(3), [], NO_TURNS), 0).head
   head = commit(head, input(reordered, none(3), [], NO_TURNS), 1).head
   expect(head.carried.size).toBe(0)
+  // A reorder in the same commit as a page's count moving is not that page continuing the window.
+  const swapped = [thought, calls('r6', 6, 7), answer]
+  head = commit(head, input(swapped, none(3), [], NO_TURNS), 2).head
+  expect(head.carried.size).toBe(0)
   // Older rows arriving with no applied page (a first load in steps) hold and carry nothing.
   const stepped = [prompt, calls('r0', 0, 7), thought, answer]
-  head = commit(head, input(stepped, ['p', 'p', 'p', 'p'], ['p'], NO_TURNS), 1).head
+  head = commit(head, input(stepped, ['p', 'p', 'p', 'p'], ['p'], NO_TURNS), 2).head
   expect(head.held.size).toBe(0)
   expect(head.carried.size).toBe(0)
   expect(head.window?.messages).toBe(stepped)
@@ -189,4 +194,38 @@ it('keeps the streamed fast path for a transcript with a carried run', () => {
   // Patched, not rebuilt: the carried slot is the same object and the frame keeps its stage.
   expect(run(next.slots)).toBe(run(first.slots))
   expect(stageBesideStreamedText(next.slots)).not.toBe(next.slots)
+})
+
+it('hands a carried id back to its row when a later update draws that row as its own run', () => {
+  const newer = calls('n', 2, 3)
+  let { head } = commit(NO_HEAD_TRACK, input([newer, answer], none(2), [], NO_TURNS), 0)
+  // The page brings an older run's calls, and the two join under the older head.
+  head = commit(head, input([calls('o', 0, 1), newer, answer], none(3), [], NO_TURNS), 1).head
+  expect([...head.carried]).toEqual([['o', 'n']])
+  // A line shown between them (a CI result line) splits the run again: each keeps its own id.
+  const split = commit(
+    head,
+    input(
+      [calls('o', 0, 1), text('ci', 'assistant', 'CI passed.'), newer, answer],
+      none(4),
+      [],
+      NO_TURNS
+    ),
+    1
+  )
+  const drawnId = (id: string) => {
+    const slot = split.slots.find((each) => each.kind === 'message' && each.message.id === id)
+    return slot?.kind === 'message' ? slot.disclosureId : 'missing'
+  }
+  expect(drawnId('o')).toBeUndefined()
+  expect(drawnId('n')).toBeUndefined()
+  expect(split.head.carried.size).toBe(0)
+})
+
+it('keeps the window current when only which turn a row is in changes', () => {
+  const rows = [text('q', 'user', 'Look'), calls('x', 0, 0), answer]
+  let { head } = commit(NO_HEAD_TRACK, input(rows, none(3), [], NO_TURNS), 0)
+  const turns = ['q', 'q', 'q']
+  head = commit(head, input(rows, turns, [], NO_TURNS), 0).head
+  expect(head.window?.turnKeys).toBe(turns)
 })

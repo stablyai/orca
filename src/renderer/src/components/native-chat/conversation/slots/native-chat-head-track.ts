@@ -3,10 +3,12 @@
 // grew at its start keeping its disclosures.
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { openNativeChatExpandedKeys } from '../../messages/disclosure/native-chat-expanded-keys'
 import {
   NO_CARRIED_RUN_DISCLOSURES,
   nativeChatCarryAcrossPage,
-  nativeChatLoadedCarries
+  nativeChatLoadedCarries,
+  nativeChatOwnedCarries
 } from './native-chat-carried-run-disclosures'
 import { NO_TURNS, nativeChatTurnsHeldOpen, withTurns } from './native-chat-held-open-turns'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
@@ -58,6 +60,8 @@ export type NativeChatHeadStep = {
   input: NativeChatTranscriptSlotsInput
   /** `input.messages` as of their last structural change, row for row. */
   structure: readonly NativeChatMessage[]
+  /** Every loaded row's id (held while a reply streams). */
+  loaded: ReadonlySet<string>
   /** What this commit draws. */
   slots: readonly NativeChatTranscriptSlot[]
 }
@@ -101,13 +105,14 @@ function acceptedPage(
     ...head,
     pages: step.pages,
     window,
-    carried: nativeChatLoadedCarries(head.carried, input.messages)
+    carried: nativeChatLoadedCarries(head.carried, step.loaded)
   }
   const continued = head.window && nativeChatPageContinuation(head.window.messages, input.messages)
   if (!head.window || !continued) {
     return next
   }
-  const expanded = withTurns(input.expandedTurnKeys, head.held)
+  // Capped as the drawn union is, so these builds draw what the reader will see.
+  const expanded = openNativeChatExpandedKeys(input.expandedTurnKeys, head.held)
   // The window the page landed on, drawn as it would be now: with the reader's folds, the turns
   // already held and the carries in use, so what it drew is what the reader has.
   const before = {
@@ -132,7 +137,7 @@ function acceptedPage(
       ? slots
       : buildNativeChatTranscript({
           ...input,
-          expandedTurnKeys: withTurns(expanded, held),
+          expandedTurnKeys: openNativeChatExpandedKeys(expanded, held),
           carriedDisclosureIds: head.carried
         }).slots
   const carried = nativeChatCarryAcrossPage(before.slots, drawn, continued, head.carried)
@@ -140,7 +145,7 @@ function acceptedPage(
     ...next,
     held: withTurns(head.held, held),
     heldSince: held.size === 0 ? head.heldSince : input.expandedTurnKeys,
-    carried: nativeChatLoadedCarries(carried, input.messages)
+    carried: nativeChatLoadedCarries(carried, step.loaded)
   }
 }
 
@@ -172,7 +177,7 @@ export function nativeChatHeadTrackStep(
       window,
       held: NO_TURNS,
       heldSince: null,
-      carried: nativeChatLoadedCarries(head.carried, step.input.messages)
+      carried: nativeChatLoadedCarries(head.carried, step.loaded)
     }
   }
   if (head.pages !== step.pages) {
@@ -182,8 +187,14 @@ export function nativeChatHeadTrackStep(
     // The reader's expanded turns took the held ones over; their status row folds them as usual.
     return { ...head, held: NO_TURNS, heldSince: null }
   }
-  if (head.window?.messages !== step.structure) {
-    return { ...head, window, carried: nativeChatLoadedCarries(head.carried, step.input.messages) }
+  // A structural change (rows, or only which turn a row is in) keeps the window current; a split
+  // that draws a carried id's original row on its own again hands the id back to it.
+  if (head.window?.messages !== step.structure || head.window.turnKeys !== step.input.turnKeys) {
+    const carried = nativeChatOwnedCarries(
+      nativeChatLoadedCarries(head.carried, step.loaded),
+      step.slots
+    )
+    return { ...head, window, carried }
   }
   return head
 }

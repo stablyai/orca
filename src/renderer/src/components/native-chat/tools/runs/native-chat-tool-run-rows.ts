@@ -40,14 +40,37 @@ export type NativeChatToolRunRow =
       block: NativeChatBlock
       result: NativeChatToolResultBlock | undefined
       lineIdentity: string
+      /** What its disclosure is remembered by: its call when named, so older pages don't move it. */
+      disclosureKey: string
     }
 
-/** A named call's identity across the run, repeated provider ids kept apart (as line rows are);
- *  undefined for a call with no usable id, which keeps its positional key. */
-function namedCallIdentity(block: NativeChatBlock, seen: Map<string, number>): string | undefined {
-  return block.type === 'tool-call' && block.callId !== undefined && block.callId.trim() !== ''
-    ? nativeChatToolLineIdentity(block, seen)
-    : undefined
+/** Disclosure keys for the run's named calls that an older page can't move: a provider id seen
+ *  more than once is numbered from its newest call, so a page bringing an earlier duplicate leaves
+ *  the calls already drawn under the keys they had. Calls with no usable id are absent. */
+function seamStableCallKeys(
+  blocks: readonly NativeChatBlock[]
+): ReadonlyMap<NativeChatBlock, string> {
+  const named = blocks.flatMap((block) =>
+    block.type === 'tool-call' && block.callId !== undefined && block.callId.trim() !== ''
+      ? [{ block, callId: block.callId }]
+      : []
+  )
+  const remaining = new Map<string, number>()
+  for (const { callId } of named) {
+    remaining.set(callId, (remaining.get(callId) ?? 0) + 1)
+  }
+  const keys = new Map<NativeChatBlock, string>()
+  for (const { block, callId } of named) {
+    const fromNewest = (remaining.get(callId) ?? 1) - 1
+    remaining.set(callId, fromNewest)
+    keys.set(
+      block,
+      fromNewest === 0
+        ? `call:${callId}`
+        : `call-occurrence:${JSON.stringify([callId, fromNewest])}`
+    )
+  }
+  return keys
 }
 
 /** A thought with no words draws nothing, so keyboard order cannot land on it. */
@@ -83,8 +106,7 @@ export function buildNativeChatToolRunRows({
   const { editCards, consumedResults } = buildEditCards(blocks)
   const { resultByCall, pairedResults } = pairNativeChatToolResults(headerBlocks)
   const seen = new Map<string, number>()
-  // Counted apart from `seen`, so task and edit rows leave line identities as they were.
-  const seenDisclosures = new Map<string, number>()
+  const callKeys = seamStableCallKeys(headerBlocks)
   const rows: NativeChatToolRunRow[] = []
   const pushAsides = (elements: readonly React.JSX.Element[] | undefined): void => {
     for (const element of elements ?? []) {
@@ -101,7 +123,7 @@ export function buildNativeChatToolRunRows({
     const taskList = taskLists.rows.get(block)
     if (taskList) {
       // Only an update shows its "Full task list" trigger; a first list has no control.
-      const callIdentity = namedCallIdentity(block, seenDisclosures)
+      const callIdentity = callKeys.get(block)
       rows.push({
         kind: 'tasks',
         key: `tasks:${blockIndex}`,
@@ -116,7 +138,7 @@ export function buildNativeChatToolRunRows({
     }
     const edit = editCards.get(block)
     if (edit) {
-      const callIdentity = namedCallIdentity(block, seenDisclosures)
+      const callIdentity = callKeys.get(block)
       rows.push({
         kind: 'edit',
         key: `edit:${edit.key}`,
@@ -142,7 +164,8 @@ export function buildNativeChatToolRunRows({
       focusable: true,
       block,
       result: block.type === 'tool-call' ? resultByCall.get(block) : undefined,
-      lineIdentity
+      lineIdentity,
+      disclosureKey: callKeys.get(block) ?? lineIdentity
     })
   }
   pushAsides(asides?.after)

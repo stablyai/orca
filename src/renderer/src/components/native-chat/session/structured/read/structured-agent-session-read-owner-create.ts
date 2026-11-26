@@ -33,7 +33,6 @@ export function createReadOwner(
   let snapshot: StructuredAgentSessionReadSnapshot = {
     state: EMPTY_STRUCTURED_AGENT_SESSION,
     loadingOlder: false,
-    olderPages: 0,
     olderHistoryGeneration: 0,
     initialHistoryAutoLoad: true,
     current: false
@@ -66,8 +65,10 @@ export function createReadOwner(
     snapshot = next
     emit()
   }
-  /** `olderPage`: a page the reader paged in, counted in the same snapshot that applies it. */
-  const apply = (action: StructuredAgentSessionAction, olderPage = false): void => {
+  const apply = (action: StructuredAgentSessionAction): void => publish(action, false)
+  /** An older page the reader paged in: counted, in the same snapshot, when it added items. */
+  const applyOlderPage = (action: StructuredAgentSessionAction): void => publish(action, true)
+  function publish(action: StructuredAgentSessionAction, olderPage: boolean): void {
     const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
     if (
       state.submissions !== snapshot.state.submissions ||
@@ -81,9 +82,9 @@ export function createReadOwner(
       (action.type === 'event' &&
         action.event.type !== 'end' &&
         !(action.event.type === 'batch' && action.event.hasNewer))
-    if (state !== snapshot.state || current !== snapshot.current || olderPage) {
-      const olderPages = snapshot.olderPages + (olderPage ? 1 : 0)
-      setSnapshot({ ...snapshot, state, current, olderPages })
+    const paged = olderPage && state.items.length > snapshot.state.items.length ? 1 : 0
+    if (state !== snapshot.state || current !== snapshot.current) {
+      setSnapshot({ ...snapshot, state, current, olderPages: (snapshot.olderPages ?? 0) + paged })
     }
   }
   const markStale = (): void => {
@@ -298,7 +299,7 @@ export function createReadOwner(
       sessionId,
       getSnapshot: () => snapshot,
       setSnapshot,
-      apply: (action) => apply(action, true),
+      apply: applyOlderPage,
       captureHistoryReadGuard: () => {
         const stopped = captureActiveHistoryReadGuard()
         const generation = snapshot.olderHistoryGeneration

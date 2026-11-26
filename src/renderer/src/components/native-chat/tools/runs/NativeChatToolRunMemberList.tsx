@@ -86,7 +86,7 @@ export function NativeChatToolRunMemberList({
               block={row.block}
               result={row.result}
               disclosureKey={
-                disclosureId === undefined ? undefined : `line:${disclosureId}:${row.lineIdentity}`
+                disclosureId === undefined ? undefined : `line:${disclosureId}:${row.disclosureKey}`
               }
             />
           )

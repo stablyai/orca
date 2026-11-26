@@ -7,8 +7,9 @@ import type { NativeChatOlderPageResult } from '../../../viewport/history/native
 export type StructuredAgentSessionReadSnapshot = {
   state: StructuredAgentSessionState
   loadingOlder: boolean
-  /** Older pages applied, counted in the same snapshot that applies each one (not the hydrate's). */
-  olderPages: number
+  /** Older pages that added items, counted in the snapshot that applies each (not the hydrate's).
+   *  Absent until the first. */
+  olderPages?: number
   /** Bumped whenever older-page reads are invalidated (open, snapshot, reset, dispose). */
   olderHistoryGeneration: number
   initialHistoryAutoLoad: boolean

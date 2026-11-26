@@ -190,6 +190,7 @@ export function createStructuredSessionMocks() {
             hasOlder: mocks.hasOlder,
             readCurrent: mocks.readCurrent,
             loadingOlder: mocks.loadingOlder,
+            olderPages: mocks.olderPages,
             olderHistoryGeneration: mocks.olderHistoryGeneration,
             loadOlder: mocks.loadOlder,
             prompts: mocks.promptItems,

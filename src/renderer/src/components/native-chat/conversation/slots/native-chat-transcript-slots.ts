@@ -37,6 +37,7 @@ import {
 } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
+import { nativeChatMarkCarriedDisclosures } from './native-chat-carried-run-disclosures'
 import {
   nativeChatSideChatForkPoint,
   nativeChatSlotOffersFork,
@@ -261,15 +262,7 @@ export function buildNativeChatTranscript(
     typography
   )
   // Set here, in the structural build, so streamed frames patch these slots like any other.
-  const carried = input.carriedDisclosureIds
-  if (carried && carried.size > 0) {
-    for (const slot of drawn) {
-      const disclosureId = slot.kind === 'message' ? carried.get(slot.message.id) : undefined
-      if (slot.kind === 'message' && disclosureId !== undefined) {
-        slot.disclosureId = disclosureId
-      }
-    }
-  }
+  nativeChatMarkCarriedDisclosures(drawn, input.carriedDisclosureIds)
   // One action holder per turn: its last drawn response with words, else (when folding hid them)
   // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()

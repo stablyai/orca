@@ -80,7 +80,7 @@ export function useStructuredAgentSessionRead(args: {
     state: snapshot.state,
     readCurrent: snapshot.current,
     loadingOlder: snapshot.loadingOlder,
-    olderPages: snapshot.olderPages,
+    olderPages: snapshot.olderPages ?? 0,
     olderHistoryGeneration: snapshot.olderHistoryGeneration,
     initialHistoryAutoLoad: snapshot.initialHistoryAutoLoad,
     loadOlder: owner.loadOlder,
