@@ -6,9 +6,9 @@ import {
   type CommandDetailAuthority
 } from '../../../../../../../shared/agent-session/view/live-read/command-detail-authority'
 
-const hoisted = vi.hoisted(() => ({
-  owner: null as unknown,
-  observedRuntime: undefined as string | undefined
+const hoisted = vi.hoisted((): { owner: unknown; observedRuntime: string | undefined } => ({
+  owner: null,
+  observedRuntime: undefined
 }))
 vi.mock('../../../session/structured/read/structured-agent-session-read-owner-registry', () => ({
   findStructuredAgentSessionReadOwner: () => hoisted.owner
@@ -57,6 +57,17 @@ function frame(): AgentSessionSubscribeEvent {
   } as AgentSessionSubscribeEvent
 }
 
+/** The paired opening under test, reading through the given test double. */
+function openPaired(call: (...args: unknown[]) => unknown) {
+  return openWorkerDockCommandDetail({
+    sessionId: SESSION,
+    target: PAIRED,
+    tuple: TUPLE,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; answers with the RPC envelope fields this path reads
+    call: call as never
+  })
+}
+
 let authority: CommandDetailAuthority
 let scope: { transport: object; generation: number }
 
@@ -81,12 +92,7 @@ describe('paired command detail runtime pinning', () => {
   it('asks only the crediting runtime and shows its unchanged reply', async () => {
     credit('runtime-a')
     const call = vi.fn(async (..._args: unknown[]) => reply('runtime-a'))
-    const detail = openWorkerDockCommandDetail({
-      sessionId: SESSION,
-      target: PAIRED,
-      tuple: TUPLE,
-      call: call as never
-    })!
+    const detail = openPaired(call)!
     await expect(detail.read()).resolves.toBe(EXACT)
     expect(call).toHaveBeenCalledTimes(1)
     expect(call.mock.calls[0]![3]).toMatchObject({
@@ -101,12 +107,7 @@ describe('paired command detail runtime pinning', () => {
   it('discards a reply that names another runtime, and the opening cannot recover', async () => {
     credit('runtime-a')
     const call = vi.fn(async () => reply('runtime-b'))
-    const detail = openWorkerDockCommandDetail({
-      sessionId: SESSION,
-      target: PAIRED,
-      tuple: TUPLE,
-      call: call as never
-    })!
+    const detail = openPaired(call)!
     let lost = 0
     detail.opening.onLost(() => (lost += 1))
     await expect(detail.read()).resolves.toBeNull()
@@ -123,12 +124,7 @@ describe('paired command detail runtime pinning', () => {
   it('refuses before dispatch once a status names another runtime, even with stream close held', async () => {
     credit('runtime-a')
     const call = vi.fn(async () => reply('runtime-a'))
-    const detail = openWorkerDockCommandDetail({
-      sessionId: SESSION,
-      target: PAIRED,
-      tuple: TUPLE,
-      call: call as never
-    })!
+    const detail = openPaired(call)!
     // The status cache already saw B; A's close and status events have not arrived.
     hoisted.observedRuntime = 'runtime-b'
     await expect(detail.read()).resolves.toBeNull()
@@ -141,12 +137,7 @@ describe('paired command detail runtime pinning', () => {
     credit('runtime-a')
     let answer: (value: unknown) => void = () => {}
     const call = vi.fn(() => new Promise((resolve) => (answer = resolve)))
-    const detail = openWorkerDockCommandDetail({
-      sessionId: SESSION,
-      target: PAIRED,
-      tuple: TUPLE,
-      call: call as never
-    })!
+    const detail = openPaired(call)!
     const pending = detail.read()
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
     hoisted.observedRuntime = 'runtime-b'
@@ -157,14 +148,7 @@ describe('paired command detail runtime pinning', () => {
   it('a paired reader with no credited runtime opens nothing and never reads', () => {
     credit(undefined)
     const call = vi.fn()
-    expect(
-      openWorkerDockCommandDetail({
-        sessionId: SESSION,
-        target: PAIRED,
-        tuple: TUPLE,
-        call: call as never
-      })
-    ).toBeNull()
+    expect(openPaired(call)).toBeNull()
     expect(call).not.toHaveBeenCalled()
     // Fresh credit from a known runtime recovers.
     credit('runtime-a')

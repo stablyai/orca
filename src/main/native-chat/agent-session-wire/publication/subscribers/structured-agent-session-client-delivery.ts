@@ -190,8 +190,7 @@ export class StructuredAgentSessionClientDelivery {
   readChildWork = (sessionId: string): AgentChildWorkView[] | undefined =>
     this.statusFeed.readChildWork(sessionId)
 
-  readCommandDetail = (sessionId: string, childWorkId: string) =>
-    this.statusFeed.readCommandDetail(sessionId, childWorkId)
+  readCommandDetail = (id: string, child: string) => this.statusFeed.readCommandDetail(id, child)
 
   childWorkOpen = (sessionId: string): boolean => this.statusFeed.childWorkOpen(sessionId)
 

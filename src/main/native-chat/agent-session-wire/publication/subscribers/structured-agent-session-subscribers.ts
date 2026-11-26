@@ -213,10 +213,9 @@ export class AgentSessionSubscribers {
   /** `creditedOnly`: only readers holding detail credit are owed (an authority-only wake, or the
    *  conversation is gone). */
   republishBackgroundTasks(sessionId: string, creditedOnly = false): void {
-    for (const subscriber of this.subscribers(sessionId)) {
-      if (!creditedOnly || subscriber.detailCredit) {
-        this.lanes.of(subscriber).backgroundTasks()
-      }
+    const owed = this.subscribers(sessionId).filter((s) => !creditedOnly || s.detailCredit)
+    for (const subscriber of owed) {
+      this.lanes.of(subscriber).backgroundTasks()
     }
   }
 
