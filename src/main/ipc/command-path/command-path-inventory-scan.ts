@@ -1,6 +1,6 @@
 export type AgentPathMatch = {
   user?: string
-  // Null means an earlier candidate could not be verified, so a later hit must use its full path.
+  // Null means an earlier candidate blocks safe by-name lookup.
   first?: string | null
   unquoted?: string | null
 }
@@ -15,6 +15,7 @@ export type DirectoryCandidate = { hit?: string; uncertain: boolean; byName?: bo
 
 function trackPathCommand(
   directoryCount: number,
+  presenceOnly: boolean,
   publish: (match: AgentPathMatch) => void,
   complete: (uncertain: boolean, verified: boolean) => void
 ): (index: number, dir: PathDirectory, outcome: DirectoryCandidate) => void {
@@ -24,6 +25,11 @@ function trackPathCommand(
   let uncertain = false
   let earliestUser: { index: number; hit: string } | undefined
   return (index, dir, outcome) => {
+    if (presenceOnly && dir.user && outcome.hit) {
+      publish({ user: outcome.hit })
+      complete(outcome.uncertain, true)
+      return
+    }
     const previousUser = earliestUser
     const { first, unquoted } = match
     if (dir.user && outcome.hit && (!earliestUser || index < earliestUser.index)) {
@@ -35,14 +41,14 @@ function trackPathCommand(
       settled.delete(next++)
       const { hit, uncertain: entryUncertain, byName } = entry.outcome
       uncertain ||= entryUncertain
-      const winner = entryUncertain || (hit && !byName) ? null : hit
+      const winner = entryUncertain || (hit && (!entry.dir.user || !byName)) ? null : hit
       if (entry.dir.first && match.first === undefined) {
         match.first = winner
       }
       if (entry.dir.unquoted && match.unquoted === undefined) {
         match.unquoted = winner
       }
-      if (hit) {
+      if (entry.dir.user && hit) {
         verified = true
         break
       }
@@ -72,11 +78,11 @@ export async function scanInventoryPathCommands<Listing>(
     command: string,
     dir: PathDirectory,
     listing: Listing | null,
-    canProbe: () => boolean
+    canProbe: boolean
   ) => Promise<DirectoryCandidate>,
   publish: (command: string, match: AgentPathMatch) => void,
   complete: (command: string, uncertain: boolean, verified: boolean) => void,
-  signal?: AbortSignal
+  { presenceOnly = false, signal }: { presenceOnly?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   const pending = new Map<
     string,
@@ -92,6 +98,7 @@ export async function scanInventoryPathCommands<Listing>(
     pending.set(command, {
       record: trackPathCommand(
         directories.length,
+        presenceOnly,
         (match) => publish(command, match),
         (uncertain, verified) => {
           hasMiss ||= !verified
@@ -124,15 +131,9 @@ export async function scanInventoryPathCommands<Listing>(
           return
         }
         // A late listing can prove absence without issuing any new candidate probes.
-        const admitted = state.firstHit === undefined
-        const outcome = await scan(
-          command,
-          dir,
-          names,
-          () => admitted && (state.firstHit === undefined || index <= state.firstHit)
-        )
+        const outcome = await scan(command, dir, names, state.firstHit === undefined)
         if (!signal?.aborted && pending.has(command)) {
-          if (outcome.hit) {
+          if (dir.user && outcome.hit) {
             if (state.firstHit === undefined) {
               searching--
             }

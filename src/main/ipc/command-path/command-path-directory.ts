@@ -39,15 +39,6 @@ export async function checkExecutableFile(
   return result === UNVERIFIED_FS_PROBE ? 'unknown' : result ? 'executable' : 'missing'
 }
 
-export function detectionDirectoryKey(dir: string, isWin: boolean): string {
-  return isWin
-    ? path.win32
-        .normalize(dir)
-        .replace(/[\\/]+$/, '')
-        .toLowerCase()
-    : dir
-}
-
 export async function readDetectionDirectory(
   dir: string,
   inventory = false
@@ -81,28 +72,6 @@ export async function readDetectionDirectory(
     return !inventory || isDirentLookupError(error) || isPathPermissionError(error)
       ? null
       : 'unverified'
-  }
-}
-
-export async function readInlineDetectionDirectory(
-  dir: string,
-  inventory: boolean
-): Promise<DetectionDirectoryListing> {
-  try {
-    // Dir iteration can lstat unknown entry types synchronously.
-    const entries = await readdir(dir)
-    if (
-      entries.length > MAX_DETECTION_DIRECTORY_ENTRIES ||
-      entries.some((name) => /[^\p{ASCII}]/u.test(name))
-    ) {
-      return null
-    }
-    return new Map(entries.map((name) => [directoryNameKey(name), name]))
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return new Map()
-    }
-    return !inventory || isPathPermissionError(error) ? null : 'unverified'
   }
 }
 

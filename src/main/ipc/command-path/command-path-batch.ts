@@ -7,11 +7,7 @@ import {
   getExecutableNames,
   stripWindowsPathQuotes
 } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
-import {
-  detectionDirectoryKey,
-  directoryNameKey,
-  checkExecutableFile
-} from './command-path-directory'
+import { directoryNameKey, checkExecutableFile } from './command-path-directory'
 import {
   scanInventoryPathCommands,
   type AgentPathMatch,
@@ -54,11 +50,14 @@ function getDetectionDirectories(
 ): PathDirectory[] {
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
   const directories = new Map<string, PathDirectory & { index: number }>()
+  const cwdDir = isWin ? (cwd ?? process.cwd()) : ''
+  // Preserve exact PATH spellings apart from trailing separators on the CWD alias.
+  const cwdKey = isAbsolute(cwdDir) ? cwdDir.replace(/[\\/]+$/, '') : undefined
   const add = (dir: string, onPath: boolean) => {
     if (!isAbsolute(dir)) {
       return undefined
     }
-    const key = detectionDirectoryKey(dir, isWin)
+    const key = cwdKey !== undefined && dir.replace(/[\\/]+$/, '') === cwdKey ? cwdDir : dir
     const entry: PathDirectory & { index: number } = directories.get(key) ?? {
       dir,
       index: directories.size,
@@ -68,9 +67,7 @@ function getDetectionDirectories(
     directories.set(key, entry)
     return entry
   }
-  if (isWin) {
-    add(cwd ?? process.cwd(), false)
-  }
+  const cwdEntry = add(cwdDir, false)
   let lastFirst = -1
   let lastUnquoted = -1
   for (const raw of (readEnvCaseInsensitive(env, 'PATH') ?? '').split(isWin ? ';' : ':')) {
@@ -91,6 +88,10 @@ function getDetectionDirectories(
       lastUnquoted = Math.max(lastUnquoted, entry.index)
     }
   }
+  // A CWD-only hit can shadow cmd's PATH lookup.
+  if (cwdEntry && !cwdEntry.user) {
+    cwdEntry.first ??= true
+  }
   return [...directories.values()]
 }
 
@@ -104,6 +105,7 @@ export async function findCommandsOnLocalPath(
     found?: Set<string>
     probes?: InventoryFsProbes
     inventoryCommandCount?: number
+    presenceOnly?: boolean
     onMatch?: () => void
     onCommandComplete?: (command: string, uncertain: boolean, verified: boolean) => void
   } = {}
@@ -178,7 +180,7 @@ export async function findCommandsOnLocalPath(
     command: string,
     dir: PathDirectory,
     listing: Listing | null,
-    canProbe: () => boolean
+    canProbe: boolean
   ): Promise<DirectoryCandidate> => {
     const names = listing === UNVERIFIED_FS_PROBE ? null : listing
     const checked = new Set<string>()
@@ -194,7 +196,7 @@ export async function findCommandsOnLocalPath(
       if (checked.has(key)) {
         continue
       }
-      if (!canProbe()) {
+      if (!canProbe) {
         return { uncertain: true }
       }
       checked.add(key)
@@ -233,7 +235,7 @@ export async function findCommandsOnLocalPath(
       }
       options.onCommandComplete?.(command, uncertain, verified)
     },
-    signal
+    { presenceOnly: options.presenceOnly, signal }
   )
   return found
 }

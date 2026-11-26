@@ -313,6 +313,55 @@ describe('win32 PATH lookup', () => {
     }
   })
 
+  it.each(['PATH', 'CWD'])(
+    'finds the user install while retaining shell precedence past a %s shadow',
+    async (source) => {
+      const runtime = path.join(root, `orca-runtime-${source}`)
+      const late = path.join(root, 'late')
+      const programs = ['claude', 'codex', 'grok', 'omp', 'opencode']
+      const shadowOnPath = source === 'PATH'
+      await mkdir(runtime)
+      await Promise.all([
+        writeFile(path.join(runtime, 'claude.cmd'), ''),
+        ...programs.map((program) => writeFile(path.join(dotBin, `${program}.cmd`), ''))
+      ])
+      const held = Promise.withResolvers<Map<string, string> | null>()
+      const listings = vi.mocked(readDetectionDirectoryViaWorker)
+      listings.mockClear()
+      listings.mockImplementation((dir) =>
+        dir === late ? held.promise : readDetectionDirectory(dir)
+      )
+      vi.mocked(stat).mockClear()
+      const matches = new Map<string, AgentPathMatch>()
+      try {
+        await expect(
+          findCommandsOnLocalPath(programs, {
+            platform: 'win32',
+            cwd: shadowOnPath ? '' : runtime,
+            env: {
+              PATH: `${shadowOnPath ? `"${runtime}";${runtime};` : ''}${dotBin};${late}`,
+              PATHEXT: '.cmd'
+            },
+            inventory: { isRuntimePath: (dir) => shadowOnPath && dir === runtime, matches }
+          })
+        ).resolves.toEqual(new Set(programs))
+        const user = path.join(dotBin, 'claude.cmd')
+        expect(matches.get('claude')).toEqual({
+          first: null,
+          unquoted: shadowOnPath ? null : user,
+          user
+        })
+        expect(listings.mock.calls.filter(([dir]) => dir === runtime)).toHaveLength(1)
+        expect(
+          vi.mocked(stat).mock.calls.filter(([file]) => file === path.join(runtime, 'claude.cmd'))
+        ).toHaveLength(1)
+      } finally {
+        held.resolve(new Map())
+        listings.mockReset()
+      }
+    }
+  )
+
   it('ignores dots in parent directories so path-qualified lookups do not match POSIX siblings', async () => {
     const target = path.join(dotBin, 'prettier')
     await expect(

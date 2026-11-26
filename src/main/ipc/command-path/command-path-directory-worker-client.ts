@@ -1,10 +1,7 @@
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import type { InstallDirectoryListing } from '../../../shared/shell/command-resolution/inventory-fs-probes'
-import {
-  readInlineDetectionDirectory,
-  readInlineInstallSubdirectories
-} from './command-path-directory'
+import { readInlineInstallSubdirectories } from './command-path-directory'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
@@ -45,7 +42,8 @@ export class DetectionDirectoryWorkerClient {
 
   constructor(
     workerFactory: WorkerThreadFactory = createWorker,
-    private readonly mode: DetectionDirectoryRequest['mode'] = 'path'
+    private readonly mode: DetectionDirectoryRequest['mode'] = 'path',
+    private readonly requestTimeoutMs: number | null = REQUEST_TIMEOUT_MS
   ) {
     this.host = new LazyWorkerThreadHost({
       factory: workerFactory,
@@ -84,7 +82,9 @@ export class DetectionDirectoryWorkerClient {
     const id = this.nextId++
     return new Promise((resolve) => {
       const timer =
-        this.mode === 'install' ? undefined : setTimeout(() => this.dispose(), REQUEST_TIMEOUT_MS)
+        this.mode === 'install' || this.requestTimeoutMs === null
+          ? undefined
+          : setTimeout(() => this.dispose(), this.requestTimeoutMs)
       if (this.mode !== 'path' && 'ref' in worker && typeof worker.ref === 'function') {
         worker.ref()
       }
@@ -112,16 +112,16 @@ export class DetectionDirectoryWorkerClient {
 let client: DetectionDirectoryWorkerClient | undefined
 let inventoryClient: DetectionDirectoryWorkerClient | undefined
 let installClient: DetectionDirectoryWorkerClient | undefined
-let inlineReads = false
+let cliInventory = false
 
-export function enableInlineDetectionDirectoryReads(): void {
-  inlineReads = true
+export function enableCliInventoryDirectoryReads(): void {
+  cliInventory = true
 }
 
 export async function readInstallDirectoriesViaWorker(
   dir: string
 ): Promise<InstallDirectoryListing | null> {
-  if (inlineReads) {
+  if (cliInventory) {
     return readInlineInstallSubdirectories(dir)
   }
   installClient ??= new DetectionDirectoryWorkerClient(createWorker, 'install')
@@ -133,11 +133,12 @@ export async function readDetectionDirectoryViaWorker(
   dir: string,
   inventory = false
 ): Promise<DetectionDirectoryListing> {
-  if (inlineReads) {
-    return readInlineDetectionDirectory(dir, inventory)
-  }
   const workerClient = inventory
-    ? (inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, 'inventory'))
+    ? (inventoryClient ??= new DetectionDirectoryWorkerClient(
+        createWorker,
+        'inventory',
+        cliInventory ? null : REQUEST_TIMEOUT_MS
+      ))
     : (client ??= new DetectionDirectoryWorkerClient())
   const listing = await workerClient.read(dir)
   return listing instanceof Map || listing === 'unverified' ? listing : null

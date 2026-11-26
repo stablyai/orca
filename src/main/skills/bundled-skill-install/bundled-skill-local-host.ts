@@ -5,7 +5,7 @@ import {
   type SkillInstallProviderId
 } from '../../../shared/skills/installation/skill-install-providers'
 import { detectInstalledAgentsWithShellPathHydration } from '../../preflight/installed-agent-detection'
-import { enableInlineDetectionDirectoryReads } from '../../ipc/command-path/command-path-directory-worker-client'
+import { enableCliInventoryDirectoryReads } from '../../ipc/command-path/command-path-directory-worker-client'
 import { killActiveShellProbes } from '../../startup/shell-environment/shell-probe-lifetime'
 import {
   readUserClaudeConfigDir,
@@ -49,7 +49,7 @@ export async function sendCliSkillAgentInventory(): Promise<void> {
     stop()
     return
   }
-  enableInlineDetectionDirectoryReads()
+  enableCliInventoryDirectoryReads()
   let reply: SkillInstallProviderId[] | string
   try {
     reply = await detectBundledSkillAgents()

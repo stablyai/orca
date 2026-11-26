@@ -50,7 +50,8 @@ export function createHostEnvironmentDoctorDeps(
     // Agent detection's login-shell PATH, applied before any probe so all checks agree.
     prepare: () => hydrateShellPathForAgentDetection(undefined, options.refreshShellPath === true),
     run,
-    findCommands: (commands) => findCommandsOnLocalPath(commands, { env: baseEnv() }),
+    findCommands: (commands) =>
+      findCommandsOnLocalPath(commands, { env: baseEnv(), presenceOnly: true }),
     detectAgents: () => detectInstalledAgentInventory(),
     readFile: (path) => readFile(path, 'utf8').catch(() => null),
     exists: (path) =>
