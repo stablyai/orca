@@ -119,6 +119,38 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getSidebarProjectColorAccentsEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.sidebarProjectColorAccents.title',
+      'Project color accents'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.sidebarProjectColorAccents.description',
+      'When grouped by project, outline each project with its badge color.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.project',
+        'project'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidebarProjectColorAccents.color',
+        'color'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidebarProjectColorAccents.group',
+        'group'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidebarProjectColorAccents.badge',
+        'badge'
+      )
+    ]
+  })
+)
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.9bc701a4d1', 'Show tasks button'),
@@ -184,5 +216,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
     ]
   },
   getLeftSidebarAppearanceEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  getSidebarProjectColorAccentsEntry()
 ])

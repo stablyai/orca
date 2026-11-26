@@ -26,6 +26,7 @@ import {
 } from './appearance-usage-percentage-search'
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { SidebarProjectColorAccentsSetting } from './SidebarProjectColorAccentsSetting'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
@@ -363,6 +364,8 @@ export function AppearanceWindowSidebarSection({
                   }
                 />
               </SearchableSetting>
+
+              <SidebarProjectColorAccentsSetting />
             </SettingsGroupSubsection>
           ) : null}
 
