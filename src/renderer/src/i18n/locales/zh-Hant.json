@@ -1257,6 +1257,8 @@
       "claudeWorkspace": "Claude 工作區",
       "httpServer": "HTTP 伺服器",
       "inspectFailed": "無法檢查 {{directory}}。",
+      "inspectConfigsFailed": "無法檢查 MCP 設定檔。",
+      "createConfigFailed": "建立 MCP 設定檔失敗。",
       "invalidJson": "JSON 無效",
       "invalidServer": "伺服器無效",
       "noServers": "沒有伺服器",
@@ -7609,7 +7611,8 @@
           "lineageSubmenu": "父層與子層",
           "projectGroupSubmenu": "專案群組",
           "muteNotifications": "將通知靜音",
-          "unmuteNotifications": "取消通知靜音"
+          "unmuteNotifications": "取消通知靜音",
+          "copyAutoNameError": "自動命名錯誤"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "需要更新",
@@ -8402,6 +8405,26 @@
           "browseFolder": "瀏覽資料夾…",
           "cloneFromUrl": "從 URL 複製…",
           "createNewProject": "建立新專案…"
+        },
+        "AutoNameFailed": {
+          "naming": "正在為此工作區命名…",
+          "title": "無法自動命名",
+          "dismiss": "關閉",
+          "modelUnavailableOnAccount": "此 {{agent}} 帳戶無法使用 {{model}}",
+          "modelUnavailableForAgent": "{{agent}} 無法使用 {{model}}",
+          "modelUnavailable": "無法使用 {{model}}",
+          "timedOut": "{{seconds}} 秒後逾時",
+          "agentMissing": "尚未安裝 {{agent}}",
+          "usageLimitAgent": "{{agent}} 已達用量上限",
+          "usageLimit": "命名代理程式已達用量上限",
+          "signedOutAgent": "尚未登入 {{agent}}",
+          "signedOut": "命名代理程式尚未登入",
+          "agentFailed": "{{agent}} 因錯誤而結束",
+          "noAgent": "尚未設定命名代理程式",
+          "publishCheck": "無法確認分支是否已推送",
+          "environment": "無法啟動命名代理程式",
+          "emptyName": "代理程式未傳回可用的名稱",
+          "unknown": "命名代理程式發生錯誤"
         }
       },
       "shared": {
@@ -21490,6 +21513,10 @@
       "copyCode": "複製程式碼",
       "wrapLines": "自動換行",
       "disableLineWrap": "停用自動換行",
+      "htmlPreview": "HTML 預覽",
+      "htmlView": "HTML 檢視",
+      "htmlViewCode": "程式碼",
+      "htmlViewPreview": "預覽",
       "context": {
         "unavailable": "上下文用量暫時未知，將在代理程式下次回應後提供。",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根據上一次回應的估算值。",
@@ -22878,6 +22905,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca，以開啟其工作區以外的檔案"
+      },
+      "paste": {
+        "clipboardUnpastable": "無法貼上複製的檔案。請試著將它拖曳到終端機中。"
       }
     },
     "settings": {
@@ -25272,7 +25302,18 @@
       "addEmoji": "新增表情符號",
       "addEmojiTooltip": "新增表情符號（或輸入 :）",
       "noEmojiFound": "找不到表情符號",
-      "labels": "標籤：{{labels}}"
+      "labels": "標籤：{{labels}}",
+      "peek": {
+        "closed": "已關閉",
+        "open": "開啟中",
+        "merged": "已合併",
+        "draft": "草稿",
+        "failing": "失敗",
+        "running": "待處理",
+        "cancelled": "已取消",
+        "passing": "通過",
+        "more": "另有 {{count}} 個"
+      }
     },
     "attachments": {
       "updateRuntime": "更新遠端執行環境以更改工作區連結",
@@ -27015,7 +27056,12 @@
       "filters": "應用程式篩選器",
       "composio": {
         "withComposio": "透過 Composio",
-        "signsIn": "透過你的 Composio 帳戶登入。"
+        "signsIn": "透過你的 Composio 帳戶登入。",
+        "changeKeyTitle": "更換你的 Composio 金鑰",
+        "replacesKeyEnding": "取代末尾為 {{hint}} 的金鑰，適用於你所有的機器人。",
+        "replacesKey": "取代你已儲存的金鑰，適用於你所有的機器人。",
+        "newKeyNeeds": "新金鑰需要 <permission/>。",
+        "replaceKey": "更換金鑰並繼續"
       },
       "mcp": {
         "addTitle": "新增 {{app}}",
@@ -27106,6 +27152,7 @@
       },
       "setUpNamed": "設定 {{name}}",
       "setUp": "設定",
+      "couldNotConnect": "無法連線到 {{app}}",
       "webhooks": {
         "line": "來自任何工具或指令碼的事件"
       },
@@ -27453,6 +27500,11 @@
       "nudgeDismiss": "不再顯示",
       "menu": "從其他應用程式匯入…"
     },
+    "composio": {
+      "key": {
+        "changeKey": "更換金鑰"
+      }
+    },
     "share": {
       "linkStatusUnavailable": "無法檢查分享連結",
       "linkNoLongerAvailable": "此分享連結已無法使用。",
@@ -27605,7 +27657,10 @@
       "groupReplierNotMember": "請在「聊天室回覆」中選擇一位目前的聊天室成員。",
       "groupMailNeverStarted": "這封郵件從未開始一輪對話。",
       "groupRemoteUnreachable": "無法連線到 {{host}}。{{detail}}",
-      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。"
+      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。",
+      "composioKeyCantCreateSessions": "此 Composio 金鑰無法建立工作階段。所需權限：{{permission}}。",
+      "composioKeyNeedsPermission": "此 Composio 金鑰缺少下列權限：{{permission}}。",
+      "composioKeyMissingPermission": "此 Composio 金鑰缺少 Orca 所需的權限。"
     },
     "lookAroundEvery": {
       "every4h": "上午 8 點到晚上 8 點，每 4 小時",

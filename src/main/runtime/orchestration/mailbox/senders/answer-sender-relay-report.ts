@@ -1,13 +1,16 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 import { agentMessageSenderName } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 
-const reportSchema = z.object({
-  version: z.literal(1),
-  name: z.string().max(200).nullable(),
-  agent: z.string().min(1).max(40).optional(),
-  relation: z.enum(['worker', 'coordinator', 'none']).optional()
-})
+const reportSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    name: z.string().max(200).nullable(),
+    agent: z.string().min(1).max(40).optional(),
+    relation: z.enum(['worker', 'coordinator', 'none']).optional()
+  })
+)
 
 export function readAnswerSenderRelayReport(
   value: unknown

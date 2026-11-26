@@ -45,12 +45,14 @@ export const PRCommentReaction = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
-export const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString,
-  userRefresh: z.boolean().optional(),
-  /** `swr`: a client's timer; the host's PR auto-refresh cadence may answer from its last read. */
-  reason: OptionalPRRefreshReason
-})
+export const PullRequestChecks = lazyZodSchema(() =>
+  PullRequest.extend({
+    headSha: OptionalString,
+    userRefresh: z.boolean().optional(),
+    /** `swr`: a client's timer; the host's PR auto-refresh cadence may answer from its last read. */
+    reason: OptionalPRRefreshReason
+  })
+)
 
 export const PullRequestCheckDetails = RepoSelector.extend({
   checkRunId: z.number().int().positive().optional(),
@@ -60,10 +62,12 @@ export const PullRequestCheckDetails = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
-export const RerunPullRequestChecks = PullRequest.extend({
-  headSha: OptionalString,
-  failedOnly: z.boolean().optional()
-})
+export const RerunPullRequestChecks = lazyZodSchema(() =>
+  PullRequest.extend({
+    headSha: OptionalString,
+    failedOnly: z.boolean().optional()
+  })
+)
 
 export const PullRequestFileContents = RepoSelector.extend({
   prNumber: z.number().int().positive(),
