@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HeadlessEmulator } from '../emulation/headless-emulator'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
@@ -8,19 +9,27 @@ const READY = '\x1b]777;orca-shell-ready\x07'
 
 function createBarrier(foreground: { group: number | null; name: string | null }) {
   const writes: string[] = []
-  const subprocess = {
+  const subprocess: SubprocessHandle = {
     pid: SHELL_PID,
     shellPath: '/bin/zsh',
     readForegroundGroup: () => foreground.group,
     getForegroundProcess: () => foreground.name,
-    write: (data: string) => writes.push(data)
-  } as unknown as SubprocessHandle
+    write: (data) => {
+      writes.push(data)
+    },
+    resize: () => {},
+    kill: () => {},
+    forceKill: () => {},
+    terminateOwnedTree: () => 'unavailable',
+    signal: () => {},
+    onData: () => {},
+    onExit: () => {},
+    dispose: () => {}
+  }
   const barrier = new SessionShellReadyBarrier({
     sessionId: 'session-1',
     subprocess,
-    responderParser: {
-      registerCsiHandler: () => ({ dispose: () => {} })
-    } as unknown as ConstructorParameters<typeof SessionShellReadyBarrier>[0]['responderParser'],
+    responderParser: new HeadlessEmulator({ cols: 80, rows: 24 }).responderParser,
     shellReadySupported: true,
     shellReadyTimeoutMs: 1_000,
     installDeviceAttributesFilter: () => {},

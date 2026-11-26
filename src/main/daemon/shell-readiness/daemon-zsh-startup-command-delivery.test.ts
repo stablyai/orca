@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as pty from 'node-pty'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { SHELL_STARTUP_FEATURE_ENV } from '../../pty/shell-startup/shell-startup-features'
 import { hasZsh, ZSH_PATH } from '../../pty/shell-startup/zsh-startup-hook-pty-harness'
@@ -84,10 +84,7 @@ describe('daemon zsh startup command delivery', () => {
       })
       const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
       try {
-        const deadline = Date.now() + 15_000
-        while (!existsSync(outPath) && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 50))
-        }
+        await vi.waitFor(() => expect(existsSync(outPath)).toBe(true), { timeout: 15_000 })
       } finally {
         proc.kill()
         // afterEach removes the scratch dir; a still-dying zsh writing into it fails that with ENOTEMPTY.

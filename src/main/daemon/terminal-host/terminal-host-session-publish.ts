@@ -198,44 +198,36 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  const command = opts.command
-  if (command && !startupCommandWritten && shellReadySupported) {
-    // The zsh wrapper runs the command from its first line editor; an rc file that execs tmux or another shell never gets there.
-    session.armStartupCommandExecFallback(() => {
-      staging.current = stageStartupCommand({
-        command,
-        shellPath: subprocess.shellPath,
-        orcaBuiltLine: opts.launchAgent !== undefined
-      })
-      return buildStartupCommandSubmission(staging.current.command, {
-        bracketedPasteSafe: true
-      })
-    })
-  }
-  if (startupCommandWritten && opts.command) {
-    staging.current = stageStartupCommand({
-      command: opts.command,
+  const buildStagedSubmission = (command: string): string => {
+    const staged = stageStartupCommand({
+      command,
       shellPath: subprocess.shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined
     })
-    const notice = startupStagingFailureNotice(staging.current)
+    staging.current = staged
+    const notice = startupStagingFailureNotice(staged)
     if (notice) {
       session.startupIngress.accept(notice)
       try {
         deps.reportReadinessEvent?.('startup-command-stage-failed', {
           sessionId: opts.sessionId,
-          reason: staging.current.failure
+          reason: staged.failure
         })
       } catch {
         // Diagnostics must never turn a live PTY into a failed create.
       }
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.writeStartupCommand(
-      buildStartupCommandSubmission(staging.current.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
-    )
+    return buildStartupCommandSubmission(staged.command, {
+      bracketedPasteSafe: shellReadySupported
+    })
+  }
+  const command = opts.command
+  if (command && startupCommandWritten) {
+    session.writeStartupCommand(buildStagedSubmission(command))
+  } else if (command && shellReadySupported) {
+    // The zsh wrapper runs the command from its first line editor; an rc file that execs tmux or another shell never gets there.
+    session.armStartupCommandExecFallback(() => buildStagedSubmission(command))
   }
 
   return {
