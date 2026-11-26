@@ -6,7 +6,10 @@ import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-su
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 
-const store = vi.hoisted(() => ({ removed: [] as string[], pending: [] as string[] }))
+const store = vi.hoisted((): { removed: string[]; pending: string[] } => ({
+  removed: [],
+  pending: []
+}))
 // Only the store worker is faked; the removal decision runs for real.
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store', () => ({
   removeWslHostEnvironment: async (_path: string, id: string) => void store.removed.push(id),
@@ -25,17 +28,29 @@ const record: WslHostDeploymentRecord = {
 }
 
 function unreachableConnector(): WslHostConnector & { stopCalls: number } {
-  const connector = {
+  const unused = async (): Promise<never> => {
+    throw new Error('not used by Remove')
+  }
+  const connector: WslHostConnector & { stopCalls: number } = {
     stopCalls: 0,
+    listDistros: unused,
+    readOrcadPublicKey: unused,
+    connect: unused,
+    get: () => null,
+    isReachable: unused,
+    reachability: unused,
+    isSettling: () => false,
     resolveDistroName: async () => 'Ubuntu-24.04',
     stopServer: async () => {
       connector.stopCalls += 1
       throw new Error('orcad_identity_mismatch: the server on remote port 6800 is not this host’s')
     },
     disconnect: async () => {},
-    releaseHolder: async () => {}
+    releaseHolder: async () => {},
+    adoptHolders: async () => {},
+    dispose: async () => {}
   }
-  return connector as unknown as WslHostConnector & { stopCalls: number }
+  return connector
 }
 
 // #49180: a host whose server can't be reached must never be stuck listed.

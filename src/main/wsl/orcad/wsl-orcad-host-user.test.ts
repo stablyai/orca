@@ -7,10 +7,10 @@ import { pinWslHostLinuxUsers } from './wsl-orcad-host-user'
 // #49180: a pinned host's every wsl.exe call names its account, whatever the distro's default is.
 function argsOfOneExec(distro: string): Promise<readonly string[]> {
   let seen: readonly string[] = []
-  const spawn = ((spec: { args: readonly string[] }) => {
-    seen = spec.args
+  const spawn: PipedProcessSpawner = (spec) => {
+    seen = spec.args ?? []
     return spawnChild(process.execPath, ['-e', ''], { stdio: 'pipe' })
-  }) as unknown as PipedProcessSpawner
+  }
   const transport = createWslOrcadHostTransport({
     target: { kind: 'wsl', id: `wsl:${distro}`, distro, label: distro },
     spawn,
