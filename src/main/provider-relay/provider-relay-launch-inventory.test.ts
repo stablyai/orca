@@ -4,7 +4,12 @@ import type { ProviderRelayInfo } from '../daemon/protocol/daemon-provider-relay
 import {
   keptProviderRelayOutstanding,
   listKeptProviderRelays,
-  registerReattachableProviderRelayAgent
+  registerReattachableProviderRelayAgent,
+  beginProviderRelayRunAsk,
+  dropListedProviderRelay,
+  forgetProviderRelayRunVerdict,
+  noteProviderRelayRunVerdict,
+  providerRelayRunUnknown
 } from './provider-relay-launch-inventory'
 
 const ended = (chatKey: string, agent: string, unread: boolean): ProviderRelayInfo => ({
@@ -55,5 +60,39 @@ describe('kept relays whose agent ended while no app was attached', () => {
     await new Promise((resolve) => setImmediate(resolve))
     // Only the relay this build can't reattach is ended at launch; the rest wait for their chats.
     expect(closed).toEqual([{ relayId: 'r-f' }])
+  })
+})
+
+describe("a chat's unknown run verdict", () => {
+  it('comes only from the newest ask that started after the last close, deletion or new run', () => {
+    // A starts, the chat closes, B starts and answers gone, then A answers unknown.
+    const a = beginProviderRelayRunAsk('c')
+    forgetProviderRelayRunVerdict('c')
+    const b = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', b, 'gone')
+    noteProviderRelayRunVerdict('c', a, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(false)
+
+    const c = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', c, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(true)
+    const thrown = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', thrown, null)
+    expect(providerRelayRunUnknown('c')).toBe(true)
+
+    // A conclusive answer is never undone by an unknown from an ask already in flight.
+    const answer = beginProviderRelayRunAsk('c')
+    const slow = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', answer, 'kept')
+    noteProviderRelayRunVerdict('c', slow, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(false)
+    const after = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', after, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(true)
+
+    const late = beginProviderRelayRunAsk('c')
+    dropListedProviderRelay('c')
+    noteProviderRelayRunVerdict('c', late, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(false)
   })
 })

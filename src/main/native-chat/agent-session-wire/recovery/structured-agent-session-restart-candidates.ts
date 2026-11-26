@@ -68,7 +68,7 @@ async function withoutKeptRunningChats(
   const mayRun = await Promise.all(
     markers.map(async ({ sessionId }) => {
       const record = getRecord(sessionId)
-      return record ? (await providerRelayRunLiveness(record)) !== 'gone' : false
+      return record ? (await providerRelayRunLiveness(record, { observe: true })) !== 'gone' : false
     })
   )
   return markers.filter(

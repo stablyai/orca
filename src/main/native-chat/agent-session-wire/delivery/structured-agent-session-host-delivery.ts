@@ -48,6 +48,8 @@ import { createStructuredAgentSessionRanRecorder } from '../options/structured-a
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
+  /** The chat closed: a run it waited on stops being asked about for it. */
+  closed: (sessionId: string) => void
   open: (
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions
@@ -280,6 +282,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   })
   return {
     loop,
+    closed: (sessionId) => keptOpens.closed(sessionId),
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
       input.clientDelivery.publishStatusAndSettlement(sessionId)
