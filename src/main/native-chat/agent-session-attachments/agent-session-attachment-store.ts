@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: preview merge of the sharing stack with main pushed this just over; split when the stack lands. */
 // Per-upload directories preserve original filenames without collisions; atomic commit hides partial bytes.
 
 import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
@@ -40,7 +41,8 @@ type InFlightUpload = {
   callerKey: string
   uploadDir: string
   name: string
-  sessionId: string
+  /** Null for an item's staged upload, which no chat holds yet. */
+  sessionId: string | null
   expectedLength: number
   receivedLength: number
   writing: boolean
@@ -86,12 +88,22 @@ export class AgentSessionAttachmentStore {
     if (!this.options.hasSession(args.sessionId)) {
       throw new Error('This chat is not on this host')
     }
+    return this.stageUpload(args)
+  }
+
+  /** Only after the caller has verified the destination on this host. */
+  async stageUpload(args: {
+    callerKey: string
+    sessionId?: string
+    name: string
+    byteLength: number
+  }): Promise<{ uploadId: string }> {
     const name = sanitizeAgentSessionAttachmentName(args.name)
     const uploadId = this.uploads.create((id) => ({
       callerKey: args.callerKey,
       uploadDir: join(this.rootDir, id),
       name,
-      sessionId: args.sessionId,
+      sessionId: args.sessionId ?? null,
       expectedLength: args.byteLength,
       receivedLength: 0,
       writing: false
@@ -154,7 +166,9 @@ export class AgentSessionAttachmentStore {
         join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE),
         finalPath
       )
-      this.uploadedFor.set(args.uploadId, upload.sessionId)
+      if (upload.sessionId !== null) {
+        this.uploadedFor.set(args.uploadId, upload.sessionId)
+      }
       for (const oldest of this.uploadedFor.keys()) {
         if (this.uploadedFor.size <= UPLOADED_FOR_KEPT) {
           break

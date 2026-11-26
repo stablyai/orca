@@ -122,6 +122,10 @@ export function startDeferredSessionReattachUnlessHiddenAgentResume(
       const deferred =
         isLive === false &&
         deferHiddenAgentResume(session, session.buildColdRestoreAgentResumeStartup(), () => {
+          // Why: hidden, the gone session's reattach starts nothing, so a background wake resumes the agent itself.
+          if (!session.deps.isVisibleRef.current && session.wakeHibernatedAgentPane) {
+            return session.wakeHibernatedAgentPane()
+          }
           reattach()
           return Promise.resolve(sessionId)
         })

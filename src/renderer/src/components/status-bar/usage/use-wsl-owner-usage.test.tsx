@@ -26,6 +26,8 @@ vi.mock('../../../store/index', () => ({
 }))
 
 const { useOwnerUsageRateLimits } = await import('./use-owner-usage-rate-limits')
+const { readWslProviderUsage, wslProviderUsageKey } =
+  await import('@/runtime/provider-accounts/observations/wsl-owner-usage-store')
 
 function provider(id: ProviderRateLimits['provider'], usedPercent: number): ProviderRateLimits {
   return {
@@ -171,21 +173,77 @@ describe('WSL host owner usage', () => {
     const reading = { ...provider('claude', 50), usageMetadata: { retryAtMs: FAR_RETRY_AT_MS } }
     const claude = { accountId: null, reading }
     mocks.readUsageForRuntimeTarget.mockResolvedValue({ claude, codex: claude })
-    renderHook(() => useOwnerUsageRateLimits(local))
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
     await act(async () => {})
-    await act(() => vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000 + 1_000))
+    await act(() => vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000 - 1_000))
+    await act(async () => {
+      await result.current.refreshRemote?.()
+    })
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledTimes(1)
+    await act(() => vi.advanceTimersByTimeAsync(2_000))
+    await act(async () => {
+      await result.current.refreshRemote?.()
+    })
     expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
   })
 
-  it('does not re-read on expiry while the window is in the background', async () => {
+  it('does not schedule idle re-reads after an attributed reading, and refreshes on focus or desktop poll', async () => {
     vi.useFakeTimers()
     mocks.distro = 'Suse'
-    mocks.focused = false
     const reading = provider('claude', 50)
-    mocks.readUsageForRuntimeTarget.mockResolvedValue({ claude: { accountId: null, reading } })
-    renderHook(() => useOwnerUsageRateLimits(local))
+    mocks.readUsageForRuntimeTarget.mockResolvedValue({
+      claude: { accountId: null, reading },
+      codex: { accountId: null, reading: provider('codex', 25) }
+    })
+    const { rerender } = renderHook(({ state }) => useOwnerUsageRateLimits(state), {
+      initialProps: { state: local }
+    })
     await act(async () => {})
-    await act(() => vi.advanceTimersByTimeAsync(120_000))
+    await act(() => vi.advanceTimersByTimeAsync(180_000))
     expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledTimes(1)
+
+    // Returning focus after the TTL refreshes the distro reading.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+
+    // Piggybacking on the desktop poller refreshes after the TTL without its own timer.
+    await act(() => vi.advanceTimersByTimeAsync(100_000))
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+    // A poll push whose desktop stamps did not advance (gated or WSL-only credentials) still counts.
+    const polled = { ...local }
+    await act(async () => {
+      rerender({ state: polled })
+    })
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledTimes(3)
+  })
+
+  it('evicts cached entries when account or distro owners are removed', async () => {
+    mocks.distro = 'Debian'
+    const retiredIds = ['acct-1', 'acct-2', 'acct-3']
+    const { rerender, unmount } = renderHook(() => useOwnerUsageRateLimits(local))
+
+    for (const id of retiredIds) {
+      mocks.settings = {
+        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Debian: id } }
+      }
+      mocks.readUsageForRuntimeTarget.mockResolvedValue({
+        codex: { accountId: id, reading: provider('codex', 40) }
+      })
+      rerender()
+      await act(async () => {})
+      expect(readWslProviderUsage(wslProviderUsageKey('Debian', 'codex', id))).not.toBeNull()
+    }
+
+    // All previously retired accounts were evicted on switch.
+    expect(readWslProviderUsage(wslProviderUsageKey('Debian', 'codex', 'acct-1'))).toBeNull()
+    expect(readWslProviderUsage(wslProviderUsageKey('Debian', 'codex', 'acct-2'))).toBeNull()
+
+    // Removing the distro owner evicts its remaining entries too.
+    mocks.distro = null
+    rerender()
+    expect(readWslProviderUsage(wslProviderUsageKey('Debian', 'codex', 'acct-3'))).toBeNull()
+    unmount()
   })
 })

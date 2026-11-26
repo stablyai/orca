@@ -40,7 +40,7 @@ export function envWithoutAppImageRuntime(env: NodeJS.ProcessEnv): Record<string
   return copy
 }
 
-export function removeAppImageRuntimeEnv(env: Record<string, string>): void {
+export function removeAppImageRuntimeEnv(env: NodeJS.ProcessEnv): void {
   if (process.platform !== 'linux' || (!env.APPIMAGE && !env.APPDIR && !env.ARGV0)) {
     return
   }

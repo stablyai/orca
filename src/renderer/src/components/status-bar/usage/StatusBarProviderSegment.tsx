@@ -27,14 +27,11 @@ import {
   isClaudeUsageWaitingForClaude
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
-import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatBareUsagePercentage } from './usage-percentage-label'
+import { formatUsageChipTitle } from './usage-chip-title'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
-import { GroupedPoolUsage } from './usage-grouped-pools'
-import { formatStatusBarSectionLabel } from './usage-pool-label'
-import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { useNow } from '@/lib/window-activity/use-now'
 
@@ -64,7 +61,7 @@ function WindowLabel({
   display: UsagePercentageDisplay
   showLabel?: boolean
   labelFirst?: boolean
-  /** Compact bar: a bright number with a smaller, dimmer unit. */
+  /** Compact bar: a regular-weight bright number with a smaller unit at 70% of its color. */
   compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -73,20 +70,28 @@ function WindowLabel({
     const value = String(getDisplayedUsagePercentage(w.usedPercent, display))
     const at = text.indexOf(value)
     const unit = (part: string) =>
-      part.trim() ? <span className="text-[0.82em] opacity-60">{part}</span> : part
+      part.trim() ? <span className="text-[0.82em] opacity-70">{part}</span> : part
     return (
       <span className="tabular-nums">
-        {showLabel && labelFirst ? <span className="text-foreground/50">{`${label} `}</span> : ''}
-        {at === -1 ? (
-          <span className="font-semibold text-foreground">{text}</span>
+        {showLabel && labelFirst ? (
+          <span className="text-muted-foreground">{`${label} `}</span>
         ) : (
-          <span className="font-semibold text-foreground">
+          ''
+        )}
+        {at === -1 ? (
+          <span className="text-foreground">{text}</span>
+        ) : (
+          <span className="text-foreground">
             {unit(text.slice(0, at))}
             {value}
             {unit(text.slice(at + value.length))}
           </span>
         )}
-        {showLabel && !labelFirst ? <span className="text-foreground/50">{` ${label}`}</span> : ''}
+        {showLabel && !labelFirst ? (
+          <span className="text-muted-foreground">{` ${label}`}</span>
+        ) : (
+          ''
+        )}
       </span>
     )
   }
@@ -142,42 +147,6 @@ export function isUsageUrgent(p: ProviderRateLimits): boolean {
   return tightest !== null && clampUsedPercent(tightest.window.usedPercent) >= USAGE_WARNING_PERCENT
 }
 
-/** Stands in for the chips a narrow bar leaves out; its tooltip names them and the popover lists them. */
-export function UsageOverflowChip({
-  hidden,
-  providerCount,
-  display
-}: {
-  hidden: readonly ProviderRateLimits[]
-  providerCount: number
-  display: UsagePercentageDisplay
-}): React.JSX.Element {
-  const t = useTranslate()
-  const names = hidden
-    .map((p) => {
-      const tightest = getTightestUsageSection(p, t, 'all')
-      const name = getProviderDisplayName(p.provider)
-      return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
-        : name
-    })
-    .join(', ')
-  return (
-    <span
-      title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
-        value0: names
-      })}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground"
-    >
-      {/* Why: reserve the widest count so the measured width doesn't depend on how many are hidden. */}
-      <span aria-hidden="true" className="invisible col-start-1 row-start-1">
-        +{providerCount}
-      </span>
-      <span className="col-start-1 row-start-1">+{Math.max(1, hidden.length)}</span>
-    </span>
-  )
-}
-
 function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
@@ -186,8 +155,6 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'O'
     case 'kimi':
       return 'K'
-    case 'antigravity':
-      return 'A'
     case 'minimax':
       return 'M'
     case 'grok':
@@ -269,7 +236,13 @@ type ProviderSegmentProps = {
   compact?: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
+  /** The user's usage setting; the compact look follows it, not the width-driven `mode`. */
+  barMode?: StatusBarUsageMode
+  /** Remote host the readings come from; the chip tooltip would otherwise hide the row's. */
+  hostLabel?: string
   countdownActive?: boolean
+  /** Off-layout copy read only for its width: tooltips can't change width, so it builds none. */
+  measuring?: boolean
 }
 
 /** A chip in the clipping status bar row: clipped chips stop their countdown wakes. */
@@ -287,7 +260,10 @@ export function ProviderSegment({
   compact = false,
   display,
   mode = 'verbose',
-  countdownActive = true
+  barMode = mode,
+  hostLabel,
+  countdownActive = true,
+  measuring = false
 }: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
@@ -303,30 +279,15 @@ export function ProviderSegment({
       : getTightestUsageSection(p, t, 'all')
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
-  const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
   // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
   const now = useResetCountdownClock(
-    !countdownActive
-      ? []
-      : template && p
-        ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
-        : mode === 'verbose'
-          ? groupedBuckets
-              .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
-              .map((bucket) => bucket.resetsAt)
-          : []
+    countdownActive && template && p
+      ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
+      : []
   )
 
-  const compactBar = mode === 'compact'
-  // Why: the compact bar dims icons so the numbers carry the row.
-  const icon = compactBar ? (
-    <span className="inline-flex opacity-50">
-      <ProviderIcon provider={provider} />
-    </span>
-  ) : (
-    <ProviderIcon provider={provider} />
-  )
+  const compactBar = barMode === 'compact'
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
   if (!p || p.status === 'idle' || (p.status === 'fetching' && !tightest)) {
@@ -340,7 +301,9 @@ export function ProviderSegment({
 
   if (p.status === 'unavailable') {
     return (
-      <span className="inline-flex items-center gap-1 text-muted-foreground/50">{icon} --</span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground/50">
+        <ProviderIcon provider={provider} /> --
+      </span>
     )
   }
 
@@ -348,7 +311,7 @@ export function ProviderSegment({
     return (
       <span
         className="inline-flex items-center gap-1 text-muted-foreground"
-        title={getProviderUsageErrorMessage(p, t)}
+        title={measuring ? undefined : getProviderUsageErrorMessage(p, t)}
       >
         <ProviderIcon provider={provider} />
         {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
@@ -371,17 +334,11 @@ export function ProviderSegment({
   const isStale =
     p.status === 'error' && (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
   const showBalance = isExtraUsageActive(p)
-  const showGroupedPools =
-    mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
-  // Why: the compact bar drops pool names ("Cursor Models") from the row; the tooltip keeps them.
-  const providerName = getProviderDisplayName(provider)
-  const pool = sections.find((section) => section.labelFirst)?.label
-  const subject =
-    !pool || pool.startsWith(providerName) ? (pool ?? providerName) : `${providerName} ${pool}`
+  // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
   const compactTitle =
-    compactBar && tightest
-      ? `${subject} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
+    mode === 'compact' && tightest && !measuring
+      ? [formatUsageChipTitle(p, sections[0], display, t), hostLabel].filter(Boolean).join('\n')
       : undefined
 
   return (
@@ -391,28 +348,19 @@ export function ProviderSegment({
       }
       title={compactTitle}
     >
-      {icon}
+      <ProviderIcon provider={provider} />
       {!template && mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
       {template ? (
         <CustomUsageText template={template} limits={p} display={display} now={now} />
-      ) : showGroupedPools ? (
-        <GroupedPoolUsage
-          visibleBuckets={groupedBuckets}
-          allBuckets={p.buckets ?? []}
-          display={display}
-          now={now}
-        />
       ) : (
         sections.map((section, index) => (
           <React.Fragment key={section.key}>
             {index > 0 ? <span className="text-muted-foreground">·</span> : null}
             <WindowLabel
               w={section.window}
-              label={
-                mode === 'compact' ? section.label : formatStatusBarSectionLabel(p, section, now, t)
-              }
+              label={section.label}
               display={display}
               showLabel={showLabels && section.label !== '' && !(compactBar && section.labelFirst)}
               labelFirst={section.labelFirst}

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: preview merge of the sharing stack with main pushed this just over; split when the stack lands. */
 import * as z from 'zod'
 import { BotImportedFromSchema } from './bots/bot-import'
 import { BotSharedFromSchema } from './bots/bot-shared-from'
@@ -81,6 +82,11 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
 
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
+}
+
+/** Memory upkeep runs tool-free, so every bot agent runs it; Look around is `lookAroundSupported`. */
+export function tidyUpSupported(agent: string): boolean {
+  return isBotAgent(agent)
 }
 
 export const BOT_NAME_MAX_LENGTH = 64

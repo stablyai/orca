@@ -55,7 +55,7 @@ export function useBrowserPageNavigationDownloads({
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   keepAddressBarFocusRef: MutableRefObject<boolean>
   focusWebviewNow: () => boolean
-  setResourceNotice: Dispatch<SetStateAction<string | null>>
+  setResourceNotice: (notice: string | null) => void
   addressBarValueRef: MutableRefObject<string>
   addressBarInputRef: MutableRefObject<HTMLInputElement | null>
   browserTabUrl: string

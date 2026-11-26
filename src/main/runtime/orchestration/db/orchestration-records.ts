@@ -255,6 +255,7 @@ export type MessageRow = {
   delivered_at: string | null
   sender_pane_key: string | null
   answer_sender_snapshot?: string | null
+  reply_to?: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
   pointer_process_incarnation?: string | null

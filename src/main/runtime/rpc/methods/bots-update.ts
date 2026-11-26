@@ -18,7 +18,8 @@ export async function updateBot(params: BotUpdateParams, context: RpcContext) {
   }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
-    relinkBotSkills(bot, context.runtime.listRepos())
+    // Replies after the links and caches change, so a `/` menu opened next lists them.
+    await relinkBotSkills(bot, context.runtime.listRepos())
   }
   if (params.updates.agent !== undefined) {
     void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})

@@ -28,6 +28,7 @@ export type DocumentCodeBlockRenderer = (props: {
   language?: string
   /** Whole-document fence line stays stable while streaming only escapes within lines or appends text. */
   sourceLine?: number
+  fenceClosed?: boolean
 }) => React.JSX.Element
 
 function handleMarkdownAnchorClick(
@@ -292,10 +293,7 @@ export function createDocumentCommentMarkdownComponents(
       ),
     code: CommentMarkdownDocumentCode,
     pre: ({ node, children }) => (
-      <CommentMarkdownDocumentPre
-        renderCodeBlock={renderCodeBlock}
-        blockLine={node?.position?.start.line}
-      >
+      <CommentMarkdownDocumentPre renderCodeBlock={renderCodeBlock} node={node}>
         {children}
       </CommentMarkdownDocumentPre>
     ),

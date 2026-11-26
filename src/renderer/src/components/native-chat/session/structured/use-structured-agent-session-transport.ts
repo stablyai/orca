@@ -23,7 +23,12 @@ export function useStructuredAgentSessionTransport(args: {
     enabled: readVisible
   })
   // A message sent from here is settled by its own reply, so a hidden pane reads nothing.
-  const read = useStructuredAgentSessionRead({ sessionId, target, isVisible: readVisible })
+  const read = useStructuredAgentSessionRead({
+    sessionId,
+    target,
+    isVisible: readVisible,
+    showsReplyText: true
+  })
   const stateRef = useRef(read.state)
   const mutation = useStructuredAgentSessionMutate({
     sessionId,

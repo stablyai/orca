@@ -26,17 +26,22 @@ export type InstalledAgentDetectionOptions = {
   disabledTuiAgents?: readonly TuiAgent[]
   /** Settings → Agents command overrides on this host; a resolvable override counts as installed. */
   agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
+  /** Probe only this agent, for a caller that checks one agent rather than listing them all. */
+  onlyTuiAgent?: TuiAgent
 }
 
 function activeDetectionCommands(
   options?: InstalledAgentDetectionOptions
 ): TuiAgentDetectionCommand[] {
   const disabled = new Set(normalizeDisabledTuiAgents(options?.disabledTuiAgents))
-  if (disabled.size === 0) {
+  const only = options?.onlyTuiAgent
+  if (disabled.size === 0 && !only) {
     return KNOWN_TUI_AGENT_DETECTION_COMMANDS
   }
   // A disabled agent is not a detection result even when another agent probes the same command.
-  return KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => !disabled.has(command.id))
+  return KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
+    (command) => !disabled.has(command.id) && (!only || command.id === only)
+  )
 }
 
 /** Options carrying only configured overrides, so hosts without any keep the plain PATH probe. */

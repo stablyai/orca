@@ -34,7 +34,6 @@ import {
   openCodeGenerationLauncherBoundary,
   mergeOpenCodeGenerationArgs
 } from '../../../text-generation/launch/opencode-generation-command'
-import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -65,7 +64,7 @@ export type CommitMessagePlan<Argument = string> = {
   label: string
   /** Leading command assignments, applied on the execution host. */
   env?: Record<string, string>
-  outputFormat?: 'opencode-json' | 'antigravity-stream-json' | 'kimi-stream-json'
+  outputFormat?: 'opencode-json' | 'kimi-stream-json'
   /** Resolved native-task inputs; the receiving execution runtime owns the server. */
   openCodeTask?: { prefixArgs: string[]; runArgs: string[] }
 }
@@ -75,12 +74,6 @@ export type CommitMessagePlanResult =
   | ({ ok: false } & TextGenerationFailureFields)
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
-const ANTIGRAVITY_FORMAT_OPTIONS = [
-  '--input-format',
-  '-input-format',
-  '--output-format',
-  '-output-format'
-]
 
 function insertAdditionalAgentArgs(args: {
   baseArgs: GenerationArgument[]
@@ -195,14 +188,8 @@ export function planCommitMessageGeneration(
   if (!command.ok) {
     return { ok: false, error: command.error }
   }
-  const prefixArgs =
-    input.agentId === 'antigravity'
-      ? compactRecipeOptions(command.prefixArgs, ANTIGRAVITY_FORMAT_OPTIONS)
-      : taskPolicyRecipeArgs(input.agentId, command.prefixArgs)
-  const recipeArgs =
-    input.agentId === 'antigravity'
-      ? compactRecipeOptions(agentArgs.args, ANTIGRAVITY_FORMAT_OPTIONS)
-      : taskPolicyRecipeArgs(input.agentId, agentArgs.args)
+  const prefixArgs = taskPolicyRecipeArgs(input.agentId, command.prefixArgs)
+  const recipeArgs = taskPolicyRecipeArgs(input.agentId, agentArgs.args)
   const baseArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
@@ -266,12 +253,7 @@ export function planCommitMessageGeneration(
     plan: {
       binary: command.binary,
       args: generationArgs.map(generationArgumentText),
-      stdinPayload:
-        input.agentId === 'antigravity'
-          ? buildAntigravityGenerationInput(prompt)
-          : spec.promptDelivery === 'stdin'
-            ? prompt
-            : null,
+      stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
       ...(spec.promptDelivery === 'file'
         ? {
             promptFile: {
@@ -292,9 +274,6 @@ export function planCommitMessageGeneration(
             ]
           }
         : {}),
-      ...(input.agentId === 'antigravity'
-        ? { policyProbeArgs: merged.prefixArgs.map(generationArgumentText) }
-        : {}),
       ...(input.agentId === 'opencode' || input.agentId === 'opencode2'
         ? {
             openCodeTask: {
@@ -311,9 +290,6 @@ export function planCommitMessageGeneration(
       ...(formatOption?.value === 'json' ? { outputFormat: 'opencode-json' as const } : {}),
       ...(kimiFormatOption?.value === 'stream-json'
         ? { outputFormat: 'kimi-stream-json' as const }
-        : {}),
-      ...(input.agentId === 'antigravity'
-        ? { outputFormat: 'antigravity-stream-json' as const }
         : {}),
       ...(command.env ? { env: command.env } : {})
     }
