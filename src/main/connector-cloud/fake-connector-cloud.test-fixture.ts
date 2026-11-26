@@ -6,6 +6,10 @@ import {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorToken, ConnectorTokenMint } from './connector-transport'
+import {
+  SLACK_PRESENTATION_EVENT_VERSION,
+  SLACK_PRESENTATION_TURN_END_VERSION
+} from '../../shared/connectors/slack-answer-presentation'
 
 export type Reply = { status: number; body?: unknown; headers?: Record<string, string> }
 
@@ -16,6 +20,8 @@ export class FakeConnectorCloud {
   readonly requests: { path: string; body: unknown; token: string | null }[] = []
   /** Forces a status on every request to these paths, e.g. 404 from an older cloud. */
   readonly forced = new Map<string, Reply>()
+  /** A mixed receiver still accepts ordinary events but requires a hello for rich ones. */
+  refusePresentedEvents = false
   online = true
   /** How long a poll answer takes to arrive once it is ready. */
   pollReplyDelayMs = 0
@@ -293,6 +299,13 @@ export class FakeConnectorCloud {
       return { status: 204 }
     }
     if (path === CONNECTOR_PATHS.events) {
+      if (
+        this.refusePresentedEvents &&
+        (fields.v === SLACK_PRESENTATION_EVENT_VERSION ||
+          fields.v === SLACK_PRESENTATION_TURN_END_VERSION)
+      ) {
+        return { status: 409, body: { error: 'hello_required', reason: 'features' } }
+      }
       // Applied only above this hello's high-water mark; a late or repeated batch is dropped.
       const seq = typeof fields.seq === 'number' ? fields.seq : -1
       if (seq > hello.seq) {

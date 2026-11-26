@@ -1,5 +1,11 @@
-import type { ConnectorFailure, ConnectorResult } from './connector-cloud-request'
+import { z } from 'zod'
+import {
+  connectorStop,
+  type ConnectorFailure,
+  type ConnectorResult
+} from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
+import type { ConnectorCallObserver } from './connector-transport'
 import {
   botPostPresentationFor,
   foldConnectorReview,
@@ -21,11 +27,40 @@ export class ConnectorPostRequests {
       features: () => ReadonlySet<string> | null
       helloRev: () => number | null
       refresh: (helloRev: number | null) => Promise<ConnectorFailure | null>
+      dropHello: () => void
+      halt: (reason: string) => void
     }
   ) {}
 
   get idle(): boolean {
     return this.posting === 0
+  }
+
+  async numbered(
+    path: string,
+    helloRev: number,
+    body: unknown,
+    options?: { requests?: ConnectorCallObserver; presented?: boolean }
+  ): Promise<ConnectorFailure | null> {
+    const sent = await this.deps.transport().call(path, body, z.undefined(), {
+      signal: this.deps.signal,
+      requests: options?.requests
+    })
+    if (sent.ok) {
+      return null
+    }
+    if (sent.status === 409 && this.deps.helloRev() === helloRev) {
+      if (options?.presented) {
+        await this.deps.refresh(helloRev)
+      } else {
+        this.deps.dropHello()
+      }
+    }
+    const stop = connectorStop(sent)
+    if (stop) {
+      this.deps.halt(stop)
+    }
+    return sent
   }
 
   readonly reply = (body: ConnectorReplyBody, proceed?: () => boolean) => {

@@ -23,7 +23,8 @@ export class ConnectorEventRequests {
       post: (
         body: unknown,
         helloRev: number,
-        events: readonly ConnectorEvent[]
+        events: readonly ConnectorEvent[],
+        presented: boolean
       ) => Promise<ConnectorFailure | null>
       rejected: (helloRev: number, failure: ConnectorFailure) => Promise<null> | null
     }
@@ -77,7 +78,8 @@ export class ConnectorEventRequests {
         events
       },
       helloRev,
-      events
+      events,
+      presented
     )
     if (failure?.status === 400) {
       // An older receiver rejects the version before it can apply any event.
