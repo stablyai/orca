@@ -2,6 +2,7 @@ import type React from 'react'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { middleEllipsis } from '@/lib/middle-ellipsis'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
@@ -118,6 +119,33 @@ export function ServerRestartConfirm({
   const [beforeName, afterName] = nameParts.length === 2 ? nameParts : ['Restart ', '?']
   const accessibleQuestion =
     serverName === undefined ? question : `${beforeName}${serverName}${afterName}`
+  const trigger = (
+    <PopoverTrigger asChild>
+      <Button
+        type="button"
+        variant={variant}
+        size="sm"
+        disabled={!expansion && disabled}
+        aria-disabled={unavailable || undefined}
+        aria-busy={awaitingExpansion || undefined}
+        aria-description={disabled ? disabledReason : undefined}
+        title={disabled ? disabledReason : undefined}
+        onBlur={() => {
+          if (awaitingExpansion) {
+            setOpenKey(null)
+          }
+        }}
+        onKeyDown={(event) => {
+          if (awaitingExpansion && event.key === 'Escape') {
+            event.preventDefault()
+            setOpenKey(null)
+          }
+        }}
+      >
+        {label}
+      </Button>
+    </PopoverTrigger>
+  )
   return (
     <Popover
       open={open}
@@ -141,31 +169,17 @@ export function ServerRestartConfirm({
         className="relative inline-flex data-disabled:opacity-50"
         data-disabled={unavailable ? '' : undefined}
       >
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant={variant}
-            size="sm"
-            disabled={!expansion && disabled}
-            aria-disabled={unavailable || undefined}
-            aria-busy={awaitingExpansion || undefined}
-            aria-description={disabled ? disabledReason : undefined}
-            title={disabled ? disabledReason : undefined}
-            onBlur={() => {
-              if (awaitingExpansion) {
-                setOpenKey(null)
-              }
-            }}
-            onKeyDown={(event) => {
-              if (awaitingExpansion && event.key === 'Escape') {
-                event.preventDefault()
-                setOpenKey(null)
-              }
-            }}
-          >
-            {label}
-          </Button>
-        </PopoverTrigger>
+        {/* Show the full host on keyboard focus before the compact confirmation opens. */}
+        {serverName !== undefined && !expansion ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4} className="max-w-xs break-words">
+              {serverName}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          trigger
+        )}
         {/* Register after the trigger so the card-width anchor takes precedence. */}
         <PopoverAnchor asChild>
           <span
