@@ -7,6 +7,9 @@ import type { RuntimeTerminalPromptSubmit } from '../../../../shared/terminal/ru
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
+import { isShellInFront } from './terminal-command-paint-record'
+import { DoubaoComposerContexts, doubaoSubmitDraft } from './doubao-composer-context'
 const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 
 const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
@@ -20,6 +23,51 @@ const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 type AgentPromptRenderWaitEnd = NonNullable<RuntimeTerminalPromptSubmit['renderWait']>
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
+  private readonly doubaoContexts = new DoubaoComposerContexts()
+
+  prepareDoubaoComposerSubmit(
+    ptyId: string,
+    data: string,
+    inputKind: TerminalInputKind
+  ): { data: string; rejected: () => void } | null {
+    if (
+      process.platform !== 'win32' ||
+      data !== '\r' ||
+      (inputKind !== 'driving' && inputKind !== 'launch')
+    ) {
+      return null
+    }
+    const pty = this.ptysById.get(ptyId)
+    const launch = pty?.launchEvidence
+    if (
+      !pty?.connected ||
+      pty.connectionId ||
+      pty.isWsl ||
+      launch?.kind !== 'held' ||
+      launch.agent !== 'doubao' ||
+      (launch.incarnationId && launch.incarnationId !== pty.incarnationId) ||
+      isShellInFront(pty)
+    ) {
+      return null
+    }
+    const state = this.readWholeScreenModel(ptyId)
+    if (!state || state.outputSequence !== this.getPtyOutputSequence(ptyId)) {
+      return null
+    }
+    const draft = doubaoSubmitDraft(state.emulator.getCursorLineContext())
+    if (!draft) {
+      return null
+    }
+    if (draft.startsWith('/')) {
+      if (/^\/(?:new|clear|resume|sessions)(?:\s|$)/i.test(draft)) {
+        this.doubaoContexts.reset(pty)
+      }
+      return null
+    }
+    const handle = this.getOrchestrationMailboxTerminal(ptyId)?.handle
+    return handle ? this.doubaoContexts.prepare(pty, launch.token, handle) : null
+  }
+
   /** A wait on an Agent-slept pane, answered as for an idle agent; null when the handle isn't slept. */
   protected abstract waitForSleptAgent(
     handle: string,
