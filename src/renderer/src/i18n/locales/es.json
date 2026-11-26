@@ -24202,7 +24202,7 @@
         "merged": "fusionado",
         "draft": "borrador",
         "failing": "fallando",
-        "running": "pendientes",
+        "running": "en curso",
         "cancelled": "cancelado",
         "passing": "superado",
         "more": "+{{count}} más"
@@ -24930,7 +24930,7 @@
       "resumeFailed": "No se pudo reanudar",
       "setupFailed": "Falló la configuración",
       "provisioning": "Aprovisionando",
-      "suspended": "Suspendida",
+      "suspended": "Suspendido",
       "waking": "Activándose"
     },
     "compat": {
