@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { isBotAgent } from '../../shared/bot-types'
+import { CONNECTOR_SOURCES } from '../../shared/connectors/external-conversation-link'
+import type { LinkableChat } from './external-conversation-chat-delivery'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { rejectedSendRefusal } from './external-conversation-failure'
 import { refusalOf } from './external-conversation-chain'
@@ -7,10 +10,18 @@ import { refused, type Delivery } from './external-conversation-types'
 
 export const PREPARING = JSON.stringify({ phase: 'preparing_attachments' })
 export const ATTEMPT_PREFIX = '{"phase":"admitting_attachments",'
+const RestorableThread = z.object({
+  source: z.enum(CONNECTOR_SOURCES),
+  externalId: z.string(),
+  botId: z.string(),
+  title: z.string()
+})
+export type RestorableThread = z.infer<typeof RestorableThread>
 const AdmissionAttempt = z.object({
   phase: z.literal('admitting_attachments'),
   sessionId: z.string(),
-  operationId: z.string()
+  operationId: z.string(),
+  thread: RestorableThread.optional()
 })
 export type DeliveryAdmissionAttempt = z.infer<typeof AdmissionAttempt>
 
@@ -23,6 +34,7 @@ export class DeliveryPreparation {
   private readonly pending = new Set<string>()
   private receipt = PREPARING
   private laneSignal: { lane: AbortSignal; delivery: AbortSignal } | undefined
+  private thread: RestorableThread | undefined
   private ledger: { db: DeliveryReceiptDb; fingerprint: string } | undefined
 
   constructor(
@@ -67,9 +79,18 @@ export class DeliveryPreparation {
     }
   }
 
+  restoreThreadOnRestart(thread: RestorableThread): void {
+    this.thread = thread
+  }
+
   /** The writer's command receipt proves whether this particular attempt took effect. */
   attempting(sessionId: string, operationId: string): void {
-    const receipt = JSON.stringify({ phase: 'admitting_attachments', sessionId, operationId })
+    const receipt = JSON.stringify({
+      phase: 'admitting_attachments',
+      sessionId,
+      operationId,
+      ...(this.thread ? { thread: this.thread } : {})
+    })
     if (this.pending.size && this.ledger) {
       const { db, fingerprint } = this.ledger
       db.checkpointPendingMutationReceipts(fingerprint, [...this.pending], receipt)
@@ -79,8 +100,9 @@ export class DeliveryPreparation {
 }
 
 export async function recoverConnectorAdmission(
-  { sessionId, operationId }: DeliveryAdmissionAttempt,
-  ensureHost?: () => Promise<unknown>
+  { sessionId, operationId, thread }: DeliveryAdmissionAttempt,
+  ensureHost?: () => Promise<unknown>,
+  restore?: (thread: RestorableThread, chat: LinkableChat) => void
 ): Promise<Delivery | null> {
   await ensureHost?.()
   const host = getStructuredAgentSessionHost()
@@ -105,6 +127,14 @@ export async function recoverConnectorAdmission(
           { sessionId, agent: conversation.provider },
           submission
         )
+      }
+      if (thread && isBotAgent(conversation.provider)) {
+        restore?.(thread, {
+          sessionId,
+          agent: conversation.provider,
+          worktreeId: conversation.location.workspaceId,
+          bot: { kind: 'bot', botId: thread.botId }
+        })
       }
       return submission?.dispatchState === 'unknown'
         ? { outcome: 'unknown', reason: 'writer_failed' }

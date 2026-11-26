@@ -27,11 +27,8 @@ export type ConversationBots = {
   /** Why the bot takes no conversation now; null when it does. */
   refusal(botId: string): 'bot_not_found' | 'bot_paused' | null
   /** A new chat for a thread, or the bot's current Chat. */
-  open(
-    target: ExternalConversationBot,
-    sessionId?: string,
-    signal?: AbortSignal
-  ): Promise<LinkableChat>
+  open(target: ExternalConversationBot, opening?: ConversationChatOpening): Promise<LinkableChat>
+  forgetUnusedStart?(sessionId: string): Promise<void>
   /** The pull requests a bot conversation's work opened. */
   workLinks(link: ExternalConversationLink): Promise<ConnectorWorkLink[]>
 }

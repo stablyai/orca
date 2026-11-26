@@ -209,7 +209,8 @@ export function projectStructuredAgentSessionStatusState(
   /** Item ids of the approvals and questions waiting on the user: what makes the status `attention`. */
   pendingPromptIds: string[]
 } {
-  const latestPrompt = latestStructuredAgentSessionPrompt(items)
+  const promptItems = items
+  let promptPreview: string | undefined
   if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
     return {
       summary: { status: null, latestPrompt: '' },
@@ -255,7 +256,11 @@ export function projectStructuredAgentSessionStatusState(
     pendingPromptIds: pending.map((item) => item.itemId),
     summary: {
       status,
-      latestPrompt: normalizePromptField(latestPrompt),
+      get latestPrompt() {
+        return (promptPreview ??= normalizePromptField(
+          latestStructuredAgentSessionPrompt(promptItems)
+        ))
+      },
       ...(toolName ? { toolName } : {}),
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),

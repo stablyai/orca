@@ -24,6 +24,7 @@ import type { SlackMirrorCloud } from './slack-mirror-cloud'
 import { recoverConnectorAdmission } from './external-conversation-delivery-preparation'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
 import {
+  findLink,
   findLinkForSession,
   findLinksForSession,
   type ExternalConversationLinkStore
@@ -146,7 +147,18 @@ export function installExternalConversations(
       store,
       receipts: new DeliveryReceipts(
         () => runtime.getOrchestrationDb(),
-        (attempt) => recoverConnectorAdmission(attempt, runtime.ensureStructuredAgentSessionHost)
+        (attempt) =>
+          recoverConnectorAdmission(
+            attempt,
+            runtime.ensureStructuredAgentSessionHost,
+            (thread, chat) => {
+              const { source, externalId, title } = thread
+              const key = { source, externalId }
+              if (!findLink(store, key)) {
+                seam?.linkChat(key, chat, title)
+              }
+            }
+          )
       ),
       onWorkspaceRemoved: (listener) =>
         runtime.onWorktreeLifecycle((event) => {

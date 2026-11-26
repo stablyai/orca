@@ -1,3 +1,4 @@
+import { externalConversationTitle } from '../../shared/external-conversation-title'
 import type { ConnectorAsker } from '../../shared/connectors/connector-cloud-contract'
 import type { NativeChatAgent } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { isBotAgent } from '../../shared/bot-types'
@@ -33,6 +34,13 @@ export async function startConnectorConversation(
   preparation?: DeliveryPreparation
 ): Promise<ConversationStart> {
   const { agent, target, prompt, ...message } = input
+  if (preparation && target.kind === 'bot') {
+    preparation.restoreThreadOnRestart({
+      ...key,
+      botId: target.botId,
+      title: externalConversationTitle(key.source, message.asker?.text ?? prompt)
+    })
+  }
   const initial = await deps.receipts.run(
     key,
     deliveryId,
@@ -49,7 +57,10 @@ export async function startConnectorConversation(
           return refused('unsupported_agent')
         }
         let stagedImages: StagedConnectorImages | undefined
+        let fresh = false
+        let expired = false
         const beforeCreate = async (agent: NativeChatAgent) => {
+          fresh = true
           if (message.asker && deps.askerImages) {
             stagedImages = await stageInitialImages(deps.askerImages, {
               agent,
@@ -71,21 +82,29 @@ export async function startConnectorConversation(
             target,
             preparation ? { deliveryId, signal: deliverySignal, beforeCreate } : undefined
           )
-          return 'outcome' in chat
-            ? chat
-            : deps.deliver(chat, {
-                ...message,
-                text: prompt,
-                deliveryId,
-                signal,
-                ...(stagedImages ? { stagedImages } : {})
-              })
+          const delivered =
+            'outcome' in chat
+              ? chat
+              : await deps.deliver(chat, {
+                  ...message,
+                  text: prompt,
+                  deliveryId,
+                  signal,
+                  ...(stagedImages ? { stagedImages } : {})
+                })
+          expired = delivered.outcome === 'expired'
+          return delivered
         } catch (error) {
           const stoppedDuringStart = preparation?.stopped(deliverySignal)
           if (stoppedDuringStart) {
+            expired = stoppedDuringStart.outcome === 'expired'
             return stoppedDuringStart
           }
           throw error
+        } finally {
+          if (fresh && expired) {
+            await host.bots?.forgetUnusedStart?.(deliveryChatId(key, target, deliveryId))
+          }
         }
       }),
     preparation
@@ -93,7 +112,7 @@ export async function startConnectorConversation(
   if (
     preparation &&
     target.kind === 'bot' &&
-    initial.outcome === 'accepted' &&
+    (initial.outcome === 'accepted' || initial.outcome === 'unknown') &&
     !findLink(deps.store, key)
   ) {
     // The journal may have committed before the thread link was written.

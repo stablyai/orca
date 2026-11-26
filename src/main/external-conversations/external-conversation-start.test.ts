@@ -21,7 +21,7 @@ const TARGET = { kind: 'bot' as const, botId: 'bot-1' }
 const INPUT = { agent: 'codex', target: TARGET, prompt: 'request' }
 const HOME_ID = 'fixture-home'
 
-it.each(['accepted', 'rejected'] as const)(
+it.each(['accepted', 'unknown', 'rejected'] as const)(
   'recovers a %s admission that was interrupted before writing the thread link',
   async (outcome) => {
     const sessionId = deliveryChatId(KEY, TARGET, ID)
@@ -46,6 +46,9 @@ it.each(['accepted', 'rejected'] as const)(
     )
     try {
       const send = rig.send(INPUT.prompt, undefined, { internal: true })
+      if (outcome === 'unknown') {
+        preparation.restoreThreadOnRestart({ ...KEY, botId: TARGET.botId, title: INPUT.prompt })
+      }
       preparation.attempting(sessionId, send.id)
       await expect(send.result).resolves.toMatchObject({ ok: true })
       if (outcome === 'rejected') {
@@ -58,6 +61,14 @@ it.each(['accepted', 'rejected'] as const)(
             surface: 'rejection'
           })
         })
+      } else if (outcome === 'unknown') {
+        const { journal } = await rig.host.conversation(sessionId)
+        await journal.resolveDispatch({
+          clientMessageId: send.id,
+          fence: rig.store.getRecord(sessionId)!.lease.runtimeFence,
+          state: 'unknown',
+          reason: 'fixture writer did not settle'
+        })
       }
       db.close()
       db = new OrchestrationDb(path)
@@ -66,7 +77,15 @@ it.each(['accepted', 'rejected'] as const)(
         id: HOME_ID,
         externalConversations: []
       }
-      const receipts = new DeliveryReceipts(() => db, recoverConnectorAdmission)
+      const receipts: DeliveryReceipts = new DeliveryReceipts(
+        () => db,
+        (attempt) =>
+          recoverConnectorAdmission(attempt, undefined, (key, chat) => {
+            if (!seam.linkedChat(key)) {
+              seam.linkChat(key, chat, key.title)
+            }
+          })
+      )
       const seam = new ExternalConversationSeam({
         store: {
           getAllWorktreeMeta: () => ({}),
@@ -86,12 +105,17 @@ it.each(['accepted', 'rejected'] as const)(
       })
       setStructuredAgentSessionHost(rig.host)
       const host = { chat: runtimeChatHost({ ensureStructuredAgentSessionHost: async () => {} }) }
+      if (outcome === 'unknown') {
+        // The lease expired during the restart and the cloud never resends the start.
+        await expect(receipts.recorded(KEY, ID)).resolves.toMatchObject({ outcome: 'unknown' })
+        expect(seam.linkedChat(KEY)).toEqual({ sessionId, worktreeId: workspaceId })
+      }
       const recovered = await seam.start(host, KEY, ID, INPUT, new DeliveryPreparation())
       if (outcome === 'accepted') {
         expect(recovered.initial).toEqual({ outcome: 'accepted' })
         expect(seam.linkedChat(KEY)).toEqual({ sessionId, worktreeId: workspaceId })
         expect(folder.externalConversations).toMatchObject([{ sessionId, agent: 'codex' }])
-      } else {
+      } else if (outcome === 'rejected') {
         expect(recovered.initial).toMatchObject({
           outcome: 'refused',
           reason: 'agent_not_reachable',

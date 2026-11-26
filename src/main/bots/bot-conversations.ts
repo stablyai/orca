@@ -10,6 +10,7 @@ import type {
   ConversationChatOpening
 } from '../external-conversations/external-conversation-bots'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { forgetExpiredBotThread } from './bot-thread-expired-start'
 import { runtimeBotChats, startBotSession } from './bot-chat-session'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { BotController } from './bot-controller'
@@ -61,7 +62,7 @@ export function botConversations(deps: {
 
 export function runtimeBotConversations(runtime: OrcaRuntimeService): ConversationBots {
   const chats = runtimeBotChats(runtime)
-  return botConversations({
+  const conversations = botConversations({
     bots: runtime.bots,
     ensureChat: chats.ensure,
     startSession: async (bot, opening) => {
@@ -80,4 +81,8 @@ export function runtimeBotConversations(runtime: OrcaRuntimeService): Conversati
     },
     botWork: runtime.botWork
   })
+  return {
+    ...conversations,
+    forgetUnusedStart: (sessionId) => forgetExpiredBotThread(runtime, sessionId)
+  }
 }
