@@ -31,8 +31,12 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
       return
     }
     const processIncarnation = this.getTerminalProcessIncarnation(handle)
-    const fail = (): void =>
+    // An end the Dispatch hears, at once or once a held restart is given up, also closes the book
+    // on terminals Orca never owned: an external reuse has nothing left to retain, settled or not.
+    const fail = (): void => {
       this.observeWorkerTerminalExit(db, handle, paneKey, processIncarnation, cause, lastOutput)
+      db.settleExternallyEndedWorkerTerminals(processIncarnation)
+    }
     // Its pane is starting again where the window's restore resumes the conversation: the Dispatch waits for it.
     const respawning = options.paneRespawning && paneKey
     const dispatch = respawning ? db.getActiveDispatchForTerminal(handle, paneKey) : undefined
