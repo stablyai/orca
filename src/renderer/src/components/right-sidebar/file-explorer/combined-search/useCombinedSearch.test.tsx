@@ -113,7 +113,7 @@ function textRowKeys(result: Field): string[] {
   )
 }
 
-async function pause(ms = 300): Promise<void> {
+async function advanceFakeClock(ms = 300): Promise<void> {
   await act(async () => {
     vi.advanceTimersByTime(ms)
   })
@@ -125,7 +125,7 @@ describe('combined search text state', () => {
     useAppStore.getState().showRightSidebarSearch({ query: 'x' })
     const { result } = renderField('wt-seed')
     expect(result.current.field.query).toBe('x')
-    await pause(1000)
+    await advanceFakeClock(1000)
     expect(pending.map((request) => request.query)).toEqual(['x'])
     await act(async () => pending[0].resolve(resultFor('x')))
     expect(textRowKeys(result)).toEqual(['file:/repo/x.ts', 'match:/repo/x.ts:1:1:0'])
@@ -134,13 +134,13 @@ describe('combined search text state', () => {
   it('never keeps the previous query rows while the next scan runs', async () => {
     const { result } = renderField('wt-stale')
     act(() => result.current.field.onQueryChange('cart'))
-    await pause()
+    await advanceFakeClock()
     await act(async () => pending[0].resolve(resultFor('cart')))
     expect(textRowKeys(result)).toHaveLength(2)
 
     act(() => result.current.field.onQueryChange('cars'))
     expect(textRowKeys(result)).toEqual([])
-    await pause()
+    await advanceFakeClock()
     expect(pending.map((request) => request.query)).toEqual(['cart', 'cars'])
     expect(textRowKeys(result)).toEqual([])
     expect(result.current.field.loading).toBe(true)
@@ -150,19 +150,19 @@ describe('combined search text state', () => {
     // FileExplorer keys the pane by route owner, so an owner change replaces the field in one commit.
     const { rerender } = render(<FieldHost key="local" worktreeId="wt-remount" />)
     act(() => field().field.onQueryChange('cart'))
-    await pause()
+    await advanceFakeClock()
     await act(async () => pending[0].resolve(resultFor('cart')))
     act(() => field().field.onQueryChange('cars'))
     rerender(<FieldHost key="runtime" worktreeId="wt-remount" />)
     expect(field().field.query).toBe('cars')
-    await pause()
+    await advanceFakeClock()
     expect(pending.at(-1)?.query).toBe('cars')
   })
 
   it('renders no global miss between a scan settling and its rows arriving', async () => {
     render(<FieldHost worktreeId="wt-deferred" />)
     act(() => field().field.onQueryChange('cart'))
-    await pause()
+    await advanceFakeClock()
     await act(async () => pending[0].resolve(resultFor('cart')))
     expect(mounted.renders.filter((keys) => keys.includes('no-results'))).toEqual([])
     expect(mounted.renders.at(-1)).toContain('match:/repo/cart.ts')
@@ -172,11 +172,11 @@ describe('combined search text state', () => {
     useAppStore.setState({ activeWorktreeId: 'wt-short' })
     useAppStore.getState().showRightSidebarSearch({ query: 'x' })
     render(<FieldHost worktreeId="wt-short" />)
-    await pause()
+    await advanceFakeClock()
     act(() => field().field.onQueryChange('xy'))
-    await pause()
+    await advanceFakeClock()
     act(() => field().field.onQueryChange('x'))
-    await pause(1000)
+    await advanceFakeClock(1000)
     expect(pending.map((request) => request.query)).toEqual(['x', 'xy'])
   })
 
@@ -211,7 +211,7 @@ describe('combined search text state', () => {
   it('says text search is unavailable instead of No results when the scan is skipped', async () => {
     render(<FieldHost worktreeId="wt-skip" worktreePath={null} />)
     act(() => field().field.onQueryChange('cart'))
-    await pause()
+    await advanceFakeClock()
     const keys = mounted.renders.at(-1) ?? ''
     expect(keys).toContain('error:text')
     expect(keys).not.toContain('no-results')
