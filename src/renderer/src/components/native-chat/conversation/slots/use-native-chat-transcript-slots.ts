@@ -17,10 +17,9 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 import { openNativeChatExpandedKeys } from '../../messages/disclosure/native-chat-expanded-keys'
-import { NO_TURNS, withTurns } from './native-chat-held-open-turns'
 import {
   NO_HEAD_TRACK,
-  nativeChatNextHeadTrack,
+  nativeChatHeadTrackStep,
   type NativeChatHeadTrack
 } from './native-chat-head-track'
 import {
@@ -39,12 +38,12 @@ export function useNativeChatTranscriptSlots({
   ...input
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'workers'> & {
   /** Receives turns kept open because an older page would fold work the reader was looking at. */
-  setExpandedTurnKeys?: (update: (current: ReadonlySet<string>) => ReadonlySet<string>) => void
-  /** Whose older history this is (another session or reset starts over), and whether it is being
-   *  paged in: older-history paging, including the mount prefetch. Read only here, for this rule. */
+  setExpandedTurnKeys: (update: (current: ReadonlySet<string>) => ReadonlySet<string>) => void
+  /** Whose older history this is (another session or generation starts over), and how many
+   *  older-history pages (including the mount prefetch) were applied. Read only here, for this rule. */
   history?: Pick<
     NativeChatLiveSession,
-    'agent' | 'sessionId' | 'olderHistoryGeneration' | 'loadingEarlier'
+    'agent' | 'sessionId' | 'olderHistoryGeneration' | 'olderPages'
   >
   /** `messages` as of their last change other than a streaming reply's text, row for row. */
   structureMessages?: readonly NativeChatMessage[]
@@ -132,12 +131,11 @@ export function useNativeChatTranscriptSlots({
   // Built from the saved rows, so a live window that only grows a reply rebuilds no structure.
   const saved = structureRows
   const [head, setHead] = useState<NativeChatHeadTrack>(NO_HEAD_TRACK)
-  const loadingOlder = history?.loadingEarlier === true
-  const historySource = history
-    ? `${history.agent}:${history.sessionId}:${history.olderHistoryGeneration}`
-    : undefined
-  // A held turn draws as the reader's own expanded turn until their expanded turns hold it.
-  const drawnExpandedTurnKeys = withTurns(expandedTurnKeys, head.held)
+  // A held turn draws as the reader's own expanded turn (under the same cap) until theirs hold it.
+  const drawnExpandedTurnKeys =
+    head.held.size === 0
+      ? expandedTurnKeys
+      : openNativeChatExpandedKeys(expandedTurnKeys, head.held)
   const buildInput = useMemo(
     () => ({
       imageSources,
@@ -185,25 +183,18 @@ export function useNativeChatTranscriptSlots({
     () => streamedTranscript(buildInput, saved, messages),
     [streamedTranscript, buildInput, saved, messages]
   )
-  // Only when the first row changes (mount, an older page) does this look back at the head.
-  if (head.source !== historySource) {
-    setHead({ ...NO_HEAD_TRACK, source: historySource })
-  } else if (head.window === null || head.window.messages[0]?.id !== messages[0]?.id) {
-    setHead(
-      nativeChatNextHeadTrack(
-        head,
-        { ...buildInput, messages, expandedTurnKeys },
-        slots,
-        loadingOlder
-      )
-    )
-  } else if (loadingOlder !== head.paging) {
-    // A request starting opens the latch; one ending without landing (failed, empty, superseded)
-    // closes it, so nothing arriving later counts as its page.
-    setHead({ ...head, paging: loadingOlder })
-  } else if (head.held.size > 0 && [...head.held].every((key) => expandedTurnKeys.has(key))) {
-    // The reader's expanded turns now hold them, so their status row folds them as usual.
-    setHead({ ...head, held: NO_TURNS })
+  // Only an applied older page can hold a turn or carry a run; anything else keeps the window
+  // the next page lands on current.
+  const nextHead = nativeChatHeadTrackStep(head, {
+    session: history ? `${history.agent}:${history.sessionId}` : undefined,
+    generation: history?.olderHistoryGeneration,
+    pages: history?.olderPages ?? 0,
+    input: { ...buildInput, messages, expandedTurnKeys },
+    structure: saved,
+    slots
+  })
+  if (nextHead !== head) {
+    setHead(nextHead)
   }
   useNativeChatQuietTurnLeave({
     quietTurnKeys,
@@ -214,7 +205,7 @@ export function useNativeChatTranscriptSlots({
   })
   useLayoutEffect(() => {
     if (head.held.size > 0) {
-      setExpandedTurnKeys?.((current) => openNativeChatExpandedKeys(current, head.held))
+      setExpandedTurnKeys((current) => openNativeChatExpandedKeys(current, head.held))
     }
   }, [head.held, setExpandedTurnKeys])
   return { slots, forkPoint, liveLine }

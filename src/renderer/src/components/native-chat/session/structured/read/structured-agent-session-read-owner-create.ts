@@ -33,6 +33,7 @@ export function createReadOwner(
   let snapshot: StructuredAgentSessionReadSnapshot = {
     state: EMPTY_STRUCTURED_AGENT_SESSION,
     loadingOlder: false,
+    olderPages: 0,
     olderHistoryGeneration: 0,
     initialHistoryAutoLoad: true,
     current: false
@@ -65,7 +66,8 @@ export function createReadOwner(
     snapshot = next
     emit()
   }
-  const apply = (action: StructuredAgentSessionAction): void => {
+  /** `olderPage`: a page the reader paged in, counted in the same snapshot that applies it. */
+  const apply = (action: StructuredAgentSessionAction, olderPage = false): void => {
     const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
     if (
       state.submissions !== snapshot.state.submissions ||
@@ -79,8 +81,9 @@ export function createReadOwner(
       (action.type === 'event' &&
         action.event.type !== 'end' &&
         !(action.event.type === 'batch' && action.event.hasNewer))
-    if (state !== snapshot.state || current !== snapshot.current) {
-      setSnapshot({ ...snapshot, state, current })
+    if (state !== snapshot.state || current !== snapshot.current || olderPage) {
+      const olderPages = snapshot.olderPages + (olderPage ? 1 : 0)
+      setSnapshot({ ...snapshot, state, current, olderPages })
     }
   }
   const markStale = (): void => {
@@ -295,7 +298,7 @@ export function createReadOwner(
       sessionId,
       getSnapshot: () => snapshot,
       setSnapshot,
-      apply,
+      apply: (action) => apply(action, true),
       captureHistoryReadGuard: () => {
         const stopped = captureActiveHistoryReadGuard()
         const generation = snapshot.olderHistoryGeneration

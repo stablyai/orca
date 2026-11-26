@@ -4,7 +4,6 @@
 // stays closed.
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatRowSuccessors } from './native-chat-row-successors'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 export const NO_CARRIED_RUN_DISCLOSURES: ReadonlyMap<string, string> = new Map()
@@ -25,62 +24,39 @@ export function nativeChatLoadedCarries(
   return kept.size === carried.size ? carried : kept
 }
 
+function rowsOf(slot: NativeChatTranscriptSlot): readonly string[] {
+  if (slot.kind !== 'message') {
+    return []
+  }
+  return slot.workRun ? slot.workRun.map((member) => member.id) : [slot.message.id]
+}
+
 /**
- * After older rows arrived before the head (the only way a run's head moves earlier): each row
- * with a new head that holds a head the previous window drew (as a run member, or because it took
- * in that row's tool calls) is that same run, grown at its start, and keeps the disclosure id that
- * head used, so a run grown over many pages keeps its first one. When several earlier heads land
- * in one row, the earliest wins. Returns `carried` itself when nothing new is carried.
+ * After an applied page continued the window (`continued`: the window's first row and the row
+ * holding it now): when the run that row opened now starts at an earlier row, that run keeps the
+ * disclosure id it was drawn under, so a run grown over many pages keeps its first one. Only the
+ * run at the page's seam can grow this way. Returns `carried` itself when nothing changes.
  */
-export function nativeChatFindCarriedRunDisclosures(
-  previous: {
-    messages: readonly NativeChatMessage[]
-    slots: readonly NativeChatTranscriptSlot[]
-  },
-  current: {
-    messages: readonly NativeChatMessage[]
-    slots: readonly NativeChatTranscriptSlot[]
-  },
+export function nativeChatCarryAcrossPage(
+  before: readonly NativeChatTranscriptSlot[],
+  after: readonly NativeChatTranscriptSlot[],
+  continued: { first: string; successor: string },
   carried: ReadonlyMap<string, string>
 ): ReadonlyMap<string, string> {
-  const previousHeads = new Map<string, string>()
-  for (const slot of previous.slots) {
-    if (slot.kind === 'message') {
-      previousHeads.set(slot.message.id, slot.disclosureId ?? slot.message.id)
-    }
-  }
-  // Where each previous head is now, with the id its disclosures used; the earliest head wins.
-  const heldIn = new Map<string, string>()
-  const successors = nativeChatRowSuccessors(
-    previous.messages,
-    current.messages,
-    previousHeads.keys()
-  )
-  for (const [head, disclosureId] of previousHeads) {
-    const row = successors.get(head)
-    if (row !== undefined && !heldIn.has(row)) {
-      heldIn.set(row, disclosureId)
-    }
-  }
-  let next: Map<string, string> | null = null
-  for (const slot of current.slots) {
-    if (slot.kind !== 'message') {
-      continue
-    }
-    const head = slot.message.id
-    if (previousHeads.has(head) || carried.has(head)) {
-      continue
-    }
-    const earlier = (slot.workRun ?? [slot.message]).find((member) => heldIn.has(member.id))
-    const disclosureId = earlier ? heldIn.get(earlier.id) : undefined
-    if (disclosureId !== undefined && disclosureId !== head) {
-      next ??= new Map(carried)
-      next.set(head, disclosureId)
-    }
-  }
-  if (!next) {
+  const opened = before.find((slot) => slot.kind === 'message')
+  if (opened?.kind !== 'message' || !rowsOf(opened).includes(continued.first)) {
     return carried
   }
+  const grown = after.find((slot) => rowsOf(slot).includes(continued.successor))
+  if (grown?.kind !== 'message' || grown.message.id === opened.message.id) {
+    return carried
+  }
+  const disclosureId = opened.disclosureId ?? opened.message.id
+  if (carried.get(grown.message.id) === disclosureId) {
+    return carried
+  }
+  const next = new Map(carried)
+  next.set(grown.message.id, disclosureId)
   for (const head of next.keys()) {
     if (next.size <= MAX_CARRIED_RUN_DISCLOSURES) {
       break

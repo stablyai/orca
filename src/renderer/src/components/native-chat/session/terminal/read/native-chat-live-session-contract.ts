@@ -28,6 +28,9 @@ export type NativeChatLiveSession = NativeChatSession & {
   /** True when an older page may still exist (the last read filled the window). */
   hasMore: boolean
   loadingEarlier: boolean
+  /** Older-history pages applied (including the mount prefetch), counted in the same update that
+   *  applies each one; a chat's first load arriving in steps is not counted. */
+  olderPages?: number
   /** Reset paging failures when source/snapshot replacement starts a new generation. */
   olderHistoryGeneration: number
   /** Changes when the owning terminal transcript is rebound or replaced. */

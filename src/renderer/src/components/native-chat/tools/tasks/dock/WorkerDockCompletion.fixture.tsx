@@ -67,6 +67,7 @@ function completionFixture(isBot: boolean) {
           backgroundTasks: { state: 'monitoring', workerDock: presence }
         },
         loadingOlder: false,
+        olderPages: 0,
         olderHistoryGeneration: 0,
         initialHistoryAutoLoad: false,
         current: true

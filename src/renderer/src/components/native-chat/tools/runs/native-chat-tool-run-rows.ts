@@ -42,10 +42,11 @@ export type NativeChatToolRunRow =
       lineIdentity: string
     }
 
-/** The call's provider id, when it has a usable one. */
-function namedCallId(block: NativeChatBlock): string | undefined {
+/** A named call's identity across the run, repeated provider ids kept apart (as line rows are);
+ *  undefined for a call with no usable id, which keeps its positional key. */
+function namedCallIdentity(block: NativeChatBlock, seen: Map<string, number>): string | undefined {
   return block.type === 'tool-call' && block.callId !== undefined && block.callId.trim() !== ''
-    ? block.callId
+    ? nativeChatToolLineIdentity(block, seen)
     : undefined
 }
 
@@ -82,6 +83,8 @@ export function buildNativeChatToolRunRows({
   const { editCards, consumedResults } = buildEditCards(blocks)
   const { resultByCall, pairedResults } = pairNativeChatToolResults(headerBlocks)
   const seen = new Map<string, number>()
+  // Counted apart from `seen`, so task and edit rows leave line identities as they were.
+  const seenDisclosures = new Map<string, number>()
   const rows: NativeChatToolRunRow[] = []
   const pushAsides = (elements: readonly React.JSX.Element[] | undefined): void => {
     for (const element of elements ?? []) {
@@ -98,13 +101,13 @@ export function buildNativeChatToolRunRows({
     const taskList = taskLists.rows.get(block)
     if (taskList) {
       // Only an update shows its "Full task list" trigger; a first list has no control.
-      const callId = namedCallId(block)
+      const callIdentity = namedCallIdentity(block, seenDisclosures)
       rows.push({
         kind: 'tasks',
         key: `tasks:${blockIndex}`,
         focusable: taskList.previous !== undefined,
         taskList,
-        disclosureKey: callId === undefined ? `tasks:${blockIndex}` : `call:${callId}`
+        disclosureKey: callIdentity ?? `tasks:${blockIndex}`
       })
       continue
     }
@@ -113,7 +116,7 @@ export function buildNativeChatToolRunRows({
     }
     const edit = editCards.get(block)
     if (edit) {
-      const callId = namedCallId(block)
+      const callIdentity = namedCallIdentity(block, seenDisclosures)
       rows.push({
         kind: 'edit',
         key: `edit:${edit.key}`,
@@ -121,9 +124,9 @@ export function buildNativeChatToolRunRows({
         editKey: edit.key,
         files: edit.files,
         fileDisclosureKeys: edit.files.map((file, fileIndex) =>
-          callId === undefined
+          callIdentity === undefined
             ? `${edit.key}:${fileIndex}`
-            : `call:${callId}:${fileIndex}:${file.path}`
+            : `${callIdentity}:${fileIndex}:${file.path}`
         )
       })
       continue

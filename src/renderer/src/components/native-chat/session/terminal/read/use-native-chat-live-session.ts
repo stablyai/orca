@@ -227,7 +227,7 @@ export function useNativeChatLiveSession(
     }
   }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
 
-  const loadEarlier = useNativeChatOlderHistory({
+  const olderHistory = useNativeChatOlderHistory({
     agent,
     sessionId,
     transcriptPath,
@@ -314,7 +314,8 @@ export function useNativeChatLiveSession(
       loadingEarlier,
       olderHistoryGeneration,
       transcriptIdentity: `${sourceKey}:${transcriptSnapshot}`,
-      loadEarlier,
+      // loadEarlier, and the older pages it applied (counted with the read that applies each).
+      ...olderHistory,
       trimHistory,
       readPhase: read.phase
     }
@@ -333,7 +334,7 @@ export function useNativeChatLiveSession(
     olderHistoryGeneration,
     sourceKey,
     transcriptSnapshot,
-    loadEarlier,
+    olderHistory,
     trimHistory,
     appended
   ])

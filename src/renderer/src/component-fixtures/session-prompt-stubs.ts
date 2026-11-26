@@ -60,6 +60,7 @@ export function stubSessionPrompts(
         currentRequests: [promptItem(sessionId, prompt)]
       },
       loadingOlder: false,
+      olderPages: 0,
       olderHistoryGeneration: 0,
       initialHistoryAutoLoad: false,
       current: true

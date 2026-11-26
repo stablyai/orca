@@ -3,7 +3,6 @@
 // exactly as if they had opened it; they can still fold it from its status row.
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatRowSuccessors } from './native-chat-row-successors'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** One committed build: what was loaded, which turn each row belongs to, and what was drawn. */
@@ -50,7 +49,9 @@ function rowIds(slot: NativeChatTranscriptSlot): readonly string[] {
 export function nativeChatTurnsHeldOpen(
   previous: NativeChatTranscriptBuild | null,
   current: NativeChatTranscriptBuild,
-  expandedTurnKeys: ReadonlySet<string>
+  expandedTurnKeys: ReadonlySet<string>,
+  /** The row of `current` that holds a row of `previous` (the page's seam may have merged one). */
+  follow: (id: string) => string
 ): ReadonlySet<string> {
   const previousFirst = previous?.messages[0]?.id
   if (!previous || previousFirst === undefined || current.messages[0]?.id === previousFirst) {
@@ -88,8 +89,7 @@ export function nativeChatTurnsHeldOpen(
     )
   )
   // A row the reader saw may now be part of an earlier row that took in its tool calls.
-  const successors = nativeChatRowSuccessors(previous.messages, current.messages, drawnBefore)
-  const rowsNow = new Set(successors.values())
+  const rowsNow = new Set([...drawnBefore].map(follow))
   const turnOf = new Map<string, string | undefined>()
   for (const [index, message] of current.messages.entries()) {
     if (rowsNow.has(message.id)) {
@@ -98,10 +98,9 @@ export function nativeChatTurnsHeldOpen(
   }
   const held = new Set<string>()
   for (const id of drawnBefore) {
-    const row = successors.get(id)
-    const turnKey = row === undefined ? undefined : turnOf.get(row)
+    const row = follow(id)
+    const turnKey = turnOf.get(row)
     if (
-      row !== undefined &&
       turnKey !== undefined &&
       folding.has(turnKey) &&
       !drawnNow.has(row) &&

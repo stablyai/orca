@@ -136,6 +136,7 @@ export function createStructuredSessionMocks() {
     hasOlder: false,
     readCurrent: false,
     loadingOlder: false,
+    olderPages: 0,
     olderHistoryGeneration: 0,
     loadOlder: vi.fn<() => Promise<NativeChatOlderPageResult>>(),
     queuedCards: Array.of<QueuedMessageCard>(),

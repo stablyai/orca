@@ -11,6 +11,7 @@ type StructuredChatController = Pick<
   | 'error'
   | 'hasOlder'
   | 'loadingOlder'
+  | 'olderPages'
   | 'olderHistoryGeneration'
   | 'initialHistoryAutoLoad'
   | 'loadOlder'
@@ -46,6 +47,7 @@ export function useStructuredChatLiveSession(
       // Older pages can't load while the host is unreachable, so the row waits for it.
       hasMore: controller.hasOlder && hostReachable,
       loadingEarlier: controller.loadingOlder,
+      olderPages: controller.olderPages,
       olderHistoryGeneration: controller.olderHistoryGeneration,
       initialHistoryAutoLoad: controller.initialHistoryAutoLoad,
       loadEarlier: controller.loadOlder,
