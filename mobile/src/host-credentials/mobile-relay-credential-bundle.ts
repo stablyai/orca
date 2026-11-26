@@ -72,10 +72,11 @@ export function promotePairingJournalCredential(args: {
 }
 
 export async function readMobileRelayCredentialBundle(
-  hostId: string
+  hostId: string,
+  signal?: AbortSignal
 ): Promise<MobileRelayCredentialBundle | null> {
   requireNativeSecretStore()
-  const raw = await readPairingKeychainItem(credentialKey(hostId))
+  const raw = await readPairingKeychainItem(credentialKey(hostId), signal)
   if (raw === null) {
     return null
   }

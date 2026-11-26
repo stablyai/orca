@@ -31,8 +31,11 @@ function readRelayCredentialForReport(hostId: string): Promise<MobileRelayCreden
   if (shared) {
     return shared
   }
-  const read = readMobileRelayCredentialBundle(hostId)
+  const abandon = new AbortController()
+  const read = readMobileRelayCredentialBundle(hostId, abandon.signal)
   const result = withTimeout(read, 2_000, null)
+  // Once every waiter has settled, a read still queued behind a mutation skips its native I/O.
+  void result.then(() => abandon.abort())
   relayCredentialReads.set(hostId, result)
   void read.catch(() => null).finally(() => relayCredentialReads.delete(hostId))
   return result

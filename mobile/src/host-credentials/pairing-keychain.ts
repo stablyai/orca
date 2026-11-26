@@ -151,8 +151,15 @@ async function setItemAtGeneration(key: string, value: string, generation: numbe
   }
 }
 
-export async function readPairingKeychainItem(key: string): Promise<string | null> {
+// signal: a caller that stopped waiting skips the native read once queued mutations clear.
+export async function readPairingKeychainItem(
+  key: string,
+  signal?: AbortSignal
+): Promise<string | null> {
   await keychainMutation
+  if (signal?.aborted) {
+    return null
+  }
   const presenceGeneration = await loadPresenceGeneration(key)
   if (presenceGeneration !== null) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration))

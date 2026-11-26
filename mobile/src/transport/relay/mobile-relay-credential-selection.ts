@@ -24,12 +24,16 @@ export async function selectDialableRelayCredentials(args: {
   const memoryCredentials = memory
     ? args.controller.eligibleCredentials(...relayDialCandidates(memory))
     : []
-  if (memoryCredentials.length > 0) {
+  // Pending alone is speculative, so keep rereading durable state for a fresher credential.
+  const onlyPending = memoryCredentials.every(
+    (credential) => credential.token === memory?.pending?.token
+  )
+  if (memoryCredentials.length > 0 && !onlyPending) {
     // Keep newer in-memory resume state when its durable write failed.
     return { bundle: memory, credentials: memoryCredentials }
   }
   const disk = await args.readBundle().catch(() => null)
-  if (disk) {
+  if (disk && !(memoryCredentials.length > 0 && disk.current.token === memory?.current.token)) {
     const diskCredentials = args.controller.eligibleCredentials(...relayDialCandidates(disk))
     if (diskCredentials.length > 0) {
       args.controller.acceptFreshCredential(disk.current.version)
@@ -37,5 +41,5 @@ export async function selectDialableRelayCredentials(args: {
       return { bundle: disk, credentials: diskCredentials }
     }
   }
-  return { bundle: memory ?? disk, credentials: [] }
+  return { bundle: memory ?? disk, credentials: memoryCredentials }
 }
