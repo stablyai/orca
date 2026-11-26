@@ -22,6 +22,7 @@ import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-fi
 import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
 import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
+import { rehypeNativeChatInlineCodeLinks } from './native-chat-inline-code-links'
 import { remarkNativeChatListItemNumbers } from './native-chat-markdown-list-item-numbers'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import {
@@ -92,6 +93,7 @@ function withFileDestinations(
       remarkNativeChatFileDestinations,
       ...(mentions?.remarkPlugins ?? [])
     ],
+    rehypePlugins: [rehypeNativeChatInlineCodeLinks],
     extraFlowSyntaxMarkers: visualExtension?.remarkPlugins.length
       ? visualExtension.extraFlowSyntaxMarkers
       : [],
