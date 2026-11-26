@@ -166,6 +166,38 @@ describe('resolveImportNavigationTarget', () => {
     expect(target?.filePath).toBe('/repo/src/button.ts')
   })
 
+  it('folds case in tsconfig `files` and `exclude` on Windows drives only, not POSIX or WSL', async () => {
+    const resolveFrom = async (root: string, separator: string) => {
+      const at = (path: string) => [root, ...path.split('/')].join(separator)
+      const files = memoryFiles({
+        [at('tsconfig.json')]:
+          '{ "files": [], "references": [{ "path": "./tsconfig.legacy.json" }, { "path": "./tsconfig.pages.json" }, { "path": "./tsconfig.app.json" }] }',
+        [at('tsconfig.legacy.json')]:
+          '{ "include": ["src"], "exclude": ["**/features"], "compilerOptions": { "paths": { "@/*": ["./legacy/*"] } } }',
+        [at('tsconfig.pages.json')]:
+          '{ "files": ["src/features/PAGE.tsx"], "include": ["src"], "exclude": ["**/features"], "compilerOptions": { "paths": { "@/*": ["./pages/*"] } } }',
+        [at('tsconfig.app.json')]:
+          '{ "include": ["src"], "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }',
+        [at('legacy/button.ts')]: 'export const button = 0\n',
+        [at('pages/button.ts')]: 'export const button = 1\n',
+        [at('src/button.ts')]: 'export const button = 2\n'
+      })
+      const target = await resolveImportNavigationTarget(files, {
+        specifier: '@/button',
+        importedName: null,
+        fromFilePath: at('src/Features/Page.tsx'),
+        rootPath: root
+      })
+      return target?.filePath
+    }
+    // Why: folded, `legacy` excludes the file and `pages` lists it; case-sensitive, `legacy` owns it.
+    expect(await resolveFrom('C:\\repo', '\\')).toBe('C:\\repo\\pages\\button.ts')
+    expect(await resolveFrom('/repo', '/')).toBe('/repo/legacy/button.ts')
+    expect(await resolveFrom('\\\\wsl.localhost\\Ubuntu\\repo', '\\')).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\repo\\legacy\\button.ts'
+    )
+  })
+
   it('declines package imports and paths outside the workspace root', async () => {
     const files = memoryFiles({ '/other/shared.ts': 'export const shared = 1\n' })
     const params = { importedName: 'x', fromFilePath: FROM, rootPath: ROOT }
