@@ -354,3 +354,26 @@ it('a complete listing drops a relay an earlier partial listing placed and no da
   expect(inventory.providerRelayInventoryComplete()).toBe(true)
   expect(inventory.keptProviderRelay(SESSION)).toBeUndefined()
 })
+
+// A start refused beside a possibly running kept agent proves no exit: death evidence from it would
+// resettle the chat's last turn before the kept agent's buffered end replays.
+it('a start refused beside an unreachable kept agent settles as unproven, however it is wrapped', async () => {
+  vi.resetModules()
+  const { KeptProviderRelayUnreachableError } =
+    await import('../../../../provider-relay/provider-relay-kept-rebind')
+  const { failedAcquisitionSettlement } =
+    await import('../../acquisition/structured-agent-session-failed-create-refusal')
+  const { AgentSessionAcquisitionExitProvenError } =
+    await import('../../acquisition/structured-agent-session-acquisition-errors')
+  const { AgentSessionPreSpawnError } =
+    await import('../../providers/structured-agent-session-adapter-errors')
+  const refused = new KeptProviderRelayUnreachableError(SESSION)
+  const wording = { record: null, newSession: false }
+  for (const error of [
+    refused,
+    new AgentSessionAcquisitionExitProvenError(refused),
+    new AgentSessionPreSpawnError(refused)
+  ]) {
+    expect(failedAcquisitionSettlement(error, wording).exitProof).toBe('unproven')
+  }
+})

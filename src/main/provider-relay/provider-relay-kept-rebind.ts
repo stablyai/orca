@@ -12,6 +12,20 @@ export class KeptProviderRelayUnreachableError extends Error {
   }
 }
 
+/** Anywhere in a start failure's causes: a refusal beside a possibly running agent proves no exit. */
+export function keptProviderRelayUnreachableWithin(error: unknown, depth = 0): boolean {
+  if (depth >= 6 || !(error instanceof Error)) {
+    return false
+  }
+  if (error instanceof KeptProviderRelayUnreachableError) {
+    return true
+  }
+  if (error instanceof AggregateError) {
+    return error.errors.some((inner) => keptProviderRelayUnreachableWithin(inner, depth + 1))
+  }
+  return keptProviderRelayUnreachableWithin(error.cause, depth + 1)
+}
+
 /** The kept agent was proven gone during a launch reattach; the rebind ends instead of starting anew. */
 export class KeptProviderRelayEndedError extends Error {
   constructor(readonly chatKey: string) {
