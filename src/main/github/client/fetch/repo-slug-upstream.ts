@@ -1,5 +1,4 @@
-import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
-import { acquire, release } from '../../execution/github-operation-slots'
+import { getGitHubForkParent } from '../../repositories/github-fork-parent'
 import {
   getRemoteUrlForRepo,
   githubRepoContext
@@ -21,8 +20,6 @@ import {
   getGitHubApiRepositoryForRemote,
   getOriginGitHubApiRepository
 } from '../../repositories/github-api-repository-remote-probe'
-import { githubRepositorySlugArg } from '../../repositories/github-repository-host'
-import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
 
 import { withSharedRemoteUrlReads } from '../../../git/remotes/remote-url-probe'
 import { isStableMissingGitRemoteError } from '../../../git/remotes/stable-missing-git-remote-error'
@@ -94,13 +91,7 @@ export async function probeRepoUpstream(
       if (hostResolved && (forgeHost === 'gitlab.com' || forgeHost === 'bitbucket.org')) {
         return { upstream: null, origin }
       }
-      const execution = await resolveGitHubRepoExecution(
-        repoPath,
-        undefined,
-        connectionId,
-        localGitOptions
-      )
-      origin = execution.ownerRepo
+      origin = await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions)
       // Missing auth for an arbitrary custom host does not prove it is another forge.
       if (!origin || !resolveParent) {
         return { upstream: undefined, origin }
@@ -114,42 +105,7 @@ export async function probeRepoUpstream(
       if (upstream && !sameOwnerRepo(upstream, origin)) {
         return { upstream, origin }
       }
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 10_000)
-      let acquired = false
-      try {
-        await acquire(controller.signal)
-        acquired = true
-        const { stdout } = await ghExecFileAsync(
-          ['repo', 'view', githubRepositorySlugArg(origin), '--json', 'isFork,parent'],
-          { ...execution.ghOptions, timeout: 10_000, signal: controller.signal }
-        )
-        const data = JSON.parse(stdout) as {
-          isFork?: boolean
-          parent?: { name?: string; owner?: { login?: string } } | null
-        }
-        if (data.isFork === false) {
-          return { upstream: null, origin }
-        }
-        const owner = data.parent?.owner?.login
-        const repo = data.parent?.name
-        return {
-          upstream:
-            data.isFork === true &&
-            typeof owner === 'string' &&
-            owner.trim() &&
-            typeof repo === 'string' &&
-            repo.trim()
-              ? { owner, repo, ...(origin.host ? { host: origin.host } : {}) }
-              : undefined,
-          origin
-        }
-      } finally {
-        clearTimeout(timer)
-        if (acquired) {
-          release()
-        }
-      }
+      return { upstream: await getGitHubForkParent(origin, context), origin }
     } catch {
       return { upstream: undefined, origin }
     }

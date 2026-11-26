@@ -28,7 +28,8 @@ export async function resolveGitHubWorkItemLinkRepository(
   const { candidates } = await resolveGitHubApiRepositoryCandidates(
     repoPath,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    { includeForkParent: !allowSameHost }
   )
   const requestedKey = githubRepoIdentityKey(requestedRepository)
   const requestedHostKey = githubHostKey(requestedRepository.host)

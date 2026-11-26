@@ -15,8 +15,8 @@ import type { RepoWorkspaceCleanupPolicy } from '../workspace-cleanup/workspace-
 
 export type RepoKind = 'git' | 'folder'
 
-/** Explicit choices survive remote-topology changes; absent/auto uses upstream when present, otherwise origin.
- * Explicit upstream falls back to origin with a toast if that remote vanishes. */
+/** Auto uses upstream, including a discovered GitHub fork parent, then origin.
+ * Explicit upstream falls back to origin with a toast when upstream is unavailable. */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 

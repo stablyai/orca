@@ -22,8 +22,7 @@ import {
   repositoryRateLimitGuard,
   spendsSharedGitHubComQuota
 } from '../../api/rate-limit'
-import { sameOwnerRepo } from './../github-exec-scope'
-import { buildWorkItemListRequest, resolvePrWorkItemSource } from './work-item-list-request'
+import { buildWorkItemListRequest } from './work-item-list-request'
 import { buildSearchQueryString, defaultOpenWorkItemQuery } from './work-item-search-query'
 import { searchWorkItemCount, usesGraphqlWorkItemSearch } from './work-item-search-page'
 
@@ -120,13 +119,12 @@ export async function countWorkItems(
     if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
       return 0
     }
-    const [issueResolved, prResolved] = await Promise.all([
-      resolveIssueGitHubApiRepositorySource(repoPath, preference, connectionId, localGitOptions),
-      resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
-    ])
-    const issueOwnerRepo = issueResolved.source
-    const prOwnerRepo = prResolved.source
-    const ownerRepo = prOwnerRepo ?? issueOwnerRepo
+    const { source: ownerRepo } = await resolveIssueGitHubApiRepositorySource(
+      repoPath,
+      preference,
+      connectionId,
+      localGitOptions
+    )
     if (!ownerRepo) {
       return 0
     }
@@ -151,63 +149,13 @@ export async function countWorkItems(
 
     await acquire()
     try {
-      if (sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
-        return await countWorkItemsForQuery(
-          repoPath,
-          ownerRepo,
-          effectiveQuery,
-          connectionId,
-          localGitOptions
-        )
-      }
-
-      const counts: Promise<number>[] = []
-      // PR-only filters cannot match issues; avoid spending a search call on that half.
-      const hasPrOnlyFilter =
-        effectiveQuery.draft ||
-        effectiveQuery.reviewRequested !== null ||
-        effectiveQuery.reviewedBy !== null
-      if (
-        effectiveQuery.scope !== 'pr' &&
-        effectiveQuery.state !== 'merged' &&
-        !hasPrOnlyFilter &&
-        issueOwnerRepo
-      ) {
-        counts.push(
-          countWorkItemsForQuery(
-            repoPath,
-            issueOwnerRepo,
-            { ...effectiveQuery, scope: 'issue' },
-            connectionId,
-            localGitOptions
-          )
-        )
-      }
-      if (effectiveQuery.scope !== 'issue' && prOwnerRepo) {
-        counts.push(
-          countWorkItemsForQuery(
-            repoPath,
-            prOwnerRepo,
-            { ...effectiveQuery, scope: 'pr' },
-            connectionId,
-            localGitOptions
-          )
-        )
-      }
-      // Preserve counts from successful sources when another search fails.
-      const results = await Promise.allSettled(counts)
-      let total = 0
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          total += r.value
-        } else {
-          console.warn('countWorkItems partial failure:', r.reason)
-        }
-      }
-      return total
-    } catch (err) {
-      console.warn('countWorkItems failed:', err)
-      return 0
+      return await countWorkItemsForQuery(
+        repoPath,
+        ownerRepo,
+        effectiveQuery,
+        connectionId,
+        localGitOptions
+      )
     } finally {
       release()
     }

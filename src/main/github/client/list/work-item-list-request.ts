@@ -1,14 +1,7 @@
 import type { ClassifiedError } from '../../../../shared/errors/classified-error'
-import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
-import { shouldProbeGitRemote } from '../../../git/remotes/remote-name-listing'
-import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
-import {
-  getGitHubApiRepositoryForRemote,
-  getOriginGitHubApiRepository
-} from '../../repositories/github-api-repository-remote-probe'
 import { WORK_ITEM_PR_LIST_JSON_FIELDS, type MainWorkItem } from './../map/work-item-field-coercion'
 import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-item-search-query'
 export type WorkItemListRequest = {
@@ -129,42 +122,4 @@ export function assertSshRepoHasResolvedGitHubSource(args: {
   }
   // SSH-only paths cannot let gh infer a local repository.
   throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
-}
-
-export type ResolvedPrWorkItemSource = {
-  source: OwnerRepo | null
-  originCandidate: OwnerRepo | null
-  upstreamCandidate: OwnerRepo | null
-}
-
-/** Only explicit origin is origin-only; other preferences retain upstream-first candidate resolution. */
-export async function resolvePrWorkItemSource(
-  repoPath: string,
-  preference: IssueSourcePreference | undefined,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<ResolvedPrWorkItemSource> {
-  const originCandidatePromise = getOriginGitHubApiRepository(
-    repoPath,
-    connectionId,
-    localGitOptions
-  )
-  // Skip known-absent upstreams; unknown remote discovery remains fail-open.
-  const upstreamCandidatePromise = shouldProbeGitRemote(
-    repoPath,
-    'upstream',
-    connectionId,
-    localGitOptions
-  ).then((shouldProbe) =>
-    shouldProbe
-      ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-      : null
-  )
-  const [originCandidate, upstreamCandidate] = await Promise.all([
-    originCandidatePromise,
-    upstreamCandidatePromise
-  ])
-  // Fork contribution PRs live upstream; explicit origin alone selects the fork namespace.
-  const source = preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate)
-  return { source, originCandidate, upstreamCandidate }
 }

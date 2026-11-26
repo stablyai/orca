@@ -12,8 +12,9 @@ import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
 } from '../../../shared/github/repositories/repository-identity-key'
-import { shouldProbeGitRemote } from '../../git/remotes/remote-name-listing'
+import { listCachedRemoteNames, shouldProbeGitRemote } from '../../git/remotes/remote-name-listing'
 
+import { getGitHubForkParent } from './github-fork-parent'
 import { isGitHubHostAuthenticated } from './github-enterprise-repository'
 import { githubHostExecOptions } from './github-repository-host'
 import {
@@ -73,37 +74,66 @@ export type GitHubApiRepositoryCandidates = {
   headRepo: GitHubApiRepository | null
 }
 
-/** Hosted mirror of resolvePRRepositoryCandidates: upstream first, then origin. */
-export async function resolveGitHubApiRepositoryCandidates(
+async function getRepositoryCandidates(
   repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<GitHubApiRepositoryCandidates> {
-  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    const originPromise = getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions, {
-      requireVerifiedSshProbe: true
-    }).then(
-      (value) => ({ status: 'fulfilled' as const, value }),
-      (reason: unknown) => ({ status: 'rejected' as const, reason })
-    )
-    const probeUpstream = await shouldProbeGitRemote(
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions,
+  { includeForkParent = false, requireVerifiedSshProbe = false } = {}
+) {
+  const probeOptions = { requireVerifiedSshProbe }
+  const [originCandidate, upstream] = await Promise.all([
+    getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions, probeOptions),
+    getGitHubApiRepositoryForRemote(
       repoPath,
       'upstream',
       connectionId,
-      localGitOptions
+      localGitOptions,
+      probeOptions
     )
-    const [upstream, originResult] = await Promise.all([
-      probeUpstream
-        ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
-            requireVerifiedSshProbe: true
-          })
-        : null,
-      originPromise
-    ])
-    if (originResult.status === 'rejected') {
-      throw originResult.reason
-    }
-    const origin = originResult.value
+  ])
+  const candidates = { originCandidate, upstreamCandidate: upstream }
+  if (upstream || !includeForkParent || !originCandidate) {
+    return candidates
+  }
+  const remotes = await listCachedRemoteNames(repoPath, connectionId, localGitOptions)
+  // An unreadable or non-GitHub upstream is not evidence of an absent remote.
+  if (!remotes?.includes('origin') || remotes.includes('upstream')) {
+    return candidates
+  }
+  // A stand-in can list work items, but fork metadata belongs to the actual origin.
+  const origin =
+    remotes.length === 1
+      ? originCandidate
+      : await getGitHubApiRepositoryForRemote(
+          repoPath,
+          'origin',
+          connectionId,
+          localGitOptions,
+          probeOptions
+        )
+  if (origin) {
+    candidates.upstreamCandidate =
+      (await getGitHubForkParent(
+        origin,
+        githubRepoContext(repoPath, connectionId, localGitOptions)
+      )) ?? null
+  }
+  return candidates
+}
+
+export async function resolveGitHubApiRepositoryCandidates(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  { includeForkParent = false } = {}
+): Promise<GitHubApiRepositoryCandidates> {
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const { originCandidate: origin, upstreamCandidate: upstream } = await getRepositoryCandidates(
+      repoPath,
+      connectionId,
+      localGitOptions,
+      { includeForkParent, requireVerifiedSshProbe: true }
+    )
     const seen = new Set<string>()
     const candidates: GitHubApiRepository[] = []
     for (const candidate of [upstream, origin]) {
@@ -121,10 +151,24 @@ export async function resolveGitHubApiRepositoryCandidates(
   })
 }
 
-export type ResolvedGitHubApiRepositorySource = {
-  source: GitHubApiRepository | null
-  /** True when explicit upstream is gone and resolver fell back to origin. */
-  fellBack: boolean
+export async function resolveGitHubWorkItemSources(
+  repoPath: string,
+  preference: IssueSourcePreference | undefined,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+) {
+  const { originCandidate, upstreamCandidate } = await getRepositoryCandidates(
+    repoPath,
+    connectionId,
+    localGitOptions,
+    { includeForkParent: true }
+  )
+  return {
+    originCandidate,
+    upstreamCandidate,
+    source: preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate),
+    fellBack: preference === 'upstream' && upstreamCandidate === null && originCandidate !== null
+  }
 }
 
 export async function resolveIssueGitHubApiRepositorySource(
@@ -132,31 +176,15 @@ export async function resolveIssueGitHubApiRepositorySource(
   preference: IssueSourcePreference | undefined,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<ResolvedGitHubApiRepositorySource> {
+) {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    if (preference === 'upstream') {
-      const upstream = await getGitHubApiRepositoryForRemote(
-        repoPath,
-        'upstream',
-        connectionId,
-        localGitOptions
-      )
-      if (upstream) {
-        return { source: upstream, fellBack: false }
-      }
-      const origin = await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions)
-      return { source: origin, fellBack: origin !== null }
-    }
     if (preference === 'origin') {
       return {
         source: await getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions),
         fellBack: false
       }
     }
-    return {
-      source: await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
-      fellBack: false
-    }
+    return resolveGitHubWorkItemSources(repoPath, preference, connectionId, localGitOptions)
   })
 }
 
