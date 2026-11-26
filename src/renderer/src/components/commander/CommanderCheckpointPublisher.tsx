@@ -17,6 +17,7 @@ import {
   checkpointObservation,
   checkpointSources,
   confirmsNoAgents,
+  missingCheckpointSources,
   type CheckpointSource
 } from './commander-checkpoint-content'
 import { reportCheckpointError, useRecordingDevice } from './CommanderRecording'
@@ -175,14 +176,9 @@ function Publisher({ account, device }: { account: CommanderAccount; device: str
                 saved.set(project.id, candidate)
                 continue
               }
-              const missing = previousSources.filter(
-                (previous) =>
-                  !project.sources.some(
-                    (source) =>
-                      source.hostId === previous.hostId && source.repoId === previous.repoId
-                  )
-              )
-              const toConfirm = empty ? [...previousSources, ...project.registrations] : missing
+              const toConfirm = empty
+                ? [...previousSources, ...project.registrations]
+                : missingCheckpointSources(page?.body ?? '', project.sources)
               if (!(await Promise.all(toConfirm.map(sourceIsEmpty))).every(Boolean)) {
                 retry = true
                 continue

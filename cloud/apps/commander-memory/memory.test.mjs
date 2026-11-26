@@ -35,15 +35,16 @@ async function setupMemory(t) {
     res.writeHead(cloud ? 200 : 401, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ cloud, capabilities: {} }))
   })
-  const capabilitiesEndpoint = (await listen(authority)) + '/v1/desktop/auth/capabilities'
-  const config = { capabilitiesEndpoint, databasePath: join(dir, 'memory.sqlite') }
-  let service = createMemoryServer(config)
-  let root = (await listen(service)) + '/v1/commander/memory'
+  let service
   t.after(async () => {
-    await close(service)
+    if (service) await close(service)
     await close(authority)
     await rm(dir, { recursive: true, force: true })
   })
+  const capabilitiesEndpoint = (await listen(authority)) + '/v1/desktop/auth/capabilities'
+  const config = { capabilitiesEndpoint, databasePath: join(dir, 'memory.sqlite') }
+  service = createMemoryServer(config)
+  let root = (await listen(service)) + '/v1/commander/memory'
   const call = async (token, path = '', body) => {
     const res = await fetch(root + path, {
       method: body ? 'POST' : 'GET',
@@ -56,6 +57,7 @@ async function setupMemory(t) {
     call,
     async restart() {
       await close(service)
+      service = undefined
       service = createMemoryServer(config)
       root = (await listen(service)) + '/v1/commander/memory'
     }
@@ -605,10 +607,15 @@ test('the owner browses paged, scoped summaries and resolves linked pages withou
 
 test('legacy revisions backfill once and older writers remain visible in the same transaction', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'orca-page-index-'))
-  t.after(() => rm(dir, { recursive: true, force: true }))
+  let db
+  let store
+  t.after(async () => {
+    store?.close()
+    db?.close()
+    await rm(dir, { recursive: true, force: true })
+  })
   const file = join(dir, 'memory.sqlite')
-  const db = new DatabaseSync(file)
-  t.after(() => db.close())
+  db = new DatabaseSync(file)
   db.exec(`CREATE TABLE revisions (
     tenant TEXT NOT NULL,page TEXT NOT NULL,version INTEGER NOT NULL,actor TEXT NOT NULL,
     request TEXT NOT NULL,fingerprint TEXT NOT NULL,data TEXT NOT NULL,
@@ -643,8 +650,7 @@ test('legacy revisions backfill once and older writers remain visible in the sam
   }
   legacyWrite('p', 1, 'before')
   legacyWrite('p', 2, 'current')
-  const store = openStore(file)
-  t.after(() => store.close())
+  store = openStore(file)
   assert.deepEqual(
     store.index(owner, new URLSearchParams()).pages.map((p) => p.title),
     ['current']
@@ -691,6 +697,7 @@ test('the handoff picker validates current Markdown and guided resume packs only
       ...fields
     })
     assert.equal(result.status, 200)
+    return result.page
   }
   const id = (digit) => 'handoff-aaaaaaaa-bbbb-cccc-dddd-' + digit.repeat(12)
   const encodedBoundary = 'x'.repeat(3987) + '\n\\## Next step'
@@ -698,8 +705,11 @@ test('the handoff picker validates current Markdown and guided resume packs only
     kind: 'note',
     body: `## Progress\n\n${encodedBoundary}\n\n## Next step\n\nContinue`
   }
-  await write(id('1'), handoff)
-  await write(id('2'), { ...handoff, body: handoff.body + '\n\n## Next step\n\nUnclear' })
+  const first = await write(id('1'), handoff)
+  await write(id('2'), {
+    ...handoff,
+    body: '## Progress\n\nReady\n\n## Next step\n\n## Next step\n\nShip'
+  })
   await write(id('3'), { ...handoff, body: 'Ordinary wiki note' })
   await write(id('4'), {
     ...handoff,
@@ -750,5 +760,31 @@ test('the handoff picker validates current Markdown and guided resume packs only
     const { token } = await call('laptop', '/delegations', { type, id: 'worker', projectId })
     assert.equal((await query(token)).status, 403)
     assert.equal((await call(token, '/handoffs-index')).status, 403)
+    if (type === 'commander') assert.equal((await call(token, '/agent/handoffs')).status, 403)
   }
+  const newer = await write(id('6'), { ...handoff, title: 'Ship' })
+  await write(id('7'), { ...handoff, projectId: 'github:other/repo' })
+  await write(id('8'), handoff, 'elsewhere')
+  await write(id('9'), handoff, 'bob')
+  const { token } = await call('laptop', '/delegations', { type: 'agent', id: 'worker', projectId })
+  const summaries = '/agent/handoffs'
+  assert.equal((await call('laptop', summaries)).status, 403)
+  for (const query of ['projectId=other', 'offset=-1', 'limit=0', 'limit=2&limit=5']) {
+    assert.equal((await call(token, summaries + '?' + query)).status, 400)
+  }
+  assert.deepEqual(await call(token, summaries + '?limit=1'), {
+    status: 200,
+    total: 2,
+    handoffs: [{ pageId: id('6'), goal: 'Ship', version: 1, savedAt: newer.createdAt }]
+  })
+  assert.deepEqual(await call(token, summaries + '?limit=1&offset=1'), {
+    status: 200,
+    total: 2,
+    handoffs: [{ pageId: id('1'), goal: 'A', version: 1, savedAt: first.createdAt }]
+  })
+  assert.deepEqual(await call(token, summaries + '?offset=10'), {
+    status: 200,
+    total: 2,
+    handoffs: []
+  })
 })

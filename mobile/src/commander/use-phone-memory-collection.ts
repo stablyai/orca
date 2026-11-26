@@ -14,7 +14,6 @@ export function usePhoneMemoryCollection({
   account,
   handoffs,
   searchable,
-  includeDeleted,
   active,
   perform
 }: {
@@ -22,20 +21,18 @@ export function usePhoneMemoryCollection({
   account: CommanderAccount
   handoffs: boolean
   searchable: boolean
-  includeDeleted: boolean
   active: boolean
   perform: (work: () => Promise<void>) => Promise<void>
 }) {
   const [filter, setFilter] = useState<HandoffFilter>({})
-  const [listing, setListing] = useState<(PhonePages & { searchable: boolean }) | null>(null)
+  const [listing, setListing] = useState<
+    (PhonePages & { searchable: boolean; includeDeleted: boolean }) | null
+  >(null)
   const collection = listing?.searchable === searchable ? listing : null
+  const includeDeleted = collection?.includeDeleted ?? false
   const loadList = useCallback(
     (after?: string, withDeleted = includeDeleted, next?: HandoffFilter) =>
       perform(async () => {
-        if (next) {
-          setFilter(next)
-          setListing((previous) => previous && { ...previous, pages: [], next: null })
-        }
         const result = await runRpcOperation(client, phoneListRead, {
           account,
           ...(handoffs ? { handoffsOnly: true } : {}),
@@ -43,18 +40,22 @@ export function usePhoneMemoryCollection({
           after,
           includeDeleted: withDeleted
         })
+        if (next) {
+          setFilter(next)
+        }
         setListing((previous) =>
-          after && previous?.searchable === searchable
+          after && previous?.searchable === searchable && previous.includeDeleted === withDeleted
             ? {
                 ...result,
                 searchable,
+                includeDeleted: withDeleted,
                 pages: [
                   ...new Map(
                     [...previous.pages, ...result.pages].map((page) => [page.pageId, page])
                   ).values()
                 ]
               }
-            : { ...result, searchable }
+            : { ...result, searchable, includeDeleted: withDeleted }
         )
       }),
     [account, client, perform, includeDeleted, handoffs, searchable, filter]
@@ -74,7 +75,7 @@ export function usePhoneMemoryCollection({
         ? {
             ...previous,
             pages: [
-              ...(page.deleted && !includeDeleted
+              ...(page.deleted && !previous.includeDeleted
                 ? []
                 : [{ ...page, recurringQuestion: humanRecurringAnswer(page)?.question }]),
               ...previous.pages.filter((p) => p.pageId !== page.pageId)
@@ -83,5 +84,5 @@ export function usePhoneMemoryCollection({
         : null
     )
   }
-  return { collection, filter, loadList, savedPage }
+  return { collection, includeDeleted, filter, loadList, savedPage }
 }

@@ -83,6 +83,23 @@ export function checkpointObservation(
   ].join('\n\n')
 }
 
+export function missingCheckpointSources(
+  previousBody: string,
+  current: readonly CheckpointSource[]
+): CheckpointSource[] {
+  const previous = checkpointSources(previousBody)
+  const verifiedEmpty = previousBody === checkpointObservation('', previous)
+  return previous.filter(
+    (old) =>
+      !current.some(
+        (row) =>
+          row.hostId === old.hostId &&
+          row.repoId === old.repoId &&
+          (old.worktreeId === undefined ? verifiedEmpty : row.worktreeId === old.worktreeId)
+      )
+  )
+}
+
 type ListingEvidence = {
   truncated?: boolean
   hostScope?: { hostIds: string[]; omittedHostIds: string[] }
@@ -109,10 +126,14 @@ export function confirmsNoAgents(
   ) {
     return false
   }
-  const rows = listing.worktrees.filter((row) => row.repoId === repoId && row.hostId === hostId)
+  const rows = listing.worktrees.filter(
+    (row) =>
+      row.repoId === repoId &&
+      row.hostId === hostId &&
+      (worktreeId === undefined || row.worktreeId === worktreeId)
+  )
   return (
     rows.length > 0 &&
-    (!worktreeId || rows.some((row) => row.worktreeId === worktreeId)) &&
     rows.every(
       (row) =>
         row.unverifiableTerminalCount === 0 &&

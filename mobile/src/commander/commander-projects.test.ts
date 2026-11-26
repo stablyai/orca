@@ -130,6 +130,7 @@ describe('Commander project overview', () => {
         }
       }
     })
+    expect(projects.map((p) => p.live)).toEqual([true, false, false])
     expect(projects.map((p) => [p.executionHostId, p.counts.working, p.rows[0]?.unread])).toEqual([
       ['local', 1, false],
       ['runtime:catalog', 1, undefined],

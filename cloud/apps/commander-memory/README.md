@@ -9,6 +9,7 @@ The service verifies an Orca account bearer on every account request by posting 
 | GET | / | Latest revisions, including tombstones, in `pages`. |
 | GET | /index | The account owner reads up to 50 latest page summaries, project identifiers and a continuation cursor in `{pages,projects,next}`. |
 | GET | /handoffs-index | The owner reads the same paged summaries, restricted to active handoffs with readable progress and next-step sections. |
+| GET | /agent/handoffs | An agent reads handoff summaries for the project named in its grant, newest first. |
 | GET | /worker-guidance?projectId=… | The owner reads current human guidelines for the account and selected project in `{guidelines,truncated}`. |
 | GET | /pages/:id | Current `page` and up to 25 newest-first revisions in `history`. Pass `?beforeVersion=<nextBeforeVersion>` for the next slice; a null cursor marks the end. |
 | POST | /human | Account-authored revision. |
@@ -42,5 +43,7 @@ The service builds the SQLite index transactionally on first startup with an exi
 
 
 `/handoffs-index` applies the saved handoff format and section limits before pagination, including after someone edits a handoff in the wiki. It accepts the same filters, sorting and cursors as `/index`. Older clients can continue using the `handoffsOnly` header filter on `/index`.
+
+`/agent/handoffs` returns `{handoffs,total}` for active, readable handoffs in the grant's project. Each summary contains `pageId`, `goal`, `version` and `savedAt`. Pass a zero-based `offset` and a `limit` from 1 to 50 (default 12). Fetch `/pages/:id` to read the selected handoff.
 
 Worker guidance is packed in page ID order within 8,000 UTF-16 code units, counting each title, version, body and separator. An entry that exceeds the remaining budget sets `truncated` to true. Later entries can still fit. The response excludes recurring-answer rules and deleted guidelines. Clients connecting to a .7 or .8 Memory service use its authenticated owner list for compatibility. Upgrade the service to receive bounded responses for both browsing handoffs and preparing worker guidance.

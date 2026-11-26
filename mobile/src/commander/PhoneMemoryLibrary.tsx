@@ -62,7 +62,6 @@ export function PhoneMemoryLibrary({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [includeDeleted, setIncludeDeleted] = useState(false)
   const searchable = handoffs && handoffSearch
   const [queryText, setQueryText] = useState('')
   const [detail, setDetail] = useState<PhonePage | null>(null)
@@ -108,19 +107,20 @@ export function PhoneMemoryLibrary({
         latestAccessError.current()
       } else {
         setError(message)
-        setConflict(/version conflict/i.test(message))
+        if (/version conflict/i.test(message)) {
+          setConflict(true)
+        }
       }
     } finally {
       running.current = false
       setBusy(false)
     }
   }, [])
-  const { collection, filter, loadList, savedPage } = usePhoneMemoryCollection({
+  const { collection, includeDeleted, filter, loadList, savedPage } = usePhoneMemoryCollection({
     client,
     account,
     handoffs,
     searchable,
-    includeDeleted,
     active: active && !detail && !draft,
     perform
   })
@@ -138,7 +138,11 @@ export function PhoneMemoryLibrary({
       })
       setDetail((previous) =>
         beforeVersion && previous?.page.pageId === pageId
-          ? { ...result, history: [...previous.history, ...result.history] }
+          ? {
+              ...previous,
+              history: [...previous.history, ...result.history],
+              nextBeforeVersion: result.nextBeforeVersion
+            }
           : result
       )
       setPast(null)
@@ -178,11 +182,17 @@ export function PhoneMemoryLibrary({
         capture={() =>
           void perform(async () => {
             const recent = await runRpcOperation(client, phoneCommanderRecentRead)
-            if (!recent.goal.trim() && !recent.progress.trim()) {
-              setError(t('commander.handoffNoRecent', 'No recent messages to add on this host.'))
+            const captured = applyRecentConversation(draft, recent)
+            if (captured === draft) {
+              setError(
+                t(
+                  'commander.handoffNoRecent',
+                  'No recent message can fill the empty handoff fields.'
+                )
+              )
               return
             }
-            setDraft((current) => applyRecentConversation(current, recent))
+            setDraft(captured)
           })
         }
         draft={draft}
@@ -191,6 +201,8 @@ export function PhoneMemoryLibrary({
         active={active}
         busy={busy}
         conflict={conflict}
+        latestPage={detail?.page}
+        reloadForReview={() => readPage(draft.pageId)}
         labels={labels}
         allProjects={allProjects}
         problem={problem}
@@ -359,11 +371,7 @@ export function PhoneMemoryLibrary({
         )
       }
       refresh={() => void loadList()}
-      toggleDeleted={() => {
-        const next = !includeDeleted
-        setIncludeDeleted(next)
-        void loadList(undefined, next)
-      }}
+      toggleDeleted={() => void loadList(undefined, !includeDeleted)}
       more={() => void loadList(collection?.next ?? undefined)}
       open={readPage}
     />

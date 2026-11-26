@@ -1,4 +1,5 @@
 import { Text } from 'react-native'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { s } from './phone-memory-controls'
 import type { PhonePageSummary } from './phone-memory-rpc'
@@ -15,7 +16,7 @@ export function PhoneMemoryAttribution({ page }: { page: PhonePageSummary }) {
       {[
         actor + ' · ' + page.actor.id,
         'v' + page.version,
-        new Date(page.createdAt).toLocaleString()
+        new Date(page.createdAt).toLocaleString(getUiIntlLocale())
       ].join(' · ')}
     </Text>
   )

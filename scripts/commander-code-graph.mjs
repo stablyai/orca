@@ -3,7 +3,6 @@ import { constants } from 'node:fs'
 import { open, realpath } from 'node:fs/promises'
 import { join, posix, win32 } from 'node:path'
 import { parseArgs } from 'node:util'
-import { pathToFileURL } from 'node:url'
 import { runProcess } from '@orca/process-host'
 
 const sourceFile = /\.(?:[cm]?[jt]s|[jt]sx)$/i
@@ -73,6 +72,52 @@ async function readSource(root, file, available) {
   }
 }
 
+async function readTrackedFile(root, file, available) {
+  try {
+    return await readSource(root, file, available)
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP'].includes(error.code)) {
+      return null
+    }
+    throw error
+  }
+}
+
+function moduleSpecifiers(ts, source) {
+  const literals = []
+  function include(node) {
+    if (node && ts.isStringLiteralLike(node)) {
+      literals.push(node)
+    }
+  }
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      include(node.moduleSpecifier)
+    } else if (ts.isExternalModuleReference(node)) {
+      include(node.expression)
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      include(node.argument.literal)
+    } else if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      if (
+        callee.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(callee) && callee.text === 'require')
+      ) {
+        include(node.arguments[0])
+      } else if (ts.isIdentifier(callee) && callee.text === 'define') {
+        const [first, second] = node.arguments
+        const dependencies = first && ts.isStringLiteralLike(first) ? second : first
+        if (dependencies && ts.isArrayLiteralExpression(dependencies)) {
+          dependencies.elements.forEach(include)
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return literals
+}
+
 export async function collectCommanderCodeGraph({
   cwd = process.cwd(),
   scope = '.',
@@ -106,7 +151,11 @@ export async function collectCommanderCodeGraph({
     allowJs: true,
     resolveJsonModule: true
   }
-  const host = { fileExists: (file) => indexed.has(file.slice(1)), readFile: () => undefined }
+  const manifests = new Map()
+  const host = {
+    fileExists: (file) => indexed.has(file.slice(1)),
+    readFile: (file) => manifests.get(file.slice(1))
+  }
   const coverage = {
     trackedInScope: inScope.length,
     sourcesInScope: sources.length,
@@ -124,12 +173,7 @@ export async function collectCommanderCodeGraph({
       break
     }
     coverage.remaining--
-    const data = await readSource(root, file, bytesLeft).catch((error) => {
-      if (['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP'].includes(error.code)) {
-        return null
-      }
-      throw error
-    })
+    const data = await readTrackedFile(root, file, bytesLeft)
     if (!data) {
       coverage.skipped++
       continue
@@ -138,17 +182,28 @@ export async function collectCommanderCodeGraph({
     bytesLeft -= data.length
     nodes.add(file)
     const text = data.toString('utf8')
-    const lineStarts = ts.computeLineStarts(text)
-    for (const item of ts.preProcessFile(text, true, true).importedFiles) {
-      if (!/^(?:\.\.?)(?:\/|$)/.test(item.fileName)) {
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest)
+    for (const specifier of moduleSpecifiers(ts, source)) {
+      if (!/^(?:\.\.?)(?:\/|$)/.test(specifier.text)) {
         continue
       }
-      const base = posix.join(posix.dirname(file), item.fileName)
+      const base = posix.join(posix.dirname(file), specifier.text)
       if (base === '..' || base.startsWith('../')) {
         coverage.unresolvedRelativeImports++
         continue
       }
-      const resolved = ts.resolveModuleName(item.fileName, `/${file}`, options, host).resolvedModule
+      const manifest = posix.join(base, 'package.json')
+      if (indexed.has(manifest) && !manifests.has(manifest) && manifests.size < maxEdges) {
+        const content = await readTrackedFile(root, manifest, bytesLeft)
+        manifests.set(manifest, content?.toString('utf8'))
+        bytesLeft -= content?.length ?? 0
+      }
+      const resolved = ts.resolveModuleName(
+        specifier.text,
+        `/${file}`,
+        options,
+        host
+      ).resolvedModule
       if (!resolved) {
         coverage.unresolvedRelativeImports++
         continue
@@ -162,7 +217,7 @@ export async function collectCommanderCodeGraph({
       edges.push({
         from: file,
         to,
-        line: ts.computeLineAndCharacterOfPosition(lineStarts, item.pos).line + 1
+        line: source.getLineAndCharacterOfPosition(specifier.getStart(source)).line + 1
       })
     }
   }
@@ -209,7 +264,7 @@ function formatGraph(graph) {
   return lines.join('\n')
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   try {
     const { values } = parseArgs({
       options: {

@@ -49,8 +49,7 @@ function isProfileSummary(value: unknown): value is OrcaProfileSummary {
   if (!isObject(value)) {
     return false
   }
-  const avatar = value.avatar
-  const cloud = value.cloud
+  const { avatar, cloud } = value
   return (
     typeof value.id === 'string' &&
     // Index IDs become path segments; reject traversal outside the profile directory.
@@ -97,6 +96,14 @@ function sanitizeProfileName(value: unknown): string {
 function readProfileIndexFile(indexPath: string): OrcaProfileIndex | null {
   try {
     return normalizeProfileIndex(JSON.parse(readFileSync(indexPath, 'utf-8')))
+  } catch {
+    return null
+  }
+}
+
+async function readProfileIndexFileAsync(indexPath: string): Promise<OrcaProfileIndex | null> {
+  try {
+    return normalizeProfileIndex(JSON.parse(await readFile(indexPath, 'utf8')))
   } catch {
     return null
   }
@@ -168,9 +175,10 @@ function getActiveProfile(index: OrcaProfileIndex): OrcaProfileSummary {
 export async function readInitializedActiveOrcaProfile(
   userDataPath: string
 ): Promise<ActiveOrcaProfileState> {
-  const index = normalizeProfileIndex(
-    JSON.parse(await readFile(getOrcaProfileIndexPath(userDataPath), 'utf8'))
-  )
+  const indexPath = getOrcaProfileIndexPath(userDataPath)
+  const index =
+    (await readProfileIndexFileAsync(indexPath)) ??
+    (await readProfileIndexFileAsync(`${indexPath}.bak`))
   if (!index) {
     throw new Error('Could not read the active Orca profile.')
   }

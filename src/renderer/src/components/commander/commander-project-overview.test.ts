@@ -29,4 +29,21 @@ describe('Commander project overview', () => {
     )
     expect(docs).toMatchObject({ id: 'repo:docs', cards: [], blocked: 0, working: 0 })
   })
+
+  it('keeps unregistered host-local repository IDs separate from each other and registered projects', () => {
+    const card = {
+      repoId: 'api',
+      repoName: 'API',
+      dotState: 'blocked',
+      bucket: 'attention'
+    } as const
+    const hosts = ['runtime:first', 'runtime:second', 'local'] as const
+    const projects = projectCommanderAgents(
+      [{ id: 'api', displayName: 'Local API' }],
+      hosts.map((executionHostId) => ({ ...card, executionHostId }))
+    )
+    expect(projects).toHaveLength(3)
+    expect(projects.every((row) => row.blocked === 1)).toBe(true)
+    expect(projects.find((row) => row.id === 'repo:api')?.name).toBe('Local API')
+  })
 })

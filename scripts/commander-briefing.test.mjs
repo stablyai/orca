@@ -14,16 +14,21 @@ test('reports decisions and progress across run pages while preserving incomplet
     if (group === 'host') {
       return inventory
     }
+    assert.equal(flags.at(-2), '--environment')
     if (flags.at(-1) === 'build') {
       throw new Error('server asleep')
     }
+    assert.equal(flags.at(-1), 'local')
     if (group === 'project') {
       return { setups: [{ projectId: 'github:acme/api', hostId: 'local', setupState: 'ready' }] }
     }
     if (command === 'run-list') {
-      return flags.includes('--cursor')
-        ? { runs: [{ id: 'b', objective: 'Ship client' }] }
-        : { runs: [{ id: 'a', objective: 'Ship API' }], nextCursor: 'page2' }
+      const cursor = flags.indexOf('--cursor')
+      if (cursor !== -1) {
+        assert.equal(flags[cursor + 1], 'page2')
+        return { runs: [{ id: 'b', objective: 'Ship client' }] }
+      }
+      return { runs: [{ id: 'a', objective: 'Ship API' }], nextCursor: 'page2' }
     }
     if (command === 'task-list') {
       return {

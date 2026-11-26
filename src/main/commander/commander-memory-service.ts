@@ -71,8 +71,10 @@ async function withCommanderAccount<T>(
     directory,
     async (session) => {
       const request: RequestMemory = async (path, body, delegation) => {
+        // A refresh or an earlier request can outlive the account selected on disk.
+        const dispatchProfile = (await readInitializedActiveOrcaProfile(directory)).profile
         await beforeRequest?.()
-        assertCurrent()
+        verifyProfile(dispatchProfile)
         const url = new URL(`/v1/commander/memory${path}`, config.config.apiBaseUrl)
         const response = await fetch(url, {
           method: body === undefined ? 'GET' : 'POST',

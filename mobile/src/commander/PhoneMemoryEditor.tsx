@@ -1,4 +1,6 @@
-import { PhoneRecurringAnswerFields } from './PhoneRecurringAnswer'
+import type { CommanderMemoryRevision } from '../../../src/shared/commander/memory-contract'
+import { humanRecurringAnswer } from '../../../src/shared/commander/recurring-answer'
+import { PhoneRecurringAnswer, PhoneRecurringAnswerFields } from './PhoneRecurringAnswer'
 import { useCommanderDetailBack } from './commander-detail-back'
 import {
   createHandoffPageId,
@@ -29,6 +31,8 @@ export function PhoneMemoryEditor({
   active,
   busy,
   conflict,
+  latestPage,
+  reloadForReview,
   labels,
   allProjects,
   problem,
@@ -43,6 +47,8 @@ export function PhoneMemoryEditor({
   active: boolean
   busy: boolean
   conflict: boolean
+  latestPage?: CommanderMemoryRevision
+  reloadForReview: () => void
   labels: Record<MemoryDraft['kind'], string>
   allProjects: string
   problem: ReactNode
@@ -71,6 +77,17 @@ export function PhoneMemoryEditor({
   const patch = (
     values: Partial<Pick<MemoryDraft, 'kind' | 'projectId' | 'title' | 'body' | 'recurring'>>
   ) => setDraft(updateMemoryDraft(draft, values))
+  const review =
+    conflict &&
+    draft.recurring &&
+    latestPage?.pageId === draft.pageId &&
+    latestPage.version > draft.expectedVersion
+      ? latestPage
+      : null
+  const savedRule =
+    review && !review.deleted && review.projectId === draft.projectId
+      ? humanRecurringAnswer(review)
+      : null
   const project = draft.projectId ?? ''
   const scope = t('commander.memoryProject', 'Project')
   const fields = draftHandoffFields(draft)
@@ -191,6 +208,41 @@ export function PhoneMemoryEditor({
         </>
       )}
       {problem}
+      {conflict &&
+        draft.recurring &&
+        (review ? (
+          savedRule ? (
+            <>
+              <Text accessibilityRole="header" style={s.title}>
+                {t('commander.ruleLatestSaved', 'Latest saved rule · v{{version}}', {
+                  version: review.version
+                })}
+              </Text>
+              <PhoneRecurringAnswer fields={savedRule} busy={busy} />
+              <MemoryButton
+                disabled={busy}
+                label={t('commander.ruleKeepEdits', 'Keep my edits for this revision')}
+                onPress={() => {
+                  setDraft({ ...memoryDraft(review), recurring: draft.recurring })
+                  clearConflict()
+                }}
+              />
+            </>
+          ) : (
+            <Text accessibilityRole="alert" style={s.meta}>
+              {t(
+                'commander.ruleNoLongerActive',
+                'This recurring answer is no longer active in this project.'
+              )}
+            </Text>
+          )
+        ) : (
+          <MemoryButton
+            disabled={busy}
+            label={t('commander.ruleReviewLatest', 'Review latest revision')}
+            onPress={reloadForReview}
+          />
+        ))}
       {conflict && !draft.recurring && (
         <MemoryButton
           label={t('commander.memoryCopyDraft', 'Keep as a new page')}

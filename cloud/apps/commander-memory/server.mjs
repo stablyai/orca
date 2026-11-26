@@ -50,7 +50,7 @@ async function accountIdentity(url, token) {
 async function readBody(req) {
   let size = 0
   const chunks = []
-  for await (const chunk of req) {
+  for await (const chunk of req.iterator({ destroyOnReturn: false })) {
     size += chunk.length
     if (size > 512 * 1024) fail(413, 'Request too large')
     chunks.push(chunk)
@@ -92,6 +92,8 @@ export function createMemoryServer({ capabilitiesEndpoint, databasePath }) {
         }
       else if (req.method === 'GET' && ['index', 'handoffs-index'].includes(action))
         result = store.index(identity, new URLSearchParams(query), action === 'handoffs-index')
+      else if (req.method === 'GET' && action === 'agent/handoffs')
+        result = store.agentHandoffs(identity, new URLSearchParams(query))
       else if (req.method === 'GET' && action === 'worker-guidance')
         result = store.workerGuidance(identity, new URLSearchParams(query))
       else if (req.method === 'GET' && action.startsWith('pages/')) {
@@ -122,7 +124,8 @@ export function createMemoryServer({ capabilitiesEndpoint, databasePath }) {
     } catch (error) {
       res.writeHead(error.status ?? 503, {
         'content-type': 'application/json',
-        'cache-control': 'no-store'
+        'cache-control': 'no-store',
+        ...(error.status === 413 ? { connection: 'close' } : {})
       })
       res.end(
         JSON.stringify({ error: error.status ? error.message : 'Commander memory unavailable' })

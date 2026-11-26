@@ -81,6 +81,14 @@ export function PhoneMemory({
   )
 }
 
+function memoryAccountKey(status: PhoneStatus | null) {
+  if (status?.state !== 'enabled') {
+    return null
+  }
+  const { profileId, userId, activeOrgId } = status.account
+  return JSON.stringify([profileId, userId, activeOrgId])
+}
+
 function PairedMemory({
   hostId,
   hostScoped,
@@ -97,10 +105,15 @@ function PairedMemory({
   setEditing: (value: boolean) => void
 }) {
   const t = useMobileTranslation()
-  const [status, setStatus] = useState<PhoneStatus | null>(null)
+  const [{ status, attempt }, setAccess] = useState<{
+    status: PhoneStatus | null
+    attempt: number
+  }>({
+    status: null,
+    attempt: 0
+  })
   const [verified, setVerified] = useState(false)
   const [error, setError] = useState('')
-  const [attempt, setAttempt] = useState(0)
   const [foreground, setForeground] = useState(
     AppState.currentState !== 'background' && AppState.currentState !== 'inactive'
   )
@@ -126,8 +139,11 @@ function PairedMemory({
       try {
         const current = await runRpcOperation(client, phoneStatusRead)
         if (live) {
-          setStatus((previous) =>
-            JSON.stringify(previous) === JSON.stringify(current) ? previous : current
+          setAccess((previous) =>
+            previous.attempt !== attempt ||
+            JSON.stringify(previous.status) === JSON.stringify(current)
+              ? previous
+              : { ...previous, status: current }
           )
           setVerified(true)
           setError('')
@@ -149,6 +165,7 @@ function PairedMemory({
     }
   }, [active, foreground, attempt, client])
   const allowed = status?.state === 'enabled'
+  const accountKey = memoryAccountKey(status)
   const show = verified && allowed && active && foreground
   return (
     <View style={s.fill}>
@@ -165,11 +182,7 @@ function PairedMemory({
             <PhoneMemoryLibrary
               hostHandoffs={status.handoffs === true}
               handoffSearch={status.handoffSearch === true}
-              key={JSON.stringify([
-                status.account.profileId,
-                status.account.userId,
-                status.account.activeOrgId
-              ])}
+              key={accountKey}
               hostId={hostId}
               hostScoped={hostScoped}
               handoffs={handoffs}
@@ -178,9 +191,11 @@ function PairedMemory({
               active={show}
               setEditing={setEditing}
               onAccessError={() => {
-                setStatus(null)
-                setVerified(false)
-                setAttempt((a) => a + 1)
+                setAccess((current) =>
+                  memoryAccountKey(current.status) === accountKey
+                    ? { status: null, attempt: current.attempt + 1 }
+                    : current
+                )
               }}
             />
           )}
@@ -200,10 +215,12 @@ function PairedMemory({
               </Text>
               <MemoryButton
                 label={t('common.retry', 'Retry')}
-                onPress={() => setAttempt((a) => a + 1)}
+                onPress={() =>
+                  setAccess((current) => ({ ...current, attempt: current.attempt + 1 }))
+                }
               />
             </>
-          ) : !verified ? (
+          ) : !verified || !status ? (
             <ActivityIndicator accessibilityLabel={t('commander.memoryLoading', 'Loading…')} />
           ) : (
             <Text style={s.meta}>

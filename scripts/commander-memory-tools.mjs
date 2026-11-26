@@ -2,15 +2,14 @@ import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { commanderPreferenceResult } from '../src/shared/commander/memory-contract.ts'
 import {
-  recurringAnswerTitle,
+  humanRecurringAnswer,
   recurringQuestionLimit
 } from '../src/shared/commander/recurring-answer.ts'
 import { readHandoff } from '../src/shared/commander/handoff-content.ts'
 
 const pageId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/)
 
-async function request(grantPath, operation, payload, beforeVersion) {
-  const grant = JSON.parse(await readFile(grantPath, 'utf8'))
+async function requestMemory(grant, operation, payload, query) {
   const url = new URL(grant.url)
   if (
     url.username ||
@@ -34,8 +33,10 @@ async function request(grantPath, operation, payload, beforeVersion) {
     throw new Error('Export a current agent grant for this project from Commander Memory.')
   }
   url.pathname += operation
-  if (beforeVersion !== undefined) {
-    url.searchParams.set('beforeVersion', String(beforeVersion))
+  for (const [key, value] of Object.entries(query ?? {})) {
+    if (value !== undefined) {
+      url.searchParams.set(key, String(value))
+    }
   }
   let body = payload
   if (operation === '/agent') {
@@ -55,7 +56,9 @@ async function request(grantPath, operation, payload, beforeVersion) {
   })
   if (!response.ok) {
     await response.body?.cancel()
-    throw new Error(`Commander memory request failed (HTTP ${response.status}).`)
+    throw Object.assign(new Error(`Commander memory request failed (HTTP ${response.status}).`), {
+      status: response.status
+    })
   }
   return response.json()
 }
@@ -64,7 +67,18 @@ function result(data) {
   return { content: [{ type: 'text', text: JSON.stringify(data) }] }
 }
 
-export function registerCommanderMemoryTools(server, grantPath) {
+export async function registerCommanderMemoryTools(server, grantPath) {
+  const { projectId, url, actorId } = JSON.parse(await readFile(grantPath, 'utf8'))
+  async function request(operation, payload, query) {
+    const current = JSON.parse(await readFile(grantPath, 'utf8'))
+    if (current.projectId !== projectId || current.url !== url || current.actorId !== actorId) {
+      throw new Error(
+        'The current memory grant does not match this client’s original project, service or agent.'
+      )
+    }
+    return requestMemory(current, operation, payload, query)
+  }
+
   server.registerTool(
     'commander_ask_preference',
     {
@@ -83,7 +97,7 @@ export function registerCommanderMemoryTools(server, grantPath) {
       }
     },
     async ({ projectId, question, requestId }) => {
-      const answer = await request(grantPath, '/preferences/ask', {
+      const answer = await request('/preferences/ask', {
         expectedProjectId: projectId,
         question,
         requestId
@@ -99,14 +113,14 @@ export function registerCommanderMemoryTools(server, grantPath) {
       annotations: { readOnlyHint: true }
     },
     async () => {
-      const { pages } = await request(grantPath, '')
+      const { pages } = await request('')
       return result(
         pages.filter(
           (page) =>
             !page.deleted &&
             page.kind === 'guideline' &&
             page.actor.type === 'human' &&
-            page.title !== recurringAnswerTitle
+            !humanRecurringAnswer(page)
         )
       )
     }
@@ -127,9 +141,9 @@ export function registerCommanderMemoryTools(server, grantPath) {
     },
     async ({ pageId: id, beforeVersion, query, offset, limit }) => {
       if (id) {
-        return result(await request(grantPath, `/pages/${id}`, undefined, beforeVersion))
+        return result(await request(`/pages/${id}`, undefined, { beforeVersion }))
       }
-      const { pages } = await request(grantPath, '')
+      const { pages } = await request('')
       const needle = query?.toLowerCase()
       const matches = pages
         .filter(
@@ -158,7 +172,7 @@ export function registerCommanderMemoryTools(server, grantPath) {
     },
     async ({ pageId: id, offset, limit }) => {
       if (id) {
-        const { page } = await request(grantPath, `/pages/${id}`, undefined, 1)
+        const { page } = await request(`/pages/${id}`, undefined, { beforeVersion: 1 })
         const handoff = readHandoff(page)
         if (!handoff) {
           throw new Error('No active Commander handoff at this page.')
@@ -172,7 +186,15 @@ export function registerCommanderMemoryTools(server, grantPath) {
           ...handoff
         })
       }
-      const { pages } = await request(grantPath, '')
+      try {
+        return result(await request('/agent/handoffs', undefined, { offset, limit }))
+      } catch (error) {
+        // Older Memory services only expose the full project wiki.
+        if (error.status !== 404) {
+          throw error
+        }
+      }
+      const { pages } = await request('')
       const matches = pages
         .filter((page) => readHandoff(page))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.pageId.localeCompare(b.pageId))
@@ -200,11 +222,16 @@ export function registerCommanderMemoryTools(server, grantPath) {
         expectedVersion: z.number().int().nonnegative(),
         kind: z.enum(['decision', 'note']),
         title: z.string().min(1).max(240),
-        body: z.string().max(65536),
+        body: z
+          .string()
+          .refine(
+            (body) => Buffer.byteLength(body, 'utf8') <= 65_536,
+            'Memory body must be at most 65,536 UTF-8 bytes.'
+          ),
         links: z.array(pageId).max(128).optional()
       }
     },
-    async (args) => result(await request(grantPath, '/agent', args))
+    async (args) => result(await request('/agent', args))
   )
   server.registerTool(
     'commander_remove_memory',
@@ -214,6 +241,6 @@ export function registerCommanderMemoryTools(server, grantPath) {
       annotations: { destructiveHint: true },
       inputSchema: { pageId, requestId: pageId, expectedVersion: z.number().int().positive() }
     },
-    async (args) => result(await request(grantPath, '/agent', { ...args, deleted: true }))
+    async (args) => result(await request('/agent', { ...args, deleted: true }))
   )
 }

@@ -73,11 +73,7 @@ export function commanderProjects(
       }
     }
     for (const worktree of input.worktreeInfo[id]?.projects ?? []) {
-      projectFor(
-        getRepoIdFromWorktreeId(worktree.worktreeId),
-        worktree.repo,
-        worktree.hostId
-      ).live = host.live
+      projectFor(getRepoIdFromWorktreeId(worktree.worktreeId), worktree.repo, worktree.hostId)
     }
     for (const row of everyRow(host.roots)) {
       const project = projectFor(
@@ -85,7 +81,6 @@ export function commanderProjects(
         row.entry.repo,
         row.entry.executionHost?.id ?? row.entry.hostId
       )
-      project.live = host.live
       project.rows.push(row)
       project.counts[rowStage(row)]++
     }

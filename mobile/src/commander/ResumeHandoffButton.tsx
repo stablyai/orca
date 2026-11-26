@@ -67,8 +67,8 @@ export function ResumeHandoffButton({
         setError(err instanceof Error ? err.message : String(err))
       }
     } finally {
-      flight.current = null
-      if (!request.signal.aborted) {
+      if (flight.current === request) {
+        flight.current = null
         setBusy(false)
       }
     }

@@ -2,6 +2,8 @@
 import { openSync, closeSync, readSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { runProcessSync } from '@orca/process-host'
+import { resolve } from 'node:path'
+import { stageOnHandoffBase } from './commander-handoff-base.mjs'
 
 const usage = `orca-commander-handoff save <task> <progress.json> [--include-tracked-edits]
 orca-commander-handoff read <task>
@@ -18,10 +20,11 @@ Apply stages the saved tracked edits on a clean matching base commit. Untracked
 files and changes inside submodules are excluded. The patch limit is 8 MiB.`
 const sizeLimit = 65536
 
-function runGit(args, input, bytes = false, absentCode) {
+function runGit(args, input, { bytes = false, absentCode, env } = {}) {
   const result = runProcessSync({
     program: 'git',
     args,
+    env,
     input,
     maxOutputBytes: bytes ? 8 * 1024 * 1024 : sizeLimit * 2,
     captureStdoutAsBytes: bytes,
@@ -38,11 +41,11 @@ function git(args, input) {
 }
 
 function gitBytes(args) {
-  return runGit(args, undefined, true).stdoutBytes
+  return runGit(args, undefined, { bytes: true }).stdoutBytes
 }
 
 function gitIfPresent(args) {
-  const result = runGit(args, undefined, false, 1)
+  const result = runGit(args, undefined, { absentCode: 1 })
   return result.code === 1 ? null : result.stdout.trim()
 }
 
@@ -115,7 +118,7 @@ function readRecord(revision, task) {
   }
 }
 
-function main([action, task, arg, ...extra]) {
+async function main([action, task, arg, ...extra]) {
   if (action === '--help' || action === '-h') {
     return console.log(usage)
   }
@@ -149,11 +152,13 @@ function main([action, task, arg, ...extra]) {
     let entries = `100644 blob ${blob}\thandoff.json\n`
     if (extra.length) {
       const patch = gitBytes([
+        '-c',
+        'diff.relative=false',
         'diff',
         '--no-color',
-        '--no-relative',
         '--binary',
         '--full-index',
+        '--unified=3',
         '--no-ext-diff',
         '--no-textconv',
         '--no-renames',
@@ -251,20 +256,29 @@ function main([action, task, arg, ...extra]) {
     if (record.commit !== head) {
       throw new Error(`Check out the handoff base ${record.commit} before applying`)
     }
-    if (git(['status', '--porcelain', '--untracked-files=no'])) {
-      throw new Error('Commit or stash tracked changes before applying')
-    }
     const root = git(['rev-parse', '--show-toplevel'])
     const patch = gitBytes(['cat-file', 'blob', `${revision}:tracked.patch`])
-    const flags = ['-C', root, 'apply', '--index', '--binary', '--whitespace=nowarn']
-    git([...flags, '--check', '-'], patch)
-    git([...flags, '-'], patch)
+    const index = resolve(git(['rev-parse', '--git-path', 'index']))
+    const worktreeIndex = process.env.GIT_INDEX_FILE
+      ? resolve(git(['rev-parse', '--git-dir']), 'index')
+      : index
+    await stageOnHandoffBase(
+      { cwd: root, index, worktreeIndex, expected: record.commit },
+      (privateIndex) => {
+        if (git(['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no'])) {
+          throw new Error('Commit or stash tracked changes before applying')
+        }
+        runGit(['-C', root, 'apply', '--index', '--binary', '--whitespace=nowarn', '-'], patch, {
+          env: { ...process.env, GIT_INDEX_FILE: privateIndex }
+        })
+      }
+    )
   }
   console.log(JSON.stringify({ ...record, matchesCheckoutCommit: head === record.commit }, null, 2))
 }
 
 try {
-  main(process.argv.slice(2))
+  await main(process.argv.slice(2))
 } catch (error) {
   console.error(error.message)
   process.exitCode = 1

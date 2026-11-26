@@ -26,7 +26,7 @@ const { values } = parseArgs({
 })
 
 if (values['memory-grant']) {
-  registerCommanderMemoryTools(server, values['memory-grant'])
+  await registerCommanderMemoryTools(server, values['memory-grant'])
 }
 server.registerTool(
   'commander_code_graph',

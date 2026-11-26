@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
+import { stageOnHandoffBase } from './commander-handoff-base.mjs'
 
 const cli = fileURLToPath(new URL('./commander-handoff.mjs', import.meta.url))
 
@@ -135,4 +136,63 @@ test('publishing an older JSON-only handoff retains its original base and progre
   assert.equal(JSON.parse(handoff(second, 'restore', 'legacy', 'origin')).commit, base)
   git(second, 'checkout', '--detach', base)
   assert.equal(readFileSync(join(second, 'code.txt'), 'utf8'), 'original machine only')
+})
+
+test('handoff patches keep context when the checkout displays zero context', (t) => {
+  const { first, file, git, handoff } = createHandoffFixture(t)
+  const path = join(first, 'code.txt')
+  const original = 'first\nsecond\nthird\nfourth\nfifth\n'
+  const modified = original.replace('third', 'changed')
+  writeFileSync(path, original)
+  git(first, 'commit', '-am', 'multi-line base')
+  git(first, 'config', 'diff.context', '0')
+  writeFileSync(file, JSON.stringify({ goal: 'Ship', next: 'Verify the change' }))
+  writeFileSync(path, modified)
+  handoff(first, 'save', 'context', file, '--include-tracked-edits')
+  git(first, 'checkout', '--', 'code.txt')
+  handoff(first, 'apply', 'context')
+  assert.equal(readFileSync(path, 'utf8'), modified)
+  assert.equal(git(first, 'show', ':code.txt'), modified.trimEnd())
+})
+
+test('the handoff base stays locked until staging returns on a branch and detached HEAD', async (t) => {
+  const { first, git } = createHandoffFixture(t)
+  const base = git(first, 'rev-parse', 'HEAD')
+  const ref = git(first, 'symbolic-ref', 'HEAD')
+  const worktreeIndex = join(first, git(first, 'rev-parse', '--git-path', 'index'))
+  git(first, 'checkout', '-b', 'competing-checkout')
+  writeFileSync(join(first, 'code.txt'), 'on the other branch')
+  git(first, 'commit', '-am', 'different worktree')
+  const other = git(first, 'rev-parse', 'HEAD')
+  git(first, 'checkout', ref.slice('refs/heads/'.length))
+  const index = `${worktreeIndex}.alternate`
+  copyFileSync(worktreeIndex, index)
+  const target = { cwd: first, index, worktreeIndex, expected: base }
+  const moveHead = (...args) =>
+    git(first, '-c', 'core.filesRefLockTimeout=0', 'update-ref', ...args)
+  await stageOnHandoffBase(target, () => {
+    assert.throws(() => moveHead('--no-deref', 'HEAD', other), /lock/i)
+    assert.throws(() => moveHead(ref, other), /lock/i)
+    assert.throws(() => git(first, 'checkout', 'competing-checkout'), /index.lock/i)
+    assert.equal(git(first, 'rev-parse', 'HEAD'), base)
+    assert.equal(readFileSync(join(first, 'code.txt'), 'utf8'), 'committed')
+    assert.equal(git(first, 'show', ':code.txt'), 'committed')
+  })
+  git(first, 'checkout', '--detach', base)
+  await assert.rejects(
+    stageOnHandoffBase(target, () => {
+      assert.throws(() => moveHead('--no-deref', 'HEAD', other), /lock/i)
+      throw new Error('stage failed')
+    }),
+    /stage failed/
+  )
+  moveHead('--no-deref', 'HEAD', other)
+  let staged = false
+  await assert.rejects(
+    stageOnHandoffBase(target, () => {
+      staged = true
+    }),
+    /handoff base/i
+  )
+  assert.equal(staged, false)
 })

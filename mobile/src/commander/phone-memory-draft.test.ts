@@ -11,6 +11,7 @@ it('retries the same portable handoff write until edited, preserving the project
   const original = updateMemoryDraft(newHandoffDraft('repo'), { title: 'My goal' })
   const first = draftWrite(original)
   expect(draftWrite(original)).toEqual(first)
+  expect(applyRecentConversation(original, { goal: 'Old goal', progress: ' ' })).toBe(original)
 
   const captured = applyRecentConversation(original, { goal: 'Old goal', progress: 'Tests passed' })
   if (!captured) {

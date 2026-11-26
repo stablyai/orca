@@ -34,6 +34,9 @@ describe('Commander Markdown handoffs', () => {
     expect(isHandoffPage({ ...page, pageId: 'handoff-my-notes' })).toBe(false)
     const body = encodeHandoffBody({ progress: 'Tests pass', nextStep: 'Ship' })
     expect(readHandoff({ ...page, body: `${body}\n\n## Next step\n\nagain` })).toBeNull()
+    expect(
+      readHandoff({ ...page, body: '## Progress\n\nReady\n\n## Next step\n\n## Next step\n\nShip' })
+    ).toBeNull()
     expect(readHandoff({ ...page, body, title: ' ' })).toBeNull()
     expect(readHandoff({ ...page, body: body + 'x'.repeat(4001) })).toBeNull()
     expect(readHandoff(page)).toBeNull()

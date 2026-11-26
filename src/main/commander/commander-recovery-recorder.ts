@@ -57,12 +57,13 @@ export class CommanderRecoveryRecorder {
       throw new Error('Recovery recording authorization changed.')
     }
   }
-  private readonly inheritedOpen = new Map<string, number>()
+  private readonly inheritedOpen = new Map<string, { at: number; prompt?: string }>()
   baseline(records: readonly RecoveryRecord[]): void {
     this.inheritedOpen.clear()
     for (const record of records) {
       if (record.lastTurn?.state === 'open') {
-        this.inheritedOpen.set(record.sessionId, record.lastTurn.at)
+        const { at, prompt } = record.lastTurn
+        this.inheritedOpen.set(record.sessionId, { at, prompt: prompt?.trim() })
       }
     }
   }
@@ -75,32 +76,35 @@ export class CommanderRecoveryRecorder {
       this.inheritedOpen.delete(id)
       return
     }
-    const inherited = this.inheritedOpen.get(id)
-    if (
-      inherited !== undefined &&
-      record.lastTurn?.state === 'open' &&
-      record.lastTurn.at > inherited &&
-      record.lastTurn.at >= this.started
-    ) {
+    const turn = record.lastTurn
+    if (!turn) {
       this.inheritedOpen.delete(id)
-    }
-    if (this.inheritedOpen.has(id)) {
-      if (record.lastTurn?.state !== 'open') {
-        this.inheritedOpen.delete(id)
-      }
-      if (record.lastTurn) {
-        this.observed.set(id, JSON.stringify(record.lastTurn))
-      }
       return
     }
-    const turn = record.lastTurn
+    const prompt = turn.prompt?.trim()
+    const inherited = this.inheritedOpen.get(id)
+    if (inherited) {
+      // A settled status can be the first observation of a new request. Its end
+      // time alone cannot distinguish it from completion of the inherited turn.
+      const newTurn =
+        turn.at >= this.started &&
+        turn.at > inherited.at &&
+        (turn.state === 'open' || (prompt && inherited.prompt && prompt !== inherited.prompt))
+      if (newTurn || turn.state !== 'open') {
+        this.inheritedOpen.delete(id)
+      }
+      if (!newTurn) {
+        this.observed.set(id, JSON.stringify(turn))
+        return
+      }
+    }
     const { location, provider } = record
     if (
       (provider !== 'codex' && provider !== 'claude') ||
       location.workspaceKind !== 'git-worktree' ||
       location.executionHostId !== 'local' ||
       location.wslDistro ||
-      !turn?.prompt?.trim() ||
+      !prompt ||
       turn.at < this.started
     ) {
       return

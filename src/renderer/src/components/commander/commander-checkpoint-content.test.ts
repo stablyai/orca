@@ -3,7 +3,8 @@ import {
   checkpointMarkdown,
   checkpointSources,
   checkpointObservation,
-  confirmsNoAgents
+  confirmsNoAgents,
+  missingCheckpointSources
 } from './commander-checkpoint-content'
 
 it('keeps counts and a bounded, stable Markdown sample for a 300-agent project', () => {
@@ -60,4 +61,25 @@ it('requires complete current coverage of the exact registration before replacin
       false
     )
   }
+})
+
+it('requires a census of the missing worktree even when its sibling remains busy', () => {
+  const repo = { hostId: 'local', repoId: 'r' }
+  const w1 = { ...repo, worktreeId: 'w1' }
+  const w2 = { ...repo, worktreeId: 'w2' }
+  expect(missingCheckpointSources(checkpointObservation('Active', [w1, w2]), [w2])).toEqual([w1])
+  expect(missingCheckpointSources(checkpointObservation('Active', [repo]), [w2])).toEqual([repo])
+  expect(missingCheckpointSources(checkpointObservation('', [repo]), [w2])).toEqual([])
+  const empty = { liveTerminalCount: 0, unverifiableTerminalCount: 0, agents: [] }
+  const listing = {
+    truncated: false,
+    hostScope: { hostIds: ['local'], omittedHostIds: [] },
+    worktrees: [
+      { ...w1, ...empty },
+      { ...w2, ...empty, liveTerminalCount: 1 }
+    ]
+  }
+  expect(confirmsNoAgents(listing, 'r', 'local', 'w1')).toBe(true)
+  expect(confirmsNoAgents(listing, 'r', 'local', 'w2')).toBe(false)
+  expect(confirmsNoAgents(listing, 'r', 'local')).toBe(false)
 })

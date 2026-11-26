@@ -64,6 +64,15 @@ function validateWrite(payload) {
 
 export function openStore(path) {
   const db = new DatabaseSync(path)
+  try {
+    return prepareMemoryStore(db)
+  } catch (error) {
+    db.close()
+    throw error
+  }
+}
+
+function prepareMemoryStore(db) {
   db.exec(`PRAGMA busy_timeout = 5000;
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS revisions (
@@ -110,7 +119,7 @@ export function openStore(path) {
   const append = db.prepare('INSERT INTO revisions VALUES (?, ?, ?, ?, ?, ?, ?)')
   return {
     close: () => db.close(),
-    index: openPageIndex(db, { fail, validId }),
+    ...openPageIndex(db, { fail, validId }),
     workerGuidance: openWorkerGuidance(db, fail),
     replayPlan: dispatchPlans.read,
     askPreference: recurringAnswers.ask,

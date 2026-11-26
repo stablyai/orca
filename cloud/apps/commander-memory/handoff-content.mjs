@@ -7,7 +7,7 @@ const decodedLength = (text) => text.replace(/^\\(\\*## Next step)$/gm, '$1').le
 export function validHandoffContent({ title, body }) {
   if (!title.trim() || title.length > 240 || !body.startsWith(progressHeading)) return false
   const at = body.indexOf(nextHeading, progressHeading.length)
-  if (at < 0 || body.includes(nextHeading, at + nextHeading.length)) return false
+  if (at < 0 || body.includes(nextHeading, at + 1)) return false
   return (
     decodedLength(body.slice(progressHeading.length, at)) <= 4000 &&
     decodedLength(body.slice(at + nextHeading.length)) <= 4000

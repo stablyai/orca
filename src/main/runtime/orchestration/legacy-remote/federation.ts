@@ -1,4 +1,3 @@
-import { assertCommanderProject } from '../../rpc/methods/orchestration/worker/start/placement/commander-project'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { waitForWorkerAgentReady } from '../../terminal/wait/launched-agent-composer-readiness'
 import { agentStartupBlockedMessage } from '../../terminal/wait/agent-startup-blocked-message'
@@ -13,7 +12,11 @@ import {
   workerStartTargetLabel
 } from '../../rpc/methods/orchestration/worker/start/worker-start-selector-refusal'
 import type { FederationEffect } from './federation-effects'
-import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
+import {
+  checkFederatedWorkerPlacement,
+  launchFederatedWorkerAgent,
+  missingWorktree
+} from './federated-worker-agent-launch'
 import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/start/placement/worker-placement-topology'
 import {
   monitorFederatedSetup,
@@ -33,7 +36,6 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/o
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
-import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineOrchestrationMethod({
@@ -82,19 +84,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           })
         )
       }
-      // The same installed-agent check as every start, before anything is created here.
-      const workspace = createsWorktree
-        ? undefined
-        : await runtime.showManagedTerminalWorkspace(requestedWorktree).catch(() => undefined)
-      const repoSelector = createsWorktree ? params.repo : workspace && `id:${workspace.repoId}`
-      await refuseUninstalledWorkerAgent(runtime, {
-        agent,
-        terminal: params.terminal,
-        repoSelector
-      })
-      if (params.commanderProjectId) {
-        await assertCommanderProject(runtime, params.commanderProjectId, repoSelector)
-      }
+      const workspace = await checkFederatedWorkerPlacement(runtime, params, agent)
       const db = runtime.getOrchestrationDb()
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
       const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {
@@ -156,10 +146,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
         } else {
           if (!workspace) {
-            throw new OrchestrationError(
-              'worktree_not_found_on_server',
-              `Worktree ${requestedWorktree} was not found on the selected worker server.`
-            )
+            throw missingWorktree(requestedWorktree)
           }
           worktree = workspace
           effects.push(

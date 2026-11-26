@@ -220,5 +220,33 @@ export function openPageIndex(db, { fail, validId }) {
       throw error
     }
   }
-  return list
+  const agentPage = db.prepare(`
+    WITH matches AS MATERIALIZED (
+      SELECT h.page AS pageId, json_extract(h.summary,'$.title') AS goal,
+             h.version, h.stamp AS savedAt
+      FROM memory_page_heads h JOIN revisions r USING (tenant,page,version)
+      WHERE h.tenant=? AND h.project=? AND h.handoff=1 AND memory_valid_handoff(r.data)
+    )
+    SELECT (SELECT count(*) FROM matches) AS total, (
+      SELECT json_group_array(json_object(
+        'pageId',pageId,'goal',goal,'version',version,'savedAt',savedAt
+      )) FROM (SELECT * FROM matches ORDER BY savedAt DESC,pageId LIMIT ? OFFSET ?)
+    ) AS handoffs`)
+  function agentHandoffs(identity, params) {
+    if (identity.actor.type !== 'agent' || !identity.projectId)
+      fail(403, 'A project agent grant is required')
+    let offset = 0
+    let limit = 12
+    for (const [key, raw] of params) {
+      const value = Number(raw)
+      if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || params.getAll(key).length !== 1)
+        fail(400, 'Invalid handoff pagination')
+      if (key === 'offset') offset = value
+      else if (key === 'limit' && value >= 1 && value <= pageSize) limit = value
+      else fail(400, 'Invalid handoff pagination')
+    }
+    const { handoffs, total } = agentPage.get(identity.tenant, identity.projectId, limit, offset)
+    return { handoffs: JSON.parse(handoffs), total }
+  }
+  return { index: list, agentHandoffs }
 }

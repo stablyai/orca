@@ -65,7 +65,7 @@ export function projectCommanderAgents<T extends CommanderCard>(
   for (const card of cards) {
     const registration = getRepoHostIdentityForParts(card.repoId, card.executionHostId ?? 'local')
     const row = project(
-      projectByRegistration.get(registration) ?? `repo:${card.repoId}`,
+      projectByRegistration.get(registration) ?? `unregistered:${encodeURIComponent(registration)}`,
       card.repoName
     )
     row.cards.push(card)

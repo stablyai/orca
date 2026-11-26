@@ -115,13 +115,16 @@ export function applyRecentConversation(
   if (!fields) {
     return draft
   }
+  const goal = !draft.title.trim() && recent.goal.trim()
+  const progress = !fields.progress.trim() && recent.progress.trim()
+  if (!goal && !progress) {
+    return draft
+  }
   return updateMemoryDraft(draft, {
-    title: draft.title.trim() ? draft.title : recent.goal.slice(0, HANDOFF_GOAL_LIMIT),
+    title: goal ? recent.goal.slice(0, HANDOFF_GOAL_LIMIT) : draft.title,
     body: encodeHandoffBody({
       ...fields,
-      progress: fields.progress.trim()
-        ? fields.progress
-        : recent.progress.slice(0, HANDOFF_SECTION_LIMIT)
+      progress: progress ? recent.progress.slice(0, HANDOFF_SECTION_LIMIT) : fields.progress
     })
   })
 }

@@ -172,10 +172,36 @@ describe('profile index store', () => {
     const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
     renameSync(indexPath, `${indexPath}.bak`)
 
+    expect((await store.readInitializedActiveOrcaProfile(testState.dir)).profile.id).toBe(
+      created.profile.id
+    )
+    expect(existsSync(indexPath)).toBe(false)
     expect(store.loadOrCreateProfileIndex(testState.dir).activeProfileId).toBe(created.profile.id)
     expect(store.ensureActiveOrcaProfile().profile.id).toBe(created.profile.id)
     expect(readJson(indexPath)).toMatchObject({ activeProfileId: created.profile.id })
   })
+
+  it.each(['{', '{"profiles":[]}'])(
+    'reads the backup without modifying an invalid primary (%s)',
+    async (invalid) => {
+      const store = await loadProfileIndexStore()
+      const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
+      const profile = createDefaultLocalOrcaProfile(1)
+      const backup = JSON.stringify({ activeProfileId: profile.id, profiles: [profile] })
+      writeFileSync(indexPath, invalid)
+      writeFileSync(`${indexPath}.bak`, backup)
+
+      expect((await store.readInitializedActiveOrcaProfile(testState.dir)).profile).toEqual(profile)
+      expect(readFileSync(indexPath, 'utf8')).toBe(invalid)
+      expect(readFileSync(`${indexPath}.bak`, 'utf8')).toBe(backup)
+      expect(existsSync(join(testState.dir, 'profiles'))).toBe(false)
+
+      writeFileSync(`${indexPath}.bak`, invalid)
+      await expect(store.readInitializedActiveOrcaProfile(testState.dir)).rejects.toThrow(
+        'Could not read the active Orca profile'
+      )
+    }
+  )
 
   it('rejects profile ids that are not safe path segments', async () => {
     const store = await loadProfileIndexStore()

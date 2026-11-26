@@ -36,7 +36,7 @@ export function readHandoff(page: HandoffPage): HandoffFields | null {
     return null
   }
   const at = page.body.indexOf(nextHeading, progressHeading.length)
-  if (at === -1 || page.body.includes(nextHeading, at + nextHeading.length)) {
+  if (at === -1 || page.body.includes(nextHeading, at + 1)) {
     return null
   }
   const goal = page.title

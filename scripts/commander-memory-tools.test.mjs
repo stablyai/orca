@@ -44,7 +44,7 @@ test('a fresh agent reads human guidance and records only its own project decisi
   }
   await post('/human', {
     pageId: 'review',
-    title: 'Review',
+    title: 'Recurring answer',
     kind: 'guideline',
     body: 'Review release notes',
     expectedVersion: 0,
@@ -62,11 +62,16 @@ test('a fresh agent reads human guidance and records only its own project decisi
   const projectId = 'github:org/api'
   const grant = await post('/delegations', { projectId, type: 'agent', id: 'claude' })
   const file = join(dir, 'grant.json')
-  await writeFile(file, JSON.stringify({ ...grant, url, projectId, type: 'agent' }), {
-    mode: 0o600
-  })
+  async function exportGrant(current, id) {
+    await writeFile(
+      file,
+      JSON.stringify({ ...current, url, projectId: id, actorId: 'claude', type: 'agent' }),
+      { mode: 0o600 }
+    )
+  }
+  await exportGrant(grant, projectId)
   const server = new McpServer({ name: 'memory', version: '1' })
-  registerCommanderMemoryTools(server, file)
+  await registerCommanderMemoryTools(server, file)
   const client = new Client({ name: 'worker', version: '1' })
   const [left, right] = InMemoryTransport.createLinkedPair()
   await Promise.all([client.connect(left), server.connect(right)])
@@ -151,13 +156,44 @@ test('a fresh agent reads human guidance and records only its own project decisi
     pageId: 'handoff-468b5460-f504-4316-9090-3e4cdeca99bb',
     projectId: 'github:org/private'
   })
-  const index = await call('commander_resume_context')
+  const requested = []
+  const capture = (req) => requested.push(req.url)
+  gateway.on('request', capture)
+  const index = await call('commander_resume_context', { limit: 1 })
+  assert.deepEqual(await call('commander_resume_context', { offset: 1, limit: 1 }), {
+    handoffs: [],
+    total: 1
+  })
+  gateway.off('request', capture)
+  assert.deepEqual(requested, [
+    '/v1/commander/memory/agent/handoffs?offset=0&limit=1',
+    '/v1/commander/memory/agent/handoffs?offset=1&limit=1'
+  ])
   assert.equal(index.total, 1)
   assert.deepEqual(
     index.handoffs.map((item) => [item.pageId, item.goal, item.version]),
     [[saved.pageId, 'Recover CI work', 1]]
   )
   assert.equal(JSON.stringify(index).includes('Checked tests'), false)
+  await t.test('older services can list handoffs and access failures stay visible', async (t) => {
+    let status = 404
+    const serviceFetch = globalThis.fetch
+    t.mock.method(globalThis, 'fetch', (input, init) => {
+      if (new URL(input).pathname.endsWith('/agent/handoffs')) {
+        return Promise.resolve(new Response(null, { status }))
+      }
+      return serviceFetch(input, init)
+    })
+    assert.deepEqual(await call('commander_resume_context', { limit: 1 }), index)
+    assert.deepEqual(await call('commander_resume_context', { offset: 1, limit: 1 }), {
+      handoffs: [],
+      total: 1
+    })
+    status = 403
+    const denied = await client.callTool({ name: 'commander_resume_context', arguments: {} })
+    assert.equal(denied.isError, true)
+    assert.match(denied.content[0].text, /HTTP 403/)
+  })
   const resumed = await call('commander_resume_context', { pageId: saved.pageId })
   assert.equal(resumed.progress, 'Checked tests')
   assert.equal(resumed.nextStep, 'Review the branch')
@@ -223,18 +259,12 @@ test('a fresh agent reads human guidance and records only its own project decisi
     await post('/preferences/settings', { enabled: true, expectedVersion: 2 })
     const retry = await call('commander_ask_preference', ask)
     assert.deepEqual(retry, answer)
-    const askFromMislabeledGrant = { ...grant, url, type: 'agent', projectId: 'github:org/other' }
-    await writeFile(file, JSON.stringify(askFromMislabeledGrant))
-    const wrongFile = await client.callTool({ name: 'commander_ask_preference', arguments: ask })
-    assert.equal(wrongFile.isError, true)
-    assert.match(wrongFile.content[0].text, /does not match this memory grant/)
     const denied = await client.callTool({
       name: 'commander_ask_preference',
       arguments: { ...ask, projectId: 'github:org/other' }
     })
     assert.equal(denied.isError, true)
-    assert.match(denied.content[0].text, /HTTP 403/)
-    await writeFile(file, JSON.stringify({ ...grant, url, type: 'agent', projectId }))
+    assert.match(denied.content[0].text, /does not match this memory grant/)
     const { page, history } = await call('commander_recall', { pageId: answer.decisionPageId })
     assert.equal(page.kind, 'decision')
     assert.equal(page.projectId, projectId)
@@ -274,4 +304,64 @@ test('a fresh agent reads human guidance and records only its own project decisi
       )
     }
   })
+
+  await t.test(
+    'a pending write and recall keep their startup project across file renewal',
+    async () => {
+      const otherId = 'github:org/other'
+      const otherGrant = await post('/delegations', {
+        projectId: otherId,
+        type: 'agent',
+        id: 'claude'
+      })
+      const pending = {
+        pageId: 'checkpoint',
+        kind: 'note',
+        title: 'Checkpoint',
+        body: 'Built locally',
+        expectedVersion: 0,
+        requestId: 'first-checkpoint'
+      }
+      await exportGrant(otherGrant, otherId)
+      for (const [name, args] of [
+        ['commander_save_memory', pending],
+        ['commander_recall', {}]
+      ]) {
+        const response = await client.callTool({ name, arguments: args })
+        assert.equal(response.isError, true)
+        assert.match(response.content[0].text, /original project/)
+      }
+      // Even a mislabeled file must satisfy the service's independent write check.
+      await exportGrant(otherGrant, projectId)
+      const denied = await client.callTool({ name: 'commander_save_memory', arguments: pending })
+      assert.equal(denied.isError, true)
+      assert.match(denied.content[0].text, /HTTP 403/)
+      const renewed = await post('/delegations', { projectId, type: 'agent', id: 'claude' })
+      await exportGrant(renewed, projectId)
+      assert.equal((await call('commander_save_memory', pending)).page.projectId, projectId)
+    }
+  )
+
+  await t.test(
+    'a multibyte body at the byte limit saves and an extra byte fails locally',
+    async () => {
+      const body = `${'界'.repeat(21845)}a`
+      const note = {
+        body,
+        kind: 'note',
+        pageId: 'byte-limit',
+        requestId: 'boundary',
+        title: 'Boundary',
+        expectedVersion: 0
+      }
+      assert.equal((await call('commander_save_memory', note)).page.body, body)
+      const tooLarge = await client.callTool({
+        name: 'commander_save_memory',
+        arguments: { ...note, body: `${body}a`, requestId: 'over', expectedVersion: 1 }
+      })
+      assert.equal(tooLarge.isError, true)
+      assert.match(tooLarge.content[0].text, /65,536 UTF-8 bytes/)
+      assert.equal((await call('commander_recall', { pageId: note.pageId })).page.version, 1)
+    }
+  )
 })

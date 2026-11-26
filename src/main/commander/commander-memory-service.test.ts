@@ -204,6 +204,18 @@ describe('Commander account boundary', () => {
     ).rejects.toThrow('Sharing disabled')
     expect(fetch).not.toHaveBeenCalled()
   })
+  it('rechecks the linked organization before a delegated write even when the local ticket is unchanged', async () => {
+    const fetch = vi.fn(async () => {
+      scope.activeOrgId = 'other'
+      return Response.json({ token: 'orcacmd_transient' })
+    })
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(
+      askHomeMemoryPreference(account, 'bot', 'repo', 'Test suite?', 'q', () => {})
+    ).rejects.toThrow('account changed')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
   it('uses a project-scoped commander for checkpoints and omits credentials from the response', async () => {
     const write = {
       pageId: `checkpoint-${'a'.repeat(64)}`,

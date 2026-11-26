@@ -812,6 +812,10 @@ module.exports = {
         to: 'bin/orca-commander-handoff'
       },
       {
+        from: 'scripts/commander-handoff-base.mjs',
+        to: 'bin/commander-handoff-base.mjs'
+      },
+      {
         from: 'scripts/commander-handoff.mjs',
         to: 'bin/commander-handoff.mjs'
       },
