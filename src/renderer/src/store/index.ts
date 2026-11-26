@@ -198,13 +198,15 @@ registerServerPortForwardStateAccessor(() => useAppStore.getState())
 attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
-  const { openWorkspaceBrowserTab, openWorkspaceBrowserTabForLink } =
-    await import('@/lib/browser/workspace/workspace-browser-tab-open')
   if (request.linkContext) {
+    const { openWorkspaceBrowserTabForLink } =
+      await import('@/lib/browser/workspace/workspace-browser-tab-open-for-link')
     const outcome = await openWorkspaceBrowserTabForLink({
       ...request,
       linkContext: request.linkContext
     })
+    // The chooser needs the detailed outcome before it is projected into a toast, error or page id.
+    request.linkContext.onDetailedOutcome?.(outcome)
     if (
       outcome.status === 'failed' ||
       (outcome.status === 'refused' && !request.linkContext.linkIntent?.targetGroupId)
@@ -232,6 +234,8 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
     }
     return outcome.status === 'opened' ? outcome.result.browserPageId : null
   }
+  const { openWorkspaceBrowserTab } =
+    await import('@/lib/browser/workspace/workspace-browser-tab-open')
   return openWorkspaceBrowserTab(request)
 })
 

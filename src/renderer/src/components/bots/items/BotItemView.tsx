@@ -292,7 +292,8 @@ export function BotItemBody({
   const waitingOn = waitingLine ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
-    isVisible: true
+    isVisible: true,
+    followsLinkMode: false
   })
   return (
     <div

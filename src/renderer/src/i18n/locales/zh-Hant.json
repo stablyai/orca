@@ -1114,6 +1114,10 @@
           "performance": "效能"
         }
       },
+      "links": {
+        "heading": "連結",
+        "headingDescription": "在 Orca 中點擊網頁連結時在哪裡開啟。"
+      },
       "sessionHost": {
         "sshDetail": "此 SSH 主機的頁面會在這台電腦上開啟。"
       }
@@ -23417,6 +23421,24 @@
         "details": "詳細資料",
         "clearing": "正在清除…"
       },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca 瀏覽器",
+          "systemBrowser": "系統瀏覽器",
+          "ask": "每次詢問",
+          "openDirectlyIn": "直接開啟方式",
+          "openDirectlyInDescription": "{{modifier}}-點按以及 Orca 詢問時的第一個選項。",
+          "title": "開啟連結",
+          "description": "聊天、終端機和按鈕中的連結。這部電腦上的 localhost 連結會在 Orca 瀏覽器中開啟。",
+          "search": {
+            "ask": "詢問",
+            "system": "系統瀏覽器"
+          }
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "用於終端機中的檔案路徑。除非點按交給終端機 App，網頁連結會遵循「開啟連結」。"
+        }
+      },
       "agents": {
         "deleteHistoryWithWorkspace": {
           "updateFailed": "無法更新 {{host}} 上的設定。",
@@ -23775,6 +23797,17 @@
             "shortcutSummary": "{{shortcut}}-按一下可改用系統瀏覽器開啟一次。可在設定中變更。"
           }
         }
+      },
+      "actions": {
+        "linkSettings": "連結設定",
+        "rememberChoice": "一律以此方式開啟連結"
+      },
+      "preferences": {
+        "savedOrca": "連結將在 Orca 瀏覽器中開啟",
+        "savedSystem": "連結將在系統瀏覽器中開啟",
+        "saveFailed": "無法儲存你的選擇。",
+        "saveUnknown": "無法確認你的選擇是否已儲存。",
+        "settings": "設定"
       }
     },
     "shared": {

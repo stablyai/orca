@@ -1145,6 +1145,10 @@
           "performance": "performans"
         }
       },
+      "links": {
+        "heading": "Bağlantılar",
+        "headingDescription": "Orca’da tıkladığınız web bağlantılarının açılacağı yer."
+      },
       "sessionHost": {
         "sshDetail": "Bu SSH sunucusunun sayfaları bu bilgisayarda açılır."
       }
@@ -23665,6 +23669,24 @@
         "details": "Ayrıntılar",
         "clearing": "Kaldırılıyor…"
       },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca tarayıcısı",
+          "systemBrowser": "Sistem tarayıcısı",
+          "ask": "Her seferinde sor",
+          "openDirectlyIn": "Doğrudan şurada aç",
+          "openDirectlyInDescription": "{{modifier}}-tıklama ve Orca sorduğunda ilk seçenek.",
+          "title": "Bağlantıları aç",
+          "description": "Sohbet, terminal ve düğmelerdeki bağlantılar. Bu bilgisayardaki localhost bağlantıları Orca tarayıcısında açılır.",
+          "search": {
+            "ask": "sor",
+            "system": "sistem tarayıcısı"
+          }
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "Terminaldeki dosya yolları için. Tıklamalar terminal uygulamasına bırakılmadıkça web bağlantıları “Bağlantıları aç” ayarını izler."
+        }
+      },
       "RepositoryHooksSection": {
         "folderRunPolicyDescription": "Yeni bir çalışma alanı oluşturulduğunda uygulanacak varsayılan davranış.",
         "folderTitle": "Çalışma alanı kancaları",
@@ -24166,6 +24188,17 @@
             "shortcutSummary": "{{shortcut}}-tıklama sistem tarayıcınızı bir kez açar. Bunu Ayarlar'dan değiştirebilirsiniz."
           }
         }
+      },
+      "actions": {
+        "linkSettings": "Bağlantı ayarları",
+        "rememberChoice": "Bağlantıları her zaman böyle aç"
+      },
+      "preferences": {
+        "savedOrca": "Bağlantılar Orca tarayıcısında açılacak",
+        "savedSystem": "Bağlantılar sistem tarayıcınızda açılacak",
+        "saveFailed": "Seçiminiz kaydedilemedi.",
+        "saveUnknown": "Seçiminizin kaydedildiği doğrulanamadı.",
+        "settings": "Ayarlar"
       }
     },
     "shared": {

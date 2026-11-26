@@ -1,9 +1,10 @@
+import { httpLinkModeFor, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { LocalScrollbackSnapshots } from '@/runtime/hosted-terminals/hydration/host-terminal-scrollback-hydration'
 import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
-import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
+import { terminalPaneHttpLinkDestinations } from '../links/http/terminal-pane-http-link-destinations'
 import '@/lib/browser/workspace/workspace-browser-tab-open'
 import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from '../host-state/terminal-pane-wsl-distro'
@@ -14,7 +15,7 @@ import {
 } from '../links/http/terminal-http-link-source-owner'
 import {
   getTerminalFileOpenHint,
-  getTerminalUrlOpenHint,
+  getTerminalUrlLinkHint,
   terminalUrlOpenHintOptionsFor
 } from '../links/terminal-link-open-hints'
 import type { LinkHandlerDeps } from '../links/files/terminal-link-handlers'
@@ -51,7 +52,7 @@ export type TerminalPaneMountPreparation = {
   unregisterRuntimeTab: () => void
   fileOpenLinkHint: string
   getPaneLinkCwd: (paneId: number) => string
-  getUrlOpenLinkHint: (paneId: number) => string
+  getUrlOpenLinkHint: (paneId: number, url?: string) => string
   getHttpLinkSourceOwnerForPane: (
     paneId: number
   ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>
@@ -118,13 +119,10 @@ export function prepareTerminalPaneMount(
       deps.worktreeId,
       getHttpLinkSourceOwnerForPane(paneId)
     )
-  const getHttpLinkActionDestinations = (
-    paneId: number,
-    url?: string
-  ): TerminalHttpLinkActionDestinations =>
-    httpLinkActionDestinationsFor(
+  const getHttpLinkActionDestinations = (paneId: number, url?: string) =>
+    terminalPaneHttpLinkDestinations(
       deps.settingsRef.current,
-      getHttpLinkSourceOwnerForPane(paneId),
+      paneTransports.get(paneId),
       canOpenOwnedBrowserForPane(paneId),
       url,
       deps.worktreeId
@@ -135,6 +133,14 @@ export function prepareTerminalPaneMount(
     if (plainClickBehavior === 'none' && middleClickBehavior === 'none') {
       return null
     }
+    // Desktop URLs follow the link mode unless plain clicks are left to the terminal app.
+    const rememberMode = usesHttpLinkMode() ? httpLinkModeFor(deps.settingsRef.current) : undefined
+    const httpPlainClickBehavior =
+      rememberMode && plainClickBehavior !== 'none'
+        ? rememberMode === 'ask'
+          ? 'actions'
+          : 'open'
+        : plainClickBehavior
     const pane = deps.managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
     const pointerGesture = refs.linkPointerGesturesRef.current.get(paneId)
     const suppression =
@@ -149,6 +155,8 @@ export function prepareTerminalPaneMount(
       request: deps.requestTerminalLinkAction,
       focusTerminal: () => pane.terminal.focus(),
       plainClickBehavior,
+      httpPlainClickBehavior,
+      ...(rememberMode ? { rememberMode } : {}),
       middleClickBehavior,
       sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
     }
@@ -231,15 +239,16 @@ export function prepareTerminalPaneMount(
     getTabWideAgentHintLeafId: deps.getTabWideAgentHintLeafId
   })
   const fileOpenLinkHint = getTerminalFileOpenHint()
-  const getUrlOpenLinkHint = (paneId: number): string =>
-    getTerminalUrlOpenHint({
-      ...terminalUrlOpenHintOptionsFor(
+  const getUrlOpenLinkHint = (paneId: number, url?: string): string =>
+    getTerminalUrlLinkHint(
+      deps.settingsRef.current,
+      terminalUrlOpenHintOptionsFor(
         deps.settingsRef.current,
         getHttpLinkSourceOwnerForPane(paneId),
         canOpenOwnedBrowserForPane(paneId)
       ),
-      showActions: terminalLinkClickBehaviorFor(deps.settingsRef.current) === 'actions'
-    })
+      url !== undefined ? getHttpLinkActionDestinations(paneId, url) : undefined
+    )
   return {
     container,
     expandedStyleSnapshots,

@@ -1,3 +1,4 @@
+import { usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { isMacUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import { translate } from '@/i18n/i18n'
@@ -8,6 +9,7 @@ import { getBrowserProfileScopeSearchEntry } from './profiles/browser-profile-sc
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
   getBrowserLinkRoutingDescription,
+  getBrowserOpenLinksCopy,
   getLinkRoutingBackgroundSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
@@ -94,25 +96,48 @@ export function getBrowserPaneSearchEntries(
         )
       ]
     },
-    {
-      title: t('auto.components.settings.browser.search.f0eb09ce09', 'Link routing'),
-      description: getBrowserLinkRoutingDescription(platform, undefined, t),
-      keywords: [
-        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.44d14df30d', 'preview'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
-        ...translateSearchKeyword(
-          'auto.components.settings.browser.search.82ba1c80ea',
-          'localhost'
-        ),
-        ...translateSearchKeyword('auto.components.settings.browser.search.72c58f7792', 'webview'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.90425d313c', 'shift'),
-        platform.isMac ? 'cmd' : 'ctrl',
-        ...translateSearchKeyword('auto.components.settings.browser.search.68d1db8929', 'markdown'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.8dd4805991', 'file'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.a7a07d5415', 'editor')
-      ]
-    },
+    usesHttpLinkMode()
+      ? getBrowserOpenLinksCopy(platform, t)
+      : {
+          title: t('auto.components.settings.browser.search.f0eb09ce09', 'Link routing'),
+          description: getBrowserLinkRoutingDescription(platform, undefined, t),
+          keywords: [
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.2d2d995c58',
+              'browser'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.44d14df30d',
+              'preview'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.bea27bac4b',
+              'links'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.82ba1c80ea',
+              'localhost'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.72c58f7792',
+              'webview'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.90425d313c',
+              'shift'
+            ),
+            platform.isMac ? 'cmd' : 'ctrl',
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.68d1db8929',
+              'markdown'
+            ),
+            ...translateSearchKeyword('auto.components.settings.browser.search.8dd4805991', 'file'),
+            ...translateSearchKeyword(
+              'auto.components.settings.browser.search.a7a07d5415',
+              'editor'
+            )
+          ]
+        },
     {
       title: getLinkRoutingModifierTitle(false, t),
       description: getLinkRoutingModifierDescription(

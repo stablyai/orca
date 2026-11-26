@@ -4,10 +4,17 @@ import { translate } from '@/i18n/i18n'
 import {
   openHttpLink,
   captureHttpLinkIntent,
-  canHttpLinkOpenInSourceGroup
+  canHttpLinkOpenInSourceGroup,
+  onceAdmission
 } from '@/lib/browser/navigation/http-link-routing'
 import { isRemoteLoopbackHttpLink } from '@/lib/browser/navigation/http-link-localhost-route'
-import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import { isDesktopLocalhostLink } from '@/lib/links/preferences/http-link-mode'
+import type {
+  HttpLinkAdmission,
+  HttpLinkSourceOwner
+} from '@/lib/browser/navigation/http-link-routing'
+import type { LinkOpenIntent } from '../../links/placement/link-open-intent'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { BrowserLinkOpenContext } from './browser-link-destination'
 import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
 import type { Translate } from '@/i18n/use-translate'
@@ -22,11 +29,24 @@ export type OpenHttpLinkOptions = {
   forceSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
   forceInApp?: boolean
+  /** Treat this link as if links open in Orca (desktop localhost links); force flags still win. */
+  preferInApp?: boolean
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
   modifierHeld?: boolean
   sourceOwner?: HttpLinkSourceOwner
   linkContext?: BrowserLinkOpenContext
   onBrowserOpenComplete?: (result: HttpLinkBrowserCompletion) => void
+  /** Settles exactly once with whether routing accepted the open; it says nothing about page load. */
+  onAdmission?: (outcome: HttpLinkAdmission) => void | Promise<void>
+}
+
+/** Captured when a chooser opens; its actions use these values instead of recapturing. */
+export type LinkActionContext = {
+  /** Null when the source tab is unknown; never recaptured at action time. */
+  linkIntent: LinkOpenIntent | null
+  groupIntent: LinkOpenIntent | null
+  /** The click's qualified host; null makes Orca destinations refuse before dispatch. */
+  clickHostId: ExecutionHostId | null
 }
 
 export type HttpLinkBrowserCompletion = { pageId: string | null; background: boolean }
@@ -54,12 +74,18 @@ export type HttpLinkDestination = 'orca' | 'system'
 export type HttpLinkActionDestinations = {
   primary: HttpLinkDestination
   alternate?: HttpLinkDestination
+  /** Plain and Cmd/Ctrl-click order when it differs from the setting's (a localhost link Orca can reach). */
+  plainClick?: { primary: 'orca'; alternate: 'system' }
 }
+
+export type HttpLinkActionChoice = { remember: boolean }
 
 export type HttpLinkAction = {
   external?: boolean
   label: string
-  run: () => void | Promise<void>
+  /** Destination rows only: the browser a ticked "Always open links this way" saves. */
+  rememberAs?: HttpLinkDestination
+  run: (choice?: HttpLinkActionChoice) => void | Promise<void>
 }
 
 export function canSourceOwnerOpenInOrca(
@@ -79,14 +105,20 @@ export function httpLinkActionDestinationsFor(
   sourceOwner: HttpLinkSourceOwner,
   canOpenOwnedBrowser: boolean,
   url?: string,
-  worktreeId?: string | null
+  worktreeId?: string | null,
+  /** False when `local` is only a fallback (a restored pane with no live process): no localhost shortcut. */
+  localOwnerConfirmed = true
 ): HttpLinkActionDestinations {
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
-  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner, worktreeId)
-    ? { primary: 'orca', alternate: 'system' }
-    : { primary: 'system', alternate: 'orca' }
+  const destinations: HttpLinkActionDestinations =
+    settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner, worktreeId)
+      ? { primary: 'orca', alternate: 'system' }
+      : { primary: 'system', alternate: 'orca' }
+  return localOwnerConfirmed && isDesktopLocalhostLink(url, sourceOwner)
+    ? { ...destinations, plainClick: { primary: 'orca', alternate: 'system' } }
+    : destinations
 }
 
 export function httpLinkDirectClickDestination(
@@ -107,7 +139,10 @@ export function httpLinkDestinationLabel(
 
 export function buildHttpLinkActions(
   destinations: HttpLinkActionDestinations | undefined,
-  open: (destination: HttpLinkDestination | undefined) => void | Promise<void>,
+  open: (
+    destination: HttpLinkDestination | undefined,
+    choice?: HttpLinkActionChoice
+  ) => void | Promise<void>,
   source?: {
     worktreeId: string
     url?: string
@@ -123,7 +158,8 @@ export function buildHttpLinkActions(
     label: primaryDestination
       ? httpLinkDestinationLabel(primaryDestination, t)
       : t('auto.components.terminal.pane.TerminalLinkActionPopover.openLink', 'Open link'),
-    run: () => open(primaryDestination)
+    ...(primaryDestination ? { rememberAs: primaryDestination } : {}),
+    run: (choice) => open(primaryDestination, choice)
   }
   const secondaryActions =
     source &&
@@ -154,7 +190,8 @@ export function buildHttpLinkActions(
     alternate: {
       external: alternateDestination === 'system',
       label: httpLinkDestinationLabel(alternateDestination, t),
-      run: () => open(alternateDestination)
+      rememberAs: alternateDestination,
+      run: (choice) => open(alternateDestination, choice)
     }
   }
 }
@@ -172,20 +209,33 @@ export type RoutedHttpLinkOptions = {
   modifierHeld?: boolean
   forceDestination?: HttpLinkDestination
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
+  /** Present for chooser actions: the click-time capture wins over anything read now. */
+  actionContext?: LinkActionContext
+  onAdmission?: OpenHttpLinkOptions['onAdmission']
 }
 
-export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): void {
+export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): void {
+  const deps: RoutedHttpLinkOptions = routed.onAdmission
+    ? { ...routed, onAdmission: onceAdmission(routed.onAdmission) }
+    : routed
   const isCurrentRequest = beginLinkOpenRequest()
-  const linkIntent = captureHttpLinkIntent(
-    deps.worktreeId,
-    deps.sourceTabId,
-    deps.openInSourceGroup
-  )
+  const action = deps.actionContext
+  // A chooser action keeps its click-time capture, a captured null included.
+  const linkIntent = action
+    ? deps.openInSourceGroup
+      ? action.groupIntent
+      : action.linkIntent
+    : captureHttpLinkIntent(deps.worktreeId, deps.sourceTabId, deps.openInSourceGroup)
   if (deps.openInSourceGroup && !linkIntent) {
     showLinkOpenInGroupRefusedToast()
+    void deps.onAdmission?.('refused')
     return
   }
-  const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined
+  const linkContext: BrowserLinkOpenContext | undefined = action
+    ? { linkIntent, isCurrentRequest, clickHostId: action.clickHostId, requireClickHost: true }
+    : deps.sourceTabId
+      ? { linkIntent, isCurrentRequest }
+      : undefined
   // Why: the clicked link's owner beats the global active runtime for both local and remote routes.
   const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
   if (deps.forceDestination) {
@@ -196,10 +246,13 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
       sourceOwner,
-      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
+      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
+      ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
     })
     return
   }
+  // A local localhost link prefers Orca without a prompt; Shift still resolves against that preference.
+  const preferInApp = isDesktopLocalhostLink(url, sourceOwner)
   if (deps.modifierHeld) {
     // Explicit modifier routing skips the one-time preference prompt; openHttpLink resolves its destination.
     openHttpLink(url, {
@@ -207,22 +260,28 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
       modifierHeld: true,
+      ...(preferInApp ? { preferInApp: true } : {}),
       sourceOwner,
-      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
+      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
+      ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
     })
     return
   }
 
   // Why: remote sources use the persisted routing preference and never prompt the viewing client.
   const preferenceDecision =
-    sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
+    sourceOwner.kind === 'local' && !preferInApp
+      ? deps.requestOpenLinksInAppPreference?.(url)
+      : null
   if (preferenceDecision === null || preferenceDecision === undefined) {
     openHttpLink(url, {
       ...(linkContext ? { linkContext } : {}),
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
+      ...(preferInApp ? { preferInApp: true } : {}),
       sourceOwner,
-      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
+      ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
+      ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
     })
     return
   }
@@ -236,7 +295,10 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
         worktreeId: deps.worktreeId,
         forceSystemBrowser: !openInOrca,
         sourceOwner,
-        ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
+        ...(deps.onBrowserOpenComplete
+          ? { onBrowserOpenComplete: deps.onBrowserOpenComplete }
+          : {}),
+        ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
       })
     })
     .catch(() => {
@@ -246,7 +308,10 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
         worktreeId: deps.worktreeId,
         forceSystemBrowser: true,
         sourceOwner,
-        ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {})
+        ...(deps.onBrowserOpenComplete
+          ? { onBrowserOpenComplete: deps.onBrowserOpenComplete }
+          : {}),
+        ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
       })
     })
 }

@@ -920,6 +920,10 @@
           "openFailed": "Einen Arbeitsbereich öffnen, um den Chrome Web Store zu durchsuchen."
         }
       },
+      "links": {
+        "heading": "Links",
+        "headingDescription": "Wo Weblinks geöffnet werden, die du in Orca anklickst."
+      },
       "sessionHost": {
         "sshDetail": "Seiten für diesen SSH-Host werden auf diesem Computer geöffnet."
       }
@@ -21928,6 +21932,24 @@
         "confirmCheckHomeFolder": "Kein anderer Rechner, der diesen Home-Ordner teilt, führt Orca aus",
         "details": "Details",
         "clearing": "Wird aufgehoben…"
+      },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca-Browser",
+          "systemBrowser": "Systembrowser",
+          "ask": "Jedes Mal fragen",
+          "openDirectlyIn": "Direkt öffnen in",
+          "openDirectlyInDescription": "{{modifier}}-Klick und die erste Auswahl, wenn Orca fragt.",
+          "title": "Links öffnen",
+          "description": "Links in Chat, Terminals und Schaltflächen. Localhost-Links auf diesem Computer öffnen sich im Orca-Browser.",
+          "search": {
+            "ask": "fragen",
+            "system": "systembrowser"
+          }
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "Für Dateipfade im Terminal. Weblinks folgen „Links öffnen“, sofern Klicks nicht der Terminal-App überlassen werden."
+        }
       }
     },
     "agentChildRow": {
@@ -22131,6 +22153,17 @@
             "shortcutSummary": "{{shortcut}}-Klick öffnet einmalig deinen Systembrowser. Du kannst das in den Einstellungen ändern."
           }
         }
+      },
+      "actions": {
+        "linkSettings": "Link-Einstellungen",
+        "rememberChoice": "Links immer so öffnen"
+      },
+      "preferences": {
+        "savedOrca": "Links werden im Orca-Browser geöffnet",
+        "savedSystem": "Links werden in deinem Systembrowser geöffnet",
+        "saveFailed": "Deine Auswahl konnte nicht gespeichert werden.",
+        "saveUnknown": "Speichern deiner Auswahl konnte nicht bestätigt werden.",
+        "settings": "Einstellungen"
       }
     },
     "shared": {

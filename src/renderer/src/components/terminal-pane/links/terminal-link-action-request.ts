@@ -6,6 +6,7 @@ import {
 import type { TerminalLinkClickBehavior } from './gestures/terminal-link-click-behavior'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
+import type { HttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 
 export type TerminalLinkActionRequest = LinkActionRequest & { paneId: number }
 
@@ -18,6 +19,10 @@ export type TerminalLinkActionContext = {
   request: TerminalLinkActionRequester
   focusTerminal: () => void
   plainClickBehavior?: TerminalLinkClickBehavior
+  /** HTTP URLs on desktop follow the link mode; file links keep plainClickBehavior. */
+  httpPlainClickBehavior?: TerminalLinkClickBehavior
+  /** Desktop only: URL choosers here may offer "Always open links this way". */
+  rememberMode?: HttpLinkMode
   middleClickBehavior?: TerminalLinkClickBehavior
   /** The host running the pane's shell; absent reads as not this machine. */
   sourceOwner?: HttpLinkSourceOwner
@@ -25,8 +30,24 @@ export type TerminalLinkActionContext = {
 
 type LinkActionDetails = Pick<
   TerminalLinkActionRequest,
-  'destination' | 'copyValue' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
+  | 'destination'
+  | 'copyValue'
+  | 'kind'
+  | 'primary'
+  | 'alternate'
+  | 'secondaryActions'
+  | 'rememberEligible'
+  | 'linkPreferenceHost'
 >
+
+function plainBehaviorFor(
+  context: TerminalLinkActionContext,
+  kind: LinkActionDetails['kind']
+): TerminalLinkClickBehavior | undefined {
+  return kind === 'url' && context.httpPlainClickBehavior
+    ? context.httpPlainClickBehavior
+    : context.plainClickBehavior
+}
 
 export function requestTerminalLinkAction(
   event: MouseEvent | undefined,
@@ -37,7 +58,8 @@ export function requestTerminalLinkAction(
     !event ||
     !context ||
     !(
-      (isTerminalLinkActionActivation(event) && context.plainClickBehavior !== 'none') ||
+      (isTerminalLinkActionActivation(event) &&
+        plainBehaviorFor(context, details.kind) !== 'none') ||
       (isTerminalMiddleClickActivation(event) && context.middleClickBehavior !== 'none')
     ) ||
     !context.pointerGesture.canRequestAction(event)
@@ -50,7 +72,9 @@ export function requestTerminalLinkAction(
   }
   event.preventDefault()
   const middleClick = isTerminalMiddleClickActivation(event)
-  if ((middleClick ? context.middleClickBehavior : context.plainClickBehavior) === 'open') {
+  if (
+    (middleClick ? context.middleClickBehavior : plainBehaviorFor(context, details.kind)) === 'open'
+  ) {
     context.focusTerminal()
     details.primary?.run()
     return true
@@ -60,6 +84,8 @@ export function requestTerminalLinkAction(
   }
   context.request({
     ...details,
+    // Remember only on a plain-click chooser; middle-click choosers never save.
+    rememberEligible: !middleClick && details.rememberEligible === true,
     paneId: context.paneId,
     anchorX: event.clientX,
     anchorY: event.clientY,

@@ -3,6 +3,8 @@ import { Label } from '../../../ui/label'
 import { Switch } from '../../../ui/switch'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
+import { usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
+import { BrowserOpenLinksSetting } from './BrowserOpenLinksSetting'
 
 type BrowserLinkRoutingSettingProps = {
   settings: GlobalSettings
@@ -18,6 +20,10 @@ export function BrowserLinkRoutingSetting({
   updateSettings
 }: BrowserLinkRoutingSettingProps): React.JSX.Element {
   const t = useTranslate()
+  // Desktop gets the three-way "Open links" control; the web client keeps this switch.
+  if (usesHttpLinkMode()) {
+    return <BrowserOpenLinksSetting settings={settings} isMac={isMac} />
+  }
   return (
     <SearchableSetting
       title={t('auto.components.settings.BrowserPane.7a366a05e1', 'Link routing')}

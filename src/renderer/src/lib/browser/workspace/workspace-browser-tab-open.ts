@@ -8,7 +8,8 @@ import {
   workspaceBrowserLinkDestination,
   openClientWorkspaceBrowserLink,
   prepareRuntimeBrowserLink,
-  materializedBrowserLinkOutcome
+  materializedBrowserLinkOutcome,
+  remoteLinkDispatchGuard
 } from './workspace-browser-link-open'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
 import type { WebRuntimeBrowserCreationFailureInfo } from '@/runtime/browser/creation/web-runtime-browser-creation-context'
@@ -34,8 +35,7 @@ import {
   openFailure,
   remoteOpenFailure,
   routeFailure,
-  validateTarget,
-  WorkspaceBrowserOpenError
+  validateTarget
 } from './workspace-browser-tab-presentation'
 import type {
   BrowserLinkOpenContext,
@@ -135,7 +135,12 @@ export async function openWorkspaceBrowserTab(
   if (!route) {
     throw hostUnavailableFailure(presentation.error, 'no active worktree route')
   }
-  const capturedHost = request.linkContext?.linkIntent?.hostId
+  // The click host qualifies a null intent; chooser actions refuse when there is none.
+  const capturedHost = request.linkContext?.linkIntent?.hostId ?? request.linkContext?.clickHostId
+  if (request.linkContext?.requireClickHost && !capturedHost) {
+    request.onLinkOutcome?.({ status: 'refused' })
+    return null
+  }
   if (
     capturedHost &&
     (!route.executionHostId ||
@@ -264,6 +269,9 @@ export async function openWorkspaceBrowserTab(
       ...(destination ? { profileId: destination.sessionProfileId } : {}),
       ...(request.linkContext ? { isCurrentRequest: request.linkContext.isCurrentRequest } : {}),
       ...(destination
+        ? { admitDispatch: remoteLinkDispatchGuard(request, destination, capturedHost) }
+        : {}),
+      ...(destination
         ? {
             onMaterialized: (pageId: string) =>
               request.onLinkOutcome?.(materializedBrowserLinkOutcome(request, destination, pageId))
@@ -290,29 +298,4 @@ export async function openWorkspaceBrowserTab(
     throw remoteOpenFailure(presentation.error, failure, null)
   }
   return null
-}
-
-/** Detailed link results are additive to the generic page-id contract. */
-export async function openWorkspaceBrowserTabForLink(
-  request: OpenWorkspaceBrowserTabRequest & { linkContext: BrowserLinkOpenContext }
-): Promise<BrowserOpenOutcome> {
-  let outcome: BrowserOpenOutcome = { status: 'failed' }
-  try {
-    await openWorkspaceBrowserTab({
-      ...request,
-      onLinkOutcome: (result) => {
-        outcome = result
-      }
-    })
-  } catch (error) {
-    if (request.linkContext.isCurrentRequest?.() === false) {
-      return { status: 'superseded' }
-    }
-    // A failure that knows its reason keeps it, so the toast can name it.
-    if (error instanceof WorkspaceBrowserOpenError) {
-      throw error
-    }
-    return { status: 'failed' }
-  }
-  return outcome
 }

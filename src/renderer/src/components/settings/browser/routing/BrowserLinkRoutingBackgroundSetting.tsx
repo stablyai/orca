@@ -1,8 +1,12 @@
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
-import { getLinkRoutingBackgroundSearchEntry } from './browser-link-routing-copy'
+import {
+  getLinkRoutingBackgroundSearchEntry,
+  linkRoutingSubRowClass
+} from './browser-link-routing-copy'
 import { useTranslate } from '../../../../i18n/use-translate'
+import { usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 
 type BrowserLinkRoutingBackgroundSettingProps = {
   settings: Pick<GlobalSettings, 'openLinksInAppInBackground'>
@@ -22,7 +26,7 @@ export function BrowserLinkRoutingBackgroundSetting({
       description={entry.description}
       keywords={entry.keywords}
     >
-      <div className="ml-4 border-l border-border pl-4">
+      <div className={linkRoutingSubRowClass(usesHttpLinkMode())}>
         <SettingsSwitchRow
           label={entry.title}
           description={entry.description}

@@ -22,6 +22,12 @@ import {
   workspaceRunsOnServer
 } from './server-port-forward-support'
 
+/** Runs the system-browser open of a forwarded address and resolves the URL it opened, or null when
+ *  none opened. A link open's gate skips a superseded open and settles the link from the result. */
+export type ForwardedOpenGate = (open: () => Promise<string | null>) => Promise<string | null>
+
+const ungated: ForwardedOpenGate = (open) => open()
+
 /** How a port's URL opens in the system browser; null when only Orca's browser on its host reaches it.
  *  `worktreeId` names the workspace a workspace port belongs to; the server's own listeners have none. */
 export function portSystemBrowserOpener(
@@ -36,7 +42,9 @@ export function portSystemBrowserOpener(
   return serverForwardsPorts(target.environmentId) &&
     isLoopbackBrowserUrl(url) &&
     (worktreeId === null || workspaceRunsOnServer(target.environmentId, worktreeId))
-    ? () => openServerLoopbackInSystemBrowser(url, target.environmentId, worktreeId)
+    ? async () => {
+        await openServerLoopbackInSystemBrowser(url, target.environmentId, worktreeId)
+      }
     : null
 }
 
@@ -49,11 +57,13 @@ export async function openServerLoopbackInSystemBrowser(
   rawUrl: string,
   environmentId: string,
   /** The workspace the link or page belongs to; null for the server's own listeners. */
-  worktreeId: string | null | undefined
-): Promise<void> {
+  worktreeId: string | null | undefined,
+  /** Wraps the forwarded address's open; a link open passes one that admits and settles it. */
+  openSystem: ForwardedOpenGate = ungated
+): Promise<boolean> {
   const port = remoteUrlPort(rawUrl)
   if (port === null) {
-    return
+    return false
   }
   const state = useAppStore.getState()
   const host = selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(environmentId))
@@ -66,20 +76,19 @@ export async function openServerLoopbackInSystemBrowser(
         { port, host }
       )
     )
-    return
+    return false
   }
   const sshTargetId = serverSshForwardTargetId(environmentId)
   if (sshTargetId) {
-    await openSshTargetLoopback(rawUrl, port, sshTargetId, host)
-    return
+    return openSshTargetLoopback(rawUrl, port, sshTargetId, host, openSystem)
   }
   const known = forwardedTargetForRemoteUrl(
     rawUrl,
     state.portForwardsByConnection[environmentId] ?? []
   )
   if (known) {
-    await openForwardedUrlInSystemBrowser(known.url, known.forward, 'paired')
-    return
+    await openSystem(() => openForwardedUrlInSystemBrowser(known.url, known.forward, 'paired'))
+    return true
   }
   const api = window.api.runtimeEnvironments.portForwards
   const supported =
@@ -96,10 +105,15 @@ export async function openServerLoopbackInSystemBrowser(
         { port, host }
       )
     )
-    return
+    return false
   }
-  await openThroughNewForward(rawUrl, port, host, 'paired', () =>
-    api.ensure({ environmentId, remotePort: port })
+  return openThroughNewForward(
+    rawUrl,
+    port,
+    host,
+    'paired',
+    () => api.ensure({ environmentId, remotePort: port }),
+    openSystem
   )
 }
 
@@ -107,32 +121,36 @@ export async function openServerLoopbackInSystemBrowser(
  *  one first when needed. Never opens this computer's own localhost. Call only from a person's gesture. */
 export async function openSshLoopbackInSystemBrowser(
   rawUrl: string,
-  targetId: string
-): Promise<void> {
+  targetId: string,
+  /** Wraps the forwarded address's open; a link open passes one that admits and settles it. */
+  openSystem: ForwardedOpenGate = ungated
+): Promise<boolean> {
   const port = remoteUrlPort(rawUrl)
   if (port === null) {
-    return
+    return false
   }
   const host = selectExecutionHostDisplayLabel(
     useAppStore.getState(),
     toSshExecutionHostId(targetId)
   )
-  await openSshTargetLoopback(rawUrl, port, targetId, host)
+  return openSshTargetLoopback(rawUrl, port, targetId, host, openSystem)
 }
 
+/** Resolves whether an address reached `openSystem`. */
 async function openSshTargetLoopback(
   rawUrl: string,
   port: number,
   targetId: string,
-  host: string
-): Promise<void> {
+  host: string,
+  openSystem: ForwardedOpenGate
+): Promise<boolean> {
   const known = forwardedTargetForRemoteUrl(
     rawUrl,
     useAppStore.getState().portForwardsByConnection[targetId] ?? []
   )
   if (known) {
-    await openForwardedUrlInSystemBrowser(known.url, known.forward, 'ssh')
-    return
+    await openSystem(() => openForwardedUrlInSystemBrowser(known.url, known.forward, 'ssh'))
+    return true
   }
   const ensure = window.api.ssh?.ensurePortForward
   if (!ensure || !sshForwardsPorts(targetId)) {
@@ -143,10 +161,15 @@ async function openSshTargetLoopback(
         { port, host }
       )
     )
-    return
+    return false
   }
-  await openThroughNewForward(rawUrl, port, host, 'ssh', () =>
-    ensure({ targetId, remotePort: port })
+  return openThroughNewForward(
+    rawUrl,
+    port,
+    host,
+    'ssh',
+    () => ensure({ targetId, remotePort: port }),
+    openSystem
   )
 }
 
@@ -164,8 +187,9 @@ async function openThroughNewForward(
   port: number,
   host: string,
   forwardKind: 'ssh' | 'paired',
-  ensure: () => Promise<{ entry: PortForwardEntry; created: boolean }>
-): Promise<void> {
+  ensure: () => Promise<{ entry: PortForwardEntry; created: boolean }>,
+  openSystem: ForwardedOpenGate
+): Promise<boolean> {
   let target: { url: string; forward: PortForwardEntry } | null
   let created: boolean
   try {
@@ -184,9 +208,11 @@ async function openThroughNewForward(
         { port, host }
       )
     )
-    return
+    return false
   }
-  const opened = await openForwardedUrlInSystemBrowser(target.url, target.forward, forwardKind)
+  const opened = await openSystem(() =>
+    openForwardedUrlInSystemBrowser(target.url, target.forward, forwardKind)
+  )
   if (opened && created) {
     toast.success(
       translate(
@@ -203,6 +229,7 @@ async function openThroughNewForward(
       }
     )
   }
+  return true
 }
 
 /** Tells the person once that a forward restored after a restart listens on another port here. */

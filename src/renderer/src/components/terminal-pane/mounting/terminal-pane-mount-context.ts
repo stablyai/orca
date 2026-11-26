@@ -27,7 +27,7 @@ export type TerminalPaneMountContext = {
   linkDeps: LinkHandlerDeps
   fileOpenLinkHint: string
   getPaneLinkCwd: (paneId: number) => string
-  getUrlOpenLinkHint: (paneId: number) => string
+  getUrlOpenLinkHint: (paneId: number, url?: string) => string
   getHttpLinkSourceOwnerForPane: (
     paneId: number
   ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>

@@ -58,7 +58,7 @@ type PaneLinkContext = {
   ) => TerminalHttpLinkActionDestinations
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
   getPaneLinkCwd: (paneId: number) => string
-  getUrlOpenLinkHint: (paneId: number) => string
+  getUrlOpenLinkHint: (paneId: number, url?: string) => string
   onShowSessionRestoredBanner: (paneId: number) => void
   ptyStartup: Parameters<typeof seedStartupSessionRestoredBanner>[0]
 }
@@ -199,7 +199,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
     hover: (_event, text) => {
       oscTooltipHoverToken += 1
       const hoverToken = oscTooltipHoverToken
-      const hint = getUrlOpenLinkHint(pane.id)
+      const hint = getUrlOpenLinkHint(pane.id, text)
       pane.linkTooltip.textContent = `${text} (${hint})`
       pane.linkTooltip.style.display = ''
       void formatTerminalUrlTooltip(text, hint, getHttpLinkSourceOwnerForPane(pane.id)).then(

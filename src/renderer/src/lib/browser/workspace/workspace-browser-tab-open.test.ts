@@ -29,8 +29,8 @@ vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   }
 }))
 
-const { openWorkspaceBrowserTab, openWorkspaceBrowserTabForLink } =
-  await import('./workspace-browser-tab-open')
+const { openWorkspaceBrowserTab } = await import('./workspace-browser-tab-open')
+const { openWorkspaceBrowserTabForLink } = await import('./workspace-browser-tab-open-for-link')
 const { openFailureDetail } = await import('./workspace-browser-tab-presentation')
 
 it('a clicked link that fails keeps its reason for the toast', async () => {

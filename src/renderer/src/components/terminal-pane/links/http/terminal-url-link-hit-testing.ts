@@ -2,6 +2,7 @@ import type { IBufferLine, IDisposable, Terminal } from '@xterm/xterm'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   isTerminalLinkDirectActivation as isTerminalHttpLinkActivation,
+  isTerminalMiddleClickActivation,
   isTerminalOwnedLinkGesture
 } from '../gestures/terminal-link-activation'
 import {
@@ -23,6 +24,12 @@ import {
   requestTerminalLinkAction,
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
+import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
+import { plainClickDestinationsFor } from '@/lib/links/preferences/http-link-mode'
+import {
+  canRememberLinkChoice,
+  rememberOnAdmission
+} from '@/lib/links/preferences/link-remember-choice'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
@@ -58,11 +65,32 @@ function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   return isTerminalOwnedLinkGesture(event)
 }
 
+// Under Ask, a localhost link that can open in Orca opens there on a plain click instead of asking.
+function localhostLinkActionContext(
+  deps: UrlLinkHitTestDeps
+): TerminalLinkActionContext | null | undefined {
+  const context = deps.linkActionContext
+  return context?.rememberMode === 'ask' &&
+    context.httpPlainClickBehavior === 'actions' &&
+    deps.actionDestinations?.plainClick
+    ? { ...context, httpPlainClickBehavior: 'open', rememberMode: 'open' }
+    : context
+}
+
 export function handleTerminalHttpLink(
   url: string,
   event: MouseEvent | undefined,
-  deps: UrlLinkHitTestDeps
+  input: UrlLinkHitTestDeps
 ): boolean {
+  // Only a middle-click set to open directly keeps the saved browser; every other route (and every
+  // chooser's Cmd and Shift+Cmd badges) uses the plain-click order, so badges name what the gesture opens.
+  const middleOpensDirectly =
+    isTerminalMiddleClickActivation(event) &&
+    input.linkActionContext?.middleClickBehavior === 'open'
+  const deps =
+    input.actionDestinations?.plainClick && !middleOpensDirectly
+      ? { ...input, actionDestinations: plainClickDestinationsFor(input.actionDestinations) }
+      : input
   if (isTerminalHttpLinkActivation(event)) {
     const forceDestination =
       deps.actionDestinations &&
@@ -75,18 +103,52 @@ export function handleTerminalHttpLink(
     return true
   }
 
-  return requestTerminalLinkAction(event, deps.linkActionContext, {
+  const linkActionContext = localhostLinkActionContext(input)
+  const rememberMode = linkActionContext?.rememberMode
+  // Captured at click: the chooser's actions must not follow later focus or host changes.
+  const actionContext = rememberMode
+    ? captureLinkActionContext(deps.worktreeId, deps.sourceTabId)
+    : undefined
+  const chooserDeps = actionContext ? { ...deps, actionContext } : deps
+  const rememberEligible = Boolean(
+    rememberMode &&
+    actionContext &&
+    deps.actionDestinations &&
+    canRememberLinkChoice({
+      plainClick: !isTerminalMiddleClickActivation(event),
+      mode: rememberMode,
+      destinations: deps.actionDestinations,
+      actionContext
+    })
+  )
+  return requestTerminalLinkAction(event, linkActionContext, {
     destination: deps.actionDestination ?? url,
     kind: 'url',
+    ...(rememberMode && actionContext && deps.actionDestinations
+      ? { linkPreferenceHost: true, rememberEligible }
+      : {}),
     ...buildHttpLinkActions(
       deps.actionDestinations,
-      (destination) =>
-        openRoutedHttpLink(url, { ...deps, modifierHeld: false, forceDestination: destination }),
+      (destination, choice) => {
+        // Only an eligible chooser saves, whatever the caller passes.
+        const onAdmission =
+          rememberEligible && destination ? rememberOnAdmission(destination, choice) : undefined
+        openRoutedHttpLink(url, {
+          ...chooserDeps,
+          modifierHeld: false,
+          forceDestination: destination,
+          ...(onAdmission ? { onAdmission } : {})
+        })
+      },
       {
         ...deps,
         url,
         openInSourceGroup: () =>
-          openRoutedHttpLink(url, { ...deps, forceDestination: 'orca', openInSourceGroup: true })
+          openRoutedHttpLink(url, {
+            ...chooserDeps,
+            forceDestination: 'orca',
+            openInSourceGroup: true
+          })
       }
     )
   })

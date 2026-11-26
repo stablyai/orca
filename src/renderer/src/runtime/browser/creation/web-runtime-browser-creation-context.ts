@@ -40,6 +40,8 @@ export type WebRuntimeBrowserCreationFailureInfo = {
 export type CreateWebRuntimeSessionBrowserTabArgs = {
   worktreeId: string
   isCurrentRequest?: () => boolean
+  /** Rechecked after preparation; false refuses before browser.tabCreate is sent. */
+  admitDispatch?: () => boolean
   onMaterialized?: (remotePageId: string) => void
   environmentId?: string | null
   url?: string

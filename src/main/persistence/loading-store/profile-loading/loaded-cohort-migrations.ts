@@ -8,6 +8,7 @@ import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/sett
 import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
+import { NEW_PROFILE_LINK_SEED, isTelemetryOnlyProfile } from './new-profile-link-seed'
 
 type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeedsSave'>
 
@@ -17,6 +18,9 @@ export class LoadedCohortMigrationOperations {
   /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
   migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existingProfile = fileExistedOnLoad && !isTelemetryOnlyProfile(state)
+    state = mapLinkOpenMode(state, existingProfile, () => {
+      this.runtime.loadNeedsSave = true
+    })
     for (const key of [
       'tabSwitchKeybindingSeed',
       'searchKeybindingSeed',
@@ -218,16 +222,33 @@ export class LoadedCohortMigrationOperations {
   }
 }
 
-/** Secondary profiles start with only the install's telemetry consent, before their first load. */
-function isTelemetryOnlyProfile(profile: unknown): boolean {
-  const settings = isRecord(profile) ? profile.settings : undefined
-  return (
-    isRecord(profile) &&
-    Object.keys(profile).length === 1 &&
-    isRecord(settings) &&
-    Object.keys(settings).length === 1 &&
-    isRecord(settings.telemetry)
-  )
+function isLinkClickMode(value: unknown): value is 'ask' | 'open' {
+  return value === 'ask' || value === 'open'
+}
+
+/** A stored mode wins; otherwise new profiles get the seed and existing ones keep today's terminal behavior. */
+function mapLinkOpenMode(
+  state: PersistedState,
+  existingProfile: boolean,
+  markSave: () => void
+): PersistedState {
+  const saved: Record<string, unknown> = isRecord(state.settings) ? state.settings : {}
+  if (isLinkClickMode(saved.httpLinkClickBehavior)) {
+    return state
+  }
+  markSave()
+  if (!existingProfile) {
+    return { ...state, settings: { ...state.settings, ...NEW_PROFILE_LINK_SEED } }
+  }
+  // Mirrors terminalLinkClickBehaviorFor on raw fields: only the Actions popover meant "ask".
+  const asks =
+    saved.terminalLinkClickBehavior !== 'open' &&
+    saved.terminalLinkClickBehavior !== 'none' &&
+    saved.terminalLinkActionPopoverEnabled !== false
+  return {
+    ...state,
+    settings: { ...state.settings, httpLinkClickBehavior: asks ? 'ask' : 'open' }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

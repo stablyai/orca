@@ -50,6 +50,34 @@ function ownsBrowserRoute(
   )
 }
 
+/** Rechecked after remote preparation and before browser.tabCreate: current request, route owner, click host. */
+export function remoteLinkDispatchGuard(
+  request: OpenWorkspaceBrowserTabRequest,
+  destination: BrowserLinkDestination,
+  capturedHost: ExecutionHostId | null | undefined
+): () => boolean {
+  return () => {
+    if (request.linkContext?.isCurrentRequest?.() === false) {
+      request.onLinkOutcome?.({ status: 'superseded' })
+      return false
+    }
+    const current = useAppStore.getState()
+    if (
+      !ownsBrowserRoute(current, request, destination) ||
+      (capturedHost &&
+        !createBrowserLinkHostMatcher(
+          current,
+          request.workspaceId,
+          destination.executionHostId
+        )(capturedHost))
+    ) {
+      request.onLinkOutcome?.({ status: 'refused' })
+      return false
+    }
+    return true
+  }
+}
+
 export function workspaceBrowserLinkDestination(
   request: OpenWorkspaceBrowserTabRequest,
   executionHostId: ExecutionHostId,

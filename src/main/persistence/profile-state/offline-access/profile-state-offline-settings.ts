@@ -3,22 +3,23 @@ import { homedir } from 'node:os'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { profileStateJsonMatchesAcceptance } from '../documents/profile-state-documents'
+import {
+  profileStateJsonMatchesAcceptance,
+  readProfileStateParsedSnapshot
+} from '../documents/profile-state-documents'
 import { isRecord, parseProfileStateRoot } from '../documents/profile-state-document-validation'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from '../database/profile-state-database'
 import { isSqliteAvailable as isProfileStateSqliteAvailable } from '../../../sqlite/sync-database'
-import {
-  readProfileStateDomains,
-  readProfileStateDomainsWithRevisionFromDatabase
-} from '../documents/profile-state-domain-reader'
+import { readProfileStateDomains } from '../documents/profile-state-domain-reader'
 import { writeProfileStateDomain } from '../documents/profile-state-domain-writes'
 import { assertProfileStateCanInitialize } from '../recovery/profile-state-recovery-required'
 import { classifyProfileStateStorage } from '../database/profile-state-storage-classification'
 import { migrateProfileStateToSqlite } from '../startup/profile-state-migration'
 import { ensureProfileStateAuthorityMarker } from '../database/profile-state-authority-marker'
+import { seedNewProfileLinkMode } from '../../loading-store/profile-loading/new-profile-link-seed'
 
 export type ProfileStateOfflineLocation = {
   dataFile: string
@@ -78,11 +79,10 @@ export function updateAgentHookSettingsInProfileState(
   const opened = openProfileStateDatabase(location.databaseFile, location.profileId)
   try {
     ensureProfileStateAuthorityMarker(location.databaseFile)
-    const domains = readProfileStateDomainsWithRevisionFromDatabase(opened.db, ['settings'])
-    if (domains.kind === 'unreadable') {
-      throw domains.error
-    }
-    const persistedSettings = domains.values.get('settings')
+    // One validated snapshot decides both the never-opened classification and the fenced write revision.
+    const snapshot = readProfileStateParsedSnapshot(opened.db)
+    const seeded = seedNewProfileLinkMode(snapshot.revision === 0 ? undefined : snapshot.state)
+    const persistedSettings = seeded ? seeded.settings : snapshot.state.settings
     const {
       uiLanguagePortugueseMigrationApplied: _migrationApplied,
       nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
@@ -99,7 +99,7 @@ export function updateAgentHookSettingsInProfileState(
     writeProfileStateDomain(opened.db, {
       domain: 'settings',
       payload: JSON.stringify(settings),
-      expectedRevision: domains.revision
+      expectedRevision: snapshot.revision
     })
     return {
       settingsPath: location.databaseFile,
@@ -125,11 +125,19 @@ export function updateAgentHookSettingsFromProfileState(
     const migrated = migrateProfileStateToSqlite({
       ...location,
       expectedLegacyJson: rawJson,
-      serializedState: rawJson ?? JSON.stringify(getDefaultPersistedState(homedir()))
+      serializedState: rawJson ?? JSON.stringify(seededDefaultState())
     })
     migrated.authority.close()
   }
   return updateAgentHookSettingsInProfileState(location, enabled)
+}
+
+function seededDefaultState(): Record<string, unknown> {
+  const defaults = getDefaultPersistedState(homedir())
+  return {
+    ...defaults,
+    settings: { ...defaults.settings, ...seedNewProfileLinkMode(undefined)?.settings }
+  }
 }
 
 export function assertOfflineProfileStateMutationRuntime(): void {

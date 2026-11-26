@@ -26,6 +26,66 @@ export function getBrowserLinkRoutingDescription(
   )
 }
 
+/** Web client: these rows hang under its Link routing switch. Desktop: peers of Open links in the Links group. */
+export function linkRoutingSubRowClass(desktopLinkMode: boolean): string | undefined {
+  return desktopLinkMode ? undefined : 'ml-4 border-l border-border pl-4'
+}
+
+/** One copy source for the desktop "Open links" row and its settings-search entry. */
+export function getBrowserOpenLinksCopy(
+  platform: { isMac: boolean },
+  t: Translate = translate
+): { title: string; description: string; keywords: string[] } {
+  return {
+    title: t('components.settings.browser.openLinks.title', 'Open links'),
+    // Stage 1 scope: Markdown and comments keep their own routing, so the copy doesn't promise them.
+    description: t(
+      'components.settings.browser.openLinks.description',
+      'Links in chat, terminals and buttons. Localhost links on this computer open in the Orca browser.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.2d2d995c58',
+        'browser',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.bea27bac4b',
+        'links',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'components.settings.browser.openLinks.search.ask',
+        'ask',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'components.settings.browser.openLinks.search.system',
+        'system browser',
+        undefined,
+        t
+      ),
+      // The nested "Open directly in" row renders inside this entry's search gate.
+      ...translateSearchKeyword(
+        'components.settings.browser.openLinks.openDirectlyIn',
+        'Open directly in',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.90425d313c',
+        'shift',
+        undefined,
+        t
+      ),
+      platform.isMac ? 'cmd' : 'ctrl'
+    ]
+  }
+}
+
 /** Share destination copy with search, which indexes the alternate title because its routing mode is fixed to false. */
 export function getLinkRoutingModifierTitle(
   openLinksInApp: boolean,

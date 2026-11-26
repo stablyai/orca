@@ -1,0 +1,156 @@
+import { showBrowserOpenFailure } from '../workspace/workspace-browser-open-failure-toast'
+import type { OpenHttpLinkOptions } from './http-link-destinations'
+import type { HttpLinkSourceOwner } from './http-link-routing'
+import { openOwnedSystemHttpLink } from './http-link-localhost-route'
+import type { ForwardedOpenGate } from '@/lib/workspace-ports/server-port-forward-open'
+import type { BrowserOpenOutcome } from './browser-link-destination'
+
+export type HttpLinkAdmission = 'admitted' | 'refused' | 'failed' | 'superseded'
+
+/** Settles once; a throwing or rejecting consumer must not change how the open is projected. */
+export function onceAdmission(
+  consumer: ((outcome: HttpLinkAdmission) => void | Promise<void>) | undefined
+): (outcome: HttpLinkAdmission) => void {
+  let settled = false
+  return (outcome) => {
+    if (settled || !consumer) {
+      settled = true
+      return
+    }
+    settled = true
+    try {
+      const pending = consumer(outcome)
+      if (pending && typeof pending.then === 'function') {
+        pending.catch((error: unknown) =>
+          console.error('[links] admission consumer failed:', error)
+        )
+      }
+    } catch (error) {
+      console.error('[links] admission consumer failed:', error)
+    }
+  }
+}
+
+export function admissionForBrowserOutcome(outcome: BrowserOpenOutcome): HttpLinkAdmission {
+  if (outcome.status === 'opened') {
+    return 'admitted'
+  }
+  if (outcome.status === 'superseded' || outcome.status === 'failed') {
+    return outcome.status
+  }
+  return 'refused'
+}
+
+/** Settles a link from a browser opener's detailed outcome. */
+export function settleFromBrowserOutcome(
+  settle: (outcome: HttpLinkAdmission) => void
+): (outcome: BrowserOpenOutcome) => void {
+  return (outcome) => settle(admissionForBrowserOutcome(outcome))
+}
+
+export function reportHttpLinkBrowserOpenFailure(error: unknown): void {
+  showBrowserOpenFailure(error)
+}
+
+// Main's shell:openUrl silently ignores anything but http(s); check first so a resolve means it opened.
+function isOpenableSystemUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'http:' || protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export async function openSystemHttpLink(url: string): Promise<HttpLinkAdmission> {
+  if (!isOpenableSystemUrl(url)) {
+    return 'refused'
+  }
+  try {
+    await window.api.shell.openUrl(url)
+    return 'admitted'
+  } catch {
+    reportHttpLinkBrowserOpenFailure(null)
+    return 'failed'
+  }
+}
+
+/** The one renderer route to the system browser for an address already resolved for it. */
+export async function openSystemHttpLinkResolved(url: string): Promise<void> {
+  await openSystemHttpLink(url)
+}
+
+/** openSystemHttpLink for a caller that reports success: false when the launch failed (already
+ *  reported) or the address is not a web link. */
+export async function openSystemHttpLinkReportingOutcome(url: string): Promise<boolean> {
+  return (await openSystemHttpLink(url)) === 'admitted'
+}
+
+/** System-browser open for a link's owner, settled once from the shell's answer for the address
+ *  that reached it (a paired server's forwarded port included); refused when none did. */
+export function openOwnedSystemHttpLinkAdmitted(
+  url: string,
+  owner: HttpLinkSourceOwner | undefined,
+  opts: Pick<OpenHttpLinkOptions, 'worktreeId' | 'linkContext'>,
+  settle: (outcome: HttpLinkAdmission) => void
+): void {
+  const isCurrentRequest = opts.linkContext?.isCurrentRequest
+  // A forward can take a while; a newer link open started meanwhile supersedes this one.
+  const superseded = (): boolean => {
+    if (isCurrentRequest?.() === false) {
+      settle('superseded')
+      return true
+    }
+    return false
+  }
+  const openPlain = (resolved: string): Promise<boolean> =>
+    superseded()
+      ? Promise.resolve(false)
+      : openSystemHttpLink(resolved).then((outcome) => {
+          settle(outcome)
+          return outcome === 'admitted'
+        })
+  // A forwarded address opens through its forward; a new forward's toast claims only an open that happened.
+  const openForwarded: ForwardedOpenGate = (open) =>
+    superseded()
+      ? Promise.resolve(null)
+      : open().then((opened) => {
+          settle(opened ? 'admitted' : 'failed')
+          return opened
+        })
+  void openOwnedSystemHttpLink(url, owner, opts.worktreeId, openPlain, openForwarded).then(
+    (reached) => {
+      if (!reached) {
+        settle('refused')
+      }
+    }
+  )
+}
+
+export function settleHttpLinkBrowserOpen(
+  opening: Promise<string | null | void>,
+  reveal: { dispose: () => void },
+  background: boolean,
+  onComplete?: OpenHttpLinkOptions['onBrowserOpenComplete'],
+  settle?: (outcome: HttpLinkAdmission) => void
+): void {
+  // A rejected open settles as failed; a no-op when the detailed outcome already settled it.
+  const report = (error: unknown): void => {
+    settle?.('failed')
+    reportHttpLinkBrowserOpenFailure(error)
+  }
+  // Openers without a detailed outcome settle from their page id; after a detailed outcome this is a no-op.
+  const settleFromPageId = (pageId: string | null | void): void =>
+    settle?.(pageId ? 'admitted' : 'refused')
+  if (onComplete) {
+    void opening
+      .then((pageId) => {
+        settleFromPageId(pageId)
+        onComplete({ pageId: pageId ?? null, background })
+      })
+      .catch(report)
+      .finally(reveal.dispose)
+    return
+  }
+  void opening.then(settleFromPageId).catch(report).finally(reveal.dispose)
+}

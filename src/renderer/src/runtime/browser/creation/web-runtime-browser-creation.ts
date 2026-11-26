@@ -92,6 +92,10 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
     if (placementPreference === 'client' && placement.kind !== 'client') {
       throw new Error('browser_client_host_unavailable')
     }
+    // Preparation can outlive the click's owner or request; recheck before the create is sent.
+    if (args.admitDispatch && !args.admitDispatch()) {
+      throw new Error('browser link dispatch no longer admitted')
+    }
     restageWebRuntimeBrowserCreation(context, placement.kind === 'client')
     context.createAttempted = true
     const navigateAfterCreate =
