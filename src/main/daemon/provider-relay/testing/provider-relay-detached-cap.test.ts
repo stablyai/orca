@@ -58,21 +58,22 @@ describe('a detached agent with output no app took', () => {
   })
 
   it('caps an agent whose turn is only waiting on an approval, never one running a command or an unblocked turn', async () => {
-    const approvals = { count: 1 }
+    const approvals = { count: 1, items: new Set(['cmd-asked']) }
     const counted = vi.fn()
-    const detachWith = (open: Record<string, string[][]>) => {
+    const detachWith = (open: Record<string, string[][]>, idleStopMs: number | null = IDLE_MS) => {
       const idle = new ProviderRelayIdleStop({
         attached: () => false,
         live: () => true,
         pendingCount: () => approvals.count,
         askingCount: () => approvals.count,
+        askedItems: () => approvals.items,
         unacked: () => [],
         stop: vi.fn(),
         idleUnread: counted
       })
       idle.arm(
         readProviderRelayDetachPolicy({
-          idleStopMs: IDLE_MS,
+          idleStopMs,
           markers: CODEX_RELAY_WORK_MARKERS.markers,
           open
         })
@@ -84,10 +85,21 @@ describe('a detached agent with output no app took', () => {
     expect(blocked.onlyWaiting).toBe(true)
     await vi.advanceTimersByTimeAsync(IDLE_MS)
     expect(counted).toHaveBeenCalledTimes(1)
+    // Codex opens a command item before asking to run it: that one is waiting too.
+    expect(
+      detachWith({ turn: [['thread-1']], command: [['thread-1', 'cmd-asked']] }).onlyWaiting
+    ).toBe(true)
     // A command still running is busy, approval or not.
     expect(detachWith({ turn: [['thread-1']], command: [['thread-1', 'cmd-1']] }).onlyWaiting).toBe(
       false
     )
+    // Left only waiting after the detach, with the idle stop off: the agent's line counts it.
+    approvals.count = 0
+    const later = detachWith({ turn: [['thread-1']] }, null)
+    counted.mockClear()
+    approvals.count = 1
+    later.observeAgentLine('{"method":"item/commandExecution/requestApproval","id":7}')
+    expect(counted).toHaveBeenCalledTimes(1)
     // A turn with no approval waiting is running.
     approvals.count = 0
     expect(blocked.onlyWaiting).toBe(false)

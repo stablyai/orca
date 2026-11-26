@@ -21,6 +21,8 @@ type IdleStopHost = {
   pendingCount: () => number
   /** Of those, the agent's own requests waiting on the user (approvals). */
   askingCount?: () => number
+  /** The items those requests ask about: a command awaiting approval hasn't started running. */
+  askedItems?: () => ReadonlySet<string>
   workRequests?: (methods: readonly string[]) => void
   /**
    * Lines after the last ack: the app may not have counted them in its open set yet. Null when some
@@ -65,6 +67,7 @@ export class ProviderRelayIdleStop {
         readonly size: number
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
+        askedItemIds: () => ReadonlySet<string>
       }
       stoppedBy: ProviderRelayStop
       close: () => Promise<unknown>
@@ -82,6 +85,7 @@ export class ProviderRelayIdleStop {
       // Held approvals, and the app's own work requests (an ACP turn) the agent hasn't answered.
       pendingCount: () => relay.pending.size + relay.pending.working.size,
       askingCount: () => relay.pending.size,
+      askedItems: () => relay.pending.askedItemIds(),
       workRequests: (methods) => {
         relay.pending.workMethods = new Set(methods)
       },
@@ -130,7 +134,7 @@ export class ProviderRelayIdleStop {
       this.work !== null &&
       !this.work.unaccounted &&
       this.host.pendingCount() === asking &&
-      !this.work.openOutside(PROVIDER_RELAY_TURN_GROUP)
+      !this.work.openOutside(PROVIDER_RELAY_TURN_GROUP, this.host.askedItems?.() ?? new Set())
     )
   }
 
@@ -203,8 +207,10 @@ export class ProviderRelayIdleStop {
     this.lastActivityAt = Date.now()
     if (this.armed && this.work && this.reader) {
       this.reader.read(line).forEach((change) => this.work?.apply(change))
-      // Lost count of while detached: the cap counts it even with the idle stop off.
-      if (this.work.unaccounted && this.unaccounted) {
+      // Lost count of, or left only waiting on an approval, while detached: the cap counts it
+      // (from its detach) even with the idle stop off.
+      const waiting = (this.host.askingCount?.() ?? 0) > 0 && this.onlyWaiting
+      if ((this.work.unaccounted && this.unaccounted) || waiting) {
         this.host.idleUnread?.()
       }
     } else if (this.handed && this.reader) {

@@ -95,6 +95,22 @@ export class ProviderRelayPendingRequests {
     return this.pending.size
   }
 
+  /** The items the waiting requests ask about (a command approval names its command's item). */
+  askedItemIds(): Set<string> {
+    const ids = new Set<string>()
+    for (const { line } of this.pending.values()) {
+      try {
+        const itemId: unknown = JSON.parse(line)?.params?.itemId
+        if (typeof itemId === 'string') {
+          ids.add(itemId)
+        }
+      } catch {
+        // A request that isn't JSON names no item.
+      }
+    }
+    return ids
+  }
+
   /** Insertion order is seq order: a re-sent id is removed before it is added again. */
   records(): ProviderRelayRecord[] {
     return [...this.pending.values()]

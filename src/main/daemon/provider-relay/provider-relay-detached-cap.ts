@@ -57,32 +57,30 @@ export class ProviderRelayDetachedCap {
       this.detachedAt.set(relay, this.now())
       const policy = relay.idleStopPolicy
       if (!policy.tracking || policy.unaccounted || policy.onlyWaiting) {
-        this.counted.add(relay)
+        this.count(relay)
       }
-      this.update()
     }
   }
 
   /** Just spawned: its first attach forgets it, or it ends as unclaimed. */
   spawned(relay: CappableRelay): void {
     this.detachedAt.set(relay, this.now() - RELAY_DETACHED_CAP_MS + RELAY_UNCLAIMED_MS)
-    this.counted.add(relay)
-    this.update()
+    this.count(relay)
   }
 
   /** The idle stop found it idle but for unread output. */
   idleUnread(relay: CappableRelay): void {
     if (this.detachedAt.has(relay) && !this.counted.has(relay)) {
-      this.counted.add(relay)
-      this.update()
+      this.count(relay)
     }
   }
 
-  /** Attached again, or ended: no deadline. */
+  /** Attached again, or ended: no deadline. The timer stays until it fires (it rescans then). */
   forget(relay: CappableRelay): void {
     this.counted.delete(relay)
-    if (this.detachedAt.delete(relay)) {
-      this.update()
+    this.detachedAt.delete(relay)
+    if (this.counted.size === 0) {
+      this.clearTimer()
     }
   }
 
@@ -92,6 +90,16 @@ export class ProviderRelayDetachedCap {
     this.clearTimer()
   }
 
+  /** O(1): a new deadline only ever moves the one timer earlier. */
+  private count(relay: CappableRelay): void {
+    this.counted.add(relay)
+    const due = this.detachedAt.get(relay)! + RELAY_DETACHED_CAP_MS
+    if (this.dueAt === null || due < this.dueAt) {
+      this.arm(due)
+    }
+  }
+
+  /** The full rescan, only when the timer fires. */
   private update(): void {
     let earliest: number | null = null
     for (const relay of this.counted) {
@@ -103,10 +111,17 @@ export class ProviderRelayDetachedCap {
     }
     this.clearTimer()
     if (earliest !== null) {
-      this.dueAt = earliest
-      this.timer = setTimeout(() => this.fire(), Math.max(0, earliest - this.now()))
-      this.timer.unref?.()
+      this.arm(earliest)
     }
+  }
+
+  private arm(due: number): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+    }
+    this.dueAt = due
+    this.timer = setTimeout(() => this.fire(), Math.max(0, due - this.now()))
+    this.timer.unref?.()
   }
 
   private forgetQuietly(relay: CappableRelay): void {
