@@ -14,6 +14,8 @@ import {
 } from './worktree-card-send-target-inputs'
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
+import { useTabOrderedAgentRoots } from './use-tab-ordered-agent-roots'
+import { AgentRowDropIndicator, useAgentRowTabDrag } from './use-agent-row-tab-drag'
 import { KeyedSummary } from './worktree-card-agent-keyed-summary'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
@@ -46,10 +48,11 @@ export default React.memo(function WorktreeCardAgents({
   executionHostId,
   className
 }: Props) {
-  const allRoots = useAgentPresentation(
+  const projectedRoots = useAgentPresentation(
     `roots\0${worktreeId}`,
     useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
+  const allRoots = useTabOrderedAgentRoots(worktreeId, projectedRoots)
   const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
   return roots.length ? (
     <WorktreeCardAgentsBody
@@ -153,6 +156,7 @@ function WorktreeCardAgentsBody({
     summary = compact && roots.length > 1 && !targets
   const rootRef = useRef<HTMLDivElement | null>(null),
     previousExpanded = useRef(expansion.compactRootListExpanded)
+  const drag = useAgentRowTabDrag(worktreeId, rootRef)
   useLayoutEffect(() => {
     const wasExpanded = previousExpanded.current
     previousExpanded.current = expansion.compactRootListExpanded
@@ -166,11 +170,12 @@ function WorktreeCardAgentsBody({
   return (
     <div
       ref={rootRef}
-      className={cn(compact ? 'flex flex-col mt-1 gap-0.5' : 'flex flex-col mt-1', className)}
+      className={cn('relative flex flex-col mt-1', compact && 'gap-0.5', className)}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
       onMouseDown={stopBubble}
       onPointerDown={stopBubble}
+      {...drag.handlers}
       role="tree"
       aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
       data-compact-agent-list={compact || undefined}
@@ -201,6 +206,7 @@ function WorktreeCardAgentsBody({
       ) : (
         <AgentBranches keysToRender={roots} context={context} timerActive root />
       )}
+      <AgentRowDropIndicator y={drag.indicatorY} />
     </div>
   )
 }
@@ -309,7 +315,10 @@ const AgentBranch = React.memo(function AgentBranch({
     />
   )
   return (
-    <div className={compact ? cn('min-w-0', root && 'ms-2') : undefined}>
+    <div
+      className={compact ? cn('min-w-0', root && 'ms-2') : undefined}
+      data-agent-root-key={root ? paneKey : undefined}
+    >
       {compact ? (
         <CompactAgentRow
           {...common}
