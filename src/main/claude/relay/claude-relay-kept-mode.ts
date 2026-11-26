@@ -30,7 +30,7 @@ export function claudeRelayKeepFor(args: readonly string[]): ProviderRelayKeepSp
 
 export type ClaudeKeptMode = {
   /** Claude's last reported mode as the daemon kept it, when it kept one. */
-  confirmed: string | null | undefined
+  confirmedMode: string | null | undefined
   /** Launched on the user's own settings and still in the mode its init reported from them. */
   ownSettings: boolean
 }
@@ -61,7 +61,10 @@ export function feedClaudeKeptModeLines(
     confirmed = mode ?? confirmed
   }
   const ownLaunch = child.attachResult?.launchNote === OWN_SETTINGS_NOTE
-  return { confirmed, ownSettings: ownLaunch && launched != null && confirmed === launched }
+  return {
+    confirmedMode: confirmed,
+    ownSettings: ownLaunch && launched != null && confirmed === launched
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

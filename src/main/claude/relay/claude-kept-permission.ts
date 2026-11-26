@@ -188,6 +188,9 @@ export function requiresAcquisition(
     if (!session) {
       return undefined
     }
+    if (keptClaudeAgentRelay(session.connection)?.freshOwed) {
+      return true
+    }
     // Claude's own settings have no mode to send: only an agent launched on them and still in the
     // mode they gave it has them; any other (a live pick, an earlier app's launch) is replaced.
     if (mode === 'own') {
