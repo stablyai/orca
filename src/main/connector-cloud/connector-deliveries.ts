@@ -97,6 +97,10 @@ export type DispatchMachine = Pick<
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
+export type ThreadDelivery = Exclude<
+  ConnectorDelivery,
+  { kind: 'trigger' | 'webhook_notice' | 'pr_event' }
+>
 const requestText = (delivery: RequestDelivery) =>
   delivery.kind === 'start' ? delivery.prompt : delivery.text
 
@@ -190,8 +194,7 @@ export function dispatchDelivery(
     })
     return { deliveryId, received: false, done }
   }
-  // A request this machine already took replays its receipt, never decided again: one the thread's
-  // mute held replays as it was, with no turn and so no automations run in one.
+  // A request already taken replays its mute receipt with no turn or automations.
   const heldByMute =
     delivery.kind === 'start' || delivery.kind === 'send'
       ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [requestText(delivery)])
@@ -204,8 +207,7 @@ export function dispatchDelivery(
     (delivery.kind === 'start' || delivery.kind === 'send') &&
     !seam.receipts.known(delivery.conversation, deliveryId)
   ) {
-    // Before the seam: a muted thread's reply never reaches the agent. Done alone, so its batch's
-    // later sends go on their own.
+    // Before the seam: a muted reply never reaches the agent; later sends go on alone.
     const record = (handled: () => Promise<Delivery>) =>
       seam.receipts.run(
         delivery.conversation,
