@@ -70,7 +70,10 @@ export class MobileEndpointNudgeRouter {
       }
       void this.routeNetworkChange(() => {
         args.onExternalSignal()
-        liftGate()
+        // The read can settle after the app backgrounds; background keeps its slow cadence.
+        if (args.isForeground()) {
+          liftGate()
+        }
       })
       // A suppressed callback may be connectivity returning, so it still earns one retry when the window ends.
       this.trailingLift ??= args.setTimer(() => {

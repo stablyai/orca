@@ -99,13 +99,19 @@ export function formatConnectionLogHistory(entries: readonly ConnectionLogEntry[
   return lines.join('\n')
 }
 
+// Past Date's range (about year 275760) toISOString throws, which would fail the whole report.
+function formatExpiry(expiresAt: number): string {
+  const date = new Date(expiresAt)
+  return Number.isNaN(date.getTime()) ? `at ${expiresAt}` : date.toISOString()
+}
+
 // Versions, expiries and pending state only: never the tokens or hashes.
 function formatRelayCredential(bundle: MobileRelayCredentialBundle | null, now: number): string {
   if (!bundle) {
     return 'Relay credential: not found or unreadable'
   }
   const lease = (credential: { version: number; expiresAt: number }) =>
-    `v${credential.version} ${credential.expiresAt > now ? 'expires' : 'expired'} ${new Date(credential.expiresAt).toISOString()}`
+    `v${credential.version} ${credential.expiresAt > now ? 'expires' : 'expired'} ${formatExpiry(credential.expiresAt)}`
   return [
     `Relay credential: current ${lease(bundle.current)}`,
     bundle.grace ? `grace ${lease(bundle.grace)}` : 'no grace',

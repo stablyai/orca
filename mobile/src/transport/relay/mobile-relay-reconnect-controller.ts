@@ -246,7 +246,7 @@ export class RelayReconnectController {
     const credentialRejected = isExplicitCredentialRejection(error)
     if (
       this.recoveryGate === 'fresh-credential' ||
-      (this.recoveryGate === 'external-signal' && !credentialRejected)
+      (this.recoveryGate === 'external-signal' && !credentialRejected && !hostOffline)
     ) {
       // Keep slow gated reprobes running only while active; foreground restores cadence.
       this.holdGate(scheduleRetry)
