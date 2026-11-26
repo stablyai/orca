@@ -266,12 +266,17 @@ function WorktreeListRowComponent({
               )}
               {showRepoChip && (
                 <View
-                  style={styles.repoChip}
+                  style={[styles.repoChip, cardDetails.projectName && styles.repoChipNamed]}
                   accessibilityLabel={t('components.worktreeListRow.project', 'Project {{repo}}', {
                     repo: item.repo
                   })}
                 >
                   <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
+                  {cardDetails.projectName && (
+                    <Text style={styles.repoChipName} numberOfLines={1}>
+                      {item.repo}
+                    </Text>
+                  )}
                 </View>
               )}
               {lineAgent ? (
@@ -335,14 +340,21 @@ function WorktreeListRowComponent({
                   />
                 ) : null}
                 {/* Show repo identity only outside grouping/title-chip cases; Folder fallback matches desktop. */}
-                {showRepoInMetaRow && (
+                {showRepoInMetaRow && cardDetails.projectName ? (
+                  <View style={[styles.repoChip, styles.repoChipNamed]}>
+                    <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
+                    <Text style={styles.repoChipName} numberOfLines={1}>
+                      {item.repo}
+                    </Text>
+                  </View>
+                ) : showRepoInMetaRow ? (
                   <>
                     <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
                     <Text style={styles.repoName} numberOfLines={1}>
                       {item.repo}
                     </Text>
                   </>
-                )}
+                ) : null}
                 {cardDetails.identity && (
                   <Text style={styles.branchName} numberOfLines={1}>
                     {metaText}
