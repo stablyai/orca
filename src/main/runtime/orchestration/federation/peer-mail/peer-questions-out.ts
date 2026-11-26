@@ -100,6 +100,7 @@ export function tellUnpairedPeerQuestions(
   let anyTold = false
   for (const row of waiting) {
     const id = String(row.message_id)
+    const threadKey = typeof row.thread_id === 'string' ? row.thread_id : id
     const conversation = db.getPeerMailConversation(String(row.conversation_id))
     const handle = conversation ? peerMailLocalRecipient(runtime, conversation) : String(row.asker)
     const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
@@ -116,8 +117,10 @@ export function tellUnpairedPeerQuestions(
         from: serverName,
         to: recipient.ok ? recipient.to : handle,
         subject: 'Re: Question',
-        body: `${reason} Your question ${id} there will not be answered. Decide without it, or ask again.`,
-        threadId: typeof row.thread_id === 'string' ? row.thread_id : id,
+        body: maybeAnswered(db, String(row.conversation_id), threadKey)
+          ? `${reason} Your question ${id} there may already be answered: a reply in this thread didn't say which question it answers. Check the replies in this thread, or ask again.`
+          : `${reason} Your question ${id} there will not be answered. Decide without it, or ask again.`,
+        threadId: threadKey,
         runId: recipient.ok ? recipient.runId : undefined
       })
     })
@@ -130,4 +133,17 @@ export function tellUnpairedPeerQuestions(
     // The asking chats' cards settle too, on a host with nothing else to announce it.
     runtime.notifyPeerMailReturned()
   }
+}
+
+/** An older Orca's reply, which names no question, landed in this thread: it settled the oldest open
+ *  question there, so it may have answered this one instead. */
+function maybeAnswered(db: OrchestrationDb, conversationId: string, threadKey: string): boolean {
+  return (
+    db.db
+      .prepare(
+        `SELECT 1 FROM messages m JOIN peer_mail_messages p ON p.message_id = m.id
+         WHERE m.thread_id = ? AND m.reply_to IS NULL AND p.conversation_id = ? LIMIT 1`
+      )
+      .get(threadKey, conversationId) !== undefined
+  )
 }

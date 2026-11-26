@@ -129,6 +129,36 @@ describe('questions asked of an agent on a paired computer', () => {
     expect(open()).toEqual(['msg_q3'])
   })
 
+  it("never says a question won't be answered after an older Orca's reply in its thread", () => {
+    asked('msg_q1', 'fp-1', 'thread_1')
+    asked('msg_q2', 'fp-1', 'thread_1')
+    asked('msg_other', 'fp-1', 'thread_2')
+    const conversation = db.getPeerMailConversation(conversationId())!
+    storePeerReply(runtime, db, conversation, 'msg_r1', {
+      senderLabel: 'term_b on Build Box',
+      fromAddress: 'term_b',
+      subject: 'Re: Question',
+      body: 'Both: yes.',
+      threadId: 'thread_1'
+    })
+    unpair()
+
+    expect(
+      told()
+        .filter(([, body]) => body.startsWith(REMOVED))
+        .sort()
+    ).toEqual([
+      [
+        'thread_1',
+        `${REMOVED} Your question msg_q2 there may already be answered: a reply in this thread didn't say which question it answers. Check the replies in this thread, or ask again.`
+      ],
+      [
+        'thread_2',
+        `${REMOVED} Your question msg_other there will not be answered. Decide without it, or ask again.`
+      ]
+    ])
+  })
+
   it('on a re-pair, tells only the questions sent under the older pairing', () => {
     asked('msg_before', 'fp-1')
     asked('msg_after', 'fp-2')
