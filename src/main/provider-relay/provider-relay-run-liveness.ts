@@ -40,27 +40,42 @@ const CONNECT_WAIT_MS = 1_000
  * Whether the chat's last run may still be running, decided only by where it ran: a run in this
  * app ended with its app; a relayed run is decided by its own daemon start, or, when that start
  * can't be reached, by its daemon and agent processes both proven gone. `fresh` asks the daemon
- * again (sends, failed attaches, retries after `unknown`).
+ * again (sends, failed attaches, retries after `unknown`). `observe` only reads the verdict: the
+ * chat's recovery state (its reattach row, its unknown mark) is left to the chat's own asks.
  */
 export async function providerRelayRunLiveness(
   record: ProviderRelayRunRecord,
-  options: { waitMs?: number; fresh?: boolean } = {}
+  options: { waitMs?: number; fresh?: boolean; observe?: boolean } = {}
 ): Promise<ProviderRelayRunLiveness> {
-  const verdict = await decide(record, options.waitMs ?? DEFAULT_WAIT_MS, options.fresh === true)
-  noteProviderRelayRunVerdict(record.sessionId, verdict)
+  const apply = options.observe !== true
+  const verdict = await decide(
+    record,
+    options.waitMs ?? DEFAULT_WAIT_MS,
+    options.fresh === true,
+    apply
+  )
+  if (apply) {
+    noteProviderRelayRunVerdict(record.sessionId, verdict)
+  }
   return verdict
 }
 
 async function decide(
   record: ProviderRelayRunRecord,
   waitMs: number,
-  fresh: boolean
+  fresh: boolean,
+  apply: boolean
 ): Promise<ProviderRelayRunLiveness> {
+  const forget = (): void => {
+    if (apply) {
+      forgetListedProviderRelayChat(record.sessionId)
+    }
+  }
   const route = providerRelayRoute()
   const local = record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
   const placement = currentPlacement(record)
   if (!route || !providerRelayMayKeep(record.provider, local) || placement?.kind !== 'relayed') {
-    forgetListedProviderRelayChat(record.sessionId)
+    forget()
     return 'gone'
   }
   const client = await instanceClient(route.all, placement.daemon.instance, waitMs)
@@ -74,7 +89,7 @@ async function decide(
   if (client && listing) {
     const info = listing.get(placement.relayId)
     if (info && keptProviderRelayOutstanding(info)) {
-      if (!info.attached) {
+      if (!info.attached && apply) {
         await placeKeptProviderRelay(record.sessionId, {
           channel: providerRelayChannel(client),
           info
@@ -82,13 +97,13 @@ async function decide(
       }
       return 'kept'
     }
-    forgetListedProviderRelayChat(record.sessionId)
+    forget()
     return 'gone'
   }
   // Its daemon start can't answer: only both processes proven gone end the run. A daemon can lose
   // its endpoint and keep its agents, and a supervised agent may outlive its daemon for a grace.
   if (await processesProvenGone(placement)) {
-    forgetListedProviderRelayChat(record.sessionId)
+    forget()
     return 'gone'
   }
   return 'unknown'
