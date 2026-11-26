@@ -6,7 +6,7 @@ import {
   confineBotShareFolderRead,
   folderIdentity
 } from '../../../../bots/team-share/bot-share-folder'
-import { botShareScopeOf } from '../../../../bots/team-share/bot-share-chats'
+import { folderConfinedTeammateOf } from '../../../../bots/team-share/teammate-workspace-view'
 import type { RpcContext } from '../../core'
 
 export const BOT_FOLDER_READ = { permission: 'workspace', share: SHARE_BY_BOT_FOLDER } as const
@@ -19,7 +19,7 @@ export function confinedFolderRead<P extends FolderReadParams, R>(
 ): (params: P, context: RpcContext) => Promise<R> {
   return async (params, context) => {
     const result = await read(params, context)
-    const scope = botShareScopeOf(context)
+    const scope = folderConfinedTeammateOf(context)
     if (scope) {
       const again = await confineBotShareFolderRead(context.runtime, scope, params)
       if (again?.relativePath !== (params.relativePath ?? '')) {
@@ -37,7 +37,7 @@ export async function confinedFolderWatch(
   context: RpcContext,
   emit: (event: unknown) => void
 ): Promise<{ emit: (event: unknown) => void; signal: AbortSignal | undefined }> {
-  const scope = botShareScopeOf(context)
+  const scope = folderConfinedTeammateOf(context)
   if (!scope) {
     return { emit, signal: context.signal }
   }

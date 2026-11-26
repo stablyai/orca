@@ -23,7 +23,7 @@ export type BotShareCallerScope = {
   name: string
   /** Their Orca works in the agent's workspaces (`bots.share-workspaces.v1`): it gets a pairing's
    *  workspace tiers, with every list scoped to the agent (`teammateWorkspaceView`). */
-  workspaces?: true
+  workspaceTier?: true
 }
 
 export const OWNER_RPC_CALLER_SCOPE: RpcCallerScope = { kind: 'owner' }
@@ -76,7 +76,7 @@ export function denyRpcMethodForCaller(
   if (scope.kind === 'bot-share') {
     const allowed =
       (share !== undefined && share !== 'not-shared') ||
-      (scope.workspaces === true &&
+      (scope.workspaceTier === true &&
         permission !== undefined &&
         BOT_SHARE_WORKSPACE_TIERS.has(permission) &&
         !OWNER_ONLY_WORKSPACE_METHODS.has(methodName))

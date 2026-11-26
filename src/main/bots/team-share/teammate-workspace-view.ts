@@ -27,12 +27,21 @@ const NO_WORKSPACES: AgentWorkspaceSet = {
   groupIds: new Set()
 }
 
+/** A chats-only teammate's file reads stay in the agent's home folder; the workspace tier reads every
+ *  workspace as the owner does, so it is never held to that folder. */
+export function folderConfinedTeammateOf(
+  context: Pick<RpcContext, 'callerScope'>
+): BotShareCallerScope | null {
+  const scope = context.callerScope
+  return scope?.kind === 'bot-share' && scope.workspaceTier !== true ? scope : null
+}
+
 /** The workspace teammate's scope, or null for anyone else. */
 export function workspaceTeammateOf(
   context: Pick<RpcContext, 'callerScope'>
 ): BotShareCallerScope | null {
   const scope = context.callerScope
-  return scope?.kind === 'bot-share' && scope.workspaces === true ? scope : null
+  return scope?.kind === 'bot-share' && scope.workspaceTier === true ? scope : null
 }
 
 export async function readTeammateWorkspaceSet(

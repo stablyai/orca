@@ -28,6 +28,7 @@ import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestrati
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
 import { admitBotShareCall } from './bot-share-call-admission'
 import { withTeammateLists } from '../../../bots/team-share/teammate-workspace-lists'
+import { folderConfinedTeammateOf } from '../../../bots/team-share/teammate-workspace-view'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -98,8 +99,12 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     if (callerScope.kind !== 'bot-share') {
       return admitted
     }
-    // A not-shared method got past the refusal only on a workspace teammate's tiers, as a pairing's would.
-    if (method.share === 'not-shared') {
+    // A not-shared method got past the refusal only on a workspace teammate's tiers, as a pairing's would;
+    // on those tiers a folder read is no longer held to the agent's home folder.
+    if (
+      method.share === 'not-shared' ||
+      (method.share.kind === 'bot-folder' && !folderConfinedTeammateOf({ callerScope }))
+    ) {
       return { ...admitted, method: withTeammateLists(method) }
     }
     return admitBotShareCall(runtime, callerScope, method.share, admitted.params).then(

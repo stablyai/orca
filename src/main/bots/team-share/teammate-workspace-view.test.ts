@@ -225,6 +225,20 @@ describe('a workspace teammate on a shared agent', () => {
     }
   })
 
+  it('reads folders in the agent’s workers’ workspaces, which a chats-only teammate cannot', async () => {
+    const read = vi
+      .spyOn(runtime, 'readFileExplorerDir')
+      .mockResolvedValue(fake([{ name: 'README.md', isDirectory: false }]))
+    const readDir = { worktree: `id:${WORKER}`, relativePath: '' }
+    expect(await call(TEAMMATE, 'files.readDir', readDir)).toMatchObject({
+      result: [{ name: 'README.md' }]
+    })
+    expect(read).toHaveBeenCalledWith(`id:${WORKER}`, '')
+    read.mockClear()
+    expect(await call(CHATS_ONLY, 'files.readDir', readDir)).toMatchObject({ code: 'not_found' })
+    expect(read).not.toHaveBeenCalled()
+  })
+
   it('lists only the agent’s home and its workers’ workspaces; the owner lists everything', async () => {
     expect(await listed(TEAMMATE, 'repo.list', 'repos')).toEqual(['repo-agent'])
     expect(await listed(OWNER, 'repo.list', 'repos')).toEqual(['repo-agent', 'repo-owner'])

@@ -63,7 +63,7 @@ export function botShareCallerScopeOf(
     accountId: device.accountId,
     name: device.name,
     ...(clientCapabilities?.includes(BOTS_SHARE_WORKSPACES_CAPABILITY)
-      ? { workspaces: true as const }
+      ? { workspaceTier: true as const }
       : {})
   }
 }

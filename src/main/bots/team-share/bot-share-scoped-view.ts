@@ -88,7 +88,7 @@ export function botShareScopedView(
     },
     'bots.agentChoices': ({ newChatAgents }) => ({ newChatAgents }),
     'agentSession.subscribeStatus': botShareSessionFilter(runtime, scope),
-    'status.get': scope.workspaces ? workspaceTeammateStatus : botShareStatus,
+    'status.get': scope.workspaceTier ? workspaceTeammateStatus : botShareStatus,
     'bots.linear.state': (state) => botShareLinearState(state, scope.botId),
     'bots.github.state': (state) => botShareGitHubState(state, scope.botId),
     'google.status': sharedGoogleStatus(runtime.bots.list(), scope.botId),
