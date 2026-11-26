@@ -127,10 +127,12 @@ type Asked = {
 }
 
 /** The kept target as the box is now: a draft's start or end moves it, and lines no longer asked go.
- *  `seenEmpty`: what this box last saw, for a box with nothing kept. */
+ *  `seenEmpty`: what this box last saw, for a box with nothing kept; `live`: it saw the draft start,
+ *  so its words are for the line named then (one that arrived while it was closed names none). */
 function settleKept(
   stored: Kept | null,
   seenEmpty: boolean,
+  live: boolean,
   boxEmpty: boolean,
   { open, noQuestion }: Asked
 ): Kept {
@@ -139,7 +141,9 @@ function settleKept(
   const gone = (id: string): boolean => !asked(id) && (open.length > 0 || noQuestion)
   let { bound, wasEmpty, hidden } = stored ?? { bound: null, wasEmpty: seenEmpty, hidden: null }
   if (wasEmpty !== boxEmpty) {
-    if (!boxEmpty && bound !== 'none' && !(bound && asked(bound.id))) {
+    if (!boxEmpty && !live) {
+      bound = 'none'
+    } else if (!boxEmpty && bound !== 'none' && !(bound && asked(bound.id))) {
       bound = open[0] ? { id: open[0].id, explicit: false } : 'none'
     } else if (boxEmpty && (bound === 'none' || (bound && !bound.explicit))) {
       bound = null
@@ -183,9 +187,10 @@ export function createBotItemReplyTargetHook(
     const subscribe = useCallback((listener: () => void) => store.subscribe(key, listener), [key])
     const text = useSyncExternalStore(subscribe, () => store.read(key))
     const seen = useRef<{ key: string; empty: boolean } | null>(null)
-    const seenEmpty = seen.current?.key === key ? seen.current.empty : boxEmpty
+    const live = seen.current?.key === key
+    const seenEmpty = live && seen.current ? seen.current.empty : boxEmpty
     const asked = { open, noQuestion }
-    const current = settleKept(parseKept(text), seenEmpty, boxEmpty, asked)
+    const current = settleKept(parseKept(text), seenEmpty, live, boxEmpty, asked)
     const settled = serializeKept(current)
     useLayoutEffect(() => {
       seen.current = { key, empty: boxEmpty }
@@ -202,7 +207,7 @@ export function createBotItemReplyTargetHook(
           null)
     // Read fresh, so a second change in the same event keeps the first.
     const update = (change: (kept: Kept) => Partial<Kept>): void => {
-      const fresh = settleKept(parseKept(store.read(key)), boxEmpty, boxEmpty, asked)
+      const fresh = settleKept(parseKept(store.read(key)), boxEmpty, true, boxEmpty, asked)
       store.write(key, serializeKept({ ...fresh, ...change(fresh) }))
     }
     const line = lineOf(current)

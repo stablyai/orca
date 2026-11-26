@@ -506,3 +506,31 @@ describe.each([
     expect(kept(uid)).toBe('')
   })
 })
+
+describe.each([
+  ['desktop', desktop],
+  ['phone', phone]
+] as const)('%s draft put back while the item was closed', (app, open) => {
+  const cases: [string, (box: Hook) => void][] = [['closed with ×', (box) => box.hide()]]
+  if (app === 'desktop') {
+    cases.push(['chosen by Type your answer', (box) => box.bind?.()])
+  }
+  it.each(cases)('after an empty box %s, names none on a new question', (name, choose) => {
+    const uid = `${app}-put-back-${name}`
+    const first = open(uid, { item: needsYou(A), events: [A] })
+    choose(first)
+    cleanup()
+    // Away: the agent asks anew and a refused reply's words come back to the box.
+    if (app === 'desktop') {
+      updateNativeChatComposerDraft(
+        botItemCommentDraftScope(bot, uid),
+        { text: 'refused words' },
+        'immediate'
+      )
+    }
+    const again = open(uid, { item: needsYou(B), events: [A, B] }, false)
+    expect(again.line()).toBeNull()
+    again.send()
+    expect(again.posted).toEqual([{ questionId: undefined, plain: true }])
+  })
+})
