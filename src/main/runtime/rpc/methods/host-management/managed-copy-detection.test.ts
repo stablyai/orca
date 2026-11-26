@@ -10,7 +10,7 @@ import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/ma
 import { rememberManagedAgentRelease } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
-  getProfileUserDataPath: () => '/data/orca'
+  getProfileUserDataPath: () => (process.platform === 'win32' ? 'C:\\data\\orca' : '/data/orca')
 }))
 vi.mock('../../../../startup/shell-environment/login-shell-environment', () => ({
   captureLoginShellEnvironment: async () => ({ status: 'fallback', env: {} })
@@ -25,6 +25,16 @@ it("leaves Claude terminals to the shell and uses Orca's Claude for native chat 
   const windows = process.platform === 'win32'
   const shell = windows ? 'powershell' : 'posix'
   const bin = join(release, windows ? 'claude.exe' : 'claude')
+  const plan = (claude: string) =>
+    buildAgentStartupPlan({
+      agent: 'claude',
+      platform: process.platform,
+      shell,
+      prompt: '',
+      allowEmptyPromptLaunch: true,
+      cmdOverrides: {},
+      managedAgentCommands: { claude }
+    })
   const prepare = (launchCommand: string | undefined) =>
     alignManagedAgentLaunchAtSpawn(
       { launchCommand, queuedPath: dir, getSettings: () => ({}) },
@@ -38,17 +48,22 @@ it("leaves Claude terminals to the shell and uses Orca's Claude for native chat 
     vi.stubEnv('FNM_DIR', dir)
 
     expect(await readHostManagedAgentCommands({}, ['claude'], { pathEnv: dir, shell })).toEqual({})
-    const plan = buildAgentStartupPlan({
-      agent: 'claude',
-      platform: process.platform,
-      shell,
-      prompt: '',
-      allowEmptyPromptLaunch: true,
-      cmdOverrides: {},
-      managedAgentCommands: { claude: bin }
-    })
-    expect(plan?.launchCommand).toBe('claude')
+    expect(plan(bin)?.launchCommand).toBe('claude')
+    expect(
+      plan(windows ? 'C:\\user\\.local\\bin\\claude.exe' : '/user/.local/bin/claude')?.launchCommand
+    ).toBe(windows ? "& 'C:\\user\\.local\\bin\\claude.exe'" : "'/user/.local/bin/claude'")
     expect(await prepare('claude --verbose')).toBe('claude --verbose')
+    expect(
+      await prepare(
+        windows
+          ? "& 'C:\\data\\orca\\agent-runtimes\\claude\\1.0\\claude.exe' --verbose"
+          : "'/data/orca/agent-runtimes/claude/1.0/claude' --verbose"
+      )
+    ).toBe(windows ? '& claude --verbose' : 'claude --verbose')
+    const userCommand = windows
+      ? "& 'C:\\user\\agent-runtimes\\claude\\1.0\\claude.exe' --verbose"
+      : "'/user/agent-runtimes/claude/1.0/claude' --verbose"
+    expect(await prepare(userCommand)).toBe(userCommand)
 
     const signIn = agentSessionSignInCommand('claude', { account: 'system', remote: false, shell })
     const preparedSignIn = await prepare(signIn ?? undefined)

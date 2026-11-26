@@ -285,9 +285,6 @@ export async function readHostManagedAgentCommands(
   } = {}
 ): Promise<ManagedAgentCommands> {
   const selections = agents.flatMap((agent) => {
-    if (agent === 'claude' && !options.claudeSystemSignIn) {
-      return []
-    }
     const program = stockLaunchProgram(agent, process.platform)
     const override = settings.agentCmdOverrides?.[agent]?.trim()
     return options.forDelivery ||
@@ -314,9 +311,11 @@ export async function readHostManagedAgentCommands(
         const executable = options.explicitExecutable ?? program
         const own = await lookUpTerminalProgram(executable, ownPath, preferUnquotedPath)
         if (own === executable) {
-          const managed = await managedCopyFor(agent, program, settings)
-          if (managed) {
-            commands[agent] = managed
+          if (agent !== 'claude' || options.claudeSystemSignIn) {
+            const managed = await managedCopyFor(agent, program, settings)
+            if (managed) {
+              commands[agent] = managed
+            }
           }
         } else if (isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
           commands[agent] = own

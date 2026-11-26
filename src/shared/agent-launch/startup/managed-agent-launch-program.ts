@@ -1,10 +1,11 @@
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
 import { clearEnvCommand, quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
-/** Full paths to Orca's copies, reported by a host only for agents it has no CLI of its own for. */
+/** Full paths to CLIs the terminal can't launch by name, including Orca's copies. */
 export type ManagedAgentCommands = Partial<Record<TuiAgent, string>>
 
 /** A program as the head of a launch, through the call operator for PowerShell. */
@@ -95,7 +96,14 @@ export function withManagedAgentProgram(
   }
 ): string {
   const path = args.managedAgentCommands?.[args.agent]
-  if (!path || args.agent === 'claude') {
+  // Older hosts also reported Orca's versioned Claude release here.
+  if (
+    !path ||
+    (args.agent === 'claude' &&
+      /\/agent-runtimes\/claude\/\d+\.\d+(?:\.\d+)?\/claude(?:\.exe)?$/.test(
+        normalizeRuntimePathForComparison(path)
+      ))
+  ) {
     return command
   }
   const launch = readLaunchPosition(command, args.shell)

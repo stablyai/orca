@@ -279,6 +279,9 @@ async function resolveLaunchExecutable(
     sourceShell === 'cmd' && shell === 'powershell'
       ? (renderCmdLaunchForPowerShell(command, launch, executable) ?? command)
       : replaceLaunchExecutable(command, shell, launch, executable)
+  if (managedAgent === 'claude') {
+    return render('claude')
+  }
   if (
     explicitProgram &&
     normalizeRuntimePathForComparison(explicitProgram) ===
@@ -293,11 +296,10 @@ async function resolveLaunchExecutable(
   if (!managedAgent && (program !== name || !settings)) {
     return render(launch.executable)
   }
-  const stock = stockLaunchProgram(agent, process.platform)
   if (agent === 'claude' && !claudeSystemSignIn) {
-    // Leave resolution to the pane's shell, including launches queued with an old managed path.
-    return render(managedAgent ? stock : launch.executable)
+    return render(launch.executable)
   }
+  const stock = stockLaunchProgram(agent, process.platform)
   const usesExplicitProgram =
     !managedAgent && process.platform === 'win32' && name.toLowerCase() !== programKey
   const pathEnv = await effectiveSearchPath(spawn, shell, launch)

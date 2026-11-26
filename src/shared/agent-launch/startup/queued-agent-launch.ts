@@ -34,17 +34,15 @@ export function mayResolveQueuedAgentLaunch(
   shell: AgentStartupShell,
   platform: NodeJS.Platform
 ): boolean {
-  if (
-    isFreshOmpLaunchCommand(command) ||
-    command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS).includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR')
-  ) {
+  if (isFreshOmpLaunchCommand(command)) {
     return true
   }
-  const launch = readLaunchPosition(command, shell)
-  return Boolean(
-    launch &&
-    (stockPrograms.has(stockProgramKey(launch.executable, platform)) ||
-      /[\\/]agent-runtimes[\\/]/i.test(launch.executable))
+  const executable = readLaunchPosition(command, shell)?.executable
+  const program = executable && stockProgramKey(executable, platform)
+  return (
+    program !== 'claude' &&
+    (command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS).includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR') ||
+      Boolean(program && (stockPrograms.has(program) || /[\\/]agent-runtimes[\\/]/i.test(program))))
   )
 }
 

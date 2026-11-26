@@ -99,7 +99,7 @@ function overrideProbeCommands(
   return probes
 }
 
-/** Full paths to Orca's copies, for agents whose own CLI the host doesn't have. */
+/** Full paths to CLIs the terminal can't launch by name, including Orca's copies. */
 export type ManagedAgentCommands = Partial<Record<TuiAgent, string>>
 
 export type InstalledAgentInventory = {
@@ -133,11 +133,9 @@ async function detectAgentsWithManagedCopies(
   })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
+  // This probe searches CLI installer directories, while Orca's agent-runtimes copies are added below.
   const outsidePath: ManagedAgentCommands = {}
   for (const id of runtime === 'wsl' ? [] : detected.filter(isTuiAgent)) {
-    if (id === 'claude') {
-      continue
-    }
     const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[id], process.platform).split(' ')
     const path = foundOutsidePath.get(program)
     if (path) {
