@@ -184,7 +184,7 @@ export class SharedBotHosts {
     }
     this.offerWaits.settled(wait)
     this.publish()
-    this.pace.schedule()
+    this.pace.settled(answer?.ok === true)
   }
 
   async call(

@@ -31,6 +31,7 @@ export type ConnectorWakeChannelOffer = Pick<ConnectorWakeOffer, 'wakeUrl'> &
 /** What a socket did, for an owner that reacts to it rather than polling through `nextPoll`. */
 export type ConnectorWakeEvents = {
   opened?(): void
+  wake?(): void
   ended?(end: ConnectorWakeSocketEnd): void
   sharesChanged?(): void
 }
@@ -216,6 +217,7 @@ export class ConnectorWakeChannel {
           wake: () => {
             this.owed = 'wake'
             this.notify()
+            this.deps.events?.wake?.()
           },
           sharesChanged: () => this.deps.events?.sharesChanged?.(),
           ended: (end) => {

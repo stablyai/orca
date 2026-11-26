@@ -9,7 +9,7 @@ import {
   type CloudSessionCommitGuards
 } from '../cloud-session/profile-cloud-session-commit'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
-import { existingHostInstallationIdSync } from '../../runtime/hosts/platform-probe/host-descriptor'
+import { loadOrCreateHostInstallationId } from '../../runtime/hosts/platform-probe/host-descriptor'
 
 /** Redeems a code whose browser leg ran on another device; the verifier never left this host. */
 export async function signInCurrentOrcaProfileWithCode(
@@ -26,7 +26,8 @@ export async function signInCurrentOrcaProfileWithCode(
     exchange = await exchangeOrcaCloudAuthCode(config, {
       ...code,
       localProfileId: active.profile.id,
-      machineId: existingHostInstallationIdSync(userDataPath)
+      // Created if missing: a first sign-in may come before anything else wrote it.
+      machineId: await loadOrCreateHostInstallationId(userDataPath).catch(() => null)
     })
   } catch (error) {
     return {

@@ -83,7 +83,7 @@ export class ConnectorCloud {
       connectorRead: (path, schema, read) =>
         this.call(path, undefined, schema, { ...read, method: 'GET' }),
       account: () => this.activeAccount(),
-      connectorRuns: () => this.client !== null
+      connectorHolds: () => this.holdsWake()
     })
   }
 
@@ -235,6 +235,12 @@ export class ConnectorCloud {
   /** Reads a shares route as the signed-in account: see `InviteWake.readShares`. */
   readonly readShares: InviteWake['readShares'] = (...args) => this.invites.readShares(...args)
 
+  // The one rule for who holds this install's wake object: a connector that runs or is wanted (even
+  // before `connect`), else the invite socket. Both name `${account}:${machineId}`.
+  private holdsWake(): boolean {
+    return this.client !== null || this.holds > 0 || this.options.machine.wantsConnection()
+  }
+
   private activeAccount(): string | null {
     return this.signingOut || this.options.isFenced() ? null : this.options.account()
   }
@@ -302,6 +308,10 @@ export class ConnectorCloud {
       })
       this.client = client
       client.start()
+    }
+    // Quitting, signed out, or a connector holds the wake object: the invite socket closes.
+    if (!account || this.holdsWake()) {
+      this.invites.stop()
     }
     if (this.client && !wanted) {
       this.settleThenStop(this.client)

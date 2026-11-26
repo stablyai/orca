@@ -50,8 +50,9 @@ export type InviteWakeDeps = {
   connectorRead: ShareRead
   /** The account reads are made as; null signed out or quitting. */
   account: () => string | null
-  /** A connector runs: its own socket names the same wake object, so this one stays shut. */
-  connectorRuns: () => boolean
+  /** A connector runs or is wanted: its own socket names the same wake object, so this one stays
+   *  shut. */
+  connectorHolds: () => boolean
   origin: string
   fetchImpl?: typeof globalThis.fetch
   random?: () => number
@@ -78,6 +79,8 @@ export class InviteWake {
       socketFactory: deps.wakeSocketFactory,
       events: {
         opened: () => this.emit('opened'),
+        // Not sent to a desktop without a connector, but it means the same: check the invites.
+        wake: () => this.sharesChanged(),
         ended: (end) => {
           if (
             end.code === CONNECTOR_WAKE_CLOSE_CODE.COUNTRY_REFUSED ||
@@ -108,11 +111,15 @@ export class InviteWake {
     const { signIn } = this.deps
     const account = this.deps.account()
     const machineId =
-      signIn && account && !this.deps.connectorRuns()
+      signIn && account && !this.deps.connectorHolds()
         ? await signIn.machineId().catch(() => null)
         : null
     // The session's usual refresh runs first if due (sending that id), so its wake token is the newest.
-    const issued = machineId && signIn ? await signIn.freshWakeToken().catch(() => null) : null
+    // A refresh that failed just now proves nothing: a kept token still says this cloud issues them.
+    const issued =
+      machineId && signIn
+        ? await signIn.freshWakeToken().catch(() => signIn.storedWakeToken())
+        : null
     if (!signIn || !machineId || !issued) {
       return await this.deps.connectorRead(path, schema, options)
     }
@@ -124,7 +131,7 @@ export class InviteWake {
       schema,
       fetchImpl: this.deps.fetchImpl ?? globalThis.fetch
     })
-    if (result.ok && this.deps.account() === account && !this.deps.connectorRuns()) {
+    if (result.ok && this.deps.account() === account && !this.deps.connectorHolds()) {
       this.offer(wakeUrl)
     }
     return result
@@ -175,8 +182,8 @@ export class InviteWake {
     const usable = (token: OrcaCloudWakeToken | null): token is OrcaCloudWakeToken =>
       token !== null && token.expiresAt > this.now()
     const { signIn } = this.deps
-    // A running connector holds the same wake object with its own socket.
-    if (this.deps.connectorRuns()) {
+    // A connector holds the same wake object with its own socket; signed out or quitting, none.
+    if (this.deps.connectorHolds() || !this.deps.account()) {
       return 'none'
     }
     let token = signIn?.storedWakeToken() ?? null

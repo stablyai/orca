@@ -60,6 +60,8 @@ let wake: FakeWakeSockets
 // What the auth service and the connector's shares route do and saw.
 let cloud: {
   issuesWakeTokens: boolean
+  // The rollout's switch: off, a sign-in read carries no wake URL.
+  sendsWakeUrl: boolean
   refreshes: Record<string, unknown>[]
   signIns: Record<string, unknown>[]
   mineReads: { token: string | null; machineId: string | null }[]
@@ -104,7 +106,12 @@ const fetchImpl: typeof globalThis.fetch = async (input, init) => {
     const signIn = token?.startsWith('access-') === true
     return Response.json(
       { v: 1, shares: [] },
-      { headers: signIn && cloud.issuesWakeTokens ? { 'x-orca-wake-url': WAKE_URL } : {} }
+      {
+        headers:
+          signIn && cloud.issuesWakeTokens && cloud.sendsWakeUrl
+            ? { 'x-orca-wake-url': WAKE_URL }
+            : {}
+      }
     )
   }
   return fake.fetch(input, init)
@@ -117,16 +124,17 @@ const settle = async (ms = 0): Promise<void> => {
   }
 }
 
-function setUp(options: { connector: boolean }) {
+function setUp(options: { connector: boolean; connectNow?: boolean }) {
   const seam = fakeSeam()
   const machine = fakeMachine(() => seam)
   machine.wanted = options.connector
+  const quit = { fenced: false }
   const connector = new ConnectorCloud({
     userDataPath,
     origin: fake.origin,
     machine,
     account: () => 'ada',
-    isFenced: () => false,
+    isFenced: () => quit.fenced,
     mintFor: (account) => fake.mintFor(account),
     fetchImpl,
     signIn: {
@@ -137,7 +145,9 @@ function setUp(options: { connector: boolean }) {
     },
     wakeSocketFactory: wake.factory
   })
-  connector.connect()
+  if (options.connectNow !== false) {
+    connector.connect()
+  }
   const hosts = new SharedBotHosts({
     userDataPath,
     cloud: () => sharedBotsCloud(connector),
@@ -148,7 +158,7 @@ function setUp(options: { connector: boolean }) {
     invites: connector.invites,
     random: () => 0
   })
-  return { connector, hosts }
+  return { connector, hosts, machine, quit }
 }
 
 const reads = () => cloud.mineReads.length
@@ -170,7 +180,7 @@ beforeEach(() => {
   })
   fake = new FakeConnectorCloud()
   wake = new FakeWakeSockets()
-  cloud = { issuesWakeTokens: true, refreshes: [], signIns: [], mineReads: [] }
+  cloud = { issuesWakeTokens: true, sendsWakeUrl: true, refreshes: [], signIns: [], mineReads: [] }
   // Signed in before this build: a session with no wake token, about to expire.
   const profileId = ensureActiveOrcaProfile(userDataPath).profile.id
   signInCloudSession(profileId, userDataPath, {
@@ -284,7 +294,75 @@ describe('the invite wake on a desktop with no connector', () => {
   })
 })
 
+/** A desktop with no connector whose invite socket is open after its first read. */
+async function upAndRead() {
+  const setup = setUp({ connector: false })
+  setup.hosts.start()
+  await vi.waitFor(() => expect(inviteSockets()).toHaveLength(1))
+  inviteSockets()[0].accept()
+  await settle()
+  expect(setup.connector.invites.up).toBe(true)
+  return setup
+}
+
+describe('the invite socket closing', () => {
+  it('closes when Orca quits, and never redials', async () => {
+    const { connector, hosts, quit } = await upAndRead()
+    quit.fenced = true
+    connector.fence()
+    expect(inviteSockets()[0].closed).toBe(true)
+    expect(connector.invites.up).toBe(false)
+    await settle(2 * MINUTE_MS)
+    expect(inviteSockets()).toHaveLength(1)
+    hosts.stop()
+  })
+
+  it('closes once a read says the rollout no longer sends a wake URL', async () => {
+    const { connector, hosts } = await upAndRead()
+    cloud.sendsWakeUrl = false
+    void hosts.refresh()
+    await vi.waitFor(() => expect(inviteSockets()[0].closed).toBe(true))
+    expect(connector.invites.up).toBe(false)
+    hosts.stop()
+  })
+
+  it('reads on a plain wake frame too', async () => {
+    const { hosts } = await upAndRead()
+    inviteSockets()[0].wake()
+    await vi.waitFor(() => expect(reads()).toBe(2))
+    hosts.stop()
+  })
+
+  it('closes when a connector starts, and opens again once it stops', async () => {
+    fake.signedIn.add('ada')
+    const { connector, hosts, machine } = await upAndRead()
+    machine.wanted = true
+    machine.inputsChanged()
+    await settle()
+    expect(inviteSockets()[0].closed).toBe(true)
+    expect(connector.invites.up).toBe(false)
+    machine.wanted = false
+    machine.inputsChanged()
+    await settle(MINUTE_MS)
+    void hosts.refresh()
+    await vi.waitFor(() => expect(inviteSockets()).toHaveLength(2))
+    hosts.stop()
+  })
+})
+
 describe('a desktop with a connector', () => {
+  it('never dials the invite socket from a read made before the connector connects', async () => {
+    fake.signedIn.add('ada')
+    const { connector, hosts } = setUp({ connector: true, connectNow: false })
+    hosts.start()
+    await vi.waitFor(() => expect(reads()).toBe(1))
+    connector.connect()
+    await settle()
+    expect(cloud.mineReads[0].token).not.toMatch(/^access-/)
+    expect(inviteSockets()).toHaveLength(0)
+    hosts.stop()
+  })
+
   it('keeps its own socket and connector-token reads, and reads on a share change it hears', async () => {
     fake.signedIn.add('ada')
     fake.wakeOffer = {
