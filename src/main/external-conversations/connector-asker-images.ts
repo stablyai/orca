@@ -42,7 +42,7 @@ function askerImageTargets(asker: ConnectorAsker): ImageTarget[] {
   const add = (target: ImageTarget) => {
     if (
       targets.length < MAX_ASKER_IMAGES &&
-      !targets.some(({ ref, fileId }) => ref === target.ref && fileId === target.fileId)
+      !targets.some(({ fileId }) => fileId === target.fileId)
     ) {
       targets.push(target)
     }

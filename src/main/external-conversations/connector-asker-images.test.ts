@@ -108,4 +108,49 @@ describe('connectorAskerImages', () => {
       expect.any(AbortSignal)
     )
   })
+
+  it('does not repeat an earlier file carried by more than one message', async () => {
+    const read = vi.fn(async ({ fileId }: { fileId: string }) => ({
+      ok: true as const,
+      value: {
+        ok: true as const,
+        result: {
+          download: {
+            id: fileId,
+            name: `${fileId}.png`,
+            size: PNG.length,
+            url: 'https://cloud.example',
+            ticket: 'ticket'
+          }
+        }
+      }
+    }))
+    const get = connectorAskerImages({
+      read,
+      store: async (name) => `/attachments/${name}`,
+      fetch: async () => new Response(new Uint8Array(PNG))
+    })
+    await get({
+      botId: 'bot-1',
+      conversation,
+      signal: new AbortController().signal,
+      asker: {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        text: '@bot',
+        context: [],
+        messageRef: 'slack:T1:C1:5.0:5.0',
+        earlierOwn: {
+          messages: Array.from({ length: 4 }, (_, at) => ({
+            text: 'Same screenshot.',
+            at,
+            messageRef: `slack:T1:C1:${at}.0:${at}.0`,
+            files: [{ id: 'FSAME', name: 'image.png', type: 'image/png' }]
+          }))
+        }
+      }
+    })
+    expect(read).toHaveBeenCalledTimes(1)
+  })
 })
