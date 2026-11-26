@@ -7,6 +7,7 @@ import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
+import { CODEX_COMMAND_APPROVAL_METHOD } from '../structured/prompts/codex-prompt-registry'
 
 const ENVELOPE_SCAN_CHARS = 4096
 const ENVELOPE_MAX_FIELDS = 32
@@ -37,6 +38,8 @@ export const CODEX_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   agent: CODEX_RELAY_AGENT,
   ackFloor: createCodexRelayAckFloor,
   continuation: CODEX_RELAY_ITEM_CONTINUATION,
+  // Codex opens a command's item before asking to run it.
+  startApprovals: [CODEX_COMMAND_APPROVAL_METHOD],
   markers: [
     { group: 'turn', name: 'turn/started', effect: 'start', key: [THREAD] },
     { group: 'turn', name: 'turn/completed', effect: 'end', key: [THREAD] },

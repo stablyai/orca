@@ -214,14 +214,14 @@ export class ProviderRelayOpenWork {
     return [...this.groups.values()].some((tasks) => tasks.size > 0)
   }
 
-  /** Open work in any group but `group`, leaving out tasks whose own id is `asked` (awaiting approval). */
-  openOutside(group: string, asked: ReadonlySet<string>): boolean {
+  /** Open work in any group but `group`, leaving out tasks whose own id is still `awaitingStart`. */
+  openOutside(group: string, awaitingStart: (itemId: string) => boolean): boolean {
     for (const [name, tasks] of this.groups) {
       if (name === group) {
         continue
       }
       for (const key of tasks) {
-        if (!asked.has(key.slice(key.lastIndexOf(KEY_SEPARATOR) + 1))) {
+        if (!awaitingStart(key.slice(key.lastIndexOf(KEY_SEPARATOR) + 1))) {
           return true
         }
       }

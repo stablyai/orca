@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedProviderProcess } from '../../../provider-process/managed-provider-process'
 import { ProviderRelay } from '../provider-relay'
+import { ProviderRelayPendingRequests } from '../provider-relay-pending-requests'
 
 function fakeManaged(): {
   managed: ManagedProviderProcess
@@ -333,5 +334,27 @@ describe('provider relay pending requests', () => {
       })
     expect(dataSeqs).toEqual([2])
     await relay.dispose()
+  })
+})
+
+describe('a request asking to start an item', () => {
+  it('marks only a whole-item approval as not started, until it is answered', () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.startMethods = new Set(['item/commandExecution/requestApproval'])
+    const ask = (id: number, params: Record<string, unknown>) =>
+      pending.observeAgentLine({
+        seq: id,
+        line: JSON.stringify({ method: 'item/commandExecution/requestApproval', id, params })
+      })
+    ask(1, { itemId: 'cmd-new' })
+    // Writing to a command that already runs names it too, with its own approval id.
+    ask(2, { itemId: 'cmd-running', approvalId: 'stdin-1' })
+    expect(pending.awaitingStart('cmd-new')).toBe(true)
+    expect(pending.awaitingStart('cmd-running')).toBe(false)
+    pending.observeAgentLine({
+      seq: 3,
+      line: JSON.stringify({ method: 'serverRequest/resolved', params: { requestId: 1 } })
+    })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
   })
 })

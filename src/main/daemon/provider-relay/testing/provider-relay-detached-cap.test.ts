@@ -66,7 +66,7 @@ describe('a detached agent with output no app took', () => {
         live: () => true,
         pendingCount: () => approvals.count,
         askingCount: () => approvals.count,
-        askedItems: () => approvals.items,
+        awaitingStart: (itemId) => approvals.items.has(itemId),
         unacked: () => [],
         stop: vi.fn(),
         idleUnread: counted

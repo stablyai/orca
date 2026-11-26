@@ -95,20 +95,15 @@ export class ProviderRelayPendingRequests {
     return this.pending.size
   }
 
-  /** The items the waiting requests ask about (a command approval names its command's item). */
-  askedItemIds(): Set<string> {
-    const ids = new Set<string>()
-    for (const { line } of this.pending.values()) {
-      try {
-        const itemId: unknown = JSON.parse(line)?.params?.itemId
-        if (typeof itemId === 'string') {
-          ids.add(itemId)
-        }
-      } catch {
-        // A request that isn't JSON names no item.
-      }
-    }
-    return ids
+  /** Of the waiting requests, those asking to start an item: the item each would start, by key. */
+  private readonly starting = new Map<string, string>()
+  private readonly startingCounts = new Map<string, number>()
+  /** Request methods that ask to start an item (from the detach policy). */
+  startMethods: ReadonlySet<string> = new Set()
+
+  /** True while a waiting request asks to start this item: it hasn't started running. */
+  awaitingStart(itemId: string): boolean {
+    return this.startingCounts.has(itemId)
   }
 
   /** Insertion order is seq order: a re-sent id is removed before it is added again. */
@@ -119,13 +114,27 @@ export class ProviderRelayPendingRequests {
   clear(): void {
     this.working.clear()
     this.pending.clear()
+    this.starting.clear()
+    this.startingCounts.clear()
     this.pendingChars = 0
   }
 
-  private hold(key: string, record: ProviderRelayRecord): void {
+  private hold(key: string, record: ProviderRelayRecord, startsItem: string | null = null): void {
     this.release(key)
     this.pending.set(key, record)
     this.pendingChars += record.line.length
+    if (startsItem !== null) {
+      this.starting.set(key, startsItem)
+      this.startingCounts.set(startsItem, (this.startingCounts.get(startsItem) ?? 0) + 1)
+    }
+  }
+
+  /** A whole-item start approval names the item; one with an `approvalId` targets a running one. */
+  private startsItem(method: string, params: unknown): string | null {
+    if (!this.startMethods.has(method) || !isObject(params) || params.approvalId !== undefined) {
+      return null
+    }
+    return typeof params.itemId === 'string' ? params.itemId : null
   }
 
   /** The agent is owed this many answers that it should wait for before saying more. */
@@ -139,6 +148,16 @@ export class ProviderRelayPendingRequests {
       this.pending.delete(key)
       this.pendingChars -= held.line.length
       this.answered.add(held.seq)
+    }
+    const item = this.starting.get(key)
+    if (item !== undefined) {
+      this.starting.delete(key)
+      const count = (this.startingCounts.get(item) ?? 1) - 1
+      if (count > 0) {
+        this.startingCounts.set(item, count)
+      } else {
+        this.startingCounts.delete(item)
+      }
     }
   }
 
@@ -164,7 +183,7 @@ export class ProviderRelayPendingRequests {
     } else if (typeof method === 'string') {
       const key = rpcId(message.id)
       if (key) {
-        this.hold(key, record)
+        this.hold(key, record, this.startsItem(method, message.params))
       }
     } else if (type === 'control_request' || type === 'control_cancel_request') {
       const key = controlId(message.request_id)

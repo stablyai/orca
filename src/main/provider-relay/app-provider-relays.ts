@@ -110,6 +110,7 @@ function policyFor(
     markers: [...markers.markers],
     ...(markers.requests ? { workRequests: [...markers.requests] } : {}),
     ...(markers.quiet ? { quiet: [...markers.quiet] } : {}),
+    ...(markers.startApprovals ? { startApprovals: [...markers.startApprovals] } : {}),
     ...(open ? { open } : {})
   }
 }

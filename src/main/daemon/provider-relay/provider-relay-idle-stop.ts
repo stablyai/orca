@@ -21,8 +21,9 @@ type IdleStopHost = {
   pendingCount: () => number
   /** Of those, the agent's own requests waiting on the user (approvals). */
   askingCount?: () => number
-  /** The items those requests ask about: a command awaiting approval hasn't started running. */
-  askedItems?: () => ReadonlySet<string>
+  /** True while a waiting request asks to start this item: it hasn't started running. */
+  awaitingStart?: (itemId: string) => boolean
+  startApprovals?: (methods: readonly string[]) => void
   workRequests?: (methods: readonly string[]) => void
   /**
    * Lines after the last ack: the app may not have counted them in its open set yet. Null when some
@@ -67,7 +68,8 @@ export class ProviderRelayIdleStop {
         readonly size: number
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
-        askedItemIds: () => ReadonlySet<string>
+        startMethods: ReadonlySet<string>
+        awaitingStart: (itemId: string) => boolean
       }
       stoppedBy: ProviderRelayStop
       close: () => Promise<unknown>
@@ -85,7 +87,10 @@ export class ProviderRelayIdleStop {
       // Held approvals, and the app's own work requests (an ACP turn) the agent hasn't answered.
       pendingCount: () => relay.pending.size + relay.pending.working.size,
       askingCount: () => relay.pending.size,
-      askedItems: () => relay.pending.askedItemIds(),
+      awaitingStart: (itemId) => relay.pending.awaitingStart(itemId),
+      startApprovals: (methods) => {
+        relay.pending.startMethods = new Set(methods)
+      },
       workRequests: (methods) => {
         relay.pending.workMethods = new Set(methods)
       },
@@ -134,7 +139,10 @@ export class ProviderRelayIdleStop {
       this.work !== null &&
       !this.work.unaccounted &&
       this.host.pendingCount() === asking &&
-      !this.work.openOutside(PROVIDER_RELAY_TURN_GROUP, this.host.askedItems?.() ?? new Set())
+      !this.work.openOutside(
+        PROVIDER_RELAY_TURN_GROUP,
+        (itemId) => this.host.awaitingStart?.(itemId) === true
+      )
     )
   }
 
@@ -238,6 +246,7 @@ export class ProviderRelayIdleStop {
     this.policy = policy
     this.quietNames = new Set(policy.quiet ?? [])
     this.host.workRequests?.(policy.workRequests ?? [])
+    this.host.startApprovals?.(policy.startApprovals ?? [])
   }
 
   private openWorkAtDetach(open: Record<string, string[][]>): ProviderRelayOpenWork {
