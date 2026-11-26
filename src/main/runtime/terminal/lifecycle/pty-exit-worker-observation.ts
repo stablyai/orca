@@ -35,7 +35,13 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
     // on terminals Orca never owned: an external reuse has nothing left to retain, settled or not.
     const fail = (): void => {
       this.observeWorkerTerminalExit(db, handle, paneKey, processIncarnation, cause, lastOutput)
-      db.settleExternallyEndedWorkerTerminals(processIncarnation)
+      // Bookkeeping only: a database that refuses the update leaves the row as it was, which the
+      // exit path above does not wait for. Let no failure here skip the rest of the exit.
+      try {
+        db.settleExternallyEndedWorkerTerminals(processIncarnation)
+      } catch (error) {
+        console.warn('[orchestration] could not settle an externally ended worker terminal', error)
+      }
     }
     // Its pane is starting again where the window's restore resumes the conversation: the Dispatch waits for it.
     const respawning = options.paneRespawning && paneKey
