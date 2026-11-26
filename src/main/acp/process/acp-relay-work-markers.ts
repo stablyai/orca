@@ -22,8 +22,12 @@ const acpRelayAgent = (agent: string): string => `acp:${agent}`
 /** Each ACP agent this build relays reattaches; called as its adapter is registered. */
 export function registerAcpRelayAgent(spec: AcpLaunchSpec): void {
   if (acpSpecRelays(spec)) {
-    // An agent that ended while Orca was closed opens once, to show its unread output.
-    registerReattachableProviderRelayAgent(acpRelayAgent(spec.agent), { opensEnded: true })
+    // An agent that ended while Orca was closed opens once, to show its unread output; its chats
+    // may be kept, so an open never settles their run as gone before the reattach.
+    registerReattachableProviderRelayAgent(acpRelayAgent(spec.agent), {
+      opensEnded: true,
+      provider: spec.agent
+    })
   }
 }
 
