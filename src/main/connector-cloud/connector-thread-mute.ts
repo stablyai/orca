@@ -13,7 +13,8 @@ import { refused, type Delivery } from '../external-conversations/external-conve
  *  current explicit mention unmutes and goes on. */
 export type ThreadMuteStep = 'silence' | 'unmute_and_send' | 'send'
 
-type MuteFacts = Pick<RequestDelivery, 'kind' | 'bareMention' | 'mentioned'> & {
+type MuteFacts = Pick<RequestDelivery, 'bareMention' | 'mentioned'> & {
+  kind?: RequestDelivery['kind']
   resume?: unknown
   asker?: { app?: true; via?: unknown }
 }

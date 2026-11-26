@@ -391,7 +391,7 @@ describe('a muted bot thread', () => {
     expect(starts).toEqual([])
   })
 
-  it('does not mark a silenced fresh start automation as handled when its receipt replays', async () => {
+  it('keeps a silenced fresh start automation handled when its receipt replays', async () => {
     const store = await botHome({ first: true })
     const { deliver, starts, automationsTaken } = connector(store)
     const quiet = start(FIRST, 'quiet', {
@@ -407,7 +407,7 @@ describe('a muted bot thread', () => {
     })
 
     expect(await deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(quiet)).toEqual({ outcome: 'accepted', inTurn: true })
     expect(starts).toEqual([])
     expect(automationsTaken).toEqual([])
   })

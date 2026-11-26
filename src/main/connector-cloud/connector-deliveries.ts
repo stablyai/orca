@@ -197,14 +197,14 @@ export function dispatchDelivery(
             deliveryId,
             'connector.start',
             [delivery.agent, startTarget, delivery.prompt],
-            handled
+            async () => withoutAutomations(delivery, await handled())
           )
         : seam.receipts.run(
             delivery.conversation,
             deliveryId,
             'connector.mute',
             [requestText(delivery)],
-            handled
+            async () => withoutAutomations(delivery, await handled())
           )
     const muted = machine.threadMute?.(delivery, record, carriedBefore)
     if (muted) {
@@ -218,7 +218,7 @@ export function dispatchDelivery(
             return { outcome: 'accepted' }
           }
           if (result !== 'send') {
-            return withoutAutomations(delivery, result)
+            return result
           }
           const sent = dispatchDelivery(seam, host, alone, delivery, msLeft, later, outboxAccount)
           carried(sent?.received === true)
