@@ -190,8 +190,18 @@ describe('a local mutation dial that times out before its frame is written', () 
       recovery: {
         orchestrationRequestId: retryKey,
         disposition: 'outcome_unknown',
-        queryCommand: ['orca', 'orchestration', 'request-show', '--request', retryKey, '--json'],
-        retryCommand: ['orca', ...ARGS, '--retry-request', retryKey]
+        // A known-local client stays local whatever the shell exports later.
+        queryCommand: [
+          'orca',
+          'orchestration',
+          'request-show',
+          '--request',
+          retryKey,
+          '--environment',
+          'local',
+          '--json'
+        ],
+        retryCommand: ['orca', ...ARGS, '--environment', 'local', '--retry-request', retryKey]
       }
     })
     expect(error.message).toContain('may already have taken effect')
@@ -228,7 +238,7 @@ describe('a local mutation dial that times out before its frame is written', () 
       originalCommand: ['orca', ...ARGS],
       recovery: {
         disposition: 'not_sent',
-        retryCommand: ['orca', ...ARGS, '--retry-request', requestId]
+        retryCommand: ['orca', ...ARGS, '--environment', 'local', '--retry-request', requestId]
       }
     })
     expect(error.message).toContain('Nothing was sent')

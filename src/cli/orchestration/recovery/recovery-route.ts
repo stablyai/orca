@@ -1,25 +1,26 @@
-import { getPlatformUserDataPath } from '../../runtime/profile/metadata'
+import { isLocalEnvironmentSelector } from '../../hosts/local-environment-selector'
 
 export type RecoveryPairingEnv = 'ORCA_PAIRING_CODE' | 'ORCA_REMOTE_PAIRING'
 
 /**
- * Which Orca a command reached and which profile it used, without any secret, so its
- * recovery commands can name the same receipt ledger after a one-shot assignment expires.
+ * Which Orca a command reached and how its profile was chosen, without any secret, so recovery
+ * names the same receipt ledger after a one-shot assignment expires, or says it cannot.
  */
 export type OrchestrationRecoveryRoute = {
-  /** A named environment, reproducible as --environment. */
+  /** The named environment the client used. */
   environment: string | null
   /** The variable whose pairing code chose the Orca; the code itself is never kept. */
   pairingEnv: RecoveryPairingEnv | null
-  /** ORCA_USER_DATA_PATH chose a profile other than the platform default. */
-  profileFromEnv: boolean
+  /** Whether the client reached a remote Orca; null when unknown. */
+  remote: boolean | null
+  /** ORCA_USER_DATA_PATH for this command: an empty or set value can be a one-shot override. */
+  profileEnv: 'unset' | 'empty' | 'set'
 }
 
 /** The fields a RuntimeClient settles its route and profile with. */
 type RoutedClient = {
   readonly isRemote?: boolean
   readonly environmentSelector?: string | null
-  readonly userDataPath?: string
 }
 
 export function recoveryRouteOf(
@@ -27,10 +28,11 @@ export function recoveryRouteOf(
   env: NodeJS.ProcessEnv = process.env
 ): OrchestrationRecoveryRoute {
   const environment = client.environmentSelector || null
-  // Remote without a named environment means a pairing code; a --pairing-code flag is in argv,
-  // which recovery already refuses to repeat, so only an environment variable is named here.
+  const remote = typeof client.isRemote === 'boolean' ? client.isRemote : null
+  // Remote without a named environment means a pairing code. The client takes
+  // ORCA_PAIRING_CODE ?? ORCA_REMOTE_PAIRING; a --pairing-code flag is in argv instead.
   const pairingEnv =
-    client.isRemote !== true || environment
+    remote !== true || environment
       ? null
       : env.ORCA_PAIRING_CODE
         ? 'ORCA_PAIRING_CODE'
@@ -41,50 +43,119 @@ export function recoveryRouteOf(
   return {
     environment,
     pairingEnv,
-    profileFromEnv: profile ? client.userDataPath === profile && !isPlatformDefault(profile) : false
+    remote,
+    profileEnv: profile === undefined ? 'unset' : profile === '' ? 'empty' : 'set'
   }
 }
 
-function isPlatformDefault(userDataPath: string): boolean {
-  try {
-    return userDataPath === getPlatformUserDataPath()
-  } catch {
-    return false
-  }
-}
-
-export type RecoverySelection = {
+export type RecoveryGuidance = {
   /** Selects the original's Orca for the inspect command. */
   target: string[]
   /** Added to the retry when the original's argv alone would not select its Orca again. */
   retryTarget: string[]
-  /** The pairing came from this variable, so no command can run standalone. */
-  pairingEnv?: RecoveryPairingEnv
+  /** Set when no argv can select the original's Orca: the shell conditions that must hold instead. */
+  restore?: string
+  /** Conditions that hold for every recovery command, emitted or not. */
+  caveats: string[]
+  /** Variables those conditions name; their values are never repeated. */
+  requiredEnv: string[]
 }
 
-export function recoverySelection(
+const PAIRING_UNSET =
+  'These commands name their Orca with --environment, so run them where ORCA_PAIRING_CODE and ORCA_REMOTE_PAIRING are unset or empty.'
+
+export function recoveryGuidance(
   flags: ReadonlyMap<string, string | boolean> | undefined,
   route: OrchestrationRecoveryRoute | undefined
-): RecoverySelection {
+): RecoveryGuidance {
+  const guidance = routeGuidance(flags, route)
+  // No flag chooses a profile, so an ORCA_USER_DATA_PATH override is reproduced only by the shell.
+  if (route?.profileEnv === 'empty') {
+    guidance.caveats.push(
+      'This command ran with ORCA_USER_DATA_PATH empty, so run these where it is unset or empty; another profile keeps a different record of it.'
+    )
+    guidance.requiredEnv.push('ORCA_USER_DATA_PATH')
+  } else if (route?.profileEnv === 'set') {
+    guidance.caveats.push(
+      'Run these where ORCA_USER_DATA_PATH names the same Orca profile as for this command; another profile keeps a different record of it.'
+    )
+    guidance.requiredEnv.push('ORCA_USER_DATA_PATH')
+  }
+  return guidance
+}
+
+function routeGuidance(
+  flags: ReadonlyMap<string, string | boolean> | undefined,
+  route: OrchestrationRecoveryRoute | undefined
+): RecoveryGuidance {
+  const none = (): RecoveryGuidance => ({
+    target: [],
+    retryTarget: [],
+    caveats: [],
+    requiredEnv: []
+  })
   // An outer --on send goes through the caller's Orca, suppressing any ambient pairing.
   if (flags?.has('on')) {
-    return { target: ['--environment', 'local'], retryTarget: [] }
+    return { ...none(), target: ['--environment', 'local'] }
   }
   const environment = flags?.get('environment')
   if (typeof environment === 'string') {
-    return { target: ['--environment', environment], retryTarget: [] }
+    const named = !isLocalEnvironmentSelector(environment)
+    return {
+      ...none(),
+      target: environmentArgs(environment),
+      caveats: named ? [PAIRING_UNSET] : []
+    }
   }
   if (flags?.has('pairing-code')) {
-    return { target: [], retryTarget: [] }
+    return none()
   }
-  // The environment chose the Orca, and a one-shot assignment is gone once this command exits.
   if (route?.pairingEnv) {
-    return { target: [], retryTarget: [], pairingEnv: route.pairingEnv }
+    // The client prefers ORCA_PAIRING_CODE, so the fallback wins again only while it is unset.
+    const pairing =
+      route.pairingEnv === 'ORCA_PAIRING_CODE'
+        ? 'ORCA_PAIRING_CODE is set to the same pairing as for this command'
+        : 'ORCA_REMOTE_PAIRING is set to the same pairing as for this command and ORCA_PAIRING_CODE is unset'
+    return {
+      ...none(),
+      restore: `${pairing}, and ORCA_ENVIRONMENT is unset or empty`,
+      requiredEnv:
+        route.pairingEnv === 'ORCA_PAIRING_CODE'
+          ? [route.pairingEnv]
+          : [route.pairingEnv, 'ORCA_PAIRING_CODE']
+    }
   }
   if (route?.environment) {
-    const named = ['--environment', route.environment]
+    // --environment local always means this machine, so a saved server named local is not reachable by name.
+    if (isLocalEnvironmentSelector(route.environment)) {
+      return {
+        ...none(),
+        restore:
+          'ORCA_ENVIRONMENT names the same saved server as for this command, and ORCA_PAIRING_CODE and ORCA_REMOTE_PAIRING are unset or empty',
+        requiredEnv: ['ORCA_ENVIRONMENT']
+      }
+    }
+    const named = environmentArgs(route.environment)
     // A --host in argv selects the same server again; a second selector would conflict with it.
-    return { target: named, retryTarget: flags?.has('host') ? [] : named }
+    return {
+      ...none(),
+      target: named,
+      retryTarget: flags?.has('host') ? [] : named,
+      caveats: [PAIRING_UNSET]
+    }
   }
-  return { target: [], retryTarget: [] }
+  // A known-local client stays local even if an ORCA_ENVIRONMENT or pairing export returns.
+  if (route?.remote === false) {
+    return {
+      ...none(),
+      target: ['--environment', 'local'],
+      retryTarget: ['--environment', 'local']
+    }
+  }
+  return none()
+}
+
+/** Assignment form keeps a name that looks like an option a value, not a flag. */
+function environmentArgs(name: string): string[] {
+  return name.startsWith('-') ? [`--environment=${name}`] : ['--environment', name]
 }
