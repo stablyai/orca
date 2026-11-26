@@ -47,6 +47,7 @@ import {
 } from '../connectivity/runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from '../status/runtime-environment-status-owner'
 import { watchRuntimeEnvironmentRegistry } from '../catalog/runtime-environment-preference'
+import { serverClientEventChange } from './runtime-environment-change-events'
 import { getRuntimeEnvironmentTransportGeneration } from '../connections/runtime-environment-transport-generation'
 import { getRuntimeEnvironmentRegistryRoot } from '../catalog/runtime-environment-registry-root'
 import { recipeVmServerState } from '../managed-orcad/runtime-environment-recipe-vm-wake'
@@ -285,8 +286,10 @@ async function watchRuntimeEnvironmentChanges(
           // A replay may stand for missed events of any kind.
           const change = isRuntimeSubscriptionReplayResponse(response)
             ? 'reposChanged'
-            : workspaceChangeOf(response.result)
-          if (change) {
+            : serverClientEventChange(response.result)
+          if (change === 'agentRows') {
+            callbacks.onRowsChanged?.()
+          } else if (change) {
             callbacks.onChange({ catalog: change !== 'worktreesChanged' })
           }
         }
@@ -303,14 +306,6 @@ async function watchRuntimeEnvironmentChanges(
     }
   }, end)
   return { close, current }
-}
-
-function workspaceChangeOf(message: unknown): 'ready' | 'worktreesChanged' | 'reposChanged' | null {
-  if (typeof message !== 'object' || message === null || !('type' in message)) {
-    return null
-  }
-  const { type } = message
-  return type === 'ready' || type === 'worktreesChanged' || type === 'reposChanged' ? type : null
 }
 
 function pairingRevision(environment: KnownRuntimeEnvironment): number {
