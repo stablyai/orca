@@ -77,7 +77,8 @@ const SET = defineMethod({
         ?.conversationTurn(runtimeChatHost(context.runtime), writer.sessionId)
         ? { askedInConversation: writer.sessionId }
         : {}
-    const closing = status === 'done' || status === 'canceled'
+    // Only a real move to a closed status reads whom the closing turn acts for; an unchanged one is a no-op.
+    const closing = (status === 'done' || status === 'canceled') && item.status !== status
     const changes = {
       ...(closing ? { closedFor: await closingTurnActsFor(context.runtime, writer) } : {}),
       title,
