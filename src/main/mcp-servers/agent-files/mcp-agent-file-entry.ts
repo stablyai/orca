@@ -58,6 +58,11 @@ export function mcpHostServerNameOfEntry(
     : null
 }
 
+/** Where this instance holds an agent's file while it decides whether it can delete it. */
+export function mcpAgentFileHeldPath(path: string, userDataPath: string): string {
+  return `${path}.orca-held-${instanceHash(userDataPath).slice(0, 12)}`
+}
+
 /** The marker lines around this instance's block in a TOML file. */
 export function mcpAgentFileMarkers(userDataPath: string): ManagedTomlMarkers {
   const tag = instanceHash(userDataPath).slice(0, 12)

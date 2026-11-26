@@ -1,7 +1,6 @@
 // Read-only: the MCP servers each agent loads from its own config, and the "In your agents" list
 // that merges them across agents by name and URL or command.
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { parse as parseToml } from 'smol-toml'
 import {
@@ -11,15 +10,17 @@ import {
   type AgentMcpConfigEntry
 } from '../../../shared/mcp/agent-mcp-config-entry'
 import type { BotToolServer } from '../../../shared/bot-tools'
-import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   MCP_CONFIG_AGENTS,
   agentMcpConfigLocations,
+  agentMcpProjectConfigLocations,
   agentMcpServerBlocks,
   type AgentMcpConfigContext,
   type AgentMcpConfigLocation,
+  type AgentMcpServerBlock,
   type McpConfigAgent
 } from './agent-mcp-config-locations'
+import { readAgentConfigText } from './agent-config-file-write'
 
 export type AgentMcpConfigSource = AgentMcpConfigLocation & {
   /** The key path of the entry itself in the file. */
@@ -30,10 +31,12 @@ export type AgentMcpConfigSource = AgentMcpConfigLocation & {
 
 export type AgentMcpConfigServer = AgentMcpConfigEntry & { source: AgentMcpConfigSource }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** A copy of the object's own keys only, so nothing reads through its prototype. */
 function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : null
+  return isRecord(value) ? Object.fromEntries(Object.entries(value)) : null
 }
 
 /** The file's parsed top level, or null when it doesn't parse as its format. */
@@ -59,12 +62,12 @@ export function parseAgentMcpConfigText(
 
 export function valueAtKeyPath(root: unknown, path: readonly string[]): unknown {
   let value = root
+  // Why no copy per step: Claude's projects map holds one entry per folder it ever opened.
   for (const segment of path) {
-    const parent = record(value)
-    if (!parent || !Object.hasOwn(parent, segment)) {
+    if (!isRecord(value) || !Object.hasOwn(value, segment)) {
       return undefined
     }
-    value = parent[segment]
+    value = value[segment]
   }
   return value
 }
@@ -80,7 +83,21 @@ export function agentMcpConfigServersIn(
   if (!parsed) {
     return null
   }
-  return agentMcpServerBlocks(location, parsed, skipProject).flatMap((block) =>
+  return serversInBlocks(
+    location,
+    parsed,
+    agentMcpServerBlocks(location, parsed, skipProject),
+    withOrcaOwned
+  )
+}
+
+function serversInBlocks(
+  location: AgentMcpConfigLocation,
+  parsed: Record<string, unknown>,
+  blocks: readonly AgentMcpServerBlock[],
+  withOrcaOwned: boolean
+): AgentMcpConfigServer[] {
+  return blocks.flatMap((block) =>
     Object.entries(record(valueAtKeyPath(parsed, block.path)) ?? {}).flatMap(([name, raw]) => {
       const entry = agentMcpConfigEntry(name, raw, block.dialect)
       if (
@@ -101,25 +118,44 @@ export function agentMcpConfigServersIn(
   )
 }
 
+async function readLocationText(location: AgentMcpConfigLocation): Promise<string | null> {
+  try {
+    // Through the publisher's reader: a config Orca holds aside is waited for or put back.
+    return await readAgentConfigText(location.path)
+  } catch (error) {
+    console.warn(`[mcp-servers] Couldn't read ${location.path}:`, error)
+    return null
+  }
+}
+
+const warnUnparsed = (location: AgentMcpConfigLocation): void =>
+  console.warn(`[mcp-servers] ${location.path} doesn't parse; its servers aren't listed`)
+
 async function readLocation(
   location: AgentMcpConfigLocation,
   skipProject?: (projectPath: string) => boolean,
   withOrcaOwned?: boolean
 ): Promise<AgentMcpConfigServer[]> {
-  let text: string
-  try {
-    text = await readFile(location.path, 'utf8')
-  } catch (error) {
-    if (!isDefinitiveAbsence(error)) {
-      console.warn(`[mcp-servers] Couldn't read ${location.path}:`, error)
-    }
+  const text = await readLocationText(location)
+  if (text === null) {
     return []
   }
   const servers = agentMcpConfigServersIn(location, text, skipProject, withOrcaOwned)
   if (!servers) {
-    console.warn(`[mcp-servers] ${location.path} doesn't parse; its servers aren't listed`)
+    warnUnparsed(location)
   }
   return servers ?? []
+}
+
+/** The servers the agent's own files in `projectPath`'s repo define; its user files go unread. */
+export async function readAgentProjectMcpServers(
+  agent: McpConfigAgent,
+  projectPath: string
+): Promise<AgentMcpConfigServer[]> {
+  const read = await Promise.all(
+    agentMcpProjectConfigLocations(agent, projectPath).map((location) => readLocation(location))
+  )
+  return read.flat()
 }
 
 /**
@@ -143,31 +179,45 @@ export async function readAgentMcpServers(
 }
 
 /**
- * Every server name one agent's config holds, whether or not Orca could carry the entry: a name the
- * agent already uses is taken even when its entry has fields Orca can't read.
+ * Every server name one agent's config holds, whether or not Orca could carry the entry (a name the
+ * agent already uses is taken even when its entry has fields Orca can't read), and the servers it
+ * can carry with Orca's own bridge entries, from one read of each file.
  */
 export async function readAgentMcpServerNames(
   agent: McpConfigAgent,
   context: AgentMcpConfigContext,
   options: { projectPath?: string } = {}
-): Promise<{ name: string; projectPath?: string }[]> {
+): Promise<{
+  names: { name: string; projectPath?: string }[]
+  servers: AgentMcpConfigServer[]
+}> {
   const locations = await agentMcpConfigLocations(agent, context, options.projectPath)
   const read = await Promise.all(
     locations.map(async (location) => {
-      const text = await readFile(location.path, 'utf8').catch(() => null)
+      const text = await readLocationText(location)
       const parsed = text === null ? null : parseAgentMcpConfigText(text, location.format)
       if (!parsed) {
-        return []
+        if (text !== null) {
+          warnUnparsed(location)
+        }
+        return { names: [], servers: [] }
       }
-      return agentMcpServerBlocks(location, parsed, () => false).flatMap((block) =>
-        Object.keys(record(valueAtKeyPath(parsed, block.path)) ?? {}).map((name) => ({
-          name,
-          ...(block.projectPath ? { projectPath: block.projectPath } : {})
-        }))
-      )
+      const blocks = agentMcpServerBlocks(location, parsed, () => false)
+      return {
+        names: blocks.flatMap((block) =>
+          Object.keys(record(valueAtKeyPath(parsed, block.path)) ?? {}).map((name) => ({
+            name,
+            ...(block.projectPath ? { projectPath: block.projectPath } : {})
+          }))
+        ),
+        servers: serversInBlocks(location, parsed, blocks, true)
+      }
     })
   )
-  return read.flat()
+  return {
+    names: read.flatMap((location) => location.names),
+    servers: read.flatMap((location) => location.servers)
+  }
 }
 
 export type DiscoveredAgentMcpServer = {

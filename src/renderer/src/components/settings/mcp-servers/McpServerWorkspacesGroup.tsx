@@ -61,8 +61,8 @@ export function McpServerWorkspacesGroup({
   workspaces: readonly McpHostWorkspace[]
 }): React.JSX.Element {
   const t = useTranslate()
-  // Clicks made before the host answers build on each other, then save one after another, so a
-  // second click never writes over the first with what the page showed before it.
+  // Clicks made before the host answers build on each other, then save one after another; each
+  // sends the choice it was made from, so the host keeps what another client saved meanwhile.
   const [pending, setPending] = useState<McpServerWorkspaces | null>(null)
   const writes = useRef<{ tail: Promise<unknown>; count: number }>({
     tail: Promise.resolve(),
@@ -71,11 +71,12 @@ export function McpServerWorkspacesGroup({
   const chosen = pending ?? server.workspaces
   const summary = mcpWorkspacesSummaryText(summarizeMcpWorkspaces(chosen, workspaces), t)
   const save = (next: McpServerWorkspaces): void => {
+    const base = chosen
     setPending(next)
     const queue = writes.current
     queue.count += 1
     queue.tail = queue.tail
-      .then(() => setMcpServerWorkspaces(target, server.id, next))
+      .then(() => setMcpServerWorkspaces(target, server.id, next, base))
       .then(
         (saved) =>
           showMcpServerChangeToast(

@@ -19,7 +19,7 @@ import {
 import type { DispatcherOptions } from '../../runtime/rpc/dispatcher'
 import type { PluginRuntimeRpc } from '../workers/host-api/plugin-host-runtime-call'
 import {
-  pluginTerminalTitle,
+  pluginWorkspaceTerminal,
   projectPluginWorkspaceContext,
   terminalForPane,
   type PluginAgentStatusRow,
@@ -128,13 +128,7 @@ async function listWorkspaceTerminals(
     PLUGIN_WORKSPACE_TERMINAL_LIMIT,
     { includeVisualLayouts: false }
   )
-  return terminals.map((terminal) => ({
-    id: terminal.handle,
-    title: pluginTerminalTitle(terminal),
-    ...(terminal.tabId && terminal.leafId
-      ? { paneKey: `${terminal.tabId}:${terminal.leafId}` }
-      : {})
-  }))
+  return terminals.map(pluginWorkspaceTerminal)
 }
 
 /**

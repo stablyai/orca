@@ -13,9 +13,8 @@ import {
   relayToolUrl,
   type BotToolRelay
 } from '../bots/tool-relay/bot-tool-relay'
-import { homedir } from 'node:os'
 import { isAbsolute } from 'node:path'
-import { readAgentMcpServers } from './agent-configs/agent-mcp-config-read'
+import { readAgentProjectMcpServers } from './agent-configs/agent-mcp-config-read'
 import { MCP_CONFIG_AGENTS } from './agent-configs/agent-mcp-config-locations'
 import { relayProcessUrl } from '../bots/tool-relay/bot-tool-relay-grants'
 import { mcpServerForLaunch } from './mcp-host-list-launch'
@@ -87,14 +86,8 @@ async function projectNamesIn(agent: string, cwd: string): Promise<Set<string>> 
   if (!configAgent || !isAbsolute(cwd)) {
     return new Set()
   }
-  const servers = await readAgentMcpServers(
-    configAgent,
-    { homeDir: homedir(), env: process.env, platform: process.platform },
-    { projectPath: cwd }
-  )
-  return new Set(
-    servers.filter(({ source }) => source.scope === 'project').map(({ configName }) => configName)
-  )
+  const servers = await readAgentProjectMcpServers(configAgent, cwd)
+  return new Set(servers.map(({ configName }) => configName))
 }
 
 export async function mcpServerConnection(
