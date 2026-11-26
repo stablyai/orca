@@ -72,4 +72,33 @@ describe('admitPairedCreateColors', () => {
     expect(getTerminalViewerColors()).toEqual(darkColors)
     expect(getTerminalViewAttributes()).toEqual(dark)
   })
+  it('seeds a cold headless host once, pins later differing themes, and never applies host-wide appearance', () => {
+    const dark = makeAttributes([230, 230, 230], [20, 20, 20], 'dark')
+    const light = makeAttributes([20, 20, 20], [245, 245, 245], 'light')
+    const darkColors = terminalViewColorQueryReplyColors(dark)
+    const lightColors = terminalViewColorQueryReplyColors(light)
+
+    let globalApplyCount = 0
+    registerTerminalViewAttributesApplier(() => {
+      globalApplyCount += 1
+    })
+
+    // First create on a cold host seeds colours, but has no host-wide palette to match.
+    expect(admitPairedCreateColors(darkColors, dark)).toEqual({
+      launcherColorQueryReplies: darkColors,
+      launcherViewAttributes: dark
+    })
+    expect(getTerminalViewerColors()).toEqual(darkColors)
+    expect(getTerminalViewAttributes()).toBeNull()
+
+    // An older colours-only creator with the seeded theme follows host-wide colours.
+    expect(admitPairedCreateColors(darkColors)).toEqual({})
+
+    // A differing creator is pinned and does not replace the seed.
+    expect(admitPairedCreateColors(lightColors)).toEqual({
+      launcherColorQueryReplies: lightColors
+    })
+    expect(getTerminalViewerColors()).toEqual(darkColors)
+    expect(globalApplyCount).toBe(0)
+  })
 })
