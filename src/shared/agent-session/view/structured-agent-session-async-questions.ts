@@ -14,6 +14,23 @@ import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import type { AgentSessionAwaitedQuestion } from '../agent-session-wire'
 import { normalizeOptionalMultilineField } from '../../agent-status/contracts/agent-status-field-normalization'
 import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../../agent-status/contracts/agent-status-types'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../native-chat/input/questions/codex-async-question-input'
+
+export function isStructuredAgentSessionQuestionSteer(
+  item: AgentJournalRenderItem,
+  question: AgentJournalRenderItem
+): boolean {
+  const delivery =
+    item.body.kind === 'message' && item.body.role === 'user' && item.body.connectorDelivery
+  return Boolean(
+    delivery &&
+    delivery.conversation.source === 'feishu-local' &&
+    !delivery.deliveryId.startsWith('om_orca_choice_') &&
+    item.turnScope?.kind === 'turn' &&
+    question.turnScope?.kind === 'turn' &&
+    item.turnScope.turnItemId === question.turnScope.turnItemId
+  )
+}
 
 /** Rows the question rule reads: command entries never reach the agent, so they answer nothing. */
 export function isStructuredAgentSessionAsyncQuestionRow(item: AgentJournalRenderItem): boolean {
@@ -26,11 +43,25 @@ export function newestOpenStructuredAgentSessionAsyncQuestion(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]
 ): AgentSessionAwaitedQuestion | undefined {
-  const messages = projectStructuredAgentSessionMessages(
-    items.filter(isStructuredAgentSessionAsyncQuestionRow),
-    [],
-    submissions
-  )
+  let question: AgentJournalRenderItem | undefined
+  const rows = [...items]
+    .sort((a, b) => a.sequence - b.sequence || (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0))
+    .filter((item) => {
+      if (!isStructuredAgentSessionAsyncQuestionRow(item)) {
+        return false
+      }
+      if (
+        item.body.kind === 'message' &&
+        item.body.role === 'assistant' &&
+        item.body.blocks.some(
+          (block) => block.type === 'tool-call' && block.name === CODEX_ASYNC_QUESTION_TOOL
+        )
+      ) {
+        question = item
+      }
+      return !question || !isStructuredAgentSessionQuestionSteer(item, question)
+    })
+  const messages = projectStructuredAgentSessionMessages(rows, [], submissions)
   const start = messages.findLastIndex(isDeliveredNativeChatUserMessage)
   const open = scanPendingAsks(messages.slice(Math.max(start, 0))).contributors.at(-1)
   if (!open) {
