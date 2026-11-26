@@ -2,7 +2,10 @@ import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../../../../shared/terminal/input/terminal-input'
+import {
+  TERMINAL_INPUT_MAX_BYTES,
+  TERMINAL_INPUT_TOO_LARGE_ERROR
+} from '../../../../../shared/terminal/input/terminal-input'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { TERMINAL_SEND_METHODS } from '../../../rpc/methods/terminal/terminal-send-method'
 import { registerBoundPty } from '../../../terminal/layout/bind-first-pane.test-fixture'
@@ -272,6 +275,21 @@ describe('Agent-slept window pane wake', () => {
       ok: true,
       result: { send: { accepted: false, bytesWritten: 0 } }
     })
+    const keyedGuardedCombined = await send(
+      'keyed-guarded-combined',
+      {
+        text: 'hi',
+        enter: true,
+        agentPrompt: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      },
+      'prompt-request-0'
+    )
+    expect(keyedGuardedCombined).toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
     const oversizedPrompt = await send(
       'oversized-prompt',
       {
@@ -282,7 +300,10 @@ describe('Agent-slept window pane wake', () => {
       },
       'prompt-request-1'
     )
-    expect(oversizedPrompt).toMatchObject({ ok: false })
+    expect(oversizedPrompt).toMatchObject({
+      ok: false,
+      error: { message: TERMINAL_INPUT_TOO_LARGE_ERROR }
+    })
     expect(resume).not.toHaveBeenCalled()
     slept.db.close()
   })

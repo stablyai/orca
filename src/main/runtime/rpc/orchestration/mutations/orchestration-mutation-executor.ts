@@ -83,12 +83,14 @@ export class OrchestrationMutationExecutor {
     const existingPromptReceipt = isPromptMutation
       ? db.getMutationReceipt(callerFingerprint, requestId)
       : undefined
-    // A slept agent resumes in place first, so the prompt binds to its woken process; a prompt the handler refuses wakes nothing.
-    if (
-      isPromptMutation &&
-      !existingPromptReceipt &&
-      !(await isTerminalSendRefusedBeforeWake(params))
-    ) {
+    const refusedBeforeWake =
+      isPromptMutation && !existingPromptReceipt && (await isTerminalSendRefusedBeforeWake(params))
+    // Input the handler always refuses keeps no receipt, so nothing binds to (or wakes) a slept agent.
+    if (refusedBeforeWake && !requireExisting) {
+      return await invoke()
+    }
+    if (isPromptMutation && !existingPromptReceipt && !refusedBeforeWake) {
+      // A slept agent resumes in place first, so the prompt binds to its woken process.
       await this.runtime.wakeSleptAgentHandle((params as { terminal: string }).terminal, {})
     }
     if (
