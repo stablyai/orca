@@ -12,7 +12,7 @@ export function isExternalAutomationProbeCancelled(error: unknown): boolean {
 }
 
 export type ExternalAutomationProbeJob<T> = {
-  /** Concurrent requests with the same owner/provider key share one probe. */
+  /** Concurrent requests with the same key share one probe. */
   key: string
   scopeKey: string
   run: (signal: AbortSignal) => Promise<T>

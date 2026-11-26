@@ -22089,6 +22089,7 @@
       "htmlView": "HTML view",
       "htmlViewCode": "Code",
       "htmlViewPreview": "Preview",
+      "htmlViewPreviewWaiting": "Preview is available when this code block finishes.",
       "context": {
         "unavailable": "Context usage is not known yet. It becomes available after the agent next responds.",
         "summary": "Context: {{used}} / {{window}} tokens ({{percent}}%), estimated from the last response.",
@@ -27765,7 +27766,7 @@
       "computerHint": "Where the bot runs.",
       "computerAccountHint": "Where the bot runs, signed in to Orca as {{account}}.",
       "useChatDefaults": "Use chat defaults",
-      "useChatDefaultsHint": "Reset the agent's model, options and permissions to your chat defaults",
+      "chatDefault": "Chat default",
       "usingChatDefault": "Using your chat default. Background runs use your Agents setting.",
       "agent": "Agent",
       "folder": "Folder: {{path}}",

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { MAX_JIRA_SAVED_FILTER_JQL_LENGTH } from './jira-saved-filters'
 import { getUtf8ByteLength, isUtf8ByteLengthWithinLimit } from '../text/utf8-byte-limits'
 
@@ -13,18 +14,22 @@ const boundedText = (max: number) =>
     .min(1)
     .max(max)
     .refine((value) => value.trim() === value)
-const Filter = z.object({
-  id: boundedText(128),
-  name: boundedText(MAX_JIRA_FAVOURITE_FILTER_NAME_LENGTH),
-  jql: boundedText(MAX_JIRA_SAVED_FILTER_JQL_LENGTH).refine((value) =>
-    isUtf8ByteLengthWithinLimit(value, MAX_JIRA_SAVED_FILTER_JQL_LENGTH)
-  ),
-  siteId: boundedText(128).refine((value) => value !== 'all')
-})
-const List = z.object({
-  filters: z.array(Filter).max(MAX_JIRA_FAVOURITE_FILTERS),
-  truncated: z.boolean()
-})
+const Filter = lazyZodSchema(() =>
+  z.object({
+    id: boundedText(128),
+    name: boundedText(MAX_JIRA_FAVOURITE_FILTER_NAME_LENGTH),
+    jql: boundedText(MAX_JIRA_SAVED_FILTER_JQL_LENGTH).refine((value) =>
+      isUtf8ByteLengthWithinLimit(value, MAX_JIRA_SAVED_FILTER_JQL_LENGTH)
+    ),
+    siteId: boundedText(128).refine((value) => value !== 'all')
+  })
+)
+const List = lazyZodSchema(() =>
+  z.object({
+    filters: z.array(Filter).max(MAX_JIRA_FAVOURITE_FILTERS),
+    truncated: z.boolean()
+  })
+)
 
 export type JiraFavouriteFilter = z.infer<typeof Filter>
 export type JiraFavouriteFilterList = z.infer<typeof List>

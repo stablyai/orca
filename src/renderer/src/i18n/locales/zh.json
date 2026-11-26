@@ -175,6 +175,7 @@
         "cursorToggleDescription": "通过 cursor-agent 或 Cursor IDE 登录后显示 Cursor 套餐用量",
         "zcodeToggleDescription": "显示 ZCode 编码计划配额使用情况",
         "museToggleDescription": "显示 Muse CLI 提供的 Muse 订阅配额",
+        "gitBlameTitle": "Git blame",
         "gitBlameDescription": "在状态栏中显示光标所在行的最后修改者",
         "gitBlameKeywordBlame": "追溯",
         "gitBlameKeywordAuthor": "作者",
@@ -750,7 +751,9 @@
       "title": "换行符",
       "description": "新文件以及尚无换行的文件所用的换行符。“自动”取决于运行该文件所在工作区的系统：Linux、macOS 和 WSL 使用 LF，Windows 使用 CRLF。已有换行的文件保留其原有换行符",
       "keywordLineEnding": "行尾符",
-      "auto": "自动"
+      "auto": "自动",
+      "lf": "LF",
+      "crlf": "CRLF"
     },
     "repositoryFormatter": {
       "description": "保存时格式化使用此项目的格式化程序。",
@@ -831,6 +834,7 @@
         "appData": "Orca 应用数据"
       },
       "host": {
+        "ssh": "SSH",
         "connected": "已连接",
         "notConnected": "未连接",
         "notConnectedRetry": "未连接。请连接此主机，然后点击“重试”"
@@ -987,6 +991,7 @@
       "inlineBlameTitle": "行内 Git blame",
       "inlineBlameDescription": "在行尾显示光标所在行的最后修改者和修改时间",
       "inlineBlameKeywordBlame": "追溯",
+      "inlineBlameKeywordGit": "git",
       "inlineBlameKeywordAuthor": "作者",
       "inlineBlameKeywordAnnotation": "批注"
     },
@@ -7170,7 +7175,8 @@
           "projectGroupSubmenu": "项目组",
           "newChildWorktree": "新建子工作树...",
           "muteNotifications": "静音通知",
-          "unmuteNotifications": "取消静音通知"
+          "unmuteNotifications": "取消静音通知",
+          "copyAutoNameError": "自动命名错误"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中",
@@ -7998,6 +8004,26 @@
           "browseFolder": "浏览文件夹…",
           "cloneFromUrl": "从 URL 克隆…",
           "createNewProject": "创建新项目…"
+        },
+        "AutoNameFailed": {
+          "naming": "正在为此工作区命名…",
+          "title": "无法自动命名",
+          "dismiss": "关闭",
+          "modelUnavailableOnAccount": "{{model}} 在此 {{agent}} 账户上不可用",
+          "modelUnavailableForAgent": "{{model}} 不可用于 {{agent}}",
+          "modelUnavailable": "{{model}} 不可用",
+          "timedOut": "{{seconds}} 秒后超时",
+          "agentMissing": "{{agent}} 未安装",
+          "usageLimitAgent": "{{agent}} 已达到使用上限",
+          "usageLimit": "命名智能体已达到使用上限",
+          "signedOutAgent": "{{agent}} 未登录",
+          "signedOut": "命名智能体未登录",
+          "agentFailed": "{{agent}} 因错误退出",
+          "noAgent": "未设置命名智能体",
+          "publishCheck": "无法检查分支是否已推送",
+          "environment": "无法启动命名智能体",
+          "emptyName": "智能体未返回可用的名称",
+          "unknown": "命名智能体出错"
         },
         "SetupScriptCodeBlock": {
           "showLess": "收起",
@@ -16315,6 +16341,7 @@
             "609517273b": "工作中",
             "005afbad3d": "刚刚",
             "04a94cadee": "40 个工作树 · 5 个活跃",
+            "b5308d5e2c": "M1 Mini",
             "aefd110ea5": "配对桌面设备",
             "d08ee9c466": "新工作区",
             "aa44b4a6b2": "浏览议题和评审",
@@ -24212,7 +24239,8 @@
       "uncommitted": "未提交的更改",
       "openCommitFailed": "无法加载提交差异",
       "statusAriaLabel": "Git blame：{{summary}}",
-      "openCommitHint": "点击打开该提交"
+      "openCommitHint": "点击打开该提交",
+      "statusBarItem": "Git Blame"
     },
     "diffTooLarge": {
       "title": "文件过大，无法显示差异",
@@ -25601,6 +25629,17 @@
       "showLinked_other": "显示 {{count}} 个关联的审查和任务",
       "linkedCount_other": "已关联 {{count}} 项",
       "labels": "标签：{{labels}}",
+      "peek": {
+        "closed": "已关闭",
+        "open": "开放",
+        "merged": "已合并",
+        "draft": "草稿",
+        "failing": "失败",
+        "running": "待处理",
+        "cancelled": "已取消",
+        "passing": "通过",
+        "more": "另有 {{count}} 项"
+      },
       "addEmoji": "添加表情符号",
       "addEmojiTooltip": "添加表情符号（或输入 :）",
       "noEmojiFound": "未找到表情符号"
@@ -25936,6 +25975,7 @@
     "killAllLocal": "结束所有本地会话",
     "killFailed": "无法结束终端。将保留上次观察到的会话",
     "owner": {
+      "orca": "Orca",
       "agents": "智能体",
       "otherTerminals": "其他终端",
       "privateBytes": "Orca 和终端已提交的内存"
@@ -27898,6 +27938,7 @@
       "computerHint": "bot 运行的位置",
       "computerAccountHint": "bot 运行的位置，以 {{account}} 身份登录 Orca",
       "useChatDefaults": "使用聊天默认设置",
+      "chatDefault": "聊天默认",
       "usingChatDefault": "正在使用你的聊天默认设置。后台运行使用你的“智能体”设置",
       "agent": "智能体",
       "folder": "文件夹：{{path}}",
@@ -27979,8 +28020,7 @@
       },
       "hostSleeping": "休眠中 · 使用时唤醒",
       "wslWaking": "正在唤醒 {{distro}}…",
-      "hostWaking": "正在唤醒…",
-      "useChatDefaultsHint": "把智能体的模型、选项和权限恢复为你的聊天默认设置"
+      "hostWaking": "正在唤醒…"
     },
     "googleSetup": {
       "otherAccount": "切换账号",
@@ -28242,6 +28282,7 @@
       "addedCount": "已添加 {{count}} 个",
       "chip": {
         "all": "全部",
+        "composio": "Composio",
         "more": "更多"
       },
       "filters": "按应用筛选",
@@ -30802,9 +30843,26 @@
     "updating": "正在更新…",
     "tryAgain": "重试",
     "update": "更新",
+    "versions": "{{installed}} → {{latest}}",
     "modelRequiresClaude": "需要 Claude Code CLI {{version}} 或更高版本",
     "modelRequiresCodex": "需要 Codex CLI {{version}} 或更高版本",
     "modelRequires": "需要 {{product}} {{version}} 或更高版本",
+    "claudeProduct": "Claude Code",
+    "codexProduct": "Codex CLI",
+    "grokProduct": "Grok Build",
+    "opencodeProduct": "OpenCode",
+    "opencode2Product": "OpenCode 2",
+    "ompProduct": "OMP",
+    "copilotProduct": "GitHub Copilot CLI",
+    "copilotShortProduct": "Copilot CLI",
+    "kimiProduct": "Kimi Code",
+    "cursorProduct": "Cursor CLI",
+    "hermesProduct": "Hermes Agent",
+    "gooseProduct": "Goose CLI",
+    "auggieProduct": "Auggie",
+    "kiloProduct": "Kilo CLI",
+    "mimoCodeProduct": "MiMo Code",
+    "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "命令已复制",

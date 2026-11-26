@@ -1,32 +1,39 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { RawData } from 'ws'
 import {
   DeviceCredentialInstalledSchema,
   DeviceResumeConfirmedSchema
 } from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 
-const OpaqueIdSchema = z.string().min(1).max(128)
-const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
-const Base6432ByteSchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/)
-const Base64Raw24ByteSchema = z.string().regex(/^[A-Za-z0-9+/]{32}$/)
-const EpochMsSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-const GenerationSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+const OpaqueIdSchema = lazyZodSchema(() => z.string().min(1).max(128))
+const Base64Url32ByteSchema = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_-]{43}$/))
+const Base6432ByteSchema = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9+/]{43}=$/))
+const Base64Raw24ByteSchema = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9+/]{32}$/))
+const EpochMsSchema = lazyZodSchema(() =>
+  z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+)
+const GenerationSchema = lazyZodSchema(() =>
+  z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+)
 
-export const RelayHostChallengeMessageSchema = z
-  .object({
-    type: z.literal('host-challenge'),
-    challengeId: OpaqueIdSchema,
-    relayEphemeralPublicKeyB64: Base6432ByteSchema,
-    nonceB64: Base64Raw24ByteSchema,
-    ciphertextB64: z
-      .string()
-      .min(1)
-      .max(16 * 1024),
-    expiresAt: EpochMsSchema
-  })
-  .strict()
+export const RelayHostChallengeMessageSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('host-challenge'),
+      challengeId: OpaqueIdSchema,
+      relayEphemeralPublicKeyB64: Base6432ByteSchema,
+      nonceB64: Base64Raw24ByteSchema,
+      ciphertextB64: z
+        .string()
+        .min(1)
+        .max(16 * 1024),
+      expiresAt: EpochMsSchema
+    })
+    .strict()
+)
 
-const ConnectionKindSchema = z.enum(['invite', 'resume'])
+const ConnectionKindSchema = lazyZodSchema(() => z.enum(['invite', 'resume']))
 
 // Strict deployed cells reject new hello keys; mirror contract capabilities in upgrade headers.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
@@ -41,114 +48,130 @@ export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
 export const RELAY_HOST_ATTACH_DEADLINE_MS = 10_000
 
 // Older cells send only ids; optional kind/device fields allow additive evolution.
-const PendingConnectionSchema = z
-  .object({
-    connId: OpaqueIdSchema,
-    connTicket: Base64Url32ByteSchema,
-    kind: ConnectionKindSchema.optional(),
-    relayDeviceId: OpaqueIdSchema.optional()
-  })
-  .strict()
+const PendingConnectionSchema = lazyZodSchema(() =>
+  z
+    .object({
+      connId: OpaqueIdSchema,
+      connTicket: Base64Url32ByteSchema,
+      kind: ConnectionKindSchema.optional(),
+      relayDeviceId: OpaqueIdSchema.optional()
+    })
+    .strict()
+)
 
-export const RelayHostHelloAckMessageSchema = z
-  .object({
-    type: z.literal('host-hello-ack'),
-    v: z.literal(1),
-    generation: GenerationSchema,
-    controlResumeSecret: Base64Url32ByteSchema,
-    leaseExpiresAt: EpochMsSchema,
-    activeConnIds: z.array(OpaqueIdSchema).max(8),
-    pendingConns: z.array(PendingConnectionSchema).max(8)
-  })
-  .strict()
+export const RelayHostHelloAckMessageSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('host-hello-ack'),
+      v: z.literal(1),
+      generation: GenerationSchema,
+      controlResumeSecret: Base64Url32ByteSchema,
+      leaseExpiresAt: EpochMsSchema,
+      activeConnIds: z.array(OpaqueIdSchema).max(8),
+      pendingConns: z.array(PendingConnectionSchema).max(8)
+    })
+    .strict()
+)
 
-export const RelayConnectionOpenMessageSchema = z
-  .object({
-    type: z.literal('conn-open'),
-    connId: OpaqueIdSchema,
-    connTicket: Base64Url32ByteSchema,
-    kind: ConnectionKindSchema,
-    relayDeviceId: OpaqueIdSchema,
-    attachDeadlineMs: z.number().int().positive().max(60_000)
-  })
-  .strict()
+export const RelayConnectionOpenMessageSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('conn-open'),
+      connId: OpaqueIdSchema,
+      connTicket: Base64Url32ByteSchema,
+      kind: ConnectionKindSchema,
+      relayDeviceId: OpaqueIdSchema,
+      attachDeadlineMs: z.number().int().positive().max(60_000)
+    })
+    .strict()
+)
 
-export const RelayDrainMessageSchema = z
-  .object({
-    type: z.literal('drain'),
-    graceMs: z
-      .number()
-      .int()
-      .nonnegative()
-      .max(60 * 60 * 1000),
-    recovery: z.literal('resolve-director')
-  })
-  .strict()
+export const RelayDrainMessageSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('drain'),
+      graceMs: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(60 * 60 * 1000),
+      recovery: z.literal('resolve-director')
+    })
+    .strict()
+)
 
-export const RelayPingMessageSchema = z
-  .object({ type: z.literal('ping'), t: EpochMsSchema })
-  .strict()
+export const RelayPingMessageSchema = lazyZodSchema(() =>
+  z.object({ type: z.literal('ping'), t: EpochMsSchema }).strict()
+)
 
-export const RelayKeepaliveOfferMessageSchema = z
-  .object({
-    type: z.literal('keepalive-offer'),
-    v: z.literal(1),
-    intervalMs: z.number().int().min(1_000).max(60_000)
-  })
-  .strict()
+export const RelayKeepaliveOfferMessageSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('keepalive-offer'),
+      v: z.literal(1),
+      intervalMs: z.number().int().min(1_000).max(60_000)
+    })
+    .strict()
+)
 
-export const RelayKeepaliveAckMessageSchema = z
-  .object({ type: z.literal('keepalive-ack') })
-  .strict()
+export const RelayKeepaliveAckMessageSchema = lazyZodSchema(() =>
+  z.object({ type: z.literal('keepalive-ack') }).strict()
+)
 
-export const RelayInviteCreatedMessageSchema = z
-  .object({
-    type: z.literal('invite-created'),
-    reqId: OpaqueIdSchema,
-    inviteToken: Base64Url32ByteSchema,
-    expiresAt: EpochMsSchema,
-    maxAttempts: z.number().int().positive().max(16)
-  })
-  .strict()
+export const RelayInviteCreatedMessageSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.literal('invite-created'),
+      reqId: OpaqueIdSchema,
+      inviteToken: Base64Url32ByteSchema,
+      expiresAt: EpochMsSchema,
+      maxAttempts: z.number().int().positive().max(16)
+    })
+    .strict()
+)
 
-export const RelayDeviceRevokedMessageSchema = z
-  .object({ type: z.literal('device-revoked'), reqId: OpaqueIdSchema })
-  .strict()
+export const RelayDeviceRevokedMessageSchema = lazyZodSchema(() =>
+  z.object({ type: z.literal('device-revoked'), reqId: OpaqueIdSchema }).strict()
+)
 
 export const RelayDeviceCredentialInstalledMessageSchema = DeviceCredentialInstalledSchema.extend({
   type: z.literal('device-credential-installed')
 }).strict()
 
-export const RelayDeviceCredentialInstallStatusResultMessageSchema = z.union([
-  z
-    .object({
-      type: z.literal('device-credential-install-status-result'),
-      v: z.literal(1),
-      reqId: OpaqueIdSchema,
-      state: z.literal('not-found')
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('device-credential-install-status-result'),
-      v: z.literal(1),
-      reqId: OpaqueIdSchema,
-      state: z.literal('committed'),
-      result: DeviceCredentialInstalledSchema
-    })
-    .strict()
-])
+export const RelayDeviceCredentialInstallStatusResultMessageSchema = lazyZodSchema(() =>
+  z.union([
+    z
+      .object({
+        type: z.literal('device-credential-install-status-result'),
+        v: z.literal(1),
+        reqId: OpaqueIdSchema,
+        state: z.literal('not-found')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('device-credential-install-status-result'),
+        v: z.literal(1),
+        reqId: OpaqueIdSchema,
+        state: z.literal('committed'),
+        result: DeviceCredentialInstalledSchema
+      })
+      .strict()
+  ])
+)
 
 export const RelayDeviceResumeConfirmedMessageSchema = DeviceResumeConfirmedSchema.extend({
   type: z.literal('device-resume-confirmed')
 }).strict()
 
 // Strip new fields instead of rejecting newer relay retry hints.
-export const RelayControlErrorMessageSchema = z.object({
-  type: z.literal('control-error'),
-  reqId: OpaqueIdSchema.optional(),
-  code: z.string().min(1).max(128)
-})
+export const RelayControlErrorMessageSchema = lazyZodSchema(() =>
+  z.object({
+    type: z.literal('control-error'),
+    reqId: OpaqueIdSchema.optional(),
+    code: z.string().min(1).max(128)
+  })
+)
 
 export type RelayPendingConnection = z.infer<typeof PendingConnectionSchema>
 export type RelayHostHelloAckMessage = z.infer<typeof RelayHostHelloAckMessageSchema>
