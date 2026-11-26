@@ -36,10 +36,23 @@ export function readBotConversationActsFor(
     : recorded
 }
 
+/** Each old event run's automation by its conversation root, per orchestration DB: found once, since
+ *  no new run lands in an old conversation. Only roots of old rows, which Orca no longer writes. */
+const legacyRunAutomations = new WeakMap<OrchestrationDb, Map<string, string | null>>()
+
 function legacyRunAutomationExists(sources: BotConversationActsForSources, root: string): boolean {
   try {
-    const run = sources.listAutomationRuns().find((entry) => entry.chatSessionId === root)
-    return run !== undefined && sources.showAutomation(run.automationId) !== undefined
+    const db = sources.getOrchestrationDb()
+    const known = legacyRunAutomations.get(db) ?? new Map<string, string | null>()
+    legacyRunAutomations.set(db, known)
+    let automationId = known.get(root)
+    if (automationId === undefined) {
+      automationId =
+        sources.listAutomationRuns().find((entry) => entry.chatSessionId === root)?.automationId ??
+        null
+      known.set(root, automationId)
+    }
+    return automationId !== null && sources.showAutomation(automationId) !== undefined
   } catch {
     return false
   }

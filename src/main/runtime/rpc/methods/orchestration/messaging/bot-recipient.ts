@@ -258,7 +258,9 @@ export async function readBotTurn(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   sessionId: string,
-  opening?: AgentJournalMessageItem
+  opening?: AgentJournalMessageItem,
+  /** Only whom the turn acts for: where an automation's run happened is not read. */
+  { askersOnly = false }: { askersOnly?: boolean } = {}
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -286,8 +288,12 @@ export async function readBotTurn(
     isBotRequest: (messageId: string) => db.getBotRequest(messageId) !== undefined,
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
-    automationPlace: (run?: AutomationRunMessage) =>
-      automationPlace(runtime, sessionId, run, conversation),
+    ...(askersOnly
+      ? {}
+      : {
+          automationPlace: (run?: AutomationRunMessage) =>
+            automationPlace(runtime, sessionId, run, conversation)
+        }),
     conversationWorkspaceId: workspaceId
   }
   const turn = opening

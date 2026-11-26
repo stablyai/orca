@@ -28,7 +28,7 @@ import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
 import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
-import { closingChatActsFor } from './bots-items-close-acts-for'
+import { closingTurnActsFor } from './bots-items-close-acts-for'
 import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
 const ADD = defineMethod({
@@ -79,7 +79,7 @@ const SET = defineMethod({
         : {}
     const closing = status === 'done' || status === 'canceled'
     const changes = {
-      ...(closing ? { closedFor: await closingChatActsFor(context, writer) } : {}),
+      ...(closing ? { closedFor: await closingTurnActsFor(context.runtime, writer) } : {}),
       title,
       description,
       doneMeans,
@@ -131,7 +131,7 @@ const DONE = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const actsFor = await closingChatActsFor(context, writer)
+    const actsFor = await closingTurnActsFor(context.runtime, writer)
     const outcome = await store.close(item.uid, 'done', params.note, writer.actor, actsFor)
     return writeResult(context, outcome, writer)
   }
@@ -145,7 +145,7 @@ const CANCEL = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const actsFor = await closingChatActsFor(context, writer)
+    const actsFor = await closingTurnActsFor(context.runtime, writer)
     const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor, actsFor)
     return writeResult(context, outcome, writer)
   }
