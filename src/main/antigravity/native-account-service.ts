@@ -112,7 +112,16 @@ export class AntigravityAccountService {
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
-      const { latest, readback, switching } = await this.applySelection(selected, current)
+      const { readback, switching } = await this.switchNative(selected, current)
+      const latest = await this.store.read()
+      if (
+        !latest.accounts.some((account) => account.id === id && this.matches(account, readback))
+      ) {
+        throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
+      }
+      latest.selectedAccountId = id
+      this.updateSnapshot(latest, readback)
+      await this.store.write(latest)
       if (switching) {
         switched?.()
       }
@@ -156,15 +165,17 @@ export class AntigravityAccountService {
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
         )
       }
-      await this.applySelection(selected, current, true)
+      await this.switchNative(selected, current)
+      // No vault write: both logins are already saved, and another Orca process selecting meanwhile wins.
+      if ((await this.store.read()).selectedAccountId !== selected.id) {
+        throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
+      }
     })
   }
 
-  /** `restoring` keeps the saved selection: another Orca process selecting meanwhile wins. */
-  private async applySelection(
+  private async switchNative(
     selected: StoredAntigravityAccount,
-    current: AntigravityNativeCredential | null,
-    restoring = false
+    current: AntigravityNativeCredential | null
   ) {
     const switching = !current || !this.matches(selected, current)
     if (switching) {
@@ -176,19 +187,7 @@ export class AntigravityAccountService {
         'Antigravity account switching could not be verified; refresh before retrying.'
       )
     }
-    const latest = await this.store.read()
-    if (
-      (restoring && latest.selectedAccountId !== selected.id) ||
-      !latest.accounts.some(
-        (account) => account.id === selected.id && this.matches(account, readback)
-      )
-    ) {
-      throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
-    }
-    latest.selectedAccountId = selected.id
-    this.updateSnapshot(latest, readback)
-    await this.store.write(latest)
-    return { latest, readback, switching }
+    return { readback, switching }
   }
 
   beginUsageRead(): Promise<AntigravityUsageReadStart | null> {
