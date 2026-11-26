@@ -23,6 +23,9 @@
 !macro customCheckAppRunning
   Push $0
   Push $1
+  Push $2
+  Push $3
+  Push $4
   Push $R0
   Push $R1
   Push $R2
@@ -38,10 +41,13 @@
   System::Call "kernel32::GetTickCount() i .R8"
   IntOp $R8 $R8 + ${ORCA_UPDATE_EXIT_GRACE_MS}
   StrCpy $0 ""
+  ; $2 is the tick count of the first pass that terminated something.
+  StrCpy $2 ""
 
   ${Do}
-    System::Call "kernel32::GetTickCount() i .r1"
-    IntOp $1 $1 - $R8
+    ; $3 is this pass's start; $1 is how far past the grace deadline it is.
+    System::Call "kernel32::GetTickCount() i .r3"
+    IntOp $1 $3 - $R8
     ; $R7 counts processes still running from $INSTDIR on this pass.
     StrCpy $R7 0
     System::Call "kernel32::CreateToolhelp32Snapshot(i 2, i 0) p .R0"
@@ -74,6 +80,9 @@
               ${If} $R5 == "$INSTDIR\"
                 IntOp $R7 $R7 + 1
                 ${If} $1 >= 0
+                  ${If} $2 == ""
+                    StrCpy $2 $3
+                  ${EndIf}
                   ; PROCESS_TERMINATE
                   System::Call "kernel32::OpenProcess(i 1, i 0, i R3) p .R4"
                   ${If} $R4 != 0
@@ -93,7 +102,9 @@
       System::Free $R1
     ${EndIf}
 
+    ; Only a scan that ran and found nothing ends the check; a failed snapshot is retried.
     ${If} $R7 == 0
+    ${AndIf} $R0 <> -1
       ${ExitDo}
     ${EndIf}
 
@@ -106,8 +117,20 @@
         System::Call "kernel32::GetTickCount() i .R8"
       ${EndIf}
       DetailPrint "$(appClosing)"
-    ${ElseIf} $1 >= 2000
-      ; TerminateProcess was refused (e.g. a protected process) or the app keeps starting again.
+    ${ElseIf} $2 != ""
+      ; A fresh scan 2 s after the first termination still finds something: TerminateProcess was
+      ; refused or the app keeps starting again.
+      IntOp $4 $3 - $2
+      ${If} $4 >= 2000
+        ${If} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDCANCEL`
+          Quit
+        ${EndIf}
+        System::Call "kernel32::GetTickCount() i .R8"
+        StrCpy $2 ""
+      ${EndIf}
+    ${ElseIf} $R0 = -1
+    ${AndIf} $1 >= 2000
+      ; The process list cannot be read at all.
       ${If} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDCANCEL`
         Quit
       ${EndIf}
@@ -126,6 +149,9 @@
   Pop $R2
   Pop $R1
   Pop $R0
+  Pop $4
+  Pop $3
+  Pop $2
   Pop $1
   Pop $0
 !macroend

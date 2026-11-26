@@ -62,8 +62,8 @@ let check = readFileSync(processCheck, 'utf8').replaceAll('\r\n', '\n')
 check = traceMacro + check
 check = replaceOnce(
   check,
-  '    ${If} $R7 == 0\n      ${ExitDo}',
-  '    !insertmacro ORCA_E2E_TRACE "install-dir-processes=$R7 since-grace-ms=$1"\n    ${If} $R7 == 0\n      ${ExitDo}'
+  '    ${If} $R7 == 0\n    ${AndIf} $R0 <> -1',
+  '    !insertmacro ORCA_E2E_TRACE "install-dir-processes=$R7 snapshot=$R0 since-grace-ms=$1 first-terminate=$2"\n    ${If} $R7 == 0\n    ${AndIf} $R0 <> -1'
 )
 
 if (!process.argv.includes('--check')) {
