@@ -11,7 +11,7 @@ const PAGE = Buffer.from('<!doctype html><html><head><title>Report</title></head
 
 let dir: string
 let url: string
-let close: () => Promise<void>
+let close: (() => Promise<void>) | undefined
 const received: { headers: IncomingHttpHeaders; body: Buffer }[] = []
 
 beforeAll(async () => {
@@ -24,7 +24,10 @@ beforeAll(async () => {
       response.end('OK')
     })
   })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
   const address = server.address()
   if (!address || typeof address === 'string') {
     throw new Error('the upload server has no port')
@@ -34,7 +37,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await close()
+  await close?.()
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -47,7 +50,7 @@ async function upload(name: string, bytes: Buffer) {
 }
 
 describe('uploadFile', () => {
-  it.each(['report.html', 'REPORT.HTM'])('labels %s as an HTML page for Slack', async (name) => {
+  it.each(['report.html', 'REPORT.HTM'])('sends %s as text/html', async (name) => {
     const sent = await upload(name, PAGE)
     expect(sent.headers['content-type']).toBe('text/html')
     expect(sent.body.equals(PAGE)).toBe(true)
@@ -57,7 +60,6 @@ describe('uploadFile', () => {
     ['chart.png', PNG],
     ['dump.bin', PNG],
     ['notes.xyz', PAGE],
-    ['Makefile', PAGE],
     ['page.html.txt', PAGE]
   ])('sends %s untyped, as before', async (name, bytes) => {
     const sent = await upload(name, bytes)

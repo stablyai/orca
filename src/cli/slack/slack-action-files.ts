@@ -62,7 +62,7 @@ const UPLOAD_FAILED = (name: string) =>
     `Slack didn't take ${name}; nothing was posted. Try again in a moment.`
   )
 
-// A page's bytes, unlike an image's, don't tell Slack what it is; untyped it shows as Binary.
+// Unlike an image's, a page's bytes don't say what they are, so the upload names its type.
 const UPLOAD_CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.html': 'text/html',
   '.htm': 'text/html'
