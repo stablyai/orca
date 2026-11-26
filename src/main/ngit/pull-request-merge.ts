@@ -44,7 +44,31 @@ async function checkoutOf(git: Git, repoPath: string, branch: string): Promise<s
   return null
 }
 
-/** Merges in `cwd`, which has `target` checked out, then pushes; the push publishes the status. */
+/**
+ * ngit publishes the merged status on push only for the repository's declared default branch, so it
+ * is always asked for; asking again for an applied pull request publishes nothing.
+ */
+async function publishApplied(
+  cwd: string,
+  remote: string,
+  target: string,
+  eventId: string,
+  exec: NgitExec
+): Promise<NgitMutationResult> {
+  try {
+    await exec(
+      ['--repo', remote, 'pr', 'applied', eventId, `--reason=landed on ${target}`, '--json'],
+      cwd
+    )
+    return { ok: true }
+  } catch (error) {
+    return failed(
+      `The changes are on ${remote}/${target}, but publishing the merged status failed: ${message(error)}. Click merge again to retry.`
+    )
+  }
+}
+
+/** Merges in `cwd`, which has `target` checked out, then pushes and publishes the status. */
 async function mergeAndPush(
   git: Git,
   cwd: string,
@@ -83,7 +107,7 @@ async function mergeAndPush(
       `Merged into local ${target}, but the push failed: ${message(error)}. Run \`git push ${remote} ${target}\`.`
     )
   }
-  return { ok: true }
+  return publishApplied(cwd, remote, target, eventId, exec)
 }
 
 export async function mergeNgitPullRequest(
@@ -108,9 +132,21 @@ export async function mergeNgitPullRequest(
         return failed(base.error)
       }
     }
+    const { headSha, eventId, isPatch } = pull.item
+    // An earlier merge, here or in a terminal, may have landed without its status.
+    const landed =
+      !isPatch &&
+      headSha !== undefined &&
+      (await git(repoPath, ['merge-base', '--is-ancestor', headSha, `${remote}/${target}`]).then(
+        () => true,
+        () => false
+      ))
+    if (landed) {
+      return await publishApplied(repoPath, remote, target, eventId, exec)
+    }
     const existing = await checkoutOf(git, repoPath, target)
     if (existing) {
-      return await mergeAndPush(git, existing, remote, target, pull.item.eventId, exec)
+      return await mergeAndPush(git, existing, remote, target, eventId, exec)
     }
     // A throwaway checkout, so no workspace the user has open changes branch.
     const parent = await mkdtemp(join(tmpdir(), 'orca-ngit-merge-'))
@@ -125,7 +161,7 @@ export async function mergeNgitPullRequest(
           ? ['worktree', 'add', checkout, target]
           : ['worktree', 'add', '--track', '-b', target, checkout, `${remote}/${target}`]
       )
-      return await mergeAndPush(git, checkout, remote, target, pull.item.eventId, exec)
+      return await mergeAndPush(git, checkout, remote, target, eventId, exec)
     } finally {
       await git(repoPath, ['worktree', 'remove', '--force', checkout]).catch(() => '')
       await rm(parent, { recursive: true, force: true })

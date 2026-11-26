@@ -9,6 +9,7 @@ import type { ProjectedWorkItem } from './work-item-projection'
 let root: string
 let repo: string
 let remote: string
+let statuses: string[]
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
     .toString()
@@ -22,6 +23,7 @@ function commit(file: string, text: string): string {
 }
 
 beforeEach(() => {
+  statuses = []
   root = mkdtempSync(join(tmpdir(), 'ngit-merge-test-'))
   remote = join(root, 'remote.git')
   repo = join(root, 'repo')
@@ -50,7 +52,11 @@ function pull(headSha: string): ProjectedWorkItem {
 }
 
 /** Stands in for `ngit pr merge`: a no-ff merge of the tip into the checked-out target. */
-const fakeNgit = (tip: string) => async (_args: string[], cwd: string) => {
+const fakeNgit = (tip: string) => async (args: string[], cwd: string) => {
+  if (args.includes('applied')) {
+    statuses.push(args[3])
+    return '{}'
+  }
   try {
     git(cwd, 'merge', '--no-ff', '-m', 'merge', tip)
   } catch {
@@ -71,6 +77,20 @@ describe('merging an ngit pull request', () => {
     expect(git(remote, 'rev-parse', 'main^2')).toBe(tip)
     expect(git(repo, 'branch', '--show-current')).toBe('feature')
     expect(git(repo, 'worktree', 'list').split('\n')).toHaveLength(1)
+    expect(statuses).toEqual(['applied'])
+  })
+
+  it('only publishes the status for changes already on the target', async () => {
+    const tip = commit('added', 'new')
+    git(repo, 'push', 'origin', 'main')
+    const landed = git(remote, 'rev-parse', 'main')
+
+    await expect(
+      mergeNgitPullRequest(repo, pull(tip), 'origin', {}, fakeNgit(tip))
+    ).resolves.toEqual({ ok: true })
+
+    expect(git(remote, 'rev-parse', 'main')).toBe(landed)
+    expect(statuses).toEqual(['applied'])
   })
 
   it('publishes nothing when the merge conflicts', async () => {
@@ -86,6 +106,7 @@ describe('merging an ngit pull request', () => {
     expect(result).toMatchObject({ ok: false, error: expect.stringContaining('conflicts') })
     expect(git(remote, 'rev-parse', 'main')).toBe(published)
     expect(git(repo, 'status', '--porcelain')).toBe('')
+    expect(statuses).toEqual([])
   })
 
   it('refuses to publish local commits the remote does not have', async () => {
