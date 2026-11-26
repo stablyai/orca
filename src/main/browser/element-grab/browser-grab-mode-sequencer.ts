@@ -1,25 +1,18 @@
 import { browserManager } from '../guest-lifecycle/manager/browser-manager'
 import type { BrowserSetGrabModeResult } from '../../../shared/browser/element-grab/browser-grab-types'
 import type { BrowserCleanPageCapture } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
+import { grabDocumentScope, retireGrabOverlay } from './grab-guest-execution'
 import {
-  grabDocumentScope,
-  retireGrabOverlay,
-  type GrabDocumentScope
-} from './grab-guest-execution'
-import {
+  disposeGrabModeStateForPage,
+  grabModeIntents as intents,
   grabModeOperationByPageId,
+  grabModeOwners as owners,
   retireGrabModeAdmission,
   queueGrabModeOperation,
-  supersededGrabMode
+  supersededGrabMode,
+  type GrabModeOwner as ModeOwner
 } from './browser-grab-mode-admission'
 
-type ModeOwner = {
-  requestId?: string
-  identity: string
-  scope?: GrabDocumentScope
-  /** Only a completed enable grants selection; a failed or disabling request never does. */
-  armed: boolean
-}
 type ModeOptions = {
   requestId?: string
   paletteKeys?: boolean
@@ -28,8 +21,7 @@ type ModeOptions = {
   onPolicyRetired?: () => void
   afterClean?: (guest: Electron.WebContents, signal: AbortSignal) => Promise<boolean>
 }
-const owners = new Map<string, ModeOwner>()
-const intents = new Map<string, { enabled: boolean }>()
+export { disposeGrabModeStateForPage }
 
 export function resetGrabModeState(): void {
   owners.clear()
@@ -38,16 +30,6 @@ export function resetGrabModeState(): void {
     retireGrabModeAdmission(state)
   }
   grabModeOperationByPageId.clear()
-}
-
-export function disposeGrabModeStateForPage(browserPageId: string): void {
-  owners.delete(browserPageId)
-  intents.delete(browserPageId)
-  const state = grabModeOperationByPageId.get(browserPageId)
-  if (state) {
-    retireGrabModeAdmission(state)
-  }
-  grabModeOperationByPageId.delete(browserPageId)
 }
 
 /** The same bounded request/document owner for a local renderer or an authorized runtime viewer. */
@@ -77,6 +59,10 @@ export async function setBrowserGrabMode(
       if (!guest && enabled && waitForGuest) {
         await waitForGuest(signal).catch(() => {})
         guest = resolveGuest()
+      }
+      if (!guest && owners.get(browserPageId) === owner) {
+        // No page to arm (it closed, or the wait gave up): nothing will ever retire this owner.
+        owners.delete(browserPageId)
       }
       if (!isCurrent() || signal.aborted) {
         return supersededGrabMode()

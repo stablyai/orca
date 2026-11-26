@@ -9,7 +9,7 @@ import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 
 /**
  * The palette's one-line hint; empty once the palette's own controls say it (Draw, notes, a Grab pick).
- * `keepWhenCompact` marks a status the user must see even where a compacted palette drops its tips.
+ * `keepWhenCompact` marks a status or key instruction the user must see even where a compacted palette drops its tips.
  */
 export function browserAnnotatePaletteHint({
   t,
@@ -82,6 +82,8 @@ export function browserAnnotatePaletteHint({
       'auto.components.browser.pane.BrowserPane.168350ae6a',
       'Click or hover an element, then press C to copy or S to screenshot.'
     ),
-    isError: false
+    isError: false,
+    // The only place the C/S keys are named, so a compacted palette keeps it.
+    keepWhenCompact: true
   }
 }

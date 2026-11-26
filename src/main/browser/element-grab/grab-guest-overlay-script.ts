@@ -1,5 +1,8 @@
 import { GRAB_PICK_CONTROL_SCRIPT } from './grab-guest-pick-control-script'
-import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import {
+  BROWSER_GRAB_HOVER_ATTRIBUTE,
+  BROWSER_GRAB_SELECTED_ATTRIBUTE
+} from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
 import { GRAB_GUEST_LABEL_PLACEMENT_SCRIPT } from './grab-guest-overlay-helpers-script'
 
@@ -62,6 +65,7 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
   }
 
   var lastPointer = null;
+  var hoverMarked = null;
   function hitAt(x, y) {
     // Exclude the overlay from hit testing to find the page element underneath.
     host.style.pointerEvents = 'none';
@@ -213,6 +217,8 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
       window.removeEventListener('fullscreenchange', raiseOverlay, true);
       stopTrackingSelection();
       currentEl = null;
+      if (hoverMarked) hoverMarked.removeAttribute(${JSON.stringify(BROWSER_GRAB_HOVER_ATTRIBUTE)});
+      hoverMarked = null;
       try { host.remove(); } catch(e) {}
     }
   };
@@ -275,7 +281,12 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
       settleHover();
       if (!currentEl) return null;
       try {
-        return pickControl(currentEl, extractPayload(currentEl), false);
+        var hoverPayload = extractPayload(currentEl);
+        // Names the described element, so the preload pairs this payload only with the node it hit itself.
+        if (hoverMarked && hoverMarked !== currentEl) hoverMarked.removeAttribute(${JSON.stringify(BROWSER_GRAB_HOVER_ATTRIBUTE)});
+        currentEl.setAttribute(${JSON.stringify(BROWSER_GRAB_HOVER_ATTRIBUTE)}, hoverPayload.page.capturedAt);
+        hoverMarked = currentEl;
+        return pickControl(currentEl, hoverPayload, false);
       } catch (e) {
         return null;
       }

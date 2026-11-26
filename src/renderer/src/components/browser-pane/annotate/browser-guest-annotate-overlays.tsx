@@ -253,7 +253,8 @@ export function BrowserGuestAnnotateOverlays({
                 )
               : null
           }
-          grabCopyDone={grabToast?.copied === true}
+          // Copied belongs to the pick it copied; a new pick within the toast's 2 s starts fresh.
+          grabCopyDone={grabToast?.copied === true && grabToast.payload === heldPayload}
           grabPicked={heldPayload !== null}
           grabCanScreenshot={Boolean(
             heldPayload?.screenshot?.dataUrl?.startsWith('data:image/png;')

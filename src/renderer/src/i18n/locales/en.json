@@ -701,6 +701,11 @@
       "failed": "Couldn't clear cookies in {{profile}} on {{host}}. Try again.",
       "failedLocal": "Couldn't clear cookies in {{profile}} on this computer. Try again.",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "grabToast": {
+      "noScreenshot": "No screenshot available",
+      "hoverReadFailed": "Could not read the hovered element",
+      "noHover": "No element hovered"
     }
   },
   "editor": {

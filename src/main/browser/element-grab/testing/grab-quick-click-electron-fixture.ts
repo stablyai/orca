@@ -25,11 +25,22 @@ export async function verifyGrabQuickClick(page: WebContents, manager: BrowserMa
     }
     await wait(20)
   }
+  // Hold the page's animation frames, so the outline cannot catch up to the move before the click.
+  await evalPage(
+    'window.__heldFrames = []; window.__realFrame = window.requestAnimationFrame; window.requestAnimationFrame = (frame) => window.__heldFrames.push(frame); true'
+  )
   page.sendInputEvent({ type: 'mouseMove', x: buy.x, y: buy.y })
   page.sendInputEvent({ type: 'mouseDown', x: buy.x, y: buy.y, button: 'left', clickCount: 1 })
   page.sendInputEvent({ type: 'mouseUp', x: buy.x, y: buy.y, button: 'left', clickCount: 1 })
   const result = await selection
+  const heldFrames = Number(
+    await evalPage(
+      'window.requestAnimationFrame = window.__realFrame; const held = window.__heldFrames.splice(0); held.forEach((frame) => frame(performance.now())); held.length'
+    )
+  )
   return {
+    // At least the move's frame was held: the click really came before the outline caught up.
+    framesHeld: heldFrames > 0,
     kind: result.kind,
     target: result.kind === 'selected' ? result.payload.target.tagName : null
   }

@@ -31,6 +31,8 @@ export const BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID = 1207
 export const BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX = '__orca_annotation_viewport__:'
 // Set by the grab overlay on the element it froze on, so the isolated bridge can measure it.
 export const BROWSER_GRAB_SELECTED_ATTRIBUTE = 'data-orca-grab-selected'
+// Set by the grab overlay on the element a hover read (C/S) describes, so the preload can match it to its own hit.
+export const BROWSER_GRAB_HOVER_ATTRIBUTE = 'data-orca-grab-hover'
 
 export function isValidBrowserAnnotationViewportBridgeToken(value: unknown): value is string {
   return typeof value === 'string' && /^[a-zA-Z0-9_-]{16,80}$/.test(value)

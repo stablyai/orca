@@ -8,6 +8,12 @@ import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
 import type { ShowGrabToast } from '../../describe-page/browser-page-types'
 import { translate } from '@/i18n/i18n'
+import {
+  copiedGrabToastMessage,
+  hoverReadFailedGrabToastMessage,
+  noHoverGrabToastMessage,
+  noScreenshotGrabToastMessage
+} from './grab-toast-messages'
 
 /** Snapshot of the picker's target at action start; true while the same Grab session on the same page is on. */
 export function grabHoverStillCurrent(
@@ -55,14 +61,14 @@ export function runBrowserGrabActionShortcut({
       const text = formatGrabPayloadAsText(payload)
       void window.api.ui.writeClipboardText(text)
       recordFeatureInteraction('browser-grab')
-      showGrabToast('Copied', 'success', payload, true)
+      showGrabToast(copiedGrabToastMessage(), 'success', payload, true)
     } else {
       const dataUrl = payload.screenshot?.dataUrl
       if (dataUrl?.startsWith('data:image/png;base64,')) {
         recordFeatureInteraction('browser-grab')
         copyGrabScreenshot(dataUrl, payload)
       } else {
-        showGrabToast('No screenshot available', 'error', payload)
+        showGrabToast(noScreenshotGrabToastMessage(), 'error', payload)
       }
     }
   }
@@ -113,7 +119,7 @@ export function runBrowserGrabActionShortcut({
       } catch {
         // Why: the guest can be destroyed or the IPC channel torn down mid-shortcut; surface it like a miss instead of an unhandled rejection.
         if (isStillCurrent()) {
-          showGrabToast('Could not read the hovered element', 'error')
+          showGrabToast(hoverReadFailedGrabToastMessage(), 'error')
         }
         return
       }
@@ -121,7 +127,7 @@ export function runBrowserGrabActionShortcut({
         return
       }
       if (!result.ok) {
-        showGrabToast('No element hovered', 'error')
+        showGrabToast(noHoverGrabToastMessage(), 'error')
         return
       }
       const payload = result.payload as BrowserGrabPayload

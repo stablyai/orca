@@ -321,7 +321,7 @@ export function useBrowserAnnotateToolSwitch({
     [selectTool]
   )
 
-  usePendingDrawEscape({ waiting: drawStarting, pageId: toolTargetId, exit })
+  usePendingDrawEscape({ waiting: drawStarting, markup, pageId: toolTargetId, exit })
 
   return {
     activeTool,

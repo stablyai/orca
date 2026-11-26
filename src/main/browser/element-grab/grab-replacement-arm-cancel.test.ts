@@ -42,6 +42,9 @@ function pickerPage(): {
         }
         return (action: string) => {
           if (action === 'teardown') {
+            if (code === 'throwing-first') {
+              throw new Error('page teardown threw')
+            }
             host.remove()
           }
           return true
@@ -78,6 +81,21 @@ it('cancel after a successful replacement arm retires the replacement', async ()
   // The page swapped pickers: the replacement is the live one.
   expect(hosts.get('first')?.isConnected).toBe(false)
   expect(hosts.get('replacement')?.isConnected).toBe(true)
+
+  retireGrabOverlay(grabDocumentScope(guest))
+  await delivered()
+  expect(hosts.get('replacement')?.isConnected).toBe(false)
+})
+
+it('cancel after a replacement whose predecessor threw on teardown retires the replacement', async () => {
+  const { guest, hosts } = pickerPage()
+  await expect(executeGrabScript(guest, 'throwing-first', { overlayControl: true })).resolves.toBe(
+    true
+  )
+  await expect(executeGrabScript(guest, 'replacement', { overlayControl: true })).resolves.toBe(
+    true
+  )
+  expect(hosts.get('throwing-first')?.isConnected).toBe(false)
 
   retireGrabOverlay(grabDocumentScope(guest))
   await delivered()

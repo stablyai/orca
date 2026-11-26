@@ -4,7 +4,10 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { build } from 'vite'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
-import { ELECTRON_FIXTURE_RESULT_ENV } from './electron-fixture-result'
+import {
+  ELECTRON_FIXTURE_PRIVATE_DISPLAY_ENV,
+  ELECTRON_FIXTURE_RESULT_ENV
+} from './electron-fixture-result'
 
 export type ElectronFixtureRun = Awaited<ReturnType<typeof runProcess>> & {
   /** What the fixture passed to `writeElectronFixtureResult`; null when it wrote none. */
@@ -45,7 +48,9 @@ export async function runElectronFixture(
       electronBinary,
       electronArgs: [join(root, 'main.cjs'), `--user-data-dir=${join(root, 'profile')}`],
       platform: process.platform,
-      display: process.env.DISPLAY
+      display: process.env.DISPLAY,
+      // Fixtures show their window on Linux (see letFixtureWindowPaint), so they get their own Xvfb display.
+      privateDisplay: true
     })
     const { ELECTRON_RUN_AS_NODE: _runAsNode, ...inherited } = process.env
     const baseEnvironment = options.isolatedEnvironment
@@ -61,8 +66,8 @@ export async function runElectronFixture(
               'LANG',
               'LC_ALL',
               'LC_CTYPE',
-              'DISPLAY',
-              'XAUTHORITY'
+              // Linux runs under its own xvfb-run, which sets these; elsewhere they are unused.
+              ...(process.platform === 'linux' ? [] : ['DISPLAY', 'XAUTHORITY'])
             ].includes(key)
           )
         )
@@ -90,6 +95,7 @@ export async function runElectronFixture(
         ...baseEnvironment,
         ...env,
         ORCA_BACKGROUND_LAUNCH: '1',
+        [ELECTRON_FIXTURE_PRIVATE_DISPLAY_ENV]: '1',
         [ELECTRON_FIXTURE_RESULT_ENV]: resultPath
       },
       timeoutMs: 45_000

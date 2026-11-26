@@ -216,37 +216,40 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     if (armed && this.grabLabelAvoidAreaByTabId.has(browserTabId)) {
       void this.syncLabelAvoidArea(browserTabId, guest, scope)
     }
-    if (armed) {
-      if (host) {
-        const keys = new GrabNativeKeySession(
-          guest,
-          host,
-          browserTabId,
-          () => {
-            if (this.nativeKeysByTabId.get(browserTabId) === keys) {
-              this.nativeKeysByTabId.delete(browserTabId)
-            }
-          },
-          canDeliver,
-          onUnavailable,
-          paletteKeys
-        )
-        this.nativeKeysByTabId.set(browserTabId, keys)
-        if (
-          !(await recoverBrowserInputGuard(guest)) ||
-          !(await keys.setEnabled(!isAgentInjectingKeyboard(guest)))
-        ) {
-          // Don't leave the picker drawn with no key session if the renderer's follow-up cancel never lands.
-          retireGrabOverlay(scope)
-          keys.stop()
-          if (this.nativeKeysByTabId.get(browserTabId) === keys) {
+    let keys: GrabNativeKeySession | null = null
+    let keysReady = true
+    if (armed && host) {
+      const session = new GrabNativeKeySession(
+        guest,
+        host,
+        browserTabId,
+        () => {
+          if (this.nativeKeysByTabId.get(browserTabId) === session) {
             this.nativeKeysByTabId.delete(browserTabId)
           }
-          return false
-        }
+        },
+        canDeliver,
+        onUnavailable,
+        paletteKeys
+      )
+      keys = session
+      this.nativeKeysByTabId.set(browserTabId, session)
+      keysReady =
+        (await recoverBrowserInputGuard(guest)) &&
+        (await session.setEnabled(!isAgentInjectingKeyboard(guest)))
+    }
+    const delivered =
+      armed === true && keysReady && scope.current && canDeliver?.() !== false && !signal?.aborted
+    // A failed key handshake, or one superseded meanwhile (a successor cancelled before it ran never retires this
+    // picker), must not leave the picker drawn or its keys live.
+    if (armed && !delivered) {
+      retireGrabOverlay(scope)
+      keys?.stop()
+      if (keys && this.nativeKeysByTabId.get(browserTabId) === keys) {
+        this.nativeKeysByTabId.delete(browserTabId)
       }
     }
-    return armed === true && scope.current && canDeliver?.() !== false && !signal?.aborted
+    return delivered
   }
 
   async awaitGrabSelection(

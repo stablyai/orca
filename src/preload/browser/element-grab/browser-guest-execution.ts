@@ -177,10 +177,12 @@ export function installBrowserGuestExecution(
             }
             value = false
           } else {
-            if (overlay) {
-              tearDown(overlay)
-            }
+            // The replacement is live first: a throwing teardown of the old picker must not lose its control.
+            const previous = overlay
             overlay = { id: request.id, control, host }
+            if (previous) {
+              retireHosts(previous, previous.host ? [previous.host] : [])
+            }
             value = true
           }
         } else {
@@ -239,15 +241,22 @@ export function installBrowserGuestExecution(
           ? source.page.capturedAt
           : ''
       // The element is the one under the trusted pointer, never the page world's claim.
-      const element = authority
-        ? authority.resolvePick(owner?.host ?? null, kind === 'held' ? marker : null)
-        : null
-      if (authority && !element) {
+      const element = authority ? authority.resolvePick(owner?.host ?? null, kind, marker) : null
+      const described =
+        'target' in source && source.target && typeof source.target === 'object'
+          ? { ...source.target }
+          : {}
+      const target = element && authority ? authority.trustedTarget(element, described) : null
+      if (authority && !target) {
         return kind === 'held' ? { __orcaCancelled: true } : null
       }
       const id = `${documentId}-${requestId}`
       picks[kind] = { id, control, overlayId: owner?.id ?? null, element }
-      const payload = { ...source, page: { ...source.page, selectionId: id } }
+      const payload = {
+        ...source,
+        ...(target ? { target } : {}),
+        page: { ...source.page, selectionId: id }
+      }
       return 'contextMenu' in result && result.contextMenu === true
         ? { __orcaContextMenu: true, payload }
         : payload

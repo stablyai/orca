@@ -43,10 +43,13 @@ const CAPTURE: MarkupCaptureContext = {
 
 // Lets a test hold the picker's teardown open, to look at the moment Draw is still waiting for it.
 let holdTeardown = false
+// Holds Draw's page capture, to look at the moment before its drawing (and the drawing's Esc owner) mounts.
+let holdCapture = false
 let releaseTeardown: (() => void) | null = null
 
 beforeEach(() => {
   holdTeardown = false
+  holdCapture = false
   releaseTeardown = null
   Object.defineProperty(Element.prototype, 'checkVisibility', {
     configurable: true,
@@ -68,11 +71,10 @@ beforeEach(() => {
         cancelGrab: async () => true,
         captureSelectionScreenshot: async () => ({ ok: false }),
         extractHoverPayload: async () => ({ ok: false }),
-        captureCleanPage: async () => ({
-          dataUrl: 'data:image/png;base64,AA',
-          width: 8,
-          height: 8
-        }),
+        captureCleanPage: () =>
+          holdCapture
+            ? new Promise(() => {})
+            : Promise.resolve({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 }),
         awaitGrabSelection: () => new Promise(() => {})
       },
       ui: { writeClipboardText: async () => {}, writeClipboardImage: async () => {} }
@@ -147,7 +149,8 @@ function renderPage(pageId: string) {
       setPendingText: () => {},
       undo: () => {},
       redo: () => {},
-      onCancel: tools.exit,
+      // As in the app, the drawing (and its Esc) exists only once the page image has arrived.
+      onCancel: markup.baseImage ? tools.exit : () => {},
       ownerPageId: pageId
     })
     return { grab, markup, grabAnnotations, tools }
@@ -273,5 +276,17 @@ describe('annotate keys on the real tools', () => {
     press(document.body, 'Escape')
 
     expect(page.result.current.state).toBe('idle')
+  })
+
+  it('Esc while Draw captures the page leaves the mode, before the drawing mounts its own owner', async () => {
+    holdCapture = true
+    const page = renderPage('page-1')
+    pageSurface('page-1')
+    act(() => page.result.current.tools.selectTool('draw'))
+    await waitFor(() => expect(page.result.current.markup.state).toBe('capturing'))
+
+    press(document.body, 'Escape')
+
+    await waitFor(() => expect(page.result.current.tools.activeTool).toBeNull())
   })
 })

@@ -16,3 +16,9 @@ export const annotationAddedGrabToastMessage = (): string =>
     'auto.components.browser.pane.annotate.use.browser.page.grab.annotations.1f5cb19034',
     'Annotation added'
   )
+export const noScreenshotGrabToastMessage = (): string =>
+  translate('browser.grabToast.noScreenshot', 'No screenshot available')
+export const hoverReadFailedGrabToastMessage = (): string =>
+  translate('browser.grabToast.hoverReadFailed', 'Could not read the hovered element')
+export const noHoverGrabToastMessage = (): string =>
+  translate('browser.grabToast.noHover', 'No element hovered')

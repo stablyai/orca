@@ -1,6 +1,12 @@
-import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import {
+  BROWSER_GRAB_HOVER_ATTRIBUTE,
+  BROWSER_GRAB_SELECTED_ATTRIBUTE
+} from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
 const HOST_ID = '__orca-grab-host'
+
+/** The page world's description of a picked element's target, as the overlay script built it. */
+export type PageTargetDescription = Record<string, unknown>
 
 export type PickedSnapshot = {
   x: number
@@ -28,10 +34,18 @@ export type BrowserGuestPickerAuthority = {
   discard: (hosts: readonly Element[]) => void
   /** Positive proof for a clean: no picker host is attached anywhere in this document's light DOM. */
   noOverlayHost: () => boolean
-  /** A frozen pick is the node the trusted press hit and must carry its marker; a hover read is the node under the pointer. */
-  resolvePick: (host: Element | null, marker: string | null) => Element | null
+  /**
+   * A frozen pick is the node the trusted press hit, a hover read the node under the trusted pointer; either must
+   * carry the marker the page world set on the element its payload describes.
+   */
+  resolvePick: (host: Element | null, kind: 'held' | 'hover', marker: string) => Element | null
   present: (element: Element) => boolean
   snapshot: (element: Element) => PickedSnapshot | false
+  /** The page world's target description with its tag and box taken from the trusted node; null if it is gone. */
+  trustedTarget: (
+    element: Element,
+    described: PageTargetDescription
+  ) => PageTargetDescription | null
 }
 
 const isPointerPosition = (event: Event): event is Event & { clientX: number; clientY: number } =>
@@ -99,6 +113,19 @@ export function createBrowserGuestPickerAuthority(
       }
     }
   }
+  function snapshot(element: Element): PickedSnapshot | false {
+    if (!element.isConnected || element.ownerDocument !== document) {
+      return false
+    }
+    const rect = element.getBoundingClientRect()
+    return {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      viewportWidth: window.innerWidth
+    }
+  }
   return {
     observeArm: async (run) => {
       const added: Element[] = []
@@ -137,29 +164,26 @@ export function createBrowserGuestPickerAuthority(
       }
     },
     noOverlayHost: () => document.querySelector(`[id="${HOST_ID}"]`) === null,
-    resolvePick: (owned, marker) => {
-      // A frozen pick is the node the trusted press hit; a hover read is the node under the pointer now.
-      const element = marker === null ? hitTest(owned) : pressed
-      if (!element || element === owned) {
+    resolvePick: (owned, kind, marker) => {
+      const element = kind === 'hover' ? hitTest(owned) : pressed
+      if (!element || element === owned || !marker) {
         return null
       }
-      return marker === null || element.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE) === marker
-        ? element
-        : null
+      const attribute =
+        kind === 'hover' ? BROWSER_GRAB_HOVER_ATTRIBUTE : BROWSER_GRAB_SELECTED_ATTRIBUTE
+      return element.getAttribute(attribute) === marker ? element : null
     },
     present: (element) => element.isConnected && element.ownerDocument === document,
-    snapshot: (element) => {
-      if (!element.isConnected || element.ownerDocument !== document) {
-        return false
-      }
-      const rect = element.getBoundingClientRect()
-      return {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-        viewportWidth: window.innerWidth
-      }
+    snapshot,
+    trustedTarget: (element, described) => {
+      const box = snapshot(element)
+      return box
+        ? {
+            ...described,
+            tagName: element.tagName.toLowerCase(),
+            rectViewport: { x: box.x, y: box.y, width: box.width, height: box.height }
+          }
+        : null
     }
   }
 }

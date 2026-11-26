@@ -4,17 +4,24 @@ import { interceptAnnotateEscape } from './annotate-escape-interceptor'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboard'
 import { annotateEscOwner } from './annotate-esc-ownership'
+import type { MarkupModeController } from '../capture/useMarkupMode'
 
-/** While Draw waits (for the picker's teardown or the page's load) neither the picker nor the drawing owns Esc; this does. */
+/**
+ * While Draw waits (for the picker's teardown, the page's load or its capture) neither the picker nor the drawing owns
+ * Esc; this does. The drawing mounts only once the captured image arrives.
+ */
 export function usePendingDrawEscape({
-  waiting,
+  waiting: startWaiting,
+  markup,
   pageId,
   exit
 }: {
   waiting: boolean
+  markup: Pick<MarkupModeController, 'state'>
   pageId: string
   exit: () => void
 }): void {
+  const waiting = startWaiting || markup.state === 'capturing'
   const exitUnlessIntercepted = useCallback(() => {
     if (!interceptAnnotateEscape(pageId)) {
       exit()

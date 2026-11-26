@@ -1,4 +1,5 @@
 import type { BrowserSetGrabModeResult } from '../../../shared/browser/element-grab/browser-grab-types'
+import type { GrabDocumentScope } from './grab-document-scope'
 
 type GrabModeRequest = {
   run: (signal: AbortSignal) => Promise<BrowserSetGrabModeResult>
@@ -60,4 +61,26 @@ export function queueGrabModeOperation(
     })()
   }
   return result
+}
+
+export type GrabModeOwner = {
+  requestId?: string
+  identity: string
+  scope?: GrabDocumentScope
+  /** Only a completed enable grants selection; a failed or disabling request never does. */
+  armed: boolean
+}
+// Leaf state, so page teardown in the browser manager can dispose it without importing the sequencer.
+export const grabModeOwners = new Map<string, GrabModeOwner>()
+export const grabModeIntents = new Map<string, { enabled: boolean }>()
+
+/** Every page teardown (close, guest destroyed, wait gave up) drops the page's mode owner and queued work. */
+export function disposeGrabModeStateForPage(browserPageId: string): void {
+  grabModeOwners.delete(browserPageId)
+  grabModeIntents.delete(browserPageId)
+  const state = grabModeOperationByPageId.get(browserPageId)
+  if (state) {
+    retireGrabModeAdmission(state)
+  }
+  grabModeOperationByPageId.delete(browserPageId)
 }

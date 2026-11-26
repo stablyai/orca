@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it } from 'vitest'
-import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import {
+  BROWSER_GRAB_HOVER_ATTRIBUTE,
+  BROWSER_GRAB_SELECTED_ATTRIBUTE
+} from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import { createBrowserGuestPickerAuthority } from '../../../preload/browser/element-grab/browser-guest-picker-authority'
 import { attachGrabExecutionTransport } from './testing/grab-execution-transport-fixture'
 import { executeGrabScript, requestGrabExecution } from './grab-guest-execution'
@@ -161,4 +164,40 @@ it('keeps presence tied to the originally picked node and refuses a pick the tru
     ok: true,
     value: { __orcaCancelled: true }
   })
+})
+
+it('pairs a hover read only with the node the trusted pointer is over, and takes its tag and box from that node', async () => {
+  const hovered = document.createElement('a')
+  hovered.setAttribute(BROWSER_GRAB_HOVER_ATTRIBUTE, 'hover-at')
+  hovered.getBoundingClientRect = () => DOMRect.fromRect({ x: 3, y: 4, width: 30, height: 10 })
+  const decoy = document.createElement('a')
+  document.body.append(hovered, decoy)
+  let underPointer: Element = decoy
+  document.elementFromPoint = () => underPointer
+  // The page world describes some other element entirely.
+  const described = (action: string): unknown =>
+    action === 'payload'
+      ? {
+          payload: {
+            page: { capturedAt: 'hover-at' },
+            target: { tagName: 'button', rectViewport: { x: 900, y: 900, width: 1, height: 1 } }
+          }
+        }
+      : true
+  const guest = guestWith(async () => described)
+  window.dispatchEvent(new MouseEvent('mousemove', { clientX: 5, clientY: 5 }))
+
+  // The pointer is over a node the page never marked for this read.
+  await expect(requestGrabExecution(guest, 'hover', { capturePick: 'hover' })).resolves.toEqual({
+    ok: true,
+    value: null
+  })
+
+  underPointer = hovered
+  const read = await requestGrabExecution(guest, 'hover', { capturePick: 'hover' })
+  const target =
+    read.ok && read.value && typeof read.value === 'object' && 'target' in read.value
+      ? read.value.target
+      : null
+  expect(target).toEqual({ tagName: 'a', rectViewport: { x: 3, y: 4, width: 30, height: 10 } })
 })

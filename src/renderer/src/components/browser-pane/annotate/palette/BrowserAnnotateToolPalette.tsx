@@ -400,13 +400,12 @@ export function BrowserAnnotateToolPalette({
         <div
           ref={hintRef}
           className={cn(
-            'pointer-events-none absolute z-40 truncate rounded-md border border-border bg-popover/95 px-2 py-0.5 text-2xs backdrop-blur',
+            'pointer-events-none absolute z-40 rounded-md break-words border border-border bg-popover/95 px-2 py-0.5 text-2xs backdrop-blur',
             'transition-opacity duration-100',
             seeThrough && 'opacity-15',
             hintIsError ? 'text-destructive' : 'text-muted-foreground'
           )}
           style={hintPlacement}
-          title={hint}
         >
           {hint}
         </div>
