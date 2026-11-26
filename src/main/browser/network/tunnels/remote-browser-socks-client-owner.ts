@@ -56,20 +56,27 @@ export function createSocksClientAdmission(
       socket.destroy()
       return
     }
-    // A connection that closes before its owner check never costs one. A half-close is not a close:
-    // forwards stay half-open, and the client may still be reading.
-    const closed = new AbortController()
-    const abort = (): void => closed.abort()
-    socket.once('close', abort)
-    // A pauseOnConnect socket doesn't notice a reset until it reads; bytes stay buffered.
-    socket.read(0)
-    void verifySocksClientOwner(socket, undefined, closed.signal).then((verdict) => {
-      socket.off('close', abort)
+    let closed: AbortController | undefined
+    let abort: (() => void) | undefined
+    if (process.platform === 'darwin') {
+      // Only macOS queues owner lookups and cancels them on close. A half-close is not a close:
+      // forwards stay half-open, and the client may still be reading.
+      const controller = new AbortController()
+      closed = controller
+      abort = (): void => controller.abort()
+      socket.once('close', abort)
+      // A pauseOnConnect socket doesn't notice a reset until it reads; bytes stay buffered.
+      socket.read(0)
+    }
+    void verifySocksClientOwner(socket, undefined, closed?.signal).then((verdict) => {
+      if (abort) {
+        socket.off('close', abort)
+      }
       if (socket.destroyed) {
         return
       }
       // Its lookup was dropped because the client left; nothing to report.
-      if (!verdict.allowed && closed.signal.aborted) {
+      if (!verdict.allowed && closed?.signal.aborted) {
         socket.destroy()
         return
       }

@@ -16,15 +16,15 @@ const RESPAWN_BACKOFF_MS = 30_000
 type Endpoint = { host: string; port: number }
 type Lookup = {
   request: string
-  /** Aborts when the connection closes; a lookup still queued then is dropped unscanned. */
-  signal?: AbortSignal
+  /** Detaches the abort listener once the lookup leaves `queued`. */
+  detachAbort?: () => void
   resolve: (own: boolean) => void
   reject: (error: Error) => void
 }
 type RunningHelper = {
   child: ChildProcessWithoutNullStreams
-  /** Written one at a time, so a lookup whose connection closed while queued is never scanned. */
-  queued: Lookup[]
+  /** FIFO set written one at a time, so canceling a queued lookup is O(1) without scanning. */
+  queued: Set<Lookup>
   inFlight: Lookup | null
   buffered: string
   /** Armed while a lookup is in flight; no answer by then means the helper is stuck. */
@@ -82,26 +82,28 @@ export function isOwnDarwinConnection(
     return Promise.reject(new Error('connection has no IP address'))
   }
   const helper = running ?? start()
-  if (helper.queued.length + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
+  if (helper.queued.size + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
     return Promise.reject(new Error('too many connections are waiting for an owner check'))
   }
   return new Promise((resolve, reject) => {
     const lookup: Lookup = {
       request: `${client.host} ${client.port} ${listener.host} ${listener.port}\n`,
-      signal,
       resolve,
       reject
     }
-    helper.queued.push(lookup)
-    signal?.addEventListener('abort', () => dropQueued(helper, lookup), { once: true })
+    helper.queued.add(lookup)
     sendNext(helper)
+    if (signal && helper.queued.has(lookup)) {
+      const onAbort = (): void => dropQueued(helper, lookup)
+      lookup.detachAbort = () => signal.removeEventListener('abort', onAbort)
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
   })
 }
 
 function dropQueued(helper: RunningHelper, lookup: Lookup): void {
-  const index = helper.queued.indexOf(lookup)
-  if (index !== -1) {
-    helper.queued.splice(index, 1)
+  if (helper.queued.delete(lookup)) {
+    lookup.detachAbort = undefined
     lookup.reject(new Error('the connection closed before its owner check'))
   }
 }
@@ -110,10 +112,13 @@ function sendNext(helper: RunningHelper): void {
   if (helper.inFlight || running !== helper) {
     return
   }
-  const next = helper.queued.shift()
+  const next = helper.queued.values().next().value
   if (!next) {
     return
   }
+  helper.queued.delete(next)
+  next.detachAbort?.()
+  next.detachAbort = undefined
   helper.inFlight = next
   helper.stall = setTimeout(
     () => fail(helper, 'the macOS socket owner helper stopped answering'),
@@ -124,7 +129,13 @@ function sendNext(helper: RunningHelper): void {
 
 function start(): RunningHelper {
   const child = spawnProcess({ program: helperPath(), args: [] })
-  const helper: RunningHelper = { child, queued: [], inFlight: null, buffered: '', stall: null }
+  const helper: RunningHelper = {
+    child,
+    queued: new Set(),
+    inFlight: null,
+    buffered: '',
+    stall: null
+  }
   running = helper
   broken = null
   child.stdout.setEncoding('utf8')
@@ -177,12 +188,15 @@ function stop(helper: RunningHelper | null, reason: string): void {
   if (helper.stall) {
     clearTimeout(helper.stall)
   }
-  const lookups = helper.queued.splice(0)
+  const lookups = [...helper.queued]
+  helper.queued.clear()
   if (helper.inFlight) {
     lookups.push(helper.inFlight)
     helper.inFlight = null
   }
   for (const lookup of lookups) {
+    lookup.detachAbort?.()
+    lookup.detachAbort = undefined
     lookup.reject(new Error(reason))
   }
   helper.child.stdin.end()
