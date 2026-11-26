@@ -249,3 +249,29 @@ it("keeps a teammate's worker theirs when the owner retries it, and finds a work
     listed(botItemAccessOfCaller(sources, { identity: { handle: '', paneKey: 'pane-9' } }))
   ).toEqual(['Kim work'])
 })
+
+// A retry from a chat that isn't the owner's keeps its own narrower stamp, whatever shape it has.
+it.each([
+  [
+    'a person the cloud gave no role',
+    '[{"kind":"person","source":"slack","userId":"U9","role":null}]'
+  ],
+  ['an asker with no kind or role', '[{"source":"slack","userId":"U9"}]'],
+  ['an unreadable record', 'not json']
+])("never widens a retry from %s to the owner's everyone", (_case, record) => {
+  addItem('Owner work', null)
+  addItem('Kim work', ['acct-2'])
+  const asker = '77777777-7777-4777-8777-777777777777'
+  db.db
+    .prepare('INSERT INTO bot_conversation_acts_for (session_id, acts_for) VALUES (?, ?)')
+    .run(asker, record)
+  // A worker the owner's chat started: its stamp names him, so it reaches everyone's.
+  startWorker(fromSession(OWNER_CHAT), { terminal: 'term_owner_first' })
+  const first = db.getActiveDispatchForIdentity('term_owner_first')!.id
+  db.db.prepare("UPDATE worker_dispatches SET state = 'failed' WHERE dispatch_id = ?").run(first)
+  db.db
+    .prepare("UPDATE tasks SET status = 'failed' WHERE id = ?")
+    .run(db.getDispatchContextById(first)!.task_id)
+  const retried = startWorker(fromSession(asker), { terminal: 'term_asker_retry' }, first)
+  expect(reachOf(retried)).toEqual(['Owner work'])
+})

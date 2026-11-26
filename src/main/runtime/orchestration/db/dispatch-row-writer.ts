@@ -14,12 +14,18 @@ const CREATOR_STAMP_SQL = `CASE
     ELSE (SELECT record.acts_for FROM bot_conversation_acts_for record WHERE record.session_id = ?)
   END`
 
-/** A stamp naming only the owner (null, or a record of owners alone), on `creator.stamp`. */
-const OWNERS_STAMP_SQL = `(creator.stamp IS NULL OR (json_array_length(creator.stamp) > 0
-    AND NOT EXISTS (SELECT 1 FROM json_each(creator.stamp) asker
-      WHERE json_extract(asker.value, '$.kind') != 'owner'
-        AND NOT (json_extract(asker.value, '$.kind') = 'person'
-          AND json_extract(asker.value, '$.role') = 'owner'))))`
+/** A stamp naming only the owner (null, or a record of owners alone), on `creator.stamp`. Every
+ *  comparison is NULL-safe (`IS`), so an asker missing its kind or role never reads as the owner, and
+ *  the CASE keeps an unreadable stamp (not one, never the owner's) from reaching `json_each`. */
+const OWNERS_STAMP_SQL = `(creator.stamp IS NULL OR CASE
+    WHEN json_valid(creator.stamp) AND json_type(creator.stamp) IS 'array'
+      AND json_array_length(creator.stamp) > 0
+    THEN NOT EXISTS (SELECT 1 FROM json_each(creator.stamp) asker
+      WHERE NOT (json_extract(asker.value, '$.kind') IS 'owner'
+        OR (json_extract(asker.value, '$.kind') IS 'person'
+          AND json_extract(asker.value, '$.role') IS 'owner')))
+    ELSE 0
+  END)`
 
 function creatorStampArgs(params: {
   creatorDispatchId?: string | null
