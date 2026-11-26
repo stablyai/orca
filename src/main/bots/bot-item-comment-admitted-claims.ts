@@ -1,6 +1,8 @@
+import type { BotItemsRemote } from './bot-items-ops'
+
 // An owner comment's admission claims its uploads for the item's chat; the mail that follows to that
 // same chat need not claim them again. Kept per open items store, so a reopened store (a restart) claims again.
-const admitted = new WeakMap<object, Set<string>>()
+const admitted = new WeakMap<BotItemsRemote, Set<string>>()
 const ADMITTED_CLAIMS_MAX = 64
 
 export type AdmittedCommentClaim = { sessionId: string; uploadIds: ReadonlySet<string> }
@@ -9,7 +11,10 @@ function claimKey({ sessionId, uploadIds }: AdmittedCommentClaim): string {
   return [sessionId, ...[...uploadIds].sort()].join('\n')
 }
 
-export function rememberAdmittedCommentClaim(store: object, claim: AdmittedCommentClaim): void {
+export function rememberAdmittedCommentClaim(
+  store: BotItemsRemote,
+  claim: AdmittedCommentClaim
+): void {
   let claims = admitted.get(store)
   if (!claims) {
     claims = new Set()
@@ -26,6 +31,9 @@ export function rememberAdmittedCommentClaim(store: object, claim: AdmittedComme
 }
 
 /** True once when this store's admission already claimed exactly these uploads for `sessionId`. */
-export function takeAdmittedCommentClaim(store: object, claim: AdmittedCommentClaim): boolean {
+export function takeAdmittedCommentClaim(
+  store: BotItemsRemote,
+  claim: AdmittedCommentClaim
+): boolean {
   return admitted.get(store)?.delete(claimKey(claim)) ?? false
 }
