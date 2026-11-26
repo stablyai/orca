@@ -44,7 +44,9 @@ it('anchors all nine cells to the shared clock as soon as the first cell starts'
   // Started at mount (document time 1234); the later cells are still inside their delay.
   const wave = cells.map(() => ({ animationName: 'worker-dock-dot-wave', startTime: 1234 }))
   const other = { animationName: 'agent-spinner-rotate', startTime: 1234 }
-  grid.getAnimations = (() => [...wave, other]) as unknown as Element['getAnimations']
+  // As in a browser: the grid itself runs no animation; its cells' come back only with subtree.
+  grid.getAnimations = ((options?: GetAnimationsOptions) =>
+    options?.subtree ? [...wave, other] : []) as unknown as Element['getAnimations']
   cells.forEach((cell, index) => {
     cell.getAnimations = (() => [wave[index]]) as unknown as Element['getAnimations']
   })
