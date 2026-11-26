@@ -27,11 +27,13 @@ const TTL_MS = 90_000
 const UNATTRIBUTED_RETRY_MS = 5_000
 // Why: a bogus Retry-After must not block forced refreshes or overflow the expiry timer.
 const MAX_RETRY_AFTER_MS = 6 * 60 * 60 * 1000
+// Why: cap automatic retries so a permanently unattributable read cannot loop forever.
+export const MAX_UNATTRIBUTED_RETRY_ATTEMPTS = 4
 const PROVIDERS: readonly RuntimeTargetUsageProvider[] = ['claude', 'codex']
 
 const entries = new Map<string, WslProviderUsageEntry>()
 const inFlight = new Map<string, Promise<void>>()
-const listeners = new Set<() => void>()
+const listenersByKey = new Map<string, Set<() => void>>()
 
 /** Readings are keyed by the account they were taken for, so another account's never matches. */
 export function wslProviderUsageKey(
@@ -42,10 +44,20 @@ export function wslProviderUsageKey(
   return JSON.stringify([distro, provider, accountId])
 }
 
-export function subscribeWslOwnerUsage(listener: () => void): () => void {
-  listeners.add(listener)
+export function subscribeWslOwnerUsage(key: string, listener: () => void): () => void {
+  let set = listenersByKey.get(key)
+  if (!set) {
+    set = new Set()
+    listenersByKey.set(key, set)
+  }
+  const current = set
+  current.add(listener)
   return () => {
-    listeners.delete(listener)
+    current.delete(listener)
+    if (current.size === 0 && listenersByKey.get(key) === current) {
+      listenersByKey.delete(key)
+      entries.delete(key)
+    }
   }
 }
 
@@ -53,31 +65,51 @@ export function readWslProviderUsage(key: string | null): WslProviderUsageEntry 
   return key ? (entries.get(key) ?? null) : null
 }
 
-function store(key: string, usage: WslProviderUsage): void {
-  const now = Date.now()
+export function isUnattributedRetryPending(entry: WslProviderUsageEntry | null): boolean {
+  return entry !== null && entry.attempts > 0 && entry.attempts <= MAX_UNATTRIBUTED_RETRY_ATTEMPTS
+}
+
+function boundedRetryAt(usage: WslProviderUsage, now: number): number {
   // Codex readings never carry retryAtMs: its fetcher has no 429 or Retry-After handling.
   const header = usage.kind === 'read' ? (usage.reading?.usageMetadata?.retryAtMs ?? 0) : 0
-  const retryAt = Math.min(header, now + MAX_RETRY_AFTER_MS)
+  return Math.min(header, now + MAX_RETRY_AFTER_MS)
+}
+
+function store(key: string, usage: WslProviderUsage, touched: Set<string>): number {
+  const now = Date.now()
+  const retryAt = boundedRetryAt(usage, now)
+  // Why: drop readings whose owner or account is no longer observed so retired keys cannot accumulate.
+  if (!listenersByKey.has(key)) {
+    return retryAt
+  }
   // Why never: a client that cannot read the distro (web) will not gain the ability by polling.
   const expiresAt =
     usage.kind === 'failed' && usage.reason === 'unsupported-owner'
       ? Infinity
       : Math.max(now + TTL_MS, retryAt)
   entries.set(key, { usage, expiresAt, retryAt, attempts: 0 })
+  touched.add(key)
+  return retryAt
 }
 
 /** Keeps any current reading but makes it due again with backoff, so an unattributed read is retried. */
-function markUnattributed(key: string, retryAt = 0): void {
+function markUnattributed(key: string, touched: Set<string>, retryAt = 0): void {
+  if (!listenersByKey.has(key)) {
+    return
+  }
   const existing = entries.get(key)
   const attempts = existing?.attempts ?? 0
   const wait = Math.min(UNATTRIBUTED_RETRY_MS * 2 ** attempts, TTL_MS)
-  const due = Math.max(Date.now() + wait, retryAt)
+  // Why retained: a later unattributed read must not make the key due before a kept Retry-After.
+  const retained = Math.max(existing?.retryAt ?? 0, retryAt)
+  const due = Math.max(Date.now() + wait, retained)
   entries.set(key, {
     usage: existing?.usage ?? { kind: 'pending' },
     expiresAt: due,
-    retryAt: Math.max(existing?.retryAt ?? 0, retryAt),
+    retryAt: retained,
     attempts: attempts + 1
   })
+  touched.add(key)
 }
 
 /** Reads the wanted providers that are due; a forced read still waits out an active Retry-After. */
@@ -102,6 +134,7 @@ export function requestWslOwnerUsage(
   if (running) {
     return running
   }
+  const touched = new Set<string>()
   const request = window.api.rateLimits
     .readUsageForRuntimeTarget({ runtime: 'wsl', wslDistro: distro }, due)
     .then(
@@ -110,30 +143,30 @@ export function requestWslOwnerUsage(
           const attributed = read?.[provider]
           const requested = wslProviderUsageKey(distro, provider, selection[provider] ?? null)
           if (!read) {
-            store(requested, { kind: 'failed', reason: 'unsupported-owner' })
+            store(requested, { kind: 'failed', reason: 'unsupported-owner' }, touched)
           } else if (attributed) {
             const key = wslProviderUsageKey(distro, provider, attributed.accountId)
-            store(key, { kind: 'read', reading: attributed.reading })
+            const retryAt = store(key, { kind: 'read', reading: attributed.reading }, touched)
             if (key !== requested) {
               // Why carry retryAt: a 429 for that account still applies to the next read.
-              markUnattributed(requested, entries.get(key)?.retryAt)
+              markUnattributed(requested, touched, retryAt)
             }
           } else {
-            markUnattributed(requested)
+            markUnattributed(requested, touched)
           }
         }
       },
       () => {
         for (const provider of due) {
           const key = wslProviderUsageKey(distro, provider, selection[provider] ?? null)
-          store(key, { kind: 'failed', reason: 'unreachable' })
+          store(key, { kind: 'failed', reason: 'unreachable' }, touched)
         }
       }
     )
     .finally(() => {
       inFlight.delete(flightKey)
-      for (const listener of listeners) {
-        listener()
+      for (const key of touched) {
+        listenersByKey.get(key)?.forEach((listener) => listener())
       }
     })
   inFlight.set(flightKey, request)
