@@ -9,7 +9,10 @@
 import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
-import { runWslMoveHostAutomationsExclusive } from './wsl-move-host-automations-lock'
+import {
+  runWslMoveHostAutomationsTurn,
+  untilWslMoveTurnAborted
+} from './wsl-move-host-automations-lock'
 import { wslMoveAutomationsPending } from '../desktop-state/wsl-move-host-automations-rewrite'
 
 export type WslMoveHostAutomationStop =
@@ -238,8 +241,16 @@ export function settleInterruptedWslMoveUndos(userDataPath: string): void {
 }
 
 export type WslMoveHostAutomationRetryHost = {
-  restore: (environmentId: string, automationIds: readonly string[]) => Promise<void>
-  disable: (environmentId: string, automationIds: readonly string[]) => Promise<unknown>
+  restore: (
+    environmentId: string,
+    automationIds: readonly string[],
+    signal?: AbortSignal
+  ) => Promise<void>
+  disable: (
+    environmentId: string,
+    automationIds: readonly string[],
+    signal?: AbortSignal
+  ) => Promise<unknown>
 }
 
 /** Turns back on what refused undos left off; true while any is still left off. */
@@ -249,7 +260,7 @@ export async function retryWslMoveHostAutomationsLeftOff(
 ): Promise<boolean> {
   let remaining = false
   for (const { migrationId } of listWslMoveCutovers(userDataPath)) {
-    const left = await runWslMoveHostAutomationsExclusive(async () => {
+    const left = await runWslMoveHostAutomationsTurn(async (signal) => {
       // Fresh inside the turn: an undo may have released the move, or a pass advanced it.
       const cutover = readMove(userDataPath, migrationId)
       const ids = cutover?.hostAutomationsLeftOff ?? []
@@ -258,7 +269,10 @@ export async function retryWslMoveHostAutomationsLeftOff(
       }
       let stillOff: string[] = []
       try {
-        await host.restore(cutover.destinationEnvironmentId, ids)
+        await untilWslMoveTurnAborted(
+          host.restore(cutover.destinationEnvironmentId, ids, signal),
+          signal
+        )
       } catch (error) {
         stillOff = leftOffOf(error).length > 0 ? leftOffOf(error) : ids
       }
