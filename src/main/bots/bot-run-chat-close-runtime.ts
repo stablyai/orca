@@ -10,6 +10,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { findLinksForSession } from '../external-conversations/external-conversation-links'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { runChatClosesWhenFinished } from '../../shared/automation-bot-target'
 import type { Store } from '../persistence/loading-store/store'
 import {
   lineageLiveSession,
@@ -92,7 +93,9 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
     wasRunChat: (sessionId) => {
       const newEachRun = new Set(
         (store.listAutomations?.() ?? []).flatMap((automation) =>
-          automation.bot?.runsIn === 'new' ? [automation.id] : []
+          automation.bot?.runsIn === 'new' && runChatClosesWhenFinished(automation.bot.resultsTo)
+            ? [automation.id]
+            : []
         )
       )
       return (store.listAutomationRuns?.() ?? []).some(

@@ -10,7 +10,7 @@ import type { LinkableChat } from '../external-conversations/external-conversati
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
 import type { Bot } from '../../shared/bot-types'
 import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
-import { runChatClosesWhenFinished } from './bot-automation-run-chat-close'
+import { runChatClosesWhenFinished } from '../../shared/automation-bot-target'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import type { AutomationBotLauncher } from './launch/automation-launch'
 import type { BotRunCompletion, BotRunResult } from '../bots/bot-run-results'

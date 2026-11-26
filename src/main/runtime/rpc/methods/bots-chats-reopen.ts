@@ -16,6 +16,8 @@ import { showBotSessionTab } from '../../../bots/bot-session-tab-show'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { namedOrCallerBot } from './bots-caller-bot'
+import { botOfSession } from '../../../bots/bot-session-tabs'
+import { createCanonicalOrcaSessionResolver } from '../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { readBotChats } from './bots-chats'
 
 /** Brings a closed chat back as a tab in the bot's home, so it takes mail again; its history is kept. */
@@ -25,10 +27,16 @@ export const BOT_CHATS_REOPEN_METHOD = defineMethod({
   params: BotChatReopen,
   handler: async (params, context) => {
     const { runtime } = context
-    const { bot } = namedOrCallerBot(params, context)
-    const id = params.chatId.startsWith(BOT_CHAT_ID_PREFIX)
+    const named = params.chatId.startsWith(BOT_CHAT_ID_PREFIX)
       ? params.chatId.slice(BOT_CHAT_ID_PREFIX.length)
       : params.chatId
+    // A chat is listed by its first id; one named after a /clear is the same chat.
+    const records = readAgentSessionRecordStore()
+    const id =
+      records && isOrcaSessionId(named) ? createCanonicalOrcaSessionResolver(records)(named) : named
+    // The chat's own bot, so another bot's chat reopens without --bot.
+    const bot =
+      (!params.botId && botOfSession(runtime.bots, id)) || namedOrCallerBot(params, context).bot
     const row = (await readBotChats(runtime, bot, null, true)).find((chat) => chat.id === id)
     if (!row) {
       throw new InvalidArgumentError(
@@ -44,8 +52,7 @@ export const BOT_CHATS_REOPEN_METHOD = defineMethod({
         `That chat can't be reopened from here: ${row.reason === 'other-host' ? 'it runs on another computer' : 'Orca can’t check it right now'}.`
       )
     }
-    const store = readAgentSessionRecordStore()
-    const live = (store && lineageLiveSession(store, row.id)) || null
+    const live = (records && lineageLiveSession(records, row.id)) || null
     // The chat keeps the agent it ran on, even after the bot moved to another.
     const provider = live?.provider
     const agent = provider && isBotAgent(provider) ? provider : bot.agent
