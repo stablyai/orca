@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { DaemonClient } from '../../../../daemon/transport/client/daemon-client'
 import type { ProviderRelayInfo } from '../../../../daemon/protocol/daemon-provider-relay-protocol'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { readProcessStartTimeMs } from '../../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 // Only a run's placement and its own daemon start decide whether its agent may still run: a held
@@ -168,10 +169,15 @@ it.skipIf(process.platform === 'win32')(
     const { pid, agent } = liveAgent()
     // Its agent still runs (its own token reads back): it may still write.
     expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), pid)))).toBe('unknown')
+    // Its daemon still runs (same pid and start time), though its agent is gone: it may hold the run.
+    const startedAtMs = await readProcessStartTimeMs(pid)
+    const daemonAlive = {
+      ...relayed(pid, exitedPid()),
+      daemon: { instance: INSTANCE, pid, startedAtMs: startedAtMs ?? 1 }
+    }
+    expect(startedAtMs).not.toBeNull()
+    expect(await relays.providerRelayRunLiveness(chat(daemonAlive))).toBe('unknown')
     agent.kill('SIGKILL')
-    expect(await relays.providerRelayRunLiveness(chat(relayed(process.pid, exitedPid())))).toBe(
-      'unknown'
-    )
     expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), exitedPid())))).toBe(
       'gone'
     )
