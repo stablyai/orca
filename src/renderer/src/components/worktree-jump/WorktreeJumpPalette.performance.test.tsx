@@ -3,6 +3,7 @@
 // result section before the input could paint (~150 ms cold). The opening commit now mounts the input
 // with no result rows and builds no workspace search documents; both arrive once that frame has painted.
 import { act, cleanup, render } from '@testing-library/react'
+import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as WorktreePaletteDocumentModule from '@/lib/workspace/search/worktrees/worktree-palette-document'
 
@@ -98,4 +99,36 @@ it('defers results again when the palette reopens during its close linger', asyn
     await vi.advanceTimersByTimeAsync(200)
   })
   expect(resultRowCount()).toBe(11)
+})
+
+it('builds results once while unrelated store writes keep arriving', async () => {
+  // Real scheduler: act() would apply the reveal without yielding, hiding a discarded, restarted build.
+  vi.useRealTimers()
+  const reactGlobals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  const previousActEnvironment = reactGlobals.IS_REACT_ACT_ENVIRONMENT
+  reactGlobals.IS_REACT_ACT_ENVIRONMENT = false
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  let writes = 0
+  const churn = setInterval(() => {
+    writes += 1
+    useAppStore.setState({ activeBrowserTabId: `churn-${writes}` })
+  }, 5)
+  try {
+    root.render(<WorktreeJumpPalette />)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    useAppStore.setState({ activeModal: 'worktree-palette' })
+    const deadline = Date.now() + 4000
+    while (resultRowCount() === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    expect(resultRowCount()).toBe(11)
+    expect(documentsBuilt.count).toBe(WORKSPACE_COUNT)
+  } finally {
+    clearInterval(churn)
+    root.unmount()
+    host.remove()
+    reactGlobals.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment
+  }
 })

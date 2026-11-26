@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 
 // Hidden windows may never run animation frames; results must still arrive there.
@@ -32,7 +32,8 @@ export function useResultsReadyAfterOpeningPaint(visible: boolean): {
       window.cancelAnimationFrame(frame)
       window.clearTimeout(paintTimer)
       window.clearTimeout(fallbackTimer)
-      startTransition(() => setReady(true))
+      // Not a transition: an interrupted transition discards the whole build and starts it again.
+      setReady(true)
     }
     // A timeout queued from an animation frame runs after that frame's paint.
     const frame = window.requestAnimationFrame(() => {
