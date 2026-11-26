@@ -1,13 +1,19 @@
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
-import { RotateCcw } from 'lucide-react'
+import { Layers, RotateCcw } from 'lucide-react'
+import { useAppStore } from '@/store'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { getRepoLucideIconOptions } from '../../../repo/repo-icon'
-import { RepoMarkTile, useRepoMarkAppearance } from '../../../repo/RepoMark'
+import {
+  RepoMarkTile,
+  selectDefaultProjectBadgeStyle,
+  useRepoMarkAppearance
+} from '../../../repo/RepoMark'
 import { RepositoryIconColorSection } from './RepositoryIconColorSection'
 import { RepositoryIconTabs } from './RepositoryIconTabs'
 import { LettersPanel } from '../../../repo/project-peek/ProjectIconStylePanels'
+import { useBulkRepoAppearance } from './use-bulk-repo-appearance'
 import { useRepositoryIconActions, type RepoAppearanceUpdate } from './use-repository-icon-actions'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -56,18 +62,24 @@ export function RepositoryIconPicker({
   updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const defaultStyle = useAppStore(selectDefaultProjectBadgeStyle)
   const actions = useRepositoryIconActions(repo, updateRepo)
+  const { canApplyToAll, applyToAll } = useBulkRepoAppearance(repo)
   const appearance = useRepoMarkAppearance(repo)
   const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : null
   const selectedEmoji = repo.repoIcon?.type === 'emoji' ? repo.repoIcon.emoji : ''
   const initialTab =
-    repo.repoIcon == null || repo.repoIcon.type === 'letters'
-      ? 'letters'
-      : repo.repoIcon?.type === 'emoji'
-        ? 'emoji'
-        : repo.repoIcon?.type === 'lucide'
-          ? 'icon'
-          : 'avatar'
+    repo.repoIcon == null
+      ? defaultStyle === 'folder'
+        ? 'icon'
+        : 'letters'
+      : repo.repoIcon.type === 'letters'
+        ? 'letters'
+        : repo.repoIcon?.type === 'emoji'
+          ? 'emoji'
+          : repo.repoIcon?.type === 'lucide'
+            ? 'icon'
+            : 'avatar'
   const currentIconLabel = getRepositoryIconLabel(appearance.icon, t)
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
@@ -84,16 +96,29 @@ export function RepositoryIconPicker({
           </Label>
           <div className="mt-1 truncate text-xs text-muted-foreground">{currentIconLabel}</div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={actions.resetToDefault}
-        >
-          <RotateCcw className="size-3.5" />
-          {t('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={!canApplyToAll}
+            onClick={applyToAll}
+          >
+            <Layers className="size-3.5" />
+            {t('auto.components.repo.ProjectPeek.applyToAll', 'Apply to all')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={actions.resetToDefault}
+          >
+            <RotateCcw className="size-3.5" />
+            {t('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}
+          </Button>
+        </div>
       </div>
 
       <RepositoryIconColorSection badgeColor={repo.badgeColor} onBadgeColorChange={setBadgeColor} />

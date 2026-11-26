@@ -119,6 +119,44 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getDefaultProjectBadgeStyleEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.defaultProjectBadgeStyle.title',
+    'Default project badge'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.defaultProjectBadgeStyle.description',
+    'Badge shown for projects without a custom icon.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectBadgeStyle.project',
+      'project'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectBadgeStyle.badge',
+      'badge'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectBadgeStyle.icon',
+      'icon'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectBadgeStyle.letters',
+      'letters'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectBadgeStyle.initials',
+      'initials'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectBadgeStyle.folder',
+      'folder'
+    ),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar')
+  ]
+}))
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.9bc701a4d1', 'Show tasks button'),
@@ -184,5 +222,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
     ]
   },
   getLeftSidebarAppearanceEntry(),
+  getDefaultProjectBadgeStyleEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

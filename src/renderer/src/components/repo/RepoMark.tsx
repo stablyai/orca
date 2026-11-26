@@ -2,6 +2,8 @@ import React from 'react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { DefaultProjectBadgeStyle } from '../../../../shared/ui-chrome/ui-chrome-types'
 import {
   repoMarkKey,
   resolveRepoMarkAppearances,
@@ -18,25 +20,47 @@ export type RepoMarkRepo = Pick<
   'id' | 'badgeColor' | 'repoIcon' | 'addedAt' | 'executionHostId' | 'connectionId' | 'displayName'
 >
 
-// Every card asks for its mark; resolve the whole catalog once per repos snapshot.
-const appearancesByRepos = new WeakMap<readonly Repo[], Map<string, RepoMarkAppearance>>()
+export function selectDefaultProjectBadgeStyle(state: {
+  settings?: Pick<GlobalSettings, 'defaultProjectBadgeStyle'> | null
+}): DefaultProjectBadgeStyle {
+  return state.settings?.defaultProjectBadgeStyle === 'folder' ? 'folder' : 'letters'
+}
 
-function appearancesFor(repos: readonly Repo[]): Map<string, RepoMarkAppearance> {
-  let appearances = appearancesByRepos.get(repos)
+// Every card asks for its mark; resolve the catalog once per repos snapshot and fallback style.
+const appearancesByRepos = new WeakMap<
+  readonly Repo[],
+  Partial<Record<DefaultProjectBadgeStyle, Map<string, RepoMarkAppearance>>>
+>()
+
+function appearancesFor(
+  repos: readonly Repo[],
+  defaultStyle: DefaultProjectBadgeStyle
+): Map<string, RepoMarkAppearance> {
+  let byStyle = appearancesByRepos.get(repos)
+  if (!byStyle) {
+    byStyle = {}
+    appearancesByRepos.set(repos, byStyle)
+  }
+  let appearances = byStyle[defaultStyle]
   if (!appearances) {
-    appearances = resolveRepoMarkAppearances(repos)
-    appearancesByRepos.set(repos, appearances)
+    appearances = resolveRepoMarkAppearances(repos, { defaultStyle })
+    byStyle[defaultStyle] = appearances
   }
   return appearances
 }
 
 export function useRepoMarkAppearance(repo: RepoMarkRepo): RepoMarkAppearance {
   const repos = useAppStore((state) => state.repos)
+  const defaultStyle = useAppStore(selectDefaultProjectBadgeStyle)
   return (
-    appearancesFor(repos).get(repoMarkKey(repo)) ??
+    appearancesFor(repos, defaultStyle).get(repoMarkKey(repo)) ??
     // A repo not in the catalog yet (e.g. mid-add) resolves on its own.
-    resolveRepoMarkAppearances([repo]).get(repoMarkKey(repo)) ?? {
-      icon: repo.repoIcon ?? { type: 'letters', text: '?' },
+    resolveRepoMarkAppearances([repo], { defaultStyle }).get(repoMarkKey(repo)) ?? {
+      icon:
+        repo.repoIcon ??
+        (defaultStyle === 'folder'
+          ? { type: 'lucide', name: 'Folder' }
+          : { type: 'letters', text: '?' }),
       color: resolveRepoBadgeColor(repo.badgeColor)
     }
   )
@@ -45,6 +69,7 @@ export function useRepoMarkAppearance(repo: RepoMarkRepo): RepoMarkAppearance {
 /** What Auto would pick for this project right now, so the Auto swatch can preview it. */
 export function useRepoAutoMarkColor(repo: RepoMarkRepo): string {
   const repos = useAppStore((state) => state.repos)
+  const defaultStyle = useAppStore(selectDefaultProjectBadgeStyle)
   const key = repoMarkKey(repo)
   return React.useMemo(() => {
     const asAuto = repos.map((candidate) =>
@@ -52,8 +77,11 @@ export function useRepoAutoMarkColor(repo: RepoMarkRepo): string {
         ? { ...candidate, badgeColor: DEFAULT_REPO_BADGE_COLOR }
         : candidate
     )
-    return resolveRepoMarkAppearances(asAuto).get(key)?.color ?? DEFAULT_REPO_BADGE_COLOR
-  }, [repos, key])
+    return (
+      resolveRepoMarkAppearances(asAuto, { defaultStyle }).get(key)?.color ??
+      DEFAULT_REPO_BADGE_COLOR
+    )
+  }, [repos, defaultStyle, key])
 }
 
 // Why: icons and emoji sit on a faint fill with a hairline edge so they read as a mark like letters do.
@@ -87,6 +115,7 @@ export function RepoMarkView({
 }): React.JSX.Element {
   const sizes = MARK_SIZES[size]
   const repoIcon = appearance.icon
+  const neutral = appearance.color === DEFAULT_REPO_BADGE_COLOR
   // Letters and pictures fill the mark; icons and emoji sit inset on a tile.
   const fills = repoIcon.type === 'letters' || repoIcon.type === 'image'
   const glyphSize = fills ? 'size-full' : sizes.icon
@@ -95,6 +124,7 @@ export function RepoMarkView({
       aria-hidden="true"
       className={cn(
         'inline-flex shrink-0 items-center justify-center overflow-hidden',
+        !fills && neutral && 'text-muted-foreground',
         sizes.box,
         className
       )}
@@ -102,7 +132,7 @@ export function RepoMarkView({
     >
       <RepoIconGlyph
         repoIcon={repoIcon}
-        color={appearance.color}
+        color={repoIcon.type === 'letters' || !neutral ? appearance.color : undefined}
         className={glyphSize}
         iconClassName={glyphSize}
       />
