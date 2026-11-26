@@ -99,7 +99,7 @@ export function NativeChatContextUsageRing({
   usage: NativeChatContextUsageSummary
 }): React.JSX.Element {
   const t = useTranslate()
-  const { filled, critical, used, window } = contextUsageRingReadout(usage)
+  const { filled, critical, used, window, cost } = contextUsageRingReadout(usage)
   const label = t(
     'components.native-chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
@@ -214,6 +214,14 @@ export function NativeChatContextUsageRing({
                   'Estimated from the last response.'
                 )}
               </p>
+            ) : null}
+            {cost ? (
+              <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3 text-xs">
+                <span className="text-foreground">
+                  {t('components.native-chat.contextUsage.cost', 'Session cost')}
+                </span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">{cost}</span>
+              </div>
             ) : null}
           </div>
         </PopoverContent>

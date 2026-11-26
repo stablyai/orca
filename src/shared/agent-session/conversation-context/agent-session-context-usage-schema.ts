@@ -4,6 +4,7 @@ import * as z from 'zod'
 import {
   MAX_CONTEXT_CATEGORIES,
   MAX_CONTEXT_CATEGORY_NAME_CHARS,
+  MAX_CONTEXT_CURRENCY_CHARS,
   MAX_CONTEXT_MODEL_ID_CHARS,
   type AgentSessionContextUsage
 } from './agent-session-context-usage'
@@ -45,7 +46,14 @@ const Used = z.discriminatedUnion('kind', [
 
 export const AgentSessionContextUsageSchema = z.object({
   window: z.object({ tokens: WindowTokens, capturedAt: CapturedAt }).optional(),
-  used: Used.optional()
+  used: Used.optional(),
+  cost: z
+    .object({
+      amount: z.number().finite().nonnegative(),
+      currency: z.string().min(1).max(MAX_CONTEXT_CURRENCY_CHARS),
+      capturedAt: CapturedAt
+    })
+    .optional()
 })
 
 export function isAdmissibleAgentSessionContextUsage(

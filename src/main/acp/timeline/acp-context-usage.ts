@@ -1,4 +1,7 @@
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import {
+  MAX_CONTEXT_CURRENCY_CHARS,
+  type AgentSessionContextUsage
+} from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
@@ -58,6 +61,20 @@ export function acpWindowUsage(update: UsageUpdate, at: number): AgentSessionCon
         cacheCreationInputTokens: 0,
         outputTokens: 0
       }
-    }
+    },
+    ...acpSessionCost(update, at)
   }
+}
+
+/** Out-of-bounds costs are dropped, so a bad report cannot make the turn row inadmissible. */
+function acpSessionCost(update: UsageUpdate, at: number): Pick<AgentSessionContextUsage, 'cost'> {
+  const amount = update.cost?.amount
+  const currency = update.cost?.currency.trim()
+  return amount !== undefined &&
+    Number.isFinite(amount) &&
+    amount >= 0 &&
+    currency &&
+    currency.length <= MAX_CONTEXT_CURRENCY_CHARS
+    ? { cost: { amount, currency, capturedAt: at } }
+    : {}
 }

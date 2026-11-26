@@ -30,3 +30,25 @@ export const deferredTools = defineFixture({
     frame.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')?.click()
   }
 })
+
+// An ACP agent's turn-end usage_update: an estimate with the session's spend.
+const acpUsage = summarizeContextUsage({
+  usedTokens: 32_602,
+  windowTokens: 272_000,
+  percentage: 12,
+  estimated: true,
+  categories: [],
+  cost: { amount: 0.11527, currency: 'USD' }
+})
+
+export const acpSessionCost = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-64 items-end justify-end bg-background p-4">
+      <NativeChatContextUsageRing usage={acpUsage} />
+    </div>
+  ),
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')?.click()
+  }
+})
