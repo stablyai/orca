@@ -104,8 +104,7 @@ it('defers results again when the palette reopens during its close linger', asyn
 it('builds results once while unrelated store writes keep arriving', async () => {
   // Real scheduler: act() would apply the reveal without yielding, hiding a discarded, restarted build.
   vi.useRealTimers()
-  const previousActEnvironment: unknown = Reflect.get(globalThis, 'IS_REACT_ACT_ENVIRONMENT')
-  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', false)
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', false)
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
@@ -124,6 +123,6 @@ it('builds results once while unrelated store writes keep arriving', async () =>
     clearInterval(churn)
     root.unmount()
     host.remove()
-    Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', previousActEnvironment)
+    vi.unstubAllGlobals()
   }
 })
