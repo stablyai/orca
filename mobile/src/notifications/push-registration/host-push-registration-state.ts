@@ -1,4 +1,5 @@
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
+import type { PushRegisterFailure } from './mobile-push-registration-operations'
 
 export type HostPushState = {
   connection: {
@@ -9,6 +10,8 @@ export type HostPushState = {
   supported: boolean | null
   capabilityProbeStop: (() => void) | null
   chain: Promise<void>
+  // Kept so the push test can say why this desktop never took the token.
+  registerFailure: PushRegisterFailure | null
 }
 
 export type HostPushSupportCompletion = {
@@ -38,6 +41,7 @@ export function createHostPushState(): HostPushState {
     connection: { client: null, support: null },
     supported: null,
     capabilityProbeStop: null,
-    chain: Promise.resolve()
+    chain: Promise.resolve(),
+    registerFailure: null
   }
 }

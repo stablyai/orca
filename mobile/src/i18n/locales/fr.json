@@ -3070,6 +3070,11 @@
       "noToken": "Aucun jeton push n’est disponible sur ce téléphone.",
       "unsupportedHost": "Cet ordinateur ne prend pas en charge les notifications push. Mettez-le à jour pour les recevoir.",
       "registrationPending": "L’inscription push n’est pas encore prête sur cet ordinateur. Réessayez dans un instant.",
+      "pushServiceRateLimited": "Le service push d’Orca limite les requêtes de cet ordinateur. Les alertes reprendront dès qu’il l’acceptera de nouveau.",
+      "pushServiceUnreachable": "Cet ordinateur ne parvient pas à joindre le service push d’Orca pour le moment. Les alertes reprendront dès que ce sera possible.",
+      "pushServiceRefused": "Le service push d’Orca a refusé cet ordinateur. Mettez à jour Orca sur l’ordinateur et réessayez.",
+      "registrationThrottled": "Cet ordinateur a reçu trop d’inscriptions push. Réessayez dans une minute.",
+      "registrationStorageFailed": "Cet ordinateur n’a pas pu enregistrer l’inscription push. Redémarrez Orca sur l’ordinateur et réessayez.",
       "liveFallbackScheduled": "{{reason}} Test local programmé. Vérifiez la notification. Les alertes en direct sont disponibles tant qu’Orca est en cours d’exécution et connecté."
     },
     "notificationSettingsScreen": {

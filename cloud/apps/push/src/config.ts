@@ -1,5 +1,6 @@
 import { PUSH_DEFAULTS } from '@orca-cloud/push-contract/push-limits'
 import { z } from 'zod'
+import { parseTrustedProxy } from './http/trusted-proxy-addresses.js'
 
 export const PUSH_DATABASE_POOL_MAX = 10
 
@@ -34,7 +35,36 @@ const EnvSchema = z.object({
   ORCA_PUSH_FCM_PROJECT_ID: z.string().regex(/^[a-z0-9-]{4,64}$/),
   // How many proxies append to x-forwarded-for after the client. 0 is Cloud Run
   // alone; raise it to 1 when a load balancer fronts the service.
-  ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0)
+  ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0),
+  // Comma-separated proxy addresses or CIDR ranges skipped at the end of x-forwarded-for, on top
+  // of the exact addresses ORCA_PUSH_PUBLIC_URL resolves to at startup. Behind an IPv6 load
+  // balancer, list the forwarding rule's allocated IPv6 range (/64 for a global external
+  // Application Load Balancer, /96 for a regional one), for example 2600:1901:0:1234::/64:
+  // Google can append any address in it, not only the one DNS returns.
+  ORCA_PUSH_TRUSTED_PROXY_ADDRESSES: z
+    .string()
+    .optional()
+    .transform((value, context) => {
+      const entries = (value ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+      const proxies: string[] = []
+      for (const entry of entries) {
+        const parsed = parseTrustedProxy(entry)
+        if (!parsed.ok) {
+          context.addIssue({
+            code: 'custom',
+            message: `ORCA_PUSH_TRUSTED_PROXY_ADDRESSES entry "${entry}": ${parsed.reason}`
+          })
+        } else {
+          proxies.push(
+            parsed.proxy.kind === 'address' ? parsed.proxy.address : parsed.proxy.range.text
+          )
+        }
+      }
+      return proxies
+    })
 })
 
 export type ApnsCredentials = { keyPem: string; keyId: string; teamId: string }
@@ -50,6 +80,7 @@ export type PushConfig = {
   apnsTopic: string
   fcmProjectId: string
   trustedProxyHops: number
+  trustedProxyAddresses: readonly string[]
 }
 
 function canonicalOrigin(value: string, name: string): string {
@@ -103,6 +134,7 @@ export function loadPushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig
     apns: readApnsCredentials(parsed),
     apnsTopic: parsed.ORCA_PUSH_APNS_TOPIC,
     fcmProjectId: parsed.ORCA_PUSH_FCM_PROJECT_ID,
-    trustedProxyHops: parsed.ORCA_PUSH_TRUSTED_PROXY_HOPS
+    trustedProxyHops: parsed.ORCA_PUSH_TRUSTED_PROXY_HOPS,
+    trustedProxyAddresses: parsed.ORCA_PUSH_TRUSTED_PROXY_ADDRESSES
   }
 }

@@ -18,7 +18,8 @@ import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
 import {
   sendRegister,
-  sendUnregister
+  sendUnregister,
+  type PushRegisterFailure
 } from './push-registration/mobile-push-registration-operations'
 import {
   loadPushNotificationsEnabled,
@@ -43,6 +44,10 @@ const hostsById = new Map<string, HostPushState>()
 
 export function getHostPushSupported(hostId: string): boolean | null {
   return hostsById.get(hostId)?.supported ?? null
+}
+/** The reason this desktop gave for refusing the last push registration; null once it accepts one. */
+export function getHostPushRegisterFailure(hostId: string): PushRegisterFailure | null {
+  return hostsById.get(hostId)?.registerFailure ?? null
 }
 export function getHostPushSupportCompletion(
   hostId: string,
@@ -177,7 +182,12 @@ async function reconcileHost(hostId: string): Promise<void> {
   ) {
     return
   }
-  if (!(await sendRegister(client, token, filter)) || hostsById.get(hostId) !== state) {
+  const outcome = await sendRegister(client, token, filter)
+  if (hostsById.get(hostId) !== state) {
+    return
+  }
+  state.registerFailure = outcome.registered ? null : outcome.reason
+  if (!outcome.registered) {
     return
   }
   if (generation !== consentGeneration) {

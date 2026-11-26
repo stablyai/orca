@@ -46,7 +46,8 @@ export function testPushConfig(): PushConfig {
     apns: { keyPem: privateKey, keyId: 'ABCDE12345', teamId: 'TEAM123456' },
     apnsTopic: 'com.stably.orca.mobile',
     fcmProjectId: 'onorca-cloud',
-    trustedProxyHops: 0
+    trustedProxyHops: 0,
+    trustedProxyAddresses: []
   }
 }
 

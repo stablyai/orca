@@ -3467,6 +3467,11 @@
       "noToken": "Nenhum token push está disponível neste telefone.",
       "unsupportedHost": "Este computador não oferece suporte a notificações push. Atualize-o para recebê-las.",
       "registrationPending": "O registro push ainda não está pronto neste computador. Tente novamente em instantes.",
+      "pushServiceRateLimited": "O serviço push do Orca está limitando as solicitações deste computador. Os alertas começam assim que ele aceitar o computador de novo.",
+      "pushServiceUnreachable": "Este computador não consegue acessar o serviço push do Orca agora. Os alertas começam assim que conseguir.",
+      "pushServiceRefused": "O serviço push do Orca recusou este computador. Atualize o Orca no computador e tente novamente.",
+      "registrationThrottled": "Este computador recebeu registros push demais. Tente novamente em um minuto.",
+      "registrationStorageFailed": "Este computador não conseguiu salvar o registro push. Reinicie o Orca no computador e tente novamente.",
       "liveFallbackScheduled": "{{reason}} Teste local agendado. Verifique a notificação. Os alertas ao vivo estão disponíveis enquanto o Orca estiver em execução e conectado."
     },
     "notificationSettingsScreen": {

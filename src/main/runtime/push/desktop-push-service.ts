@@ -132,7 +132,7 @@ export class DesktopPushService {
     const registration = device?.pushRegistration
     if (device?.scope !== 'mobile' || !registration || registration.expiresAt <= Date.now()) {
       const live = !this.stopped && this.deliveryMode !== 'disabled'
-      return unregisteredTestResult(live ? await this.client.currentClockSkewMs() : null)
+      return unregisteredTestResult(live ? await this.client.currentSignInProblem() : null)
     }
     if (this.stopped || this.deliveryMode === 'disabled') {
       return { accepted: false, reason: 'unavailable' }

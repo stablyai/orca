@@ -2985,6 +2985,11 @@
       "noToken": "此手機上沒有可用的推播權杖。",
       "unsupportedHost": "此桌面端不支援推播通知。請更新以接收推播。",
       "registrationPending": "此桌面端的推播註冊尚未就緒。請稍後再試。",
+      "pushServiceRateLimited": "Orca 推播服務正在限制此桌面端的請求。服務重新接受此桌面端後即會開始推播提醒。",
+      "pushServiceUnreachable": "此桌面端目前無法連線至 Orca 推播服務。連線恢復後即會開始推播提醒。",
+      "pushServiceRefused": "Orca 推播服務拒絕了此桌面端。請更新桌面端的 Orca 後再試一次。",
+      "registrationThrottled": "此桌面端收到的推播註冊過多。請一分鐘後再試一次。",
+      "registrationStorageFailed": "此桌面端無法儲存推播註冊。請重新啟動桌面端的 Orca 後再試一次。",
       "liveFallbackScheduled": "{{reason}} 已安排本機測試。請檢查通知。Orca 執行且保持連線時，可接收即時提醒。"
     },
     "notificationSettingsScreen": {

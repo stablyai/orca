@@ -2988,6 +2988,11 @@
       "noToken": "この端末ではプッシュトークンを利用できません。",
       "unsupportedHost": "このデスクトップはプッシュ通知に対応していません。受信するには更新してください。",
       "registrationPending": "このデスクトップではプッシュ登録がまだ完了していません。しばらくしてからもう一度お試しください。",
+      "pushServiceRateLimited": "Orca のプッシュサービスがこのデスクトップのリクエストを制限しています。再び受け付けられると通知が届くようになります。",
+      "pushServiceUnreachable": "このデスクトップは現在 Orca のプッシュサービスに接続できません。接続できるようになると通知が届くようになります。",
+      "pushServiceRefused": "Orca のプッシュサービスがこのデスクトップを拒否しました。デスクトップの Orca を更新してから、もう一度お試しください。",
+      "registrationThrottled": "このデスクトップへのプッシュ登録が多すぎます。1 分後にもう一度お試しください。",
+      "registrationStorageFailed": "このデスクトップはプッシュ登録を保存できませんでした。デスクトップの Orca を再起動してから、もう一度お試しください。",
       "liveFallbackScheduled": "{{reason}} ローカルテストを予約しました。通知を確認してください。Orca が実行中で接続されている間は、リアルタイムのアラートを受信できます。"
     },
     "notificationSettingsScreen": {

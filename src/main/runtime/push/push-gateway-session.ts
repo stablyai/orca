@@ -1,10 +1,11 @@
 import { z } from 'zod'
-import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import { deriveRelayHostId } from '../mobile-cloud-relay/director/relay-http-client'
 import { answerPushHostChallenge } from './push-host-proof'
+import type { MobilePushServiceProblem } from '../../../shared/notifications/mobile-push-contract'
 import {
   postPushGatewayJson,
+  pushServiceProblemOf,
   readPushGatewayJson,
   type PushGatewayFailure
 } from './push-gateway-response'
@@ -13,7 +14,6 @@ import {
 const SESSION_RENEWAL_MARGIN_MS = 60_000
 // Cache proof refusal to avoid repeating identical failed handshakes on every dispatch.
 const HANDSHAKE_REFUSAL_TTL_MS = 30_000
-// Back off the per-IP challenge bucket instead of exhausting it on unusable sessions.
 const HANDSHAKE_RATE_LIMIT_TTL_MS = 60_000
 
 const ChallengeResponseSchema = z
@@ -56,9 +56,10 @@ export class PushGatewaySession {
   private session: PushSession | null = null
   private pending: Promise<PushSessionOutcome> | null = null
   private negative: { at: number; ttlMs: number; failure: PushGatewayFailure } | null = null
-  // One log line per distinct refusal, so a host stuck on it does not log every retry.
-  private loggedRefusal: string | null = null
+  // One log line per distinct failure, so a host stuck on it does not log every retry.
+  private loggedFailure: string | null = null
   private refusedClockSkewMs: number | null = null
+  private lastFailure: MobilePushServiceProblem | null = null
 
   constructor(options: PushGatewaySessionOptions) {
     this.origin = options.origin
@@ -71,6 +72,11 @@ export class PushGatewaySession {
   /** How far off this host's clock was when the last sign-in was refused for it; null otherwise. */
   clockSkewMs(): number | null {
     return this.refusedClockSkewMs
+  }
+
+  /** Why the last sign-in failed; null once signed in, or before any attempt. */
+  signInFailure(): MobilePushServiceProblem | null {
+    return this.lastFailure
   }
 
   /** Invalidate only the token that received 401; concurrent requests may already have installed its replacement. */
@@ -142,8 +148,9 @@ export class PushGatewaySession {
 
   private signedIn(session: PushSession): PushSessionOutcome {
     this.refusedClockSkewMs = null
-    if (this.loggedRefusal !== null) {
-      this.loggedRefusal = null
+    this.lastFailure = null
+    if (this.loggedFailure !== null) {
+      this.loggedFailure = null
       console.warn('[push] Signed in to the push service again')
     }
     return { ok: true, session }
@@ -154,15 +161,10 @@ export class PushGatewaySession {
     body: unknown,
     schema: TSchema
   ): Promise<{ ok: true; value: z.infer<TSchema> } | PushGatewayFailure> {
-    const response = await postPushGatewayJson(this.fetchImpl, `${this.origin}${path}`, body)
-    if (response.ok && response.response.status === 429) {
-      await cancelUnreadResponseBody(response.response)
-      // Rate limiting is temporary, not host rejection; retain register/send retry semantics.
-      const failure = { ok: false, reason: 'unreachable' } as const
-      this.negative = { at: this.now(), ttlMs: HANDSHAKE_RATE_LIMIT_TTL_MS, failure }
-      return failure
-    }
-    return await readPushGatewayJson(response, schema)
+    return await readPushGatewayJson(
+      await postPushGatewayJson(this.fetchImpl, `${this.origin}${path}`, body),
+      schema
+    )
   }
 
   // A clock set back (the usual fix for skew) ends the cache instead of stretching it by the skew.
@@ -171,22 +173,36 @@ export class PushGatewaySession {
     return age >= 0 && age < entry.ttlMs
   }
 
-  /** Caches refusals only: a transport failure may clear on the very next try. */
+  /** Caches refusals and 429s; a transport failure may clear on the very next try. */
   private remember(failure: PushGatewayFailure, cause: string): PushGatewayFailure {
-    if (failure.reason !== 'rejected') {
-      return failure
+    const problem = pushServiceProblemOf(failure)
+    this.lastFailure = problem
+    if (problem === 'rate_limited') {
+      // Back off the per-IP challenge bucket instead of exhausting it on unusable sessions.
+      this.negative = { at: this.now(), ttlMs: HANDSHAKE_RATE_LIMIT_TTL_MS, failure }
+    } else if (problem === 'refused') {
+      this.negative = { at: this.now(), ttlMs: HANDSHAKE_REFUSAL_TTL_MS, failure }
+      this.refusedClockSkewMs = failure.clockSkewMs ?? null
     }
-    this.negative = { at: this.now(), ttlMs: HANDSHAKE_REFUSAL_TTL_MS, failure }
-    this.refusedClockSkewMs = failure.clockSkewMs ?? null
     // Clock refusals key on the cause without the seconds, which drift between attempts.
-    const key = failure.clockSkewMs === undefined ? cause : 'clock'
-    if (key !== this.loggedRefusal) {
-      this.loggedRefusal = key
-      console.warn(
-        `[push] Push service sign-in refused: ${cause}. Phones get no pushes from this host.`
-      )
+    const key =
+      problem !== 'refused' ? problem : failure.clockSkewMs === undefined ? cause : 'clock'
+    if (key !== this.loggedFailure) {
+      this.loggedFailure = key
+      console.warn(signInFailureMessage(problem, cause))
     }
     return failure
+  }
+}
+
+function signInFailureMessage(problem: MobilePushServiceProblem, cause: string): string {
+  switch (problem) {
+    case 'refused':
+      return `[push] Push service sign-in refused: ${cause}. Phones get no pushes from this host.`
+    case 'rate_limited':
+      return '[push] Push service rate limited sign-in (HTTP 429); retrying. Phones get no pushes from this host until it signs in.'
+    case 'unreachable':
+      return '[push] Push service unreachable for sign-in; retrying. Phones get no pushes from this host until it signs in.'
   }
 }
 

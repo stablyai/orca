@@ -15,6 +15,7 @@ import {
   type ApnsTransport
 } from './providers/apns/apns-http2-transport.js'
 import {
+  clientIpPolicy,
   clientIpRateLimit,
   ClientIpRateLimiter,
   readClientIp
@@ -109,9 +110,10 @@ export function createPushServer(
     onRetry: () => observability.record('delivery_retry')
   })
   const ready = createPushReadiness(database, { now })
+  const ipPolicy = clientIpPolicy(config)
   const unauthenticatedIps = new ClientIpRateLimiter({ now })
   const limitUnauthenticatedIp = clientIpRateLimit(unauthenticatedIps, {
-    trustedProxyHops: config.trustedProxyHops,
+    policy: ipPolicy,
     onLimited: () => observability.record('ip_rate_limited')
   })
   const limitAuthenticatedIp = clientIpRateLimit(
@@ -120,7 +122,7 @@ export function createPushServer(
       capacity: PUSH_LIMITS.authenticatedRequestsPerMinutePerIp
     }),
     {
-      trustedProxyHops: config.trustedProxyHops,
+      policy: ipPolicy,
       onLimited: () => observability.record('ip_rate_limited')
     }
   )
@@ -159,7 +161,7 @@ export function createPushServer(
   }
 
   const bearerSession: MiddlewareHandler<{ Variables: PushVariables }> = async (context, next) => {
-    const ip = readClientIp(context, config.trustedProxyHops)
+    const ip = readClientIp(context, ipPolicy)
     if (!invalidBearerIps.available(ip)) return context.json({ error: 'rate_limited' }, 429)
     const bearer = readBearer(context.req.header('authorization'))
     if (!bearer) {
