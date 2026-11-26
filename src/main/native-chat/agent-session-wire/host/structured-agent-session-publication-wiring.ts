@@ -29,6 +29,7 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       input.client().requestFailures.forget(id)
       // A closed chat's undecided run is asked again at its next open.
       forgetProviderRelayRunVerdict(id)
+      input.delivery().closed(id)
     },
     deliver: (id, journal, inputChanged) => {
       input.client().subscribers.deliverFrames(id, journal, undefined, inputChanged)

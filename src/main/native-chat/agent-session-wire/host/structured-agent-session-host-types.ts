@@ -327,6 +327,8 @@ export type StructuredAgentSessionConversationLifetime = ReturnType<
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
+  /** The chat closed: a run it waited on stops being asked about for it. */
+  closed: (sessionId: string) => void
   open: (
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions

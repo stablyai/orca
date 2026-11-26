@@ -20,6 +20,7 @@ import {
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
 import { providerRelayRoute } from './provider-relay-route'
+import { watchProviderRelayClient } from './provider-relay-instance-signals'
 import { agentProvenGone, provenGone } from './provider-relay-exit-probes'
 
 /** `kept`: its daemon start holds it. `gone`: proven ended. `unknown`: its daemon can't say yet. */
@@ -155,6 +156,9 @@ async function instanceClient(
     waitMs,
     []
   )
+  for (const client of clients) {
+    watchProviderRelayClient(client)
+  }
   const named = (client: DaemonClient) => client.getDaemonIdentity()?.launchNonce === instance
   const found = clients.find(named)
   if (found) {
