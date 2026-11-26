@@ -115,7 +115,8 @@ export type RuntimeSkillCommandSurface = {
   getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null
   cancelSharedSkillInstall(operationId: string): boolean
   previewSharedSkillInstallRequest(
-    request: SkillInstallPreviewRequest
+    request: SkillInstallPreviewRequest,
+    signal?: AbortSignal
   ): Promise<SkillInstallPreview>
   previewSharedSkillBundleInstallRequest(
     request: SkillBundleInstallPreviewRequest

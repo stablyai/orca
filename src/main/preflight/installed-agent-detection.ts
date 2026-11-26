@@ -122,6 +122,8 @@ export type InstalledAgentInventory = {
   outsidePath?: ManagedAgentCommands
 }
 
+export type InstalledAgentListPolicy = 'complete' | 'wsl-fallback'
+
 export async function detectInstalledAgentInventory(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions,
@@ -195,17 +197,21 @@ export async function detectInstalledAgents(
       revalidate,
       signal
     ),
-    options
+    options?.waitForCompletion === false ? 'complete' : 'wsl-fallback',
+    context
   )
 }
 
 function completeAgentList(
   inventory: InstalledAgentInventory,
-  options?: InstalledAgentDetectionOptions
+  policy: InstalledAgentListPolicy,
+  context?: PreflightRuntimeContext
 ): string[] {
   if (
     inventory.incomplete &&
-    (inventory.afterPublication !== undefined || options?.waitForCompletion === false)
+    (policy === 'complete' ||
+      !getPreflightWslTarget(context) ||
+      inventory.afterPublication !== undefined)
   ) {
     throw new AgentInventoryDeadlineError(inventory.afterPublication)
   }
@@ -225,7 +231,8 @@ export async function detectInstalledAgentInventoryWithShellPathHydration(
 export async function detectInstalledAgentsWithShellPathHydration(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  policy: InstalledAgentListPolicy = 'complete'
 ): Promise<string[]> {
   return completeAgentList(
     await detectInstalledAgentInventoryWithShellPathHydration(
@@ -233,6 +240,7 @@ export async function detectInstalledAgentsWithShellPathHydration(
       { waitForCompletion: true, ...options },
       signal
     ),
-    options
+    options?.waitForCompletion === false ? 'complete' : policy,
+    context
   )
 }

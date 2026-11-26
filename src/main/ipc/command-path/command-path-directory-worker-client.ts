@@ -32,15 +32,19 @@ export class DetectionDirectoryWorkerClient {
   private readonly host: LazyWorkerThreadHost<DetectionDirectoryResponse>
   private readonly pending = new Map<
     number,
-    { resolve: (names: Map<string, string> | null) => void; timer: NodeJS.Timeout }
+    { resolve: (names: Map<string, string> | null) => void; timer?: NodeJS.Timeout }
   >()
   private nextId = 1
 
-  constructor(workerFactory: WorkerThreadFactory = createWorker) {
+  constructor(
+    workerFactory: WorkerThreadFactory = createWorker,
+    private readonly retainPending = false
+  ) {
     this.host = new LazyWorkerThreadHost({
       factory: workerFactory,
       idleTeardownMs: IDLE_TEARDOWN_MS,
       awaitRetirement: true,
+      strictRetirement: this.retainPending,
       isIdle: () => this.pending.size === 0,
       onMessage: (response) => {
         const call = this.pending.get(response.id)
@@ -51,6 +55,7 @@ export class DetectionDirectoryWorkerClient {
         this.pending.delete(response.id)
         call.resolve(response.names)
         if (this.pending.size === 0) {
+          this.host.current?.unref()
           this.host.scheduleIdleTeardown()
         }
       },
@@ -71,8 +76,13 @@ export class DetectionDirectoryWorkerClient {
     this.host.clearIdleTimer()
     const id = this.nextId++
     return new Promise((resolve) => {
-      // Keep plain-Node CLI invocations alive until their listings settle.
-      const timer = setTimeout(() => this.dispose(), REQUEST_TIMEOUT_MS)
+      // Inventory owns the deadline and keeps its worker request until the native read settles.
+      const timer = this.retainPending
+        ? undefined
+        : setTimeout(() => this.dispose(), REQUEST_TIMEOUT_MS)
+      if (this.retainPending && 'ref' in worker && typeof worker.ref === 'function') {
+        worker.ref()
+      }
       this.pending.set(id, { resolve, timer })
       const request: DetectionDirectoryRequest = { id, dir }
       try {
@@ -85,18 +95,33 @@ export class DetectionDirectoryWorkerClient {
 
   dispose(): void {
     this.host.destroy()
-    for (const { resolve, timer } of this.pending.values()) {
-      clearTimeout(timer)
-      // Failure falls back to async candidate probes, never an inline listing.
-      resolve(null)
-    }
+    const pending = [...this.pending.values()]
     this.pending.clear()
+    const settle = (): void => {
+      for (const { resolve, timer } of pending) {
+        clearTimeout(timer)
+        resolve(null)
+      }
+    }
+    if (this.retainPending) {
+      void this.host.retired().then(settle, () => {})
+      return
+    }
+    settle()
   }
 }
 
 let client: DetectionDirectoryWorkerClient | undefined
+let inventoryClient: DetectionDirectoryWorkerClient | undefined
 
-export function readDetectionDirectoryViaWorker(dir: string): Promise<Map<string, string> | null> {
+export function readDetectionDirectoryViaWorker(
+  dir: string,
+  retainPending = false
+): Promise<Map<string, string> | null> {
+  if (retainPending) {
+    inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, true)
+    return inventoryClient.read(dir)
+  }
   client ??= new DetectionDirectoryWorkerClient()
   return client.read(dir)
 }

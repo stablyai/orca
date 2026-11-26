@@ -1,7 +1,10 @@
 import { realpath } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
+import {
+  UNVERIFIED_FS_PROBE,
+  type InventoryFsProbes
+} from '../../../shared/shell/command-resolution/inventory-fs-probes'
 import {
   getExecutableNames,
   isQuotedWindowsPathEntry,
@@ -33,26 +36,17 @@ function getWindowsBatchDetectionExtensions(env: NodeJS.ProcessEnv, command: str
 }
 
 const DIRECT_DETECTION_COMMAND_LIMIT = 4
-const FILESYSTEM_PROBE_TIMEOUT_MS = 1_000
 const realpathNative = promisify(realpath.native)
-const pendingFileProbes = new Map<string, ReturnType<typeof checkExecutableFile>>()
 
-function probeExecutable(candidate: string, isWin: boolean) {
-  const key = isWin ? `win32:${candidate.toLowerCase()}` : candidate
-  let pending = pendingFileProbes.get(key)
-  if (!pending) {
-    // Reuse a timed-out probe until the underlying filesystem call settles.
-    const probe = checkExecutableFile(candidate, isWin).finally(() => pendingFileProbes.delete(key))
-    pending = withTimeout(probe, FILESYSTEM_PROBE_TIMEOUT_MS, 'unknown')
-    pendingFileProbes.set(key, pending)
-  }
-  return pending
-}
-
-async function windowsHitSpelling(dir: string, candidate: string): Promise<string> {
-  const basename = path.win32.basename(
-    await withTimeout(realpathNative(candidate), FILESYSTEM_PROBE_TIMEOUT_MS, candidate)
-  )
+async function windowsHitSpelling(
+  dir: string,
+  candidate: string,
+  probes?: InventoryFsProbes
+): Promise<string> {
+  const resolved = await (probes
+    ? probes.read(candidate, 'realpath', () => realpathNative(candidate))
+    : realpathNative(candidate).catch(() => null))
+  const basename = path.win32.basename(typeof resolved === 'string' ? resolved : candidate)
   // Native realpath can expand a short PATH directory name or follow a link.
   return basename.toLowerCase() === path.win32.basename(candidate).toLowerCase()
     ? joinCandidatePath(true, dir, basename)
@@ -78,6 +72,7 @@ export async function findCommandsOnLocalPath(
     matches?: Map<string, string>
     inventory?: AgentPathInventory
     unverified?: Set<string>
+    probes?: InventoryFsProbes
   } = {}
 ): Promise<Set<string>> {
   const found = new Set<string>()
@@ -86,6 +81,7 @@ export async function findCommandsOnLocalPath(
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
   const env = options.env ?? process.env
   const inventory = options.inventory
+  const probes = options.probes
   const direct = new Set<string>()
   for (const command of commands.filter(Boolean)) {
     if (command.includes('/') || (isWin && command.includes('\\'))) {
@@ -101,7 +97,7 @@ export async function findCommandsOnLocalPath(
         probeCandidate:
           options.probeCandidate ??
           (async (candidate) => {
-            const result = await probeExecutable(candidate, isWin)
+            const result = await checkExecutableFile(candidate, isWin, probes)
             if (result === 'unknown') {
               options.unverified?.add(command)
             }
@@ -159,16 +155,21 @@ export async function findCommandsOnLocalPath(
       return pending
     }
     const read = async (): Promise<DirectoryProbe[]> => {
-      const names =
+      const listing =
         !isWin && remaining.size <= DIRECT_DETECTION_COMMAND_LIMIT
           ? null
-          : await readDetectionDirectoryViaWorker(dir.dir)
-      const probes = await Promise.all(
+          : await (probes
+              ? probes.read(dir.dir, 'listing', () =>
+                  readDetectionDirectoryViaWorker(dir.dir, true)
+                )
+              : readDetectionDirectoryViaWorker(dir.dir))
+      const names = listing === UNVERIFIED_FS_PROBE ? null : listing
+      const candidates = await Promise.all(
         [...remaining]
           .filter((command) => needsReplay || needsHit(command, dir))
           .map(async (command): Promise<DirectoryProbe | undefined> => {
             const checked = new Set<string>()
-            let uncertain = false
+            let uncertain = listing === UNVERIFIED_FS_PROBE
             for (const ext of extensions.get(command) ?? []) {
               const wanted = command + ext.toLowerCase()
               const key = directoryNameKey(wanted)
@@ -186,11 +187,11 @@ export async function findCommandsOnLocalPath(
                 dir.dir,
                 isWin ? (listed ?? wanted) : wanted
               )
-              const outcome = await probeExecutable(candidate, isWin)
+              const outcome = await checkExecutableFile(candidate, isWin, probes)
               if (outcome === 'executable') {
                 const hit =
                   isWin && !listed && process.platform === 'win32'
-                    ? await windowsHitSpelling(dir.dir, candidate)
+                    ? await windowsHitSpelling(dir.dir, candidate, probes)
                     : candidate
                 return { command, hit, uncertain }
               }
@@ -199,7 +200,7 @@ export async function findCommandsOnLocalPath(
             return uncertain ? { command, uncertain } : undefined
           })
       )
-      return probes.filter((probe) => probe !== undefined)
+      return candidates.filter((probe) => probe !== undefined)
     }
     const result = read()
     if (needsReplay) {

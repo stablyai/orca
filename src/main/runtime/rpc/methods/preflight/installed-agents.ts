@@ -114,7 +114,8 @@ export async function listInstalledWorkspaceAgents(
     agents: await detectAgentsOnHost(
       host,
       agentCommandOverrideDetectionOptions(settings.agentCmdOverrides),
-      signal
+      signal,
+      'wsl-fallback'
     ),
     settings: {
       disabledTuiAgents: settings.disabledTuiAgents,

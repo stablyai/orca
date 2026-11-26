@@ -1,4 +1,4 @@
-import { runCliFsReadsAsync } from './cli-fs-reads'
+import { runCliFsReadsAsync, type CliFsProbeOptions } from './cli-fs-reads'
 import {
   cliCommandLookup,
   cliCommandsLookup,
@@ -18,9 +18,9 @@ export function resolveCliCommandAsync(
 export function resolveCliCommandsAsync(
   commandNames: readonly string[],
   options: ResolveCommandOptions = {},
-  onProbeTimeout?: () => void
+  probes?: CliFsProbeOptions
 ): Promise<Map<string, string>> {
-  return runCliFsReadsAsync(cliCommandsLookup(commandNames, options), onProbeTimeout)
+  return runCliFsReadsAsync(cliCommandsLookup(commandNames, options), probes)
 }
 
 /** resolveExecutableCommand with every filesystem read off the event loop. */

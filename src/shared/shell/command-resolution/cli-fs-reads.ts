@@ -1,6 +1,7 @@
 import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs'
-import { access, open, readdir, readFile, stat } from 'node:fs/promises'
-import { withTimeoutResult } from '../../concurrency/promise-timeout-fallback'
+import { access, lstat, open, readdir, readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { UNVERIFIED_FS_PROBE, type InventoryFsProbes } from './inventory-fs-probes'
 import {
   hasNativeExecutableMagic,
   isNativeExecutable,
@@ -82,17 +83,69 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
   }
 }
 
-async function readAsync(read: CliFsRead): Promise<CliFsReadResult> {
+export type CliFsProbeOptions = { probes: InventoryFsProbes; onUnverified: () => void }
+
+async function readInstallDirectories(
+  path: string,
+  probes: InventoryFsProbes
+): Promise<string[] | null | typeof UNVERIFIED_FS_PROBE> {
+  // Dirent conversion can schedule an unbounded set of lstats on filesystems without entry types.
+  const names = await probes.read(path, 'dirs', () => readdir(path))
+  if (!names || names === UNVERIFIED_FS_PROBE) {
+    return names
+  }
+  const directories: string[] = []
+  for (const name of names) {
+    const entry = join(path, name)
+    const stats = await probes.read(entry, 'lstat', () => lstat(entry))
+    if (stats === UNVERIFIED_FS_PROBE) {
+      return stats
+    }
+    if (stats?.isDirectory()) {
+      directories.push(name)
+    }
+  }
+  return directories
+}
+
+async function readAsync(
+  read: CliFsRead,
+  probes?: InventoryFsProbes
+): Promise<CliFsReadResult | typeof UNVERIFIED_FS_PROBE> {
   try {
     switch (read.kind) {
-      case 'runnable':
-        return await isRunnableCommandAsync(read.platform, read.path)
-      case 'file':
-        return (await stat(read.path)).isFile() ? await readFile(read.path, 'utf8') : null
+      case 'runnable': {
+        if (!probes) {
+          return await isRunnableCommandAsync(read.platform, read.path)
+        }
+        const stats = await probes.read(read.path, 'stat', () => stat(read.path))
+        if (stats === UNVERIFIED_FS_PROBE || !stats?.isFile()) {
+          return stats === UNVERIFIED_FS_PROBE ? stats : false
+        }
+        return read.platform === 'win32'
+          ? true
+          : await probes.read(read.path, 'access', async () => {
+              await access(read.path, constants.X_OK)
+              return true
+            })
+      }
+      case 'file': {
+        const stats = await (probes
+          ? probes.read(read.path, 'stat', () => stat(read.path))
+          : stat(read.path))
+        if (stats === UNVERIFIED_FS_PROBE || !stats?.isFile()) {
+          return stats === UNVERIFIED_FS_PROBE ? stats : null
+        }
+        return await (probes
+          ? probes.read(read.path, 'file', () => readFile(read.path, 'utf8'))
+          : readFile(read.path, 'utf8'))
+      }
       case 'dirs':
-        return (await readdir(read.path, { withFileTypes: true }))
-          .filter((entry) => entry.isDirectory())
-          .map((entry) => entry.name)
+        return probes
+          ? await readInstallDirectories(read.path, probes)
+          : (await readdir(read.path, { withFileTypes: true }))
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => entry.name)
       case 'native':
         return await isNativeExecutableAsync(read.path)
     }
@@ -109,32 +162,17 @@ export function runCliFsReadsSync<T>(reads: CliFsReads<T>): T {
   return step.value
 }
 
-const CLI_BATCH_FS_PROBE_TIMEOUT_MS = 1_000
-const CLI_BATCH_FS_BUDGET_MS = 5_000
-
 export async function runCliFsReadsAsync<T>(
   reads: CliFsReads<T>,
-  onProbeTimeout?: () => void
+  options?: CliFsProbeOptions
 ): Promise<T> {
-  const deadline = Date.now() + CLI_BATCH_FS_BUDGET_MS
   let step = reads.next()
   while (!step.done) {
-    if (!onProbeTimeout) {
-      step = reads.next(await readAsync(step.value))
-      continue
+    const result = await readAsync(step.value, options?.probes)
+    if (result === UNVERIFIED_FS_PROBE) {
+      options?.onUnverified()
     }
-    const remaining = deadline - Date.now()
-    const result =
-      remaining > 0
-        ? await withTimeoutResult(
-            readAsync(step.value),
-            Math.min(remaining, CLI_BATCH_FS_PROBE_TIMEOUT_MS)
-          )
-        : undefined
-    if (!result?.ok) {
-      onProbeTimeout()
-    }
-    step = reads.next(result?.ok ? result.value : null)
+    step = reads.next(result === UNVERIFIED_FS_PROBE ? null : result)
   }
   return step.value
 }

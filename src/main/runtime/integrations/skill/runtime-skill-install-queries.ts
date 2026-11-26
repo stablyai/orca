@@ -2,6 +2,10 @@ import '../../../../shared/git/admission/git-admission-state'
 import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
 import { listManagedSkillInstalls } from '../../../skills/transaction-state/skill-install-provenance'
 import { WslSkillInstallFilesystem } from '../../../skills/filesystem/skill-wsl-install-filesystem'
@@ -30,15 +34,23 @@ import {
 import { isSkillSshDestination } from './runtime-skill-install-authority'
 
 export class RuntimeSkillInstallQueries extends RuntimeSkillInstallCommands {
-  async previewSharedSkillInstallRequest(request: SkillInstallPreviewRequest) {
+  async previewSharedSkillInstallRequest(
+    request: SkillInstallPreviewRequest,
+    signal?: AbortSignal
+  ) {
     await this.refuseSshDestination(request.destination)
-    await this.host.skillTransactionRecovery
-    return previewSharedSkillInstall(request, {
-      authority: this.authority(),
-      stateDirectory: this.userDataPath(),
-      detectProviders: detectInstalledAgentsWithShellPathHydration,
-      resolveProviderRootOverrides: (destination) => this.roots(destination)
-    })
+    await waitForPromiseWithSignal(this.host.skillTransactionRecovery, signal)
+    throwIfSignalAborted(signal)
+    return waitForPromiseWithSignal(
+      previewSharedSkillInstall(request, {
+        authority: this.authority(),
+        stateDirectory: this.userDataPath(),
+        detectProviders: () =>
+          detectInstalledAgentsWithShellPathHydration(undefined, undefined, signal),
+        resolveProviderRootOverrides: (destination) => this.roots(destination)
+      }),
+      signal
+    )
   }
   async previewSharedSkillBundleInstallRequest(request: SkillBundleInstallPreviewRequest) {
     await this.refuseSshDestination(request.destination)

@@ -30,6 +30,7 @@ import {
   previewBundledSkillInstall
 } from '../../main/skills/bundled-skill-install/bundled-skill-installation'
 import { localBundledSkillInput } from '../../main/skills/bundled-skill-install/bundled-skill-local-host'
+import { readCliSkillAgentInventory } from './cli-skill-agent-inventory'
 
 export type SkillMutationVerb = 'install' | 'update'
 
@@ -145,7 +146,7 @@ function rejectNonlocalSkillMutationFlags(
 }
 
 export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
-  return async ({ flags, json }) => {
+  return async ({ flags, json, cliEntryPath }) => {
     rejectNonlocalSkillMutationFlags(flags, verb)
     const guides = await loadCanonicalGuides()
     const skillNames = resolveSelectedSkillNames(flags, guides)
@@ -170,6 +171,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
     }
 
     const local = flags.get('local') === true
+    const agents = requestedAgents(flags)
     const input = await localBundledSkillInput({
       userDataPath: getDefaultUserDataPath(),
       destination: local
@@ -179,7 +181,7 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
             workspaceDirectory: await workspaceDirectory()
           }
         : { scope: 'global', homeDirectory: homedir() },
-      agents: requestedAgents(flags),
+      agents: agents ?? (cliEntryPath ? await readCliSkillAgentInventory(cliEntryPath) : undefined),
       selection: {
         names: skillNames,
         ...(flags.get('force') === true ? { force: 'all' as const } : {}),

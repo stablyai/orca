@@ -42,7 +42,8 @@ import {
   detectInstalledAgentInventory,
   detectInstalledAgentInventoryWithShellPathHydration,
   type InstalledAgentDetectionOptions,
-  type InstalledAgentInventory
+  type InstalledAgentInventory,
+  type InstalledAgentListPolicy
 } from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
@@ -167,13 +168,14 @@ function resolveFolderWorkspace(
 export async function detectAgentsOnHost(
   host: AgentDetectionHost,
   options?: InstalledAgentDetectionOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  policy: InstalledAgentListPolicy = 'complete'
 ): Promise<string[]> {
   // Unserved hosts are unverifiable; [] would falsely cache no installed agents.
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return detectInstalledAgentsWithShellPathHydration(host.context, options, signal)
+  return detectInstalledAgentsWithShellPathHydration(host.context, options, signal, policy)
 }
 
 /** The host's terminal agents and user CLI paths outside PATH. */
@@ -200,17 +202,20 @@ export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
   options?: InstalledAgentDetectionOptions,
   userInitiated = false,
-  withManagedAgentCommands = false
+  withManagedAgentCommands = false,
+  requestSignal?: AbortSignal
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
   const wsl = getPreflightWslTarget(host.context)
+  const waitForCompletion =
+    options?.waitForCompletion ?? (userInitiated || !withManagedAgentCommands)
   const refresh = async (signal?: AbortSignal): Promise<RefreshAgentsResult> => {
     let path: Awaited<ReturnType<typeof refreshAgentShellPath>> | undefined
     const inventory = await detectInstalledAgentInventory(
       host.context,
-      { ...options, waitForCompletion: !signal },
+      { ...options, waitForCompletion },
       true,
       signal,
       async () => {
@@ -242,9 +247,9 @@ export async function refreshAgentsOnHost(
       })
     }
   }
-  return userInitiated || !withManagedAgentCommands
-    ? refresh()
-    : withAgentInventoryDeadline(refresh)
+  return waitForCompletion
+    ? refresh(requestSignal)
+    : withAgentInventoryDeadline(refresh, requestSignal)
 }
 
 /** A prospective workspace uses the create route's resolved repo, never a client host guess. */

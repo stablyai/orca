@@ -258,7 +258,8 @@ export const SKILL_METHODS = [
     name: 'skills.previewInstall',
     permission: 'workspace',
     params: SkillInstallPreviewRequestSchema,
-    handler: (params, { runtime }) => runtime.previewSharedSkillInstallRequest(params)
+    handler: (params, { runtime, signal }) =>
+      runtime.previewSharedSkillInstallRequest(params, signal)
   }),
   defineMethod({
     name: 'skills.removeInstall',

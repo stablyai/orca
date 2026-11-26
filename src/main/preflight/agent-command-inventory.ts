@@ -21,6 +21,7 @@ import {
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
 import { scanLocalAgentCommandInventory } from './local-agent-command-inventory'
+import type { InventoryFsProbes } from '../../shared/shell/command-resolution/inventory-fs-probes'
 
 type CommandInventory = {
   found: Set<string>
@@ -28,6 +29,7 @@ type CommandInventory = {
   // An incomplete WSL probe only settles commands it actually found.
   probed: ReadonlySet<string>
   incomplete?: boolean
+  retryProbes?: InventoryFsProbes
 }
 
 const INVENTORY_RETRY_MS = 5_000
@@ -40,7 +42,8 @@ type InventoryScan = {
   mode: InventoryMode
   targeted: boolean
   generation: number | undefined
-  revalidatesMiss?: boolean
+  revalidatesMiss?: readonly string[]
+  retryProbes?: InventoryFsProbes
 }
 type PendingInventory = {
   active: InventoryScan
@@ -101,23 +104,24 @@ async function scanInventory(
   slot: InventorySlot,
   scan: InventoryScan
 ): Promise<CommandInventory | null> {
+  const { commands, mode, targeted, retryProbes } = scan
   if (slot.distro) {
-    if (scan.mode === 'refresh') {
+    if (mode === 'refresh') {
       invalidateWslGuestEnvironment(slot.distro)
     }
     scan.generation = inventoryGeneration(slot)
-    const probe = await probeWslCommandsOnPath({ distro: slot.distro }, [...scan.commands])
+    const probe = await probeWslCommandsOnPath({ distro: slot.distro }, [...commands])
     return (
       probe && {
         found: probe.found,
         matches: new Map(),
-        probed: probe.environmentResolved ? scan.commands : probe.found,
+        probed: probe.environmentResolved ? commands : probe.found,
         incomplete: !probe.environmentResolved
       }
     )
   }
-  const readLoginPath = !scan.targeted && (scan.mode === 'read' || scan.mode === 'revalidate')
-  return scanLocalAgentCommandInventory(scan.commands, readLoginPath, slot.localEnv?.())
+  const readLoginPath = !targeted && (mode === 'read' || mode === 'revalidate')
+  return scanLocalAgentCommandInventory(commands, readLoginPath, slot.localEnv?.(), retryProbes)
 }
 
 function publishInventory(
@@ -188,7 +192,10 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
     if (scan.generation !== inventoryGeneration(slot)) {
       continue
     }
-    if (scan.revalidatesMiss) {
+    if (
+      result &&
+      scan.revalidatesMiss?.every((cmd) => result.probed.has(cmd) && !result.found.has(cmd))
+    ) {
       slot.missRetry = { after: Date.now() + INVENTORY_RETRY_MS, generation: scan.generation }
     }
     if (slot.distro && (!result || result.incomplete)) {
@@ -224,8 +231,14 @@ export function readInventory(
   {
     targeted = false,
     acceptAnyMatch = false,
-    revalidateUnavailable = false
-  }: { targeted?: boolean; acceptAnyMatch?: boolean; revalidateUnavailable?: boolean } = {}
+    revalidateUnavailable = false,
+    retryProbes
+  }: {
+    targeted?: boolean
+    acceptAnyMatch?: boolean
+    revalidateUnavailable?: boolean
+    retryProbes?: InventoryFsProbes
+  } = {}
 ): Promise<CommandInventory | null> {
   const generation = inventoryGeneration(slot)
   const current = currentInventoryPublication(slot)?.inventory
@@ -250,14 +263,17 @@ export function readInventory(
   if (pending) {
     const { active } = pending
     if (!active.started) {
+      active.retryProbes ??= retryProbes
       return addScanRequest(active, commands, mode, targeted)
     }
     if (
       mode === 'refresh' ||
       scanPriority[mode] > scanPriority[active.mode] ||
+      (retryProbes && active.retryProbes !== retryProbes) ||
       !commands.every((cmd) => active.commands.has(cmd))
     ) {
       pending.queued ??= createScan(active.commands, mode, active.targeted, generation)
+      pending.queued.retryProbes ??= retryProbes
       return addScanRequest(pending.queued, commands, mode, targeted)
     }
     return active.result.promise
@@ -276,15 +292,13 @@ export function readInventory(
     return Promise.resolve(current ?? null)
   }
 
-  const batch: PendingInventory = {
-    active: createScan(commands, mode, targeted, generation)
-  }
-  if (revalidateMiss) {
-    batch.active.revalidatesMiss = true
-  }
+  const active = createScan(commands, mode, targeted, generation)
+  active.retryProbes = retryProbes
+  active.revalidatesMiss = revalidateMiss ? requested : undefined
+  const batch = { active }
   slot.pending = batch
   void Promise.resolve().then(() => runInventoryScans(slot, batch))
-  return batch.active.result.promise
+  return active.result.promise
 }
 
 const wsl = new Map<string, InventorySlot>()

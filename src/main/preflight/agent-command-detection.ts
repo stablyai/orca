@@ -213,7 +213,7 @@ export async function detectAgentCommandInventoryOnHost(
       if (!slot) {
         return { slot, inventory: null }
       }
-      const inventory =
+      let inventory =
         (!options.refresh ? completeInventoryAfter(slot, before, commands) : undefined) ??
         (await waitForPromiseWithSignal(
           readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
@@ -221,6 +221,23 @@ export async function detectAgentCommandInventoryOnHost(
           }),
           waitSignal
         ))
+      if (!wslTarget && options.waitForCompletion) {
+        while (inventory) {
+          const { probed, retryProbes } = inventory
+          if (!retryProbes?.retryWhen || commands.every((command) => probed.has(command))) {
+            break
+          }
+          const beforeRetry = slot.published?.sequence ?? 0
+          await waitForPromiseWithSignal(retryProbes.retryWhen, waitSignal)
+          throwIfSignalAborted(waitSignal)
+          inventory =
+            completeInventoryAfter(slot, beforeRetry, commands) ??
+            (await waitForPromiseWithSignal(
+              readInventory(slot, commands, ordinaryMode, { targeted, retryProbes }),
+              waitSignal
+            ))
+        }
+      }
       throwIfSignalAborted(waitSignal)
       return { slot, inventory }
     } catch (error) {

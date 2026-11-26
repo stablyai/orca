@@ -1,12 +1,13 @@
 import path from 'node:path'
 import { resolveCliCommandsAsync } from '../../shell/command-resolution/node-cli-command-async-resolution'
+import type { CliFsProbeOptions } from '../../shell/command-resolution/cli-fs-reads'
 
 // Why: detection may precede shell-PATH hydration, but the fallback stays bounded.
 export async function detectCommandsInInstallDirs(
   commands: readonly string[],
   /** The PATH detection searched; defaults to this process's own. */
   pathEnv?: string,
-  options?: { skipPathSearch?: boolean; onProbeTimeout?: () => void }
+  options?: { skipPathSearch?: boolean; fs?: CliFsProbeOptions }
 ): Promise<Map<string, string>> {
   if (commands.length === 0) {
     return new Map()
@@ -18,7 +19,7 @@ export async function detectCommandsInInstallDirs(
         ...(pathEnv === undefined ? {} : { pathEnv }),
         ...(options?.skipPathSearch ? { skipPathSearch: true } : {})
       },
-      options?.onProbeTimeout
+      options?.fs
     )
     // Each command found, to the full path it was found at.
     return new Map(

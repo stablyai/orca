@@ -1,6 +1,10 @@
 import type { Dir, Stats } from 'node:fs'
 import { access, constants as fsConstants, opendir, stat } from 'node:fs/promises'
 import path from 'node:path'
+import {
+  UNVERIFIED_FS_PROBE,
+  type InventoryFsProbes
+} from '../../../shared/shell/command-resolution/inventory-fs-probes'
 
 const MAX_DETECTION_DIRECTORY_ENTRIES = 128
 
@@ -14,22 +18,33 @@ export async function isExecutableFile(candidate: string, isWin: boolean): Promi
 
 export async function checkExecutableFile(
   candidate: string,
-  isWin: boolean
+  isWin: boolean,
+  probes?: InventoryFsProbes
 ): Promise<'executable' | 'missing' | 'unknown'> {
-  let stats: Stats
+  let stats: Stats | null | typeof UNVERIFIED_FS_PROBE
   try {
     // Follow symlinked CLIs to their real targets.
-    stats = await stat(candidate)
+    stats = await (probes ? probes.read(candidate, 'stat', () => stat(candidate)) : stat(candidate))
   } catch (error) {
     return isMissingPathError(error) ? 'missing' : 'unknown'
   }
-  if (stats.isDirectory()) {
+  if (stats === UNVERIFIED_FS_PROBE) {
+    return 'unknown'
+  }
+  if (!stats || stats.isDirectory()) {
     // PATH directories are not executable files despite their search bit.
     return 'missing'
   }
   if (isWin) {
     // Extension membership already enforced by the PATHEXT permutation.
     return stats.isFile() ? 'executable' : 'missing'
+  }
+  if (probes) {
+    const result = await probes.read(candidate, 'access', async () => {
+      await access(candidate, fsConstants.X_OK)
+      return true
+    })
+    return result === UNVERIFIED_FS_PROBE ? 'unknown' : result ? 'executable' : 'missing'
   }
   try {
     await access(candidate, fsConstants.X_OK)

@@ -91,7 +91,12 @@ export const PREFLIGHT_METHODS = [
             ...hostDetectionOptions(runtime),
             afterPublication: params.afterPublication
           })
-        : detectAgentsOnHost(host, hostDetectionOptions(runtime), signal)
+        : detectAgentsOnHost(
+            host,
+            { ...hostDetectionOptions(runtime), waitForCompletion: false },
+            signal,
+            'complete'
+          )
     }
   }),
   defineMethod({
@@ -111,14 +116,15 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.refreshAgents',
     permission: 'workspace',
     params: PreflightAgentRefresh,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, signal }) => {
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       await assertAgentDetectionHostRunning(host)
       return refreshAgentsOnHost(
         host,
-        hostDetectionOptions(runtime),
+        { ...hostDetectionOptions(runtime), waitForCompletion: true },
         params.userInitiated,
-        params.withManagedAgentCommands
+        params.withManagedAgentCommands,
+        signal
       )
     }
   })
