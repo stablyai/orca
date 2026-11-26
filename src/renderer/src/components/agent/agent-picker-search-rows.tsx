@@ -158,7 +158,12 @@ export function AgentPickerChoiceRows({
   return (
     <div
       ref={ref}
-      className={top ? 'shrink-0 border-b border-border p-1' : 'border-t border-border p-1'}
+      className={
+        top
+          ? // Why: in a very short window the model list needs its room; search still lists it.
+            'shrink-0 border-b border-border p-1 [@media(max-height:440px)]:hidden'
+          : 'border-t border-border p-1'
+      }
       onKeyDown={(event) => {
         const rows = event.currentTarget.querySelectorAll('[role^="menuitem"]')
         const leave =

@@ -59,6 +59,7 @@ export function launchModelLabel(agent: string, model: string | undefined): stri
 
 const AGENT_LAUNCH_PICKER_SIDE_OFFSET = 4
 const AGENT_LAUNCH_PICKER_COLLISION_PADDING = 8
+const PLACEMENT_GAP = AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING
 
 const portalOrInline = (node: ReactNode, container: HTMLElement | null | undefined) =>
   container ? createPortal(node, container) : container === undefined ? node : null
@@ -157,6 +158,7 @@ export const AgentLaunchPicker = memo(
       }
     }, [])
     const [open, setOpenState] = useState(false)
+    const leading = choices?.filter((choice) => choice.leading).length ?? 0
     // Why: typing on the closed trigger opens the menu with that key already in the search field.
     const [initialQuery, setInitialQuery] = useState('')
     const [placement, setPlacement] = useState<AgentLaunchPickerPlacement>()
@@ -167,17 +169,13 @@ export const AgentLaunchPicker = memo(
           setInitialQuery('')
         } else if (trigger.current) {
           setPlacement(
-            readAgentLaunchPickerPlacement(
-              trigger.current,
-              AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING,
-              inline
-            )
+            readAgentLaunchPickerPlacement(trigger.current, PLACEMENT_GAP, inline, leading)
           )
         }
         setOpenState(next)
         onOpenChange?.(next)
       },
-      [inline, onOpenChange]
+      [inline, onOpenChange, leading]
     )
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const observedEntries = useAgentLaunchPickerInventory(
@@ -255,13 +253,16 @@ export const AgentLaunchPicker = memo(
         : cli
           ? 'terminal'
           : undefined
+    const selectLabel = t('agentPicker.select', 'Select agent')
     const agentLabel = agent
       ? surface === 'terminal'
         ? rowLabel({ kind: 'cli', agent }, t)
         : surface === 'chat'
           ? `${entry?.label ?? getAgentLabel(agent)} ${t('agentPicker.chatTag', '(Chat)')}`
           : (entry?.label ?? getAgentLabel(agent))
-      : (emptyLabel ?? t('agentPicker.select', 'Select agent'))
+      : (emptyLabel ?? selectLabel)
+    const shownLabel = triggerLabel ?? agentLabel
+    const triggerName = shownLabel === selectLabel ? selectLabel : `${selectLabel}, ${shownLabel}`
     const close = useCallback(() => setOpen(false), [setOpen])
     const tabbed = model.state === 'settled' && !setupDisabled
     const blankTerminal: AgentPickerChoice | null = onSelectBlankTerminal
@@ -291,7 +292,8 @@ export const AgentLaunchPicker = memo(
               ref={trigger}
               type="button"
               data-agent-launch-picker-trigger="true"
-              aria-label={inline ? undefined : t('agentPicker.select', 'Select agent')}
+              // Why: the name carries the shown choice, as screen readers and voice control read it.
+              aria-label={inline ? undefined : triggerName}
               variant="outline"
               size={inline ? 'xs' : 'default'}
               className={inline ? 'min-w-0 max-w-full' : 'w-full min-w-0'}
@@ -322,7 +324,7 @@ export const AgentLaunchPicker = memo(
             >
               <AgentLaunchPickerTriggerLabel
                 icon={triggerIcon ?? (agent ? <AgentVariantIcon agent={agent} size={14} /> : null)}
-                label={triggerLabel ?? agentLabel}
+                label={shownLabel}
                 detail={triggerLabel ? triggerDetail : agent ? summary : undefined}
                 muted={Boolean(triggerIcon)}
               />
@@ -400,9 +402,7 @@ export const AgentLaunchPicker = memo(
                 runLaunch={runLaunch}
               />
             ) : (
-              <DropdownMenuItem disabled>
-                {t('agentPicker.select', 'Select agent')}
-              </DropdownMenuItem>
+              <DropdownMenuItem disabled>{selectLabel}</DropdownMenuItem>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
