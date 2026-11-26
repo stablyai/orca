@@ -105,7 +105,7 @@ const MAX_DATE_MS = 8.64e15
 // Versions, expiries and pending state only: never the tokens or hashes.
 function formatRelayCredential(bundle: MobileRelayCredentialBundle | null, now: number): string {
   if (!bundle) {
-    return 'Relay credential: not found or unreadable'
+    return 'Relay credential: none'
   }
   const lease = (credential: { version: number; expiresAt: number }) =>
     `v${credential.version} ${credential.expiresAt > now ? 'expires' : 'expired'} ${new Date(Math.min(credential.expiresAt, MAX_DATE_MS)).toISOString()}`

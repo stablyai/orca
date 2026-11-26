@@ -176,9 +176,7 @@ const RELAY_DIAL_ADVICE: Record<
     nextStep: 'Check the desktop is awake, Orca is running, and it is signed in to Orca Cloud.'
   },
   'credential-refused': {
-    // Relay checks the credential before the desktop, so a refusal says nothing about whether the desktop is online.
-    likelyCause: (code) =>
-      `Relay refused this device’s relay credential (close code ${code}), so it could not check whether the desktop is online.`,
+    likelyCause: (code) => `Relay refused this device’s relay credential (close code ${code}).`,
     nextStep:
       "Connect once on the desktop's network to refresh Relay access. If Relay still refuses, re-pair."
   },
