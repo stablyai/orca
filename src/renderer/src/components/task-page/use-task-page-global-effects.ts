@@ -1,7 +1,8 @@
 import type { TaskPageJiraSummaryGenerationModel } from './jira/creation/use-task-page-jira-summary-generation'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { needsTargetedPreflightRefresh } from './task-page-preflight-recheck'
 
 function isTextEntryTarget(target: HTMLElement): boolean {
   return (
@@ -19,11 +20,15 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     taskSource,
     activeModal,
     linearStatusContextKey,
+    preflightStatus,
     preflightStatusChecked,
     preflightStatusContextKey,
+    preflightDescribesDesktop,
     checkLinearConnection,
     refreshPreflightStatus,
     expectedPreflightContextKey,
+    selectedReposKey,
+    taskSourceRepoContexts,
     jiraStatusContextKey,
     checkJiraConnection,
     providerRuntimeContextKey,
@@ -41,6 +46,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newJiraIssueOpen
   } = model
   const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
+  const forcedPreflightKeyRef = useRef<string | null>(null)
   // GitHub and Linear details replace the list in-page; the Jira detail is a Sheet that owns Esc.
   const detailPageOpen =
     (taskSource === 'github' && Boolean(dialogWorkItem)) ||
@@ -106,6 +112,23 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
+    const needsRefresh = needsTargetedPreflightRefresh({
+      taskSource,
+      hasRepoContexts: taskSourceRepoContexts.length > 0,
+      preflightStatus,
+      preflightStatusChecked,
+      preflightStatusCurrent,
+      preflightDescribesDesktop
+    })
+    const refreshKey = needsRefresh
+      ? `${expectedPreflightContextKey}|${selectedReposKey}|${taskSource}`
+      : null
+    if (!refreshKey) {
+      forcedPreflightKeyRef.current = null
+    } else if (forcedPreflightKeyRef.current !== refreshKey) {
+      forcedPreflightKeyRef.current = refreshKey
+      void refreshPreflightStatus({ force: true })
+    }
     if (!linearStatusReady) {
       void checkLinearConnection()
     }
@@ -120,11 +143,16 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     jiraStatusReady,
     linearStatusContextKey,
     linearStatusReady,
+    preflightDescribesDesktop,
+    preflightStatus,
     providerRuntimeContextKey,
     preflightStatusContextKey,
     preflightStatusChecked,
     preflightStatusCurrent,
-    refreshPreflightStatus
+    refreshPreflightStatus,
+    selectedReposKey,
+    taskSource,
+    taskSourceRepoContexts
   ])
 
   const nextModel = model as typeof model & {
