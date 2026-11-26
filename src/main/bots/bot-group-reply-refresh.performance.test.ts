@@ -1,10 +1,12 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { botGroupReplyBodies, restoreBotGroupReplies } from '../../shared/bots/bot-group-transcript'
 import type { BotGroup, BotGroupTurn } from '../../shared/bots/bot-group'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { readBotGroup } from './bot-group-delivery'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
+import { readBotGroupTurnSource } from './bot-group-turn-source'
 
 // #47176: a matching room notice only carries preview bodies the reader does not hold.
 it('recovers the page with zero repeated reply bodies and one changed body at both sizes', () => {
@@ -66,6 +68,67 @@ it('recovers the page with zero repeated reply bodies and one changed body at bo
       expect([...botGroupReplyBodies(delta).values()]).toEqual(['Updated answer.'])
       expect(restoreBotGroupReplies(delta, held)).toEqual(load([]))
       expect(load().messages.at(-1)?.turns[0].reply).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  }
+})
+
+it('reads the frozen source once across consecutive detail pages at both sizes', () => {
+  for (const count of [1_000, 10_000]) {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const store = new BotGroupStore(db.db)
+      const operationId = 'frozen'
+      const frozenItems = Array.from({ length: count }, (_, index): AgentJournalRenderItem => ({
+        itemId: `row-${index}`,
+        revision: 1,
+        sequence: index + 1,
+        observedAt: index + 1,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'row' }] }
+      }))
+      const stored = store.append({
+        id: 'post',
+        groupId: 'room',
+        author: { kind: 'owner' },
+        text: 'Check the status',
+        createdAt: 2,
+        turns: [
+          {
+            operationId,
+            botId: 'retired',
+            botName: 'Retired',
+            avatar: null,
+            agent: 'codex',
+            sessionId: 'retired-session',
+            revoked: true,
+            frozenItems
+          }
+        ]
+      })
+      const source = vi.spyOn(db.db, 'prepare')
+      const read = (before?: number) =>
+        readBotGroupTurnSource(db.db, {
+          ...store.detailSource(operationId)!,
+          groupId: 'room',
+          operationId,
+          before
+        })
+      const newest = read()
+      expect(newest?.kind).toBe('frozen')
+      if (newest?.kind !== 'frozen') {
+        throw new Error('Missing frozen page')
+      }
+      expect(newest.page.items).toHaveLength(128)
+      expect(newest.page.items.at(-1)?.sequence).toBe(count)
+      const older = read(newest.page.before?.journal?.[0])
+      expect(older?.kind === 'frozen' && older.page.items.at(-1)?.sequence).toBe(count - 128)
+      expect(
+        source.mock.calls.filter(([sql]) => sql.includes("json_each(m.record, '$.turns')"))
+      ).toHaveLength(1)
+
+      store.update({ ...stored, turns: [{ ...stored.turns[0], frozenItems: [] }] })
+      expect(read()).toEqual({ kind: 'frozen', page: { items: [] } })
     } finally {
       db.close()
     }

@@ -41,6 +41,7 @@ type PagePost = {
   post: BotGroupMessage
   previews: ReadonlyMap<string, Pick<ReplyPreview, 'reply' | 'key' | 'bytes'>>
   bytes: number
+  previewBytes: number
 }
 
 const pagePosts = new WeakMap<BotGroupMessage, PagePost>()
@@ -98,16 +99,18 @@ function projectPost(message: BotGroupMessage): PagePost {
   })
   const post = { ...message, turns }
   const bytes = Buffer.byteLength(JSON.stringify(post)) + 1
-  const projected = { post, previews, bytes }
+  const previewBytes = [...previews.values()].reduce((total, reply) => total + reply.bytes, 0)
+  const projected = { post, previews, bytes, previewBytes }
   pagePosts.set(message, projected)
   return projected
 }
 
-/** Admit whole posts newest first. Posts before this cursor retain their previews on older pages. */
+/** Keep recent page boundaries stable, then use remaining wire space for named updates. */
 export function presentBotGroupPage(
   group: BotGroup,
   messages: readonly BotGroupMessage[],
-  knownReplyKeys: readonly string[] | undefined
+  knownReplyKeys: readonly string[] | undefined,
+  recentIds: ReadonlySet<string>
 ): BotGroupMessage[] {
   const known = new Set(knownReplyKeys)
   const page: BotGroupMessage[] = []
@@ -115,13 +118,27 @@ export function presentBotGroupPage(
     REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES -
     PAGE_ENVELOPE_BYTES -
     Buffer.byteLength(JSON.stringify(group))
+  let recentRemaining = remaining
   for (const message of messages.toReversed()) {
-    const { post, previews, bytes } = projectPost(message)
-    const previewBytes = [...previews.values()].reduce((total, reply) => total + reply.bytes, 0)
-    if (page.length && bytes + previewBytes > remaining) {
-      break
+    const recent = recentIds.has(message.id)
+    if (recent && page.length && recentRemaining <= 0) {
+      continue
     }
-    let available = remaining - bytes
+    const { post, previews, bytes, previewBytes } = projectPost(message)
+    const reserved = bytes + previewBytes
+    if (recent && page.length && reserved > recentRemaining) {
+      recentRemaining = 0
+      continue
+    }
+    const wireBytes = [...previews.values()].reduce(
+      (total, reply) => (known.has(reply.key) ? total : total + reply.bytes),
+      bytes
+    )
+    if (!recent && wireBytes > remaining) {
+      continue
+    }
+    const budget = recent ? recentRemaining : remaining
+    let available = budget - bytes
     page.push(
       previews.size === 0
         ? post
@@ -130,6 +147,9 @@ export function presentBotGroupPage(
             turns: post.turns.map((turn) => {
               const saved = previews.get(turn.operationId)
               if (!saved) {
+                return turn
+              }
+              if (known.has(saved.key) && !recent) {
                 return turn
               }
               if (saved.bytes > available) {
@@ -142,7 +162,10 @@ export function presentBotGroupPage(
             })
           }
     )
-    remaining -= bytes + previewBytes
+    remaining -= wireBytes
+    if (recent) {
+      recentRemaining -= reserved
+    }
   }
   return page.toReversed()
 }

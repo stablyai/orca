@@ -213,11 +213,16 @@ export class BotGroupStore {
     return row ? this.message(String(row.message_id)) : null
   }
 
-  operationMessage(operationId: string, includeWorkers = true): BotGroupMessage | null {
-    const row = this.db
-      .prepare('SELECT message_id FROM bot_group_operations WHERE operation_id = ?')
-      .get(operationId)
-    return row ? this.posts.message(String(row.message_id), includeWorkers) : null
+  operationMessage(operationId: string): BotGroupMessage | null {
+    const id = this.posts.operationMessageId(operationId)
+    return id === undefined ? null : this.posts.message(id)
+  }
+
+  detailSource(operationId: string): { messageId: string; version: number } | undefined {
+    const messageId = this.posts.operationMessageId(operationId)
+    return messageId === undefined
+      ? undefined
+      : { messageId, version: this.posts.detailVersion(messageId) }
   }
 
   /** Stores a post with each turn's pending context, owed until native admission. */

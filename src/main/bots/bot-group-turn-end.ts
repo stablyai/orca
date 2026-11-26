@@ -1,6 +1,7 @@
 // How a member's ended turn is saved on its room post, so the room draws it without its chat rows.
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotGroupTurn } from '../../shared/bots/bot-group'
+import { rootAssistantProse } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { botGroupPageReply } from '../../shared/bots/bot-group-reply-preview'
 
 /** The ended turn among `items`, worded as its header words it: a Stop or a replacement stopped it,
@@ -46,16 +47,9 @@ export function botGroupTurnEnd(
 export function settledGroupRoomReply(
   items: readonly AgentJournalRenderItem[]
 ): string | undefined {
-  for (let index = items.length - 1; index >= 0; index--) {
-    const { body } = items[index]
-    if (body.kind === 'message' && body.role === 'assistant') {
-      const text = body.blocks
-        .flatMap((block) => (block.type === 'text' ? [block.text] : []))
-        .join('\n')
-      if (text.trim()) {
-        return botGroupPageReply(text)
-      }
-    }
-  }
-  return undefined
+  const text = items
+    .map(rootAssistantProse)
+    .filter((prose) => prose.trim())
+    .join('\n\n')
+  return text ? botGroupPageReply(text) : undefined
 }

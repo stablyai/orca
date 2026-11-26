@@ -5,10 +5,13 @@ import {
   withBotGroupTurnAnswer
 } from '../../shared/bots/bot-group-reply-preview'
 import type { BotGroupTurn } from '../../shared/bots/bot-group'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { readBotGroup } from './bot-group-delivery'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
+import { settledGroupRoomReply } from './bot-group-turn-end'
 
 // A long member turn pushes its own send off the member chat's loaded page; once it ended the room
 // draws it from what its post saved, never "Starting…" (#46084).
@@ -114,4 +117,72 @@ it('keeps a closing fence and the following prose when the opening is outside th
   expect(botGroupPageReply(full)).toMatch(
     /^…\n\n```text\ncode line[\s\S]+\n```\n\nDone with \*\*bold\*\* prose\.$/
   )
+})
+
+it('keeps the recent page when named older updates fill the transport budget', () => {
+  const orchestration = new OrchestrationDb(':memory:')
+  databases.push(orchestration)
+  const store = new BotGroupStore(orchestration.db)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture needs only the store.
+  const groups = { store, mailTurnChecks: new Map() } as unknown as BotGroupRuntime
+  const groupId = 'group-1'
+  store.put({
+    id: groupId,
+    name: 'Crew',
+    hostId: 'local',
+    revision: 1,
+    folder: 'crew',
+    folderWorkspaceId: 'home-1',
+    createdAt: 1,
+    members: [],
+    replyMode: { kind: 'mentions' }
+  })
+  const olderIds = Array.from({ length: 40 }, (_, index) => `older-${index}`)
+  const recent = Array.from({ length: 40 }, (_, index) => `recent-${index}`)
+  for (const [index, id] of [...olderIds, ...recent].entries()) {
+    store.append({
+      id,
+      groupId,
+      text: 'Check the status',
+      createdAt: index + 2,
+      author: { kind: 'owner' },
+      turns:
+        index < olderIds.length
+          ? Array.from({ length: 32 }, (_, member) =>
+              turn(`${id}-${member}`, {
+                end: 'finished',
+                reply: `${'x'.repeat(3900)} ${id}-${member}`
+              })
+            )
+          : []
+    })
+  }
+  const page = readBotGroup(groups, groupId, undefined, undefined, [], olderIds)
+  expect(page.messages.map(({ id }) => id)).toEqual(recent)
+  expect(page.updatedPosts?.length).toBeGreaterThan(0)
+  expect(page.deferredPostIds?.length).toBeGreaterThan(0)
+  expect(
+    new Set([...(page.updatedPosts ?? []).map(({ id }) => id), ...(page.deferredPostIds ?? [])])
+  ).toEqual(new Set(olderIds))
+  expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThan(
+    REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+  )
+})
+
+it('keeps consecutive root messages in the saved reply', () => {
+  const text = (sequence: number, content: string, agentId?: string): AgentJournalRenderItem => ({
+    itemId: `row-${sequence}`,
+    revision: 1,
+    sequence,
+    observedAt: sequence,
+    agentId,
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: content }] }
+  })
+  expect(
+    settledGroupRoomReply([
+      text(1, 'Apply this configuration.'),
+      text(2, 'Only the child agent said this.', 'child'),
+      text(3, 'Restart afterward.')
+    ])
+  ).toBe('Apply this configuration.\n\nRestart afterward.')
 })

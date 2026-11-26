@@ -5,6 +5,7 @@ import { projectBotGroupRoomPost } from './bot-group-page-replies'
 
 // The row's sequence is the message order; the record keeps everything else.
 const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
+let nextDetailVersion = 0
 
 export class BotGroupPostRead {
   private readonly roomPosts = new BoundedMap<string, { post: BotGroupMessage; bytes: number }>({
@@ -12,15 +13,34 @@ export class BotGroupPostRead {
     maxBytes: 32 * 1024 * 1024,
     sizeOf: (entry) => entry.bytes
   })
+  private readonly detailVersions = new BoundedMap<string, number>({ maxEntries: 160 })
 
   constructor(private readonly db: Database) {}
 
   invalidate(id: string): void {
     this.roomPosts.delete(id)
+    this.detailVersions.delete(id)
   }
 
   clear(): void {
     this.roomPosts.clear()
+    this.detailVersions.clear()
+  }
+
+  detailVersion(id: string): number {
+    let version = this.detailVersions.get(id)
+    if (version === undefined) {
+      version = ++nextDetailVersion
+      this.detailVersions.set(id, version)
+    }
+    return version
+  }
+
+  operationMessageId(operationId: string): string | undefined {
+    const row = this.db
+      .prepare('SELECT message_id FROM bot_group_operations WHERE operation_id = ?')
+      .get(operationId)
+    return row ? String(row.message_id) : undefined
   }
 
   dropGroup(groupId: string): void {
@@ -82,9 +102,9 @@ export class BotGroupPostRead {
     return ids.flatMap((id) => found.get(id) ?? [])
   }
 
-  message(id: string, includeWorkers = true): BotGroupMessage | null {
+  message(id: string): BotGroupMessage | null {
     const row = this.messageRecord(id)
-    return row ? this.messageRow(row, includeWorkers) : null
+    return row ? this.messageRow(row) : null
   }
 
   private messageRecord(id: string) {
@@ -109,9 +129,9 @@ export class BotGroupPostRead {
     return post
   }
 
-  private messageRow(row: Record<string, unknown>, includeWorkers = true): BotGroupMessage {
+  private messageRow(row: Record<string, unknown>): BotGroupMessage {
     const message = MessageRecordSchema.parse(JSON.parse(String(row.record)))
-    if (!includeWorkers) {
+    if (message.turns.length === 0) {
       return { ...message, sequence: Number(row.sequence) }
     }
     const workers = this.db.prepare(

@@ -27,6 +27,7 @@ export const groupRead = bindDeferredRpcOperation(
         group: BotGroupSchema,
         messages: z.array(BotGroupMessageSchema),
         updatedPosts: z.array(BotGroupMessageSchema).optional(),
+        deferredPostIds: z.array(z.string()).optional(),
         hasEarlier: z.boolean()
       })
     )

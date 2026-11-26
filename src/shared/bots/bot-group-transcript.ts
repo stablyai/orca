@@ -5,6 +5,7 @@ export type BotGroupTranscript = {
   messages: BotGroupMessage[]
   hasEarlier: boolean
   updatedPosts?: BotGroupMessage[]
+  deferredPostIds?: string[]
 }
 
 /** Pending posts already on screen can settle while the reader is disconnected. */
@@ -109,7 +110,7 @@ export function reduceBotGroupTranscript(
   }
   switch (action.kind) {
     case 'recent': {
-      const { updatedPosts, ...page } = action.page
+      const { updatedPosts, deferredPostIds: _deferredPostIds, ...page } = action.page
       // Older pages stay only while they still join the new page and no member left, since leaving rewrites their turns.
       const joins =
         page.messages.length === 0 ||

@@ -58,7 +58,7 @@ export function useBotGroupTranscript(
           if (!closed && request === current) {
             const complete = restoreBotGroupReplies(page, held)
             replies = botGroupReplyBodies(complete)
-            updates = []
+            updates = page.deferredPostIds ?? []
             apply({ kind: 'recent', page: complete })
             setError(null)
           }

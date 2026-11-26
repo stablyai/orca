@@ -186,7 +186,7 @@ export function useMobileBotGroupTranscript(
           }
           const page = restoreBotGroupReplies(groupRead.interpret(reply), held)
           replies = botGroupReplyBodies(page)
-          updates = []
+          updates = page.deferredPostIds ?? []
           apply({ kind: 'recent', page })
           if (bots?.kind === 'bots') {
             setBots(bots.bots)

@@ -97,7 +97,7 @@ export const BotGroupSchema = z.object({
 })
 
 /** One native operation a post started; the bot's name, avatar and agent as they were then. */
-const BotGroupTurnSchema = z.object({
+export const BotGroupTurnSchema = z.object({
   operationId: z.string(),
   botId: z.string(),
   botName: z.string(),

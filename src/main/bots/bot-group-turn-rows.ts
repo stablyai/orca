@@ -2,11 +2,7 @@ import type { z } from 'zod'
 import type { BotGroupTurnRows } from '../../shared/bots/bot-group'
 import { requireStructuredHost } from './bot-chat-session'
 import type { BotGroupTurnDetailPage } from '../../shared/bots/use-bot-group-turn-details'
-import {
-  boundHistoryItemsByBytes,
-  HISTORY_PAGE_CONTENT_BUDGET_BYTES
-} from '../native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
-import { agentJournalItemForWire } from '../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
+import { orchestrationReader } from '../runtime/orchestration/db/reader-worker/orchestration-reader-client'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 
@@ -37,23 +33,22 @@ async function readTurnPage(
   groups: BotGroupRuntime,
   { groupId, threadId, operationId, before }: z.infer<typeof BotGroupTurnRows>
 ): Promise<BotGroupTurnDetailPage> {
-  const message = groups.store.operationMessage(operationId, false)
-  const turn = message?.turns.find((candidate) => candidate.operationId === operationId)
-  if (!message || message.groupId !== groupId || message.threadId !== threadId || !turn) {
+  const source = groups.store.detailSource(operationId)
+  if (!source) {
     return { items: [] }
   }
-  if (turn.frozenItems) {
-    const end = Math.min(before?.journal?.[0] ?? Infinity, turn.frozenItems.length)
-    const candidates = turn.frozenItems.slice(Math.max(0, end - 128), end)
-    const { items, dropped } = boundHistoryItemsByBytes(
-      candidates,
-      'newest',
-      new Map(),
-      HISTORY_PAGE_CONTENT_BUDGET_BYTES,
-      agentJournalItemForWire
-    )
-    const next = end - candidates.length + dropped
-    return { items, ...(next > 0 ? { before: { journal: [next, 0, 0] } } : {}) }
+  const turn = await orchestrationReader().read(groups.store, 'botGroupTurnSource', {
+    ...source,
+    groupId,
+    threadId,
+    operationId,
+    before: before?.journal?.[0]
+  })
+  if (!turn) {
+    return { items: [] }
+  }
+  if (turn.kind === 'frozen') {
+    return turn.page
   }
   const workers =
     !before || before.worker !== undefined

@@ -48,18 +48,23 @@ export function readBotGroup(
     const post = groups.store.roomPageMessage(id)
     return post?.groupId === groupId && post.threadId === threadId ? [post] : []
   })
-  const candidates = [...recent, ...updates]
+  // Admission runs backward. Give the requested page first claim on the transport.
+  const candidates = [...updates.sort((left, right) => left.sequence - right.sequence), ...recent]
   const messages = collectRemoteAnswers(groups, candidates).map((post, index) =>
     post === candidates[index] ? post : projectBotGroupRoomPost(post)
   )
   settleDeadGroupMailTurns(groups, messages)
-  const page = presentBotGroupPage(group, presentPageAnswers(messages), knownReplyKeys)
+  const page = presentBotGroupPage(group, presentPageAnswers(messages), knownReplyKeys, recentIds)
   const current = page.filter(({ id }) => recentIds.has(id))
+  const updatedPosts = page.filter(({ id }) => !recentIds.has(id))
+  const admittedUpdates = new Set(updatedPosts.map(({ id }) => id))
+  const deferredPostIds = updates.flatMap(({ id }) => (admittedUpdates.has(id) ? [] : [id]))
   return {
     group,
     // An ended turn draws from its saved reply and end, so the room needs none of its chat's rows.
     messages: current,
-    ...(updates.length > 0 ? { updatedPosts: page.filter(({ id }) => !recentIds.has(id)) } : {}),
+    ...(updatedPosts.length > 0 ? { updatedPosts } : {}),
+    ...(deferredPostIds.length > 0 ? { deferredPostIds } : {}),
     hasEarlier: stored.length > current.length
   }
 }

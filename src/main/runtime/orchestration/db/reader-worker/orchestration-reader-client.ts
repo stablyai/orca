@@ -38,10 +38,14 @@ const IN_PLACE: {
   [K in OrchestrationReadName]: (
     connection: OrchestrationDbConnection,
     args: OrchestrationReads[K]['args']
-  ) => OrchestrationReads[K]['value']
+  ) => OrchestrationReads[K]['value'] | Promise<OrchestrationReads[K]['value']>
 } = {
   connectorWorkerCandidates: (connection, args) =>
-    readConnectorWorkerCandidates(connection, args.sessionIds, args.now)
+    readConnectorWorkerCandidates(connection, args.sessionIds, args.now),
+  botGroupTurnSource: async (connection, args) => {
+    const { readBotGroupTurnSource } = await import('../../../../bots/bot-group-turn-source')
+    return readBotGroupTurnSource(connection.db, args)
+  }
 }
 
 /** The file a connection reads; empty for an in-memory database. */
