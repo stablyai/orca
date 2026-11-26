@@ -96,3 +96,42 @@ it('preserves UTF-8 produced by Git or a textconv driver for a GB18030 source', 
     modifiedContent: '中文𠀀'
   })
 })
+
+it.each([
+  {
+    edit: 'normalizes CRLF',
+    attributes: '-text',
+    hex: 'c2a90d0a',
+    rewrite: "input.replaceAll('\\r\\n', '\\n')",
+    utf8: '©\n',
+    gb18030: '漏\n'
+  },
+  {
+    edit: 'appends ASCII to a GB18030 checkout of a normalized blob',
+    attributes: 'working-tree-encoding=GB18030',
+    hex: 'c2a9',
+    rewrite: "input + '!'",
+    utf8: '©!',
+    gb18030: '漏!'
+  }
+])(
+  'honors the selected encoding when textconv $edit',
+  async ({ attributes, hex, rewrite, utf8, gb18030 }) => {
+    const { repo, git } = createRepo()
+    writeFileSync(join(repo, '.gitattributes'), `sample.c ${attributes} diff=legacy\n`)
+    writeFileSync(
+      join(repo, 'edit.cjs'),
+      [
+        "const input = require('node:fs').readFileSync(process.argv[2], 'latin1')",
+        `process.stdout.write(${rewrite}, 'latin1')`
+      ].join('\n')
+    )
+    git('config', 'diff.legacy.textconv', 'node edit.cjs')
+    writeFileSync(join(repo, 'sample.c'), Buffer.from(hex, 'hex'))
+    git('add', 'sample.c')
+
+    const read = (encoding: GitDiffEncoding) => getDiff(repo, 'sample.c', true, false, { encoding })
+    expect((await read('utf-8')).modifiedContent).toBe(utf8)
+    expect((await read('gb18030')).modifiedContent).toBe(gb18030)
+  }
+)

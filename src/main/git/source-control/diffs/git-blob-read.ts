@@ -124,19 +124,39 @@ async function readGitBlob(
       ['cat-file', mode === 'checkout' ? '--filters' : '--textconv', '--', spec],
       readOptions
     )
-    // Keep the UTF-8 output of a textconv driver that already converted the raw bytes.
-    const convertedToUtf8 =
-      mode === 'textconv' &&
-      options.encoding === 'gb18030' &&
-      isUtf8(stdout) &&
-      (storesUtf8 || !stdout.equals(raw))
-    return bufferToBlob(stdout, filePath, convertedToUtf8 ? 'utf-8' : options.encoding)
+    if (mode === 'textconv' && options.encoding === 'gb18030') {
+      if (stdout.equals(raw)) {
+        return bufferToBlob(raw, filePath, rawEncoding)
+      }
+      if (!isBinaryBuffer(stdout) && isUtf8(stdout)) {
+        return { content: decodeChangedTextconvOutput(raw, stdout), isBinary: false, exists: true }
+      }
+    }
+    return bufferToBlob(stdout, filePath, options.encoding)
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return TOO_LARGE_BLOB
     }
     // A driver or filter missing from this host's PATH, or failing, must not hide the stored blob.
     return bufferToBlob(raw, filePath, rawEncoding)
+  }
+}
+
+function decodeChangedTextconvOutput(raw: Buffer, output: Buffer): string {
+  const utf8 = output.toString('utf8')
+  const gb18030 = tryDecodeGb18030(output)
+  if (gb18030 === undefined || gb18030 === utf8) {
+    return utf8
+  }
+  // A driver can edit only line endings. Override an ambiguous result only for an exact transcode.
+  return tryDecodeGb18030(raw) === utf8 ? utf8 : gb18030
+}
+
+function tryDecodeGb18030(bytes: Buffer): string | undefined {
+  try {
+    return new TextDecoder('gb18030', { fatal: true }).decode(bytes)
+  } catch {
+    return undefined
   }
 }
 
